@@ -1,4 +1,4 @@
-import { createGatewayAuthSession, type OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Database,
@@ -11,12 +11,18 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { AdminModeGate, AdminModeProvider } from "./admin-mode.js";
+import { ErrorBoundary } from "./components/error/error-boundary.js";
 import { AppShell } from "./components/layout/app-shell.js";
 import { MobileNav } from "./components/layout/mobile-nav.js";
 import { Sidebar } from "./components/layout/sidebar.js";
 import { MemoryInspector } from "./components/memory/memory-inspector.js";
+import { ToastProvider } from "./components/toast/toast-provider.js";
+import { Alert } from "./components/ui/alert.js";
+import { Button } from "./components/ui/button.js";
+import { Card, CardContent } from "./components/ui/card.js";
 import { getDesktopApi } from "./desktop-api.js";
-import { OPERATOR_UI_CSS } from "./style.js";
+import { ThemeProvider } from "./hooks/use-theme.js";
+import { ConnectPage } from "./pages/connect-page.js";
 import { useOperatorStore } from "./use-operator-store.js";
 
 export type OperatorUiMode = "web" | "desktop";
@@ -66,162 +72,6 @@ const DESKTOP_NAV_ORDER: OperatorUiRouteId[] = ["desktop"];
 function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {
   return Object.prototype.hasOwnProperty.call(NAV_ITEM_CONFIG, value);
 }
-
-function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
-  const connection = useOperatorStore(core.connectionStore);
-  const [loginBusy, setLoginBusy] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const tokenRef = useRef<HTMLTextAreaElement | null>(null);
-  const title = mode === "web" ? "Login" : "Connect";
-  const isWeb = mode === "web";
-
-  const truncateText = (text: string, limit = 300): string => {
-    if (text.length <= limit) return text;
-    return `${text.slice(0, limit)}…`;
-  };
-
-  const readGatewayError = async (res: Response): Promise<string> => {
-    const contentType = res.headers.get("content-type")?.trim().toLowerCase() ?? "";
-    const maybeJson =
-      contentType.includes("application/json") ||
-      contentType.includes("+json") ||
-      contentType.includes("/json");
-
-    let bodyText: string;
-    try {
-      bodyText = await res.text();
-    } catch {
-      return `HTTP ${String(res.status)}`;
-    }
-
-    const trimmedText = bodyText.trim();
-    if (!trimmedText) {
-      return `HTTP ${String(res.status)}`;
-    }
-
-    if (maybeJson) {
-      try {
-        const body = JSON.parse(trimmedText) as unknown;
-        if (body && typeof body === "object" && !Array.isArray(body)) {
-          const message = (body as Record<string, unknown>)["message"];
-          if (typeof message === "string" && message.trim()) {
-            return message.trim();
-          }
-
-          const error = (body as Record<string, unknown>)["error"];
-          if (typeof error === "string" && error.trim()) {
-            return error.trim();
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    return truncateText(trimmedText);
-  };
-
-  const login = async (): Promise<void> => {
-    if (!isWeb) return;
-    const trimmed = tokenRef.current?.value.trim() ?? "";
-    if (!trimmed) {
-      setLoginError("Token is required");
-      return;
-    }
-    setLoginBusy(true);
-    setLoginError(null);
-    try {
-      const res = await createGatewayAuthSession({ token: trimmed, httpBaseUrl: core.httpBaseUrl });
-      if (!res.ok) {
-        setLoginError(await readGatewayError(res));
-        return;
-      }
-      if (tokenRef.current) {
-        tokenRef.current.value = "";
-      }
-      core.connect();
-    } catch (error) {
-      setLoginError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setLoginBusy(false);
-    }
-  };
-  return (
-    <>
-      <h1>{title}</h1>
-      <div className="stack">
-        {isWeb ? (
-          <div className="card stack">
-            <div>
-              <label>
-                Token
-                <textarea
-                  data-testid="login-token"
-                  rows={3}
-                  ref={tokenRef}
-                  spellCheck={false}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                />
-              </label>
-            </div>
-            <button
-              type="button"
-              data-testid="login-button"
-              disabled={loginBusy}
-              onClick={() => {
-                void login();
-              }}
-            >
-              {loginBusy ? "Logging in..." : "Login"}
-            </button>
-            {loginError ? (
-              <div className="alert error" role="alert">
-                {loginError}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        <div className="card stack">
-          <div>
-            Status: <span>{connection.status}</span>
-          </div>
-          {connection.transportError ? (
-            <div className="alert error" role="alert">
-              Transport error: {connection.transportError}
-            </div>
-          ) : null}
-          {connection.lastDisconnect ? (
-            <div className="alert error" role="alert">
-              Last disconnect: {connection.lastDisconnect.code} {connection.lastDisconnect.reason}
-            </div>
-          ) : null}
-          <div>
-            <button
-              type="button"
-              data-testid="connect-button"
-              onClick={() => {
-                core.connect();
-              }}
-            >
-              Connect
-            </button>
-            <button
-              type="button"
-              data-testid="disconnect-button"
-              onClick={() => {
-                core.disconnect();
-              }}
-            >
-              Disconnect
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
 function DesktopSetupPage({ core }: { core: OperatorCore }) {
   const api = getDesktopApi();
   const [port, setPort] = useState(8788);
@@ -467,184 +317,204 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
 
   if (!api) {
     return (
-      <>
-        <h1>Desktop Setup</h1>
-        <div className="alert error" role="alert">
-          Desktop API not available.
-        </div>
-      </>
+      <div className="grid gap-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-fg">Desktop Setup</h1>
+        <Alert variant="error" title="Desktop API not available." />
+      </div>
     );
   }
 
   return (
-    <>
-      <h1>Desktop Setup</h1>
-      <div className="stack">
-        <div className="card stack">
-          <div>
-            Embedded gateway: <span>{gatewayStatus}</span>
-          </div>
-          <div style={{ fontSize: 12, color: "var(--muted)" }}>
-            Operator mode: {mode === "embedded" ? "embedded (local)" : "remote"}
-          </div>
-          <div style={{ fontSize: 12, color: "var(--muted)" }}>Port: {port}</div>
-          <div>
-            {gatewayStatus === "running" ? (
-              <button
-                type="button"
-                data-testid="desktop-stop-gateway"
-                disabled={busy !== null}
-                onClick={() => {
-                  void stopGateway();
-                }}
-              >
-                {busy === "gateway" ? "Stopping..." : "Stop gateway"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                data-testid="desktop-start-gateway"
-                disabled={busy !== null}
-                onClick={() => {
-                  void startGateway();
-                }}
-              >
-                {busy === "gateway" ? "Starting..." : "Start gateway"}
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="card stack">
-          <div>
-            Local node runtime: <span>{nodeStatus}</span>
-          </div>
-          <div>
-            {nodeStatus === "connected" || nodeStatus === "connecting" ? (
-              <button
-                type="button"
-                data-testid="desktop-disconnect-node"
-                disabled={busy !== null}
-                onClick={() => {
-                  void disconnectNode();
-                }}
-              >
-                {busy === "node"
-                  ? "Disconnecting..."
-                  : nodeStatus === "connecting"
-                    ? "Cancel connect"
-                    : "Disconnect node"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                data-testid="desktop-connect-node"
-                disabled={busy !== null}
-                onClick={() => {
-                  void connectNode();
-                }}
-              >
-                {busy === "node" ? "Connecting..." : "Connect node"}
-              </button>
-            )}
-          </div>
-          <div style={{ fontSize: 12, color: "var(--muted)" }}>
-            Reconnect the node runtime after changing capabilities.
-          </div>
-        </div>
-
-        <div className="card stack">
-          <div style={{ fontSize: 14, fontWeight: 700 }}>Capabilities</div>
-          {(
-            [
-              ["desktop", "Desktop (screenshot & input)"],
-              ["playwright", "Playwright (web automation)"],
-              ["cli", "CLI (command execution)"],
-              ["http", "HTTP (network requests)"],
-            ] as const
-          ).map(([key, label]) => (
-            <label key={key} style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <input
-                type="checkbox"
-                checked={capabilities[key]}
-                disabled={busy === "config"}
-                onChange={() => toggleCapability(key)}
-              />
-              <span>{label}</span>
-            </label>
-          ))}
-          {capabilities.cli || capabilities.http ? (
-            <div className="alert" role="note">
-              CLI/HTTP capabilities can execute commands or make network requests from this machine.
-              Keep them disabled unless you explicitly need them.
+    <div className="grid gap-6">
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Desktop Setup</h1>
+      <div className="grid gap-4">
+        <Card>
+          <CardContent className="grid gap-3 pt-6">
+            <div className="text-sm">
+              <span className="text-fg-muted">Embedded gateway:</span>{" "}
+              <span className="font-medium text-fg">{gatewayStatus}</span>
             </div>
-          ) : null}
-          <div>
-            <button
-              type="button"
-              data-testid="desktop-save-capabilities"
-              disabled={!configDirty || busy !== null}
-              onClick={() => {
-                void saveConfig();
-              }}
-            >
-              {busy === "config" ? "Saving..." : configSaved ? "Saved" : "Save settings"}
-            </button>
-          </div>
-        </div>
+            <div className="text-xs text-fg-muted">
+              Operator mode: {mode === "embedded" ? "embedded (local)" : "remote"}
+            </div>
+            <div className="text-xs text-fg-muted">Port: {port}</div>
+            <div>
+              {gatewayStatus === "running" ? (
+                <Button
+                  data-testid="desktop-stop-gateway"
+                  variant="danger"
+                  disabled={busy !== null}
+                  isLoading={busy === "gateway"}
+                  onClick={() => {
+                    void stopGateway();
+                  }}
+                >
+                  {busy === "gateway" ? "Stopping..." : "Stop gateway"}
+                </Button>
+              ) : (
+                <Button
+                  data-testid="desktop-start-gateway"
+                  disabled={busy !== null}
+                  isLoading={busy === "gateway"}
+                  onClick={() => {
+                    void startGateway();
+                  }}
+                >
+                  {busy === "gateway" ? "Starting..." : "Start gateway"}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-        <div className="card stack">
-          <div style={{ fontSize: 14, fontWeight: 700 }}>macOS permissions</div>
-          <div style={{ fontSize: 12, color: "var(--muted)" }}>
-            Desktop automation may require Accessibility and Screen Recording permissions on macOS.
-          </div>
-          <div>
-            <button
-              type="button"
-              data-testid="desktop-check-mac-permissions"
-              disabled={!api.checkMacPermissions || requestingPermission !== null || busy !== null}
-              onClick={() => {
-                void checkMacPermissions();
-              }}
-            >
-              Check permissions
-            </button>
-          </div>
-          {macPermissionSummary ? <div>{macPermissionSummary}</div> : null}
-          <div>
-            <button
-              type="button"
-              data-testid="desktop-request-accessibility"
-              disabled={!api.requestMacPermission || requestingPermission !== null || busy !== null}
-              onClick={() => {
-                void requestMacPermission("accessibility");
-              }}
-            >
-              {requestingPermission === "accessibility" ? "Requesting..." : "Request Accessibility"}
-            </button>
-            <button
-              type="button"
-              data-testid="desktop-request-screen-recording"
-              disabled={!api.requestMacPermission || requestingPermission !== null || busy !== null}
-              onClick={() => {
-                void requestMacPermission("screenRecording");
-              }}
-              style={{ marginLeft: 8 }}
-            >
-              {requestingPermission === "screenRecording"
-                ? "Opening..."
-                : "Request Screen Recording"}
-            </button>
-          </div>
-        </div>
+        <Card>
+          <CardContent className="grid gap-3 pt-6">
+            <div className="text-sm">
+              <span className="text-fg-muted">Local node runtime:</span>{" "}
+              <span className="font-medium text-fg">{nodeStatus}</span>
+            </div>
+            <div>
+              {nodeStatus === "connected" || nodeStatus === "connecting" ? (
+                <Button
+                  data-testid="desktop-disconnect-node"
+                  variant="secondary"
+                  disabled={busy !== null}
+                  isLoading={busy === "node"}
+                  onClick={() => {
+                    void disconnectNode();
+                  }}
+                >
+                  {busy === "node"
+                    ? "Disconnecting..."
+                    : nodeStatus === "connecting"
+                      ? "Cancel connect"
+                      : "Disconnect node"}
+                </Button>
+              ) : (
+                <Button
+                  data-testid="desktop-connect-node"
+                  variant="secondary"
+                  disabled={busy !== null}
+                  isLoading={busy === "node"}
+                  onClick={() => {
+                    void connectNode();
+                  }}
+                >
+                  {busy === "node" ? "Connecting..." : "Connect node"}
+                </Button>
+              )}
+            </div>
+            <div className="text-xs text-fg-muted">
+              Reconnect the node runtime after changing capabilities.
+            </div>
+          </CardContent>
+        </Card>
 
-        {errorMessage ? (
-          <div className="alert error" role="alert">
-            {errorMessage}
-          </div>
-        ) : null}
+        <Card>
+          <CardContent className="grid gap-3 pt-6">
+            <div className="text-sm font-semibold text-fg">Capabilities</div>
+            {(
+              [
+                ["desktop", "Desktop (screenshot & input)"],
+                ["playwright", "Playwright (web automation)"],
+                ["cli", "CLI (command execution)"],
+                ["http", "HTTP (network requests)"],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  checked={capabilities[key]}
+                  disabled={busy === "config"}
+                  onChange={() => toggleCapability(key)}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+            {capabilities.cli || capabilities.http ? (
+              <Alert
+                variant="warning"
+                title="Security note"
+                description="CLI/HTTP capabilities can execute commands or make network requests from this machine. Keep them disabled unless you explicitly need them."
+              />
+            ) : null}
+            <div>
+              <Button
+                data-testid="desktop-save-capabilities"
+                variant="secondary"
+                disabled={!configDirty || busy !== null}
+                isLoading={busy === "config"}
+                onClick={() => {
+                  void saveConfig();
+                }}
+              >
+                {busy === "config" ? "Saving..." : configSaved ? "Saved" : "Save settings"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="grid gap-3 pt-6">
+            <div className="text-sm font-semibold text-fg">macOS permissions</div>
+            <div className="text-xs text-fg-muted">
+              Desktop automation may require Accessibility and Screen Recording permissions on
+              macOS.
+            </div>
+            <div>
+              <Button
+                data-testid="desktop-check-mac-permissions"
+                variant="secondary"
+                disabled={
+                  !api.checkMacPermissions || requestingPermission !== null || busy !== null
+                }
+                onClick={() => {
+                  void checkMacPermissions();
+                }}
+              >
+                Check permissions
+              </Button>
+            </div>
+            {macPermissionSummary ? (
+              <div className="text-sm text-fg">{macPermissionSummary}</div>
+            ) : null}
+            <div>
+              <Button
+                data-testid="desktop-request-accessibility"
+                variant="secondary"
+                disabled={
+                  !api.requestMacPermission || requestingPermission !== null || busy !== null
+                }
+                onClick={() => {
+                  void requestMacPermission("accessibility");
+                }}
+              >
+                {requestingPermission === "accessibility"
+                  ? "Requesting..."
+                  : "Request Accessibility"}
+              </Button>
+              <Button
+                data-testid="desktop-request-screen-recording"
+                variant="secondary"
+                disabled={
+                  !api.requestMacPermission || requestingPermission !== null || busy !== null
+                }
+                onClick={() => {
+                  void requestMacPermission("screenRecording");
+                }}
+                className="ml-2"
+              >
+                {requestingPermission === "screenRecording"
+                  ? "Opening..."
+                  : "Request Screen Recording"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {errorMessage ? <Alert variant="error" title="Error" description={errorMessage} /> : null}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -854,44 +724,46 @@ function SettingsPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode
   };
 
   return (
-    <>
-      <h1>Settings</h1>
-      <div>Mode: {mode}</div>
-      <button
-        type="button"
-        data-testid="settings-refresh-usage"
-        onClick={() => {
-          void core.statusStore.refreshUsage();
-        }}
-      >
-        Refresh usage
-      </button>
-      <div>Total tokens: {totalTokens ?? "-"}</div>
+    <div className="grid gap-6">
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Settings</h1>
+      <div className="grid gap-2">
+        <div className="text-sm text-fg-muted">Mode: {mode}</div>
+        <Button
+          data-testid="settings-refresh-usage"
+          variant="secondary"
+          onClick={() => {
+            void core.statusStore.refreshUsage();
+          }}
+        >
+          Refresh usage
+        </Button>
+        <div className="text-sm text-fg">Total tokens: {totalTokens ?? "-"}</div>
+      </div>
 
-      <h2 style={{ marginTop: 24 }}>Admin</h2>
+      <h2 className="mt-6 text-lg font-semibold text-fg">Admin</h2>
       <AdminModeGate>
-        <div className="card stack">
-          <div style={{ fontSize: 13, color: "var(--muted)" }}>
-            Admin Mode is required for privileged operator actions.
-          </div>
-          <button
-            type="button"
-            data-testid="settings-admin-command-execute"
-            disabled={adminCommandBusy}
-            onClick={() => {
-              void runAdminCommand();
-            }}
-          >
-            {adminCommandBusy ? "Running..." : "Run admin command"}
-          </button>
-          {adminCommandError ? (
-            <div className="alert error" role="alert">
-              {adminCommandError}
+        <Card>
+          <CardContent className="grid gap-3 pt-6">
+            <div className="text-sm text-fg-muted">
+              Admin Mode is required for privileged operator actions.
             </div>
-          ) : null}
-        </div>
+            <Button
+              data-testid="settings-admin-command-execute"
+              variant="secondary"
+              isLoading={adminCommandBusy}
+              onClick={() => {
+                void runAdminCommand();
+              }}
+            >
+              {adminCommandBusy ? "Running..." : "Run admin command"}
+            </Button>
+            {adminCommandError ? (
+              <Alert variant="error" title="Admin command failed" description={adminCommandError} />
+            ) : null}
+          </CardContent>
+        </Card>
       </AdminModeGate>
-    </>
+    </div>
   );
 }
 
@@ -920,42 +792,44 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
     if (!isOperatorUiRouteId(id)) return;
     setRoute(id);
   };
+
   return (
-    <div className="tyrum-operator-ui">
-      <style>{OPERATOR_UI_CSS}</style>
-      <AppShell
-        mode={mode}
-        sidebar={
-          <Sidebar
-            items={sidebarItems}
-            secondaryItems={desktopItems}
-            activeItemId={route}
-            onNavigate={navigate}
-            connectionStatus={connection.status}
-          />
-        }
-        mobileNav={
-          <MobileNav
-            items={mobileItems}
-            overflowItems={mobileOverflowItems}
-            activeItemId={route}
-            onNavigate={navigate}
-          />
-        }
-      >
-        <div className="tyrum-legacy">
-          <AdminModeProvider core={core} mode={mode}>
-            {route === "connect" && <ConnectPage core={core} mode={mode} />}
-            {route === "dashboard" && <DashboardPage core={core} />}
-            {route === "memory" && <MemoryInspector core={core} />}
-            {route === "approvals" && <ApprovalsPage core={core} />}
-            {route === "runs" && <RunsPage core={core} />}
-            {route === "pairing" && <PairingPage core={core} />}
-            {route === "settings" && <SettingsPage core={core} mode={mode} />}
-            {route === "desktop" && mode === "desktop" && <DesktopSetupPage core={core} />}
-          </AdminModeProvider>
-        </div>
-      </AppShell>
-    </div>
+    <ThemeProvider>
+      <ToastProvider>
+        <ErrorBoundary>
+          <AppShell
+            mode={mode}
+            sidebar={
+              <Sidebar
+                items={sidebarItems}
+                secondaryItems={desktopItems}
+                activeItemId={route}
+                onNavigate={navigate}
+                connectionStatus={connection.status}
+              />
+            }
+            mobileNav={
+              <MobileNav
+                items={mobileItems}
+                overflowItems={mobileOverflowItems}
+                activeItemId={route}
+                onNavigate={navigate}
+              />
+            }
+          >
+            <AdminModeProvider core={core} mode={mode}>
+              {route === "connect" && <ConnectPage core={core} mode={mode} />}
+              {route === "dashboard" && <DashboardPage core={core} />}
+              {route === "memory" && <MemoryInspector core={core} />}
+              {route === "approvals" && <ApprovalsPage core={core} />}
+              {route === "runs" && <RunsPage core={core} />}
+              {route === "pairing" && <PairingPage core={core} />}
+              {route === "settings" && <SettingsPage core={core} mode={mode} />}
+              {route === "desktop" && mode === "desktop" && <DesktopSetupPage core={core} />}
+            </AdminModeProvider>
+          </AppShell>
+        </ErrorBoundary>
+      </ToastProvider>
+    </ThemeProvider>
   );
 }

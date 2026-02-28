@@ -49,7 +49,11 @@ function resolveSystemColorScheme(): "dark" | "light" {
   if (typeof globalThis.matchMedia !== "function") {
     return "dark";
   }
-  return globalThis.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  try {
+    return globalThis.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  } catch {
+    return "dark";
+  }
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -62,7 +66,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (mode !== "system") return;
     if (typeof globalThis.matchMedia !== "function") return;
-    const mediaQuery = globalThis.matchMedia("(prefers-color-scheme: dark)");
+    let mediaQuery: MediaQueryList;
+    try {
+      mediaQuery = globalThis.matchMedia("(prefers-color-scheme: dark)");
+    } catch {
+      return;
+    }
     setSystemColorScheme(mediaQuery.matches ? "dark" : "light");
     const handler = (event: MediaQueryListEvent) => {
       setSystemColorScheme(event.matches ? "dark" : "light");

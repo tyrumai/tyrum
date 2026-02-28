@@ -253,6 +253,121 @@ describe("operator-ui", () => {
     expect("AdminModeBanner" in operatorUi).toBe(false);
   });
 
+  it("applies the stored theme mode when mounting OperatorUiApp", () => {
+    const localStorageMock = {
+      getItem: vi.fn((key: string) => (key === "tyrum.themeMode" ? "light" : null)),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+    vi.stubGlobal("localStorage", localStorageMock as unknown as Storage);
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    expect(document.documentElement.dataset.themeMode).toBe("light");
+    expect(document.documentElement.dataset.theme).toBe("light");
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("does not inject the legacy operator-ui css", () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    const styles = Array.from(container.querySelectorAll("style"));
+    expect(styles.some((style) => style.textContent?.includes(".tyrum-operator-ui"))).toBe(false);
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("does not render legacy layout class names", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    expect(container.querySelector(".card")).toBeNull();
+    expect(container.querySelector(".stack")).toBeNull();
+    expect(container.querySelector(".alert")).toBeNull();
+
+    const desktopLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-desktop"]');
+    expect(desktopLink).not.toBeNull();
+
+    await act(async () => {
+      desktopLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector(".card")).toBeNull();
+    expect(container.querySelector(".stack")).toBeNull();
+    expect(container.querySelector(".alert")).toBeNull();
+
+    const settingsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-settings"]');
+    expect(settingsLink).not.toBeNull();
+
+    act(() => {
+      settingsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector(".card")).toBeNull();
+    expect(container.querySelector(".stack")).toBeNull();
+    expect(container.querySelector(".alert")).toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
   it("renders the operator shell navigation", () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -772,6 +887,60 @@ describe("operator-ui", () => {
     expect(tokenField!.getAttribute("spellcheck")).toBe("false");
     expect(tokenField!.getAttribute("autocapitalize")).toBe("none");
     expect(tokenField!.getAttribute("autocorrect")).toBe("off");
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("sets aria-busy on the login button while logging in", async () => {
+    let resolveFetch: ((response: Response) => void) | null = null;
+    const fetchPromise = new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const fetchMock = vi.fn(async () => fetchPromise);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBrowserCookieAuth(),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
+    });
+
+    const tokenField = container.querySelector<HTMLTextAreaElement>('[data-testid="login-token"]');
+    expect(tokenField).not.toBeNull();
+    act(() => {
+      tokenField!.value = "test-token";
+    });
+
+    const loginButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
+    expect(loginButton).not.toBeNull();
+
+    await act(async () => {
+      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const liveButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
+    expect(liveButton?.getAttribute("aria-busy")).toBe("true");
+
+    resolveFetch?.(new Response(null, { status: 204 }));
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     act(() => {
       root?.unmount();
@@ -1447,15 +1616,13 @@ describe("operator-ui", () => {
       enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const tokenField = container.querySelector<HTMLInputElement>(
-      '[data-testid="admin-mode-token"]',
-    );
+    const tokenField = document.querySelector<HTMLInputElement>('[data-testid="admin-mode-token"]');
     expect(tokenField).not.toBeNull();
     act(() => {
       tokenField!.value = "admin-token";
     });
 
-    const confirmCheckbox = container.querySelector<HTMLInputElement>(
+    const confirmCheckbox = document.querySelector<HTMLInputElement>(
       '[data-testid="admin-mode-confirm"]',
     );
     expect(confirmCheckbox).not.toBeNull();
@@ -1464,7 +1631,7 @@ describe("operator-ui", () => {
       confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
-    const submitButton = container.querySelector<HTMLButtonElement>(
+    const submitButton = document.querySelector<HTMLButtonElement>(
       '[data-testid="admin-mode-submit"]',
     );
     expect(submitButton).not.toBeNull();
@@ -1562,17 +1729,15 @@ describe("operator-ui", () => {
       enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const dialog = container.querySelector('[data-testid="admin-mode-dialog"]');
+    const dialog = document.querySelector('[data-testid="admin-mode-dialog"]');
     expect(dialog).not.toBeNull();
 
-    const tokenField = container.querySelector<HTMLInputElement>(
-      '[data-testid="admin-mode-token"]',
-    );
+    const tokenField = document.querySelector<HTMLInputElement>('[data-testid="admin-mode-token"]');
     expect(tokenField).not.toBeNull();
     expect(tokenField!.type).toBe("password");
     expect(tokenField!.getAttribute("autocomplete")).toBe("off");
 
-    const toggleTokenButton = container.querySelector<HTMLButtonElement>(
+    const toggleTokenButton = document.querySelector<HTMLButtonElement>(
       '[data-testid="admin-mode-token-toggle"]',
     );
     expect(toggleTokenButton).not.toBeNull();
@@ -1589,7 +1754,7 @@ describe("operator-ui", () => {
       tokenField!.value = "  admin-token  ";
     });
 
-    const confirmCheckbox = container.querySelector<HTMLInputElement>(
+    const confirmCheckbox = document.querySelector<HTMLInputElement>(
       '[data-testid="admin-mode-confirm"]',
     );
     expect(confirmCheckbox).not.toBeNull();
@@ -1598,7 +1763,7 @@ describe("operator-ui", () => {
       confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
-    const submitButton = container.querySelector<HTMLButtonElement>(
+    const submitButton = document.querySelector<HTMLButtonElement>(
       '[data-testid="admin-mode-submit"]',
     );
     expect(submitButton).not.toBeNull();
@@ -1666,17 +1831,14 @@ describe("operator-ui", () => {
       enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const dialog = container.querySelector('[data-testid="admin-mode-dialog"]');
+    const dialog = document.querySelector('[data-testid="admin-mode-dialog"]');
     expect(dialog).not.toBeNull();
 
-    const dialogRole = dialog?.querySelector('[role="dialog"]');
-    expect(dialogRole).not.toBeNull();
-    expect(dialogRole?.getAttribute("aria-modal")).toBe("true");
-    expect(dialogRole?.getAttribute("aria-labelledby")).toBeTruthy();
+    expect(dialog?.getAttribute("role")).toBe("dialog");
+    expect(dialog?.getAttribute("aria-modal")).toBe("true");
+    expect(dialog?.getAttribute("aria-labelledby")).toBeTruthy();
 
-    const tokenField = container.querySelector<HTMLInputElement>(
-      '[data-testid="admin-mode-token"]',
-    );
+    const tokenField = document.querySelector<HTMLInputElement>('[data-testid="admin-mode-token"]');
     expect(tokenField).not.toBeNull();
     expect(tokenField!.type).toBe("password");
 
@@ -1684,7 +1846,7 @@ describe("operator-ui", () => {
       tokenField?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
 
-    expect(container.querySelector('[data-testid="admin-mode-dialog"]')).toBeNull();
+    expect(document.querySelector('[data-testid="admin-mode-dialog"]')).toBeNull();
 
     act(() => {
       root?.unmount();
