@@ -72,6 +72,21 @@ bash scripts/smoke-desktop-sandbox.sh
 
 Set `TYRUM_SMOKE_KEEP_RUNNING=1` to leave containers running after the script finishes.
 
+## Running the desktop automation tests
+
+The gateway test suite includes an end-to-end smoke test that boots an in-process gateway, starts the `desktop-sandbox` container, approves pairing, then dispatches a Desktop `snapshot` and a safe `mouse` action.
+
+This test currently requires Linux + a working Docker daemon, and may take a few minutes on first run while the sandbox image builds.
+
+```bash
+pnpm exec vitest run packages/gateway/tests/integration/desktop-sandbox-e2e.test.ts
+```
+
+Useful environment variables:
+
+- `TYRUM_DESKTOP_SANDBOX_REBUILD=1` forces a Docker rebuild of the sandbox image.
+- `TYRUM_DESKTOP_SANDBOX_IMAGE=<tag>` uses an existing prebuilt image tag.
+
 ## Notes
 
 - The sandbox image includes DBus and AT-SPI packages (`dbus`, `dbus-x11`, `at-spi2-core`) to maximize a11y availability for Linux backends.

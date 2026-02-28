@@ -29,8 +29,6 @@ RUN pnpm --filter @tyrum/schemas build \
   && pnpm --filter @tyrum/client build \
   && pnpm --filter @tyrum/desktop-node build
 
-RUN CI=true pnpm prune --prod
-
 # ---------------------------------------------------------------------------
 
 FROM public.ecr.aws/docker/library/node:24-bookworm-slim
@@ -61,13 +59,16 @@ COPY --from=builder /app/node_modules ./node_modules
 
 COPY --from=builder /app/packages/schemas/package.json ./packages/schemas/package.json
 COPY --from=builder /app/packages/schemas/dist ./packages/schemas/dist
+COPY --from=builder /app/packages/schemas/node_modules ./packages/schemas/node_modules
 
 COPY --from=builder /app/packages/client/package.json ./packages/client/package.json
 COPY --from=builder /app/packages/client/dist ./packages/client/dist
+COPY --from=builder /app/packages/client/node_modules ./packages/client/node_modules
 
 COPY --from=builder /app/packages/desktop-node/package.json ./packages/desktop-node/package.json
 COPY --from=builder /app/packages/desktop-node/dist ./packages/desktop-node/dist
 COPY --from=builder /app/packages/desktop-node/bin ./packages/desktop-node/bin
+COPY --from=builder /app/packages/desktop-node/node_modules ./packages/desktop-node/node_modules
 
 COPY docker/desktop-sandbox/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
