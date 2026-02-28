@@ -46,7 +46,9 @@ export function AppShell({
             {fullBleed ? (
               children
             ) : (
-              <div className={cn("min-w-0 px-4 py-6", mode === "web" ? "mx-auto max-w-6xl" : null)}>{children}</div>
+              <div className={cn("min-w-0 px-4 py-6", mode === "web" ? "mx-auto max-w-6xl" : null)}>
+                {children}
+              </div>
             )}
           </main>
           {showMobileNav ? mobileNav : null}

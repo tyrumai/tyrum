@@ -457,13 +457,3 @@ export function DiagnosticsContent() {
     </div>
   );
 }
-
-/** @deprecated Use `DiagnosticsContent` instead. Kept for backward compatibility. */
-export function Diagnostics() {
-  return (
-    <div className="grid gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-fg">Diagnostics</h1>
-      <DiagnosticsContent />
-    </div>
-  );
-}

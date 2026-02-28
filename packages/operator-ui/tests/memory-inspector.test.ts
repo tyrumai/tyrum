@@ -883,14 +883,10 @@ describe("MemoryInspector", () => {
     });
 
     // Dialog renders in a portal — query from document
-    const dialog = document.querySelector<HTMLDivElement>(
-      '[data-testid="memory-forget-dialog"]',
-    );
+    const dialog = document.querySelector<HTMLDivElement>('[data-testid="memory-forget-dialog"]');
     expect(dialog).not.toBeNull();
 
-    const target = document.querySelector<HTMLElement>(
-      '[data-testid="memory-forget-target"]',
-    );
+    const target = document.querySelector<HTMLElement>('[data-testid="memory-forget-target"]');
     expect(target).not.toBeNull();
     expect(target?.textContent).toContain(item.memory_item_id);
 

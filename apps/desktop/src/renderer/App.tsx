@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useSyncExternalStore, useState } from "react";
 import {
-  AdminModeProvider,
   ApprovalsPage,
   MemoryPage,
   PairingPage,
@@ -69,23 +68,22 @@ const OPERATOR_PAGES = new Set<PageId>([
   "settings",
 ]);
 
-/** Subscribes to operator core connection status without hooks rules issues. */
-function useConnectionStatus(core: import("@tyrum/operator-core").OperatorCore | null): SidebarConnectionStatus {
-  const [status, setStatus] = useState<SidebarConnectionStatus>("disconnected");
-
-  useEffect(() => {
-    if (!core) {
-      setStatus("disconnected");
-      return;
-    }
-    setStatus(core.connectionStore.getSnapshot().status);
-    const unsubscribe = core.connectionStore.subscribe(() => {
-      setStatus(core.connectionStore.getSnapshot().status);
-    });
-    return unsubscribe;
-  }, [core]);
-
-  return status;
+/** Subscribes to operator core connection status via useSyncExternalStore. */
+function useConnectionStatus(
+  core: import("@tyrum/operator-core").OperatorCore | null,
+): SidebarConnectionStatus {
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      if (!core) return () => {};
+      return core.connectionStore.subscribe(onStoreChange);
+    },
+    [core],
+  );
+  const getSnapshot = useCallback(
+    (): SidebarConnectionStatus => core?.connectionStore.getSnapshot().status ?? "disconnected",
+    [core],
+  );
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 export function App() {
@@ -153,16 +151,10 @@ export function App() {
         return <Dashboard core={operatorCore.core} onNavigate={handleNavigate} />;
       case "approvals":
         return (
-          <OperatorPageGuard {...operatorCore}>
-            <ApprovalsPage core={operatorCore.core!} />
-          </OperatorPageGuard>
+          <OperatorPageGuard {...operatorCore} render={(core) => <ApprovalsPage core={core} />} />
         );
       case "runs":
-        return (
-          <OperatorPageGuard {...operatorCore}>
-            <RunsPage core={operatorCore.core!} />
-          </OperatorPageGuard>
-        );
+        return <OperatorPageGuard {...operatorCore} render={(core) => <RunsPage core={core} />} />;
       case "work":
         return (
           <WorkBoard
@@ -172,25 +164,22 @@ export function App() {
         );
       case "memory":
         return (
-          <OperatorPageGuard {...operatorCore}>
-            <MemoryPage core={operatorCore.core!} />
-          </OperatorPageGuard>
+          <OperatorPageGuard {...operatorCore} render={(core) => <MemoryPage core={core} />} />
         );
       case "connection":
         return <ConnectionPage {...operatorCore} />;
       case "pairing":
         return (
-          <OperatorPageGuard {...operatorCore}>
-            <PairingPage core={operatorCore.core!} />
-          </OperatorPageGuard>
+          <OperatorPageGuard {...operatorCore} render={(core) => <PairingPage core={core} />} />
         );
       case "permissions":
         return <Permissions />;
       case "settings":
         return (
-          <OperatorPageGuard {...operatorCore}>
-            <SettingsPage core={operatorCore.core!} mode="desktop" />
-          </OperatorPageGuard>
+          <OperatorPageGuard
+            {...operatorCore}
+            render={(core) => <SettingsPage core={core} mode="desktop" />}
+          />
         );
       case "debug":
         return <DebugPage />;
@@ -198,26 +187,11 @@ export function App() {
   };
 
   const content = (
-    <Layout
-      currentPage={page}
-      onNavigate={handleNavigate}
-      connectionStatus={connectionStatus}
-    >
+    <Layout currentPage={page} onNavigate={handleNavigate} connectionStatus={connectionStatus}>
       {renderPage()}
       <ConsentModal />
     </Layout>
   );
-
-  // Wrap with AdminModeProvider when operator core is available
-  if (operatorCore.core) {
-    return (
-      <ToastProvider>
-        <AdminModeProvider core={operatorCore.core} mode="desktop">
-          {content}
-        </AdminModeProvider>
-      </ToastProvider>
-    );
-  }
 
   return <ToastProvider>{content}</ToastProvider>;
 }

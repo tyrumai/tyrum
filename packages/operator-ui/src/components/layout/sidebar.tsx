@@ -122,7 +122,7 @@ export function Sidebar({
           collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
           active
             ? "border-l-2 border-primary bg-primary-dim text-fg font-medium"
-            : "text-fg-muted hover:bg-black/5 hover:text-fg dark:hover:bg-white/5",
+            : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
         )}
         onClick={() => {
@@ -191,7 +191,12 @@ export function Sidebar({
         ) : null}
       </nav>
 
-      <div className={cn("mt-auto flex flex-col gap-2 border-t border-border", collapsed ? "p-2" : "p-4")}>
+      <div
+        className={cn(
+          "mt-auto flex flex-col gap-2 border-t border-border",
+          collapsed ? "p-2" : "p-4",
+        )}
+      >
         {collapsed ? (
           <div className="flex justify-center" title={connectionLabel}>
             <StatusDot
@@ -224,7 +229,7 @@ export function Sidebar({
             className={cn(
               "flex items-center rounded-md text-sm transition-colors",
               collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
-              "text-fg-muted hover:bg-black/5 hover:text-fg dark:hover:bg-white/5",
+              "text-fg-muted hover:bg-bg-subtle hover:text-fg",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
             )}
             onClick={() => {
@@ -244,7 +249,7 @@ export function Sidebar({
             className={cn(
               "flex items-center rounded-md text-sm transition-colors",
               collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
-              "text-fg-muted hover:bg-black/5 hover:text-fg dark:hover:bg-white/5",
+              "text-fg-muted hover:bg-bg-subtle hover:text-fg",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
             )}
             onClick={toggleCollapsed}
