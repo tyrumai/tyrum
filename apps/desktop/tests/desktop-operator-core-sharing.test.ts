@@ -19,4 +19,3 @@ describe("desktop operator-core sharing", () => {
     expect(memory).not.toContain("useDesktopOperatorCore");
   });
 });
-
