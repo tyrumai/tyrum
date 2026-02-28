@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "../ui/dialog.js";
 import { useAdminModeUiContext } from "./admin-mode-provider.js";
-import { toErrorMessage } from "../../utils/to-error-message.js";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
 
 function headersToRecord(headers: HeadersInit | undefined): Record<string, string> | undefined {
   if (!headers) return undefined;
@@ -118,7 +118,7 @@ export function AdminModeEnterDialog() {
       resetForm();
       closeEnter();
     } catch (error) {
-      setErrorMessage(toErrorMessage(error));
+      setErrorMessage(formatErrorMessage(error));
     } finally {
       setBusy(false);
     }

@@ -11,7 +11,7 @@ import { Input } from "../components/ui/input.js";
 import { Label } from "../components/ui/label.js";
 import { useTheme, type ThemeMode } from "../hooks/use-theme.js";
 import { cn } from "../lib/cn.js";
-import { toErrorMessage } from "../utils/to-error-message.js";
+import { formatErrorMessage } from "../utils/format-error-message.js";
 import { useOperatorStore } from "../use-operator-store.js";
 
 type ThemeOption = {
@@ -77,7 +77,7 @@ export function SettingsPage({ core, mode }: { core: OperatorCore; mode: Operato
       }
       await core.ws.commandExecute(command);
     } catch (error) {
-      setAdminCommandError(toErrorMessage(error));
+      setAdminCommandError(formatErrorMessage(error));
     } finally {
       setAdminCommandBusy(false);
     }
