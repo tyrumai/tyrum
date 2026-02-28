@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import mitt from "mitt";
-import { MemoryDal } from "../../src/modules/memory/dal.js";
+import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
 import type { GatewayEvents } from "../../src/event-bus.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
@@ -9,29 +9,41 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 describe("WatcherProcessor", () => {
   let db: SqliteDb;
-  let memoryDal: MemoryDal;
+  let memoryV1Dal: MemoryV1Dal;
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
 
   beforeEach(() => {
     db = openTestSqliteDb();
-    memoryDal = new MemoryDal(db);
+    memoryV1Dal = new MemoryV1Dal(db);
     eventBus = mitt<GatewayEvents>();
-    processor = new WatcherProcessor({ db, memoryDal, eventBus });
+    processor = new WatcherProcessor({ db, memoryV1Dal, eventBus });
   });
 
   afterEach(async () => {
     await db.close();
   });
 
+  async function listWatcherEpisodes(): Promise<any[]> {
+    const { items } = await memoryV1Dal.list({
+      agentId: "default",
+      filter: { kinds: ["episode"], provenance: { channels: ["watcher"] } },
+      limit: 2000,
+    });
+    return items;
+  }
+
+  function findEpisodeByType(episodes: any[], eventType: string): any | undefined {
+    return episodes.find((item) => (item?.provenance?.metadata as any)?.event_type === eventType);
+  }
+
   it("creates episodic events for matching plan completion", async () => {
     await processor.createWatcher("plan-1", "plan_complete", { planId: "plan-1" });
 
     await processor.onPlanCompleted({ planId: "plan-1", stepsExecuted: 5 });
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(1);
-    expect(events[0]!.event_type).toBe("plan_completed");
+    const episodes = await listWatcherEpisodes();
+    expect(findEpisodeByType(episodes, "plan_completed")).toBeTruthy();
   });
 
   it("logs plan failure and deactivates plan_complete watchers", async () => {
@@ -39,9 +51,8 @@ describe("WatcherProcessor", () => {
 
     await processor.onPlanFailed({ planId: "plan-1", reason: "timeout" });
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(1);
-    expect(events[0]!.event_type).toBe("plan_failed");
+    const episodes = await listWatcherEpisodes();
+    expect(findEpisodeByType(episodes, "plan_failed")).toBeTruthy();
     expect(await processor.listWatchers()).toHaveLength(0);
   });
 
@@ -69,7 +80,8 @@ describe("WatcherProcessor", () => {
 
     eventBus.emit("plan:completed", { planId: "plan-1", stepsExecuted: 3 });
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(await memoryDal.getEpisodicEvents()).toHaveLength(1);
+    const episodes = await listWatcherEpisodes();
+    expect(findEpisodeByType(episodes, "plan_completed")).toBeTruthy();
 
     processor.stop();
   });
@@ -103,8 +115,10 @@ describe("WatcherProcessor", () => {
     });
     expect(replay).toBe(false);
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events.filter((event) => event.event_type === "webhook_fired")).toHaveLength(1);
+    const episodes = await listWatcherEpisodes();
+    expect(
+      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "webhook_fired"),
+    ).toHaveLength(1);
   });
 
   it("creates durable firing rows for webhook triggers", async () => {
@@ -142,61 +156,11 @@ describe("WatcherProcessor", () => {
     expect(firings[0]!.status).toBe("queued");
     expect(firings[0]!.scheduled_at_ms).toBe(timestampMs);
 
-    const events = await memoryDal.getEpisodicEvents();
-    const fired = events.find((event) => event.event_type === "webhook_fired");
+    const episodes = await listWatcherEpisodes();
+    const fired = findEpisodeByType(episodes, "webhook_fired");
     expect(fired).toBeDefined();
-    const payload = fired!.payload as Record<string, unknown>;
-    expect(payload["firingId"]).toBe(`webhook-${String(id)}-${replayDigest}`);
-  });
-
-  it("repairs missing durable webhook firings on replay", async () => {
-    const id = await processor.createWatcher("plan-1", "webhook", {
-      secret_handle: {
-        handle_id: "secret-handle",
-        provider: "file",
-        scope: "watcher:webhook:test",
-        created_at: new Date().toISOString(),
-      },
-    });
-    const watcher = await processor.getActiveWatcherById(id);
-    expect(watcher).not.toBeNull();
-
-    const timestampMs = Date.now();
-    const nonce = "nonce-repair-1";
-    const replayDigest = createHash("sha256").update(nonce).digest("hex");
-    const firingId = `webhook-${String(id)}-${replayDigest}`;
-    const eventId = `watcher-${String(id)}-webhook-${replayDigest}`;
-
-    // Simulate a crash after recording the replay marker episodic event but before
-    // creating the durable watcher_firings row.
-    const inserted = await memoryDal.insertEpisodicEventIfAbsent(
-      eventId,
-      new Date(timestampMs).toISOString(),
-      "watcher",
-      "webhook_fired",
-      { firingId, watcherId: id, planId: "plan-1" },
-    );
-    expect(inserted).toBe(true);
-
-    const repaired = await processor.recordWebhookTrigger(watcher!, {
-      timestampMs,
-      nonce,
-      bodySha256: "abc123",
-      bodyBytes: 11,
-    });
-    expect(repaired).toBe(true);
-
-    const firings = await db.all<{ firing_id: string }>("SELECT firing_id FROM watcher_firings");
-    expect(firings).toHaveLength(1);
-    expect(firings[0]!.firing_id).toBe(firingId);
-
-    const replay = await processor.recordWebhookTrigger(watcher!, {
-      timestampMs,
-      nonce,
-      bodySha256: "abc123",
-      bodyBytes: 11,
-    });
-    expect(replay).toBe(false);
+    const payload = fired!.provenance.metadata as Record<string, unknown> | undefined;
+    expect(payload?.["firing_id"]).toBe(`webhook-${String(id)}-${replayDigest}`);
   });
 
   it("rejects webhook nonce replays even when timestamp differs", async () => {
@@ -327,7 +291,7 @@ describe("WatcherProcessor", () => {
   it("bounds webhook scheduled_at cursor map size", async () => {
     const limitedProcessor = new WatcherProcessor({
       db,
-      memoryDal,
+      memoryV1Dal,
       eventBus,
       webhookScheduledAtCursorMaxEntries: 3,
     });

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import mitt from "mitt";
-import { MemoryDal } from "../../src/modules/memory/dal.js";
+import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
 import type { GatewayEvents } from "../../src/event-bus.js";
@@ -12,31 +12,41 @@ import type { PolicyService } from "../../src/modules/policy/service.js";
 
 describe("WatcherScheduler", () => {
   let db: SqliteDb;
-  let memoryDal: MemoryDal;
+  let memoryV1Dal: MemoryV1Dal;
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
   let scheduler: WatcherScheduler;
 
   beforeEach(() => {
     db = openTestSqliteDb();
-    memoryDal = new MemoryDal(db);
+    memoryV1Dal = new MemoryV1Dal(db);
     eventBus = mitt<GatewayEvents>();
-    processor = new WatcherProcessor({ db, memoryDal, eventBus });
-    scheduler = new WatcherScheduler({ db, memoryDal, eventBus, tickMs: 100 });
+    processor = new WatcherProcessor({ db, memoryV1Dal, eventBus });
+    scheduler = new WatcherScheduler({ db, memoryV1Dal, eventBus, tickMs: 100 });
   });
 
   afterEach(async () => {
     await db.close();
   });
 
+  async function listWatcherEpisodes(): Promise<any[]> {
+    const { items } = await memoryV1Dal.list({
+      agentId: "default",
+      filter: { kinds: ["episode"], provenance: { channels: ["watcher"] } },
+      limit: 2000,
+    });
+    return items;
+  }
+
   it("fires periodic watcher on first tick", async () => {
     await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(1);
-    expect(events[0]!.event_type).toBe("periodic_fired");
+    const episodes = await listWatcherEpisodes();
+    expect(
+      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "periodic_fired"),
+    ).toHaveLength(1);
 
     const firings = await db.all<{ status: string }>("SELECT status FROM watcher_firings");
     expect(firings).toHaveLength(1);
@@ -49,8 +59,10 @@ describe("WatcherScheduler", () => {
     await scheduler.tick();
     await scheduler.tick(); // second tick, interval not yet elapsed
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(1); // only fired once
+    const episodes = await listWatcherEpisodes();
+    expect(
+      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "periodic_fired"),
+    ).toHaveLength(1); // only fired once
   });
 
   it("skips watchers with invalid config", async () => {
@@ -63,8 +75,8 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(0);
+    const episodes = await listWatcherEpisodes();
+    expect(episodes).toHaveLength(0);
   });
 
   it("skips watchers with non-positive intervalMs", async () => {
@@ -73,8 +85,8 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(0);
+    const episodes = await listWatcherEpisodes();
+    expect(episodes).toHaveLength(0);
   });
 
   it("ignores non-periodic watchers", async () => {
@@ -82,8 +94,8 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(0);
+    const episodes = await listWatcherEpisodes();
+    expect(episodes).toHaveLength(0);
   });
 
   it("emits watcher:fired event on fire", async () => {
@@ -122,7 +134,7 @@ describe("WatcherScheduler", () => {
   it("keeps the interval timer refed when keepProcessAlive is true", () => {
     const keepAliveScheduler = new WatcherScheduler({
       db,
-      memoryDal,
+      memoryV1Dal,
       eventBus,
       tickMs: 100,
       keepProcessAlive: true,
@@ -146,8 +158,8 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(0);
+    const episodes = await listWatcherEpisodes();
+    expect(episodes).toHaveLength(0);
   });
 
   it("claims webhook firings without emitting periodic events", async () => {
@@ -179,9 +191,13 @@ describe("WatcherScheduler", () => {
     expect(firings[0]!.trigger_type).toBe("webhook");
     expect(firings[0]!.status).toBe("enqueued");
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events.filter((event) => event.event_type === "webhook_fired")).toHaveLength(1);
-    expect(events.filter((event) => event.event_type === "periodic_fired")).toHaveLength(0);
+    const episodes = await listWatcherEpisodes();
+    expect(
+      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "webhook_fired"),
+    ).toHaveLength(1);
+    expect(
+      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "periodic_fired"),
+    ).toHaveLength(0);
   });
 
   it("includes firing + lease ids in the cron execution trigger metadata", async () => {
@@ -192,7 +208,7 @@ describe("WatcherScheduler", () => {
     const policyBundle = PolicyBundle.parse({ v: 1 });
     const schedulerWithEngine = new WatcherScheduler({
       db,
-      memoryDal,
+      memoryV1Dal,
       eventBus,
       owner: "scheduler-1",
       firingLeaseTtlMs: 10_000,
@@ -256,7 +272,7 @@ describe("WatcherScheduler", () => {
     const policyBundle = PolicyBundle.parse({ v: 1 });
     const schedulerWithEngine = new WatcherScheduler({
       db,
-      memoryDal,
+      memoryV1Dal,
       eventBus,
       owner: "scheduler-1",
       firingLeaseTtlMs: 10_000,
@@ -313,7 +329,7 @@ describe("WatcherScheduler", () => {
     const policyBundle = PolicyBundle.parse({ v: 1 });
     const schedulerWithEngine = new WatcherScheduler({
       db,
-      memoryDal,
+      memoryV1Dal,
       eventBus,
       owner: "scheduler-1",
       firingLeaseTtlMs: 10_000,

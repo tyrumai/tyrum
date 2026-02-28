@@ -38,7 +38,6 @@ import { createWsHandler } from "./routes/ws.js";
 import { maybeStartOtel } from "./modules/observability/otel.js";
 import { AuthAudit } from "./modules/auth/audit.js";
 import { SlidingWindowRateLimiter } from "./modules/auth/rate-limiter.js";
-import { MemoryV1Dal } from "./modules/memory/v1-dal.js";
 import {
   ExecutionEngine,
   type StepExecutor as ExecutionStepExecutor,
@@ -1048,7 +1047,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     role === "all" || role === "scheduler"
       ? new WatcherScheduler({
           db: container.db,
-          memoryDal: container.memoryDal,
+          memoryV1Dal: container.memoryV1Dal,
           eventBus: container.eventBus,
           keepProcessAlive: role === "scheduler",
         })
@@ -1170,7 +1169,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     logger,
     db: container.db,
     redactionEngine: container.redactionEngine,
-    memoryV1Dal: new MemoryV1Dal(container.db),
+    memoryV1Dal: container.memoryV1Dal,
     artifactStore: container.artifactStore,
     authAudit: new AuthAudit({ eventLog: container.eventLog, logger }),
     contextReportDal: container.contextReportDal,
@@ -1378,7 +1377,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           telegramBot: container.telegramBot,
           owner: instanceId,
           logger,
-          memoryDal: container.memoryDal,
+          memoryV1Dal: container.memoryV1Dal,
           approvalDal: container.approvalDal,
           approvalNotifier,
         })

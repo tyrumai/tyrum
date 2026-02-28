@@ -23,7 +23,7 @@ vi.mock("../../src/container.js", () => {
     policyOverrideDal: {},
     nodePairingDal: {},
     contextReportDal: {},
-    memoryDal: {},
+    memoryV1Dal: {},
     eventBus: {},
     watcherProcessor: { start: vi.fn(), stop: vi.fn() },
     artifactStore: {},

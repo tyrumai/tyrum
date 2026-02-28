@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import mitt from "mitt";
 import { createHmac, randomUUID } from "node:crypto";
-import { MemoryDal } from "../../src/modules/memory/dal.js";
+import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
 import { createWatcherRoutes } from "../../src/routes/watcher.js";
@@ -67,7 +67,7 @@ class InMemorySecretProvider implements SecretProvider {
 
 describe("Watcher routes + scheduler integration", () => {
   let db: SqliteDb;
-  let memoryDal: MemoryDal;
+  let memoryV1Dal: MemoryV1Dal;
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
   let secretProviders: Map<string, InMemorySecretProvider>;
@@ -108,9 +108,9 @@ describe("Watcher routes + scheduler integration", () => {
 
   beforeEach(() => {
     db = openTestSqliteDb();
-    memoryDal = new MemoryDal(db);
+    memoryV1Dal = new MemoryV1Dal(db);
     eventBus = mitt<GatewayEvents>();
-    processor = new WatcherProcessor({ db, memoryDal, eventBus });
+    processor = new WatcherProcessor({ db, memoryV1Dal, eventBus });
     secretProviders = new Map([["default", new InMemorySecretProvider()]]);
     app = new Hono();
     app.route(
@@ -124,6 +124,15 @@ describe("Watcher routes + scheduler integration", () => {
   afterEach(async () => {
     await db.close();
   });
+
+  async function listWatcherEpisodes(): Promise<any[]> {
+    const { items } = await memoryV1Dal.list({
+      agentId: "default",
+      filter: { kinds: ["episode"], provenance: { channels: ["watcher"] } },
+      limit: 2000,
+    });
+    return items;
+  }
 
   it("POST /watchers creates a watcher", async () => {
     const res = await app.request("/watchers", {
@@ -208,16 +217,16 @@ describe("Watcher routes + scheduler integration", () => {
     // Fire a scheduler tick
     const scheduler = new WatcherScheduler({
       db,
-      memoryDal,
+      memoryV1Dal,
       eventBus,
       tickMs: 100,
     });
     await scheduler.tick();
 
-    // Verify episodic event was created
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(1);
-    expect(events[0]!.event_type).toBe("periodic_fired");
+    const episodes = await listWatcherEpisodes();
+    expect(
+      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "periodic_fired"),
+    ).toHaveLength(1);
   });
 
   it("POST /watchers/:id/trigger/webhook rejects requests without signature envelope", async () => {
@@ -266,8 +275,10 @@ describe("Watcher routes + scheduler integration", () => {
     });
 
     expect(replay.status).toBe(409);
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events.filter((event) => event.event_type === "webhook_fired")).toHaveLength(1);
+    const episodes = await listWatcherEpisodes();
+    expect(
+      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "webhook_fired"),
+    ).toHaveLength(1);
   });
 
   it("POST /watchers/:id/trigger/webhook rejects nonce replays even if timestamp unit differs", async () => {
@@ -385,7 +396,9 @@ describe("Watcher routes + scheduler integration", () => {
     });
 
     expect(res.status).toBe(401);
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events.filter((event) => event.event_type === "webhook_fired")).toHaveLength(0);
+    const episodes = await listWatcherEpisodes();
+    expect(
+      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "webhook_fired"),
+    ).toHaveLength(0);
   });
 });

@@ -290,11 +290,10 @@ describe("Pre-compaction memory flush", () => {
 
     const memory = new MemoryV1Dal(container.db);
     const list = await memory.list({ agentId: "default", limit: 50 });
-    expect(list.items).toHaveLength(1);
-    const item = list.items[0];
-    if (!item || item.kind !== "note") {
-      throw new Error("expected memory v1 note item");
-    }
+    const notes = list.items.filter((item) => item.kind === "note");
+    expect(notes).toHaveLength(1);
+    const item = notes[0];
+    if (!item) throw new Error("expected memory v1 note item");
 
     expect(item.body_md).not.toContain(secret);
     expect(item.body_md).toContain("[REDACTED]");

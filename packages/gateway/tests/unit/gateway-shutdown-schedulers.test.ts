@@ -41,7 +41,7 @@ describe("gateway shutdown", () => {
         createContainerAsync: async () =>
           ({
             db,
-            memoryDal: {},
+            memoryV1Dal: {},
             contextReportDal: {},
             secretResolutionAuditDal: {},
             eventLog: {},

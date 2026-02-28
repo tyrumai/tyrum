@@ -353,7 +353,7 @@ describe("WS event catalog", () => {
         },
         required_scopes: ["operator.write"],
         method: "POST",
-        path: "/memory/facts",
+        path: "/watchers",
         request_id: "req-2",
         client_ip: "203.0.113.10",
         client_id: "client-1",

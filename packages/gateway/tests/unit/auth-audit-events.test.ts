@@ -164,9 +164,9 @@ describe("auth audit events", () => {
       const app = new Hono();
       app.use("*", createAuthMiddleware(tokenStore, { audit }));
       app.use("*", createHttpScopeAuthorizationMiddleware({ audit }));
-      app.post("/memory/facts", (c) => c.json({ ok: true }));
+      app.post("/watchers", (c) => c.json({ ok: true }));
 
-      const res = await app.request("/memory/facts", {
+      const res = await app.request("/watchers", {
         method: "POST",
         headers: { Authorization: `Bearer ${deviceToken.token}` },
       });

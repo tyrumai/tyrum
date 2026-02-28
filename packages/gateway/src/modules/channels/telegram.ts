@@ -28,7 +28,8 @@ import type { ApprovalDal } from "../approval/dal.js";
 import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { PolicyService } from "../policy/service.js";
 import { isSafeSuggestedOverridePattern } from "../policy/override-guardrails.js";
-import type { MemoryDal } from "../memory/dal.js";
+import type { MemoryV1Dal } from "../memory/v1-dal.js";
+import { recordMemoryV1SystemEpisode } from "../memory/v1-episode-recorder.js";
 import {
   type ChannelEgressConnector,
   DEFAULT_CHANNEL_ACCOUNT_ID,
@@ -544,7 +545,7 @@ export class TelegramChannelProcessor {
   private readonly egressConnectors: Map<string, ChannelEgressConnector>;
   private readonly owner: string;
   private readonly logger?: Logger;
-  private readonly memoryDal?: MemoryDal;
+  private readonly memoryV1Dal?: MemoryV1Dal;
   private readonly approvalDal?: ApprovalDal;
   private readonly approvalNotifier?: ApprovalNotifier;
   private readonly pollIntervalMs: number;
@@ -562,7 +563,7 @@ export class TelegramChannelProcessor {
     telegramBot: TelegramBot;
     owner: string;
     logger?: Logger;
-    memoryDal?: MemoryDal;
+    memoryV1Dal?: MemoryV1Dal;
     approvalDal?: ApprovalDal;
     approvalNotifier?: ApprovalNotifier;
     egressConnectors?: ChannelEgressConnector[];
@@ -584,7 +585,7 @@ export class TelegramChannelProcessor {
     );
     this.owner = opts.owner;
     this.logger = opts.logger;
-    this.memoryDal = opts.memoryDal;
+    this.memoryV1Dal = opts.memoryV1Dal;
     this.approvalDal = opts.approvalDal;
     this.approvalNotifier = opts.approvalNotifier;
     this.pollIntervalMs = opts.pollIntervalMs ?? 250;
@@ -1087,23 +1088,27 @@ export class TelegramChannelProcessor {
       },
     });
 
-    if (this.memoryDal && formattingFallbacks.length > 0) {
+    if (this.memoryV1Dal && formattingFallbacks.length > 0) {
       const occurredAt = new Date().toISOString();
       await Promise.allSettled(
         formattingFallbacks.map(async (fallback) => {
-          await this.memoryDal?.insertEpisodicEvent(
-            `channel-formatting-fallback-${randomUUID()}`,
-            occurredAt,
-            connectorId,
-            "channel_formatting_fallback",
+          await recordMemoryV1SystemEpisode(
+            this.memoryV1Dal!,
             {
-              mode: "pipeline",
-              agent_id: agentId,
-              inbox_id: leader.inbox_id,
-              source: leader.source,
-              reason: fallback.reason,
-              chunk_index: fallback.chunk_index,
-              ...(fallback.detail ? { detail: fallback.detail } : {}),
+              occurred_at: occurredAt,
+              channel: connectorId,
+              event_type: "channel_formatting_fallback",
+              summary_md: `Telegram formatting fallback: ${fallback.reason}`,
+              tags: ["channel", "telegram", "formatting_fallback"],
+              metadata: {
+                mode: "pipeline",
+                agent_id: agentId,
+                inbox_id: leader.inbox_id,
+                source: leader.source,
+                reason: fallback.reason,
+                chunk_index: fallback.chunk_index,
+                ...(fallback.detail ? { detail: fallback.detail } : {}),
+              },
             },
             agentId,
           );

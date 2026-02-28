@@ -5,7 +5,23 @@
  */
 
 import type { DiscoveryRequest, DiscoveryResolution } from "@tyrum/schemas";
-import type { CapabilityMemoryRow } from "../../memory/dal.js";
+
+export type CapabilityMemoryRow = {
+  id: number;
+  capability_type: string;
+  capability_identifier: string;
+  executor_kind: string;
+  selectors: unknown | null;
+  outcome_metadata: unknown | null;
+  cost_profile: unknown | null;
+  anti_bot_notes: string | null;
+  result_summary: string | null;
+  success_count: number;
+  last_success_at: string | null;
+  metadata: unknown | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export interface CapabilityMemorySource {
   getCapabilityMemories(capabilityType?: string): Promise<CapabilityMemoryRow[]>;

@@ -3,14 +3,15 @@
  *
  * Subscribes to plan lifecycle events on the gateway event bus and
  * evaluates trigger conditions stored in the watchers table.  When a
- * trigger fires it records an episodic event through the MemoryDal.
+ * trigger fires it records an episodic event through Memory v1.
  */
 
 import type { Emitter, Handler } from "mitt";
 import { createHash } from "node:crypto";
 import type { GatewayEvents } from "../../event-bus.js";
-import type { MemoryDal } from "../memory/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
+import type { MemoryV1Dal } from "../memory/v1-dal.js";
+import { recordMemoryV1SystemEpisode } from "../memory/v1-episode-recorder.js";
 import { WatcherFiringDal } from "./firing-dal.js";
 
 const DEFAULT_WEBHOOK_SCHEDULED_AT_CURSOR_MAX_ENTRIES = 10_000;
@@ -60,7 +61,7 @@ export interface WebhookTriggerEvent {
 
 export interface WatcherProcessorOptions {
   db: SqlDb;
-  memoryDal: MemoryDal;
+  memoryV1Dal: MemoryV1Dal;
   eventBus: Emitter<GatewayEvents>;
   /** Max entries for the webhook scheduled_at cursor cache (default: 10_000). Set to 0 to disable caching. */
   webhookScheduledAtCursorMaxEntries?: number;
@@ -81,7 +82,7 @@ function parseRow(row: RawWatcherRow): WatcherRow {
 
 export class WatcherProcessor {
   private readonly db: SqlDb;
-  private readonly memoryDal: MemoryDal;
+  private readonly memoryV1Dal: MemoryV1Dal;
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly firingDal: WatcherFiringDal;
   private readonly webhookScheduledAtCursorMaxEntries: number;
@@ -92,7 +93,7 @@ export class WatcherProcessor {
 
   constructor(opts: WatcherProcessorOptions) {
     this.db = opts.db;
-    this.memoryDal = opts.memoryDal;
+    this.memoryV1Dal = opts.memoryV1Dal;
     this.eventBus = opts.eventBus;
     this.firingDal = new WatcherFiringDal(opts.db);
     this.webhookScheduledAtCursorMaxEntries = (() => {
@@ -159,17 +160,22 @@ export class WatcherProcessor {
     const watchers = await this.getActiveWatchersForPlan(event.planId);
     for (const watcher of watchers) {
       if (!this.evaluateTrigger(watcher, event)) continue;
-      await this.memoryDal.insertEpisodicEvent(
-        `watcher-${String(watcher.id)}-${event.planId}-completed`,
-        new Date().toISOString(),
-        "watcher",
-        "plan_completed",
+      await recordMemoryV1SystemEpisode(
+        this.memoryV1Dal,
         {
-          watcherId: watcher.id,
-          planId: event.planId,
-          stepsExecuted: event.stepsExecuted,
-          triggerType: watcher.trigger_type,
+          occurred_at: new Date().toISOString(),
+          channel: "watcher",
+          event_type: "plan_completed",
+          summary_md: `Watcher fired: plan_completed`,
+          tags: ["watcher", `watcher_id:${String(watcher.id)}`, `plan_id:${event.planId}`],
+          metadata: {
+            watcher_id: watcher.id,
+            plan_id: event.planId,
+            steps_executed: event.stepsExecuted,
+            trigger_type: watcher.trigger_type,
+          },
         },
+        "default",
       );
     }
   }
@@ -177,17 +183,22 @@ export class WatcherProcessor {
   async onPlanFailed(event: GatewayEvents["plan:failed"]): Promise<void> {
     const watchers = await this.getActiveWatchersForPlan(event.planId);
     for (const watcher of watchers) {
-      await this.memoryDal.insertEpisodicEvent(
-        `watcher-${String(watcher.id)}-${event.planId}-failed`,
-        new Date().toISOString(),
-        "watcher",
-        "plan_failed",
+      await recordMemoryV1SystemEpisode(
+        this.memoryV1Dal,
         {
-          watcherId: watcher.id,
-          planId: event.planId,
-          reason: event.reason,
-          triggerType: watcher.trigger_type,
+          occurred_at: new Date().toISOString(),
+          channel: "watcher",
+          event_type: "plan_failed",
+          summary_md: `Watcher fired: plan_failed`,
+          tags: ["watcher", `watcher_id:${String(watcher.id)}`, `plan_id:${event.planId}`],
+          metadata: {
+            watcher_id: watcher.id,
+            plan_id: event.planId,
+            reason: event.reason,
+            trigger_type: watcher.trigger_type,
+          },
         },
+        "default",
       );
 
       if (watcher.trigger_type === "plan_complete") {
@@ -248,32 +259,9 @@ export class WatcherProcessor {
     const replayDigest = createHash("sha256").update(event.nonce).digest("hex");
     const firingId = `webhook-${String(watcher.id)}-${replayDigest}`;
 
-    const inserted = await this.memoryDal.insertEpisodicEventIfAbsent(
-      `watcher-${String(watcher.id)}-webhook-${replayDigest}`,
-      new Date(event.timestampMs).toISOString(),
-      "watcher",
-      "webhook_fired",
-      {
-        firingId,
-        watcherId: watcher.id,
-        planId: watcher.plan_id,
-        triggerType: watcher.trigger_type,
-        timestampMs: event.timestampMs,
-        nonce: event.nonce,
-        bodySha256: event.bodySha256,
-        bodyBytes: event.bodyBytes,
-      },
-    );
-
-    if (!inserted) {
-      // Replay marker exists already. This normally indicates the nonce was
-      // handled, but a prior process may have crashed after writing the episodic
-      // event and before creating the durable watcher_firings row. Only reject
-      // the replay if the durable firing exists as well.
-      const existing = await this.firingDal.getById(firingId);
-      if (existing) {
-        return false;
-      }
+    const existing = await this.firingDal.getById(firingId);
+    if (existing) {
+      return false;
     }
 
     const maxScheduledAtSearch = 10_000;
@@ -297,6 +285,9 @@ export class WatcherProcessor {
         scheduledAtMs,
       });
       if (created.row.firing_id === firingId) {
+        if (!created.created) {
+          return false;
+        }
         const nextMs = Math.max(startScheduledAtMs, created.row.scheduled_at_ms + 1);
         this.setWebhookScheduledAtCursorEntry(watcher.id, { baseMs: baseScheduledAtMs, nextMs });
         break;
@@ -305,6 +296,28 @@ export class WatcherProcessor {
         throw new Error("failed to allocate unique scheduled_at_ms for webhook firing");
       }
     }
+
+    await recordMemoryV1SystemEpisode(
+      this.memoryV1Dal,
+      {
+        occurred_at: new Date(event.timestampMs).toISOString(),
+        channel: "watcher",
+        event_type: "webhook_fired",
+        summary_md: `Watcher fired: webhook_fired`,
+        tags: ["watcher", `watcher_id:${String(watcher.id)}`, `plan_id:${watcher.plan_id}`],
+        metadata: {
+          firing_id: firingId,
+          watcher_id: watcher.id,
+          plan_id: watcher.plan_id,
+          trigger_type: watcher.trigger_type,
+          timestamp_ms: event.timestampMs,
+          nonce: event.nonce,
+          body_sha256: event.bodySha256,
+          body_bytes: event.bodyBytes,
+        },
+      },
+      "default",
+    );
 
     this.eventBus.emit("watcher:fired", {
       watcherId: watcher.id,

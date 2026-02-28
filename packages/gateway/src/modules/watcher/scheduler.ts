@@ -15,8 +15,9 @@ import type {
   PolicyBundle as PolicyBundleT,
 } from "@tyrum/schemas";
 import { ActionPrimitive as ActionPrimitiveSchema, Lane, PolicyBundle } from "@tyrum/schemas";
-import type { MemoryDal } from "../memory/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
+import type { MemoryV1Dal } from "../memory/v1-dal.js";
+import { recordMemoryV1SystemEpisode } from "../memory/v1-episode-recorder.js";
 import type { Logger } from "../observability/logger.js";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "../policy/service.js";
@@ -57,7 +58,7 @@ export interface PeriodicTriggerConfig {
 
 export interface WatcherSchedulerOptions {
   db: SqlDb;
-  memoryDal: MemoryDal;
+  memoryV1Dal: MemoryV1Dal;
   eventBus: Emitter<GatewayEvents>;
   owner?: string;
   logger?: Logger;
@@ -77,7 +78,7 @@ export interface WatcherSchedulerOptions {
 
 export class WatcherScheduler {
   private readonly db: SqlDb;
-  private readonly memoryDal: MemoryDal;
+  private readonly memoryV1Dal: MemoryV1Dal;
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly owner: string;
   private readonly logger?: Logger;
@@ -94,7 +95,7 @@ export class WatcherScheduler {
 
   constructor(opts: WatcherSchedulerOptions) {
     this.db = opts.db;
-    this.memoryDal = opts.memoryDal;
+    this.memoryV1Dal = opts.memoryV1Dal;
     this.eventBus = opts.eventBus;
     this.owner = opts.owner?.trim() || "scheduler";
     this.logger = opts.logger;
@@ -279,9 +280,8 @@ export class WatcherScheduler {
 
   private async processFiring(firing: WatcherFiringRow): Promise<void> {
     if (firing.trigger_type === "webhook") {
-      // Webhook firings already have an operator-visible episodic event recorded
-      // at ingestion time (for replay detection). The scheduler's responsibility
-      // is to lease + finalize the durable firing row.
+      // Webhook firings already have an operator-visible episode recorded at ingestion time.
+      // The scheduler's responsibility is to lease + finalize the durable firing row.
       if (!this.isAutomationExecutionEnabled()) {
         await this.firingDal.markEnqueued({ firingId: firing.firing_id, owner: this.owner });
         return;
@@ -297,15 +297,24 @@ export class WatcherScheduler {
     }
 
     const occurredAtIso = new Date(firing.scheduled_at_ms).toISOString();
-    const eventId = `scheduler-${firing.firing_id}`;
-
-    await this.memoryDal.insertEpisodicEvent(eventId, occurredAtIso, "watcher", "periodic_fired", {
-      firing_id: firing.firing_id,
-      watcher_id: firing.watcher_id,
-      plan_id: firing.plan_id,
-      trigger_type: firing.trigger_type,
-      scheduled_at_ms: firing.scheduled_at_ms,
-    });
+    await recordMemoryV1SystemEpisode(
+      this.memoryV1Dal,
+      {
+        occurred_at: occurredAtIso,
+        channel: "watcher",
+        event_type: "periodic_fired",
+        summary_md: `Watcher fired: periodic_fired`,
+        tags: ["watcher", `watcher_id:${String(firing.watcher_id)}`, `plan_id:${firing.plan_id}`],
+        metadata: {
+          firing_id: firing.firing_id,
+          watcher_id: firing.watcher_id,
+          plan_id: firing.plan_id,
+          trigger_type: firing.trigger_type,
+          scheduled_at_ms: firing.scheduled_at_ms,
+        },
+      },
+      "default",
+    );
 
     this.eventBus.emit("watcher:fired", {
       watcherId: firing.watcher_id,

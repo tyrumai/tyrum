@@ -85,6 +85,7 @@ import { VectorDal } from "../../memory/vector-dal.js";
 import { EmbeddingPipeline } from "../../memory/embedding-pipeline.js";
 import { MemoryV1Dal } from "../../memory/v1-dal.js";
 import { buildMemoryV1Digest } from "../../memory/v1-digest.js";
+import { recordMemoryV1SystemEpisode } from "../../memory/v1-episode-recorder.js";
 import {
   MemoryV1SemanticIndex,
   type MemoryV1SemanticSearchHit,
@@ -2245,16 +2246,32 @@ export class AgentRuntime {
       }
     }
 
-    this.opts.container.memoryDal.insertEpisodicEvent(
-      `agent-turn-${randomUUID()}`,
-      nowIso,
-      input.channel,
-      "agent_turn",
-      {
+    try {
+      await recordMemoryV1SystemEpisode(
+        new MemoryV1Dal(this.opts.container.db),
+        {
+          occurred_at: nowIso,
+          channel: input.channel,
+          event_type: "agent_turn",
+          summary_md: `Agent turn: ${input.channel}`,
+          tags: ["agent", "turn"],
+          metadata: {
+            channel: input.channel,
+            thread_id: input.thread_id,
+            session_id: session.session_id,
+          },
+        },
+        this.agentId,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.opts.container.logger.warn("memory.v1.system_episode_record_failed", {
         session_id: session.session_id,
-      },
-      this.agentId,
-    );
+        channel: input.channel,
+        thread_id: input.thread_id,
+        error: message,
+      });
+    }
 
     return AgentTurnResponse.parse({
       reply: finalizedReply,
