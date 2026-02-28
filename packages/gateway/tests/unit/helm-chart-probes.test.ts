@@ -83,9 +83,29 @@ describe("Helm chart probes", () => {
     expect(single).toContain("livenessProbe:");
     expect(single).toContain("startupProbe:");
 
-    expect(countOccurrences(split, "readinessProbe:")).toBeGreaterThanOrEqual(3);
-    expect(countOccurrences(split, "livenessProbe:")).toBeGreaterThanOrEqual(3);
-    expect(countOccurrences(split, "startupProbe:")).toBeGreaterThanOrEqual(3);
+    // In split mode, only the edge role serves HTTP (/healthz).
+    expect(countOccurrences(split, "readinessProbe:")).toBe(1);
+    expect(countOccurrences(split, "livenessProbe:")).toBe(1);
+    expect(countOccurrences(split, "startupProbe:")).toBe(1);
+
+    const docs = split.split(/\n---\n/);
+    const edge = docs.find((doc) => doc.includes("-edge") && doc.includes('args: ["edge"]'));
+    const worker = docs.find((doc) => doc.includes("-worker") && doc.includes('args: ["worker"]'));
+    const scheduler = docs.find(
+      (doc) => doc.includes("-scheduler") && doc.includes('args: ["scheduler"]'),
+    );
+
+    expect(edge).toContain("startupProbe:");
+    expect(edge).toContain("readinessProbe:");
+    expect(edge).toContain("livenessProbe:");
+
+    expect(worker).not.toContain("startupProbe:");
+    expect(worker).not.toContain("readinessProbe:");
+    expect(worker).not.toContain("livenessProbe:");
+
+    expect(scheduler).not.toContain("startupProbe:");
+    expect(scheduler).not.toContain("readinessProbe:");
+    expect(scheduler).not.toContain("livenessProbe:");
   });
 
   test("_helpers.tpl defines a reusable probe template for /healthz", () => {
