@@ -109,7 +109,7 @@ function samplePairingRequestPending() {
     requested_at: "2026-01-01T00:00:00.000Z",
     node: {
       node_id: "node-1",
-      label: "tyrum-desktop-sandbox (takeover: http://localhost:6080/vnc.html?autoconnect=true)",
+      label: "my takeover: label (takeover: http://localhost:6080/vnc.html?autoconnect=true)",
       last_seen_at: "2026-01-01T00:00:00.000Z",
       capabilities: [],
     },
