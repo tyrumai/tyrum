@@ -225,6 +225,157 @@ describe("Pre-compaction memory flush", () => {
     expect(flushPromptText).toContain("[REDACTED]");
   });
 
+  it("redacts secret-like text from the flush result before storing it in memory v1", async () => {
+    const secret = "ghp_123456789012345678901234567890";
+
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-secret-out-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow: []",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 1",
+        "memory:",
+        "  markdown_enabled: false",
+        "  v1:",
+        "    enabled: true",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const languageModel = createSequencedTextLanguageModel([
+      "a1",
+      `Remember this: ${secret}`,
+      "a2",
+    ]);
+
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+    });
+
+    const first = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-secret-out",
+      message: "first",
+    });
+    expect(first.reply).toBe("a1");
+
+    const second = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-secret-out",
+      message: "second",
+    });
+    expect(second.reply).toBe("a2");
+
+    const memory = new MemoryV1Dal(container.db);
+    const list = await memory.list({ agentId: "default", limit: 50 });
+    expect(list.items).toHaveLength(1);
+    const item = list.items[0];
+    if (!item || item.kind !== "note") {
+      throw new Error("expected memory v1 note item");
+    }
+
+    expect(item.body_md).not.toContain(secret);
+    expect(item.body_md).toContain("[REDACTED]");
+  });
+
+  it("truncates very long message content in the flush prompt", async () => {
+    const tail = "TAIL_SHOULD_NOT_APPEAR_IN_PROMPT";
+    const longMessage = `prefix ${"x".repeat(10_000)} ${tail}`;
+
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-truncate-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow: []",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 1",
+        "memory:",
+        "  markdown_enabled: false",
+        "  v1:",
+        "    enabled: true",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const languageModel = createSequencedTextLanguageModel(["a1", "NOOP", "a2"]);
+
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+    });
+
+    const first = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-truncate",
+      message: longMessage,
+    });
+    expect(first.reply).toBe("a1");
+
+    const second = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-truncate",
+      message: "second",
+    });
+    expect(second.reply).toBe("a2");
+
+    expect(languageModel.doGenerateCalls).toHaveLength(3);
+    const flushCall = languageModel.doGenerateCalls[1];
+    const flushPromptText = flushCall
+      ? flushCall.prompt
+          .filter((msg) => msg.role === "user")
+          .flatMap((msg) => (Array.isArray(msg.content) ? msg.content : []))
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("\n")
+      : "";
+
+    expect(flushPromptText).toContain("prefix");
+    expect(flushPromptText).not.toContain(tail);
+    expect(flushPromptText).toContain("...(truncated)");
+  });
+
   it("only triggers the flush when the next append would compact (threshold behavior)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-threshold-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });

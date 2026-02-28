@@ -126,6 +126,8 @@ const TURN_ENGINE_MIN_BACKOFF_MS = 5;
 const TURN_ENGINE_MAX_BACKOFF_MS = 250;
 
 const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
+const PRE_COMPACTION_FLUSH_TRUNCATION_MARKER = "...(truncated)";
+const MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS = 2_000;
 
 const WITHIN_TURN_LOOP_STOP_REPLY =
   "Loop detected (repeated tool calls); stopping to avoid runaway execution. " +
@@ -1650,7 +1652,19 @@ export class AgentRuntime {
   private formatPreCompactionFlushPrompt(droppedTurns: readonly SessionMessage[]): string {
     const lines = droppedTurns.map((turn) => {
       const role = turn.role === "assistant" ? "Assistant" : "User";
-      return `${role} (${turn.timestamp}): ${redactSecretLikeText(turn.content.trim())}`;
+      const redacted = redactSecretLikeText(turn.content.trim());
+      const content =
+        redacted.length <= MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS
+          ? redacted
+          : `${redacted.slice(
+              0,
+              Math.max(
+                0,
+                MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS -
+                  PRE_COMPACTION_FLUSH_TRUNCATION_MARKER.length,
+              ),
+            )}${PRE_COMPACTION_FLUSH_TRUNCATION_MARKER}`;
+      return `${role} (${turn.timestamp}): ${content}`;
     });
 
     return [
@@ -1751,20 +1765,25 @@ export class AgentRuntime {
         timeout: flushTimeoutMs,
       });
 
-      const flushText = (flushResult.text ?? "").trim();
-      if (flushText.length === 0 || flushText.toUpperCase() === "NOOP") {
+      const rawFlushText = (flushResult.text ?? "").trim();
+      if (rawFlushText.length === 0 || rawFlushText.toUpperCase() === "NOOP") {
         return;
       }
 
-      const entry = ["Pre-compaction memory flush", "", flushText].join("\n").trim();
-      if (looksLikeSecretText(entry)) {
-        this.opts.container.logger.warn("memory.flush_skipped_secret_like", {
+      const flushText = redactSecretLikeText(rawFlushText).trim();
+      if (flushText.length === 0) {
+        return;
+      }
+
+      if (flushText !== rawFlushText) {
+        this.opts.container.logger.warn("memory.flush_redacted_secret_like", {
           session_id: input.session.session_id,
           channel: input.session.channel,
           thread_id: input.session.thread_id,
         });
-        return;
       }
+
+      const entry = ["Pre-compaction memory flush", "", flushText].join("\n").trim();
 
       if (v1Enabled) {
         try {
