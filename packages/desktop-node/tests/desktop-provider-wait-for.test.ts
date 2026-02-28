@@ -133,4 +133,33 @@ describe("DesktopProvider (wait_for)", () => {
       status: "satisfied",
     });
   });
+
+  it("wait_for(hidden) does not satisfy when query fails (OCR unavailable)", async () => {
+    const backend = new MockDesktopBackend();
+    const permissions = {
+      desktopScreenshot: true,
+      desktopInput: false,
+      desktopInputRequiresConfirmation: false,
+    };
+
+    const provider = new DesktopProvider(backend, permissions, vi.fn<ConfirmationFn>());
+
+    const result = await provider.execute(
+      makeAction({
+        op: "wait_for",
+        selector: { kind: "ocr", text: "missing" },
+        state: "hidden",
+        timeout_ms: 0,
+        poll_ms: 50,
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.result).toMatchObject({
+      op: "wait_for",
+      state: "hidden",
+      status: "timeout",
+    });
+    expect(backend.calls).toEqual([]);
+  });
 });

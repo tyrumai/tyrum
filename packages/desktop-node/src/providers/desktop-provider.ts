@@ -598,7 +598,11 @@ export class DesktopProvider implements CapabilityProvider {
 
       lastMatch = matches[0] ?? lastMatch;
 
-      const satisfied = args.state === "hidden" ? matches.length === 0 : matches.length > 0;
+      const satisfied = queryResult.success
+        ? args.state === "hidden"
+          ? matches.length === 0
+          : matches.length > 0
+        : false;
       if (satisfied) {
         const elapsed = Date.now() - start;
         return {
