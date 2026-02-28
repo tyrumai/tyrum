@@ -20,7 +20,9 @@ describe("auth middleware public allowlist", () => {
 
     const res = await app.request("/healthz");
     expect(res.status).toBe(503);
-    const body = (await res.json()) as { error?: string };
-    expect(body.error).toBe("unauthorized");
+    const body = (await res.json()) as { error?: string; message?: string };
+    expect(body.error).toBe("service_unavailable");
+    expect(body.message).toBeTypeOf("string");
+    expect(body.message).not.toContain("Bearer");
   });
 });

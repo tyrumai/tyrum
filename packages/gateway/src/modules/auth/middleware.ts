@@ -22,6 +22,11 @@ const AUTH_ERROR_BODY = {
   message: "Provide a valid token via Authorization: Bearer <token> header",
 };
 
+const AUTH_UNAVAILABLE_BODY = {
+  error: "service_unavailable",
+  message: "Authentication service is unavailable; please try again later.",
+};
+
 const AUTH_SESSION_ROUTE_PATH = "/auth/session";
 const AUTH_LOGOUT_ROUTE_PATH = "/auth/logout";
 const UI_PATH_PREFIX = "/ui";
@@ -80,8 +85,6 @@ function matchPublicPathExemption(c: Context): PublicPathExemption | undefined {
   return undefined;
 }
 
-let didLogMissingTokenStore = false;
-
 export function createAuthMiddleware(
   tokenStore: TokenStore | undefined,
   opts?: {
@@ -89,6 +92,7 @@ export function createAuthMiddleware(
     logger?: Logger;
   },
 ) {
+  let didLogMissingTokenStore = false;
   return async (c: Context, next: Next) => {
     if (!tokenStore) {
       if (!didLogMissingTokenStore) {
@@ -100,7 +104,7 @@ export function createAuthMiddleware(
           request_id: requestIdForAudit(c),
         });
       }
-      return c.json(AUTH_ERROR_BODY, 503);
+      return c.json(AUTH_UNAVAILABLE_BODY, 503);
     }
 
     const publicPathExemption = matchPublicPathExemption(c);
