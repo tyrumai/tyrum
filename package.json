@@ -28,6 +28,7 @@
       "minimatch": "10.2.4",
       "null-loader>schema-utils": "4.3.3",
       "rollup": "4.59.0",
+      "serialize-javascript": "7.0.3",
       "tmp": ">=0.2.4",
       "url-loader>schema-utils": "4.3.3"
     },
