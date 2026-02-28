@@ -24,6 +24,7 @@ import { getDesktopApi } from "./desktop-api.js";
 import { ThemeProvider } from "./hooks/use-theme.js";
 import { ApprovalsPage } from "./pages/approvals-page.js";
 import { ConnectPage } from "./pages/connect-page.js";
+import { DashboardPage } from "./pages/dashboard-page.js";
 import { RunsPage } from "./pages/runs-page.js";
 import { PairingPage } from "./pages/pairing-page.js";
 import { useOperatorStore } from "./use-operator-store.js";
@@ -517,25 +518,6 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
   );
 }
 
-function DashboardPage({ core }: { core: OperatorCore }) {
-  const statusState = useOperatorStore(core.statusStore);
-  return (
-    <>
-      <h1>Dashboard</h1>
-      <button
-        type="button"
-        data-testid="dashboard-refresh-status"
-        onClick={() => {
-          void core.statusStore.refreshStatus();
-        }}
-      >
-        Refresh status
-      </button>
-      <div>Instance: {statusState.status?.instance_id ?? "-"}</div>
-    </>
-  );
-}
-
 function SettingsPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
   const statusState = useOperatorStore(core.statusStore);
   const totalTokens = statusState.usage?.local.totals.total_tokens;
@@ -657,7 +639,7 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
           >
             <AdminModeProvider core={core} mode={mode}>
               {route === "connect" && <ConnectPage core={core} mode={mode} />}
-              {route === "dashboard" && <DashboardPage core={core} />}
+              {route === "dashboard" && <DashboardPage core={core} onNavigate={navigate} />}
               {route === "memory" && <MemoryInspector core={core} />}
               {route === "approvals" && <ApprovalsPage core={core} />}
               {route === "runs" && <RunsPage core={core} />}

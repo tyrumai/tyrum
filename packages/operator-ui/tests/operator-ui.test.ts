@@ -1269,7 +1269,11 @@ describe("operator-ui", () => {
 
   it("refreshes and displays status on the dashboard", async () => {
     const ws = new FakeWsClient();
-    const { http, statusGet } = createFakeHttpClient();
+    ws.approvalList.mockResolvedValueOnce({
+      approvals: [sampleApprovalPending()],
+      next_cursor: undefined,
+    });
+    const { http, statusGet, usageGet, presenceList, pairingsList } = createFakeHttpClient();
     const core = createOperatorCore({
       wsUrl: "ws://example.test/ws",
       httpBaseUrl: "http://example.test",
@@ -1295,6 +1299,10 @@ describe("operator-ui", () => {
       dashboardLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
+    const pageHeader = container.querySelector<HTMLElement>("header");
+    expect(pageHeader).not.toBeNull();
+    expect(pageHeader?.className).toContain("mb-0");
+
     const refreshButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="dashboard-refresh-status"]',
     );
@@ -1306,7 +1314,66 @@ describe("operator-ui", () => {
     });
 
     expect(statusGet).toHaveBeenCalledTimes(1);
+    expect(usageGet).toHaveBeenCalledTimes(1);
+    expect(presenceList).toHaveBeenCalledTimes(1);
+    expect(pairingsList).toHaveBeenCalledTimes(1);
+    expect(ws.approvalList).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("gateway-1");
+    expect(container.textContent).toContain("Tokens Used");
+    expect(container.textContent).toContain("Pending Approvals");
+
+    const approvalsBadge = container.querySelector<HTMLSpanElement>(
+      '[data-testid="dashboard-approvals-badge"]',
+    );
+    expect(approvalsBadge?.textContent).toContain("1");
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("navigates to approvals when clicking the pending approvals card", () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    const dashboardLink = container.querySelector<HTMLButtonElement>(
+      '[data-testid="nav-dashboard"]',
+    );
+    expect(dashboardLink).not.toBeNull();
+
+    act(() => {
+      dashboardLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const approvalsCard = container.querySelector<HTMLDivElement>(
+      '[data-testid="dashboard-card-approvals"]',
+    );
+    expect(approvalsCard).not.toBeNull();
+
+    act(() => {
+      approvalsCard?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const approvalsRefresh = container.querySelector<HTMLButtonElement>(
+      '[data-testid="approvals-refresh"]',
+    );
+    expect(approvalsRefresh).not.toBeNull();
 
     act(() => {
       root?.unmount();
