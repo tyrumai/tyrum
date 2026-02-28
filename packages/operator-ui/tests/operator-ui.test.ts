@@ -1299,6 +1299,10 @@ describe("operator-ui", () => {
       dashboardLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
+    const pageHeader = container.querySelector<HTMLElement>("header");
+    expect(pageHeader).not.toBeNull();
+    expect(pageHeader?.className).toContain("mb-0");
+
     const refreshButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="dashboard-refresh-status"]',
     );

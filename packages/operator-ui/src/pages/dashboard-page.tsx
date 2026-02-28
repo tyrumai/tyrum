@@ -117,6 +117,7 @@ export function DashboardPage({ core, onNavigate }: DashboardPageProps) {
     <div className="grid gap-6">
       <PageHeader
         title="Dashboard"
+        className="mb-0"
         actions={
           <Button
             variant="secondary"
