@@ -74,24 +74,46 @@ export { ConnectionManager } from "./ws/connection-manager.js";
 export type { ConnectedClient, ConnectionStats } from "./ws/connection-manager.js";
 
 export function formatFatalErrorForConsole(error: unknown): string {
-  let formatted: string;
-
-  if (error instanceof Error) {
-    const name = error.name?.trim() ? error.name : "Error";
-    formatted = `${name}: ${error.message}`;
-  } else {
-    const errorType = typeof error;
-    let stringified: string;
-    if (typeof error === "string") {
-      stringified = error;
-    } else {
-      try {
-        stringified = JSON.stringify(error) ?? String(error);
-      } catch {
-        stringified = String(error);
-      }
+  const safeToString = (value: unknown): string => {
+    try {
+      return String(value);
+    } catch {
+      return "[unstringifiable]";
     }
-    formatted = `${errorType}: ${stringified}`;
+  };
+
+  const safeJsonStringify = (value: unknown): string | undefined => {
+    try {
+      return JSON.stringify(value) ?? undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  let formatted = "Error: [unable to format fatal error]";
+
+  try {
+    if (error instanceof Error) {
+      const rawName = (error as { name?: unknown }).name;
+      const name = typeof rawName === "string" && rawName.trim() ? rawName : "Error";
+
+      const rawMessage = (error as { message?: unknown }).message;
+      const message =
+        typeof rawMessage === "string"
+          ? rawMessage
+          : rawMessage == null
+            ? ""
+            : safeToString(rawMessage);
+
+      formatted = `${name}: ${message}`;
+    } else {
+      const errorType = typeof error;
+      const stringified =
+        typeof error === "string" ? error : (safeJsonStringify(error) ?? safeToString(error));
+      formatted = `${errorType}: ${stringified}`;
+    }
+  } catch {
+    // Keep fallback.
   }
 
   // Redact URI-style userinfo (e.g. postgres://user:pass@host -> postgres://***@host)

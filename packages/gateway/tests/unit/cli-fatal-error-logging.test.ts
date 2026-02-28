@@ -35,4 +35,18 @@ describe("formatFatalErrorForConsole", () => {
     expect(formatted).toBe(`string: ${longString}`.slice(0, 500));
     expect(formatted.length).toBe(500);
   });
+
+  it("does not throw when formatting pathological thrown values", () => {
+    const pathological = {
+      toJSON() {
+        return undefined;
+      },
+      [Symbol.toPrimitive]() {
+        throw new Error("nope");
+      },
+    };
+
+    expect(() => formatFatalErrorForConsole(pathological)).not.toThrow();
+    expect(formatFatalErrorForConsole(pathological)).toContain("object:");
+  });
 });
