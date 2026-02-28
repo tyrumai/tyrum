@@ -163,11 +163,18 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
 
   it("vNext handshake + task.execute exchange conform to @tyrum/schemas contracts", async () => {
     let resolveTaskResult:
-      | ((value: { taskId: string; success: boolean; evidence: unknown; error?: string }) => void)
+      | ((value: {
+          taskId: string;
+          success: boolean;
+          result: unknown;
+          evidence: unknown;
+          error?: string;
+        }) => void)
       | undefined;
     const taskResultP = new Promise<{
       taskId: string;
       success: boolean;
+      result: unknown;
       evidence: unknown;
       error?: string;
     }>((resolve) => {
@@ -177,8 +184,8 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     server = await startInstrumentedGateway((connectionManager) => {
       return {
         connectionManager,
-        onTaskResult(taskId, success, evidence, error) {
-          resolveTaskResult?.({ taskId, success, evidence, error });
+        onTaskResult(taskId, success, result, evidence, error) {
+          resolveTaskResult?.({ taskId, success, result, evidence, error });
         },
       };
     });
