@@ -239,6 +239,7 @@ export class ToolSetBuilder {
       try {
         return JSON.parse(raw) as unknown;
       } catch {
+        // Intentional: stored args may be missing/corrupt; fall back to the args provided by the model.
         return input.args;
       }
     };
@@ -694,7 +695,7 @@ export class ToolSetBuilder {
 
       return { allowlist: [...allowlist], pluginTools: gatedPluginTools };
     } catch {
-      // Fail closed: side-effecting plugin tools are opt-in and require a readable policy bundle.
+      // Intentional: fail closed; side-effecting plugin tools are opt-in and require a readable policy bundle.
       const gatedPluginTools = pluginTools.filter((tool) => !isSideEffectingPluginTool(tool));
       return { allowlist: [...params.allowlist], pluginTools: gatedPluginTools };
     }

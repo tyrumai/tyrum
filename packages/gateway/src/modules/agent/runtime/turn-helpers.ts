@@ -120,6 +120,7 @@ export async function deriveElevatedExecutionAvailable(
     const effective = await policyService.loadEffectiveBundle();
     return deriveElevatedExecutionAvailableFromPolicyBundle(effective.bundle);
   } catch {
+    // Intentional: policy bundle may be unavailable; treat elevated execution as unknown.
     return null;
   }
 }

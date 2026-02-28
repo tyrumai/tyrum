@@ -560,6 +560,7 @@ export class AgentRuntime {
     try {
       serialized = JSON.stringify(input.args);
     } catch {
+      // Intentional: tool approval arg persistence is best-effort; args may be non-serializable.
       serialized = undefined;
     }
     if (typeof serialized !== "string") {
@@ -572,6 +573,7 @@ export class AgentRuntime {
         serialized,
       );
     } catch {
+      // Intentional: tool approval arg persistence is best-effort; continue without stored args handle.
       return undefined;
     }
   }
@@ -697,7 +699,7 @@ export class AgentRuntime {
       try {
         await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "doing" });
       } catch {
-        // ignore WIP or transition errors; the WorkItem still exists for operator triage.
+        // Intentional: best-effort transition to "doing"; the WorkItem still exists for operator triage.
       }
 
       const reply = `Delegated work item created: ${item.work_item_id} (mode=${intakeModeDecision.mode}, reason=${intakeModeDecision.reason_code})`;
@@ -923,6 +925,7 @@ export class AgentRuntime {
       });
       return await index.search(query, limit);
     } catch {
+      // Intentional: semantic search is best-effort; fall back to no hits on failure.
       return [];
     }
   }
@@ -1000,6 +1003,7 @@ export class AgentRuntime {
         try {
           return parseProviderModelId(primaryModelId).providerId;
         } catch {
+          // Intentional: primary model id may not follow provider/model format; treat as unknown.
           return undefined;
         }
       })();
@@ -1113,6 +1117,7 @@ export class AgentRuntime {
 
       return undefined;
     } catch {
+      // Intentional: embedding pipeline resolution is best-effort; fall back to other retrieval strategies.
       return undefined;
     }
   }
@@ -1311,6 +1316,7 @@ export class AgentRuntime {
       try {
         chars = JSON.stringify(schema).length;
       } catch {
+        // Intentional: schema size accounting is best-effort; treat non-serializable schemas as 0 chars.
         chars = 0;
       }
       return { id: t.id, chars };
@@ -1560,7 +1566,7 @@ export class AgentRuntime {
         return { mode: override, reason_code: "override" };
       }
     } catch {
-      // ignore override lookup failures; fall back to default inline
+      // Intentional: intake override lookup is best-effort; fall back to default inline.
     }
 
     return { mode: "inline", reason_code: "default_inline" };
