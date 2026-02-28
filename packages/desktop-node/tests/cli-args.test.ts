@@ -30,4 +30,37 @@ describe("parseDesktopNodeArgs", () => {
     expect(parseDesktopNodeArgs(["--help"]).help).toBe(true);
     expect(parseDesktopNodeArgs(["--version"]).version).toBe(true);
   });
+
+  it("parses --token, --label, --mode, and --home", () => {
+    const parsed = parseDesktopNodeArgs([
+      "--token",
+      "test-token",
+      "--label",
+      "my label",
+      "--mode",
+      "desktop-sandbox",
+      "--home",
+      "/tmp/tyrum",
+    ]);
+
+    expect(parsed).toEqual({
+      wsUrl: undefined,
+      token: "test-token",
+      tokenPath: undefined,
+      takeoverUrl: undefined,
+      label: "my label",
+      mode: "desktop-sandbox",
+      home: "/tmp/tyrum",
+      help: false,
+      version: false,
+    });
+  });
+
+  it("throws when a flag requires a value but none provided", () => {
+    expect(() => parseDesktopNodeArgs(["--token"])).toThrow("--token requires a value");
+  });
+
+  it("throws on unknown arguments", () => {
+    expect(() => parseDesktopNodeArgs(["--nope"])).toThrow("unknown argument: --nope");
+  });
 });
