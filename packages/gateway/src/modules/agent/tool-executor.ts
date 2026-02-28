@@ -22,7 +22,10 @@ import type { RedactionEngine } from "../redaction/engine.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
 import type { ArtifactStore } from "../artifact/store.js";
-import { persistExecutionArtifactBytes } from "../artifact/execution-artifacts.js";
+import {
+  persistExecutionArtifactBytes,
+  type ExecutionArtifactSensitivity,
+} from "../artifact/execution-artifacts.js";
 import { NoCapableNodeError, NodeNotPairedError } from "../../ws/protocol/errors.js";
 
 const MAX_RESPONSE_BYTES = 32_768;
@@ -231,6 +234,7 @@ export function isBlockedUrl(raw: string): boolean {
 
     return false;
   } catch {
+    // Intentional: invalid URL parsing → block (SSRF safe default).
     return true; // invalid URL → block
   }
 }
@@ -273,6 +277,7 @@ export async function resolvesToBlockedAddress(
 
     return false;
   } catch {
+    // Intentional: URL parse/DNS errors → treat as blocked (SSRF safe default).
     return true;
   }
 }
@@ -564,10 +569,12 @@ export class ToolExecutor {
         { timeoutMs },
       );
 
-      const evidence = await this.shapeNodeDispatchEvidence(parsedAction.data, result.evidence, {
-        runId,
-        stepId,
-      });
+      const evidence = await this.shapeNodeDispatchEvidence(
+        parsedAction.data,
+        result.evidence,
+        result.result,
+        { runId, stepId },
+      );
 
       const payload = {
         ok: result.ok,
@@ -623,6 +630,7 @@ export class ToolExecutor {
   private async shapeNodeDispatchEvidence(
     actionKind: ActionPrimitive["type"],
     evidence: unknown,
+    result: unknown,
     scope: { runId: string; stepId: string },
   ): Promise<unknown> {
     if (actionKind !== "Desktop") return evidence;
@@ -637,7 +645,12 @@ export class ToolExecutor {
     const evidenceObj = evidence as Record<string, unknown>;
     const bytesBase64 =
       typeof evidenceObj["bytesBase64"] === "string" ? evidenceObj["bytesBase64"] : undefined;
-    const treeValue = evidenceObj["tree"];
+    const treeFromEvidence = evidenceObj["tree"];
+    const treeFromResult =
+      result && typeof result === "object" && !Array.isArray(result)
+        ? (result as Record<string, unknown>)["tree"]
+        : undefined;
+    const treeValue = treeFromEvidence !== undefined ? treeFromEvidence : treeFromResult;
 
     if (!bytesBase64 && treeValue === undefined) return evidence;
 
@@ -648,6 +661,8 @@ export class ToolExecutor {
     const height = typeof evidenceObj["height"] === "number" ? evidenceObj["height"] : undefined;
     const timestamp =
       typeof evidenceObj["timestamp"] === "string" ? evidenceObj["timestamp"] : undefined;
+
+    const sensitivity = await this.resolveDesktopEvidenceSensitivity(db, scope);
 
     const shaped: Record<string, unknown> = { ...evidenceObj };
 
@@ -671,9 +686,10 @@ export class ToolExecutor {
             mime: mime ?? "image/png",
             evidence_type: evidenceType,
           },
-          sensitivity: "sensitive",
+          sensitivity,
         });
       } catch {
+        // Intentional: artifact byte persistence is best-effort; omit bytes if storage fails.
         stored = null;
       }
 
@@ -685,7 +701,9 @@ export class ToolExecutor {
     }
 
     if (treeValue !== undefined) {
-      delete shaped["tree"];
+      if (treeFromEvidence !== undefined) {
+        delete shaped["tree"];
+      }
 
       const treeJson = (() => {
         if (typeof treeValue === "string") return treeValue;
@@ -707,9 +725,10 @@ export class ToolExecutor {
             timestamp,
             evidence_type: evidenceType,
           },
-          sensitivity: "sensitive",
+          sensitivity,
         });
       } catch {
+        // Intentional: DOM snapshot persistence is best-effort; omit tree if storage fails.
         storedTree = null;
       }
 
@@ -721,6 +740,98 @@ export class ToolExecutor {
     }
 
     return shaped;
+  }
+
+  private parseEvidenceSensitivity(
+    raw: string | undefined,
+    fallback: ExecutionArtifactSensitivity,
+  ): ExecutionArtifactSensitivity {
+    const normalized = raw?.trim().toLowerCase();
+    if (normalized === "normal" || normalized === "sensitive") return normalized;
+    return fallback;
+  }
+
+  private resolveDesktopSandboxEvidenceSensitivity(): ExecutionArtifactSensitivity {
+    return this.parseEvidenceSensitivity(
+      process.env["TYRUM_DESKTOP_SANDBOX_ARTIFACT_SENSITIVITY"],
+      "normal",
+    );
+  }
+
+  private resolveDesktopEvidenceSensitivityForMode(
+    mode: string | undefined,
+  ): ExecutionArtifactSensitivity {
+    const normalizedMode = mode?.trim().toLowerCase();
+    if (normalizedMode === "desktop-sandbox") {
+      return this.resolveDesktopSandboxEvidenceSensitivity();
+    }
+
+    return this.parseEvidenceSensitivity(
+      process.env["TYRUM_DESKTOP_ARTIFACT_SENSITIVITY"],
+      "sensitive",
+    );
+  }
+
+  private async resolveDesktopEvidenceSensitivity(
+    db: SqlDb,
+    scope: { runId: string; stepId: string },
+  ): Promise<ExecutionArtifactSensitivity> {
+    let executorNodeId: string | undefined;
+
+    try {
+      const attemptRow = await db.get<{ metadata_json: string | null }>(
+        `SELECT ea.metadata_json
+         FROM execution_attempts ea
+         JOIN execution_steps es ON es.step_id = ea.step_id
+         WHERE ea.step_id = ? AND es.run_id = ?
+         ORDER BY ea.attempt DESC
+         LIMIT 1`,
+        [scope.stepId, scope.runId],
+      );
+      const rawAttemptMeta = attemptRow?.metadata_json;
+      if (typeof rawAttemptMeta === "string" && rawAttemptMeta.trim().length > 0) {
+        const parsed = JSON.parse(rawAttemptMeta) as unknown;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          const executor = (parsed as Record<string, unknown>)["executor"];
+          if (executor && typeof executor === "object" && !Array.isArray(executor)) {
+            const nodeId = (executor as Record<string, unknown>)["node_id"];
+            if (typeof nodeId === "string" && nodeId.trim().length > 0) {
+              executorNodeId = nodeId.trim();
+            }
+          }
+        }
+      }
+    } catch {
+      // Intentional: attempt metadata lookup is best-effort; fall back to default sensitivity.
+      executorNodeId = undefined;
+    }
+
+    if (!executorNodeId) {
+      return this.resolveDesktopEvidenceSensitivityForMode(undefined);
+    }
+
+    let nodeMode: string | undefined;
+    try {
+      const pairingRow = await db.get<{ metadata_json: string }>(
+        "SELECT metadata_json FROM node_pairings WHERE node_id = ?",
+        [executorNodeId],
+      );
+      const rawPairingMeta = pairingRow?.metadata_json;
+      if (typeof rawPairingMeta === "string" && rawPairingMeta.trim().length > 0) {
+        const parsed = JSON.parse(rawPairingMeta) as unknown;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          const mode = (parsed as Record<string, unknown>)["mode"];
+          if (typeof mode === "string" && mode.trim().length > 0) {
+            nodeMode = mode.trim();
+          }
+        }
+      }
+    } catch {
+      // Intentional: pairing metadata lookup is best-effort; fall back to default sensitivity.
+      nodeMode = undefined;
+    }
+
+    return this.resolveDesktopEvidenceSensitivityForMode(nodeMode);
   }
 
   private async executeFsRead(toolCallId: string, args: unknown): Promise<ToolResult> {
@@ -945,13 +1056,13 @@ export class ToolExecutor {
                 process.kill(-child.pid, signal);
                 return;
               } catch {
-                // ignore and fall back to killing the direct child
+                // Intentional: best-effort process group kill; fall back to killing the child.
               }
             }
             try {
               child.kill(signal);
             } catch {
-              // ignore
+              // Intentional: best-effort child kill; ignore errors during cleanup.
             }
           };
 
@@ -1112,7 +1223,7 @@ export class ToolExecutor {
               error: resolved !== null ? undefined : "secret provider returned null",
             });
           } catch {
-            // ignore audit write failures
+            // Intentional: ignore audit-write failures so tool execution is not blocked by logging.
           }
         }
         if (resolved !== null) {

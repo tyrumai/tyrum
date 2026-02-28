@@ -41,7 +41,7 @@ function isPublicOAuthCallbackRoute(c: Context): boolean {
       return true;
     }
   } catch {
-    // Continue to path-shape fallback when route metadata isn't available.
+    // Intentional: continue to path-shape fallback when route metadata isn't available.
   }
   return OAUTH_CALLBACK_REQUEST_PATH_PATTERN.test(c.req.path);
 }
@@ -79,7 +79,7 @@ function matchPublicPathExemption(c: Context): PublicPathExemption | undefined {
     try {
       if (exemption.matches(c)) return exemption;
     } catch {
-      // Fail closed when path matchers throw.
+      // Intentional: fail closed when path matchers throw.
     }
   }
   return undefined;

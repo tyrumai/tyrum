@@ -214,6 +214,7 @@ export async function runPlaybookRuntimeEnvelope(
         try {
           runtimeArgs = JSON.parse(input.argsJson) as unknown;
         } catch {
+          // Intentional: surface invalid JSON as a structured invalid_request error.
           return {
             ok: false,
             status: "error",

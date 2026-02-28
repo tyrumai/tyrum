@@ -32,7 +32,7 @@ function toArtifactRow(raw: RawCanvasArtifactRow): CanvasArtifactRow {
   try {
     metadata = JSON.parse(raw.metadata_json) as unknown;
   } catch {
-    // leave as empty object
+    // Intentional: treat invalid JSON metadata as an empty object.
   }
   return {
     id: raw.id,

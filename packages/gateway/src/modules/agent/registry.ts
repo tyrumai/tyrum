@@ -74,6 +74,7 @@ export class AgentRegistry {
       home,
       snapshotDal: this.opts.container.policySnapshotDal,
       overrideDal: this.opts.container.policyOverrideDal,
+      logger: this.opts.logger,
     });
     this.policyServiceByAgentId.set(id, service);
     return service;

@@ -36,6 +36,7 @@ function parseJsonOrEmpty(raw: string | null): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
+    // Intentional: treat invalid JSON columns as empty objects.
     return {};
   }
 }

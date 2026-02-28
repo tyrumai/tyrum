@@ -94,6 +94,7 @@ export function parseJsonOr(raw: string | null, fallback: unknown): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
+    // Intentional: treat invalid JSON columns as the provided fallback.
     return fallback;
   }
 }
@@ -103,6 +104,7 @@ function parseJsonMaybe(raw: string | null): unknown | undefined {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
+    // Intentional: treat invalid JSON columns as missing.
     return undefined;
   }
 }
@@ -132,7 +134,7 @@ export function decodeCursor(raw: string): Cursor {
       return { sort: (parsed as { sort: string }).sort, id: (parsed as { id: string }).id };
     }
   } catch {
-    // fall through
+    // Intentional: fall through to a generic cursor error for malformed/unknown cursors.
   }
   throw new Error("invalid cursor");
 }

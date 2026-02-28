@@ -18,6 +18,7 @@ function tryParseJson(raw: string): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
+    // Intentional: fall back to the raw value when the column isn't valid JSON (legacy rows).
     return raw;
   }
 }

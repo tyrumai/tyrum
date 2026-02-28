@@ -189,6 +189,9 @@ describe("runCli", () => {
     expect(backendCtorSpy).toHaveBeenCalledTimes(1);
     expect(providerCtorSpy).toHaveBeenCalledTimes(1);
 
+    const providerArgs = providerCtorSpy.mock.calls[0] ?? [];
+    expect(typeof (providerArgs[3] as any)?.recognize).toBe("function");
+
     const opts = clientCtorSpy.mock.calls[0]?.[0] as any;
     expect(opts.url).toBe("ws://127.0.0.1:8788/ws");
     expect(opts.token).toBe("test-token");

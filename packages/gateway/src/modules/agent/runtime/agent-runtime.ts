@@ -95,7 +95,10 @@ import type { ApprovalDal, ApprovalStatus } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
 import { canonicalizeToolMatchTarget } from "../../policy/match-target.js";
-import { isSafeSuggestedOverridePattern } from "../../policy/override-guardrails.js";
+import {
+  suggestedOverridesForToolCall,
+  type SuggestedOverride,
+} from "../../policy/suggested-overrides.js";
 import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { wildcardMatch } from "../../policy/wildcard.js";
 import { createProviderFromNpm } from "../../models/provider-factory.js";
@@ -245,6 +248,7 @@ async function deriveElevatedExecutionAvailable(
     const effective = await policyService.loadEffectiveBundle();
     return deriveElevatedExecutionAvailableFromPolicyBundle(effective.bundle);
   } catch {
+    // Intentional: policy bundle load is best-effort for prompt context; treat failures as unknown.
     return null;
   }
 }
@@ -287,9 +291,7 @@ type ToolCallPolicyState = {
   policyDecision?: Decision;
   policySnapshotId?: string;
   appliedOverrideIds?: string[];
-  suggestedOverrides?:
-    | Array<{ tool_id: string; pattern: string; workspace_id: string }>
-    | undefined;
+  suggestedOverrides?: SuggestedOverride[];
   approvalStepIndex?: number;
   shouldRequireApproval: boolean;
 };
@@ -543,7 +545,9 @@ export class AgentRuntime {
       }
 
       return lines.join("\n");
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.opts.container.logger.warn("workboard.focus_digest_failed", { error: message });
       return "Work focus digest unavailable.";
     }
   }
@@ -574,7 +578,7 @@ export class AgentRuntime {
       process.env["TYRUM_INSTANCE_ID"]?.trim() ||
       `instance-${randomUUID()}`;
     this.languageModelOverride = opts.languageModel;
-    this.mcpManager = opts.mcpManager ?? new McpManager();
+    this.mcpManager = opts.mcpManager ?? new McpManager({ logger: opts.container.logger });
     this.plugins = opts.plugins;
     this.policyService = opts.policyService ?? opts.container.policyService;
     this.approvalDal = opts.approvalDal ?? opts.container.approvalDal;
@@ -603,8 +607,12 @@ export class AgentRuntime {
     await ensureWorkspaceInitialized(this.home);
     const config = await loadAgentConfig(this.home);
     const identity = await loadIdentity(this.home);
-    const skills = await loadEnabledSkills(this.home, config);
-    const mcpServers = await loadEnabledMcpServers(this.home, config);
+    const skills = await loadEnabledSkills(this.home, config, {
+      logger: this.opts.container.logger,
+    });
+    const mcpServers = await loadEnabledMcpServers(this.home, config, {
+      logger: this.opts.container.logger,
+    });
     const memoryStore = new MarkdownMemoryStore(this.home);
     await memoryStore.ensureInitialized();
 
@@ -880,6 +888,7 @@ export class AgentRuntime {
     try {
       serialized = JSON.stringify(input.args);
     } catch {
+      // Intentional: tool approval args may be non-serializable (cycles/BigInt); skip persistence.
       serialized = undefined;
     }
     if (typeof serialized !== "string") {
@@ -892,6 +901,7 @@ export class AgentRuntime {
         serialized,
       );
     } catch {
+      // Intentional: approval args persistence is best-effort; skipping doesn't block tool execution.
       return undefined;
     }
   }
@@ -1017,7 +1027,7 @@ export class AgentRuntime {
       try {
         await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "doing" });
       } catch {
-        // ignore WIP or transition errors; the WorkItem still exists for operator triage.
+        // Intentional: ignore WIP/transition errors; the WorkItem still exists for operator triage.
       }
 
       const reply = `Delegated work item created: ${item.work_item_id} (mode=${intakeModeDecision.mode}, reason=${intakeModeDecision.reason_code})`;
@@ -1436,6 +1446,7 @@ export class AgentRuntime {
       });
       return await index.search(query, limit);
     } catch {
+      // Intentional: semantic search is best-effort; failures shouldn't block turns.
       return [];
     }
   }
@@ -1513,6 +1524,7 @@ export class AgentRuntime {
         try {
           return parseProviderModelId(primaryModelId).providerId;
         } catch {
+          // Intentional: model_id may be malformed; fall back to non-primary providers.
           return undefined;
         }
       })();
@@ -1626,6 +1638,7 @@ export class AgentRuntime {
 
       return undefined;
     } catch {
+      // Intentional: embedding pipeline is optional; semantic search should degrade gracefully.
       return undefined;
     }
   }
@@ -1810,6 +1823,7 @@ export class AgentRuntime {
       try {
         chars = JSON.stringify(schema).length;
       } catch {
+        // Intentional: schema may contain cycles/BigInt; treat size as unknown.
         chars = 0;
       }
       return { id: t.id, chars };
@@ -2014,7 +2028,12 @@ export class AgentRuntime {
         profile,
         source: "subagent_record",
       };
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.opts.container.logger.warn("workboard.subagent_profile_resolve_failed", {
+        subagent_id: subagentId,
+        error: message,
+      });
       const id: ExecutionProfileId = "explorer_ro";
       return { id, profile: getExecutionProfile(id), source: "subagent_fallback" };
     }
@@ -2054,7 +2073,7 @@ export class AgentRuntime {
         return { mode: override, reason_code: "override" };
       }
     } catch {
-      // ignore override lookup failures; fall back to default inline
+      // Intentional: ignore override lookup failures; fall back to default inline.
     }
 
     return { mode: "inline", reason_code: "default_inline" };
@@ -2365,18 +2384,13 @@ export class AgentRuntime {
           ? policyDecision === "require_approval"
           : input.toolDesc.requires_confirmation;
 
-      const suggestedOverrides =
-        policyEnabled &&
-        matchTarget.trim().length > 0 &&
-        isSafeSuggestedOverridePattern(matchTarget)
-          ? [
-              {
-                tool_id: input.toolDesc.id,
-                pattern: matchTarget,
-                workspace_id: this.workspaceId,
-              },
-            ]
-          : undefined;
+      const suggestedOverrides = policyEnabled
+        ? suggestedOverridesForToolCall({
+            toolId: input.toolDesc.id,
+            matchTarget,
+            workspaceId: this.workspaceId,
+          })
+        : undefined;
 
       const state: ToolCallPolicyState = {
         toolDesc: input.toolDesc,
@@ -2426,6 +2440,7 @@ export class AgentRuntime {
       try {
         return JSON.parse(raw) as unknown;
       } catch {
+        // Intentional: handle may reference stale/malformed JSON; treat as unchanged args.
         return input.args;
       }
     };
@@ -2881,7 +2896,7 @@ export class AgentRuntime {
 
       return { allowlist: [...allowlist], pluginTools: gatedPluginTools };
     } catch {
-      // Fail closed: side-effecting plugin tools are opt-in and require a readable policy bundle.
+      // Intentional: fail closed; side-effecting plugin tools are opt-in and require a readable policy bundle.
       const gatedPluginTools = pluginTools.filter((tool) => !isSideEffectingPluginTool(tool));
       return { allowlist: [...params.allowlist], pluginTools: gatedPluginTools };
     }

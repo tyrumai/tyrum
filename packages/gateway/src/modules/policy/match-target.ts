@@ -132,11 +132,21 @@ function canonicalizeMessagingTarget(
 type DesktopDispatchOp = "snapshot" | "query" | "act" | "wait_for" | "unknown";
 type DesktopActSubtype = "ui" | "mouse" | "keyboard" | "unknown";
 
+function normalizeDesktopDispatchOpRaw(parsed: Record<string, unknown> | null): string | undefined {
+  let current = parsed;
+  for (let depth = 0; depth < 3 && current; depth += 1) {
+    const op = normalizeToken(current["op"]);
+    if (op) return op;
+    current = asRecord(current["args"]);
+  }
+  return undefined;
+}
+
 function canonicalizeDesktopDispatchOp(parsed: Record<string, unknown> | null): {
   op: DesktopDispatchOp;
   actSubtype?: DesktopActSubtype;
 } {
-  const opRaw = normalizeToken(parsed?.["op"]);
+  const opRaw = normalizeDesktopDispatchOpRaw(parsed);
   if (!opRaw) return { op: "unknown" };
 
   switch (opRaw) {

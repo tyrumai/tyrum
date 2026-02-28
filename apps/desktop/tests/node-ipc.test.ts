@@ -52,6 +52,7 @@ vi.mock("@tyrum/desktop-node", () => ({
   AtSpiDesktopA11yBackend: vi.fn(),
   DesktopProvider: vi.fn(),
   NutJsDesktopBackend: vi.fn(),
+  getTesseractOcrEngine: vi.fn(() => ({ recognize: vi.fn() })),
 }));
 
 vi.mock("../src/main/providers/playwright-provider.js", () => ({

@@ -4,6 +4,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { Logger } from "../observability/logger.js";
 
 /**
  * Zod v4 `z.union` with `.default()` on the discriminant doesn't produce a
@@ -152,6 +153,11 @@ function createClientAndTransport(spec: McpServerSpecT): {
 
 export class McpManager {
   private readonly entries = new Map<string, McpClientEntry>();
+  private readonly logger: Logger | undefined;
+
+  constructor(opts?: { logger?: Logger }) {
+    this.logger = opts?.logger;
+  }
 
   private reconcileEnabledServers(enabledServers: readonly McpServerSpecT[]): void {
     const enabledIds = new Set(
@@ -331,7 +337,13 @@ export class McpManager {
       entry.discoveryFailureCount = undefined;
       entry.discoveryBackoffUntilMs = undefined;
       return descriptors;
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.warn("mcp.tools_discovery_failed", {
+        server_id: entry.spec.id,
+        server_name: entry.spec.name,
+        error: message,
+      });
       const failures = (entry.discoveryFailureCount ?? 0) + 1;
       entry.discoveryFailureCount = failures;
       entry.discoveryBackoffUntilMs = Date.now() + discoveryBackoffMs(failures);
@@ -357,7 +369,14 @@ export class McpManager {
         content: "content" in result ? (result.content as unknown[]) : [],
         isError,
       };
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.warn("mcp.tool_call_failed", {
+        server_id: server.id,
+        server_name: server.name,
+        tool: toolName,
+        error: message,
+      });
       this.invalidateEntryConnection(entry);
       return { content: [], isError: true };
     }

@@ -93,6 +93,20 @@ Recommended normalization rules for high-risk tool classes:
   - Match target SHOULD include the action and a stable destination identifier (connector + account + container/recipient id).
   - Avoid matching on message bodies or display names (too variable; easy to broaden accidentally).
   - Example match target: `send:slack:acct_123:chan_C024BE91L`.
+- **`tool.node.dispatch` (node capability dispatch):**
+  - Match target SHOULD include the required capability descriptor id and action kind.
+  - For Desktop actions, match target SHOULD additionally include a normalized Desktop `op` so policies can distinguish read-only UI operations from state-changing `act`.
+  - Match target MUST NOT include user-typed selector text, UI labels, OCR queries, or any other high-entropy values.
+  - Example match targets:
+    - `capability:tyrum.desktop;action:Desktop;op:snapshot`
+    - `capability:tyrum.desktop;action:Desktop;op:query`
+    - `capability:tyrum.desktop;action:Desktop;op:wait_for`
+    - `capability:tyrum.desktop;action:Desktop;op:act;act:ui`
+  - Example safe override patterns:
+    - `capability:tyrum.desktop;action:Desktop;op:query`
+    - `capability:tyrum.desktop;action:Desktop;op:wait_for`
+    - `capability:tyrum.desktop;action:Desktop;op:snapshot`
+    - `capability:tyrum.desktop;action:Desktop;op:act*`
 
 ### Suggested patterns (examples)
 

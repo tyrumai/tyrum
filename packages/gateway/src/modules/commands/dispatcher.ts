@@ -148,7 +148,7 @@ async function resolveKeyLane(
         sources.push({ exact: parsed.connector });
       }
     } catch {
-      // ignore parse errors; fall back to matching the provided channel only
+      // Intentional: ignore parse errors; fall back to matching the provided channel only.
     }
   }
 
@@ -185,7 +185,7 @@ function resolveAgentId(ctx: CommandDeps["commandContext"] | undefined): string 
       const parsed = parseTyrumKey(key as never);
       if (parsed.kind === "agent") return parsed.agent_id;
     } catch {
-      // ignore invalid keys; fall back to default agent
+      // Intentional: ignore invalid keys; fall back to default agent.
     }
   }
 
@@ -333,6 +333,7 @@ async function resolveChannelThread(
     try {
       channel = parseChannelSourceKey(channelRaw).connector;
     } catch {
+      // Intentional: accept unscoped channel IDs by stripping any connector suffix.
       const idx = channel.indexOf(":");
       if (idx > 0) channel = channel.slice(0, idx);
     }
@@ -356,6 +357,7 @@ async function resolveChannelThread(
     try {
       channel = parseChannelSourceKey(channel).connector;
     } catch {
+      // Intentional: accept unscoped channel IDs by stripping any connector suffix.
       const idx = channel.indexOf(":");
       if (idx > 0) channel = channel.slice(0, idx);
     }
@@ -372,7 +374,7 @@ async function resolveChannelThread(
       if (channel && threadId) return { channel, threadId };
     }
   } catch {
-    // ignore parse errors
+    // Intentional: ignore parse errors when resolving channel/thread from legacy keys.
   }
 
   return undefined;
@@ -426,6 +428,7 @@ async function computeUsageTotals(
     try {
       json = JSON.parse(row.cost_json) as unknown;
     } catch {
+      // Intentional: skip invalid cost JSON rows.
       invalid += 1;
       continue;
     }
@@ -511,6 +514,7 @@ export async function executeCommand(
     try {
       channel = parseChannelSourceKey(channelRaw).connector;
     } catch {
+      // Intentional: accept unscoped channel IDs by stripping any connector suffix.
       const idx = channel.indexOf(":");
       if (idx > 0) channel = channel.slice(0, idx);
     }

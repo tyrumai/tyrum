@@ -239,6 +239,9 @@ importers:
       dbus-next:
         specifier: ^0.10.2
         version: 0.10.2
+      tesseract.js:
+        specifier: ^7.0.0
+        version: 7.0.0(encoding@0.1.13)
     devDependencies:
       '@types/node':
         specifier: ^25.3.2

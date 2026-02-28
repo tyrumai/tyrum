@@ -37,14 +37,14 @@ function toVectorRow(raw: RawVectorRow): VectorRow {
   try {
     if (raw.metadata) metadata = JSON.parse(raw.metadata) as unknown;
   } catch {
-    // leave as empty object
+    // Intentional: treat invalid JSON metadata as an empty object.
   }
 
   let vector: number[] = [];
   try {
     if (raw.vector_data) vector = JSON.parse(raw.vector_data) as number[];
   } catch {
-    // leave as empty array
+    // Intentional: treat invalid JSON vectors as an empty array.
   }
 
   return {

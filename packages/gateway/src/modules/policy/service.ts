@@ -7,6 +7,7 @@ import type {
 import { PolicyBundle } from "@tyrum/schemas";
 import { access } from "node:fs/promises";
 import { wildcardMatch } from "./wildcard.js";
+import type { Logger } from "../observability/logger.js";
 import {
   evaluateDomain,
   mostRestrictiveDecision,
@@ -30,6 +31,7 @@ async function fileExists(path: string): Promise<boolean> {
     await access(path);
     return true;
   } catch {
+    // Intentional: treat missing policy files as absent.
     return false;
   }
 }
@@ -85,6 +87,7 @@ export class PolicyService {
       home: string;
       snapshotDal: PolicySnapshotDal;
       overrideDal: PolicyOverrideDal;
+      logger?: Logger;
     },
   ) {}
 
@@ -457,7 +460,9 @@ export class PolicyService {
     if (path) {
       try {
         bundle = await loadPolicyBundleFromFile(path);
-      } catch {
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.opts.logger?.warn("policy.bundle.deployment_load_failed", { path, error: message });
         bundle = defaultPolicyBundle();
       }
     } else {
@@ -504,7 +509,9 @@ export class PolicyService {
       const sha256 = sha256HexFromString(canonicalJson);
       this.agentBundleCache = { path, bundle, sha256 };
       return this.agentBundleCache;
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.opts.logger?.warn("policy.bundle.agent_load_failed", { path, error: message });
       this.agentBundleCache = { path, bundle: null, sha256: null };
       return this.agentBundleCache;
     }

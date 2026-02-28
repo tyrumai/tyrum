@@ -93,6 +93,8 @@ export async function resolveSessionModel(
     try {
       parsed = parseProviderModelId(rawCandidate);
     } catch {
+      // Intentional: parse failures mark candidate model IDs invalid; surfaced via the thrown error
+      // listing candidates below.
       parsed = undefined;
     }
 
@@ -244,6 +246,7 @@ export async function resolveSessionModel(
         const model = await buildModelFromApiKey(undefined);
         return await Promise.resolve(model.supportedUrls);
       } catch {
+        // Intentional: supportedUrls introspection is best-effort; treat supported URLs as unknown.
         return {};
       }
     })();

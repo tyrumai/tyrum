@@ -173,6 +173,7 @@ function wireContainer(
     home: tyrumHome,
     snapshotDal: policySnapshotDal,
     overrideDal: policyOverrideDal,
+    logger,
   });
 
   const modelsDevCacheDal = new ModelsDevCacheDal(db);

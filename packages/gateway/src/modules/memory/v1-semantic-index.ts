@@ -162,6 +162,7 @@ export class MemoryV1SemanticIndex {
         assertFiniteVector(embedded as unknown);
         vector = embedded;
       } catch {
+        // Intentional: best-effort semantic indexing; skip rows when embedding fails.
         skipped += 1;
         continue;
       }
@@ -225,6 +226,7 @@ export class MemoryV1SemanticIndex {
         assertFiniteVector(parsed);
         vector = parsed;
       } catch {
+        // Intentional: best-effort semantic search; skip invalid/corrupt stored vectors.
         continue;
       }
 

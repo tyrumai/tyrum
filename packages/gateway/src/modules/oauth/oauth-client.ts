@@ -121,6 +121,7 @@ function parseTokenResponseBody(input: {
     try {
       return JSON.parse(trimmed) as Record<string, unknown>;
     } catch {
+      // Intentional: treat invalid JSON token responses as empty objects.
       return {};
     }
   }

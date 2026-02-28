@@ -269,13 +269,11 @@ describe("FileSecretProvider", () => {
     expect(list).toHaveLength(0);
   });
 
-  it("handles corrupted file gracefully", async () => {
+  it("surfaces corrupted secrets stores (fail closed)", async () => {
     const { writeFileSync } = await import("node:fs");
     writeFileSync(secretsPath, "not-valid-json!!!", "utf8");
 
-    const provider = await FileSecretProvider.create(secretsPath, adminToken);
-    const list = await provider.list();
-    expect(list).toHaveLength(0);
+    await expect(FileSecretProvider.create(secretsPath, adminToken)).rejects.toThrow();
   });
 
   it("stores multiple secrets independently", async () => {
@@ -353,5 +351,11 @@ describe("KeychainSecretProvider", () => {
       isEncryptionAvailable: () => false,
     });
     await expect(providerPromise).rejects.toThrow(/encryption/i);
+  });
+
+  it("surfaces corrupted secrets stores (fail closed)", async () => {
+    writeFileSync(secretsPath, "not-valid-json!!!", "utf8");
+    const provider = await KeychainSecretProvider.create(secretsPath, safeStorage);
+    await expect(provider.list()).rejects.toThrow();
   });
 });

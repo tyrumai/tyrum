@@ -77,6 +77,7 @@ function fromBase64UrlUtf8(value: string): string | undefined {
   try {
     return Buffer.from(value, "base64url").toString("utf-8");
   } catch {
+    // Intentional: treat invalid base64url input as a parse failure.
     return undefined;
   }
 }
@@ -145,7 +146,7 @@ export class TokenStore {
     try {
       fileContent = await readFile(tokenPath, "utf-8");
     } catch {
-      // File doesn't exist or is unreadable — fall through to generation.
+      // Intentional: missing/unreadable token file falls through to token generation.
     }
     const trimmed = fileContent?.trim();
     if (trimmed) {
@@ -327,6 +328,7 @@ export class TokenStore {
     try {
       payloadUnknown = JSON.parse(decoded) as unknown;
     } catch {
+      // Intentional: treat invalid JSON payload as a parse failure.
       return undefined;
     }
     const payload = toDeviceTokenPayload(payloadUnknown);
@@ -496,7 +498,7 @@ export class TokenStore {
         try {
           await this.renameFile(backupPath, finalPath);
         } catch {
-          // ignore best-effort rollback
+          // Intentional: ignore best-effort rollback; surface the original failure.
         }
       }
       throw err;

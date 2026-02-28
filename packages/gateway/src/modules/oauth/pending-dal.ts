@@ -40,6 +40,7 @@ function parseJson(value: unknown): Record<string, unknown> {
       const parsed = JSON.parse(value) as unknown;
       return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
     } catch {
+      // Intentional: treat invalid JSON metadata as an empty object.
       return {};
     }
   }

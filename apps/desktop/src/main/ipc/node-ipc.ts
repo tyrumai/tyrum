@@ -3,8 +3,12 @@ import { NodeRuntime } from "../node-runtime.js";
 import { loadConfig } from "../config/store.js";
 import { resolvePermissions } from "../config/permissions.js";
 import { decryptToken } from "../config/token-store.js";
-import { AtSpiDesktopA11yBackend, DesktopProvider, NutJsDesktopBackend } from "@tyrum/desktop-node";
-import { getTesseractOcrEngine } from "../providers/ocr/tesseract-engine.js";
+import {
+  AtSpiDesktopA11yBackend,
+  DesktopProvider,
+  getTesseractOcrEngine,
+  NutJsDesktopBackend,
+} from "@tyrum/desktop-node";
 import { PlaywrightProvider } from "../providers/playwright-provider.js";
 import { CliProvider } from "../providers/cli-provider.js";
 import { RealPlaywrightBackend } from "../providers/backends/real-playwright-backend.js";

@@ -37,6 +37,7 @@ function parseJsonOrEmpty(raw: string): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
+    // Intentional: treat invalid JSON columns as empty metadata.
     return {};
   }
 }
@@ -50,7 +51,7 @@ function parseCapabilities(raw: string): ClientCapability[] {
       ) as ClientCapability[];
     }
   } catch {
-    // ignore
+    // Intentional: treat invalid JSON columns as empty capabilities.
   }
   return [];
 }
@@ -64,6 +65,7 @@ function parseAllowlist(raw: string): CapabilityDescriptor[] {
       .filter((res) => res.success)
       .map((res) => res.data);
   } catch {
+    // Intentional: treat invalid JSON columns as empty allowlists.
     return [];
   }
 }

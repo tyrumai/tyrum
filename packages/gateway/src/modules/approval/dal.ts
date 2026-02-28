@@ -63,7 +63,7 @@ function toApprovalRow(raw: RawApprovalRow): ApprovalRow {
   try {
     context = JSON.parse(raw.context_json) as unknown;
   } catch {
-    // leave as empty object
+    // Intentional: treat invalid JSON contexts as empty objects.
   }
   return {
     id: raw.id,

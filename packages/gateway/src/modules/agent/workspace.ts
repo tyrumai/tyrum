@@ -18,6 +18,7 @@ import {
   resolveMcpDir,
 } from "./home.js";
 import { parseFrontmatterDocument } from "./frontmatter.js";
+import type { Logger } from "../observability/logger.js";
 
 export type SkillProvenanceSource = SkillProvenanceSourceT;
 export type SkillProvenance = { source: SkillProvenanceSource; path: string };
@@ -51,6 +52,7 @@ async function loadSkillFromDir(
   skillsDir: string,
   skillId: string,
   source: SkillProvenanceSource,
+  logger?: Logger,
 ): Promise<LoadedSkillManifest | undefined> {
   const skillPath = join(skillsDir, skillId, "SKILL.md");
   try {
@@ -67,7 +69,9 @@ async function loadSkillFromDir(
         path: skillPath,
       },
     };
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger?.warn("agent.skill_load_failed", { skill_id: skillId, path: skillPath, error: message });
     return undefined;
   }
 }
@@ -75,6 +79,7 @@ async function loadSkillFromDir(
 export async function loadEnabledSkills(
   home: string,
   config: AgentConfigT,
+  opts?: { logger?: Logger },
 ): Promise<LoadedSkillManifest[]> {
   const loaded: LoadedSkillManifest[] = [];
 
@@ -86,10 +91,10 @@ export async function loadEnabledSkills(
   for (const skillId of config.skills.enabled) {
     const manifest =
       (workspaceTrusted
-        ? await loadSkillFromDir(workspaceSkillsDir, skillId, "workspace")
+        ? await loadSkillFromDir(workspaceSkillsDir, skillId, "workspace", opts?.logger)
         : undefined) ??
-      (await loadSkillFromDir(userSkillsDir, skillId, "user")) ??
-      (await loadSkillFromDir(bundledSkillsDir, skillId, "bundled"));
+      (await loadSkillFromDir(userSkillsDir, skillId, "user", opts?.logger)) ??
+      (await loadSkillFromDir(bundledSkillsDir, skillId, "bundled", opts?.logger));
     if (manifest) {
       loaded.push(manifest);
     }
@@ -101,6 +106,7 @@ export async function loadEnabledSkills(
 async function loadMcpServerFromDir(
   mcpDir: string,
   serverId: string,
+  logger?: Logger,
 ): Promise<McpServerSpecT | undefined> {
   const serverDir = join(mcpDir, serverId);
   const serverPath = join(serverDir, "server.yml");
@@ -124,7 +130,13 @@ async function loadMcpServerFromDir(
     }
 
     return spec;
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger?.warn("mcp.server_spec_load_failed", {
+      server_id: serverId,
+      path: serverPath,
+      error: message,
+    });
     return undefined;
   }
 }
@@ -132,12 +144,13 @@ async function loadMcpServerFromDir(
 export async function loadEnabledMcpServers(
   home: string,
   config: AgentConfigT,
+  opts?: { logger?: Logger },
 ): Promise<McpServerSpecT[]> {
   const mcpDir = resolveMcpDir(home);
   const loaded: McpServerSpecT[] = [];
 
   for (const serverId of config.mcp.enabled) {
-    const spec = await loadMcpServerFromDir(mcpDir, serverId);
+    const spec = await loadMcpServerFromDir(mcpDir, serverId, opts?.logger);
     if (spec) {
       loaded.push(spec);
     }
