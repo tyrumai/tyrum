@@ -63,23 +63,23 @@ describe("requiresPostcondition", () => {
 });
 
 describe("PlanResponse", () => {
-  it("round-trips success outcome", () => {
-    const response = {
-      plan_id: "plan-success",
-      request_id: "req-123",
-      created_at: "2025-10-05T16:31:09Z",
-      trace_id: "trace-abc",
-      status: "success" as const,
-      steps: [
-        {
-          type: "Research" as const,
-          args: { intent: "look_up", query: "best espresso" },
-        },
-      ],
-      summary: { synopsis: "Research best espresso options" },
-    };
+  const baseSuccessResponse = {
+    plan_id: "plan-success",
+    request_id: "req-123",
+    created_at: "2025-10-05T16:31:09Z",
+    trace_id: "trace-abc",
+    status: "success" as const,
+    steps: [
+      {
+        type: "Research" as const,
+        args: { intent: "look_up", query: "best espresso" },
+      },
+    ],
+    summary: { synopsis: "Research best espresso options" },
+  };
 
-    const parsed = PlanResponse.parse(response);
+  it("round-trips success outcome", () => {
+    const parsed = PlanResponse.parse(baseSuccessResponse);
     expect(parsed.status).toBe("success");
     if (parsed.status === "success") {
       expect(parsed.steps).toHaveLength(1);
@@ -91,12 +91,8 @@ describe("PlanResponse", () => {
   });
 
   it("rejects success outcome missing steps", () => {
-    const bad = {
-      plan_id: "plan-success",
-      request_id: "req-123",
-      created_at: "2025-10-05T16:31:09Z",
-      status: "success" as const,
-    } as const;
+    const bad = { ...baseSuccessResponse } as Record<string, unknown>;
+    delete bad.steps;
 
     expectRejects(PlanResponse, bad);
   });

@@ -27,6 +27,16 @@ describe("Device token contracts", () => {
     expires_at: "2026-02-23T00:15:00.000Z",
   } as const;
 
+  const baseClaims = {
+    token_kind: "device",
+    token_id: "tok_1",
+    device_id: "dev_client_1",
+    role: "client",
+    scopes: ["operator.read"],
+    issued_at: "2026-02-23T00:00:00.000Z",
+    expires_at: "2026-02-23T00:15:00.000Z",
+  } as const;
+
   it("parses issue request with trimmed scopes", () => {
     const req = DeviceTokenIssueRequest.parse({
       device_id: "  dev_client_1  ",
@@ -84,25 +94,21 @@ describe("Device token contracts", () => {
   });
 
   it("parses device token claims", () => {
-    const claims = DeviceTokenClaims.parse({
-      token_kind: "device",
-      token_id: "tok_1",
-      device_id: "dev_client_1",
-      role: "client",
-      scopes: ["operator.read"],
-      issued_at: "2026-02-23T00:00:00.000Z",
-      expires_at: "2026-02-23T00:15:00.000Z",
-    });
+    const claims = DeviceTokenClaims.parse(baseClaims);
     expect(claims.scopes).toEqual(["operator.read"]);
   });
 
   it("rejects device token claims missing token_kind", () => {
-    const bad = { ...baseIssueResponse } as Record<string, unknown>;
+    const bad = { ...baseClaims } as Record<string, unknown>;
     delete bad.token_kind;
     expectRejects(DeviceTokenClaims, bad);
   });
 
+  it("rejects device token claims with extra token field", () => {
+    expectRejects(DeviceTokenClaims, { ...baseClaims, token: "tyrum-device.v1.payload.sig" });
+  });
+
   it("rejects device token claims with wrong expires_at type", () => {
-    expectRejects(DeviceTokenClaims, { ...baseIssueResponse, expires_at: 123 });
+    expectRejects(DeviceTokenClaims, { ...baseClaims, expires_at: 123 });
   });
 });
