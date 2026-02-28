@@ -22,6 +22,7 @@ import { Button } from "./components/ui/button.js";
 import { Card, CardContent } from "./components/ui/card.js";
 import { getDesktopApi } from "./desktop-api.js";
 import { ThemeProvider } from "./hooks/use-theme.js";
+import { ApprovalsPage } from "./pages/approvals-page.js";
 import { ConnectPage } from "./pages/connect-page.js";
 import { useOperatorStore } from "./use-operator-store.js";
 
@@ -533,57 +534,6 @@ function DashboardPage({ core }: { core: OperatorCore }) {
         Refresh status
       </button>
       <div>Instance: {statusState.status?.instance_id ?? "-"}</div>
-    </>
-  );
-}
-
-function ApprovalsPage({ core }: { core: OperatorCore }) {
-  const approvals = useOperatorStore(core.approvalsStore);
-  return (
-    <>
-      <h1>Approvals</h1>
-      <button
-        type="button"
-        data-testid="approvals-refresh"
-        onClick={() => {
-          void core.approvalsStore.refreshPending();
-        }}
-      >
-        Refresh
-      </button>
-      {approvals.pendingIds.length === 0 ? (
-        <div>No pending approvals.</div>
-      ) : (
-        <ul>
-          {approvals.pendingIds.map((approvalId) => {
-            const approval = approvals.byId[approvalId];
-            if (!approval) return null;
-            return (
-              <li key={approvalId}>
-                <div>{approval.prompt}</div>
-                <button
-                  type="button"
-                  data-testid={`approval-approve-${approvalId}`}
-                  onClick={() => {
-                    void core.approvalsStore.resolve(approvalId, "approved");
-                  }}
-                >
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  data-testid={`approval-deny-${approvalId}`}
-                  onClick={() => {
-                    void core.approvalsStore.resolve(approvalId, "denied");
-                  }}
-                >
-                  Deny
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
     </>
   );
 }
