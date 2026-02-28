@@ -316,6 +316,58 @@ describe("operator-ui", () => {
     container.remove();
   });
 
+  it("does not render legacy layout class names", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    expect(container.querySelector(".card")).toBeNull();
+    expect(container.querySelector(".stack")).toBeNull();
+    expect(container.querySelector(".alert")).toBeNull();
+
+    const desktopLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-desktop"]');
+    expect(desktopLink).not.toBeNull();
+
+    await act(async () => {
+      desktopLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector(".card")).toBeNull();
+    expect(container.querySelector(".stack")).toBeNull();
+    expect(container.querySelector(".alert")).toBeNull();
+
+    const settingsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-settings"]');
+    expect(settingsLink).not.toBeNull();
+
+    act(() => {
+      settingsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector(".card")).toBeNull();
+    expect(container.querySelector(".stack")).toBeNull();
+    expect(container.querySelector(".alert")).toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
   it("renders the operator shell navigation", () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
