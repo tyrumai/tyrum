@@ -276,6 +276,49 @@ describe("buildMemoryV1Digest", () => {
     }
   });
 
+  it("deduplicates structured tag results against fact_keys results", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const dal = new MemoryV1Dal(db);
+      const base = AgentConfig.parse({ model: { model: "openai/gpt-4.1" } }).memory.v1;
+      const config = {
+        ...base,
+        structured: {
+          ...base.structured,
+          fact_keys: ["favorite_color"],
+          tags: ["prefs"],
+        },
+      } satisfies typeof base;
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
+      await dal.create(
+        {
+          kind: "fact",
+          key: "favorite_color",
+          value: "blue",
+          observed_at: "2026-02-27T00:00:00.000Z",
+          confidence: 0.9,
+          tags: ["prefs"],
+          sensitivity: "private",
+          provenance: { source_kind: "user", refs: [] },
+        },
+        "agent-a",
+      );
+
+      const res = await buildMemoryV1Digest({
+        dal,
+        agentId: "agent-a",
+        query: "",
+        config,
+      });
+
+      expect(res.structured_item_count).toBe(1);
+    } finally {
+      await db.close();
+    }
+  });
+
   it("skips keyword candidates when dal.getById throws", async () => {
     const db = openTestSqliteDb();
     try {

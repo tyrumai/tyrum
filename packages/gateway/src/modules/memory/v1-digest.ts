@@ -158,8 +158,11 @@ async function loadStructuredItems(params: {
       },
     });
 
+    const seenIds = new Set(out.map((item) => item.memory_item_id));
     for (const item of items) {
+      if (seenIds.has(item.memory_item_id)) continue;
       out.push(item);
+      seenIds.add(item.memory_item_id);
       if (out.length >= params.maxItems) break;
     }
   }
