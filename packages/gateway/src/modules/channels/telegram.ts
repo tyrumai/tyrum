@@ -43,12 +43,6 @@ import { randomUUID } from "node:crypto";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
 import { SessionSendPolicyOverrideDal } from "./send-policy-override-dal.js";
 
-function isFalsyEnvFlag(value: string | undefined): boolean {
-  if (!value) return false;
-  const v = value.trim().toLowerCase();
-  return v.length > 0 && ["0", "false", "off", "no"].includes(v);
-}
-
 function isTruthyEnvFlag(value: string | undefined): boolean {
   const trimmed = value?.trim().toLowerCase();
   if (!trimmed) return false;
@@ -61,10 +55,6 @@ function normalizeLane(raw: string | undefined): "main" | "cron" | "subagent" {
     return normalized;
   }
   return "main";
-}
-
-export function isChannelPipelineEnabled(): boolean {
-  return !isFalsyEnvFlag(process.env["TYRUM_CHANNEL_PIPELINE_ENABLED"]);
 }
 
 type ChannelTypingMode = "never" | "message" | "thinking" | "instant";

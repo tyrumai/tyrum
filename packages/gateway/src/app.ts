@@ -41,7 +41,7 @@ import { createPresenceRoutes } from "./routes/presence.js";
 import { createMetricsRoutes } from "./routes/metrics.js";
 import { loadAllPlaybooks } from "./modules/playbook/loader.js";
 import { ExecutionEngine } from "./modules/execution/engine.js";
-import { isChannelPipelineEnabled, TelegramChannelQueue } from "./modules/channels/telegram.js";
+import { TelegramChannelQueue } from "./modules/channels/telegram.js";
 import { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
 import { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "./modules/models/session-pin-dal.js";
@@ -98,18 +98,15 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   const isLocalOnly = opts.isLocalOnly ?? true;
   const runtime = opts.runtime ?? {
     version: VERSION,
-    instanceId: process.env["TYRUM_INSTANCE_ID"]?.trim() || "unknown",
-    role: process.env["TYRUM_ROLE"]?.trim() || "all",
-    otelEnabled: false,
+    instanceId: container.gatewayConfig?.runtime.instanceId ?? "unknown",
+    role: container.gatewayConfig?.runtime.role ?? "all",
+    otelEnabled: container.gatewayConfig?.otel.enabled ?? false,
   };
 
   const engine =
     opts.engine ??
     (() => {
-      const engineApiEnabledRaw = process.env["TYRUM_ENGINE_API_ENABLED"]?.trim();
-      const engineApiEnabled =
-        engineApiEnabledRaw &&
-        !["0", "false", "off", "no"].includes(engineApiEnabledRaw.toLowerCase());
+      const engineApiEnabled = container.gatewayConfig?.execution.engineApiEnabled ?? false;
       if (!engineApiEnabled) return undefined;
       return new ExecutionEngine({
         db: container.db,
@@ -151,7 +148,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   })();
 
   const trustedProxies = createTrustedProxyAllowlistFromEnv(
-    container.gatewayConfig?.server.trustedProxies ?? process.env["GATEWAY_TRUSTED_PROXIES"],
+    container.gatewayConfig?.server.trustedProxies,
   );
   app.use("*", createClientIpMiddleware({ trustedProxies }));
 
@@ -183,10 +180,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   // Prometheus request metrics.
   app.use("*", createMetricsMiddleware(gatewayMetrics));
 
-  const corsOrigins = (process.env["TYRUM_CORS_ORIGINS"] ?? "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
+  const corsOrigins = container.gatewayConfig?.server.corsOrigins ?? [];
 
   if (corsOrigins.length > 0) {
     app.use(
@@ -199,6 +193,8 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       }),
     );
   }
+
+  const channelPipelineEnabled = container.gatewayConfig?.channels.pipelineEnabled ?? true;
 
   // Apply auth middleware if a token store is provided
   if (opts.authRateLimiter) {
@@ -317,7 +313,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     createIngressRoutes({
       telegramBot: container.telegramBot,
       telegramQueue:
-        isChannelPipelineEnabled() && container.telegramBot && opts.agents
+        channelPipelineEnabled && container.telegramBot && opts.agents
           ? new TelegramChannelQueue(container.db, {
               logger: container.logger,
               ws: opts.connectionManager
@@ -394,7 +390,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   const playbookHome =
     container.gatewayConfig?.paths.homeExplicit === true
       ? container.gatewayConfig.paths.home
-      : process.env["TYRUM_HOME"];
+      : undefined;
   const playbooks =
     opts.playbooks ?? (playbookHome ? loadAllPlaybooks(`${playbookHome}/playbooks`) : []);
   const playbookRunner = new PlaybookRunner();
@@ -453,7 +449,8 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       error_message: err.message,
     };
     const shouldIncludeStackTrace =
-      container.config.logStackTraces ?? process.env["NODE_ENV"] !== "production";
+      container.config.logStackTraces ??
+      (container.gatewayConfig?.runtime.nodeEnv ?? "development") !== "production";
     if (shouldIncludeStackTrace && err.stack) {
       payload["error_stack"] = err.stack;
     }

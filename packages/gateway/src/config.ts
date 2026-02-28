@@ -39,6 +39,13 @@ function parseOptionalUint(value: unknown): number | undefined {
   return parsed;
 }
 
+function parseOptionalPositiveInt(value: unknown): number | undefined {
+  const parsed = parseOptionalUint(value);
+  if (parsed === undefined) return undefined;
+  if (parsed <= 0) return undefined;
+  return parsed;
+}
+
 function parseStrictTransportGuardrailFlag(
   value: unknown,
   envVar: string,
@@ -136,6 +143,16 @@ export const GatewayConfigSchema = z
         .transform((value) => normalizeOptionalString(value))
         .optional(),
 
+      /** `TYRUM_CORS_ORIGINS` (default: unset). Comma-separated origin allowlist. */
+      corsOrigins: z.unknown().transform((value) => {
+        const raw = normalizeOptionalString(value);
+        if (!raw) return [];
+        return raw
+          .split(",")
+          .map((origin) => origin.trim())
+          .filter((origin) => origin.length > 0);
+      }),
+
       /** `TYRUM_TLS_READY` (default: `false`). Set to acknowledge TLS termination is configured. */
       tlsReady: z
         .unknown()
@@ -168,6 +185,14 @@ export const GatewayConfigSchema = z
         });
         return z.NEVER;
       }),
+
+      rateLimit: z.object({
+        /** `TYRUM_AUTH_RATE_LIMIT_WINDOW_S` (default: `60`). */
+        windowSeconds: z.unknown().transform((value) => parseOptionalPositiveInt(value) ?? 60),
+
+        /** `TYRUM_AUTH_RATE_LIMIT_MAX` (default: `20`). */
+        max: z.unknown().transform((value) => parseOptionalPositiveInt(value) ?? 20),
+      }),
     }),
 
     database: z.object({
@@ -193,6 +218,9 @@ export const GatewayConfigSchema = z
 
       /** `TYRUM_ROLE` (default: `all`). */
       role: z.unknown().transform((value) => parseGatewayRole(value)),
+
+      /** `NODE_ENV` (default: `development`). */
+      nodeEnv: z.unknown().transform((value) => normalizeOptionalString(value) ?? "development"),
     }),
 
     paths: z.object({
@@ -573,11 +601,16 @@ export function loadConfig(env: NodeJS.ProcessEnv): GatewayConfig {
       host: env["GATEWAY_HOST"],
       port: env["GATEWAY_PORT"],
       trustedProxies: env["GATEWAY_TRUSTED_PROXIES"],
+      corsOrigins: env["TYRUM_CORS_ORIGINS"],
       tlsReady: env["TYRUM_TLS_READY"],
       allowInsecureHttp: env["TYRUM_ALLOW_INSECURE_HTTP"],
     },
     auth: {
       token: env["GATEWAY_TOKEN"],
+      rateLimit: {
+        windowSeconds: env["TYRUM_AUTH_RATE_LIMIT_WINDOW_S"],
+        max: env["TYRUM_AUTH_RATE_LIMIT_MAX"],
+      },
     },
     database: {
       path: env["GATEWAY_DB_PATH"],
@@ -586,6 +619,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): GatewayConfig {
     runtime: {
       instanceId: env["TYRUM_INSTANCE_ID"],
       role: env["TYRUM_ROLE"],
+      nodeEnv: env["NODE_ENV"],
     },
     paths: {
       home: env["TYRUM_HOME"],
@@ -688,4 +722,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): GatewayConfig {
   }
   const message = parsed.error.issues.map((issue) => issue.message).join("; ");
   throw new Error(`Invalid gateway config: ${message}`);
+}
+
+export function loadConfigFromProcessEnv(overrides: NodeJS.ProcessEnv = {}): GatewayConfig {
+  return loadConfig({ ...process.env, ...overrides });
 }

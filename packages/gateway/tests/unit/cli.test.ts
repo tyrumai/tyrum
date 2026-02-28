@@ -42,12 +42,7 @@ function mockChildExit(exitCode: number): EventEmitter {
 
 describe("gateway CLI argument parsing", () => {
   it("defaults to start when no args are provided", () => {
-    const prev = process.env["TYRUM_ROLE"];
-    delete process.env["TYRUM_ROLE"];
-    expect(parseCliArgs([])).toEqual({ kind: "start", role: "all" });
-    if (typeof prev === "string") {
-      process.env["TYRUM_ROLE"] = prev;
-    }
+    expect(parseCliArgs([])).toEqual({ kind: "start" });
   });
 
   it("parses update channel flag", () => {
