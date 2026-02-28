@@ -24,7 +24,7 @@ function stubLocalStorage() {
   return store;
 }
 
-vi.mock("../src/pages/connect-page.js", async () => {
+vi.mock("../src/components/pages/connect-page.js", async () => {
   const React = await import("react");
   const { useTheme } = await import("../src/hooks/use-theme.js");
   return {

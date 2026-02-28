@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
-import { RunsPage } from "../../src/pages/runs-page.js";
+import { RunsPage } from "../../src/components/pages/runs-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 describe("RunsPage (artifacts)", () => {

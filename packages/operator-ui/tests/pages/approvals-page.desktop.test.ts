@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import React from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
-import { ApprovalsPage } from "../../src/pages/approvals-page.js";
+import { ApprovalsPage } from "../../src/components/pages/approvals-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 describe("ApprovalsPage (desktop approvals)", () => {

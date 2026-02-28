@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
-import { DashboardPage } from "../../src/pages/dashboard-page.js";
+import { DashboardPage } from "../../src/components/pages/dashboard-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 describe("DashboardPage", () => {

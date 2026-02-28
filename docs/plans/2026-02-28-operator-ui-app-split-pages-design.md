@@ -44,4 +44,3 @@ Same as Option A, but keep the old `src/pages/*` modules as re-exports that forw
   - asserts `packages/operator-ui/src/app.tsx` is ≤200 lines, and
   - verifies all expected page modules exist and can be imported from `src/components/pages/*`.
 - Rely on existing operator-ui unit tests (Dashboard/Approvals/Runs/etc.) to detect any behavior regressions from the move.
-

@@ -13,9 +13,11 @@
 ### Task 1: Add a failing structural regression test
 
 **Files:**
+
 - Create: `packages/operator-ui/tests/app-page-components.test.ts`
 
 **Step 1: Write the failing test**
+
 - Assert `packages/operator-ui/src/app.tsx` line count is ≤200.
 - `import()` each page module from `packages/operator-ui/src/components/pages/*.js` and assert it exports the expected component.
 
@@ -27,6 +29,7 @@ Expected: FAIL (app.tsx too large and/or modules not found).
 ### Task 2: Move existing pages into `components/pages/`
 
 **Files:**
+
 - Move: `packages/operator-ui/src/pages/*.tsx` → `packages/operator-ui/src/components/pages/*.tsx`
 - Modify (imports): moved page files
 
@@ -42,6 +45,7 @@ Run: `git mv packages/operator-ui/src/pages packages/operator-ui/src/components/
 ### Task 3: Extract `DesktopPage` and add `MemoryPage`
 
 **Files:**
+
 - Create: `packages/operator-ui/src/components/pages/desktop-page.tsx`
 - Create: `packages/operator-ui/src/components/pages/memory-page.tsx`
 - Modify: `packages/operator-ui/src/app.tsx`
@@ -58,6 +62,7 @@ Run: `git mv packages/operator-ui/src/pages packages/operator-ui/src/components/
 ### Task 4: Wire new pages from `app.tsx` and update tests
 
 **Files:**
+
 - Modify: `packages/operator-ui/src/app.tsx`
 - Modify: `packages/operator-ui/tests/**/*.ts`
 
@@ -76,6 +81,7 @@ Run: `git mv packages/operator-ui/src/pages packages/operator-ui/src/components/
 **Step 1: Run verification**
 
 Run:
+
 - `pnpm test`
 - `pnpm typecheck`
 - `pnpm lint`
@@ -84,4 +90,3 @@ Run:
 **Step 2: Commit**
 
 Commit message: `refactor(operator-ui): split app.tsx into page components (#838)`
-

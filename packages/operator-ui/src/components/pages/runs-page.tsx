@@ -3,14 +3,14 @@ import type { OperatorCore, RunsState } from "@tyrum/operator-core";
 import { ChevronDown, Play } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { EmptyState } from "../components/ui/empty-state.js";
-import { Badge, type BadgeVariant } from "../components/ui/badge.js";
-import { Button } from "../components/ui/button.js";
-import { Card } from "../components/ui/card.js";
-import { StatusDot, type StatusDotVariant } from "../components/ui/status-dot.js";
-import { AttemptArtifactsDialog } from "../components/artifacts/attempt-artifacts-dialog.js";
-import { cn } from "../lib/cn.js";
-import { useOperatorStore } from "../use-operator-store.js";
+import { AttemptArtifactsDialog } from "../artifacts/attempt-artifacts-dialog.js";
+import { Badge, type BadgeVariant } from "../ui/badge.js";
+import { Button } from "../ui/button.js";
+import { Card } from "../ui/card.js";
+import { EmptyState } from "../ui/empty-state.js";
+import { StatusDot, type StatusDotVariant } from "../ui/status-dot.js";
+import { cn } from "../../lib/cn.js";
+import { useOperatorStore } from "../../use-operator-store.js";
 
 const TRUNCATED_ID_CHARS = 8;
 
