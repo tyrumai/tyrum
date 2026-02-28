@@ -9,12 +9,15 @@ Reference (reproducible) configuration templates live in `config/deployments/`.
 
 ## Docker deployments (docker compose)
 
-The repo ships a `docker-compose.yml` with two profiles:
+The repo ships a `docker-compose.yml` with these profiles:
 
 - default: single-host (`tyrum` service)
 - `split`: split-role (`tyrum-edge`, `tyrum-worker`, `tyrum-scheduler` + `postgres`)
+- `desktop-sandbox`: optional Linux desktop sandbox (Xfce + noVNC) + paired desktop node
 
 > Safety note: `docker-compose.yml` is **local-first**. It allows plaintext HTTP for convenience and publishes Postgres on `5432`. For remote deployments, add firewalling/allowlists, use TLS termination, and set strong database credentials. See `docs/advanced/remote-gateway.md`.
+
+The `desktop-sandbox` profile publishes an unauthenticated desktop takeover endpoint for local use (bound to `127.0.0.1` by default).
 
 ### Single-host
 

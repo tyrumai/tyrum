@@ -48,8 +48,9 @@ vi.mock("../src/main/config/token-store.js", () => ({
   decryptToken: vi.fn(() => "test-token"),
 }));
 
-vi.mock("../src/main/providers/desktop-provider.js", () => ({
+vi.mock("@tyrum/desktop-node", () => ({
   DesktopProvider: vi.fn(),
+  NutJsDesktopBackend: vi.fn(),
 }));
 
 vi.mock("../src/main/providers/playwright-provider.js", () => ({
@@ -58,10 +59,6 @@ vi.mock("../src/main/providers/playwright-provider.js", () => ({
 
 vi.mock("../src/main/providers/cli-provider.js", () => ({
   CliProvider: vi.fn(),
-}));
-
-vi.mock("../src/main/providers/backends/nutjs-desktop-backend.js", () => ({
-  NutJsDesktopBackend: vi.fn(),
 }));
 
 vi.mock("../src/main/providers/backends/real-playwright-backend.js", () => ({
@@ -249,7 +246,7 @@ describe("node-ipc", () => {
     expect(runtimeInstance).toBeDefined();
     expect(runtimeInstance?.connect).toHaveBeenCalledWith("ws://gateway.example/ws", "test-token");
 
-    const { DesktopProvider } = await import("../src/main/providers/desktop-provider.js");
+    const { DesktopProvider } = await import("@tyrum/desktop-node");
     const { PlaywrightProvider } = await import("../src/main/providers/playwright-provider.js");
     const { CliProvider } = await import("../src/main/providers/cli-provider.js");
     expect(DesktopProvider).toHaveBeenCalledTimes(1);

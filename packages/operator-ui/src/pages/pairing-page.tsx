@@ -10,6 +10,7 @@ import { Label } from "../components/ui/label.js";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group.js";
 import { Textarea } from "../components/ui/textarea.js";
 import { formatErrorMessage } from "../utils/format-error-message.js";
+import { extractTakeoverUrlFromNodeLabel } from "../utils/takeover-url.js";
 import { useOperatorStore } from "../use-operator-store.js";
 
 type PairingTrustLevel = "local" | "remote";
@@ -36,6 +37,7 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
   );
   const reasonRef = useRef<HTMLTextAreaElement | null>(null);
   const isBusy = busy !== null;
+  const takeoverUrl = extractTakeoverUrlFromNodeLabel(pairing.node.label);
 
   const onApprove = async (): Promise<void> => {
     if (busy) return;
@@ -83,6 +85,21 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
           <div className="text-sm text-fg-muted">
             Node <span className="font-medium text-fg">{pairing.node.node_id}</span>
           </div>
+          {pairing.node.label ? (
+            <div className="text-xs text-fg-muted">{pairing.node.label}</div>
+          ) : null}
+          {takeoverUrl ? (
+            <Button asChild size="sm" variant="outline" className="w-fit">
+              <a
+                data-testid={`pairing-takeover-${pairing.pairing_id}`}
+                href={takeoverUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                Open takeover
+              </a>
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="grid gap-6">

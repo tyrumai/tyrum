@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ActionPrimitive } from "@tyrum/schemas";
 import { resolvePermissions } from "../src/main/config/permissions.js";
-import { DesktopProvider, type ConfirmationFn } from "../src/main/providers/desktop-provider.js";
-import { MockDesktopBackend } from "../src/main/providers/backends/desktop-backend.js";
 import type { OcrEngine, OcrMatch } from "../src/main/providers/ocr/types.js";
+import { DesktopProvider, MockDesktopBackend, type ConfirmationFn } from "@tyrum/desktop-node";
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -26,10 +26,9 @@ import { TokenStore } from "../../../../packages/gateway/src/modules/auth/token-
 import { dispatchTask } from "../../../../packages/gateway/src/ws/protocol.js";
 import type { ProtocolDeps } from "../../../../packages/gateway/src/ws/protocol.js";
 import { TyrumClient, autoExecute } from "../../../../packages/client/src/index.js";
-import { DesktopProvider } from "../../src/main/providers/desktop-provider.js";
+import { DesktopProvider, MockDesktopBackend } from "@tyrum/desktop-node";
 import { CliProvider } from "../../src/main/providers/cli-provider.js";
 import { resolvePermissions } from "../../src/main/config/permissions.js";
-import { MockDesktopBackend } from "../../src/main/providers/backends/desktop-backend.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../../../packages/gateway/migrations");

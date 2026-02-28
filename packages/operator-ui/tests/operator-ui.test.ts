@@ -118,6 +118,7 @@ function samplePairingRequestPending() {
     requested_at: "2026-01-01T00:00:00.000Z",
     node: {
       node_id: "node-1",
+      label: "my takeover: label (takeover: http://localhost:6080/vnc.html?autoconnect=true)",
       last_seen_at: "2026-01-01T00:00:00.000Z",
       capabilities: [],
     },
@@ -1634,6 +1635,14 @@ describe("operator-ui", () => {
 
     expect(pairingsList).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("node-1");
+
+    const takeoverLink = container.querySelector<HTMLAnchorElement>(
+      '[data-testid="pairing-takeover-1"]',
+    );
+    expect(takeoverLink).not.toBeNull();
+    expect(takeoverLink?.getAttribute("href")).toBe(
+      "http://localhost:6080/vnc.html?autoconnect=true",
+    );
 
     const trustRemote = container.querySelector<HTMLButtonElement>(
       '[data-testid="pairing-trust-level-1-remote"]',
