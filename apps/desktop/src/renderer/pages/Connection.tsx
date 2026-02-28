@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
 import {
-  colors,
-  heading,
-  card,
-  label as labelStyle,
-  input,
-  btn,
-  info,
-  tabRow,
-  tab as tabStyle,
-} from "../theme.js";
+  Alert,
+  Button,
+  Card,
+  CardContent,
+  Input,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@tyrum/operator-ui";
 
 type Tab = "embedded" | "remote";
 
@@ -143,118 +143,104 @@ export function Connection() {
   };
 
   return (
-    <div>
-      <h1 style={heading}>Connection</h1>
+    <div className="grid gap-6">
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Connection</h1>
 
-      <div style={tabRow}>
-        <button style={tabStyle(tab === "embedded")} onClick={() => setTab("embedded")}>
-          Embedded
-        </button>
-        <button style={tabStyle(tab === "remote")} onClick={() => setTab("remote")}>
-          Remote
-        </button>
-      </div>
+      <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
+        <TabsList>
+          <TabsTrigger value="embedded">Embedded</TabsTrigger>
+          <TabsTrigger value="remote">Remote</TabsTrigger>
+        </TabsList>
 
-      {tab === "embedded" && (
-        <div style={card}>
-          <div style={{ ...labelStyle, marginTop: 12 }}>Port</div>
-          <input
-            style={input}
-            type="number"
-            value={port}
-            onChange={(e) => setPort(Number(e.target.value))}
-            min={1024}
-            max={65535}
-          />
+        <TabsContent value="embedded">
+          <Card>
+            <CardContent className="grid gap-4 pt-6">
+              <Input
+                label="Port"
+                type="number"
+                value={port}
+                onChange={(e) => setPort(Number(e.target.value))}
+                min={1024}
+                max={65535}
+              />
 
-          <div>
-            {gatewayStatus === "stopped" || gatewayStatus === "error" ? (
-              <button
-                style={{ ...btn("primary"), marginRight: 8, marginTop: 12 }}
-                onClick={startGateway}
-                disabled={busy}
-              >
-                {busy ? "Starting..." : "Start Gateway"}
-              </button>
-            ) : (
-              <button
-                style={{ ...btn("danger"), marginRight: 8, marginTop: 12 }}
-                onClick={stopGateway}
-                disabled={busy}
-              >
-                {busy ? "Stopping..." : "Stop Gateway"}
-              </button>
-            )}
-          </div>
+              <div className="flex gap-2">
+                {gatewayStatus === "stopped" || gatewayStatus === "error" ? (
+                  <Button onClick={startGateway} disabled={busy} isLoading={busy}>
+                    {busy ? "Starting..." : "Start Gateway"}
+                  </Button>
+                ) : (
+                  <Button variant="danger" onClick={stopGateway} disabled={busy} isLoading={busy}>
+                    {busy ? "Stopping..." : "Stop Gateway"}
+                  </Button>
+                )}
+              </div>
 
-          <div style={info}>
-            Status: {gatewayStatus} {mode === "embedded" ? "(active mode)" : ""}
-          </div>
-          {gatewayError && (
-            <div style={{ ...info, color: colors.error, marginTop: 6 }}>Reason: {gatewayError}</div>
-          )}
-        </div>
-      )}
+              <div className="text-sm text-fg-muted">
+                Status: {gatewayStatus} {mode === "embedded" ? "(active mode)" : ""}
+              </div>
 
-      {tab === "remote" && (
-        <div style={card}>
-          <div style={{ ...labelStyle, marginTop: 12 }}>Gateway WebSocket URL</div>
-          <input
-            style={input}
-            type="text"
-            value={remoteUrl}
-            onChange={(e) => setRemoteUrl(e.target.value)}
-            placeholder="ws://host:port/ws"
-          />
+              {gatewayError ? (
+                <Alert variant="error" title="Gateway error" description={gatewayError} />
+              ) : null}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          <div style={{ ...labelStyle, marginTop: 12 }}>Token</div>
-          <input
-            style={input}
-            type="password"
-            value={remoteToken}
-            onChange={(e) => setRemoteToken(e.target.value)}
-            placeholder="Bearer token"
-          />
-          {hasSavedRemoteToken && remoteToken.trim() === "" && (
-            <div style={info}>
-              A token is already saved. Leave blank to reuse it, or enter a new token to replace it.
-            </div>
-          )}
+        <TabsContent value="remote">
+          <Card>
+            <CardContent className="grid gap-4 pt-6">
+              <Input
+                label="Gateway WebSocket URL"
+                type="text"
+                value={remoteUrl}
+                onChange={(e) => setRemoteUrl(e.target.value)}
+                placeholder="ws://host:port/ws"
+              />
 
-          <div style={{ ...labelStyle, marginTop: 12 }}>
-            TLS certificate fingerprint (SHA-256, optional)
-          </div>
-          <input
-            style={input}
-            type="text"
-            value={remoteTlsCertFingerprint256}
-            onChange={(e) => setRemoteTlsCertFingerprint256(e.target.value)}
-            placeholder="AA:BB:CC:…"
-          />
+              <Input
+                label="Token"
+                type="password"
+                value={remoteToken}
+                onChange={(e) => setRemoteToken(e.target.value)}
+                placeholder="Bearer token"
+                helperText={
+                  hasSavedRemoteToken && remoteToken.trim() === ""
+                    ? "A token is already saved. Leave blank to reuse it, or enter a new token to replace it."
+                    : undefined
+                }
+              />
 
-          <div>
-            {nodeStatus === "disconnected" || nodeStatus === "error" ? (
-              <button
-                style={{ ...btn("primary"), marginRight: 8, marginTop: 12 }}
-                onClick={connectNode}
-                disabled={busy}
-              >
-                {busy ? "Connecting..." : "Connect"}
-              </button>
-            ) : (
-              <button
-                style={{ ...btn("danger"), marginRight: 8, marginTop: 12 }}
-                onClick={disconnectNode}
-                disabled={busy}
-              >
-                {busy ? "Disconnecting..." : "Disconnect"}
-              </button>
-            )}
-          </div>
+              <Input
+                label="TLS certificate fingerprint (SHA-256, optional)"
+                type="text"
+                value={remoteTlsCertFingerprint256}
+                onChange={(e) => setRemoteTlsCertFingerprint256(e.target.value)}
+                placeholder="AA:BB:CC:…"
+              />
 
-          <div style={info}>Node status: {nodeStatus}</div>
-        </div>
-      )}
+              <div className="flex gap-2">
+                {nodeStatus === "disconnected" || nodeStatus === "error" ? (
+                  <Button onClick={connectNode} disabled={busy} isLoading={busy}>
+                    {busy ? "Connecting..." : "Connect"}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="danger"
+                    onClick={disconnectNode}
+                    disabled={busy}
+                    isLoading={busy}
+                  >
+                    {busy ? "Disconnecting..." : "Disconnect"}
+                  </Button>
+                )}
+              </div>
+
+              <div className="text-sm text-fg-muted">Node status: {nodeStatus}</div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

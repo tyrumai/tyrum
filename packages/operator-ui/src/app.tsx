@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import {
   Database,
   LayoutDashboard,
@@ -20,8 +20,10 @@ import { ToastProvider } from "./components/toast/toast-provider.js";
 import { Alert } from "./components/ui/alert.js";
 import { Button } from "./components/ui/button.js";
 import { Card, CardContent } from "./components/ui/card.js";
+import { Checkbox } from "./components/ui/checkbox.js";
+import { Label } from "./components/ui/label.js";
 import { getDesktopApi } from "./desktop-api.js";
-import { ThemeProvider } from "./hooks/use-theme.js";
+import { ThemeProvider, useThemeOptional } from "./hooks/use-theme.js";
 import { ApprovalsPage } from "./pages/approvals-page.js";
 import { ConnectPage } from "./pages/connect-page.js";
 import { DashboardPage } from "./pages/dashboard-page.js";
@@ -78,6 +80,15 @@ const DESKTOP_NAV_ORDER: OperatorUiRouteId[] = ["desktop"];
 function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {
   return Object.prototype.hasOwnProperty.call(NAV_ITEM_CONFIG, value);
 }
+
+function MaybeThemeProvider({ children }: { children: ReactNode }) {
+  const existing = useThemeOptional();
+  if (existing) {
+    return <>{children}</>;
+  }
+  return <ThemeProvider>{children}</ThemeProvider>;
+}
+
 function DesktopSetupPage({ core }: { core: OperatorCore }) {
   const api = getDesktopApi();
   const [port, setPort] = useState(8788);
@@ -238,13 +249,13 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
     }
   };
 
-  const toggleCapability = (key: keyof typeof capabilities): void => {
+  const setCapability = (key: keyof typeof capabilities, nextEnabled: boolean): void => {
     if (saveResetTimer.current) {
       clearTimeout(saveResetTimer.current);
       saveResetTimer.current = null;
     }
     setConfigSaved(false);
-    setCapabilities((prev) => ({ ...prev, [key]: !prev[key] }));
+    setCapabilities((prev) => ({ ...prev, [key]: nextEnabled }));
     setConfigDirty(true);
   };
 
@@ -421,17 +432,25 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
                 ["cli", "CLI (command execution)"],
                 ["http", "HTTP (network requests)"],
               ] as const
-            ).map(([key, label]) => (
-              <label key={key} className="flex items-center gap-2 text-sm text-fg">
-                <input
-                  type="checkbox"
-                  checked={capabilities[key]}
-                  disabled={busy === "config"}
-                  onChange={() => toggleCapability(key)}
-                />
-                <span>{label}</span>
-              </label>
-            ))}
+            ).map(([key, label]) => {
+              const checkboxId = `desktop-capability-${key}`;
+              return (
+                <div key={key} className="flex items-start gap-2">
+                  <Checkbox
+                    id={checkboxId}
+                    data-testid={`desktop-capability-${key}`}
+                    checked={capabilities[key]}
+                    disabled={busy === "config"}
+                    onCheckedChange={(nextChecked) => {
+                      setCapability(key, nextChecked === true);
+                    }}
+                  />
+                  <Label htmlFor={checkboxId} className="text-sm font-normal text-fg">
+                    {label}
+                  </Label>
+                </div>
+              );
+            })}
             {capabilities.cli || capabilities.http ? (
               <Alert
                 variant="warning"
@@ -546,7 +565,7 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
   };
 
   return (
-    <ThemeProvider>
+    <MaybeThemeProvider>
       <ToastProvider>
         <ErrorBoundary>
           <AppShell
@@ -582,6 +601,6 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
           </AppShell>
         </ErrorBoundary>
       </ToastProvider>
-    </ThemeProvider>
+    </MaybeThemeProvider>
   );
 }

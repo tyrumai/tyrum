@@ -83,10 +83,14 @@ vi.mock("@tyrum/operator-core", () => ({
   httpAuthForAuth: vi.fn((auth: unknown) => auth),
 }));
 
-vi.mock("@tyrum/operator-ui", () => ({
-  OperatorUiApp: () => createElement("div", { "data-testid": "operator-ui-app" }),
-  MemoryInspector: () => createElement("div", { "data-testid": "memory-inspector" }),
-}));
+vi.mock("@tyrum/operator-ui", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tyrum/operator-ui")>();
+  return {
+    ...actual,
+    OperatorUiApp: () => createElement("div", { "data-testid": "operator-ui-app" }),
+    MemoryInspector: () => createElement("div", { "data-testid": "memory-inspector" }),
+  };
+});
 
 vi.mock("../src/renderer/pages/Overview.js", () => ({
   Overview: () => null,
@@ -136,17 +140,16 @@ describe("desktop operator-core diff line coverage", () => {
       root.render(createElement(App));
     });
 
-    const clickNavByLabel = (label: string): void => {
-      const buttons = Array.from(document.querySelectorAll('[role="button"]')) as HTMLElement[];
-      const target = buttons.find((el) => el.textContent?.trim() === label);
-      if (!target) {
-        throw new Error(`nav item not found: ${label}`);
+    const clickNavItem = (id: string): void => {
+      const button = document.querySelector(`[data-testid="nav-${id}"]`);
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error(`nav item not found: ${id}`);
       }
-      target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      button.click();
     };
 
     await act(async () => {
-      clickNavByLabel("Memory");
+      clickNavItem("gateway");
     });
 
     await act(async () => {
@@ -164,7 +167,7 @@ describe("desktop operator-core diff line coverage", () => {
     expect(coreConnectMock).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      clickNavByLabel("Gateway");
+      clickNavItem("overview");
     });
 
     await act(async () => {

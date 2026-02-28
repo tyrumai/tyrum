@@ -1,6 +1,5 @@
-import { OperatorUiApp } from "@tyrum/operator-ui";
+import { Alert, OperatorUiApp } from "@tyrum/operator-ui";
 import type { DesktopOperatorCoreState } from "../lib/desktop-operator-core.js";
-import { colors } from "../theme.js";
 
 export type GatewayProps = DesktopOperatorCoreState;
 
@@ -9,27 +8,30 @@ export function Gateway({ core, busy, errorMessage }: GatewayProps) {
 
   if (!api) {
     return (
-      <div style={{ padding: 24 }}>
-        <h1>Gateway</h1>
-        <div>Desktop API not available.</div>
+      <div className="grid gap-4 px-4 py-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-fg">Gateway</h1>
+        <Alert variant="error" title="Desktop API not available." />
       </div>
     );
   }
 
   if (errorMessage) {
     return (
-      <div style={{ padding: 24 }}>
-        <h1>Gateway</h1>
-        <div style={{ marginTop: 12, color: colors.error }}>{errorMessage}</div>
+      <div className="grid gap-4 px-4 py-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-fg">Gateway</h1>
+        <Alert variant="error" title="Error" description={errorMessage} />
       </div>
     );
   }
 
   if (!core) {
     return (
-      <div style={{ padding: 24 }}>
-        <h1>Gateway</h1>
-        <div>{busy ? "Loading operator UI..." : "Operator UI not ready."}</div>
+      <div className="grid gap-4 px-4 py-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-fg">Gateway</h1>
+        <Alert
+          variant="warning"
+          title={busy ? "Loading operator UI..." : "Operator UI not ready."}
+        />
       </div>
     );
   }

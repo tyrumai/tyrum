@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { colors, fonts, heading, tabRow, tab as tabStyle } from "../theme.js";
+import { Button, ScrollArea, Tabs, TabsList, TabsTrigger } from "@tyrum/operator-ui";
 
 type LogTab = "gateway" | "node";
 
@@ -14,72 +14,17 @@ interface LogEntry {
 const MAX_ENTRIES = 500;
 let nextId = 0;
 
-const logContainerStyle: React.CSSProperties = {
-  background: colors.bgSubtle,
-  borderRadius: 8,
-  padding: 12,
-  minHeight: 400,
-  maxHeight: "calc(100vh - 200px)",
-  overflowY: "auto",
-  fontFamily: fonts.mono,
-  fontSize: 12,
-  lineHeight: 1.6,
-  border: `1px solid ${colors.border}`,
-};
-
-const LEVEL_COLORS: Record<string, string> = {
-  info: "#818cf8",
-  warn: "#eab308",
-  error: "#ef4444",
-  debug: "#9ca3af",
-};
-
-function entryStyle(level: string): React.CSSProperties {
-  return {
-    color: LEVEL_COLORS[level] ?? colors.fg,
-    whiteSpace: "pre-wrap" as const,
-    wordBreak: "break-all" as const,
-    padding: "1px 0",
-  };
-}
-
-const timestampStyle: React.CSSProperties = {
-  color: colors.fgMuted,
-  marginRight: 8,
-};
-
-const levelStyle = (level: string): React.CSSProperties => ({
-  color: LEVEL_COLORS[level] ?? colors.fg,
-  fontWeight: 700,
-  marginRight: 8,
-  textTransform: "uppercase" as const,
-  minWidth: 44,
-  display: "inline-block",
-});
-
-const emptyStyle: React.CSSProperties = {
-  color: colors.fgMuted,
-  textAlign: "center" as const,
-  padding: 40,
-  fontSize: 14,
-};
-
-const clearBtnStyle: React.CSSProperties = {
-  padding: "6px 16px",
-  borderRadius: 6,
-  border: `1px solid ${colors.border}`,
-  fontSize: 13,
-  fontWeight: 500,
-  cursor: "pointer",
-  background: "transparent",
-  color: colors.fg,
-  marginLeft: "auto",
+const LEVEL_CLASS_NAMES: Record<string, string> = {
+  info: "text-primary",
+  warn: "text-warning",
+  error: "text-error",
+  debug: "text-fg-muted",
 };
 
 export function Logs() {
   const [tab, setTab] = useState<LogTab>("gateway");
   const [entries, setEntries] = useState<LogEntry[]>([]);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRootRef = useRef<HTMLDivElement>(null);
   const autoScroll = useRef(true);
 
   useEffect(() => {
@@ -108,15 +53,19 @@ export function Logs() {
 
   // Auto-scroll to bottom
   useEffect(() => {
-    if (autoScroll.current && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    const viewport = scrollRootRef.current?.querySelector<HTMLElement>(
+      '[data-scroll-area-viewport=""]',
+    );
+    if (!autoScroll.current || !viewport) return;
+    viewport.scrollTop = viewport.scrollHeight;
   }, [entries]);
 
   const handleScroll = () => {
-    if (!scrollRef.current) return;
-    const el = scrollRef.current;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    const viewport = scrollRootRef.current?.querySelector<HTMLElement>(
+      '[data-scroll-area-viewport=""]',
+    );
+    if (!viewport) return;
+    const atBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 40;
     autoScroll.current = atBottom;
   };
 
@@ -133,36 +82,49 @@ export function Logs() {
   };
 
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
-        <h1 style={{ ...heading, marginBottom: 0 }}>Logs</h1>
-        <button style={clearBtnStyle} onClick={clearLogs}>
+    <div className="grid gap-6">
+      <div className="flex items-center gap-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-fg">Logs</h1>
+        <Button variant="secondary" size="sm" onClick={clearLogs} className="ml-auto">
           Clear
-        </button>
+        </Button>
       </div>
 
-      <div style={tabRow}>
-        <button style={tabStyle(tab === "gateway")} onClick={() => setTab("gateway")}>
-          Gateway
-        </button>
-        <button style={tabStyle(tab === "node")} onClick={() => setTab("node")}>
-          Node
-        </button>
-      </div>
+      <Tabs value={tab} onValueChange={(value) => setTab(value as LogTab)}>
+        <TabsList>
+          <TabsTrigger value="gateway">Gateway</TabsTrigger>
+          <TabsTrigger value="node">Node</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      <div ref={scrollRef} style={logContainerStyle} onScroll={handleScroll}>
-        {filtered.length === 0 ? (
-          <div style={emptyStyle}>No log entries yet</div>
-        ) : (
-          filtered.map((entry) => (
-            <div key={entry.id} style={entryStyle(entry.level)}>
-              <span style={timestampStyle}>{formatTime(entry.timestamp)}</span>
-              <span style={levelStyle(entry.level)}>{entry.level}</span>
-              {entry.message}
-            </div>
-          ))
-        )}
-      </div>
+      <ScrollArea
+        ref={scrollRootRef}
+        className="min-h-[400px] max-h-[calc(100vh-200px)] rounded-lg border border-border bg-bg-subtle"
+        onScroll={handleScroll}
+      >
+        <div className="p-3 font-mono text-xs leading-relaxed text-fg">
+          {filtered.length === 0 ? (
+            <div className="py-10 text-center text-sm text-fg-muted">No log entries yet</div>
+          ) : (
+            filtered.map((entry) => {
+              const levelClassName = LEVEL_CLASS_NAMES[entry.level] ?? "text-fg";
+              return (
+                <div key={entry.id} className="whitespace-pre-wrap break-all py-0.5">
+                  <span className="mr-2 text-fg-muted">{formatTime(entry.timestamp)}</span>
+                  <span
+                    className={["mr-2 inline-block w-12 font-bold uppercase", levelClassName].join(
+                      " ",
+                    )}
+                  >
+                    {entry.level}
+                  </span>
+                  <span className={levelClassName}>{entry.message}</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 }

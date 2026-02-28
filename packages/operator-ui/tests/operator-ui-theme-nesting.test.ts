@@ -1,0 +1,116 @@
+// @vitest-environment jsdom
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+import React from "react";
+import { createOperatorCore, createBearerTokenAuth } from "../../operator-core/src/index.js";
+import type { OperatorHttpClient, OperatorWsClient } from "../../operator-core/src/deps.js";
+import { ThemeProvider } from "../src/hooks/use-theme.js";
+import { OperatorUiApp } from "../src/app.js";
+import { cleanupTestRoot, renderIntoDocument } from "./test-utils.js";
+
+const THEME_STORAGE_KEY = "tyrum.themeMode";
+
+function stubLocalStorage() {
+  const store = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+  });
+  return store;
+}
+
+vi.mock("../src/pages/connect-page.js", async () => {
+  const React = await import("react");
+  const { useTheme } = await import("../src/hooks/use-theme.js");
+  return {
+    ConnectPage() {
+      const { mode } = useTheme();
+      return React.createElement("div", { "data-testid": "theme-mode" }, mode);
+    },
+  };
+});
+
+class StubWsClient implements OperatorWsClient {
+  connected = false;
+  connect(): void {}
+  disconnect(): void {}
+  on(_event: string, _handler: (data: unknown) => void): void {}
+  off(_event: string, _handler: (data: unknown) => void): void {}
+  approvalList = async () => ({ approvals: [], next_cursor: undefined });
+  approvalResolve = async () => ({ approval: {} as never });
+  memorySearch = async () => ({ v: 1, hits: [], next_cursor: undefined }) as never;
+  memoryList = async () => ({ v: 1, items: [], next_cursor: undefined }) as never;
+  memoryGet = async () => ({ v: 1, item: {} }) as never;
+  memoryUpdate = async () => ({ v: 1, item: {} }) as never;
+  memoryForget = async () => ({ v: 1, deleted_count: 0, tombstones: [] }) as never;
+  memoryExport = async () => ({ v: 1, artifact_id: "artifact-1" }) as never;
+}
+
+const stubHttp: OperatorHttpClient = {
+  status: {
+    get: async () => ({ status: "ok" }) as never,
+  },
+  usage: {
+    get: async () => ({ status: "ok" }) as never,
+  },
+  presence: {
+    list: async () => ({ status: "ok" }) as never,
+  },
+  pairings: {
+    list: async () => ({ status: "ok", pairings: [] }) as never,
+    approve: async () => ({ status: "ok" }) as never,
+    deny: async () => ({ status: "ok" }) as never,
+    revoke: async () => ({ status: "ok" }) as never,
+  },
+};
+
+function MutateStorageDuringRender({ children }: { children: React.ReactNode }) {
+  localStorage.setItem(THEME_STORAGE_KEY, "dark");
+  return React.createElement(React.Fragment, null, children);
+}
+
+describe("OperatorUiApp ThemeProvider nesting", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.documentElement.dataset.theme = "";
+    document.documentElement.dataset.themeMode = "";
+  });
+
+  it("does not mount a nested ThemeProvider when already wrapped", () => {
+    stubLocalStorage();
+    localStorage.setItem(THEME_STORAGE_KEY, "light");
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test-token"),
+      deps: {
+        ws: new StubWsClient(),
+        http: stubHttp,
+      },
+    });
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        ThemeProvider,
+        null,
+        React.createElement(
+          MutateStorageDuringRender,
+          null,
+          React.createElement(OperatorUiApp, { core, mode: "web" }),
+        ),
+      ),
+    );
+
+    const mode = testRoot.container.querySelector('[data-testid="theme-mode"]')?.textContent;
+    cleanupTestRoot(testRoot);
+    core.dispose();
+
+    expect(mode).toBe("light");
+  });
+});

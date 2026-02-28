@@ -7,6 +7,15 @@ import type {
   WorkStateKVScope,
 } from "@tyrum/schemas";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  StatusDot,
+  type StatusDotVariant,
+} from "@tyrum/operator-ui";
 import { toErrorMessage } from "../lib/errors.js";
 import {
   WORK_ITEM_STATUSES,
@@ -22,17 +31,6 @@ import {
   type WorkStateKvEntry,
   type WorkTasksByWorkItemId,
 } from "../lib/workboard-store.js";
-import {
-  badge,
-  btn,
-  card,
-  colors,
-  fonts,
-  heading,
-  label,
-  sectionTitle,
-  statusDot,
-} from "../theme.js";
 
 type OperatorConnectionInfo = {
   mode: "embedded" | "remote";
@@ -45,87 +43,6 @@ type OperatorConnectionInfo = {
 export type WorkBoardProps = {
   deepLinkWorkItemId?: string | null;
   onDeepLinkHandled?: () => void;
-};
-
-const containerStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 16,
-};
-
-const headerRowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12,
-};
-
-const headerActionsStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-};
-
-const boardScrollStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 12,
-  overflowX: "auto",
-  paddingBottom: 8,
-};
-
-const columnStyle: React.CSSProperties = {
-  border: `1px solid ${colors.border}`,
-  borderRadius: 8,
-  background: colors.bgCard,
-  padding: 12,
-  minHeight: 140,
-  width: 260,
-  flex: "0 0 auto",
-};
-
-const columnTitleStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  marginBottom: 8,
-  fontSize: 13,
-  fontWeight: 700,
-  color: colors.fg,
-};
-
-function workItemCardStyle(active: boolean): React.CSSProperties {
-  return {
-    border: `1px solid ${active ? colors.primary : colors.border}`,
-    borderRadius: 8,
-    padding: 10,
-    background: active ? colors.primaryDim : colors.bgSubtle,
-    cursor: "pointer",
-    marginBottom: 8,
-  };
-}
-
-const cardTitleStyle: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 700,
-  marginBottom: 6,
-  color: colors.fg,
-  lineHeight: 1.25,
-};
-
-const cardMetaStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: colors.fgMuted,
-  display: "flex",
-  gap: 10,
-  flexWrap: "wrap",
-};
-
-const monospaceStyle: React.CSSProperties = {
-  fontFamily: fonts.mono,
-  fontSize: 12,
-  color: colors.fg,
-  overflowX: "auto",
-  whiteSpace: "pre-wrap",
 };
 
 const STATUS_LABELS: Record<(typeof WORK_ITEM_STATUSES)[number], string> = {
@@ -553,14 +470,12 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
     [taskList],
   );
 
-  const connectionDotColor =
+  const connectionDotVariant: StatusDotVariant =
     connectionStatus === "connected"
-      ? colors.success
+      ? "success"
       : connectionStatus === "connecting"
-        ? colors.warning
-        : connectionStatus === "disconnected"
-          ? colors.neutral
-          : colors.neutral;
+        ? "warning"
+        : "neutral";
 
   const tlsPinWarning = connectionInfo?.tlsCertFingerprint256?.trim().length
     ? "TLS fingerprint pinning is configured, but pin verification is not enforced in the Desktop renderer."
@@ -574,379 +489,390 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
     selectedItem?.status === "blocked";
 
   return (
-    <div style={containerStyle}>
-      <div style={headerRowStyle}>
-        <h1 style={{ ...heading, marginBottom: 0 }}>Work</h1>
-        <div style={headerActionsStyle}>
-          <div style={{ fontSize: 13, color: colors.fgMuted }}>
-            <span style={statusDot(connectionDotColor)} />
+    <div className="grid gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-fg">Work</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 text-sm text-fg-muted">
+            <StatusDot variant={connectionDotVariant} pulse={connectionStatus === "connecting"} />
             {connectionStatus}
           </div>
-          <button
-            style={btn("secondary")}
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={refresh}
             disabled={connectionStatus !== "connected"}
           >
             Refresh
-          </button>
-          <button style={btn("secondary")} onClick={reconnect}>
+          </Button>
+          <Button variant="secondary" size="sm" onClick={reconnect}>
             Reconnect
-          </button>
+          </Button>
         </div>
       </div>
 
-      {tlsPinWarning && (
-        <div style={{ ...card, marginBottom: 0, borderColor: colors.warning }}>
-          <div style={{ ...label, marginBottom: 6 }}>TLS</div>
-          <div style={{ fontSize: 13, color: colors.fg }}>{tlsPinWarning}</div>
-        </div>
-      )}
+      {tlsPinWarning ? <Alert variant="warning" title="TLS" description={tlsPinWarning} /> : null}
 
-      {connectionError && (
-        <div style={{ ...card, marginBottom: 0, borderColor: colors.error }}>
-          <div style={{ ...label, marginBottom: 6 }}>Connection error</div>
-          <div style={{ fontSize: 13, color: colors.error }}>{connectionError}</div>
-        </div>
-      )}
+      {connectionError ? (
+        <Alert variant="error" title="Connection error" description={connectionError} />
+      ) : null}
 
-      <div style={boardScrollStyle}>
+      <div className="flex gap-3 overflow-x-auto pb-2">
         {WORK_ITEM_STATUSES.map((status) => {
           const columnItems = grouped[status];
           return (
-            <section key={status} style={columnStyle}>
-              <div style={columnTitleStyle}>
-                <span>{STATUS_LABELS[status]}</span>
-                <span style={{ ...badge, margin: 0 }}>{columnItems.length}</span>
-              </div>
-              {columnItems.length === 0 ? (
-                <div style={{ fontSize: 13, color: colors.fgMuted }}>No items</div>
-              ) : (
-                columnItems.map((item) => (
-                  <div
-                    key={item.work_item_id}
-                    style={workItemCardStyle(item.work_item_id === selectedWorkItemId)}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedWorkItemId(item.work_item_id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ")
-                        setSelectedWorkItemId(item.work_item_id);
-                    }}
-                  >
-                    <div style={cardTitleStyle}>{item.title}</div>
-                    <div style={cardMetaStyle}>
-                      <span>{item.kind}</span>
-                      <span>prio {item.priority}</span>
-                    </div>
-                    <div style={{ ...cardMetaStyle, marginTop: 6 }}>
-                      <span style={{ fontFamily: "inherit" }}>
-                        <span style={{ color: colors.fgMuted }}>id</span>{" "}
-                        <span style={{ fontFamily: fonts.mono }}>
-                          {item.work_item_id.slice(0, 8)}
-                        </span>
-                      </span>
-                      {item.last_active_at && (
-                        <span>active {new Date(item.last_active_at).toLocaleString()}</span>
-                      )}
-                    </div>
+            <Card key={status} className="w-64 shrink-0">
+              <CardContent className="grid gap-3 pt-6">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-fg">{STATUS_LABELS[status]}</span>
+                  <Badge variant="outline">{columnItems.length}</Badge>
+                </div>
+
+                {columnItems.length === 0 ? (
+                  <div className="text-sm text-fg-muted">No items</div>
+                ) : (
+                  <div className="grid gap-2">
+                    {columnItems.map((item) => {
+                      const active = item.work_item_id === selectedWorkItemId;
+                      return (
+                        <div
+                          key={item.work_item_id}
+                          className={[
+                            "cursor-pointer rounded-lg border p-3 transition-colors",
+                            active
+                              ? "border-primary bg-primary-dim"
+                              : "border-border bg-bg-subtle hover:bg-bg",
+                          ].join(" ")}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setSelectedWorkItemId(item.work_item_id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              setSelectedWorkItemId(item.work_item_id);
+                            }
+                          }}
+                        >
+                          <div className="text-sm font-semibold leading-snug text-fg">
+                            {item.title}
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-2 text-xs text-fg-muted">
+                            <span>{item.kind}</span>
+                            <span>prio {item.priority}</span>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
+                            <span>
+                              <span className="text-fg-muted">id</span>{" "}
+                              <span className="font-mono">{item.work_item_id.slice(0, 8)}</span>
+                            </span>
+                            {item.last_active_at ? (
+                              <span>active {new Date(item.last_active_at).toLocaleString()}</span>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ))
-              )}
-            </section>
+                )}
+              </CardContent>
+            </Card>
           );
         })}
       </div>
 
-      <div style={card}>
-        <div style={sectionTitle}>Drilldown</div>
-        {!selectedWorkItemId ? (
-          <div style={{ fontSize: 13, color: colors.fgMuted }}>
-            Select a WorkItem to inspect details.
-          </div>
-        ) : drilldownBusy ? (
-          <div style={{ fontSize: 13, color: colors.fgMuted }}>Loading…</div>
-        ) : drilldownError ? (
-          <div style={{ fontSize: 13, color: colors.error }}>{drilldownError}</div>
-        ) : !selectedItem ? (
-          <div style={{ fontSize: 13, color: colors.fgMuted }}>WorkItem not loaded.</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <div style={label}>WorkItem</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: colors.fg }}>
-                {selectedItem.title}
-              </div>
-              <div style={{ ...cardMetaStyle, marginTop: 6 }}>
-                <span>
-                  status <strong style={{ color: colors.fg }}>{selectedItem.status}</strong>
-                </span>
-                <span>kind {selectedItem.kind}</span>
-                <span>priority {selectedItem.priority}</span>
-              </div>
-              {(canMarkReadySelected || canResumeSelected || canCancelSelected) && (
-                <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-                  {canMarkReadySelected && (
-                    <button
-                      style={btn("secondary")}
-                      onClick={() => void transitionSelected("ready", "operator triaged")}
-                      disabled={transitionTarget !== null}
-                    >
-                      {transitionTarget === "ready" ? "Triaging…" : "Mark Ready"}
-                    </button>
-                  )}
-                  {canResumeSelected && (
-                    <button
-                      style={btn("primary")}
-                      onClick={() => void transitionSelected("doing", "operator resumed")}
-                      disabled={transitionTarget !== null}
-                    >
-                      {transitionTarget === "doing" ? "Resuming…" : "Resume"}
-                    </button>
-                  )}
-                  {canCancelSelected && (
-                    <button
-                      style={btn("danger")}
-                      onClick={() => {
-                        if (!window.confirm("Cancel this WorkItem?")) return;
-                        void transitionSelected("cancelled", "operator cancelled");
-                      }}
-                      disabled={transitionTarget !== null}
-                    >
-                      {transitionTarget === "cancelled" ? "Cancelling…" : "Cancel"}
-                    </button>
-                  )}
+      <Card>
+        <CardContent className="grid gap-4 pt-6">
+          <div className="text-sm font-semibold text-fg">Drilldown</div>
+          {!selectedWorkItemId ? (
+            <div className="text-sm text-fg-muted">Select a WorkItem to inspect details.</div>
+          ) : drilldownBusy ? (
+            <div className="text-sm text-fg-muted">Loading…</div>
+          ) : drilldownError ? (
+            <Alert variant="error" title="Drilldown error" description={drilldownError} />
+          ) : !selectedItem ? (
+            <div className="text-sm text-fg-muted">WorkItem not loaded.</div>
+          ) : (
+            <div className="grid gap-6">
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                  WorkItem
                 </div>
-              )}
-              <div style={{ ...cardMetaStyle, marginTop: 6 }}>
-                <span style={{ fontFamily: fonts.mono }}>{selectedItem.work_item_id}</span>
+                <div className="text-sm font-semibold text-fg">{selectedItem.title}</div>
+                <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
+                  <span>
+                    status <strong className="text-fg">{selectedItem.status}</strong>
+                  </span>
+                  <span>kind {selectedItem.kind}</span>
+                  <span>priority {selectedItem.priority}</span>
+                </div>
+                {canMarkReadySelected || canResumeSelected || canCancelSelected ? (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {canMarkReadySelected ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => void transitionSelected("ready", "operator triaged")}
+                        disabled={transitionTarget !== null}
+                        isLoading={transitionTarget === "ready"}
+                      >
+                        {transitionTarget === "ready" ? "Triaging…" : "Mark Ready"}
+                      </Button>
+                    ) : null}
+                    {canResumeSelected ? (
+                      <Button
+                        size="sm"
+                        onClick={() => void transitionSelected("doing", "operator resumed")}
+                        disabled={transitionTarget !== null}
+                        isLoading={transitionTarget === "doing"}
+                      >
+                        {transitionTarget === "doing" ? "Resuming…" : "Resume"}
+                      </Button>
+                    ) : null}
+                    {canCancelSelected ? (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => {
+                          if (!window.confirm("Cancel this WorkItem?")) return;
+                          void transitionSelected("cancelled", "operator cancelled");
+                        }}
+                        disabled={transitionTarget !== null}
+                        isLoading={transitionTarget === "cancelled"}
+                      >
+                        {transitionTarget === "cancelled" ? "Cancelling…" : "Cancel"}
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="font-mono text-xs text-fg-muted">{selectedItem.work_item_id}</div>
               </div>
-            </div>
 
-            <div>
-              <div style={label}>Timestamps</div>
-              <div style={{ ...cardMetaStyle, marginTop: 6 }}>
-                <span>created {new Date(selectedItem.created_at).toLocaleString()}</span>
-                {selectedItem.updated_at && (
-                  <span>updated {new Date(selectedItem.updated_at).toLocaleString()}</span>
-                )}
-                {selectedItem.last_active_at && (
-                  <span>last active {new Date(selectedItem.last_active_at).toLocaleString()}</span>
-                )}
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                  Timestamps
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
+                  <span>created {new Date(selectedItem.created_at).toLocaleString()}</span>
+                  {selectedItem.updated_at ? (
+                    <span>updated {new Date(selectedItem.updated_at).toLocaleString()}</span>
+                  ) : null}
+                  {selectedItem.last_active_at ? (
+                    <span>
+                      last active {new Date(selectedItem.last_active_at).toLocaleString()}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-            </div>
 
-            <div>
-              <div style={label}>Acceptance</div>
-              <pre style={monospaceStyle}>
-                {selectedItem.acceptance === undefined
-                  ? "—"
-                  : JSON.stringify(selectedItem.acceptance, null, 2)}
-              </pre>
-            </div>
-
-            <div>
-              <div style={label}>Tasks</div>
-              <div style={{ ...cardMetaStyle, marginTop: 6 }}>
-                <span>running {taskCounts.running}</span>
-                <span>leased {taskCounts.leased}</span>
-                <span>paused {taskCounts.paused}</span>
-                <span>completed {taskCounts.completed}</span>
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                  Acceptance
+                </div>
+                <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-bg-subtle p-3 font-mono text-xs text-fg">
+                  {selectedItem.acceptance === undefined
+                    ? "—"
+                    : JSON.stringify(selectedItem.acceptance, null, 2)}
+                </pre>
               </div>
-              {taskList.length > 0 && (
-                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                  {taskList.map((task) => (
-                    <div
-                      key={task.task_id}
-                      style={{
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: 8,
-                        padding: 10,
-                        background: colors.bgSubtle,
-                      }}
-                    >
-                      <div style={{ ...cardMetaStyle, marginTop: 0 }}>
-                        <span>
-                          <strong style={{ color: colors.fg }}>{task.status}</strong>
-                        </span>
-                        <span style={{ fontFamily: fonts.mono }}>{task.task_id}</span>
-                        <span>{new Date(task.last_event_at).toLocaleString()}</span>
-                      </div>
-                      {(task.run_id ||
-                        typeof task.approval_id === "number" ||
-                        task.result_summary) && (
-                        <div style={{ ...cardMetaStyle, marginTop: 6 }}>
-                          {task.run_id && <span>run {task.run_id}</span>}
-                          {typeof task.approval_id === "number" && (
-                            <span>approval {task.approval_id}</span>
-                          )}
-                          {task.result_summary && <span>result {task.result_summary}</span>}
+
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                  Tasks
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
+                  <span>running {taskCounts.running}</span>
+                  <span>leased {taskCounts.leased}</span>
+                  <span>paused {taskCounts.paused}</span>
+                  <span>completed {taskCounts.completed}</span>
+                </div>
+                {taskList.length > 0 ? (
+                  <div className="grid gap-2">
+                    {taskList.map((task) => (
+                      <div
+                        key={task.task_id}
+                        className="rounded-lg border border-border bg-bg-subtle p-3"
+                      >
+                        <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
+                          <span>
+                            <strong className="text-fg">{task.status}</strong>
+                          </span>
+                          <span className="font-mono">{task.task_id}</span>
+                          <span>{new Date(task.last_event_at).toLocaleString()}</span>
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <div style={label}>Blockers</div>
-              {approvalBlockers.length === 0 ? (
-                <div style={{ fontSize: 13, color: colors.fgMuted }}>No approval blockers.</div>
-              ) : (
-                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                  {approvalBlockers.map((task) => (
-                    <div
-                      key={task.task_id}
-                      style={{
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: 8,
-                        padding: 10,
-                        background: colors.bgSubtle,
-                      }}
-                    >
-                      <div style={{ ...cardMetaStyle, marginTop: 0 }}>
-                        <span>approval {task.approval_id}</span>
-                        <span style={{ fontFamily: fonts.mono }}>{task.task_id}</span>
+                        {(task.run_id ||
+                          typeof task.approval_id === "number" ||
+                          task.result_summary) && (
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
+                            {task.run_id ? <span>run {task.run_id}</span> : null}
+                            {typeof task.approval_id === "number" ? (
+                              <span>approval {task.approval_id}</span>
+                            ) : null}
+                            {task.result_summary ? <span>result {task.result_summary}</span> : null}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
 
-            <div>
-              <div style={label}>Decisions</div>
-              {decisions.length === 0 ? (
-                <div style={{ fontSize: 13, color: colors.fgMuted }}>No DecisionRecords.</div>
-              ) : (
-                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-                  {decisions.map((decision) => (
-                    <div
-                      key={decision.decision_id}
-                      style={{
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: 8,
-                        padding: 10,
-                        background: colors.bgSubtle,
-                      }}
-                    >
-                      <div style={cardTitleStyle}>{decision.question}</div>
-                      <div style={{ ...cardMetaStyle, marginTop: 0 }}>
-                        <span>chosen {decision.chosen}</span>
-                        <span>{new Date(decision.created_at).toLocaleString()}</span>
-                      </div>
-                      <pre style={{ ...monospaceStyle, marginTop: 8 }}>{decision.rationale_md}</pre>
-                    </div>
-                  ))}
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                  Blockers
                 </div>
-              )}
-            </div>
-
-            <div>
-              <div style={label}>Artifacts</div>
-              {artifacts.length === 0 ? (
-                <div style={{ fontSize: 13, color: colors.fgMuted }}>No WorkArtifacts.</div>
-              ) : (
-                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-                  {artifacts.map((artifact) => (
-                    <div
-                      key={artifact.artifact_id}
-                      style={{
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: 8,
-                        padding: 10,
-                        background: colors.bgSubtle,
-                      }}
-                    >
-                      <div style={{ ...cardMetaStyle, marginTop: 0 }}>
-                        <span style={{ fontWeight: 700, color: colors.fg }}>{artifact.kind}</span>
-                        <span>{new Date(artifact.created_at).toLocaleString()}</span>
-                      </div>
-                      <div style={{ ...cardTitleStyle, marginTop: 6 }}>{artifact.title}</div>
-                      {artifact.body_md && <pre style={monospaceStyle}>{artifact.body_md}</pre>}
-                      {artifact.refs.length > 0 && (
-                        <div style={{ ...cardMetaStyle, marginTop: 8 }}>
-                          <span style={{ color: colors.fgMuted }}>refs</span>
-                          <span style={{ fontFamily: fonts.mono }}>{artifact.refs.join(", ")}</span>
+                {approvalBlockers.length === 0 ? (
+                  <div className="text-sm text-fg-muted">No approval blockers.</div>
+                ) : (
+                  <div className="grid gap-2">
+                    {approvalBlockers.map((task) => (
+                      <div
+                        key={task.task_id}
+                        className="rounded-lg border border-border bg-bg-subtle p-3"
+                      >
+                        <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
+                          <span>approval {task.approval_id}</span>
+                          <span className="font-mono">{task.task_id}</span>
                         </div>
-                      )}
-                      <div style={{ ...cardMetaStyle, marginTop: 8 }}>
-                        <span style={{ fontFamily: fonts.mono }}>{artifact.artifact_id}</span>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-            <div>
-              <div style={label}>Signals</div>
-              {signals.length === 0 ? (
-                <div style={{ fontSize: 13, color: colors.fgMuted }}>No WorkSignals.</div>
-              ) : (
-                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-                  {signals.map((signal) => (
-                    <div
-                      key={signal.signal_id}
-                      style={{
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: 8,
-                        padding: 10,
-                        background: colors.bgSubtle,
-                      }}
-                    >
-                      <div style={{ ...cardMetaStyle, marginTop: 0 }}>
-                        <span style={{ fontWeight: 700, color: colors.fg }}>
-                          {signal.trigger_kind}
-                        </span>
-                        <span>
-                          status <strong style={{ color: colors.fg }}>{signal.status}</strong>
-                        </span>
-                        <span>{new Date(signal.created_at).toLocaleString()}</span>
-                        {signal.last_fired_at ? (
-                          <span>last fired {new Date(signal.last_fired_at).toLocaleString()}</span>
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                  Decisions
+                </div>
+                {decisions.length === 0 ? (
+                  <div className="text-sm text-fg-muted">No DecisionRecords.</div>
+                ) : (
+                  <div className="grid gap-2">
+                    {decisions.map((decision) => (
+                      <div
+                        key={decision.decision_id}
+                        className="rounded-lg border border-border bg-bg-subtle p-3"
+                      >
+                        <div className="text-sm font-semibold text-fg">{decision.question}</div>
+                        <div className="mt-1 flex flex-wrap gap-2 text-xs text-fg-muted">
+                          <span>chosen {decision.chosen}</span>
+                          <span>{new Date(decision.created_at).toLocaleString()}</span>
+                        </div>
+                        <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-fg">
+                          {decision.rationale_md}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                  Artifacts
+                </div>
+                {artifacts.length === 0 ? (
+                  <div className="text-sm text-fg-muted">No WorkArtifacts.</div>
+                ) : (
+                  <div className="grid gap-2">
+                    {artifacts.map((artifact) => (
+                      <div
+                        key={artifact.artifact_id}
+                        className="rounded-lg border border-border bg-bg-subtle p-3"
+                      >
+                        <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
+                          <span className="font-semibold text-fg">{artifact.kind}</span>
+                          <span>{new Date(artifact.created_at).toLocaleString()}</span>
+                        </div>
+                        <div className="mt-1 text-sm font-semibold text-fg">{artifact.title}</div>
+                        {artifact.body_md ? (
+                          <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-fg">
+                            {artifact.body_md}
+                          </pre>
                         ) : null}
+                        {artifact.refs.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
+                            <span className="text-fg-muted">refs</span>
+                            <span className="font-mono">{artifact.refs.join(", ")}</span>
+                          </div>
+                        ) : null}
+                        <div className="mt-2 font-mono text-xs text-fg-muted">
+                          {artifact.artifact_id}
+                        </div>
                       </div>
-                      <pre style={monospaceStyle}>
-                        {JSON.stringify(signal.trigger_spec_json, null, 2)}
-                      </pre>
-                      <div style={{ ...cardMetaStyle, marginTop: 8 }}>
-                        <span style={{ fontFamily: fonts.mono }}>{signal.signal_id}</span>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                  Signals
                 </div>
-              )}
-            </div>
+                {signals.length === 0 ? (
+                  <div className="text-sm text-fg-muted">No WorkSignals.</div>
+                ) : (
+                  <div className="grid gap-2">
+                    {signals.map((signal) => (
+                      <div
+                        key={signal.signal_id}
+                        className="rounded-lg border border-border bg-bg-subtle p-3"
+                      >
+                        <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
+                          <span className="font-semibold text-fg">{signal.trigger_kind}</span>
+                          <span>
+                            status <strong className="text-fg">{signal.status}</strong>
+                          </span>
+                          <span>{new Date(signal.created_at).toLocaleString()}</span>
+                          {signal.last_fired_at ? (
+                            <span>
+                              last fired {new Date(signal.last_fired_at).toLocaleString()}
+                            </span>
+                          ) : null}
+                        </div>
+                        <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-fg">
+                          {JSON.stringify(signal.trigger_spec_json, null, 2)}
+                        </pre>
+                        <div className="mt-2 font-mono text-xs text-fg-muted">
+                          {signal.signal_id}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-            <div>
-              <div style={label}>State KV (agent)</div>
-              {agentKvEntries.length === 0 ? (
-                <div style={{ fontSize: 13, color: colors.fgMuted }}>No entries.</div>
-              ) : (
-                <pre style={monospaceStyle}>
-                  {agentKvEntries
-                    .map((entry) => `${entry.key} = ${JSON.stringify(entry.value_json)}`)
-                    .join("\n")}
-                </pre>
-              )}
-            </div>
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                  State KV (agent)
+                </div>
+                {agentKvEntries.length === 0 ? (
+                  <div className="text-sm text-fg-muted">No entries.</div>
+                ) : (
+                  <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-bg-subtle p-3 font-mono text-xs text-fg">
+                    {agentKvEntries
+                      .map((entry) => `${entry.key} = ${JSON.stringify(entry.value_json)}`)
+                      .join("\n")}
+                  </pre>
+                )}
+              </div>
 
-            <div>
-              <div style={label}>State KV (work item)</div>
-              {workItemKvEntries.length === 0 ? (
-                <div style={{ fontSize: 13, color: colors.fgMuted }}>No entries.</div>
-              ) : (
-                <pre style={monospaceStyle}>
-                  {workItemKvEntries
-                    .map((entry) => `${entry.key} = ${JSON.stringify(entry.value_json)}`)
-                    .join("\n")}
-                </pre>
-              )}
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                  State KV (work item)
+                </div>
+                {workItemKvEntries.length === 0 ? (
+                  <div className="text-sm text-fg-muted">No entries.</div>
+                ) : (
+                  <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-bg-subtle p-3 font-mono text-xs text-fg">
+                    {workItemKvEntries
+                      .map((entry) => `${entry.key} = ${JSON.stringify(entry.value_json)}`)
+                      .join("\n")}
+                  </pre>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

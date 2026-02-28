@@ -5,7 +5,7 @@ import { cn } from "../../lib/cn.js";
 export const ScrollArea = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
   ScrollAreaPrimitive.ScrollAreaProps
->(({ className, children, ...props }, ref) => {
+>(({ className, children, onScroll, ...props }, ref) => {
   return (
     <ScrollAreaPrimitive.Root
       ref={ref}
@@ -16,6 +16,7 @@ export const ScrollArea = React.forwardRef<
       <ScrollAreaPrimitive.Viewport
         data-scroll-area-viewport=""
         className="h-full w-full rounded-[inherit]"
+        onScroll={onScroll}
       >
         {children}
       </ScrollAreaPrimitive.Viewport>

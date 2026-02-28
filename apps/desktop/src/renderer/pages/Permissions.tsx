@@ -7,19 +7,17 @@ import {
   type Profile,
 } from "../lib/permission-profile.js";
 import {
-  colors,
-  heading,
-  card,
-  sectionTitle,
-  btn as btnFn,
-  help,
-  warn,
-  toggleRow,
-  toggleLabel,
-  textarea,
-  statusBadge,
-  label as themeLabel,
-} from "../theme.js";
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Label,
+  RadioGroup,
+  RadioGroupItem,
+  Switch,
+  Textarea,
+} from "@tyrum/operator-ui";
 
 const PROFILES: { id: Profile; label: string; description: string }[] = [
   {
@@ -41,20 +39,6 @@ const PROFILES: { id: Profile; label: string; description: string }[] = [
       "Full access to desktop, CLI, and web automation. No confirmation prompts. Use with caution.",
   },
 ];
-
-function radioLabelActiveStyle(active: boolean): React.CSSProperties {
-  return {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: 10,
-    padding: "10px 12px",
-    borderRadius: 6,
-    cursor: "pointer",
-    marginBottom: 4,
-    background: active ? colors.primaryDim : "transparent",
-    border: active ? `1px solid ${colors.primary}` : "1px solid transparent",
-  };
-}
 
 interface CliConfig {
   allowedCommands: string[];
@@ -138,173 +122,185 @@ export function Permissions() {
     setCapabilities(capabilitiesForProfile(nextProfile));
   };
 
-  const toggleCap = (key: keyof CapFlags) => {
-    setCapabilities((prev) => ({ ...prev, [key]: !prev[key] }));
+  const setCapability = (key: keyof CapFlags, nextEnabled: boolean) => {
+    setCapabilities((prev) => ({ ...prev, [key]: nextEnabled }));
   };
 
   return (
-    <div>
-      <h1 style={heading}>Permissions</h1>
+    <div className="grid gap-6">
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Permissions</h1>
 
-      <div style={card}>
-        <div style={sectionTitle}>Security Profile</div>
-        {PROFILES.map((p) => (
-          <label key={p.id} style={radioLabelActiveStyle(profile === p.id)}>
-            <input
-              type="radio"
-              name="profile"
-              value={p.id}
-              checked={profile === p.id}
-              onChange={() => applyProfile(p.id)}
-              style={{ marginTop: 3 }}
-            />
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{p.label}</div>
-              <div style={{ fontSize: 12, color: colors.fgMuted, lineHeight: 1.4, marginTop: 2 }}>
-                {p.description}
+      <Card>
+        <CardContent className="grid gap-4 pt-6">
+          <div className="text-sm font-semibold text-fg">Security Profile</div>
+          <RadioGroup value={profile} onValueChange={(value) => applyProfile(value as Profile)}>
+            {PROFILES.map((p) => {
+              const radioId = `permission-profile-${p.id}`;
+              const active = profile === p.id;
+              return (
+                <div
+                  key={p.id}
+                  className={[
+                    "flex items-start gap-3 rounded-md border p-3",
+                    active ? "border-primary bg-primary-dim" : "border-border bg-bg-card",
+                  ].join(" ")}
+                >
+                  <RadioGroupItem id={radioId} value={p.id} />
+                  <div className="grid gap-1">
+                    <Label htmlFor={radioId} className="text-sm font-medium text-fg">
+                      {p.label}
+                    </Label>
+                    <div className="text-sm text-fg-muted">{p.description}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </RadioGroup>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="grid gap-4 pt-6">
+          <div className="text-sm font-semibold text-fg">Capabilities</div>
+          <div className="text-sm text-fg-muted">
+            Switching profile applies recommended capability defaults for that profile. You can
+            still adjust these before saving.
+          </div>
+          <div className="grid gap-3">
+            {(
+              [
+                ["desktop", "Desktop (screenshot & input)"],
+                ["playwright", "Playwright (web automation)"],
+                ["cli", "CLI (command execution)"],
+                ["http", "HTTP (network requests)"],
+              ] as const
+            ).map(([key, label]) => (
+              <div
+                key={key}
+                className="flex items-center justify-between gap-4 border-b border-border py-2 last:border-b-0"
+              >
+                <div className="text-sm text-fg">{label}</div>
+                <Switch
+                  checked={capabilities[key]}
+                  onCheckedChange={(checked) => setCapability(key, checked)}
+                />
               </div>
-            </div>
-          </label>
-        ))}
-      </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-      <div style={card}>
-        <div style={sectionTitle}>Capabilities</div>
-        <div style={help}>
-          Switching profile applies recommended capability defaults for that profile. You can still
-          adjust these before saving.
-        </div>
-        {(
-          [
-            ["desktop", "Desktop (screenshot & input)"],
-            ["playwright", "Playwright (web automation)"],
-            ["cli", "CLI (command execution)"],
-            ["http", "HTTP (network requests)"],
-          ] as const
-        ).map(([key, label]) => (
-          <div key={key} style={toggleRow}>
-            <span style={toggleLabel}>{label}</span>
-            <input type="checkbox" checked={capabilities[key]} onChange={() => toggleCap(key)} />
+      <Card>
+        <CardContent className="grid gap-4 pt-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-semibold text-fg">CLI Allowlist</div>
+            <Badge variant={cliAllowlistActive ? "danger" : "success"}>
+              {cliAllowlistActive ? "active (default deny)" : "inactive (default allow)"}
+            </Badge>
           </div>
-        ))}
-      </div>
 
-      <div style={card}>
-        <div style={sectionTitle}>CLI Allowlist</div>
-        <div style={help}>
-          Enforcement:
-          <span
-            style={{
-              ...statusBadge,
-              background: cliAllowlistActive ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)",
-              color: cliAllowlistActive ? colors.error : colors.success,
-            }}
-          >
-            {cliAllowlistActive ? "active (default deny)" : "inactive (default allow)"}
-          </span>
-        </div>
-        <div style={{ ...themeLabel, marginBottom: 4, marginTop: 12 }}>
-          Allowed Commands (one per line)
-        </div>
-        <textarea
-          style={textarea}
-          value={cli.allowedCommands.join("\n")}
-          disabled={!cliAllowlistActive}
-          onChange={(e) =>
-            setCli((prev) => ({
-              ...prev,
-              allowedCommands: e.target.value.split("\n").filter(Boolean),
-            }))
-          }
-          placeholder="git status&#10;node --version&#10;*"
-        />
-        <div style={help}>
-          <div>- Use one rule per line.</div>
-          <div>- `*` allows all commands.</div>
-          <div>
-            - Subcommand rules are prefix matches. `git status` allows `git status -sb`, but does
-            not allow `git push`.
-          </div>
-          <div>- A bare command (for example `git`) allows all its subcommands.</div>
-        </div>
-        {cliAllowlistActive && cli.allowedCommands.length === 0 && (
-          <div style={warn}>
-            CLI allowlist is active and empty, so command execution is default deny.
-          </div>
-        )}
-        <div style={{ ...themeLabel, marginBottom: 4, marginTop: 12 }}>
-          Allowed Working Directories (one per line)
-        </div>
-        <textarea
-          style={textarea}
-          value={cli.allowedWorkingDirs.join("\n")}
-          disabled={!cliAllowlistActive}
-          onChange={(e) =>
-            setCli((prev) => ({
-              ...prev,
-              allowedWorkingDirs: e.target.value.split("\n").filter(Boolean),
-            }))
-          }
-          placeholder="/home/user/projects&#10;*"
-        />
-        <div style={help}>
-          <div>- `*` allows any working directory when CLI allowlist enforcement is active.</div>
-        </div>
-      </div>
-
-      <div style={card}>
-        <div style={sectionTitle}>Web / Playwright</div>
-        <div style={help}>
-          Enforcement:
-          <span
-            style={{
-              ...statusBadge,
-              background: webAllowlistActive ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)",
-              color: webAllowlistActive ? colors.error : colors.success,
-            }}
-          >
-            {webAllowlistActive ? "active (default deny)" : "inactive (default allow)"}
-          </span>
-        </div>
-        <div style={{ ...themeLabel, marginBottom: 4, marginTop: 12 }}>
-          Allowed Domains (one per line)
-        </div>
-        <textarea
-          style={textarea}
-          value={web.allowedDomains.join("\n")}
-          disabled={!webAllowlistActive}
-          onChange={(e) =>
-            setWeb((prev) => ({
-              ...prev,
-              allowedDomains: e.target.value.split("\n").filter(Boolean),
-            }))
-          }
-          placeholder="example.com&#10;docs.example.com&#10;*"
-        />
-        <div style={help}>
-          <div>- Use one domain per line.</div>
-          <div>- Subdomains are allowed automatically.</div>
-          <div>- `*` allows all domains.</div>
-        </div>
-        {webAllowlistActive && web.allowedDomains.length === 0 && (
-          <div style={warn}>
-            Domain allowlist is active and empty, so web navigation is default deny.
-          </div>
-        )}
-        <div style={toggleRow}>
-          <span style={toggleLabel}>Headless mode</span>
-          <input
-            type="checkbox"
-            checked={web.headless}
-            onChange={() => setWeb((prev) => ({ ...prev, headless: !prev.headless }))}
+          <Textarea
+            label="Allowed Commands (one per line)"
+            value={cli.allowedCommands.join("\n")}
+            disabled={!cliAllowlistActive}
+            onChange={(e) =>
+              setCli((prev) => ({
+                ...prev,
+                allowedCommands: e.target.value.split("\n").filter(Boolean),
+              }))
+            }
+            placeholder={"git status\nnode --version\n*"}
           />
-        </div>
-      </div>
 
-      <button style={{ ...btnFn("primary"), marginTop: 16 }} onClick={save}>
-        {saved ? "Saved!" : "Save Permissions"}
-      </button>
-      {saveError && <div style={warn}>Save failed: {saveError}</div>}
+          <div className="grid gap-1 text-sm text-fg-muted">
+            <div>- Use one rule per line.</div>
+            <div>- `*` allows all commands.</div>
+            <div>
+              - Subcommand rules are prefix matches. `git status` allows `git status -sb`, but does
+              not allow `git push`.
+            </div>
+            <div>- A bare command (for example `git`) allows all its subcommands.</div>
+          </div>
+
+          {cliAllowlistActive && cli.allowedCommands.length === 0 ? (
+            <Alert
+              variant="warning"
+              title="CLI allowlist is active and empty"
+              description="Command execution is default deny until you add at least one rule (or '*')."
+            />
+          ) : null}
+
+          <Textarea
+            label="Allowed Working Directories (one per line)"
+            value={cli.allowedWorkingDirs.join("\n")}
+            disabled={!cliAllowlistActive}
+            onChange={(e) =>
+              setCli((prev) => ({
+                ...prev,
+                allowedWorkingDirs: e.target.value.split("\n").filter(Boolean),
+              }))
+            }
+            placeholder={"/home/user/projects\n*"}
+          />
+
+          <div className="grid gap-1 text-sm text-fg-muted">
+            <div>- `*` allows any working directory when CLI allowlist enforcement is active.</div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="grid gap-4 pt-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-semibold text-fg">Web / Playwright</div>
+            <Badge variant={webAllowlistActive ? "danger" : "success"}>
+              {webAllowlistActive ? "active (default deny)" : "inactive (default allow)"}
+            </Badge>
+          </div>
+
+          <Textarea
+            label="Allowed Domains (one per line)"
+            value={web.allowedDomains.join("\n")}
+            disabled={!webAllowlistActive}
+            onChange={(e) =>
+              setWeb((prev) => ({
+                ...prev,
+                allowedDomains: e.target.value.split("\n").filter(Boolean),
+              }))
+            }
+            placeholder={"example.com\ndocs.example.com\n*"}
+          />
+
+          <div className="grid gap-1 text-sm text-fg-muted">
+            <div>- Use one domain per line.</div>
+            <div>- Subdomains are allowed automatically.</div>
+            <div>- `*` allows all domains.</div>
+          </div>
+
+          {webAllowlistActive && web.allowedDomains.length === 0 ? (
+            <Alert
+              variant="warning"
+              title="Domain allowlist is active and empty"
+              description="Web navigation is default deny until you add at least one domain (or '*')."
+            />
+          ) : null}
+
+          <div className="flex items-center justify-between gap-4 border-b border-border py-2">
+            <div className="text-sm text-fg">Headless mode</div>
+            <Switch
+              checked={web.headless}
+              onCheckedChange={(checked) => {
+                setWeb((prev) => ({ ...prev, headless: checked }));
+              }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-3">
+        <Button onClick={save}>{saved ? "Saved!" : "Save Permissions"}</Button>
+        {saveError ? <Alert variant="error" title="Save failed" description={saveError} /> : null}
+      </div>
     </div>
   );
 }
