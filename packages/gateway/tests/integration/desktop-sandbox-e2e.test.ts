@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { getRequestListener } from "@hono/node-server";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  type DesktopQueryMatch,
   descriptorIdForClientCapability,
 } from "@tyrum/schemas";
 
@@ -35,6 +36,7 @@ const DOCKER_IMAGE_INSPECT_TIMEOUT_MS = 15_000;
 const DOCKER_BUILD_TIMEOUT_MS = 10 * 60_000;
 const DOCKER_RUN_TIMEOUT_MS = 60_000;
 const DOCKER_LOGS_TIMEOUT_MS = 30_000;
+const DOCKER_EXEC_TIMEOUT_MS = 10_000;
 const DOCKER_CLEANUP_TIMEOUT_MS = 30_000;
 const DOCKER_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
@@ -116,6 +118,38 @@ async function waitForPendingDesktopPairing(params: {
     await delay(250);
   }
   throw new Error("timed out waiting for pending desktop pairing");
+}
+
+async function waitForNoVncReady(containerName: string, timeoutMs: number): Promise<void> {
+  const deadlineMs = Date.now() + Math.max(1, Math.floor(timeoutMs));
+  while (Date.now() < deadlineMs) {
+    const result = runDocker(
+      [
+        "exec",
+        containerName,
+        "bash",
+        "-lc",
+        'curl -fsS "http://127.0.0.1:6080/vnc.html" >/dev/null',
+      ],
+      { timeoutMs: DOCKER_EXEC_TIMEOUT_MS },
+    );
+    if (result.status === 0) return;
+    await delay(500);
+  }
+
+  const logResult = runDocker(
+    ["exec", containerName, "bash", "-lc", "tail -n 50 /tmp/novnc.log 2>/dev/null || true"],
+    { timeoutMs: DOCKER_EXEC_TIMEOUT_MS },
+  );
+
+  throw new Error(
+    [
+      "noVNC did not become ready inside desktop-sandbox container.",
+      truncate(logResult.stdout + logResult.stderr, 4_000),
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
 }
 
 const CAN_RUN_DESKTOP_SANDBOX_E2E = process.platform === "linux" && dockerAvailable();
@@ -266,6 +300,9 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
           throw new Error(`desktop-sandbox container did not return an id: ${run.stdout}`);
         }
 
+        if (!containerName) throw new Error("desktop-sandbox container name missing");
+        await waitForNoVncReady(containerName, 60_000);
+
         try {
           const pairing = await waitForPendingDesktopPairing({
             listPending: async () => {
@@ -378,6 +415,47 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
 
           expect(actResult.error).toBeUndefined();
           expect(actResult.output).toContain('"ok":true');
+
+          const queryDeadlineMs = Date.now() + 30_000;
+          for (;;) {
+            const query = await nodeDispatchService.dispatchAndWait(
+              {
+                type: "Desktop",
+                args: {
+                  op: "query",
+                  selector: { kind: "a11y", role: "desktop frame" },
+                  limit: 1,
+                },
+              },
+              {
+                runId: scope.runId,
+                stepId: scope.stepId,
+                attemptId: scope.attemptId,
+              },
+              { timeoutMs: 60_000 },
+            );
+
+            if (query.result.ok) {
+              const payload = query.result.result as { matches?: unknown } | undefined;
+              const matches = Array.isArray(payload?.matches)
+                ? (payload?.matches as DesktopQueryMatch[])
+                : [];
+              if (matches.length > 0) {
+                expect(matches[0]?.kind).toBe("a11y");
+                expect(matches[0]?.node?.role).toBe("desktop frame");
+                break;
+              }
+            }
+
+            if (Date.now() > queryDeadlineMs) {
+              const message = query.result.error
+                ? `Desktop a11y query error: ${query.result.error}`
+                : "Desktop a11y query returned no matches.";
+              throw new Error(message);
+            }
+
+            await delay(500);
+          }
 
           await container.db.close();
         } catch (err) {

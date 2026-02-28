@@ -46,7 +46,23 @@ echo "desktop-sandbox: starting x11vnc (port ${VNC_PORT})"
 x11vnc -display "$DISPLAY" -rfbport "$VNC_PORT" -listen 0.0.0.0 -shared -forever -nopw >/tmp/x11vnc.log 2>&1 &
 
 echo "desktop-sandbox: starting noVNC (port ${NOVNC_PORT})"
-novnc_proxy --vnc "127.0.0.1:${VNC_PORT}" --listen "${NOVNC_PORT}" >/tmp/novnc.log 2>&1 &
+novnc_proxy_bin=""
+if command -v novnc_proxy >/dev/null 2>&1; then
+  novnc_proxy_bin="$(command -v novnc_proxy)"
+elif [[ -x "/usr/share/novnc/utils/novnc_proxy" ]]; then
+  novnc_proxy_bin="/usr/share/novnc/utils/novnc_proxy"
+fi
+
+if [[ -z "${novnc_proxy_bin}" ]]; then
+  echo "desktop-sandbox: novnc_proxy not found" >&2
+  exit 1
+fi
+
+"${novnc_proxy_bin}" \
+  --vnc "127.0.0.1:${VNC_PORT}" \
+  --listen "${NOVNC_PORT}" \
+  --web "/usr/share/novnc" \
+  >/tmp/novnc.log 2>&1 &
 
 takeover_url_default="http://localhost:${NOVNC_PORT}/vnc.html?autoconnect=true"
 takeover_url="${TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL:-$takeover_url_default}"

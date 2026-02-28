@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { PluginManifest } from "@tyrum/schemas";
 import { createContainerAsync } from "./container.js";
 import { createApp } from "./app.js";
+import { NodeDispatchService } from "./modules/agent/node-dispatch-service.js";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
 import { WorkSignalScheduler } from "./modules/workboard/signal-scheduler.js";
@@ -45,6 +46,7 @@ import { TelegramChannelProcessor } from "./modules/channels/telegram.js";
 import { createToolRunnerStepExecutor } from "./modules/execution/toolrunner-step-executor.js";
 import { createKubernetesToolRunnerStepExecutor } from "./modules/execution/kubernetes-toolrunner-step-executor.js";
 import { createGatewayStepExecutor } from "./modules/execution/gateway-step-executor.js";
+import { createNodeDispatchStepExecutor } from "./modules/execution/node-dispatch-step-executor.js";
 import { runToolRunnerFromStdio } from "./toolrunner.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
 import { VERSION } from "./version.js";
@@ -1454,9 +1456,15 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
         };
 
         const toolExecutor = resolveExecutor() satisfies ExecutionStepExecutor;
+        const nodeDispatchExecutor = createNodeDispatchStepExecutor({
+          db: container.db,
+          artifactStore: container.artifactStore,
+          nodeDispatchService: new NodeDispatchService(protocolDeps),
+          fallback: toolExecutor,
+        }) satisfies ExecutionStepExecutor;
         const executor = createGatewayStepExecutor({
           container,
-          toolExecutor,
+          toolExecutor: nodeDispatchExecutor,
         }) satisfies ExecutionStepExecutor;
 
         return startExecutionWorkerLoop({

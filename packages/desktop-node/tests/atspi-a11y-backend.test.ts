@@ -4,43 +4,32 @@ import { AtSpiDesktopA11yBackend } from "../src/providers/backends/atspi-a11y-ba
 import { DEFAULT_A11Y_MAX_DEPTH } from "../src/providers/a11y/prune-ui-tree.js";
 
 describe("AtSpiDesktopA11yBackend", () => {
-  it("does not treat the desktop frame as the focused window root", async () => {
+  it("uses the AT-SPI root accessible as the snapshot/query root", async () => {
     const backend = new AtSpiDesktopA11yBackend() as any;
-
-    const focus = { busName: "app", objectPath: "/focus" };
-    const windowFrame = { busName: "app", objectPath: "/frame" };
-    const application = { busName: "app", objectPath: "/app" };
-    const desktopFrame = { busName: "app", objectPath: "/desktop" };
-
-    backend.getFocusedAccessible = vi.fn(async () => focus);
-    backend.getParent = vi.fn(async (ref: { objectPath: string }) => {
-      switch (ref.objectPath) {
-        case "/focus":
-          return windowFrame;
-        case "/frame":
-          return application;
-        case "/app":
-          return desktopFrame;
-        default:
-          return null;
-      }
-    });
-    backend.describeAccessible = vi.fn(async (ref: { objectPath: string }) => ({
-      elementRef: `atspi:app|${ref.objectPath}`,
-      role:
-        ref.objectPath === "/frame"
-          ? "frame"
-          : ref.objectPath === "/desktop"
-            ? "desktop frame"
-            : "application",
-      name: "",
-      bounds: { x: 0, y: 0, width: 0, height: 0 },
-      actions: [],
-      states: [],
-    }));
+    backend.isAvailable = vi.fn(async () => true);
 
     const resolved = await backend.resolveRootAccessible();
-    expect(resolved).toEqual(windowFrame);
+    expect(resolved).toEqual({
+      busName: "org.a11y.atspi.Registry",
+      objectPath: "/org/a11y/atspi/accessible/root",
+    });
+  });
+
+  it("isAvailable returns true when the root accessible provides a role name", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const accessible = {
+      GetRoleName: vi.fn(async () => "desktop frame"),
+    };
+
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name === "org.a11y.atspi.Accessible") return accessible;
+      return null;
+    });
+
+    await expect(backend.isAvailable()).resolves.toBe(true);
+    expect(accessible.GetRoleName).toHaveBeenCalledTimes(1);
   });
 
   it("caps GetChildAtIndex enumeration per call", async () => {

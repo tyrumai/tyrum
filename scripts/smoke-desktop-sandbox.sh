@@ -13,7 +13,7 @@ cleanup() {
     echo "[smoke] leaving containers running (TYRUM_SMOKE_KEEP_RUNNING=1)"
     return
   fi
-  docker compose down -v >/dev/null 2>&1 || true
+  docker compose --profile desktop-sandbox down -v --remove-orphans >/dev/null 2>&1 || true
 }
 
 trap cleanup EXIT
@@ -56,6 +56,7 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
   import Database from "better-sqlite3";
   import { readFileSync } from "node:fs";
   import { randomUUID } from "node:crypto";
+  import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, descriptorIdForClientCapability } from "@tyrum/schemas";
 
   const baseUrl = "http://127.0.0.1:8788";
   const token = readFileSync("/var/lib/tyrum/.admin-token", "utf8").trim();
@@ -99,6 +100,8 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
     throw new Error(`[smoke] invalid pairing_id: ${String(pairingId)}`);
   }
 
+  const desktopDescriptorId = descriptorIdForClientCapability("desktop");
+
   console.log(
     `[smoke] pending pairing: id=${pairingId} node_id=${pairing?.node?.node_id ?? "<missing>"} label=${pairing?.node?.label ?? "<none>"}`,
   );
@@ -108,7 +111,9 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
     headers,
     body: JSON.stringify({
       trust_level: "local",
-      capability_allowlist: pairing.capability_allowlist ?? [],
+      capability_allowlist: [
+        { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+      ],
     }),
   });
 
