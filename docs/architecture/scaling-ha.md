@@ -1,5 +1,9 @@
 # Scaling and High Availability
 
+## Status
+
+- **Status:** Partially Implemented
+
 Tyrum runs as a single-host local installation or as a horizontally scalable deployment with replicated gateway edges, workers, and lease-coordinated schedulers backed by HA Postgres.
 
 The system uses one logical architecture in all deployments. Components may be co-located or split across processes/hosts; coordination primitives (leases and the event backplane) are always present so a single-host deployment behaves like a cluster with one replica.

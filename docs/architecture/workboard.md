@@ -2,12 +2,22 @@
 
 The WorkBoard is Tyrum's workspace-scoped backlog and work-tracking system. It exists to keep interactive sessions (chat, and future low-latency audio) responsive while long-running work is planned and executed in the background.
 
+## Status
+
+- **Status:** Partially Implemented
+
+## Current State
+
+- The gateway persists WorkItems and related drilldown data and exposes WorkBoard APIs.
+- The desktop app exposes a WorkBoard UI (Kanban + drilldown).
+- The web operator UI, CLI, and TUI do not yet provide full WorkBoard management (planned).
+
 The WorkBoard is a Kanban view over durable work state. A WorkItem can contain an internal task graph (a DAG) that the planning loop updates and the execution engine executes.
 
 ## Goals
 
 - Keep channel-facing interactions low-latency by delegating long-running work to background runs/subagents.
-- Make background work queryable from any channel or client (desktop app, Telegram, etc.) without relying on a specific session transcript.
+- Make background work queryable from operator clients (desktop app today) and, over time, from channels (for example Telegram) without relying on a specific session transcript.
 - Prevent "one mega task" by sizing WorkItems, enforcing WIP limits, and making consolidation explicit.
 - Preserve Tyrum's safety model: approvals, postconditions, artifacts, idempotency, and policy enforcement remain the enforcement layer.
 

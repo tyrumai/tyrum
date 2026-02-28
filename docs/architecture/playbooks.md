@@ -1,5 +1,9 @@
 # Playbooks (deterministic workflows)
 
+## Status
+
+- **Status:** Implemented
+
 A playbook is a **durable, reviewable workflow artifact** that the execution engine can run deterministically. Playbooks exist to make multi-step work:
 
 - **Composable:** a single run request executes many steps

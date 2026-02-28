@@ -1,5 +1,9 @@
 # Node
 
+## Status
+
+- **Status:** Partially Implemented
+
 A node is a companion runtime that connects to the gateway with `role: node` and exposes capabilities (for example `camera.*`, `canvas.*`, `system.*`). Nodes let Tyrum safely use device-specific interfaces without baking that logic into the gateway.
 
 ## Integration quality bar
@@ -12,9 +16,18 @@ Nodes are “remote hands”, so Tyrum treats node capabilities as high-risk by 
 
 ## Node forms
 
-- Desktop app (Windows/Linux/macOS)
-- Mobile app (iOS/Android)
+### Implemented
+
+- Desktop node (Windows/Linux/macOS)
+
+### Planned
+
+- Mobile node (iOS/Android)
 - Headless node (server or embedded device)
+
+## Current State
+
+The only shipped node runtime today is the desktop node (`@tyrum/desktop-node`), which is used by the desktop app.
 
 ## Responsibilities
 

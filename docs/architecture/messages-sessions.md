@@ -1,5 +1,9 @@
 # Messages and Sessions
 
+## Status
+
+- **Status:** Implemented
+
 This document defines how Tyrum turns inbound messages into durable sessions and serialized execution, while keeping chat UX responsive and safe across channels.
 
 ## Message flow (end-to-end)

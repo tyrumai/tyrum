@@ -1,5 +1,9 @@
 # Sessions and Lanes
 
+## Status
+
+- **Status:** Implemented
+
 A session is a durable conversation container. A lane is an execution stream within a session (for example `main` vs `cron` vs `heartbeat` vs `subagent`).
 
 ## Sessions

@@ -1,5 +1,9 @@
 # Gateway
 
+## Status
+
+- **Status:** Partially Implemented
+
 The gateway is Tyrum's long-lived service component. It is the system's authority for connectivity, policy enforcement, validation, routing, orchestration, and durable state coordination.
 
 Deployments range from a single host (replica count = 1) to multi-instance clusters (replicated gateway edges and workers). The gateway coordinates execution and event delivery via the StateStore and event backplane across deployment sizes. See [Scaling and High Availability](../scaling-ha.md).

@@ -1,5 +1,9 @@
 # Identity
 
+## Status
+
+- **Status:** Implemented
+
 Identity is how Tyrum attributes authority and scopes access to durable state. Tyrum uses identity at three layers:
 
 - **Tenant** (isolation boundary)

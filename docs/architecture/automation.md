@@ -1,5 +1,9 @@
 # Automation
 
+## Status
+
+- **Status:** Partially Implemented
+
 Automation lets Tyrum act on schedules and triggers while keeping behavior observable and policy-gated.
 
 ## Primitives

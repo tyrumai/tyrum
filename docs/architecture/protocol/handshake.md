@@ -1,5 +1,9 @@
 # Handshake
 
+## Status
+
+- **Status:** Implemented
+
 Every WebSocket connection starts with a handshake that identifies the peer and establishes what it is allowed to do.
 
 ## Flow

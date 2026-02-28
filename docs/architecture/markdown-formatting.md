@@ -1,5 +1,9 @@
 # Markdown Formatting
 
+## Status
+
+- **Status:** Implemented
+
 Tyrum formats assistant output for outbound channels by converting Markdown into a neutral intermediate representation (IR) before chunking and rendering.
 
 ## Goals

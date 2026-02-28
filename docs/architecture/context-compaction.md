@@ -1,5 +1,9 @@
 # Context, Compaction, and Pruning
 
+## Status
+
+- **Status:** Implemented
+
 The context for a run is the message stack provided to the model. Context is bounded by the model's context window (token limit), so long-running sessions use compaction and pruning to stay within limits without losing safety-critical information.
 
 ## Context stack

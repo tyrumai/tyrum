@@ -1,5 +1,9 @@
 # Provider Auth and Onboarding
 
+## Status
+
+- **Status:** Implemented
+
 Tyrum supports multiple model providers and authentication mechanisms while preserving the invariant that raw credentials never enter model context.
 
 ## Principles

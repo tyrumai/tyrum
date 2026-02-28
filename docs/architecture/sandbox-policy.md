@@ -1,5 +1,9 @@
 # Sandbox and Policy
 
+## Status
+
+- **Status:** Implemented
+
 Tyrum enforces safety through layered controls that do not depend on prompt text alone. Policies, approvals, and sandboxing define what execution is allowed to do.
 
 ## Enforcement layers

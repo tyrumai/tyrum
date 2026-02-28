@@ -1,5 +1,9 @@
 # Workspace
 
+## Status
+
+- **Status:** Implemented
+
 A workspace is the agent's working directory boundary for tools that read and write files. Workspaces make file operations explicit, containable, and **durable across runs**.
 
 ## Properties

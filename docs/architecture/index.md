@@ -1,5 +1,9 @@
 # Architecture
 
+## Status
+
+- **Status:** Partially Implemented
+
 Tyrum is a WebSocket-first autonomous worker agent platform built around a long-lived gateway that coordinates durable execution, approvals, and audit evidence.
 
 ## Positioning
@@ -26,7 +30,7 @@ Tyrum’s architecture is intentionally conservative:
 ```mermaid
 flowchart LR
   subgraph Operator["Operator surfaces"]
-    C["Client<br/>(Desktop • Mobile • CLI/TUI • Web App)"]
+    C["Client<br/>(Desktop • CLI/TUI • Web App)<br/>(Planned: Mobile)"]
   end
 
   subgraph Runtime["Tyrum runtime"]
@@ -48,7 +52,7 @@ flowchart LR
 
   subgraph Integrations["Integrations"]
     M["Model providers<br/>(provider/model)"]
-    CH["Channels<br/>(WhatsApp • Telegram • …)"]
+    CH["Channels<br/>(Telegram • …)"]
     EXT["External systems<br/>(tools / MCP)"]
   end
 
@@ -88,8 +92,8 @@ flowchart LR
 - **Secrets:** a first-class boundary; raw secrets stay behind a secret provider and are referenced via handles.
 - **Auth profiles:** provider credentials (API keys/OAuth) expressed as metadata + secret handles for deterministic selection and rotation. See [Provider Auth and Onboarding](./auth.md).
 - **Artifacts:** evidence objects stored outside the StateStore with policy-gated access. See [Artifacts](./artifacts.md).
-- **Client:** an operator interface connected to the gateway (desktop/mobile/CLI/web).
-- **Node:** a capability provider connected to the gateway (desktop/mobile/headless).
+- **Client:** an operator interface connected to the gateway (desktop/web/CLI/TUI; planned: mobile).
+- **Node:** a capability provider connected to the gateway (desktop node today; planned: mobile/headless).
 - **Protocol:** typed WebSocket messages (requests/responses and server-push events).
 - **Contracts:** versioned schemas used to validate protocol messages and extension boundaries.
 

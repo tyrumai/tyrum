@@ -1,13 +1,23 @@
 # Client
 
+## Status
+
+- **Status:** Partially Implemented
+
 A client is an operator interface that connects to the gateway and participates in sessions. Clients are where humans read events, send requests, approve actions, and manage connected nodes.
 
 ## Client forms
 
+### Implemented
+
 - Desktop app (Windows/Linux/macOS)
-- Mobile app (iOS/Android)
-- CLI/TUI
 - Operator web UI (SPA served by the gateway at `/ui`)
+- CLI (`tyrum-cli`)
+- TUI (`tyrum-tui`)
+
+### Planned
+
+- Mobile app (iOS/Android)
 
 ## Responsibilities
 
@@ -29,18 +39,34 @@ All clients should use `@tyrum/client` for WebSocket + HTTP interactions rather 
 
 See: [API surfaces (WebSocket vs HTTP)](./api-surfaces.md).
 
-## Operator UI expectations
+## Current State
 
-Operator clients provide oversight and administration. At minimum they should expose:
+Operator clients currently expose:
 
-- **Session:** a session-centric view rendered as a unified timeline that merges chat, runs/steps/attempts, approvals, and artifacts (reconstructible from durable state; live events stream updates). The UI supports lane filters and surfaces queue-mode semantics as pending input items.
-- **Work:** a workspace-scoped WorkBoard view of active WorkItems (Backlog/Doing/Blocked/Done), with WIP visibility and drilldown into artifacts/decisions/signals linked to runs, approvals, and evidence (see [Work board and delegated execution](./workboard.md)).
-- **Approvals:** an approval queue (approve/deny) with previews and linked evidence.
-- **Nodes/devices:** pairing requests, connected capability providers, revoke controls.
-- **Instances:** a presence view of connected gateway/client/node instances with TTL-based pruning (see [Presence](./presence.md)).
-- **Context/usage:** context breakdown (`/context`) and usage/quota panels (`/usage`) for operational transparency (see [Observability](./observability.md)).
-- **Settings:** policy defaults, tool allowlists, model config, secrets setup, and automation toggles.
-- **Onboarding/check:** guided setup and diagnostics that detect footguns and recommend fixes (see [Operations and onboarding](./operations.md)).
+- Connection/bootstrap (connect)
+- Dashboard/status summary
+- Runs view (queued/running/paused + drilldown)
+- Approvals queue
+- Pairing workflow for nodes/devices
+- Settings (including Admin Mode gating)
+- Memory inspection
+
+Desktop-only operator surfaces include:
+
+- WorkBoard UI (Kanban + drilldown)
+- Permissions + diagnostics + logs
+- Embedded gateway/node controls (start/stop + local permission prompts)
+
+There is no dedicated "Session timeline" page yet; runs and work items are the primary drilldown primitives today.
+
+## Target State
+
+Operator clients may add:
+
+- A unified "Session" timeline view that merges chat, runs/steps/attempts, approvals, and artifacts (reconstructible from durable state; live events stream updates).
+- Richer WorkBoard surfaces across all clients (not just desktop).
+- First-class context/usage panels (beyond `/context` and `/usage` command output).
+- Additional clients (for example a mobile app).
 
 ## What a client is not
 
