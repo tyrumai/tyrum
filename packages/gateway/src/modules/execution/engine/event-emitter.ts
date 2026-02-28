@@ -13,10 +13,7 @@ import type { ClockFn } from "./types.js";
 export class ExecutionEngineEventEmitter {
   constructor(private readonly opts: { clock: ClockFn; eventsEnabled: boolean }) {}
 
-  async enqueueWsMessage(
-    tx: SqlDb,
-    message: WsEventEnvelopeT | WsRequestEnvelopeT,
-  ): Promise<void> {
+  async enqueueWsMessage(tx: SqlDb, message: WsEventEnvelopeT | WsRequestEnvelopeT): Promise<void> {
     if (!this.opts.eventsEnabled) return;
     await enqueueWsBroadcastMessage(tx, message);
   }

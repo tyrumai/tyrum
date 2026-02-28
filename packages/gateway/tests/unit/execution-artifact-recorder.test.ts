@@ -7,13 +7,25 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 describe("ExecutionEngineArtifactRecorder", () => {
   let db: SqliteDb | undefined;
 
-  afterEach(async () => {
-    await db?.close();
-    db = undefined;
-  });
-
-  it("records artifacts and emits created/attached events", async () => {
-    db = openTestSqliteDb();
+  async function setup(): Promise<{
+    recorder: ExecutionEngineArtifactRecorder;
+    scope: {
+      runId: string;
+      stepId: string;
+      attemptId: string;
+      workspaceId: string;
+      key: string;
+    };
+    artifact: {
+      artifact_id: string;
+      uri: string;
+      kind: "log";
+      created_at: string;
+      labels: readonly ["label-1"];
+      metadata: { ok: true };
+    };
+  }> {
+    if (!db) throw new Error("test db not initialized");
 
     const jobId = "job-artifacts-1";
     const runId = "550e8400-e29b-41d4-a716-446655440000";
@@ -61,12 +73,24 @@ describe("ExecutionEngineArtifactRecorder", () => {
       metadata: { ok: true },
     } as const;
 
+    return {
+      recorder,
+      scope: { runId, stepId, attemptId, workspaceId: "default", key: "agent:agent-1" },
+      artifact,
+    };
+  }
+
+  afterEach(async () => {
+    await db?.close();
+    db = undefined;
+  });
+
+  it("records artifacts and emits created/attached events", async () => {
+    db = openTestSqliteDb();
+    const { recorder, scope, artifact } = await setup();
+
     await db.transaction(async (tx) => {
-      await recorder.recordArtifactsTx(
-        tx,
-        { runId, stepId, attemptId, workspaceId: "default", key: "agent:agent-1" },
-        [artifact],
-      );
+      await recorder.recordArtifactsTx(tx, scope, [artifact]);
     });
 
     const row = await db.get<{ artifact_id: string; uri: string }>(
@@ -87,5 +111,25 @@ describe("ExecutionEngineArtifactRecorder", () => {
     expect(types).toContain("artifact.created");
     expect(types).toContain("artifact.attached");
   });
-});
 
+  it("only emits artifact.created for the first insert", async () => {
+    db = openTestSqliteDb();
+    const { recorder, scope, artifact } = await setup();
+
+    await db.transaction(async (tx) => {
+      await recorder.recordArtifactsTx(tx, scope, [artifact]);
+      await recorder.recordArtifactsTx(tx, scope, [artifact]);
+    });
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((r) => JSON.parse(r.payload_json) as { message?: { type?: string } })
+      .map((r) => r.message?.type)
+      .filter((t): t is string => typeof t === "string");
+    expect(types.filter((t) => t === "artifact.created")).toHaveLength(1);
+    expect(types.filter((t) => t === "artifact.attached")).toHaveLength(2);
+  });
+});

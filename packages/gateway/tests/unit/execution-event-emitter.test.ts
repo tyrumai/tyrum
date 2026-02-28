@@ -7,13 +7,8 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 describe("ExecutionEngineEventEmitter", () => {
   let db: SqliteDb | undefined;
 
-  afterEach(async () => {
-    await db?.close();
-    db = undefined;
-  });
-
-  it("emits run.updated for an existing run", async () => {
-    db = openTestSqliteDb();
+  async function createRun(): Promise<{ runId: string; nowIso: string }> {
+    if (!db) throw new Error("test db not initialized");
 
     const nowIso = new Date(0).toISOString();
     const engine = new ExecutionEngine({
@@ -30,6 +25,18 @@ describe("ExecutionEngineEventEmitter", () => {
     });
 
     await db.run("DELETE FROM outbox");
+
+    return { runId, nowIso };
+  }
+
+  afterEach(async () => {
+    await db?.close();
+    db = undefined;
+  });
+
+  it("emits run.updated for an existing run", async () => {
+    db = openTestSqliteDb();
+    const { runId, nowIso } = await createRun();
 
     const emitter = new ExecutionEngineEventEmitter({
       clock: () => ({ nowMs: 0, nowIso }),
@@ -49,5 +56,25 @@ describe("ExecutionEngineEventEmitter", () => {
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
     expect(types).toContain("run.updated");
+  });
+
+  it("does not enqueue events when eventsEnabled is false", async () => {
+    db = openTestSqliteDb();
+    const { runId, nowIso } = await createRun();
+
+    const emitter = new ExecutionEngineEventEmitter({
+      clock: () => ({ nowMs: 0, nowIso }),
+      eventsEnabled: false,
+    });
+
+    await db.transaction(async (tx) => {
+      await emitter.emitRunUpdatedTx(tx, runId);
+    });
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    expect(outbox).toHaveLength(0);
   });
 });
