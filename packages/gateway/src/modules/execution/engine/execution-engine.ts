@@ -2,7 +2,6 @@ import type {
   ActionPrimitive as ActionPrimitiveT,
   ArtifactRef as ArtifactRefT,
   Decision as DecisionT,
-  ClientCapability as ClientCapabilityT,
   ExecutionTrigger as ExecutionTriggerT,
   PolicyBundle as PolicyBundleT,
   WsEventEnvelope as WsEventEnvelopeT,
@@ -43,6 +42,15 @@ import {
 import { defaultClock } from "./clock.js";
 import { normalizePositiveInt } from "../normalize-positive-int.js";
 import { parseConcurrencyLimitsFromEnv } from "./concurrency.js";
+import {
+  executeWithTimeout as executeWithTimeoutFn,
+  releaseConcurrencySlotsTx,
+  releaseLaneAndWorkspaceLeasesTx,
+  releaseLaneLeaseTx,
+  touchLaneLeaseTx,
+  tryAcquireConcurrencyForAttemptTx,
+  tryAcquireLaneLease,
+} from "./concurrency-manager.js";
 import { normalizeWorkspaceId, parsePlanIdFromTriggerJson } from "./db.js";
 import {
   releaseWorkspaceLease,
@@ -872,7 +880,7 @@ export class ExecutionEngine {
       );
 
       for (const attempt of runningAttempts) {
-        await this.releaseConcurrencySlotsTx(tx, attempt.attempt_id, nowIso);
+        await releaseConcurrencySlotsTx(tx, attempt.attempt_id, nowIso, this.concurrencyLimits);
       }
 
       await this.emitRunUpdatedTx(tx, runId);
@@ -927,7 +935,7 @@ export class ExecutionEngine {
     );
 
     for (const run of candidates) {
-      const leaseOk = await this.tryAcquireLaneLease({
+      const leaseOk = await tryAcquireLaneLease(this.db, {
         key: run.key,
         lane: run.lane,
         owner: input.workerId,
@@ -970,16 +978,12 @@ export class ExecutionEngine {
         return { kind: "noop" as const };
       }
       if (current.run_status === "cancelled" || current.job_status === "cancelled") {
-        await tx.run(
-          `DELETE FROM lane_leases
-           WHERE key = ? AND lane = ? AND lease_owner = ?`,
-          [run.key, run.lane, input.workerId],
-        );
-        await tx.run(
-          `DELETE FROM workspace_leases
-           WHERE workspace_id = ? AND lease_owner = ?`,
-          [run.workspace_id, input.workerId],
-        );
+        await releaseLaneAndWorkspaceLeasesTx(tx, {
+          key: run.key,
+          lane: run.lane,
+          workspaceId: run.workspace_id,
+          owner: input.workerId,
+        });
         return { kind: "cancelled" as const };
       }
 
@@ -1056,18 +1060,12 @@ export class ExecutionEngine {
            WHERE job_id = ? AND status IN ('queued', 'running')`,
           [failed ? "failed" : "completed", run.job_id],
         );
-
-        await tx.run(
-          `DELETE FROM lane_leases
-           WHERE key = ? AND lane = ? AND lease_owner = ?`,
-          [run.key, run.lane, input.workerId],
-        );
-
-        await tx.run(
-          `DELETE FROM workspace_leases
-           WHERE workspace_id = ? AND lease_owner = ?`,
-          [run.workspace_id, input.workerId],
-        );
+        await releaseLaneAndWorkspaceLeasesTx(tx, {
+          key: run.key,
+          lane: run.lane,
+          workspaceId: run.workspace_id,
+          owner: input.workerId,
+        });
 
         return { kind: "finalized" as const };
       }
@@ -1107,7 +1105,12 @@ export class ExecutionEngine {
             [next.step_id],
           );
           await this.emitAttemptUpdatedTx(tx, latestAttempt.attempt_id);
-          await this.releaseConcurrencySlotsTx(tx, latestAttempt.attempt_id, clock.nowIso);
+          await releaseConcurrencySlotsTx(
+            tx,
+            latestAttempt.attempt_id,
+            clock.nowIso,
+            this.concurrencyLimits,
+          );
           await this.emitStepUpdatedTx(tx, next.step_id);
           return { kind: "recovered" as const };
         }
@@ -1376,16 +1379,12 @@ export class ExecutionEngine {
                 await this.emitRunUpdatedTx(tx, run.run_id);
                 await this.emitRunFailedTx(tx, run.run_id);
               }
-              await tx.run(
-                `DELETE FROM lane_leases
-	                 WHERE key = ? AND lane = ? AND lease_owner = ?`,
-                [run.key, run.lane, input.workerId],
-              );
-              await tx.run(
-                `DELETE FROM workspace_leases
-	                 WHERE workspace_id = ? AND lease_owner = ?`,
-                [run.workspace_id, input.workerId],
-              );
+              await releaseLaneAndWorkspaceLeasesTx(tx, {
+                key: run.key,
+                lane: run.lane,
+                workspaceId: run.workspace_id,
+                owner: input.workerId,
+              });
 
               await this.emitStepUpdatedTx(tx, next.step_id);
               await this.emitAttemptUpdatedTx(tx, attemptId);
@@ -1601,18 +1600,12 @@ export class ExecutionEngine {
                WHERE job_id = ? AND status IN ('queued', 'running')`,
               [run.job_id],
             );
-
-            await tx.run(
-              `DELETE FROM lane_leases
-               WHERE key = ? AND lane = ? AND lease_owner = ?`,
-              [run.key, run.lane, input.workerId],
-            );
-
-            await tx.run(
-              `DELETE FROM workspace_leases
-               WHERE workspace_id = ? AND lease_owner = ?`,
-              [run.workspace_id, input.workerId],
-            );
+            await releaseLaneAndWorkspaceLeasesTx(tx, {
+              key: run.key,
+              lane: run.lane,
+              workspaceId: run.workspace_id,
+              owner: input.workerId,
+            });
 
             await this.emitAttemptUpdatedTx(tx, attemptId);
             await this.emitRunUpdatedTx(tx, run.run_id);
@@ -1672,15 +1665,19 @@ export class ExecutionEngine {
       const agentId = deriveAgentIdFromExecutionKey(run.key) ?? "default";
       const capability = actionType ? requiredCapability(actionType) : undefined;
 
-      const concurrencyOk = await this.tryAcquireConcurrencyForAttemptTx(tx, {
-        attemptId,
-        owner: input.workerId,
-        nowMs: clock.nowMs,
-        nowIso: clock.nowIso,
-        ttlMs: leaseTtlMs,
-        agentId,
-        capability,
-      });
+      const concurrencyOk = await tryAcquireConcurrencyForAttemptTx(
+        tx,
+        {
+          attemptId,
+          owner: input.workerId,
+          nowMs: clock.nowMs,
+          nowIso: clock.nowIso,
+          ttlMs: leaseTtlMs,
+          agentId,
+          capability,
+        },
+        this.concurrencyLimits,
+      );
       if (!concurrencyOk) {
         return { kind: "noop" as const };
       }
@@ -1694,12 +1691,8 @@ export class ExecutionEngine {
           ttlMs: leaseTtlMs,
         });
         if (!workspaceOk) {
-          await this.releaseConcurrencySlotsTx(tx, attemptId, clock.nowIso);
-          await tx.run(
-            `DELETE FROM lane_leases
-             WHERE key = ? AND lane = ? AND lease_owner = ?`,
-            [run.key, run.lane, input.workerId],
-          );
+          await releaseConcurrencySlotsTx(tx, attemptId, clock.nowIso, this.concurrencyLimits);
+          await releaseLaneLeaseTx(tx, { key: run.key, lane: run.lane, owner: input.workerId });
           return { kind: "noop" as const };
         }
       }
@@ -1718,7 +1711,7 @@ export class ExecutionEngine {
             owner: input.workerId,
           });
         }
-        await this.releaseConcurrencySlotsTx(tx, attemptId, clock.nowIso);
+        await releaseConcurrencySlotsTx(tx, attemptId, clock.nowIso, this.concurrencyLimits);
         return { kind: "noop" as const };
       }
 
@@ -1745,12 +1738,12 @@ export class ExecutionEngine {
         ],
       );
 
-      await tx.run(
-        `UPDATE lane_leases
-         SET lease_expires_at_ms = ?
-         WHERE key = ? AND lane = ? AND lease_owner = ?`,
-        [clock.nowMs + leaseTtlMs, run.key, run.lane, input.workerId],
-      );
+      await touchLaneLeaseTx(tx, {
+        key: run.key,
+        lane: run.lane,
+        owner: input.workerId,
+        expiresAtMs: clock.nowMs + leaseTtlMs,
+      });
 
       await this.emitStepUpdatedTx(tx, next.step_id);
       await this.emitAttemptUpdatedTx(tx, attemptId);
@@ -1940,17 +1933,13 @@ export class ExecutionEngine {
           [nowIso, evidenceJson, artifactsJson, costJson, opts.attemptId],
         );
         await this.emitAttemptUpdatedTx(tx, opts.attemptId);
-        await this.releaseConcurrencySlotsTx(tx, opts.attemptId, nowIso);
-        await tx.run(
-          `DELETE FROM lane_leases
-           WHERE key = ? AND lane = ? AND lease_owner = ?`,
-          [opts.key, opts.lane, opts.workerId],
-        );
-        await tx.run(
-          `DELETE FROM workspace_leases
-           WHERE workspace_id = ? AND lease_owner = ?`,
-          [opts.workspaceId, opts.workerId],
-        );
+        await releaseConcurrencySlotsTx(tx, opts.attemptId, nowIso, this.concurrencyLimits);
+        await releaseLaneAndWorkspaceLeasesTx(tx, {
+          key: opts.key,
+          lane: opts.lane,
+          workspaceId: opts.workspaceId,
+          owner: opts.workerId,
+        });
         return { kind: "cancelled" as const };
       }
 
@@ -2160,7 +2149,7 @@ export class ExecutionEngine {
         },
         artifacts,
       );
-      await this.releaseConcurrencySlotsTx(tx, opts.attemptId, nowIso);
+      await releaseConcurrencySlotsTx(tx, opts.attemptId, nowIso, this.concurrencyLimits);
 
       await this.maybeRetryOrFailStep({
         tx,
@@ -2365,7 +2354,7 @@ export class ExecutionEngine {
       ],
     );
     await this.emitAttemptUpdatedTx(tx, opts.attemptId);
-    await this.releaseConcurrencySlotsTx(tx, opts.attemptId, nowIso);
+    await releaseConcurrencySlotsTx(tx, opts.attemptId, nowIso, this.concurrencyLimits);
   }
 
   private async markAttemptFailed(
@@ -2400,7 +2389,7 @@ export class ExecutionEngine {
       ],
     );
     await this.emitAttemptUpdatedTx(tx, opts.attemptId);
-    await this.releaseConcurrencySlotsTx(tx, opts.attemptId, nowIso);
+    await releaseConcurrencySlotsTx(tx, opts.attemptId, nowIso, this.concurrencyLimits);
   }
 
   private async maybeRetryOrFailStep(
@@ -2530,17 +2519,12 @@ export class ExecutionEngine {
       await this.emitRunUpdatedTx(tx, opts.runId);
       await this.emitRunFailedTx(tx, opts.runId);
     }
-
-    await tx.run(
-      `DELETE FROM lane_leases
-       WHERE key = ? AND lane = ? AND lease_owner = ?`,
-      [opts.key, opts.lane, opts.workerId],
-    );
-    await tx.run(
-      `DELETE FROM workspace_leases
-       WHERE workspace_id = ? AND lease_owner = ?`,
-      [opts.workspaceId, opts.workerId],
-    );
+    await releaseLaneAndWorkspaceLeasesTx(tx, {
+      key: opts.key,
+      lane: opts.lane,
+      workspaceId: opts.workspaceId,
+      owner: opts.workerId,
+    });
 
     return true;
   }
@@ -2673,16 +2657,12 @@ export class ExecutionEngine {
     }
 
     // Release leases while paused.
-    await tx.run(
-      `DELETE FROM lane_leases
-       WHERE key = ? AND lane = ? AND lease_owner = ?`,
-      [opts.key, opts.lane, opts.workerId],
-    );
-    await tx.run(
-      `DELETE FROM workspace_leases
-       WHERE workspace_id = ? AND lease_owner = ?`,
-      [opts.workspaceId, opts.workerId],
-    );
+    await releaseLaneAndWorkspaceLeasesTx(tx, {
+      key: opts.key,
+      lane: opts.lane,
+      workspaceId: opts.workspaceId,
+      owner: opts.workerId,
+    });
 
     // Emit run/step state updates and approval events/requests.
     await this.emitRunUpdatedTx(tx, opts.runId);
@@ -3027,195 +3007,6 @@ export class ExecutionEngine {
     timeoutMs: number,
     context: StepExecutionContext,
   ): Promise<StepResult> {
-    try {
-      return await executor.execute(action, planId, stepIndex, timeoutMs, context);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { success: false, error: message };
-    }
-  }
-
-  private async releaseConcurrencySlotsTx(
-    tx: SqlDb,
-    attemptId: string,
-    nowIso: string,
-  ): Promise<void> {
-    if (!attemptId) return;
-    if (!this.concurrencyLimits) return;
-    await tx.run(
-      `UPDATE concurrency_slots
-       SET lease_owner = NULL,
-           lease_expires_at_ms = NULL,
-           attempt_id = NULL,
-           updated_at = ?
-       WHERE attempt_id = ?`,
-      [nowIso, attemptId],
-    );
-  }
-
-  private async ensureConcurrencySlotsTx(
-    tx: SqlDb,
-    scope: string,
-    scopeId: string,
-    limit: number,
-  ): Promise<void> {
-    for (let slot = 0; slot < limit; slot += 1) {
-      await tx.run(
-        `INSERT INTO concurrency_slots (scope, scope_id, slot)
-         VALUES (?, ?, ?)
-         ON CONFLICT (scope, scope_id, slot) DO NOTHING`,
-        [scope, scopeId, slot],
-      );
-    }
-  }
-
-  private async tryAcquireConcurrencySlotTx(
-    tx: SqlDb,
-    opts: {
-      scope: string;
-      scopeId: string;
-      limit: number;
-      attemptId: string;
-      owner: string;
-      nowMs: number;
-      nowIso: string;
-      ttlMs: number;
-    },
-  ): Promise<boolean> {
-    if (opts.limit <= 0) return false;
-
-    await this.ensureConcurrencySlotsTx(tx, opts.scope, opts.scopeId, opts.limit);
-
-    const expiresAtMs = opts.nowMs + Math.max(1, opts.ttlMs);
-    const maxTries = Math.min(10, Math.max(1, opts.limit));
-
-    for (let i = 0; i < maxTries; i += 1) {
-      const updated = await tx.run(
-        `UPDATE concurrency_slots
-         SET lease_owner = ?,
-             lease_expires_at_ms = ?,
-             attempt_id = ?,
-             updated_at = ?
-         WHERE scope = ? AND scope_id = ?
-           AND slot IN (
-             SELECT slot
-             FROM concurrency_slots
-             WHERE scope = ? AND scope_id = ?
-               AND slot < ?
-               AND (lease_expires_at_ms IS NULL OR lease_expires_at_ms <= ?)
-             ORDER BY COALESCE(lease_expires_at_ms, 0) ASC, slot ASC
-             LIMIT 1
-           )
-           AND (lease_expires_at_ms IS NULL OR lease_expires_at_ms <= ?)`,
-        [
-          opts.owner,
-          expiresAtMs,
-          opts.attemptId,
-          opts.nowIso,
-          opts.scope,
-          opts.scopeId,
-          opts.scope,
-          opts.scopeId,
-          opts.limit,
-          opts.nowMs,
-          opts.nowMs,
-        ],
-      );
-      if (updated.changes === 1) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  private async tryAcquireConcurrencyForAttemptTx(
-    tx: SqlDb,
-    opts: {
-      attemptId: string;
-      owner: string;
-      nowMs: number;
-      nowIso: string;
-      ttlMs: number;
-      agentId: string;
-      capability?: ClientCapabilityT;
-    },
-  ): Promise<boolean> {
-    const limits = this.concurrencyLimits;
-    if (!limits) return true;
-
-    const globalLimit = limits.global;
-    const perAgentLimit = limits.perAgent;
-    const capabilityLimit =
-      opts.capability && limits.perCapability ? limits.perCapability[opts.capability] : undefined;
-
-    if (globalLimit === undefined && perAgentLimit === undefined && capabilityLimit === undefined) {
-      return true;
-    }
-
-    const claimScope = async (
-      scope: string,
-      scopeId: string,
-      limit: number | undefined,
-    ): Promise<boolean> => {
-      if (limit === undefined) return true;
-      return await this.tryAcquireConcurrencySlotTx(tx, {
-        scope,
-        scopeId,
-        limit,
-        attemptId: opts.attemptId,
-        owner: opts.owner,
-        nowMs: opts.nowMs,
-        nowIso: opts.nowIso,
-        ttlMs: opts.ttlMs,
-      });
-    };
-
-    if (!(await claimScope("global", "global", globalLimit))) {
-      await this.releaseConcurrencySlotsTx(tx, opts.attemptId, opts.nowIso);
-      return false;
-    }
-
-    if (!(await claimScope("agent", opts.agentId, perAgentLimit))) {
-      await this.releaseConcurrencySlotsTx(tx, opts.attemptId, opts.nowIso);
-      return false;
-    }
-
-    if (opts.capability && capabilityLimit !== undefined) {
-      if (!(await claimScope("capability", opts.capability, capabilityLimit))) {
-        await this.releaseConcurrencySlotsTx(tx, opts.attemptId, opts.nowIso);
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  private async tryAcquireLaneLease(opts: {
-    key: string;
-    lane: string;
-    owner: string;
-    nowMs: number;
-    ttlMs: number;
-  }): Promise<boolean> {
-    const expiresAt = opts.nowMs + Math.max(1, opts.ttlMs);
-    return await this.db.transaction(async (tx) => {
-      const inserted = await tx.run(
-        `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT (key, lane) DO NOTHING`,
-        [opts.key, opts.lane, opts.owner, expiresAt],
-      );
-      if (inserted.changes === 1) return true;
-
-      const updated = await tx.run(
-        `UPDATE lane_leases
-         SET lease_owner = ?, lease_expires_at_ms = ?
-         WHERE key = ? AND lane = ?
-           AND (lease_expires_at_ms <= ? OR lease_owner = ?)`,
-        [opts.owner, expiresAt, opts.key, opts.lane, opts.nowMs, opts.owner],
-      );
-      return updated.changes === 1;
-    });
+    return await executeWithTimeoutFn(executor, action, planId, stepIndex, timeoutMs, context);
   }
 }
