@@ -23,14 +23,19 @@ import type {
 import {
   AgentId,
   AgentStatusResponse,
-  AgentTurnRequest,
   AgentTurnResponse,
   ContextReport as ContextReportSchema,
   SubagentSessionKey,
   WorkspaceId,
 } from "@tyrum/schemas";
 import type { Decision } from "@tyrum/schemas";
-import { applyDeterministicContextCompactionAndToolPruning } from "./context-pruning.js";
+import {
+  prepareLaneQueueStep as prepareLaneQueueStepBridge,
+  turnViaExecutionEngine as turnViaExecutionEngineBridge,
+  type LaneQueueScope,
+  type LaneQueueState,
+  type TurnEngineBridgeDeps,
+} from "./turn-engine-bridge.js";
 import {
   DATA_TAG_SAFETY_PROMPT,
   formatIdentityPrompt,
@@ -100,7 +105,7 @@ import {
   hasToolResult,
 } from "../../ai-sdk/message-utils.js";
 import { coerceRecord } from "../../util/coerce.js";
-import { ExecutionEngine, type StepExecutor } from "../../execution/engine.js";
+import { ExecutionEngine } from "../../execution/engine.js";
 import { resolveSandboxHardeningProfile } from "../../sandbox/hardening.js";
 import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../../sandbox/elevated-execution.js";
 import { LaneQueueSignalDal, LaneQueueInterruptError } from "../../lanes/queue-signal-dal.js";
@@ -111,8 +116,6 @@ const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
 const DEFAULT_APPROVAL_POLL_MS = 500;
 const MAX_TURN_ENGINE_WAIT_MS = 60_000;
-const TURN_ENGINE_MIN_BACKOFF_MS = 5;
-const TURN_ENGINE_MAX_BACKOFF_MS = 250;
 
 const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
 const PRE_COMPACTION_FLUSH_TRUNCATION_MARKER = "...(truncated)";
@@ -309,16 +312,6 @@ type ResolvedAgentTurnInput = {
   message: string;
   envelope?: NormalizedMessageEnvelopeT;
   metadata?: Record<string, unknown>;
-};
-
-type LaneQueueScope = { key: string; lane: string };
-
-type LaneQueueState = {
-  scope: LaneQueueScope;
-  signals: LaneQueueSignalDal;
-  interruptError: LaneQueueInterruptError | undefined;
-  cancelToolCalls: boolean;
-  pendingInjectionTexts: string[];
 };
 
 type ResolvedExecutionProfile = {
@@ -706,29 +699,7 @@ export class AgentRuntime {
     laneQueue: LaneQueueState | undefined,
     messages: Array<ModelMessage>,
   ): { messages: Array<ModelMessage> } {
-    let preparedMessages = messages;
-    if (laneQueue) {
-      if (laneQueue.interruptError) throw laneQueue.interruptError;
-
-      const injectionTexts = laneQueue.pendingInjectionTexts.splice(
-        0,
-        laneQueue.pendingInjectionTexts.length,
-      );
-      laneQueue.cancelToolCalls = false;
-      if (injectionTexts.length > 0) {
-        preparedMessages = [
-          ...preparedMessages,
-          ...injectionTexts.map((text) => ({
-            role: "user" as const,
-            content: [{ type: "text" as const, text }],
-          })),
-        ];
-      }
-    }
-
-    return {
-      messages: applyDeterministicContextCompactionAndToolPruning(preparedMessages),
-    };
+    return prepareLaneQueueStepBridge(laneQueue, messages);
   }
 
   private createStopWhenWithWithinTurnLoopDetection(input: {
@@ -1419,388 +1390,26 @@ export class AgentRuntime {
   }
 
   private async turnViaExecutionEngine(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
-    const resolvedInput = resolveAgentTurnInput(input);
-    const containerKind: NormalizedContainerKind =
-      input.container_kind ?? resolvedInput.envelope?.container.kind ?? "channel";
-    const defaultKey = buildAgentTurnKey({
+    const deps = {
       agentId: this.agentId,
       workspaceId: this.workspaceId,
-      channel: resolvedInput.channel,
-      containerKind,
-      threadId: resolvedInput.thread_id,
-      deliveryAccount: resolvedInput.envelope?.delivery.account,
-    });
-    const laneQueueScope = resolveLaneQueueScope(resolvedInput.metadata);
-    const canOverride =
-      laneQueueScope &&
-      laneQueueScope.lane === "subagent" &&
-      laneQueueScope.key.startsWith(`agent:${this.agentId}:subagent:`) &&
-      SubagentSessionKey.safeParse(laneQueueScope.key).success;
-    const key = canOverride ? laneQueueScope.key : defaultKey;
-    const lane = canOverride ? "subagent" : "main";
-    const planId = `agent-turn-${this.agentId}-${randomUUID()}`;
-    const requestId = resolveTurnRequestId(input);
+      executionEngine: this.executionEngine,
+      executionWorkerId: this.executionWorkerId,
+      turnEngineWaitMs: this.turnEngineWaitMs,
+      approvalPollMs: this.approvalPollMs,
+      db: this.opts.container.db,
+      approvalDal: this.approvalDal,
+      getWorkScope: () => this.getWorkScope(),
+      resolveExecutionProfile: (args) => this.resolveExecutionProfile(args),
+      turnDirect: (request, opts) => this.turnDirect(request, opts),
+      resolveAgentTurnInput,
+      resolveLaneQueueScope,
+      resolveTurnRequestId,
+      isToolExecutionApprovalRequiredError: (err: unknown): err is { pause: StepPauseRequest } =>
+        err instanceof ToolExecutionApprovalRequiredError,
+    } satisfies TurnEngineBridgeDeps;
 
-    if (lane === "main") {
-      try {
-        await new WorkboardDal(this.opts.container.db).upsertScopeActivity({
-          scope: this.getWorkScope(),
-          last_active_session_key: key,
-          updated_at_ms: Date.now(),
-        });
-      } catch {
-        // ignore best-effort activity tracking failures
-      }
-    }
-
-    const executionProfile = await this.resolveExecutionProfile({
-      laneQueueScope,
-      metadata: resolvedInput.metadata,
-    });
-
-    const stepArgs: Record<string, unknown> = {
-      channel: resolvedInput.channel,
-      thread_id: resolvedInput.thread_id,
-      container_kind: containerKind,
-      message: input.message,
-      envelope: resolvedInput.envelope,
-      agent_id: this.agentId,
-      workspace_id: this.workspaceId,
-    };
-    if (input.intake_mode) {
-      stepArgs["intake_mode"] = input.intake_mode;
-    }
-    stepArgs["metadata"] = {
-      ...(input.metadata as Record<string, unknown>),
-      work_session_key: key,
-      work_lane: lane,
-    };
-
-    const { runId } = await this.executionEngine.enqueuePlan({
-      key,
-      lane,
-      workspaceId: this.workspaceId,
-      planId,
-      requestId,
-      budgets: executionProfile.profile.budgets,
-      steps: [{ type: "Decide", args: stepArgs }],
-    });
-
-    // Ensure concurrent turns don't share a lease owner (lane leases are re-entrant for the same owner).
-    const workerId = `${this.executionWorkerId}-${runId}`;
-
-    const startMs = Date.now();
-    const deadlineMs = startMs + this.turnEngineWaitMs;
-    let laneQueueInterrupted = false;
-    let laneQueueInterruptReason: string | undefined;
-
-    const executor: StepExecutor = {
-      execute: async (action, planId, stepIndex, timeoutMs, _context) => {
-        if (action.type !== "Decide") {
-          return { success: false, error: `unsupported action type: ${action.type}` };
-        }
-
-        const parsed = AgentTurnRequest.safeParse(action.args ?? {});
-        if (!parsed.success) {
-          return { success: false, error: `invalid agent turn request: ${parsed.error.message}` };
-        }
-
-        const remainingMs = Math.max(1, deadlineMs - Date.now());
-        const normalizedTimeoutMs = Number.isFinite(timeoutMs) ? timeoutMs : remainingMs;
-        const requestedTimeoutMs = Math.max(1, Math.floor(normalizedTimeoutMs));
-        const effectiveTimeoutMs = Math.min(requestedTimeoutMs, remainingMs);
-
-        const stepRow = await this.opts.container.db.get<{
-          step_id: string;
-          approval_id: number | null;
-        }>(
-          `SELECT step_id, approval_id
-           FROM execution_steps
-           WHERE run_id = ? AND step_index = ?`,
-          [runId, stepIndex],
-        );
-        if (!stepRow) {
-          return {
-            success: false,
-            error: `execution step ${String(stepIndex)} not found for run ${runId}`,
-          };
-        }
-
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), effectiveTimeoutMs);
-        try {
-          const response = await this.turnDirect(parsed.data, {
-            abortSignal: controller.signal,
-            timeoutMs: effectiveTimeoutMs,
-            execution: {
-              planId,
-              runId,
-              stepIndex,
-              stepId: stepRow.step_id,
-              stepApprovalId: stepRow.approval_id ?? undefined,
-            },
-          });
-          return { success: true, result: response };
-        } catch (err) {
-          if (err instanceof ToolExecutionApprovalRequiredError) {
-            return { success: true, pause: err.pause };
-          }
-          if (controller.signal.aborted) {
-            return { success: false, error: `timed out after ${String(effectiveTimeoutMs)}ms` };
-          }
-          if (err instanceof LaneQueueInterruptError) {
-            laneQueueInterrupted = true;
-            laneQueueInterruptReason = err.message;
-            await this.executionEngine.cancelRun(runId, err.message);
-            return { success: false, error: err.message };
-          }
-          const message = err instanceof Error ? err.message : String(err);
-          return { success: false, error: message };
-        } finally {
-          clearTimeout(timer);
-        }
-      },
-    };
-
-    type RunStatusRow = {
-      status: string;
-      paused_reason: string | null;
-      paused_detail: string | null;
-    };
-
-    const resolveIfTerminal = async (
-      row: RunStatusRow,
-    ): Promise<AgentTurnResponseT | undefined> => {
-      if (row.status === "succeeded") {
-        const persisted = await this.loadTurnResultFromRun(runId);
-        if (persisted) {
-          return persisted;
-        }
-        throw new Error("execution engine turn completed without a result payload");
-      }
-
-      if (row.status === "failed") {
-        const failure = await this.loadTurnFailureFromRun(runId);
-        const reason =
-          failure ?? row.paused_detail ?? row.paused_reason ?? `execution run ${row.status}`;
-        throw new Error(reason);
-      }
-
-      if (row.status === "cancelled") {
-        if (laneQueueInterrupted) {
-          throw new LaneQueueInterruptError(laneQueueInterruptReason);
-        }
-        const failure = await this.loadTurnFailureFromRun(runId);
-        const reason =
-          row.paused_detail ?? row.paused_reason ?? failure ?? `execution run ${row.status}`;
-        throw new Error(reason);
-      }
-
-      if (row.status === "paused") {
-        return undefined;
-      }
-
-      return undefined;
-    };
-
-    let backoffMs = TURN_ENGINE_MIN_BACKOFF_MS;
-
-    while (Date.now() < deadlineMs) {
-      const run = await this.opts.container.db.get<RunStatusRow>(
-        `SELECT status, paused_reason, paused_detail
-         FROM execution_runs
-         WHERE run_id = ?`,
-        [runId],
-      );
-      if (!run) {
-        throw new Error(`execution run '${runId}' not found`);
-      }
-
-      if (run.status === "paused") {
-        const resolvedPause = await this.maybeResolvePausedRun(runId);
-        if (!resolvedPause) {
-          const remainingMs = Math.max(1, deadlineMs - Date.now());
-          const sleepMs = Math.min(this.approvalPollMs, remainingMs);
-          await new Promise((resolve) => setTimeout(resolve, sleepMs));
-        } else {
-          backoffMs = TURN_ENGINE_MIN_BACKOFF_MS;
-        }
-        continue;
-      }
-
-      const resolved = await resolveIfTerminal(run);
-      if (resolved) {
-        return resolved;
-      }
-
-      const didWork = await this.executionEngine.workerTick({
-        workerId,
-        executor,
-        runId,
-      });
-
-      if (!didWork) {
-        const remainingMs = Math.max(1, deadlineMs - Date.now());
-        const sleepMs = Math.min(backoffMs, remainingMs);
-        await new Promise((resolve) => setTimeout(resolve, sleepMs));
-        backoffMs = Math.min(TURN_ENGINE_MAX_BACKOFF_MS, backoffMs * 2);
-      } else {
-        backoffMs = TURN_ENGINE_MIN_BACKOFF_MS;
-      }
-    }
-
-    // Avoid timing out when the run completed during the final tick but the
-    // polling loop didn't get another iteration before the deadline elapsed.
-    const completed = await this.opts.container.db.get<RunStatusRow>(
-      `SELECT status, paused_reason, paused_detail
-       FROM execution_runs
-       WHERE run_id = ?`,
-      [runId],
-    );
-    if (!completed) {
-      throw new Error(`execution run '${runId}' not found`);
-    }
-
-    const resolved = await resolveIfTerminal(completed);
-    if (resolved) {
-      return resolved;
-    }
-
-    const elapsed = Math.max(0, Date.now() - startMs);
-    const timeoutMessage = `execution run '${runId}' did not complete within ${String(elapsed)}ms`;
-
-    const cancelOutcome = await this.executionEngine.cancelRun(runId, timeoutMessage);
-
-    // Best-effort: avoid leaving our lane/workspace leases behind when we give up waiting.
-    // (Leases held by other workers expire and are cleaned up via the normal TTL/takeover flow.)
-    await this.opts.container.db.run(
-      `DELETE FROM lane_leases
-       WHERE key = ? AND lane = ? AND lease_owner = ?`,
-      [key, lane, workerId],
-    );
-    await this.opts.container.db.run(
-      `DELETE FROM workspace_leases
-       WHERE workspace_id = ? AND lease_owner = ?`,
-      [this.workspaceId, workerId],
-    );
-
-    if (cancelOutcome === "already_terminal") {
-      const latest = await this.opts.container.db.get<RunStatusRow>(
-        `SELECT status, paused_reason, paused_detail
-         FROM execution_runs
-         WHERE run_id = ?`,
-        [runId],
-      );
-      if (latest) {
-        const terminal = await resolveIfTerminal(latest);
-        if (terminal) {
-          return terminal;
-        }
-      }
-    }
-
-    throw new Error(timeoutMessage);
-  }
-
-  private async maybeResolvePausedRun(runId: string): Promise<boolean> {
-    const pausedStep = await this.opts.container.db.get<{ approval_id: number | null }>(
-      `SELECT approval_id
-       FROM execution_steps
-       WHERE run_id = ? AND status = 'paused'
-       ORDER BY step_index ASC
-       LIMIT 1`,
-      [runId],
-    );
-    const approvalId = pausedStep?.approval_id ?? null;
-    if (approvalId === null) return false;
-
-    await this.approvalDal.expireStale();
-    let approval = await this.approvalDal.getById(approvalId);
-    if (!approval) {
-      await this.executionEngine.cancelRun(runId, "approval record not found");
-      return true;
-    }
-
-    if (approval.status === "pending") {
-      const expiresAt = approval.expires_at;
-      const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
-      if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
-        approval = (await this.approvalDal.expireById(approval.id)) ?? approval;
-      } else {
-        return false;
-      }
-    }
-
-    const ctx = coerceRecord(approval.context);
-    const isAgentToolExecution = ctx?.["source"] === "agent-tool-execution";
-    const resumeToken =
-      approval.resume_token?.trim() ||
-      (typeof ctx?.["resume_token"] === "string" ? ctx["resume_token"].trim() : "");
-
-    if (approval.status === "approved" && !resumeToken) {
-      await this.executionEngine.cancelRun(
-        approval.run_id ?? runId,
-        approval.response_reason ?? "approved approval missing resume token",
-      );
-      return true;
-    }
-
-    if (
-      resumeToken &&
-      (approval.status === "approved" ||
-        (isAgentToolExecution && (approval.status === "denied" || approval.status === "expired")))
-    ) {
-      await this.executionEngine.resumeRun(resumeToken);
-      return true;
-    }
-
-    if (approval.status === "denied" || approval.status === "expired") {
-      const reason =
-        approval.response_reason ??
-        (approval.status === "expired" ? "approval timed out" : "approval denied");
-      await this.executionEngine.cancelRun(runId, reason);
-      return true;
-    }
-
-    if (approval.status === "cancelled") {
-      await this.executionEngine.cancelRun(runId, approval.response_reason ?? "approval cancelled");
-      return true;
-    }
-
-    return false;
-  }
-
-  private async loadTurnResultFromRun(runId: string): Promise<AgentTurnResponseT | undefined> {
-    const row = await this.opts.container.db.get<{ result_json: string | null }>(
-      `SELECT a.result_json
-       FROM execution_attempts a
-       JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.run_id = ? AND a.result_json IS NOT NULL
-       ORDER BY a.attempt DESC
-       LIMIT 1`,
-      [runId],
-    );
-    if (!row?.result_json) return undefined;
-
-    try {
-      return AgentTurnResponse.parse(JSON.parse(row.result_json));
-    } catch {
-      return undefined;
-    }
-  }
-
-  private async loadTurnFailureFromRun(runId: string): Promise<string | undefined> {
-    const row = await this.opts.container.db.get<{ error: string | null }>(
-      `SELECT a.error
-       FROM execution_attempts a
-       JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.run_id = ? AND a.error IS NOT NULL
-       ORDER BY a.attempt DESC
-       LIMIT 1`,
-      [runId],
-    );
-    const error = row?.error?.trim();
-    return error && error.length > 0 ? error : undefined;
+    return await turnViaExecutionEngineBridge(deps, input);
   }
 
   private async semanticSearch(
