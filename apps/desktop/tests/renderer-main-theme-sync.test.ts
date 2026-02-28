@@ -1,49 +1,37 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createRootMock, renderMock, startDesktopThemeSyncMock } = vi.hoisted(() => {
+const { createRootMock, renderMock, ThemeProviderMock } = vi.hoisted(() => {
   const renderMock = vi.fn();
   const createRootMock = vi.fn(() => ({ render: renderMock }));
-  const startDesktopThemeSyncMock = vi.fn(() => new Promise<() => void>(() => {}));
+  const ThemeProviderMock = vi.fn(({ children }: { children: unknown }) => children);
 
-  return { createRootMock, renderMock, startDesktopThemeSyncMock };
+  return { createRootMock, renderMock, ThemeProviderMock };
 });
 
 vi.mock("react-dom/client", () => ({
   createRoot: createRootMock,
 }));
 
-vi.mock("../src/renderer/App.js", () => ({
-  App: () => null,
+vi.mock("@tyrum/operator-ui", () => ({
+  ThemeProvider: ThemeProviderMock,
 }));
 
-vi.mock("../src/renderer/theme.js", () => ({
-  startDesktopThemeSync: startDesktopThemeSyncMock,
+vi.mock("../src/renderer/App.js", () => ({
+  App: () => null,
 }));
 
 describe("renderer bootstrap theme sync", () => {
   beforeEach(() => {
     vi.resetModules();
     document.body.innerHTML = '<div id="root"></div>';
-    (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = {
-      theme: {
-        getState: vi.fn(async () => ({
-          colorScheme: "dark",
-          highContrast: false,
-          inverted: false,
-          source: "system",
-        })),
-        onChange: vi.fn(() => () => {}),
-      },
-    };
   });
 
-  it("renders even when desktop theme sync is still pending", async () => {
+  it("wraps the app in ThemeProvider", async () => {
     await import("../src/renderer/main.tsx");
 
-    await Promise.resolve();
-
-    expect(startDesktopThemeSyncMock).toHaveBeenCalledTimes(1);
     expect(renderMock).toHaveBeenCalledTimes(1);
+    const element = renderMock.mock.calls[0]?.[0] as { type?: unknown } | undefined;
+    expect(element?.type).toBe(ThemeProviderMock);
   });
 });
