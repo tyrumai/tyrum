@@ -16,10 +16,16 @@ export interface PairingStore extends ExternalStore<PairingState> {
   refresh(): Promise<void>;
   approve(
     pairingId: number,
-    input: { trust_level: string; capability_allowlist: unknown[]; reason?: string },
+    input: Parameters<OperatorHttpClient["pairings"]["approve"]>[1],
   ): Promise<Pairing>;
-  deny(pairingId: number, input?: { reason?: string }): Promise<Pairing>;
-  revoke(pairingId: number, input?: { reason?: string }): Promise<Pairing>;
+  deny(
+    pairingId: number,
+    input?: Parameters<OperatorHttpClient["pairings"]["deny"]>[1],
+  ): Promise<Pairing>;
+  revoke(
+    pairingId: number,
+    input?: Parameters<OperatorHttpClient["pairings"]["revoke"]>[1],
+  ): Promise<Pairing>;
 }
 
 function upsertPairing(state: PairingState, pairing: Pairing): PairingState {
@@ -113,7 +119,7 @@ export function createPairingStore(http: OperatorHttpClient): {
 
   async function approve(
     pairingId: number,
-    input: { trust_level: string; capability_allowlist: unknown[]; reason?: string },
+    input: Parameters<OperatorHttpClient["pairings"]["approve"]>[1],
   ): Promise<Pairing> {
     const result = await http.pairings.approve(pairingId, input);
     const pairing = pairingFromMutation(result);
@@ -121,14 +127,20 @@ export function createPairingStore(http: OperatorHttpClient): {
     return pairing;
   }
 
-  async function deny(pairingId: number, input?: { reason?: string }): Promise<Pairing> {
+  async function deny(
+    pairingId: number,
+    input?: Parameters<OperatorHttpClient["pairings"]["deny"]>[1],
+  ): Promise<Pairing> {
     const result = await http.pairings.deny(pairingId, input);
     const pairing = pairingFromMutation(result);
     handlePairingUpsert(pairing);
     return pairing;
   }
 
-  async function revoke(pairingId: number, input?: { reason?: string }): Promise<Pairing> {
+  async function revoke(
+    pairingId: number,
+    input?: Parameters<OperatorHttpClient["pairings"]["revoke"]>[1],
+  ): Promise<Pairing> {
     const result = await http.pairings.revoke(pairingId, input);
     const pairing = pairingFromMutation(result);
     handlePairingUpsert(pairing);

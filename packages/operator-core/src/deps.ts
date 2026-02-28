@@ -1,69 +1,61 @@
-import type {
-  Approval,
-  PairingListResponse,
-  PairingMutateResponse,
-  PresenceResponse,
-  StatusResponse,
-  TyrumHttpClient,
-  UsageResponse,
-  WsMemoryExportPayload,
-  WsMemoryExportResult,
-  WsMemoryForgetPayload,
-  WsMemoryForgetResult,
-  WsMemoryGetPayload,
-  WsMemoryGetResult,
-  WsMemoryListPayload,
-  WsMemoryListResult,
-  WsMemorySearchPayload,
-  WsMemorySearchResult,
-  WsMemoryUpdatePayload,
-  WsMemoryUpdateResult,
-} from "@tyrum/client";
+import type { TyrumClient, TyrumHttpClientOperator } from "@tyrum/client";
 
-export interface OperatorWsClient {
-  readonly connected: boolean;
-  connect(): void;
-  disconnect(): void;
-  on(event: string, handler: (data: unknown) => void): void;
-  off(event: string, handler: (data: unknown) => void): void;
-  approvalList(payload?: unknown): Promise<{ approvals: Approval[]; next_cursor?: string }>;
-  approvalResolve(payload: unknown): Promise<{ approval: Approval }>;
-  memorySearch(payload: WsMemorySearchPayload): Promise<WsMemorySearchResult>;
-  memoryList(payload: WsMemoryListPayload): Promise<WsMemoryListResult>;
-  memoryGet(payload: WsMemoryGetPayload): Promise<WsMemoryGetResult>;
-  memoryUpdate(payload: WsMemoryUpdatePayload): Promise<WsMemoryUpdateResult>;
-  memoryForget(payload: WsMemoryForgetPayload): Promise<WsMemoryForgetResult>;
-  memoryExport(payload: WsMemoryExportPayload): Promise<WsMemoryExportResult>;
-  commandExecute?(command: string, context?: unknown): Promise<unknown>;
-}
+export type OperatorWsClient = Pick<
+  TyrumClient,
+  | "connected"
+  | "connect"
+  | "disconnect"
+  | "on"
+  | "off"
+  | "respondTaskExecute"
+  | "respondApprovalRequest"
+  | "approvalList"
+  | "approvalResolve"
+  | "commandExecute"
+  | "ping"
+  | "sessionSend"
+  | "workflowRun"
+  | "workflowResume"
+  | "workflowCancel"
+  | "pairingApprove"
+  | "pairingDeny"
+  | "pairingRevoke"
+  | "presenceBeacon"
+  | "capabilityReady"
+  | "attemptEvidence"
+  | "workList"
+  | "workGet"
+  | "workCreate"
+  | "workUpdate"
+  | "workTransition"
+  | "workLinkCreate"
+  | "workLinkList"
+  | "workArtifactList"
+  | "workArtifactGet"
+  | "workArtifactCreate"
+  | "workDecisionList"
+  | "workDecisionGet"
+  | "workDecisionCreate"
+  | "workSignalList"
+  | "workSignalGet"
+  | "workSignalCreate"
+  | "workSignalUpdate"
+  | "workStateKvGet"
+  | "workStateKvList"
+  | "workStateKvSet"
+  | "memorySearch"
+  | "memoryList"
+  | "memoryGet"
+  | "memoryCreate"
+  | "memoryUpdate"
+  | "memoryDelete"
+  | "memoryForget"
+  | "memoryExport"
+  | "subagentSpawn"
+  | "subagentList"
+  | "subagentGet"
+  | "subagentSend"
+  | "subagentClose"
+>;
 
-export interface OperatorHttpClient {
-  status: {
-    get(options?: { signal?: AbortSignal }): Promise<StatusResponse>;
-  };
-  usage: {
-    get(query?: unknown, options?: { signal?: AbortSignal }): Promise<UsageResponse>;
-  };
-  presence: {
-    list(options?: { signal?: AbortSignal }): Promise<PresenceResponse>;
-  };
-  pairings: {
-    list(query?: unknown, options?: { signal?: AbortSignal }): Promise<PairingListResponse>;
-    approve(
-      pairingId: number,
-      input: unknown,
-      options?: { signal?: AbortSignal },
-    ): Promise<PairingMutateResponse>;
-    deny(
-      pairingId: number,
-      input?: unknown,
-      options?: { signal?: AbortSignal },
-    ): Promise<PairingMutateResponse>;
-    revoke(
-      pairingId: number,
-      input?: unknown,
-      options?: { signal?: AbortSignal },
-    ): Promise<PairingMutateResponse>;
-  };
-  artifacts?: TyrumHttpClient["artifacts"];
-}
+export type OperatorHttpClient = TyrumHttpClientOperator;
