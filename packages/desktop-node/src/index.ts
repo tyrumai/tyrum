@@ -7,6 +7,9 @@ export {
   type DesktopProviderPermissions,
 } from "./providers/desktop-provider.js";
 
+export type { OcrEngine, OcrMatch } from "./providers/ocr/types.js";
+export { getTesseractOcrEngine } from "./providers/ocr/tesseract-engine.js";
+
 export {
   type DesktopBackend,
   type ScreenCapture,
