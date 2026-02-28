@@ -10,4 +10,3 @@ test("scripts/smoke-desktop-sandbox sends auth headers when listing pending pair
     /fetchJson\(\s*["']\/pairings\?status=pending["']\s*,\s*\{\s*headers\s*\}\s*\)/,
   );
 });
-

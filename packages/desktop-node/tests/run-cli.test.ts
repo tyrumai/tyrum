@@ -52,7 +52,9 @@ vi.mock("@tyrum/client", () => {
     connect(): void {
       clientConnectSpy();
       queueMicrotask(() => this.emit("connected", {}));
-      queueMicrotask(() => this.emit("pairing.approved", { payload: { scoped_token: "scoped-1" } }));
+      queueMicrotask(() =>
+        this.emit("pairing.approved", { payload: { scoped_token: "scoped-1" } }),
+      );
       queueMicrotask(() => this.emit("pairing.approved", { payload: {} }));
       queueMicrotask(() => this.emit("transport_error", { message: "mock transport error" }));
       queueMicrotask(() => this.emit("error", { payload: { message: "mock gateway error" } }));
@@ -168,14 +170,14 @@ describe("runCli", () => {
 
     const code = await runWithSigterm(
       runCli([
-      "--token",
-      " test-token ",
-      "--label",
-      "my takeover: label",
-      "--takeover-url",
-      "http://localhost:6080/vnc.html?autoconnect=true",
-      "--mode",
-      " desktop-sandbox ",
+        "--token",
+        " test-token ",
+        "--label",
+        "my takeover: label",
+        "--takeover-url",
+        "http://localhost:6080/vnc.html?autoconnect=true",
+        "--mode",
+        " desktop-sandbox ",
       ]),
     );
 
@@ -203,7 +205,9 @@ describe("runCli", () => {
     expect(logSpy.mock.calls.map((call) => String(call[0]))).toContain(
       "desktop-node: pairing approved (scoped token issued)",
     );
-    expect(logSpy.mock.calls.map((call) => String(call[0]))).toContain("desktop-node: pairing approved");
+    expect(logSpy.mock.calls.map((call) => String(call[0]))).toContain(
+      "desktop-node: pairing approved",
+    );
     expect(logSpy.mock.calls.map((call) => String(call[0]))).toContain(
       "desktop-node: connected device_id=device-123 takeover=http://localhost:6080/vnc.html?autoconnect=true",
     );
