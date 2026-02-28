@@ -18,7 +18,10 @@ export interface PairingStore extends ExternalStore<PairingState> {
     pairingId: number,
     input: Parameters<OperatorHttpClient["pairings"]["approve"]>[1],
   ): Promise<Pairing>;
-  deny(pairingId: number, input?: Parameters<OperatorHttpClient["pairings"]["deny"]>[1]): Promise<Pairing>;
+  deny(
+    pairingId: number,
+    input?: Parameters<OperatorHttpClient["pairings"]["deny"]>[1],
+  ): Promise<Pairing>;
   revoke(
     pairingId: number,
     input?: Parameters<OperatorHttpClient["pairings"]["revoke"]>[1],

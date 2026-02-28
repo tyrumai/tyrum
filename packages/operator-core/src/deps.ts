@@ -59,4 +59,3 @@ export type OperatorWsClient = Pick<
 >;
 
 export type OperatorHttpClient = TyrumHttpClientOperator;
-
