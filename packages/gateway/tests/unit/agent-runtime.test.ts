@@ -5,9 +5,11 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import { ToolSetBuilder } from "../../src/modules/agent/runtime/tool-set-builder.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { LaneQueueSignalDal } from "../../src/modules/lanes/queue-signal-dal.js";
+import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 import { simulateReadableStream } from "ai";
@@ -48,6 +50,33 @@ function makeContextReport(overrides?: Partial<Record<string, unknown>>): Record
     injected_files: [],
     ...overrides,
   };
+}
+
+function createToolSetBuilder(input: {
+  home: string;
+  container: GatewayContainer;
+  policyService: unknown;
+  secretProvider?: unknown;
+  plugins?: unknown;
+}): ToolSetBuilder {
+  return new ToolSetBuilder({
+    home: input.home,
+    agentId: "default",
+    workspaceId: "default",
+    policyService: input.policyService as unknown as ConstructorParameters<
+      typeof ToolSetBuilder
+    >[0]["policyService"],
+    approvalDal: input.container.approvalDal,
+    approvalNotifier: { notify() {} },
+    approvalWaitMs: 120_000,
+    approvalPollMs: 500,
+    logger: input.container.logger,
+    secretProvider: input.secretProvider as unknown as ConstructorParameters<
+      typeof ToolSetBuilder
+    >[0]["secretProvider"],
+    plugins: input.plugins as unknown as ConstructorParameters<typeof ToolSetBuilder>[0]["plugins"],
+    redactionEngine: input.container.redactionEngine,
+  });
 }
 
 function createDeferred<T = void>(): {
@@ -356,6 +385,43 @@ describe("AgentRuntime", () => {
 
     expect(agentTurnEpisode).toBeDefined();
   }, 10_000);
+
+  it("logs when subagent execution profile resolution fails", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const warnSpy = vi.spyOn(container.logger, "warn").mockImplementation(() => undefined);
+    const getSubagentSpy = vi
+      .spyOn(WorkboardDal.prototype, "getSubagent")
+      .mockRejectedValue(new Error("boom"));
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+    });
+
+    const subagentId = "subagent-1";
+    const key = `agent:default:subagent:${subagentId}`;
+
+    const profile = await (runtime as any).resolveExecutionProfile({
+      laneQueueScope: { key, lane: "subagent" },
+      metadata: { subagent_id: subagentId },
+    });
+
+    expect(profile.id).toBe("explorer_ro");
+    expect(warnSpy).toHaveBeenCalledWith(
+      "workboard.subagent_profile_resolve_failed",
+      expect.objectContaining({ subagent_id: subagentId, error: "boom" }),
+    );
+
+    getSubagentSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
 
   it("clears lane interrupt signals when the lane lease is released", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
@@ -1904,15 +1970,7 @@ describe("AgentRuntime", () => {
       evaluateToolCall: vi.fn(async () => ({ decision: "deny" as const })),
     };
 
-    const runtime = new AgentRuntime({
-      container,
-      home: homeDir,
-      languageModel: createStubLanguageModel("hello"),
-      fetchImpl: fetch404,
-      policyService: policyService as unknown as ConstructorParameters<
-        typeof AgentRuntime
-      >[0]["policyService"],
-    });
+    const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
 
     const approvalSpy = vi.fn(async () => ({
       approved: true,
@@ -1920,7 +1978,7 @@ describe("AgentRuntime", () => {
       approvalId: 1,
     }));
     (
-      runtime as unknown as { awaitApprovalForToolExecution: unknown }
+      toolSetBuilder as unknown as { awaitApprovalForToolExecution: unknown }
     ).awaitApprovalForToolExecution = approvalSpy;
 
     const toolDesc = {
@@ -1947,17 +2005,7 @@ describe("AgentRuntime", () => {
     };
 
     const usedTools = new Set<string>();
-    const toolSet = (
-      runtime as unknown as {
-        buildToolSet: (
-          tools: readonly unknown[],
-          toolExecutor: unknown,
-          usedTools: Set<string>,
-          context: { planId: string; sessionId: string; channel: string; threadId: string },
-          contextReport: unknown,
-        ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
-      }
-    ).buildToolSet(
+    const toolSet = toolSetBuilder.buildToolSet(
       [toolDesc],
       toolExecutor,
       usedTools,
@@ -1992,15 +2040,7 @@ describe("AgentRuntime", () => {
       evaluateToolCall: vi.fn(),
     };
 
-    const runtime = new AgentRuntime({
-      container,
-      home: homeDir,
-      languageModel: createStubLanguageModel("hello"),
-      fetchImpl: fetch404,
-      policyService: policyService as unknown as ConstructorParameters<
-        typeof AgentRuntime
-      >[0]["policyService"],
-    });
+    const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
 
     const approval = await container.approvalDal.create({
       planId: "plan-1",
@@ -2040,28 +2080,7 @@ describe("AgentRuntime", () => {
     };
 
     const usedTools = new Set<string>();
-    const toolSet = (
-      runtime as unknown as {
-        buildToolSet: (
-          tools: readonly unknown[],
-          toolExecutor: unknown,
-          usedTools: Set<string>,
-          context: {
-            planId: string;
-            sessionId: string;
-            channel: string;
-            threadId: string;
-            execution?: {
-              runId: string;
-              stepIndex: number;
-              stepId: string;
-              stepApprovalId?: number;
-            };
-          },
-          contextReport: unknown,
-        ) => Record<string, { execute: (args: unknown, options?: unknown) => Promise<string> }>;
-      }
-    ).buildToolSet(
+    const toolSet = toolSetBuilder.buildToolSet(
       [toolDesc],
       toolExecutor,
       usedTools,
@@ -2110,17 +2129,11 @@ describe("AgentRuntime", () => {
       evaluateToolCall: vi.fn(),
     };
 
-    const runtime = new AgentRuntime({
-      container,
+    const toolSetBuilder = createToolSetBuilder({
       home: homeDir,
-      languageModel: createStubLanguageModel("hello"),
-      fetchImpl: fetch404,
-      secretProvider: secretProvider as unknown as ConstructorParameters<
-        typeof AgentRuntime
-      >[0]["secretProvider"],
-      policyService: policyService as unknown as ConstructorParameters<
-        typeof AgentRuntime
-      >[0]["policyService"],
+      container,
+      policyService,
+      secretProvider,
     });
 
     const approval = await container.approvalDal.create({
@@ -2167,28 +2180,7 @@ describe("AgentRuntime", () => {
     };
 
     const usedTools = new Set<string>();
-    const toolSet = (
-      runtime as unknown as {
-        buildToolSet: (
-          tools: readonly unknown[],
-          toolExecutor: unknown,
-          usedTools: Set<string>,
-          context: {
-            planId: string;
-            sessionId: string;
-            channel: string;
-            threadId: string;
-            execution?: {
-              runId: string;
-              stepIndex: number;
-              stepId: string;
-              stepApprovalId?: number;
-            };
-          },
-          contextReport: unknown,
-        ) => Record<string, { execute: (args: unknown, options?: unknown) => Promise<string> }>;
-      }
-    ).buildToolSet(
+    const toolSet = toolSetBuilder.buildToolSet(
       [toolDesc],
       toolExecutor,
       usedTools,
@@ -2256,17 +2248,11 @@ describe("AgentRuntime", () => {
       evaluateToolCall: vi.fn(async () => ({ decision: "allow" as const })),
     };
 
-    const runtime = new AgentRuntime({
-      container,
+    const toolSetBuilder = createToolSetBuilder({
       home: homeDir,
-      languageModel: createStubLanguageModel("hello"),
-      fetchImpl: fetch404,
-      secretProvider: secretProvider as unknown as ConstructorParameters<
-        typeof AgentRuntime
-      >[0]["secretProvider"],
-      policyService: policyService as unknown as ConstructorParameters<
-        typeof AgentRuntime
-      >[0]["policyService"],
+      container,
+      policyService,
+      secretProvider,
     });
 
     const toolDescs = [
@@ -2318,17 +2304,7 @@ describe("AgentRuntime", () => {
     };
 
     const usedTools = new Set<string>();
-    const toolSet = (
-      runtime as unknown as {
-        buildToolSet: (
-          tools: readonly unknown[],
-          toolExecutor: unknown,
-          usedTools: Set<string>,
-          context: { planId: string; sessionId: string; channel: string; threadId: string },
-          contextReport: unknown,
-        ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
-      }
-    ).buildToolSet(
+    const toolSet = toolSetBuilder.buildToolSet(
       toolDescs,
       toolExecutor,
       usedTools,
@@ -2377,15 +2353,7 @@ describe("AgentRuntime", () => {
       evaluateToolCall: vi.fn(async () => ({ decision: "require_approval" as const })),
     };
 
-    const runtime = new AgentRuntime({
-      container,
-      home: homeDir,
-      languageModel: createStubLanguageModel("hello"),
-      fetchImpl: fetch404,
-      policyService: policyService as unknown as ConstructorParameters<
-        typeof AgentRuntime
-      >[0]["policyService"],
-    });
+    const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
 
     const approvalSpy = vi.fn(async () => ({
       approved: true,
@@ -2393,7 +2361,7 @@ describe("AgentRuntime", () => {
       approvalId: 1,
     }));
     (
-      runtime as unknown as { awaitApprovalForToolExecution: unknown }
+      toolSetBuilder as unknown as { awaitApprovalForToolExecution: unknown }
     ).awaitApprovalForToolExecution = approvalSpy;
 
     const toolDesc = {
@@ -2420,17 +2388,7 @@ describe("AgentRuntime", () => {
     };
 
     const usedTools = new Set<string>();
-    const toolSet = (
-      runtime as unknown as {
-        buildToolSet: (
-          tools: readonly unknown[],
-          toolExecutor: unknown,
-          usedTools: Set<string>,
-          context: { planId: string; sessionId: string; channel: string; threadId: string },
-          contextReport: unknown,
-        ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
-      }
-    ).buildToolSet(
+    const toolSet = toolSetBuilder.buildToolSet(
       [toolDesc],
       toolExecutor,
       usedTools,
@@ -2612,15 +2570,7 @@ describe("AgentRuntime", () => {
       evaluateToolCall: vi.fn(async () => ({ decision: "require_approval" as const })),
     };
 
-    const runtime = new AgentRuntime({
-      container,
-      home: homeDir,
-      languageModel: createStubLanguageModel("hello"),
-      fetchImpl: fetch404,
-      policyService: policyService as unknown as ConstructorParameters<
-        typeof AgentRuntime
-      >[0]["policyService"],
-    });
+    const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
 
     const approvalSpy = vi.fn(async () => ({
       approved: true,
@@ -2628,7 +2578,7 @@ describe("AgentRuntime", () => {
       approvalId: 1,
     }));
     (
-      runtime as unknown as { awaitApprovalForToolExecution: unknown }
+      toolSetBuilder as unknown as { awaitApprovalForToolExecution: unknown }
     ).awaitApprovalForToolExecution = approvalSpy;
 
     const toolDesc = {
@@ -2655,17 +2605,7 @@ describe("AgentRuntime", () => {
     };
 
     const usedTools = new Set<string>();
-    const toolSet = (
-      runtime as unknown as {
-        buildToolSet: (
-          tools: readonly unknown[],
-          toolExecutor: unknown,
-          usedTools: Set<string>,
-          context: { planId: string; sessionId: string; channel: string; threadId: string },
-          contextReport: unknown,
-        ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
-      }
-    ).buildToolSet(
+    const toolSet = toolSetBuilder.buildToolSet(
       [toolDesc],
       toolExecutor,
       usedTools,
@@ -2706,17 +2646,17 @@ describe("AgentRuntime", () => {
       })),
     };
 
-    const runtime = new AgentRuntime({
-      container,
+    const policyService = {
+      isEnabled: () => false,
+      isObserveOnly: () => false,
+      evaluateToolCall: vi.fn(),
+    };
+
+    const toolSetBuilder = createToolSetBuilder({
       home: homeDir,
-      languageModel: createStubLanguageModel("hello"),
-      fetchImpl: fetch404,
-      policyService: {
-        isEnabled: () => false,
-        isObserveOnly: () => false,
-        evaluateToolCall: vi.fn(),
-      } as unknown as ConstructorParameters<typeof AgentRuntime>[0]["policyService"],
-      plugins: plugins as unknown as ConstructorParameters<typeof AgentRuntime>[0]["plugins"],
+      container,
+      policyService,
+      plugins,
     });
 
     const toolDesc = {
@@ -2741,17 +2681,7 @@ describe("AgentRuntime", () => {
     };
 
     const usedTools = new Set<string>();
-    const toolSet = (
-      runtime as unknown as {
-        buildToolSet: (
-          tools: readonly unknown[],
-          toolExecutor: unknown,
-          usedTools: Set<string>,
-          context: { planId: string; sessionId: string; channel: string; threadId: string },
-          contextReport: unknown,
-        ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
-      }
-    ).buildToolSet(
+    const toolSet = toolSetBuilder.buildToolSet(
       [toolDesc],
       toolExecutor,
       usedTools,

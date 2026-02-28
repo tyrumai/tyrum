@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { MockLanguageModelV3 } from "ai/test";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import { maybeRunPreCompactionMemoryFlush } from "../../src/modules/agent/runtime/pre-compaction-memory-flush.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -506,9 +507,16 @@ describe("Pre-compaction memory flush", () => {
       message: "second",
     });
 
-    const flush = (
-      runtime as unknown as { maybeRunPreCompactionMemoryFlush: Function }
-    ).maybeRunPreCompactionMemoryFlush.bind(runtime);
+    const flush = async (input: {
+      ctx: typeof prepared.ctx;
+      session: typeof prepared.session;
+      model: typeof prepared.model;
+      systemPrompt: typeof prepared.systemPrompt;
+    }) =>
+      maybeRunPreCompactionMemoryFlush(
+        { db: container.db, logger: container.logger, agentId: "default" },
+        input,
+      );
 
     await flush({
       ctx: prepared.ctx,
