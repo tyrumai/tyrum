@@ -67,8 +67,9 @@ import { ModelsDevService as ModelsDevServiceImpl } from "./modules/models/model
 import { OauthPendingDal as OauthPendingDalImpl } from "./modules/oauth/pending-dal.js";
 import { OauthRefreshLeaseDal as OauthRefreshLeaseDalImpl } from "./modules/oauth/refresh-lease-dal.js";
 import { OAuthProviderRegistry as OAuthProviderRegistryImpl } from "./modules/oauth/provider-registry.js";
+import type { GatewayConfig as GatewayRuntimeConfig } from "./config.js";
 
-export interface GatewayConfig {
+export interface GatewayContainerConfig {
   dbPath: string;
   migrationsDir: string;
   tyrumHome?: string;
@@ -102,12 +103,13 @@ export interface GatewayContainer {
   oauthRefreshLeaseDal: OauthRefreshLeaseDal;
   oauthProviderRegistry: OAuthProviderRegistry;
   logger: Logger;
-  config: GatewayConfig;
+  config: GatewayContainerConfig;
+  gatewayConfig?: GatewayRuntimeConfig;
 }
 
 export function createContainer(
-  config: GatewayConfig,
-  opts?: { redactionEngine?: RedactionEngine },
+  config: GatewayContainerConfig,
+  opts?: { redactionEngine?: RedactionEngine; gatewayConfig?: GatewayRuntimeConfig },
 ): GatewayContainer {
   if (isPostgresDbUri(config.dbPath)) {
     throw new Error(
@@ -121,8 +123,8 @@ export function createContainer(
 }
 
 export async function createContainerAsync(
-  config: GatewayConfig,
-  opts?: { redactionEngine?: RedactionEngine },
+  config: GatewayContainerConfig,
+  opts?: { redactionEngine?: RedactionEngine; gatewayConfig?: GatewayRuntimeConfig },
 ): Promise<GatewayContainer> {
   const db = isPostgresDbUri(config.dbPath)
     ? await PostgresDb.open({ dbUri: config.dbPath, migrationsDir: config.migrationsDir })
@@ -133,8 +135,8 @@ export async function createContainerAsync(
 
 function wireContainer(
   db: SqlDb,
-  config: GatewayConfig,
-  opts?: { redactionEngine?: RedactionEngine },
+  config: GatewayContainerConfig,
+  opts?: { redactionEngine?: RedactionEngine; gatewayConfig?: GatewayRuntimeConfig },
 ): GatewayContainer {
   const memoryDal = new MemoryDalImpl(db);
   const contextReportDal = new ContextReportDalImpl(db);
@@ -217,5 +219,6 @@ function wireContainer(
     oauthProviderRegistry,
     logger,
     config,
+    gatewayConfig: opts?.gatewayConfig,
   };
 }

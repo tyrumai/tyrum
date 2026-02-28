@@ -59,11 +59,14 @@ import { AgentRegistry } from "./modules/agent/registry.js";
 import { isRecord, parseJsonOrYaml } from "./utils/parse-json-or-yaml.js";
 import { loadLifecycleHooksFromHome } from "./modules/hooks/config.js";
 import { LifecycleHooksRuntime } from "./modules/hooks/runtime.js";
+import { loadConfig, parseTruthyEnvFlag } from "./config.js";
 
 // Re-export for library consumers
 export { VERSION } from "./version.js";
 export { createContainer, createContainerAsync } from "./container.js";
-export type { GatewayConfig, GatewayContainer } from "./container.js";
+export type { GatewayContainer, GatewayContainerConfig } from "./container.js";
+export type { GatewayConfig } from "./config.js";
+export { GatewayConfigSchema, loadConfig } from "./config.js";
 export { createApp } from "./app.js";
 export { createEventBus } from "./event-bus.js";
 export type { GatewayEvents, EventBus } from "./event-bus.js";
@@ -219,12 +222,6 @@ type GatewayRole = "all" | "edge" | "worker" | "scheduler";
 
 export type NonLoopbackTransportPolicy = "local" | "tls" | "insecure";
 
-function isTruthyEnvFlag(value: string | undefined): boolean {
-  const trimmed = value?.trim().toLowerCase();
-  if (!trimmed) return false;
-  return !["0", "false", "off", "no"].includes(trimmed);
-}
-
 function parsePositiveIntEnv(value: string | undefined): number | undefined {
   const trimmed = value?.trim();
   if (!trimmed) return undefined;
@@ -233,11 +230,12 @@ function parsePositiveIntEnv(value: string | undefined): number | undefined {
   if (!Number.isInteger(parsed) || parsed <= 0) return undefined;
   return parsed;
 }
-
 export function assertNonLoopbackDeploymentGuardrails(input: {
   role: GatewayRole;
   host: string;
   token: string | undefined;
+  tlsReady?: boolean;
+  allowInsecureHttp?: boolean;
 }): NonLoopbackTransportPolicy {
   const shouldRunEdge = input.role === "all" || input.role === "edge";
   if (!shouldRunEdge) return "local";
@@ -263,10 +261,11 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
     );
   }
 
-  const tlsReady = isTruthyEnvFlag(process.env["TYRUM_TLS_READY"]);
+  const tlsReady = input.tlsReady ?? parseTruthyEnvFlag(process.env["TYRUM_TLS_READY"]);
   if (tlsReady) return "tls";
 
-  const allowInsecureHttp = isTruthyEnvFlag(process.env["TYRUM_ALLOW_INSECURE_HTTP"]);
+  const allowInsecureHttp =
+    input.allowInsecureHttp ?? parseTruthyEnvFlag(process.env["TYRUM_ALLOW_INSECURE_HTTP"]);
   if (allowInsecureHttp) return "insecure";
 
   throw new Error(
@@ -960,18 +959,6 @@ export async function runShutdownCleanup(
 }
 
 export async function main(role: GatewayRole = "all"): Promise<void> {
-  const port = parseInt(process.env["GATEWAY_PORT"] ?? "8788", 10);
-  const host = process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
-  const dbPath = process.env["GATEWAY_DB_PATH"] ?? "gateway.db";
-  assertSplitRoleUsesPostgres(role, dbPath);
-  const defaultMigrationsDir = isPostgresDbUri(dbPath)
-    ? join(__dirname, "../migrations/postgres")
-    : join(__dirname, "../migrations/sqlite");
-  const migrationsDir = process.env["GATEWAY_MIGRATIONS_DIR"] ?? defaultMigrationsDir;
-
-  const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
-  const isLocalOnly = isLoopbackHost(host);
-
   const instanceId = (() => {
     const raw = process.env["TYRUM_INSTANCE_ID"];
     const trimmed = raw?.trim();
@@ -984,13 +971,37 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     return generated;
   })();
 
+  const homeForTokenStore = process.env["TYRUM_HOME"]?.trim() || join(homedir(), ".tyrum");
+
+  // Initialize the token store early so a generated token is present before config validation.
+  const tokenStore = new TokenStore(homeForTokenStore);
+  const token = await tokenStore.initialize();
+
+  const config = loadConfig({
+    ...process.env,
+    GATEWAY_TOKEN: token,
+    TYRUM_ROLE: role,
+    TYRUM_INSTANCE_ID: instanceId,
+  });
+
+  const host = config.server.host;
+  const port = config.server.port;
+  const dbPath = config.database.path;
+  const migrationsDir = config.database.migrationsDir;
+  const tyrumHome = config.paths.home;
+  const isLocalOnly = isLoopbackHost(host);
+
+  assertSplitRoleUsesPostgres(role, dbPath);
   ensureDatabaseDirectory(dbPath);
 
-  const container = await createContainerAsync({
-    dbPath,
-    migrationsDir,
-    tyrumHome,
-  });
+  const container = await createContainerAsync(
+    {
+      dbPath,
+      migrationsDir,
+      tyrumHome,
+    },
+    { gatewayConfig: config },
+  );
   container.modelsDev.startBackgroundRefresh();
 
   const logger = container.logger.child({
@@ -1000,11 +1011,13 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   });
   logger.info("gateway.instance", { instance_id: instanceId });
 
-  // Initialize auth token store
-  const tokenStore = new TokenStore(tyrumHome);
-  const token = await tokenStore.initialize();
-
-  const transportPolicy = assertNonLoopbackDeploymentGuardrails({ role, host, token });
+  const transportPolicy = assertNonLoopbackDeploymentGuardrails({
+    role,
+    host,
+    token,
+    tlsReady: config.server.tlsReady,
+    allowInsecureHttp: config.server.allowInsecureHttp,
+  });
 
   if (transportPolicy !== "local") {
     const tokenPath = join(tyrumHome, ".admin-token");
@@ -1092,7 +1105,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     logger.info("otel.started");
   }
 
-  const engineApiEnabled = isTruthyEnvFlag(process.env["TYRUM_ENGINE_API_ENABLED"]);
+  const engineApiEnabled = config.execution.engineApiEnabled;
 
   const connectionManager = new ConnectionManager();
   const outboxDal = new OutboxDal(container.db, container.redactionEngine);
@@ -1426,32 +1439,12 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         });
 
         const resolveExecutor = (): ExecutionStepExecutor => {
-          const launcherRaw = process.env["TYRUM_TOOLRUNNER_LAUNCHER"]?.trim().toLowerCase();
-          const isKubernetesRuntime = Boolean(process.env["KUBERNETES_SERVICE_HOST"]);
-          const launcher = launcherRaw || (isKubernetesRuntime ? "kubernetes" : "local");
-
-          if (launcher === "kubernetes") {
-            const namespace =
-              process.env["TYRUM_TOOLRUNNER_NAMESPACE"]?.trim() ??
-              process.env["POD_NAMESPACE"]?.trim() ??
-              "default";
-            const image = process.env["TYRUM_TOOLRUNNER_IMAGE"]?.trim();
-            const workspacePvcClaim = process.env["TYRUM_TOOLRUNNER_WORKSPACE_CLAIM"]?.trim();
-            if (!image) {
-              throw new Error(
-                "TYRUM_TOOLRUNNER_IMAGE is required when TYRUM_TOOLRUNNER_LAUNCHER=kubernetes",
-              );
-            }
-            if (!workspacePvcClaim) {
-              throw new Error(
-                "TYRUM_TOOLRUNNER_WORKSPACE_CLAIM is required when TYRUM_TOOLRUNNER_LAUNCHER=kubernetes",
-              );
-            }
-
+          const toolrunner = config.execution.toolrunner;
+          if (toolrunner.launcher === "kubernetes") {
             return createKubernetesToolRunnerStepExecutor({
-              namespace,
-              image,
-              workspacePvcClaim,
+              namespace: toolrunner.namespace,
+              image: toolrunner.image,
+              workspacePvcClaim: toolrunner.workspacePvcClaim,
               tyrumHome,
               logger,
               jobTtlSeconds: 300,
