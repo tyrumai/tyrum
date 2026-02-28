@@ -708,7 +708,7 @@ describe("operator-ui", () => {
     });
 
     const capabilityCheckboxes = Array.from(
-      container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+      container.querySelectorAll<HTMLButtonElement>('[data-testid^="desktop-capability-"]'),
     );
     expect(capabilityCheckboxes.length).toBeGreaterThanOrEqual(4);
 
@@ -729,7 +729,7 @@ describe("operator-ui", () => {
     });
 
     const updatedCheckboxes = Array.from(
-      container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+      container.querySelectorAll<HTMLButtonElement>('[data-testid^="desktop-capability-"]'),
     );
     expect(updatedCheckboxes.length).toBeGreaterThanOrEqual(4);
     for (const checkbox of updatedCheckboxes) {
