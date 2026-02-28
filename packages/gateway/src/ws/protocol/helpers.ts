@@ -62,4 +62,3 @@ export function workboardErrorResponse(
   }
   return errorResponse(requestId, type, "invalid_request", message);
 }
-

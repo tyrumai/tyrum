@@ -164,7 +164,12 @@ export async function handleWorkboardMessage(
       );
     }
     if (!deps.db) {
-      return errorResponse(msg.request_id, msg.type, "unsupported_request", "work.get not supported");
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "work.get not supported",
+      );
     }
 
     const parsedReq = WsWorkGetRequest.safeParse(msg);
@@ -354,7 +359,12 @@ export async function handleWorkboardMessage(
       );
     }
     if (!deps.db) {
-      return errorResponse(msg.request_id, msg.type, "unsupported_request", `${msg.type} not supported`);
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        `${msg.type} not supported`,
+      );
     }
 
     const dal = new WorkboardDal(deps.db, deps.redactionEngine);
@@ -431,7 +441,11 @@ export async function handleWorkboardMessage(
     }
   }
 
-  if (msg.type === "work.artifact.list" || msg.type === "work.artifact.get" || msg.type === "work.artifact.create") {
+  if (
+    msg.type === "work.artifact.list" ||
+    msg.type === "work.artifact.get" ||
+    msg.type === "work.artifact.create"
+  ) {
     if (client.role !== "client") {
       return errorResponse(
         msg.request_id,
@@ -441,7 +455,12 @@ export async function handleWorkboardMessage(
       );
     }
     if (!deps.db) {
-      return errorResponse(msg.request_id, msg.type, "unsupported_request", `${msg.type} not supported`);
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        `${msg.type} not supported`,
+      );
     }
 
     const dal = new WorkboardDal(deps.db, deps.redactionEngine);
@@ -523,7 +542,11 @@ export async function handleWorkboardMessage(
     }
   }
 
-  if (msg.type === "work.decision.list" || msg.type === "work.decision.get" || msg.type === "work.decision.create") {
+  if (
+    msg.type === "work.decision.list" ||
+    msg.type === "work.decision.get" ||
+    msg.type === "work.decision.create"
+  ) {
     if (client.role !== "client") {
       return errorResponse(
         msg.request_id,
@@ -533,7 +556,12 @@ export async function handleWorkboardMessage(
       );
     }
     if (!deps.db) {
-      return errorResponse(msg.request_id, msg.type, "unsupported_request", `${msg.type} not supported`);
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        `${msg.type} not supported`,
+      );
     }
 
     const dal = new WorkboardDal(deps.db, deps.redactionEngine);
@@ -615,7 +643,12 @@ export async function handleWorkboardMessage(
     }
   }
 
-  if (msg.type === "work.signal.list" || msg.type === "work.signal.get" || msg.type === "work.signal.create" || msg.type === "work.signal.update") {
+  if (
+    msg.type === "work.signal.list" ||
+    msg.type === "work.signal.get" ||
+    msg.type === "work.signal.create" ||
+    msg.type === "work.signal.update"
+  ) {
     if (client.role !== "client") {
       return errorResponse(
         msg.request_id,
@@ -625,7 +658,12 @@ export async function handleWorkboardMessage(
       );
     }
     if (!deps.db) {
-      return errorResponse(msg.request_id, msg.type, "unsupported_request", `${msg.type} not supported`);
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        `${msg.type} not supported`,
+      );
     }
 
     const dal = new WorkboardDal(deps.db, deps.redactionEngine);
@@ -743,7 +781,11 @@ export async function handleWorkboardMessage(
     }
   }
 
-  if (msg.type === "work.state_kv.get" || msg.type === "work.state_kv.list" || msg.type === "work.state_kv.set") {
+  if (
+    msg.type === "work.state_kv.get" ||
+    msg.type === "work.state_kv.list" ||
+    msg.type === "work.state_kv.set"
+  ) {
     if (client.role !== "client") {
       return errorResponse(
         msg.request_id,
@@ -753,7 +795,12 @@ export async function handleWorkboardMessage(
       );
     }
     if (!deps.db) {
-      return errorResponse(msg.request_id, msg.type, "unsupported_request", `${msg.type} not supported`);
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        `${msg.type} not supported`,
+      );
     }
 
     const dal = new WorkboardDal(deps.db, deps.redactionEngine);
