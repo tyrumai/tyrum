@@ -1,23 +1,8 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-
-async function listFilesRecursive(dir: string): Promise<string[]> {
-  const entries = await readdir(dir, { withFileTypes: true });
-  const files: string[] = [];
-
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await listFilesRecursive(fullPath)));
-      continue;
-    }
-    files.push(fullPath);
-  }
-
-  return files;
-}
+import { listFilesRecursive } from "../helpers/list-files-recursive.js";
 
 describe("json parsing utilities", () => {
   it("dedupes safeJsonParse and parseJsonOrFallback across gateway src", async () => {

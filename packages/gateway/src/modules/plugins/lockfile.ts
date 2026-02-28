@@ -26,6 +26,7 @@ export function parsePluginLockFile(raw: string): PluginInstallInfo | undefined 
   try {
     parsed = JSON.parse(raw) as unknown;
   } catch {
+    // Intentional: treat invalid JSON lockfiles as absent.
     return undefined;
   }
   const validated = PluginLockFile.safeParse(parsed);

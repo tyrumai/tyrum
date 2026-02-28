@@ -101,6 +101,7 @@ function isAllowedHref(href: string): boolean {
     const url = new URL(href);
     return url.protocol === "http:" || url.protocol === "https:";
   } catch {
+    // Intentional: treat invalid URLs as disallowed.
     return false;
   }
 }
@@ -398,6 +399,7 @@ export function renderMarkdownForTelegram(
     try {
       return renderIrChunkToTelegramHtml(chunk).length;
     } catch {
+      // Intentional: treat render failures as too-large so chunking falls back to safer splits.
       return maxChars + 1;
     }
   };

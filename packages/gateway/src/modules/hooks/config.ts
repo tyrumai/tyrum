@@ -10,6 +10,7 @@ async function fileExists(path: string): Promise<boolean> {
     await access(path);
     return true;
   } catch {
+    // Intentional: treat missing hooks config files as absent.
     return false;
   }
 }

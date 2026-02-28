@@ -45,7 +45,7 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
       ) as ClientCapability[];
     }
   } catch {
-    // leave empty
+    // Intentional: treat invalid JSON columns as empty capabilities.
   }
   let readyCapabilities: ClientCapability[] | undefined;
   if (typeof raw.ready_capabilities_json === "string") {
@@ -57,7 +57,7 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
         ) as ClientCapability[];
       }
     } catch {
-      // leave undefined so callers fall back to advertised capabilities
+      // Intentional: treat invalid JSON columns as missing so callers fall back to advertised capabilities.
     }
   }
   const role = raw.role === "node" ? "node" : "client";

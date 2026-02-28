@@ -146,6 +146,7 @@ function parseCatalogCounts(rawJson: string): { providerCount: number; modelCoun
     }, 0);
     return { providerCount, modelCount };
   } catch {
+    // Intentional: status sampling falls back to 0 counts on invalid cached JSON.
     return { providerCount: 0, modelCount: 0 };
   }
 }
@@ -196,6 +197,7 @@ async function loadActiveModel(
       fallback_models: status.model.fallback ?? [],
     };
   } catch {
+    // Intentional: status sampling is best-effort; treat agent runtime status as unavailable.
     return null;
   }
 }
@@ -364,7 +366,7 @@ async function loadCatalogFreshness(
         last_error: loaded.status.last_error,
       };
     } catch {
-      // Fall through to DB fallback below.
+      // Intentional: fall back to the DB snapshot when the in-memory service is unavailable.
     }
   }
 
@@ -625,6 +627,7 @@ async function loadSandboxStatus(
     const effective = await policyService.loadEffectiveBundle();
     elevatedExecutionAvailable = deriveElevatedExecutionAvailableFromPolicyBundle(effective.bundle);
   } catch {
+    // Intentional: status sampling is best-effort; treat elevated execution availability as unknown.
     elevatedExecutionAvailable = null;
   }
 

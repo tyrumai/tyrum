@@ -388,6 +388,7 @@ export class ProviderUsagePoller {
         const trimmed = text.trim();
         detail = trimmed.length > 0 ? trimmed.slice(0, 512) : undefined;
       } catch {
+        // Intentional: best-effort response detail; ignore response body read failures.
         detail = undefined;
       }
 

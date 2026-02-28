@@ -36,6 +36,7 @@ function parseMetadata(raw: string): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
+    // Intentional: treat invalid JSON metadata as an empty object.
     return {};
   }
 }

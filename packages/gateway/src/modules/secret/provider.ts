@@ -87,7 +87,7 @@ async function loadElectronSafeStorage(): Promise<SafeStorageLike | null> {
       return electron.safeStorage;
     }
   } catch {
-    // ignore
+    // Intentional: Electron is unavailable in non-desktop runtimes; treat safeStorage as absent.
   }
   return null;
 }
@@ -162,14 +162,26 @@ export class KeychainSecretProvider implements SecretProvider {
   private async readStore(): Promise<KeychainSecretStore> {
     try {
       await access(this.secretsPath);
-    } catch {
-      return { handles: {} };
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code?: unknown }).code === "ENOENT"
+      ) {
+        return { handles: {} };
+      }
+      throw new Error(`Failed to access keychain secrets store: ${this.secretsPath}`, {
+        cause: error,
+      });
     }
     try {
       const raw = await readFile(this.secretsPath, "utf8");
       return JSON.parse(raw) as KeychainSecretStore;
-    } catch {
-      return { handles: {} };
+    } catch (error) {
+      throw new Error(`Failed to read keychain secrets store: ${this.secretsPath}`, {
+        cause: error,
+      });
     }
   }
 
@@ -257,7 +269,7 @@ export class FileSecretProvider implements SecretProvider {
     try {
       storedSalt = await readFile(saltPath);
     } catch {
-      // ignore missing salt file
+      // Intentional: ignore missing salt file; migrate/create an instance salt if needed.
     }
 
     const store = await FileSecretProvider.readStoreFromPath(secretsPath);
@@ -285,7 +297,7 @@ export class FileSecretProvider implements SecretProvider {
         decryptWithKey(instanceKey, sample);
         return new FileSecretProvider(secretsPath, instanceKey);
       } catch {
-        // fall through
+        // Intentional: fall back to the legacy key if the sample cannot be decrypted.
       }
     }
 
@@ -293,6 +305,8 @@ export class FileSecretProvider implements SecretProvider {
     try {
       decryptWithKey(legacyKey, sample);
     } catch {
+      // Intentional: if the legacy key cannot decrypt the sample, stick with the instance key
+      // when available so failures are surfaced by resolve().
       if (instanceKey) return new FileSecretProvider(secretsPath, instanceKey);
       return new FileSecretProvider(secretsPath, legacyKey);
     }
@@ -317,6 +331,8 @@ export class FileSecretProvider implements SecretProvider {
       await FileSecretProvider.writeStoreToPath(secretsPath, migrated);
       return new FileSecretProvider(secretsPath, migratedKey);
     } catch {
+      // Intentional: best-effort migration; fall back to the legacy key if migration cannot
+      // write the store (e.g., permissions), keeping secrets readable.
       return new FileSecretProvider(secretsPath, legacyKey);
     }
   }
@@ -376,14 +392,22 @@ export class FileSecretProvider implements SecretProvider {
   private static async readStoreFromPath(secretsPath: string): Promise<SecretStore> {
     try {
       await access(secretsPath);
-    } catch {
-      return { handles: {} };
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code?: unknown }).code === "ENOENT"
+      ) {
+        return { handles: {} };
+      }
+      throw new Error(`Failed to access secrets store: ${secretsPath}`, { cause: error });
     }
     try {
       const raw = await readFile(secretsPath, "utf8");
       return JSON.parse(raw) as SecretStore;
-    } catch {
-      return { handles: {} };
+    } catch (error) {
+      throw new Error(`Failed to read secrets store: ${secretsPath}`, { cause: error });
     }
   }
 

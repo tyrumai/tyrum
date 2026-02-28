@@ -52,6 +52,7 @@ export function loadAllPlaybooks(dir: string, options: LoadAllPlaybooksOptions =
   try {
     entries = readdirSync(absoluteDir);
   } catch {
+    // Intentional: treat missing/unreadable playbook directories as empty.
     return playbooks;
   }
 
@@ -60,6 +61,7 @@ export function loadAllPlaybooks(dir: string, options: LoadAllPlaybooksOptions =
     try {
       if (!statSync(entryPath).isDirectory()) continue;
     } catch {
+      // Intentional: skip entries that cannot be stat'd.
       continue;
     }
 

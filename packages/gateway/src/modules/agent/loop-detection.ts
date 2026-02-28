@@ -1,6 +1,10 @@
 import { sha256HexFromString, stableJsonStringify } from "../policy/canonical-json.js";
+import { Logger } from "../observability/logger.js";
 
 export const LOOP_WARNING_PREFIX = "Loop warning:";
+
+const logger = new Logger({ base: { module: "agent.loop_detection" } });
+let warnedToolCallSignatureStringify = false;
 
 type ToolCallLike = {
   toolName?: unknown;
@@ -23,7 +27,12 @@ function safeToolCallSignature(toolCall: ToolCallLike): string | undefined {
   let canonicalArgs = "";
   try {
     canonicalArgs = stableJsonStringify(toolCall.input);
-  } catch {
+  } catch (err) {
+    if (!warnedToolCallSignatureStringify) {
+      warnedToolCallSignatureStringify = true;
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn("agents.loop.tool_signature_stringify_failed", { error: message });
+    }
     canonicalArgs = "";
   }
   const argsHash = sha256HexFromString(canonicalArgs);

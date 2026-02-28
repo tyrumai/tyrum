@@ -230,6 +230,7 @@ export function isBlockedUrl(raw: string): boolean {
 
     return false;
   } catch {
+    // Intentional: invalid URL parsing → block (SSRF safe default).
     return true; // invalid URL → block
   }
 }
@@ -272,6 +273,7 @@ export async function resolvesToBlockedAddress(
 
     return false;
   } catch {
+    // Intentional: URL parse/DNS errors → treat as blocked (SSRF safe default).
     return true;
   }
 }
@@ -664,6 +666,7 @@ export class ToolExecutor {
           sensitivity: "sensitive",
         });
       } catch {
+        // Intentional: artifact byte persistence is best-effort; omit bytes if storage fails.
         stored = null;
       }
 
@@ -700,6 +703,7 @@ export class ToolExecutor {
           sensitivity: "sensitive",
         });
       } catch {
+        // Intentional: DOM snapshot persistence is best-effort; omit tree if storage fails.
         storedTree = null;
       }
 
@@ -935,13 +939,13 @@ export class ToolExecutor {
                 process.kill(-child.pid, signal);
                 return;
               } catch {
-                // ignore and fall back to killing the direct child
+                // Intentional: best-effort process group kill; fall back to killing the child.
               }
             }
             try {
               child.kill(signal);
             } catch {
-              // ignore
+              // Intentional: best-effort child kill; ignore errors during cleanup.
             }
           };
 
@@ -1102,7 +1106,7 @@ export class ToolExecutor {
               error: resolved !== null ? undefined : "secret provider returned null",
             });
           } catch {
-            // ignore audit write failures
+            // Intentional: ignore audit-write failures so tool execution is not blocked by logging.
           }
         }
         if (resolved !== null) {

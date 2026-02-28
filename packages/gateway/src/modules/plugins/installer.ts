@@ -32,6 +32,7 @@ async function loadPluginManifestFromDir(dir: string): Promise<{
     try {
       raw = await readFile(path, "utf-8");
     } catch {
+      // Intentional: try the next manifest candidate when a file is missing/unreadable.
       continue;
     }
 

@@ -63,8 +63,17 @@ export class MarkdownMemoryStore {
     await mkdir(this.memoryDir, { recursive: true });
     try {
       await readFile(this.corePath, "utf-8");
-    } catch {
-      await writeFile(this.corePath, "# MEMORY\n\n## Learned Preferences\n\n", "utf-8");
+    } catch (err) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code?: unknown }).code === "ENOENT"
+      ) {
+        await writeFile(this.corePath, "# MEMORY\n\n## Learned Preferences\n\n", "utf-8");
+        return;
+      }
+      throw new Error(`Failed to read core memory file: ${this.corePath}`, { cause: err });
     }
   }
 

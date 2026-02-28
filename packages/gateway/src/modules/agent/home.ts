@@ -3,6 +3,9 @@ import { dirname, join } from "node:path";
 import { mkdir, access, writeFile } from "node:fs/promises";
 import { constants, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { Logger } from "../observability/logger.js";
+
+const logger = new Logger({ base: { module: "agent.home" } });
 
 function fileExists(path: string): Promise<boolean> {
   return access(path, constants.F_OK)
@@ -50,7 +53,18 @@ export function resolveBundledSkillsDir(): string {
 function isDirectory(path: string): boolean {
   try {
     return statSync(path).isDirectory();
-  } catch {
+  } catch (err) {
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      ((err as { code?: unknown }).code === "ENOENT" ||
+        (err as { code?: unknown }).code === "ENOTDIR")
+    ) {
+      return false;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn("agent.home.directory_check_failed", { candidate_path: path, error: message });
     return false;
   }
 }

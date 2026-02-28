@@ -26,6 +26,7 @@ function parseBundle(raw: string): PolicyBundleT {
   try {
     return PolicyBundle.parse(JSON.parse(raw) as unknown);
   } catch {
+    // Intentional: treat invalid stored bundles as empty policy bundles.
     return PolicyBundle.parse({ v: 1 });
   }
 }
