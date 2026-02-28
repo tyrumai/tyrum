@@ -221,4 +221,27 @@ describe("Desktop automation contract v1 (schemas)", () => {
 
     expect(() => DesktopUiTree.parse({ root })).toThrow();
   });
+
+  it("DesktopUiTree enforces an overall max text char count", () => {
+    const chunk = "s".repeat(64);
+    const states = Array.from({ length: 32 }, () => chunk);
+    const actions = Array.from({ length: 32 }, () => chunk);
+
+    const leaf = {
+      role: "group",
+      name: "a".repeat(512),
+      value: "b".repeat(512),
+      bounds: { x: 0, y: 0, width: 1, height: 1 },
+      states,
+      actions,
+      children: [],
+    } as const;
+
+    const root = {
+      ...leaf,
+      children: Array.from({ length: 7 }, () => leaf),
+    };
+
+    expect(() => DesktopUiTree.parse({ root })).toThrow();
+  });
 });

@@ -17,6 +17,7 @@ import {
   WsTaskExecuteRequest,
   requiredCapability,
 } from "../src/protocol.js";
+import { expectRejects } from "./test-helpers.js";
 
 describe("WS envelopes", () => {
   it("parses connect request", () => {
@@ -29,6 +30,10 @@ describe("WS envelopes", () => {
     expect(msg.payload.capabilities).toEqual(["playwright", "http"]);
   });
 
+  it("rejects connect request missing payload", () => {
+    expectRejects(WsConnectRequest, { request_id: "r-1", type: "connect" });
+  });
+
   it("parses ping request", () => {
     const msg = WsPingRequest.parse({
       request_id: "r-2",
@@ -36,6 +41,10 @@ describe("WS envelopes", () => {
       payload: {},
     });
     expect(msg.type).toBe("ping");
+  });
+
+  it("rejects ping request with non-object payload", () => {
+    expectRejects(WsPingRequest, { request_id: "r-2", type: "ping", payload: 123 });
   });
 
   it("parses task.execute request", () => {
@@ -53,6 +62,18 @@ describe("WS envelopes", () => {
     expect(msg.payload.action.type).toBe("Http");
   });
 
+  it("rejects task.execute request with missing action", () => {
+    expectRejects(WsTaskExecuteRequest, {
+      request_id: "r-3",
+      type: "task.execute",
+      payload: {
+        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+      },
+    });
+  });
+
   it("parses approval.list request", () => {
     const msg = WsApprovalListRequest.parse({
       request_id: "r-approval-list-1",
@@ -60,6 +81,14 @@ describe("WS envelopes", () => {
       payload: { status: "pending", limit: 25 },
     });
     expect(msg.type).toBe("approval.list");
+  });
+
+  it("rejects approval.list request with invalid status", () => {
+    expectRejects(WsApprovalListRequest, {
+      request_id: "r-approval-list-1",
+      type: "approval.list",
+      payload: { status: "nope", limit: 25 },
+    });
   });
 
   it("parses approval.resolve request", () => {
@@ -71,6 +100,14 @@ describe("WS envelopes", () => {
     expect(msg.payload.approval_id).toBe(7);
   });
 
+  it("rejects approval.resolve request missing approval_id", () => {
+    expectRejects(WsApprovalResolveRequest, {
+      request_id: "r-approval-resolve-1",
+      type: "approval.resolve",
+      payload: { decision: "approved" },
+    });
+  });
+
   it("parses generic request envelope", () => {
     const msg = WsRequestEnvelope.parse({
       request_id: "r-4",
@@ -78,6 +115,10 @@ describe("WS envelopes", () => {
       payload: { x: 1 },
     });
     expect(msg.type).toBe("custom.op");
+  });
+
+  it("rejects generic request envelope missing request_id", () => {
+    expectRejects(WsRequestEnvelope, { type: "custom.op", payload: { x: 1 } });
   });
 
   it("parses response envelope ok", () => {
@@ -88,6 +129,14 @@ describe("WS envelopes", () => {
       result: { evidence: { http: { status: 200 } } },
     });
     expect(msg.ok).toBe(true);
+  });
+
+  it("rejects response envelope ok with blank request_id", () => {
+    expectRejects(WsResponseEnvelope, {
+      request_id: "",
+      type: "task.execute",
+      ok: true,
+    });
   });
 
   it("parses typed connect response", () => {

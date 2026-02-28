@@ -12,14 +12,23 @@ import {
   DesktopActionArgs,
   ActionPrimitive,
 } from "../src/index.js";
+import { expectRejects } from "./test-helpers.js";
 
 describe("Desktop schema regression", () => {
   it("ActionPrimitiveKind includes Desktop", () => {
     expect(ActionPrimitiveKind.parse("Desktop")).toBe("Desktop");
   });
 
+  it("ActionPrimitiveKind rejects unknown values", () => {
+    expectRejects(ActionPrimitiveKind, "NotARealKind");
+  });
+
   it("ClientCapability includes desktop", () => {
     expect(ClientCapability.parse("desktop")).toBe("desktop");
+  });
+
+  it("ClientCapability rejects unknown values", () => {
+    expectRejects(ClientCapability, "camera");
   });
 
   it("Desktop maps to desktop capability", () => {
@@ -40,6 +49,10 @@ describe("Desktop schema regression", () => {
     // Verify args can be parsed as DesktopActionArgs
     const desktopArgs = DesktopActionArgs.parse(primitive.args);
     expect(desktopArgs.op).toBe("screenshot");
+  });
+
+  it("DesktopActionArgs rejects missing op", () => {
+    expectRejects(DesktopActionArgs, { display: "primary", format: "png" });
   });
 
   it("all 12 ActionPrimitiveKind values parse", () => {

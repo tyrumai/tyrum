@@ -5,16 +5,17 @@ import {
   PlanResponse,
   requiresPostcondition,
 } from "../src/index.js";
+import { expectRejects } from "./test-helpers.js";
 
 describe("ActionPrimitive", () => {
-  it("round-trips through parse/serialize respecting schema", () => {
-    const primitive = {
-      type: "Research" as const,
-      args: { query: "find coffees" },
-      idempotency_key: "research-1",
-    };
+  const basePrimitive = {
+    type: "Research" as const,
+    args: { query: "find coffees" },
+    idempotency_key: "research-1",
+  } as const;
 
-    const parsed = ActionPrimitive.parse(primitive);
+  it("round-trips through parse/serialize respecting schema", () => {
+    const parsed = ActionPrimitive.parse(basePrimitive);
     expect(parsed.type).toBe("Research");
     expect(parsed.args["query"]).toBe("find coffees");
     expect(parsed.postcondition).toBeUndefined();
@@ -24,6 +25,14 @@ describe("ActionPrimitive", () => {
     const json = JSON.parse(JSON.stringify(parsed));
     const restored = ActionPrimitive.parse(json);
     expect(restored).toEqual(parsed);
+  });
+
+  it("rejects a primitive missing type", () => {
+    expectRejects(ActionPrimitive, { args: { query: "x" } });
+  });
+
+  it("rejects a primitive with unknown type", () => {
+    expectRejects(ActionPrimitive, { ...basePrimitive, type: "Unknown" });
   });
 });
 
@@ -54,23 +63,23 @@ describe("requiresPostcondition", () => {
 });
 
 describe("PlanResponse", () => {
-  it("round-trips success outcome", () => {
-    const response = {
-      plan_id: "plan-success",
-      request_id: "req-123",
-      created_at: "2025-10-05T16:31:09Z",
-      trace_id: "trace-abc",
-      status: "success" as const,
-      steps: [
-        {
-          type: "Research" as const,
-          args: { intent: "look_up", query: "best espresso" },
-        },
-      ],
-      summary: { synopsis: "Research best espresso options" },
-    };
+  const baseSuccessResponse = {
+    plan_id: "plan-success",
+    request_id: "req-123",
+    created_at: "2025-10-05T16:31:09Z",
+    trace_id: "trace-abc",
+    status: "success" as const,
+    steps: [
+      {
+        type: "Research" as const,
+        args: { intent: "look_up", query: "best espresso" },
+      },
+    ],
+    summary: { synopsis: "Research best espresso options" },
+  };
 
-    const parsed = PlanResponse.parse(response);
+  it("round-trips success outcome", () => {
+    const parsed = PlanResponse.parse(baseSuccessResponse);
     expect(parsed.status).toBe("success");
     if (parsed.status === "success") {
       expect(parsed.steps).toHaveLength(1);
@@ -79,6 +88,22 @@ describe("PlanResponse", () => {
     const json = JSON.parse(JSON.stringify(parsed));
     const restored = PlanResponse.parse(json);
     expect(restored).toEqual(parsed);
+  });
+
+  it("rejects success outcome missing steps", () => {
+    const bad = { ...baseSuccessResponse } as Record<string, unknown>;
+    delete bad.steps;
+
+    expectRejects(PlanResponse, bad);
+  });
+
+  it("rejects response with invalid status", () => {
+    expectRejects(PlanResponse, {
+      plan_id: "plan-1",
+      request_id: "req-123",
+      created_at: "2025-10-05T16:31:09Z",
+      status: "ok",
+    });
   });
 
   it("round-trips escalate outcome", () => {

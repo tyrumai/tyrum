@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as Schemas from "../src/index.js";
 import * as Protocol from "../src/protocol.js";
 import { WsEvent, WsRequest, WsResponse } from "../src/protocol.js";
+import { expectRejects } from "./test-helpers.js";
 
 describe("Memory v1 WS protocol", () => {
   it("exports Memory v1 schemas from @tyrum/schemas", () => {
@@ -174,5 +175,13 @@ describe("Memory v1 WS protocol", () => {
       });
       expect(parsed.success, entry.type).toBe(true);
     }
+  });
+
+  it("rejects memory.* request envelopes missing payload", () => {
+    expectRejects(WsRequest, { request_id: "r-missing-payload", type: "memory.search" });
+  });
+
+  it("rejects error responses missing error payload", () => {
+    expectRejects(WsResponse, { request_id: "r-missing-error", type: "memory.search", ok: false });
   });
 });

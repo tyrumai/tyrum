@@ -5,6 +5,7 @@ import {
   clientCapabilityFromDescriptorId,
   descriptorIdForClientCapability,
 } from "../src/capability.js";
+import { expectRejects } from "./test-helpers.js";
 
 describe("CapabilityDescriptor", () => {
   it("parses namespaced descriptor IDs", () => {
@@ -31,6 +32,14 @@ describe("CapabilityDescriptor", () => {
       version: "1.0.0",
     });
     expect(parsed.success).toBe(false);
+  });
+
+  it("rejects non-semver version strings", () => {
+    expectRejects(CapabilityDescriptor, { id: "system.shell.exec", version: "1" });
+  });
+
+  it("rejects descriptor IDs with wrong type", () => {
+    expectRejects(CapabilityDescriptor, { id: 123, version: "1.0.0" });
   });
 });
 

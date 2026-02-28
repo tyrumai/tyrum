@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { WsEvent } from "../src/protocol.js";
+import { expectRejects } from "./test-helpers.js";
 
 describe("WS event catalog", () => {
   it("parses artifact.fetched", () => {
@@ -365,5 +366,24 @@ describe("WS event catalog", () => {
       },
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it("rejects events missing event_id", () => {
+    expectRejects(WsEvent, {
+      type: "run.queued",
+      occurred_at: "2026-02-19T12:00:00Z",
+      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
+      payload: { run_id: "550e8400-e29b-41d4-a716-446655440000" },
+    });
+  });
+
+  it("rejects events with non-string occurred_at", () => {
+    expectRejects(WsEvent, {
+      event_id: "e-bad",
+      type: "run.queued",
+      occurred_at: 123,
+      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
+      payload: { run_id: "550e8400-e29b-41d4-a716-446655440000" },
+    });
   });
 });

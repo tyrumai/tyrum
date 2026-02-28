@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as Schemas from "../src/index.js";
 import * as Protocol from "../src/protocol.js";
 import { WsEvent, WsRequest, WsResponse } from "../src/protocol.js";
+import { expectRejects } from "./test-helpers.js";
 
 describe("WorkBoard WS protocol", () => {
   it("exports WorkBoard schemas from @tyrum/schemas", () => {
@@ -363,5 +364,13 @@ describe("WorkBoard WS protocol", () => {
       });
       expect(parsed.success, entry.type).toBe(true);
     }
+  });
+
+  it("rejects work.* request envelopes missing payload", () => {
+    expectRejects(WsRequest, { request_id: "r-missing-payload", type: "work.list" });
+  });
+
+  it("rejects work.* error responses missing error payload", () => {
+    expectRejects(WsResponse, { request_id: "r-missing-error", type: "work.list", ok: false });
   });
 });
