@@ -19,6 +19,15 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 type Handler = (data: unknown) => void;
 
+function openSettings(container: HTMLElement): void {
+  const settingsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-settings"]');
+  expect(settingsLink).not.toBeNull();
+
+  act(() => {
+    settingsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
 class FakeWsClient implements OperatorWsClient {
   connected = false;
   connect = vi.fn(() => {});
@@ -2197,17 +2206,22 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    const settingsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-settings"]');
-    expect(settingsLink).not.toBeNull();
+    openSettings(container);
 
-    act(() => {
-      settingsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    const generalCard = container.querySelector('[data-testid="settings-general"]');
+    expect(generalCard).not.toBeNull();
+    expect(generalCard?.textContent).toContain("desktop");
+    expect(generalCard?.textContent).toContain("http://example.test");
+    expect(container.querySelector('[data-testid="settings-usage"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="settings-theme"]')).not.toBeNull();
 
     const refreshButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="settings-refresh-usage"]',
     );
     expect(refreshButton).not.toBeNull();
+
+    const tokensValue = container.querySelector('[data-testid="settings-usage-total-tokens"]');
+    expect(tokensValue?.textContent).toContain("-");
 
     await act(async () => {
       refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -2215,7 +2229,54 @@ describe("operator-ui", () => {
     });
 
     expect(usageGet).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("Total tokens: 0");
+    expect(tokensValue?.textContent).toContain("0");
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("switches theme mode from Settings", async () => {
+    const localStorageMock = {
+      getItem: vi.fn((key: string) => (key === "tyrum.themeMode" ? "dark" : null)),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+    vi.stubGlobal("localStorage", localStorageMock as unknown as Storage);
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    openSettings(container);
+
+    const lightOption = container.querySelector<HTMLButtonElement>(
+      '[data-testid="settings-theme-light"]',
+    );
+    expect(lightOption).not.toBeNull();
+
+    await act(async () => {
+      lightOption?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(document.documentElement.dataset.themeMode).toBe("light");
+    expect(document.documentElement.dataset.theme).toBe("light");
 
     act(() => {
       root?.unmount();
@@ -2319,12 +2380,7 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
     });
 
-    const settingsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-settings"]');
-    expect(settingsLink).not.toBeNull();
-
-    act(() => {
-      settingsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    openSettings(container);
 
     expect(container.querySelector('[data-testid="settings-admin-command-execute"]')).toBeNull();
     expect(container.textContent).toContain("Enter Admin Mode to continue");
@@ -2373,6 +2429,27 @@ describe("operator-ui", () => {
     expect(
       container.querySelector('[data-testid="settings-admin-command-execute"]'),
     ).not.toBeNull();
+
+    const commandInput = container.querySelector<HTMLInputElement>(
+      '[data-testid="settings-admin-command-input"]',
+    );
+    expect(commandInput).not.toBeNull();
+    act(() => {
+      commandInput!.value = "/help";
+      commandInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const executeButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="settings-admin-command-execute"]',
+    );
+    expect(executeButton).not.toBeNull();
+
+    await act(async () => {
+      executeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(ws.commandExecute).toHaveBeenCalledWith("/help");
 
     act(() => {
       root?.unmount();

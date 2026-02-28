@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "../ui/dialog.js";
 import { useAdminModeUiContext } from "./admin-mode-provider.js";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
 
 function headersToRecord(headers: HeadersInit | undefined): Record<string, string> | undefined {
   if (!headers) return undefined;
@@ -47,11 +48,6 @@ function resolveHttpFetch(mode: "web" | "desktop"): TyrumHttpFetch | undefined {
       headers: result.headers,
     });
   };
-}
-
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
 }
 
 export function AdminModeEnterDialog() {
@@ -122,7 +118,7 @@ export function AdminModeEnterDialog() {
       resetForm();
       closeEnter();
     } catch (error) {
-      setErrorMessage(toErrorMessage(error));
+      setErrorMessage(formatErrorMessage(error));
     } finally {
       setBusy(false);
     }
