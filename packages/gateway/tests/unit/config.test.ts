@@ -49,18 +49,33 @@ describe("loadConfig", () => {
     ).toBe(false);
   });
 
-  it("requires kubernetes toolrunner env vars when launcher resolves to kubernetes", () => {
+  it("does not eagerly require kubernetes toolrunner env vars when in-cluster but not configured", () => {
+    const edgeConfig = loadConfig({
+      GATEWAY_TOKEN: "test-token",
+      TYRUM_ROLE: "edge",
+      KUBERNETES_SERVICE_HOST: "k8s",
+    });
+    expect(edgeConfig.execution.toolrunner.launcher).toBe("local");
+
+    const allConfig = loadConfig({
+      GATEWAY_TOKEN: "test-token",
+      KUBERNETES_SERVICE_HOST: "k8s",
+    });
+    expect(allConfig.execution.toolrunner.launcher).toBe("local");
+  });
+
+  it("requires kubernetes toolrunner env vars when launcher is kubernetes", () => {
     expect(() =>
       loadConfig({
         GATEWAY_TOKEN: "test-token",
-        KUBERNETES_SERVICE_HOST: "k8s",
+        TYRUM_TOOLRUNNER_LAUNCHER: "kubernetes",
       }),
     ).toThrow(/TYRUM_TOOLRUNNER_IMAGE/i);
 
     expect(() =>
       loadConfig({
         GATEWAY_TOKEN: "test-token",
-        KUBERNETES_SERVICE_HOST: "k8s",
+        TYRUM_TOOLRUNNER_LAUNCHER: "kubernetes",
         TYRUM_TOOLRUNNER_IMAGE: "tyrum/toolrunner:test",
       }),
     ).toThrow(/TYRUM_TOOLRUNNER_WORKSPACE_CLAIM/i);

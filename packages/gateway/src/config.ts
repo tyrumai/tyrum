@@ -90,16 +90,6 @@ function parseGatewayRole(raw: unknown): "all" | "edge" | "worker" | "scheduler"
   return "all";
 }
 
-function parseToolRunnerLauncher(
-  raw: unknown,
-  isKubernetesRuntime: boolean,
-): "local" | "kubernetes" {
-  const value = normalizeOptionalString(raw)?.toLowerCase();
-  if (!value) return isKubernetesRuntime ? "kubernetes" : "local";
-  if (value === "kubernetes") return "kubernetes";
-  return "local";
-}
-
 type ToolRunnerConfig =
   | { launcher: "local" }
   | { launcher: "kubernetes"; namespace: string; image: string; workspacePvcClaim: string };
@@ -314,7 +304,7 @@ export const GatewayConfigSchema = z
 
       toolrunner: z
         .object({
-          /** `TYRUM_TOOLRUNNER_LAUNCHER` (default: `local`, or `kubernetes` when in-cluster). */
+          /** `TYRUM_TOOLRUNNER_LAUNCHER` (default: `local`). */
           launcher: z.unknown(),
 
           /** `KUBERNETES_SERVICE_HOST` (default: unset). Indicates we are running in Kubernetes. */
@@ -340,13 +330,19 @@ export const GatewayConfigSchema = z
         })
         .transform((value, ctx): ToolRunnerConfig => {
           const isKubernetesRuntime = Boolean(value.kubernetesServiceHost);
-          const launcher = parseToolRunnerLauncher(value.launcher, isKubernetesRuntime);
+          const launcherToken = normalizeOptionalString(value.launcher)?.toLowerCase();
+          const namespaceToken = normalizeOptionalString(value.namespace);
+          const image = normalizeOptionalString(value.image);
+          const workspacePvcClaim = normalizeOptionalString(value.workspaceClaim);
 
-          if (launcher === "kubernetes") {
-            const namespace =
-              normalizeOptionalString(value.namespace) ?? value.podNamespace ?? "default";
-            const image = normalizeOptionalString(value.image);
-            const workspacePvcClaim = normalizeOptionalString(value.workspaceClaim);
+          const shouldUseKubernetesLauncher =
+            launcherToken === "kubernetes" ||
+            (!launcherToken &&
+              isKubernetesRuntime &&
+              (namespaceToken || image || workspacePvcClaim));
+
+          if (shouldUseKubernetesLauncher) {
+            const namespace = namespaceToken ?? value.podNamespace ?? "default";
             return {
               launcher: "kubernetes",
               namespace,
