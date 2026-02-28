@@ -45,6 +45,25 @@ curl -sS -H "authorization: Bearer ${TOKEN}" -H "content-type: application/json"
   "http://localhost:8788/workflow/run"
 ```
 
+## Manual verification (AT-SPI a11y)
+
+1. Open the noVNC takeover and launch a GUI app (for example Xfce Terminal). You can also launch one from the host:
+
+```bash
+docker compose exec -T desktop-sandbox bash -lc 'DISPLAY=:0 xfce4-terminal --title "Tyrum A11y Smoke" >/tmp/tyrum-a11y-smoke.log 2>&1 &'
+```
+
+2. Run snapshot → query → act with `include_tree: true`:
+
+```bash
+TOKEN="$(docker compose exec -T tyrum sh -lc 'cat /var/lib/tyrum/.admin-token' | tr -d '\r\n')"
+curl -sS -H "authorization: Bearer ${TOKEN}" -H "content-type: application/json" \
+  -d '{"key":"agent:default:manual:a11y:desktop-sandbox","lane":"main","steps":[{"type":"Desktop","args":{"op":"snapshot","include_tree":true,"max_nodes":512,"max_text_chars":8192}},{"type":"Desktop","args":{"op":"query","selector":{"kind":"a11y","name":"Tyrum A11y Smoke"},"limit":1}},{"type":"Desktop","args":{"op":"act","target":{"kind":"a11y","name":"Tyrum A11y Smoke"},"action":{"kind":"focus"}}}]}' \
+  "http://localhost:8788/workflow/run"
+```
+
+If the run pauses for policy approvals, approve in the Gateway UI (or use the existing smoke script as a reference for automating approvals).
+
 ## Smoke test
 
 ```bash

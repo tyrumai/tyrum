@@ -2,15 +2,19 @@ import type { ActionPrimitive, ClientCapability } from "@tyrum/schemas";
 import { DesktopActionArgs } from "@tyrum/schemas";
 import type { CapabilityProvider, TaskResult } from "@tyrum/client";
 import type { DesktopBackend } from "./backends/desktop-backend.js";
+import type { DesktopA11yBackend } from "./backends/desktop-a11y-backend.js";
 import type {
   DesktopActArgs,
   DesktopBackendPermissions,
   DesktopQueryArgs,
   DesktopSnapshotArgs,
   DesktopUiRect,
+  DesktopUiTree,
+  DesktopWindow,
   DesktopWaitForArgs,
 } from "@tyrum/schemas";
 import type { OcrEngine, OcrMatch } from "./ocr/types.js";
+import { DEFAULT_A11Y_MAX_DEPTH, pruneUiTree } from "./a11y/prune-ui-tree.js";
 
 export interface DesktopProviderPermissions {
   desktopScreenshot: boolean;
@@ -95,12 +99,34 @@ function boundTextAroundMatch(value: string, matchIndex: number): string {
 export class DesktopProvider implements CapabilityProvider {
   readonly capability: ClientCapability = "desktop";
 
+  private a11yBackendState: "unknown" | "available" | "unavailable" = "unknown";
+
   constructor(
     private backend: DesktopBackend,
     private permissions: DesktopProviderPermissions,
     private requestConfirmation: ConfirmationFn,
     private ocr?: OcrEngine,
+    private a11yBackend?: DesktopA11yBackend,
   ) {}
+
+  private async resolveA11yBackend(): Promise<DesktopA11yBackend | null> {
+    if (this.a11yBackendState === "available") return this.a11yBackend ?? null;
+    if (this.a11yBackendState === "unavailable") return null;
+
+    if (process.platform !== "linux" || !this.a11yBackend) {
+      this.a11yBackendState = "unavailable";
+      return null;
+    }
+
+    try {
+      const available = await this.a11yBackend.isAvailable();
+      this.a11yBackendState = available ? "available" : "unavailable";
+      return available ? this.a11yBackend : null;
+    } catch {
+      this.a11yBackendState = "unavailable";
+      return null;
+    }
+  }
 
   async execute(action: ActionPrimitive): Promise<TaskResult> {
     const parseResult = DesktopActionArgs.safeParse(action.args);
@@ -142,9 +168,9 @@ export class DesktopProvider implements CapabilityProvider {
     }
   }
 
-  private backendPermissions(): DesktopBackendPermissions {
+  private backendPermissions(accessibility: boolean): DesktopBackendPermissions {
     return {
-      accessibility: false,
+      accessibility,
       screen_capture: this.permissions.desktopScreenshot,
       input_control: this.permissions.desktopInput,
     };
@@ -185,7 +211,7 @@ export class DesktopProvider implements CapabilityProvider {
     };
   }
 
-  private async snapshot(_args: DesktopSnapshotArgs): Promise<TaskResult> {
+  private async snapshot(args: DesktopSnapshotArgs): Promise<TaskResult> {
     if (!this.permissions.desktopScreenshot) {
       return {
         success: false,
@@ -195,21 +221,47 @@ export class DesktopProvider implements CapabilityProvider {
 
     const capture = await this.backend.captureScreen("primary");
 
+    let mode: "pixel" | "hybrid" = "pixel";
+    let accessibility = false;
+    let windows: DesktopWindow[] = [];
+    let tree: DesktopUiTree | undefined;
+
+    if (args.include_tree) {
+      const a11yBackend = await this.resolveA11yBackend();
+      if (a11yBackend) {
+        try {
+          const snapshot = await a11yBackend.snapshot(args);
+          accessibility = true;
+          mode = "hybrid";
+          windows = snapshot.windows;
+          tree = pruneUiTree(snapshot.tree, {
+            maxNodes: args.max_nodes,
+            maxTextChars: args.max_text_chars,
+            maxDepth: DEFAULT_A11Y_MAX_DEPTH,
+          });
+        } catch {
+          // Fall back to pixel mode when AT-SPI is unavailable or errors.
+          this.a11yBackendState = "unavailable";
+        }
+      }
+    }
+
     return {
       success: true,
       result: {
         op: "snapshot",
         backend: {
-          mode: "pixel",
-          permissions: this.backendPermissions(),
+          mode,
+          permissions: this.backendPermissions(accessibility),
         },
-        windows: [],
+        windows,
+        tree,
       },
-      evidence: this.toImageEvidence("snapshot", capture, { mode: "pixel" }),
+      evidence: this.toImageEvidence("snapshot", capture, { mode }),
     };
   }
 
-  private async query(_args: DesktopQueryArgs): Promise<TaskResult> {
+  private async query(args: DesktopQueryArgs): Promise<TaskResult> {
     if (!this.permissions.desktopScreenshot) {
       return {
         success: false,
@@ -217,7 +269,35 @@ export class DesktopProvider implements CapabilityProvider {
       };
     }
 
-    const selector = _args.selector;
+    const selector = args.selector;
+    const wantsA11y =
+      selector.kind === "a11y" ||
+      (selector.kind === "ref" && selector.ref.trim().toLowerCase().startsWith("atspi:"));
+
+    if (wantsA11y) {
+      const a11yBackend = await this.resolveA11yBackend();
+      if (a11yBackend) {
+        try {
+          const matches = await a11yBackend.query(args);
+          return {
+            success: true,
+            result: {
+              op: "query",
+              matches,
+            },
+            evidence: {
+              type: "query",
+              mode: "a11y",
+              timestamp: new Date().toISOString(),
+            },
+          };
+        } catch {
+          // Fall back to pixel mode when AT-SPI is unavailable or errors.
+          this.a11yBackendState = "unavailable";
+        }
+      }
+    }
+
     const queryText =
       selector.kind === "ocr"
         ? selector.text
@@ -296,7 +376,7 @@ export class DesktopProvider implements CapabilityProvider {
         confidence: candidate.confidence,
       });
 
-      if (matches.length >= _args.limit) break;
+      if (matches.length >= args.limit) break;
     }
 
     return {
@@ -330,6 +410,47 @@ export class DesktopProvider implements CapabilityProvider {
         success: false,
         error: "Desktop input is disabled by permission profile",
       };
+    }
+
+    const targetRef = args.target.kind === "ref" ? args.target.ref : undefined;
+    const isA11yTarget =
+      args.target.kind === "a11y" ||
+      (targetRef !== undefined && targetRef.trim().toLowerCase().startsWith("atspi:"));
+
+    if (isA11yTarget) {
+      const a11yBackend = await this.resolveA11yBackend();
+      if (a11yBackend) {
+        if (this.permissions.desktopInputRequiresConfirmation) {
+          const approved = await this.requestConfirmation(
+            `Allow desktop act ${args.action.kind} via accessibility?`,
+          );
+          if (!approved) {
+            return { success: false, error: "User denied desktop act" };
+          }
+        }
+
+        try {
+          const result = await a11yBackend.act(args);
+          return {
+            success: true,
+            result: {
+              op: "act",
+              target: args.target,
+              action: args.action,
+              resolved_element_ref: result.resolved_element_ref,
+            },
+            evidence: {
+              type: "act",
+              mode: "a11y",
+              action: args.action.kind,
+              timestamp: new Date().toISOString(),
+            },
+          };
+        } catch {
+          // Fall back to pixel mode when AT-SPI is unavailable or errors.
+          this.a11yBackendState = "unavailable";
+        }
+      }
     }
 
     if (args.target.kind !== "ref") {

@@ -22,7 +22,8 @@
   "dependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6",
     "@tyrum/client": "workspace:*",
-    "@tyrum/schemas": "workspace:*"
+    "@tyrum/schemas": "workspace:*",
+    "dbus-next": "^0.10.2"
   },
   "devDependencies": {
     "@types/node": "^25.3.2"

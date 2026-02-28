@@ -13,3 +13,10 @@ export {
   MockDesktopBackend,
 } from "./providers/backends/desktop-backend.js";
 export { NutJsDesktopBackend } from "./providers/backends/nutjs-desktop-backend.js";
+
+export {
+  type DesktopA11yBackend,
+  type DesktopA11ySnapshot,
+  type DesktopA11yActResult,
+} from "./providers/backends/desktop-a11y-backend.js";
+export { AtSpiDesktopA11yBackend } from "./providers/backends/atspi-a11y-backend.js";
