@@ -87,14 +87,16 @@ class ToolRunnerStepExecutor implements StepExecutor {
         () => {
           try {
             child.kill("SIGTERM");
-          } catch {
-            // ignore
+          } catch (err) {
+            // Intentional: process may have already exited.
+            void err;
           }
           setTimeout(() => {
             try {
               child.kill("SIGKILL");
-            } catch {
-              // ignore
+            } catch (err) {
+              // Intentional: process may have already exited.
+              void err;
             }
           }, 5_000).unref();
         },

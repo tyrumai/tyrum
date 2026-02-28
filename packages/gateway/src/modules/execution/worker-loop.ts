@@ -56,8 +56,19 @@ export function startExecutionWorkerLoop(opts: ExecutionWorkerLoopOptions): Exec
           await sleep(0);
         }
       } catch (err) {
+        const runIdRaw =
+          err && typeof err === "object"
+            ? ((err as { run_id?: unknown; runId?: unknown }).run_id ??
+              (err as { runId?: unknown }).runId)
+            : undefined;
+        const runId =
+          typeof runIdRaw === "string" && runIdRaw.trim().length > 0 ? runIdRaw.trim() : undefined;
         const message = err instanceof Error ? err.message : String(err);
-        opts.logger?.error("worker.loop.error", { error: message });
+        opts.logger?.error("worker.loop.error", {
+          worker_id: opts.workerId,
+          run_id: runId,
+          error: message,
+        });
         await sleep(errorSleepMs);
       }
     }

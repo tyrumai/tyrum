@@ -435,7 +435,9 @@ async function applyInboundQueueOverflowPolicy(
       const summaryAddress = (() => {
         try {
           return parseChannelSourceKey(summarySource);
-        } catch {
+        } catch (err) {
+          // Intentional: fall back to a default connector when the persisted source key is invalid.
+          void err;
           return { connector: "telegram", accountId: DEFAULT_CHANNEL_ACCOUNT_ID };
         }
       })();
@@ -765,8 +767,9 @@ export class ChannelInboxDal {
           updated_at_ms: receivedAtMs,
         });
       }
-    } catch {
-      // ignore invalid keys / unsupported shapes (best-effort)
+    } catch (err) {
+      // Intentional: completion notifications are best-effort; ignore invalid keys or activity update failures.
+      void err;
     }
 
     return result;

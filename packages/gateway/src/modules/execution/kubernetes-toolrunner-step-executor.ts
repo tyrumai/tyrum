@@ -54,8 +54,9 @@ export function parseStepResultFromLogs(raw: string): StepResult | null {
       if (parsed && typeof parsed === "object" && typeof parsed.success === "boolean") {
         return parsed;
       }
-    } catch {
-      // keep scanning
+    } catch (err) {
+      // Intentional: toolrunner logs can contain non-JSON lines; keep scanning.
+      void err;
     }
   }
   return null;
@@ -125,7 +126,7 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
     planId: string,
     stepIndex: number,
     timeoutMs: number,
-    _context: StepExecutionContext,
+    context: StepExecutionContext,
   ): Promise<StepResult> {
     const hardeningProfile: SandboxHardeningProfile = resolveSandboxHardeningProfile();
     const suffix = sanitizeDnsLabelSuffix(randomUUID().replace(/-/g, "").slice(0, 10));
@@ -251,7 +252,17 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
 
         if ((status?.succeeded ?? 0) >= 1) break;
         if ((status?.failed ?? 0) >= 1) {
-          const logs = await this.tryReadJobLogs(jobName).catch(() => "");
+          const logs = await this.tryReadJobLogs(jobName).catch((err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            this.logger?.warn("toolrunner.k8s.logs_read_failed", {
+              run_id: context.runId,
+              step_id: context.stepId,
+              attempt_id: context.attemptId,
+              job: jobName,
+              error: message,
+            });
+            return "";
+          });
           const parsed = logs ? parseStepResultFromLogs(logs) : null;
           return (
             parsed ?? {
@@ -287,8 +298,15 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
             name: jobName,
             propagationPolicy: "Background",
           });
-        } catch {
-          // ignore cleanup errors
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger?.warn("toolrunner.k8s.delete_job_failed", {
+            run_id: context.runId,
+            step_id: context.stepId,
+            attempt_id: context.attemptId,
+            job: jobName,
+            error: message,
+          });
         }
       }
     }

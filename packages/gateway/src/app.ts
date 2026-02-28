@@ -319,6 +319,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       telegramQueue:
         isChannelPipelineEnabled() && container.telegramBot && opts.agents
           ? new TelegramChannelQueue(container.db, {
+              logger: container.logger,
               ws: opts.connectionManager
                 ? {
                     connectionManager: opts.connectionManager,

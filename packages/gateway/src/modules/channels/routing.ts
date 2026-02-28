@@ -48,8 +48,9 @@ export async function loadRoutingConfig(home: string): Promise<RoutingConfig> {
             }
           : undefined,
       };
-    } catch {
-      // ignore missing/invalid config
+    } catch (err) {
+      // Intentional: routing config is optional; ignore missing/invalid config files.
+      void err;
     }
   }
 

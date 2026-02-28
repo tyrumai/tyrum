@@ -321,6 +321,7 @@ export class TelegramChannelQueue {
   private readonly lane: string;
   private readonly dmScope: DmScope;
   private readonly ws?: WsBroadcastDeps;
+  private readonly logger?: Logger;
 
   constructor(
     db: SqlDb,
@@ -331,6 +332,7 @@ export class TelegramChannelQueue {
       lane?: string;
       dmScope?: DmScope;
       ws?: WsBroadcastDeps;
+      logger?: Logger;
     },
   ) {
     this.db = db;
@@ -342,6 +344,7 @@ export class TelegramChannelQueue {
     this.lane = normalizeLane(opts?.lane);
     this.dmScope = resolveDmScope({ configured: opts?.dmScope ?? "per_account_channel_peer" });
     this.ws = opts?.ws;
+    this.logger = opts?.logger;
   }
 
   private emitWsEvent(evt: unknown): void {
@@ -352,20 +355,26 @@ export class TelegramChannelQueue {
     for (const client of ws.connectionManager.allClients()) {
       try {
         client.ws.send(payload);
-      } catch {
-        // ignore
+      } catch (err) {
+        // Intentional: clients can disconnect between enumeration and send.
+        void err;
       }
     }
 
-    if (ws.cluster) {
-      void ws.cluster.outboxDal
+    const cluster = ws.cluster;
+    if (cluster) {
+      void cluster.outboxDal
         .enqueue("ws.broadcast", {
-          source_edge_id: ws.cluster.edgeId,
+          source_edge_id: cluster.edgeId,
           skip_local: true,
           message: evt,
         })
-        .catch(() => {
-          // ignore
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger?.warn("channels.ws_broadcast_enqueue_failed", {
+            edge_id: cluster.edgeId,
+            error: message,
+          });
         });
     }
   }
@@ -989,7 +998,15 @@ export class TelegramChannelProcessor {
           accountId,
           containerId: leader.thread_id,
         })
-        .catch(() => undefined);
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger?.debug("channels.telegram.send_typing_failed", {
+            channel_id: connectorId,
+            message_id: leader.message_id,
+            thread_id: leader.thread_id,
+            error: message,
+          });
+        });
     };
 
     const startTyping = (): void => {
@@ -1010,8 +1027,9 @@ export class TelegramChannelProcessor {
         if (parsedKey.kind === "agent") {
           agentId = parsedKey.agent_id;
         }
-      } catch {
-        // ignore invalid keys; fall back to default agent
+      } catch (err) {
+        // Intentional: ignore invalid keys; fall back to default agent.
+        void err;
       }
 
       const runtime = await this.agents.getRuntime(agentId);
@@ -1035,10 +1053,12 @@ export class TelegramChannelProcessor {
       if (err instanceof LaneQueueInterruptError) {
         this.logger?.info("channels.ingress.agent_interrupted", {
           inbox_id: leader.inbox_id,
+          channel_id: connectorId,
           source: leader.source,
           connector: connectorId,
           account_id: accountId,
           thread_id: leader.thread_id,
+          message_id: leader.message_id,
           error: err.message,
         });
         for (const row of rows) {
@@ -1049,10 +1069,12 @@ export class TelegramChannelProcessor {
       const message = err instanceof Error ? err.message : String(err);
       this.logger?.warn("channels.ingress.agent_failed", {
         inbox_id: leader.inbox_id,
+        channel_id: connectorId,
         source: leader.source,
         connector: connectorId,
         account_id: accountId,
         thread_id: leader.thread_id,
+        message_id: leader.message_id,
         error: message,
       });
       if (connector) {
@@ -1063,7 +1085,15 @@ export class TelegramChannelProcessor {
             text: "Sorry, something went wrong. Please try again later.",
             parseMode: "HTML",
           })
-          .catch(() => undefined);
+          .catch((err) => {
+            const message2 = err instanceof Error ? err.message : String(err);
+            this.logger?.warn("channels.telegram.send_error_reply_failed", {
+              channel_id: connectorId,
+              message_id: leader.message_id,
+              thread_id: leader.thread_id,
+              error: message2,
+            });
+          });
       }
       for (const row of rows) {
         await this.inbox.markFailed(row.inbox_id, this.owner, message);
@@ -1128,11 +1158,11 @@ export class TelegramChannelProcessor {
         ? this.agents.getPolicyService(agentId)
         : undefined;
     if (policyService?.isEnabled()) {
+      connectorMatchTarget =
+        accountId === DEFAULT_CHANNEL_ACCOUNT_ID
+          ? `${source}:${leader.thread_id}`
+          : `${source}:${accountId}:${leader.thread_id}`;
       try {
-        connectorMatchTarget =
-          accountId === DEFAULT_CHANNEL_ACCOUNT_ID
-            ? `${source}:${leader.thread_id}`
-            : `${source}:${accountId}:${leader.thread_id}`;
         const evalRes = await policyService.evaluateConnectorAction({
           agentId,
           workspaceId: agentId,
@@ -1141,7 +1171,18 @@ export class TelegramChannelProcessor {
         decision = evalRes.decision;
         policySnapshotId = evalRes.policy_snapshot?.policy_snapshot_id;
         appliedOverrideIds = evalRes.applied_override_ids;
-      } catch {
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.warn("channels.egress.policy_eval_failed", {
+          channel_id: source,
+          message_id: leader.message_id,
+          inbox_id: leader.inbox_id,
+          agent_id: agentId,
+          account_id: accountId,
+          thread_id: leader.thread_id,
+          match_target: connectorMatchTarget,
+          error: message,
+        });
         // Fail closed: require approval when policy evaluation fails.
         decision = "require_approval";
       }
@@ -1225,8 +1266,15 @@ export class TelegramChannelProcessor {
       approvalId = approval.id;
       try {
         this.approvalNotifier?.notify(approval);
-      } catch {
-        // ignore best-effort notify failures
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.debug("channels.egress.approval_notify_failed", {
+          channel_id: source,
+          message_id: leader.message_id,
+          inbox_id: leader.inbox_id,
+          approval_id: approval.id,
+          error: message,
+        });
       }
     }
 

@@ -158,7 +158,10 @@ export class ExecutionEngine {
     return this.redactionEngine ? this.redactionEngine.redactText(text).redacted : text;
   }
 
-  private async resolveSecretScopesFromArgs(args: unknown): Promise<string[]> {
+  private async resolveSecretScopesFromArgs(
+    args: unknown,
+    context?: { runId?: string; stepId?: string; attemptId?: string },
+  ): Promise<string[]> {
     const handleIds = collectSecretHandleIds(args);
     if (handleIds.length === 0) return [];
 
@@ -181,7 +184,14 @@ export class ExecutionEngine {
       }
 
       return [...scopes];
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.warn("execution.secret_provider_list_failed", {
+        run_id: context?.runId,
+        step_id: context?.stepId,
+        attempt_id: context?.attemptId,
+        error: message,
+      });
       return handleIds;
     }
   }
@@ -1224,6 +1234,23 @@ export class ExecutionEngine {
         }
       }
 
+      let actionType: ActionPrimitiveT["type"] | undefined;
+      let parsedAction: ActionPrimitiveT | undefined;
+      try {
+        const parsed = JSON.parse(next.action_json) as ActionPrimitiveT;
+        parsedAction = parsed;
+        if (typeof parsed?.type === "string") {
+          actionType = parsed.type as ActionPrimitiveT["type"];
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.warn("execution.step_action_parse_failed", {
+          run_id: run.run_id,
+          step_id: next.step_id,
+          error: message,
+        });
+      }
+
       // Enforce per-step policy decisions when a run carries a snapshot.
       const policySnapshotId = budgetRow?.policy_snapshot_id ?? null;
       if (policySnapshotId) {
@@ -1238,17 +1265,17 @@ export class ExecutionEngine {
           try {
             policyBundle = PolicyBundle.parse(JSON.parse(policyRow.bundle_json) as unknown);
             snapshotState = "valid";
-          } catch {
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
             snapshotState = "invalid";
             policyBundle = undefined;
+            this.logger?.warn("execution.policy_snapshot_invalid", {
+              run_id: run.run_id,
+              step_id: next.step_id,
+              policy_snapshot_id: policySnapshotId,
+              error: message,
+            });
           }
-        }
-
-        let parsedAction: ActionPrimitiveT | undefined;
-        try {
-          parsedAction = JSON.parse(next.action_json) as ActionPrimitiveT;
-        } catch {
-          parsedAction = undefined;
         }
 
         if (parsedAction) {
@@ -1494,18 +1521,6 @@ export class ExecutionEngine {
         }
       }
 
-      let actionType: ActionPrimitiveT["type"] | undefined;
-      let parsedAction: ActionPrimitiveT | undefined;
-      try {
-        const parsed = JSON.parse(next.action_json) as ActionPrimitiveT;
-        parsedAction = parsed;
-        if (typeof parsed?.type === "string") {
-          actionType = parsed.type as ActionPrimitiveT["type"];
-        }
-      } catch {
-        // ignore malformed action_json
-      }
-
       const toolIntentPause = await this.maybePauseForToolIntentGuardrailTx(tx, {
         run,
         step: next,
@@ -1530,7 +1545,10 @@ export class ExecutionEngine {
         parsedAction &&
         (actionType === "CLI" || actionType === "Http")
       ) {
-        const secretScopes = await this.resolveSecretScopesFromArgs(parsedAction.args ?? {});
+        const secretScopes = await this.resolveSecretScopesFromArgs(parsedAction.args ?? {}, {
+          runId: run.run_id,
+          stepId: next.step_id,
+        });
 
         if (secretScopes.length > 0) {
           const secretsDecision = (
@@ -2258,7 +2276,11 @@ export class ExecutionEngine {
     if (!this.policyService?.isEnabled()) return;
 
     const agentId = deriveAgentIdFromExecutionKey(opts.key) ?? "default";
-    const secretScopes = await this.resolveSecretScopesFromArgs(opts.action.args ?? {});
+    const secretScopes = await this.resolveSecretScopesFromArgs(opts.action.args ?? {}, {
+      runId: opts.runId,
+      stepId: opts.stepId,
+      attemptId: opts.attemptId,
+    });
     const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
       policySnapshotId,
       agentId,
@@ -2430,8 +2452,14 @@ export class ExecutionEngine {
         if (typeof parsed?.type === "string") {
           actionType = parsed.type as ActionPrimitiveT["type"];
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.warn("execution.step_action_parse_failed", {
+          run_id: opts.runId,
+          step_id: opts.stepId,
+          attempt_id: opts.attemptId,
+          error: message,
+        });
       }
 
       const isStateChanging = actionType ? requiresPostcondition(actionType) : true;
