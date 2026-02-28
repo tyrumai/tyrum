@@ -6,43 +6,7 @@ import { createApp } from "../../src/app.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
 import { createTestContainer } from "./helpers.js";
-
-type SqlRunner = {
-  run(sql: string, params?: unknown[]): Promise<unknown>;
-};
-
-type ExecutionScopeIds = {
-  jobId: string;
-  runId: string;
-  stepId: string;
-  attemptId: string;
-};
-
-async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds): Promise<void> {
-  await db.run(
-    `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json, input_json, latest_run_id)
-     VALUES (?, ?, ?, 'running', ?, ?, ?)`,
-    [ids.jobId, "agent:agent-1:thread:thread-1", "main", "{}", "{}", ids.runId],
-  );
-
-  await db.run(
-    `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, 'running', 1)`,
-    [ids.runId, ids.jobId, "agent:agent-1:thread:thread-1", "main"],
-  );
-
-  await db.run(
-    `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-     VALUES (?, ?, 0, 'running', ?)`,
-    [ids.stepId, ids.runId, "{}"],
-  );
-
-  await db.run(
-    `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status, artifacts_json)
-     VALUES (?, ?, 1, 'running', '[]')`,
-    [ids.attemptId, ids.stepId],
-  );
-}
+import { seedExecutionScope, type ExecutionScopeIds } from "./execution-scope.js";
 
 function stubMcpManager(): McpManager {
   return {
@@ -155,7 +119,9 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     }>(
       `SELECT artifact_id, run_id, step_id, attempt_id, sensitivity, labels_json
        FROM execution_artifacts
-       WHERE run_id = ? AND step_id = ?`,
+       WHERE run_id = ? AND step_id = ? AND kind = 'screenshot'
+       ORDER BY created_at DESC
+       LIMIT 1`,
       [scope.runId, scope.stepId],
     );
     expect(row).toBeTruthy();
@@ -257,7 +223,9 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     }>(
       `SELECT artifact_id, kind, mime_type, sensitivity, labels_json
        FROM execution_artifacts
-       WHERE run_id = ? AND step_id = ?`,
+       WHERE run_id = ? AND step_id = ? AND kind = 'dom_snapshot'
+       ORDER BY created_at DESC
+       LIMIT 1`,
       [scope.runId, scope.stepId],
     );
     expect(row).toBeTruthy();
