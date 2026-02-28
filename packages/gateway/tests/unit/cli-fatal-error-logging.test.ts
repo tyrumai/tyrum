@@ -28,6 +28,15 @@ describe("formatFatalErrorForConsole", () => {
     expect(formatted).not.toContain("user:supersecret");
   });
 
+  it("does not redact '@' outside URI userinfo", () => {
+    expect(formatFatalErrorForConsole("http://example.com/@user")).toBe(
+      "string: http://example.com/@user",
+    );
+    expect(formatFatalErrorForConsole("http://example.com?x=a@b")).toBe(
+      "string: http://example.com?x=a@b",
+    );
+  });
+
   it("truncates output to 500 characters", () => {
     const longString = "a".repeat(600);
     const formatted = formatFatalErrorForConsole(longString);
