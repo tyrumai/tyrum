@@ -10,6 +10,7 @@ export default defineConfig({
       "@tyrum/schemas": resolve(__dirname, "packages/schemas/src/index.ts"),
       "@tyrum/client": resolve(__dirname, "packages/client/src/index.ts"),
       "@tyrum/gateway": resolve(__dirname, "packages/gateway/src/index.ts"),
+      "@tyrum/desktop-node": resolve(__dirname, "packages/desktop-node/src/index.ts"),
     },
   },
   test: {
