@@ -33,6 +33,7 @@ export type OperatorUiMode = "web" | "desktop";
 export interface OperatorUiAppProps {
   core: OperatorCore;
   mode: OperatorUiMode;
+  onReloadPage?: () => void;
 }
 
 type OperatorUiRouteId =
@@ -93,7 +94,15 @@ function MaybeThemeProvider({ children }: { children: ReactNode }) {
   return <ThemeProvider>{children}</ThemeProvider>;
 }
 
-export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
+export function OperatorUiApp({ core, mode, onReloadPage }: OperatorUiAppProps) {
+  return (
+    <ErrorBoundary onReloadPage={onReloadPage}>
+      <OperatorUiAppRoot core={core} mode={mode} />
+    </ErrorBoundary>
+  );
+}
+
+function OperatorUiAppRoot({ core, mode }: Pick<OperatorUiAppProps, "core" | "mode">) {
   const [route, setRoute] = useState<OperatorUiRouteId>("connect");
   const connection = useOperatorStore(core.connectionStore);
 
@@ -140,39 +149,37 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
   return (
     <MaybeThemeProvider>
       <ToastProvider>
-        <ErrorBoundary>
-          <AppShell
-            mode={mode}
-            sidebar={
-              <Sidebar
-                items={sidebarItems}
-                secondaryItems={desktopItems}
-                activeItemId={route}
-                onNavigate={navigate}
-                connectionStatus={connection.status}
-              />
-            }
-            mobileNav={
-              <MobileNav
-                items={mobileItems}
-                overflowItems={mobileOverflowItems}
-                activeItemId={route}
-                onNavigate={navigate}
-              />
-            }
-          >
-            <AdminModeProvider core={core} mode={mode}>
-              {route === "connect" && <ConnectPage core={core} mode={mode} />}
-              {route === "dashboard" && <DashboardPage core={core} onNavigate={navigate} />}
-              {route === "memory" && <MemoryPage core={core} />}
-              {route === "approvals" && <ApprovalsPage core={core} />}
-              {route === "runs" && <RunsPage core={core} />}
-              {route === "pairing" && <PairingPage core={core} />}
-              {route === "settings" && <SettingsPage core={core} mode={mode} />}
-              {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
-            </AdminModeProvider>
-          </AppShell>
-        </ErrorBoundary>
+        <AppShell
+          mode={mode}
+          sidebar={
+            <Sidebar
+              items={sidebarItems}
+              secondaryItems={desktopItems}
+              activeItemId={route}
+              onNavigate={navigate}
+              connectionStatus={connection.status}
+            />
+          }
+          mobileNav={
+            <MobileNav
+              items={mobileItems}
+              overflowItems={mobileOverflowItems}
+              activeItemId={route}
+              onNavigate={navigate}
+            />
+          }
+        >
+          <AdminModeProvider core={core} mode={mode}>
+            {route === "connect" && <ConnectPage core={core} mode={mode} />}
+            {route === "dashboard" && <DashboardPage core={core} onNavigate={navigate} />}
+            {route === "memory" && <MemoryPage core={core} />}
+            {route === "approvals" && <ApprovalsPage core={core} />}
+            {route === "runs" && <RunsPage core={core} />}
+            {route === "pairing" && <PairingPage core={core} />}
+            {route === "settings" && <SettingsPage core={core} mode={mode} />}
+            {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
+          </AdminModeProvider>
+        </AppShell>
       </ToastProvider>
     </MaybeThemeProvider>
   );

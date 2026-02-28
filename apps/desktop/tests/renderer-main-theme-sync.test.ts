@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createRootMock, renderMock, ThemeProviderMock } = vi.hoisted(() => {
+const { createRootMock, renderMock, ThemeProviderMock, ErrorBoundaryMock } = vi.hoisted(() => {
   const renderMock = vi.fn();
   const createRootMock = vi.fn(() => ({ render: renderMock }));
   const ThemeProviderMock = vi.fn(({ children }: { children: unknown }) => children);
+  const ErrorBoundaryMock = vi.fn(({ children }: { children: unknown }) => children);
 
-  return { createRootMock, renderMock, ThemeProviderMock };
+  return { createRootMock, renderMock, ThemeProviderMock, ErrorBoundaryMock };
 });
 
 vi.mock("react-dom/client", () => ({
@@ -15,6 +16,7 @@ vi.mock("react-dom/client", () => ({
 
 vi.mock("@tyrum/operator-ui", () => ({
   ThemeProvider: ThemeProviderMock,
+  ErrorBoundary: ErrorBoundaryMock,
 }));
 
 vi.mock("../src/renderer/App.js", () => ({
