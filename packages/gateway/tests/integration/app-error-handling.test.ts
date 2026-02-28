@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTestApp } from "./helpers.js";
+import { AuthProfile } from "@tyrum/schemas";
 
 function parseStructuredLogRecords(logSpy: {
   mock: { calls: unknown[][] };
@@ -57,9 +58,9 @@ describe("gateway app global error handling", () => {
       const { app } = await createTestApp();
 
       app.post("/__invalid", () => {
-        const error = new Error("invalid payload");
-        error.name = "ZodError";
-        throw error;
+        const err = new Error("invalid payload");
+        err.name = "InvalidRequestError";
+        throw err;
       });
 
       const res = await app.request("/__invalid", { method: "POST" });
@@ -76,6 +77,41 @@ describe("gateway app global error handling", () => {
       expect(record["method"]).toBe("POST");
       expect(record["path"]).toBe("/__invalid");
       expect(typeof record["request_id"]).toBe("string");
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  it("treats server-side ZodErrors as internal errors (500)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const { app } = await createTestApp();
+
+      app.get("/__internal_zod", () => {
+        AuthProfile.parse({});
+        return new Response("ok");
+      });
+
+      const res = await app.request("/__internal_zod");
+      expect(res.status).toBe(500);
+      expect(res.headers.get("content-type") ?? "").toMatch(/application\/json/i);
+      const body = (await res.json()) as { error: string; message: string };
+      expect(body).toEqual({ error: "internal_error", message: "An unexpected error occurred" });
+
+      const invalidRequestRecords = parseStructuredLogRecords(logSpy).filter(
+        (record) => record["msg"] === "http.invalid_request",
+      );
+      expect(invalidRequestRecords).toHaveLength(0);
+
+      const unhandledRecords = parseStructuredLogRecords(logSpy).filter(
+        (record) => record["msg"] === "http.unhandled_error",
+      );
+      expect(unhandledRecords).toHaveLength(1);
+      const record = unhandledRecords[0] as Record<string, unknown>;
+      expect(record["method"]).toBe("GET");
+      expect(record["path"]).toBe("/__internal_zod");
+      expect(typeof record["request_id"]).toBe("string");
+      expect(record["error_name"]).toBe("ZodError");
     } finally {
       logSpy.mockRestore();
     }

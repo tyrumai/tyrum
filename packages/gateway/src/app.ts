@@ -431,7 +431,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       payload["error_stack"] = err.stack;
     }
 
-    if (err.name === "ZodError") {
+    if (err.name === "InvalidRequestError") {
       container.logger.warn("http.invalid_request", payload);
       return c.json({ error: "invalid_request", message: err.message }, 400);
     }
