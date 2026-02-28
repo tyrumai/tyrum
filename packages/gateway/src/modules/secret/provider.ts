@@ -1,5 +1,5 @@
 import { randomUUID, createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
-import { readFile, writeFile, access } from "node:fs/promises";
+import { readFile, writeFile, access, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { SecretHandle as SecretHandleT } from "@tyrum/schemas";
 
@@ -200,6 +200,10 @@ function resolveFileSecretSaltPath(secretsPath: string): string {
   return join(dirname(secretsPath), ".salt");
 }
 
+async function ensureParentDirExists(filePath: string): Promise<void> {
+  await mkdir(dirname(filePath), { recursive: true, mode: 0o700 });
+}
+
 function deriveFileSecretKey(adminToken: string, salt: Buffer | string): Buffer {
   return pbkdf2Sync(
     adminToken,
@@ -263,6 +267,7 @@ export class FileSecretProvider implements SecretProvider {
     if (entries.length === 0) {
       if (!storedSalt) {
         storedSalt = randomBytes(32);
+        await ensureParentDirExists(saltPath);
         await writeFile(saltPath, storedSalt, { mode: 0o600 });
       }
       return new FileSecretProvider(secretsPath, deriveFileSecretKey(adminToken, storedSalt));
@@ -290,6 +295,7 @@ export class FileSecretProvider implements SecretProvider {
       let saltToUse = storedSalt;
       if (!saltToUse) {
         saltToUse = randomBytes(32);
+        await ensureParentDirExists(saltPath);
         await writeFile(saltPath, saltToUse, { mode: 0o600 });
       }
 
