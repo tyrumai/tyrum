@@ -21,6 +21,8 @@ import type { SecretResolutionAuditDal } from "../secret/resolution-audit-dal.js
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
+import type { ArtifactStore } from "../artifact/store.js";
+import { persistExecutionArtifactBytes } from "../artifact/execution-artifacts.js";
 
 const MAX_RESPONSE_BYTES = 32_768;
 const TRUNCATION_MARKER = "...(truncated)";
@@ -311,6 +313,7 @@ export class ToolExecutor {
     private readonly secretResolutionAuditDal?: SecretResolutionAuditDal,
     private readonly workspaceLease?: WorkspaceLeaseConfig,
     private readonly nodeDispatchService?: NodeDispatchService,
+    private readonly artifactStore?: ArtifactStore,
   ) {}
 
   private workspaceLeaseOwner(toolCallId: string): string {
@@ -560,10 +563,15 @@ export class ToolExecutor {
         { timeoutMs },
       );
 
+      const evidence = await this.shapeNodeDispatchEvidence(parsedAction.data, result.evidence, {
+        runId,
+        stepId,
+      });
+
       const payload = {
         ok: result.ok,
         task_id: taskId,
-        evidence: result.evidence,
+        evidence,
         error: result.error,
       };
 
@@ -600,6 +608,109 @@ export class ToolExecutor {
       output: sanitizeForModel(tagged),
       provenance: tagged,
     };
+  }
+
+  private async shapeNodeDispatchEvidence(
+    actionKind: ActionPrimitive["type"],
+    evidence: unknown,
+    scope: { runId: string; stepId: string },
+  ): Promise<unknown> {
+    if (actionKind !== "Desktop") return evidence;
+    if (!this.artifactStore) return evidence;
+    const db = this.workspaceLease?.db;
+    if (!db) return evidence;
+    if (evidence === undefined) return evidence;
+    if (evidence === null || typeof evidence !== "object" || Array.isArray(evidence)) {
+      return evidence;
+    }
+
+    const evidenceObj = evidence as Record<string, unknown>;
+    const bytesBase64 =
+      typeof evidenceObj["bytesBase64"] === "string" ? evidenceObj["bytesBase64"] : undefined;
+    const treeValue = evidenceObj["tree"];
+
+    if (!bytesBase64 && treeValue === undefined) return evidence;
+
+    const mime = typeof evidenceObj["mime"] === "string" ? evidenceObj["mime"] : undefined;
+    const evidenceType =
+      typeof evidenceObj["type"] === "string" ? evidenceObj["type"] : "screenshot";
+    const width = typeof evidenceObj["width"] === "number" ? evidenceObj["width"] : undefined;
+    const height = typeof evidenceObj["height"] === "number" ? evidenceObj["height"] : undefined;
+    const timestamp =
+      typeof evidenceObj["timestamp"] === "string" ? evidenceObj["timestamp"] : undefined;
+
+    const shaped: Record<string, unknown> = { ...evidenceObj };
+
+    if (bytesBase64) {
+      delete shaped["bytesBase64"];
+
+      let stored = null as Awaited<ReturnType<typeof persistExecutionArtifactBytes>>;
+      try {
+        stored = await persistExecutionArtifactBytes(db, this.artifactStore, {
+          runId: scope.runId,
+          stepId: scope.stepId,
+          workspaceId: this.workspaceLease?.workspaceId,
+          kind: "screenshot",
+          body: Buffer.from(bytesBase64, "base64"),
+          mimeType: mime ?? "image/png",
+          labels: [evidenceType, "desktop"],
+          metadata: {
+            width,
+            height,
+            timestamp,
+            mime: mime ?? "image/png",
+            evidence_type: evidenceType,
+          },
+          sensitivity: "sensitive",
+        });
+      } catch {
+        stored = null;
+      }
+
+      if (!stored) {
+        shaped["bytes_omitted"] = true;
+      } else {
+        shaped["artifact"] = stored;
+      }
+    }
+
+    if (treeValue !== undefined) {
+      delete shaped["tree"];
+
+      const treeJson = (() => {
+        if (typeof treeValue === "string") return treeValue;
+        if (treeValue === null) return "null";
+        return JSON.stringify(treeValue);
+      })();
+
+      let storedTree = null as Awaited<ReturnType<typeof persistExecutionArtifactBytes>>;
+      try {
+        storedTree = await persistExecutionArtifactBytes(db, this.artifactStore, {
+          runId: scope.runId,
+          stepId: scope.stepId,
+          workspaceId: this.workspaceLease?.workspaceId,
+          kind: "dom_snapshot",
+          body: Buffer.from(treeJson, "utf8"),
+          mimeType: "application/json",
+          labels: ["a11y-tree", "desktop"],
+          metadata: {
+            timestamp,
+            evidence_type: evidenceType,
+          },
+          sensitivity: "sensitive",
+        });
+      } catch {
+        storedTree = null;
+      }
+
+      if (!storedTree) {
+        shaped["tree_omitted"] = true;
+      } else {
+        shaped["tree_artifact"] = storedTree;
+      }
+    }
+
+    return shaped;
   }
 
   private async executeFsRead(toolCallId: string, args: unknown): Promise<ToolResult> {

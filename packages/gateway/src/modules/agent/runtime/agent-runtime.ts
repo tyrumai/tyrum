@@ -2578,6 +2578,7 @@ export class AgentRuntime {
         ownerPrefix: this.instanceOwner,
       },
       nodeDispatchService,
+      this.opts.container.artifactStore,
     );
 
     const sessionCtx = formatSessionContext(session.summary, session.turns);

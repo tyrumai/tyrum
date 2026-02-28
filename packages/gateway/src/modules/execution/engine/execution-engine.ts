@@ -36,6 +36,10 @@ import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
 import { WorkboardDal } from "../../workboard/dal.js";
 import { sha256HexFromString, stableJsonStringify } from "../../policy/canonical-json.js";
+import {
+  deriveAgentIdFromExecutionKey,
+  insertExecutionArtifactRowTx,
+} from "../../artifact/execution-artifacts.js";
 import { defaultClock } from "./clock.js";
 import { normalizePositiveInt } from "../normalize-positive-int.js";
 import { parseConcurrencyLimitsFromEnv } from "./concurrency.js";
@@ -494,13 +498,6 @@ export class ExecutionEngine {
     await this.enqueueWsEvent(tx, evt);
   }
 
-  private deriveAgentIdFromKey(key: string): string | null {
-    if (!key.startsWith("agent:")) return null;
-    const parts = key.split(":");
-    const agentId = parts.length > 1 ? parts[1] : undefined;
-    return agentId && agentId.trim().length > 0 ? agentId : null;
-  }
-
   private async recordArtifactsTx(
     tx: SqlDb,
     scope: {
@@ -514,7 +511,7 @@ export class ExecutionEngine {
   ): Promise<void> {
     if (artifacts.length === 0) return;
 
-    const agentId = this.deriveAgentIdFromKey(scope.key);
+    const agentId = deriveAgentIdFromExecutionKey(scope.key);
     const run = await tx.get<{ policy_snapshot_id: string | null }>(
       "SELECT policy_snapshot_id FROM execution_runs WHERE run_id = ?",
       [scope.runId],
@@ -525,48 +522,22 @@ export class ExecutionEngine {
       const labelsJson = JSON.stringify(this.redactUnknown(artifact.labels ?? []));
       const metadataJson = JSON.stringify(this.redactUnknown(artifact.metadata ?? {}));
 
-      const insertResult = await tx.run(
-        `INSERT INTO execution_artifacts (
-           artifact_id,
-           workspace_id,
-           agent_id,
-           run_id,
-           step_id,
-           attempt_id,
-           kind,
-           uri,
-           created_at,
-           mime_type,
-           size_bytes,
-           sha256,
-           labels_json,
-           metadata_json,
-           sensitivity,
-           policy_snapshot_id
-         )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (artifact_id) DO NOTHING`,
-        [
-          artifact.artifact_id,
-          scope.workspaceId,
+      const { inserted } = await insertExecutionArtifactRowTx(tx, {
+        artifact,
+        labelsJson,
+        metadataJson,
+        scope: {
+          workspaceId: scope.workspaceId,
           agentId,
-          scope.runId,
-          scope.stepId,
-          scope.attemptId,
-          artifact.kind,
-          artifact.uri,
-          artifact.created_at,
-          artifact.mime_type ?? null,
-          artifact.size_bytes ?? null,
-          artifact.sha256 ?? null,
-          labelsJson,
-          metadataJson,
-          "normal",
+          runId: scope.runId,
+          stepId: scope.stepId,
+          attemptId: scope.attemptId,
+          sensitivity: "normal",
           policySnapshotId,
-        ],
-      );
+        },
+      });
 
-      if (insertResult.changes > 0) {
+      if (inserted) {
         await this.emitArtifactCreatedTx(tx, { runId: scope.runId, artifact });
       }
       await this.emitArtifactAttachedTx(tx, {
@@ -1294,7 +1265,7 @@ export class ExecutionEngine {
             }
 
             if (this.policyService?.isEnabled()) {
-              const agentId = this.deriveAgentIdFromKey(run.key) ?? "default";
+              const agentId = deriveAgentIdFromExecutionKey(run.key) ?? "default";
               const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
                 policySnapshotId,
                 agentId,
@@ -1698,7 +1669,7 @@ export class ExecutionEngine {
         }
       }
 
-      const agentId = this.deriveAgentIdFromKey(run.key) ?? "default";
+      const agentId = deriveAgentIdFromExecutionKey(run.key) ?? "default";
       const capability = actionType ? requiredCapability(actionType) : undefined;
 
       const concurrencyOk = await this.tryAcquireConcurrencyForAttemptTx(tx, {
@@ -2297,7 +2268,7 @@ export class ExecutionEngine {
 
     if (!this.policyService?.isEnabled()) return;
 
-    const agentId = this.deriveAgentIdFromKey(opts.key) ?? "default";
+    const agentId = deriveAgentIdFromExecutionKey(opts.key) ?? "default";
     const secretScopes = await this.resolveSecretScopesFromArgs(opts.action.args ?? {});
     const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
       policySnapshotId,
@@ -2807,7 +2778,7 @@ export class ExecutionEngine {
     const agentId =
       typeof agentIdRaw === "string" && agentIdRaw.trim()
         ? agentIdRaw.trim()
-        : (this.deriveAgentIdFromKey(opts.run.key) ?? "default");
+        : (deriveAgentIdFromExecutionKey(opts.run.key) ?? "default");
 
     const scope = {
       tenant_id: tenantId,
