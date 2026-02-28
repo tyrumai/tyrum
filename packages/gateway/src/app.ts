@@ -3,6 +3,7 @@
  */
 
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import type { GatewayContainer } from "./container.js";
 import { createHealthRoute } from "./routes/health.js";
 import { createStatusRoutes } from "./routes/status.js";
@@ -67,6 +68,7 @@ import {
   type SlidingWindowRateLimiter,
 } from "./modules/auth/rate-limiter.js";
 import { createMetricsMiddleware, gatewayMetrics } from "./modules/observability/metrics.js";
+import { requestIdForAudit } from "./modules/observability/request-id.js";
 
 export interface AppOptions {
   agents?: AgentRegistry;
@@ -409,6 +411,39 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       }),
     );
   }
+
+  app.onError((err, c) => {
+    if (err instanceof HTTPException) {
+      return err.getResponse();
+    }
+
+    const requestId = requestIdForAudit(c);
+    const payload: Record<string, unknown> = {
+      request_id: requestId,
+      method: c.req.method,
+      path: c.req.path,
+      error_name: err.name,
+      error_message: err.message,
+    };
+    const shouldIncludeStackTrace =
+      container.config.logStackTraces ?? process.env["NODE_ENV"] !== "production";
+    if (shouldIncludeStackTrace && err.stack) {
+      payload["error_stack"] = err.stack;
+    }
+
+    // Note: Do not treat raw ZodErrors as invalid_request.
+    // Zod is used to parse server-side data (DB rows/response shapes) and those failures should surface as 500s.
+    const errCode = (err as { code?: unknown }).code;
+    if (err.name === "InvalidRequestError" || errCode === "invalid_request") {
+      container.logger.warn("http.invalid_request", payload);
+      return c.json({ error: "invalid_request", message: err.message }, 400);
+    }
+
+    container.logger.error("http.unhandled_error", payload);
+    return c.json({ error: "internal_error", message: "An unexpected error occurred" }, 500);
+  });
+
+  app.notFound((c) => c.json({ error: "not_found", message: "route not found" }, 404));
 
   return app;
 }
