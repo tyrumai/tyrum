@@ -476,12 +476,11 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
       ref: AtSpiAccessibleRef,
       depth: number,
     ): Promise<DesktopUiTree["root"] | null> => {
-      if (remainingNodes <= 0) return null;
-      remainingNodes -= 1;
-
       const key = `${ref.busName}${ATSPI_REF_SEPARATOR}${ref.objectPath}`;
       if (visited.has(key)) return null;
+      if (remainingNodes <= 0) return null;
       visited.add(key);
+      remainingNodes -= 1;
 
       const info = await this.describeAccessible(ref);
 
@@ -556,11 +555,11 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
       if (matches.length >= args.limit) return;
       if (remainingNodes <= 0) return;
       if (depth >= DEFAULT_A11Y_MAX_DEPTH) return;
-      remainingNodes -= 1;
 
       const key = `${ref.busName}${ATSPI_REF_SEPARATOR}${ref.objectPath}`;
       if (visited.has(key)) return;
       visited.add(key);
+      remainingNodes -= 1;
 
       const info = await this.describeAccessible(ref);
       const node: DesktopUiNodeSummary = {

@@ -175,4 +175,79 @@ describe("AtSpiDesktopA11yBackend", () => {
     });
     expect(accessible.GetState).toHaveBeenCalledTimes(1);
   });
+
+  it("does not consume snapshot node budget on visited nodes", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const rootRef = { busName: "app", objectPath: "/root" };
+    backend.resolveRootAccessible = vi.fn(async () => rootRef);
+    backend.getChildren = vi.fn(async (ref: { objectPath: string }, maxChildren: number) => {
+      if (ref.objectPath === "/root") {
+        return [
+          { busName: "app", objectPath: "/a" },
+          { busName: "app", objectPath: "/b" },
+        ].slice(0, maxChildren);
+      }
+      if (ref.objectPath === "/a") {
+        return [{ busName: "app", objectPath: "/a" }].slice(0, maxChildren);
+      }
+      return [];
+    });
+    backend.describeAccessible = vi.fn(async (ref: { busName: string; objectPath: string }) => ({
+      elementRef: `atspi:${ref.busName}|${ref.objectPath}`,
+      role: "frame",
+      name: ref.objectPath,
+      bounds: { x: 0, y: 0, width: 100, height: 80 },
+      actions: [],
+      states: [],
+    }));
+
+    const snapshot = await backend.snapshot({
+      op: "snapshot",
+      include_tree: true,
+      max_nodes: 3,
+      max_text_chars: 512,
+    });
+
+    expect(snapshot.tree.root.children.map((n: { name: string }) => n.name)).toEqual(["/a", "/b"]);
+  });
+
+  it("does not consume query node budget on visited nodes", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const rootRef = { busName: "app", objectPath: "/node0" };
+    backend.resolveRootAccessible = vi.fn(async () => rootRef);
+    backend.getChildren = vi.fn(async (ref: { objectPath: string }, maxChildren: number) => {
+      const idxRaw = ref.objectPath.replace("/node", "");
+      const idx = Number(idxRaw);
+      if (!Number.isFinite(idx) || idx < 0) return [];
+      if (idx >= 19) return [];
+
+      const duplicates = Array.from({ length: 127 }, () => ({
+        busName: "app",
+        objectPath: "/node0",
+      }));
+      const next = { busName: "app", objectPath: `/node${String(idx + 1)}` };
+      const children = [...duplicates, next];
+      return children.slice(0, maxChildren);
+    });
+    backend.describeAccessible = vi.fn(async (ref: { busName: string; objectPath: string }) => ({
+      elementRef: `atspi:${ref.busName}|${ref.objectPath}`,
+      role: "button",
+      name: ref.objectPath === "/node19" ? "Target" : ref.objectPath,
+      bounds: { x: 0, y: 0, width: 100, height: 80 },
+      actions: [],
+      states: [],
+    }));
+
+    const matches = await backend.query({
+      op: "query",
+      selector: { kind: "a11y", role: "button", name: "target", states: [] },
+      limit: 1,
+    });
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.kind).toBe("a11y");
+    expect((matches[0] as { element_ref?: string }).element_ref).toBe("atspi:app|/node19");
+  });
 });

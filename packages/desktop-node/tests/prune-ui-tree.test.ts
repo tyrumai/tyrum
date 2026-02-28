@@ -22,4 +22,3 @@ describe("pruneUiTree", () => {
     expect(parsed.success).toBe(true);
   });
 });
-

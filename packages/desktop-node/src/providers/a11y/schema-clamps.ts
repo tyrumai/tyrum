@@ -12,4 +12,3 @@ export function clampTrimmed(value: string, maxChars: number): string {
   const trimmed = value.trim();
   return trimmed.length > maxChars ? trimmed.slice(0, maxChars) : trimmed;
 }
-

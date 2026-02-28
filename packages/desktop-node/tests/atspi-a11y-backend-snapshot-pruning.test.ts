@@ -34,4 +34,3 @@ describe("AtSpiDesktopA11yBackend snapshot pruning", () => {
     expect(pruneSpy).not.toHaveBeenCalled();
   });
 });
-
