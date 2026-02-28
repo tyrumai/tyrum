@@ -1152,17 +1152,24 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   const taskResults = new TaskResultRegistry();
   const toTaskResult = (
     success: boolean,
+    result: unknown,
     evidence: unknown,
     error: string | undefined,
   ): TaskResult => {
     if (success) {
-      return evidence === undefined ? { ok: true } : { ok: true, evidence };
+      const taskResult: TaskResult = { ok: true };
+      if (result !== undefined) taskResult.result = result;
+      if (evidence !== undefined) taskResult.evidence = evidence;
+      return taskResult;
     }
-    const result: TaskResult = { ok: false, error: error ?? "task failed" };
+    const taskResult: TaskResult = { ok: false, error: error ?? "task failed" };
+    if (result !== undefined) {
+      taskResult.result = result;
+    }
     if (evidence !== undefined) {
-      result.evidence = evidence;
+      taskResult.evidence = evidence;
     }
-    return result;
+    return taskResult;
   };
   const protocolDeps: ProtocolDeps = {
     connectionManager,
@@ -1197,8 +1204,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       : undefined,
     taskResults,
     hooks: hooksRuntime,
-    onTaskResult: (taskId, success, evidence, error) => {
-      taskResults.resolve(taskId, toTaskResult(success, evidence, error));
+    onTaskResult: (taskId, success, result, evidence, error) => {
+      taskResults.resolve(taskId, toTaskResult(success, result, evidence, error));
     },
     onConnectionClosed: (connectionId) => {
       taskResults.rejectAllForConnection(connectionId);

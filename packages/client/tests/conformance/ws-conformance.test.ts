@@ -126,11 +126,18 @@ describe("WS SDK conformance (client <-> gateway)", () => {
 
   it("gateway dispatches task.execute, client responds, gateway receives result", async () => {
     let resolveTaskResult:
-      | ((v: { taskId: string; success: boolean; evidence: unknown; error?: string }) => void)
+      | ((v: {
+          taskId: string;
+          success: boolean;
+          result: unknown;
+          evidence: unknown;
+          error?: string;
+        }) => void)
       | undefined;
     const taskResultP = new Promise<{
       taskId: string;
       success: boolean;
+      result: unknown;
       evidence: unknown;
       error?: string;
     }>((resolve) => {
@@ -139,8 +146,8 @@ describe("WS SDK conformance (client <-> gateway)", () => {
 
     gw = await startGateway((cm) => ({
       connectionManager: cm,
-      onTaskResult(taskId, success, evidence, error) {
-        resolveTaskResult?.({ taskId, success, evidence, error });
+      onTaskResult(taskId, success, result, evidence, error) {
+        resolveTaskResult?.({ taskId, success, result, evidence, error });
       },
     }));
 

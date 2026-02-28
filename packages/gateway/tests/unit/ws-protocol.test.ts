@@ -143,7 +143,13 @@ describe("handleClientMessage", () => {
     );
 
     expect(result).toBeUndefined();
-    expect(onTaskResult).toHaveBeenCalledWith("t-1", true, { screenshot: "base64..." }, undefined);
+    expect(onTaskResult).toHaveBeenCalledWith(
+      "t-1",
+      true,
+      undefined,
+      { screenshot: "base64..." },
+      undefined,
+    );
   });
 
   it("fires command.execute lifecycle hooks after executing a command", async () => {
@@ -229,7 +235,7 @@ describe("handleClientMessage", () => {
       deps,
     );
 
-    expect(onTaskResult).toHaveBeenCalledWith("t-2", false, undefined, "command failed");
+    expect(onTaskResult).toHaveBeenCalledWith("t-2", false, undefined, undefined, "command failed");
   });
 
   it("dispatches task.execute error response evidence from error details", async () => {
@@ -259,6 +265,7 @@ describe("handleClientMessage", () => {
     expect(onTaskResult).toHaveBeenCalledWith(
       "t-3",
       false,
+      undefined,
       { screenshot: "base64...", dom: "<html></html>" },
       "browser action failed",
     );

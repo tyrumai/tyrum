@@ -191,6 +191,11 @@ export async function handleClientMessage(
         msg.ok,
         msg.ok
           ? evidenceAndResult?.success
+            ? evidenceAndResult.data.result
+            : undefined
+          : undefined,
+        msg.ok
+          ? evidenceAndResult?.success
             ? evidenceAndResult.data.evidence
             : undefined
           : failureEvidence,

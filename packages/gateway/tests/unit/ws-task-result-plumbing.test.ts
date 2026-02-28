@@ -22,7 +22,66 @@ function createMockWs(): MockWebSocket {
   };
 }
 
+function toTaskResult(
+  success: boolean,
+  result: unknown,
+  evidence: unknown,
+  error: string | undefined,
+) {
+  const taskResult: {
+    ok: boolean;
+    result?: unknown;
+    evidence?: unknown;
+    error?: string;
+  } = { ok: success };
+
+  if (result !== undefined) taskResult.result = result;
+  if (evidence !== undefined) taskResult.evidence = evidence;
+  if (!success) taskResult.error = error ?? "task failed";
+
+  return taskResult;
+}
+
 describe("WS task.execute result plumbing", () => {
+  it("plumbs task.execute result + evidence to onTaskResult", async () => {
+    const cm = new ConnectionManager();
+    const nodeWs = createMockWs();
+    const connectionId = cm.addClient(nodeWs as never, ["desktop"], {
+      id: "conn-1",
+      role: "node",
+      deviceId: "node-1",
+      protocolRev: 2,
+    });
+
+    const onTaskResult = vi.fn();
+    const deps: ProtocolDeps = {
+      connectionManager: cm,
+      onTaskResult,
+    };
+
+    const taskId = "task-1";
+    const nodeClient = cm.getClient(connectionId)!;
+    await handleClientMessage(
+      nodeClient,
+      JSON.stringify({
+        request_id: taskId,
+        type: "task.execute",
+        ok: true,
+        result: { result: { ok: true }, evidence: { foo: "bar" } },
+      }),
+      deps,
+    );
+
+    expect(onTaskResult).toHaveBeenCalledOnce();
+    expect(onTaskResult).toHaveBeenCalledWith(
+      taskId,
+      true,
+      { ok: true },
+      { foo: "bar" },
+      undefined,
+    );
+  });
+
   it("dispatches task.execute and resolves the awaiting caller exactly once", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
@@ -52,15 +111,8 @@ describe("WS task.execute result plumbing", () => {
           };
         },
       } as never,
-      onTaskResult: (taskId, success, evidence, error) => {
-        registry.resolve(
-          taskId,
-          success
-            ? evidence === undefined
-              ? { ok: true }
-              : { ok: true, evidence }
-            : { ok: false, error: error ?? "task failed", evidence },
-        );
+      onTaskResult: (taskId, success, result, evidence, error) => {
+        registry.resolve(taskId, toTaskResult(success, result, evidence, error));
       },
       onConnectionClosed: (connectionId) => {
         registry.rejectAllForConnection(connectionId);
@@ -142,15 +194,8 @@ describe("WS task.execute result plumbing", () => {
           };
         },
       } as never,
-      onTaskResult: (taskId, success, evidence, error) => {
-        registry.resolve(
-          taskId,
-          success
-            ? evidence === undefined
-              ? { ok: true }
-              : { ok: true, evidence }
-            : { ok: false, error: error ?? "task failed", evidence },
-        );
+      onTaskResult: (taskId, success, result, evidence, error) => {
+        registry.resolve(taskId, toTaskResult(success, result, evidence, error));
       },
       onConnectionClosed: (connectionId) => {
         registry.rejectAllForConnection(connectionId);

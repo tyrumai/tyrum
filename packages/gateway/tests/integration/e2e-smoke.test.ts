@@ -42,6 +42,7 @@ async function startServer(app: Hono): Promise<{
   taskResults: Array<{
     taskId: string;
     success: boolean;
+    result: unknown;
     evidence: unknown;
     error: string | undefined;
   }>;
@@ -50,14 +51,15 @@ async function startServer(app: Hono): Promise<{
   const taskResults: Array<{
     taskId: string;
     success: boolean;
+    result: unknown;
     evidence: unknown;
     error: string | undefined;
   }> = [];
 
   const protocolDeps: ProtocolDeps = {
     connectionManager,
-    onTaskResult(taskId, success, evidence, error) {
-      taskResults.push({ taskId, success, evidence, error });
+    onTaskResult(taskId, success, result, evidence, error) {
+      taskResults.push({ taskId, success, result, evidence, error });
     },
   };
 

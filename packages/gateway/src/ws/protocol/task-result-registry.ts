@@ -1,5 +1,6 @@
 export type TaskResult = {
   ok: boolean;
+  result?: unknown;
   evidence?: unknown;
   error?: string;
 };

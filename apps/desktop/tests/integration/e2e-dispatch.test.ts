@@ -67,6 +67,7 @@ async function waitForCapabilities(
 interface TaskResultEntry {
   taskId: string;
   success: boolean;
+  result: unknown;
   evidence: unknown;
   error: string | undefined;
 }
@@ -96,8 +97,8 @@ async function startServer(): Promise<{
 
   const protocolDeps: ProtocolDeps = {
     connectionManager,
-    onTaskResult(taskId, success, evidence, error) {
-      taskResults.push({ taskId, success, evidence, error });
+    onTaskResult(taskId, success, result, evidence, error) {
+      taskResults.push({ taskId, success, result, evidence, error });
     },
   };
 

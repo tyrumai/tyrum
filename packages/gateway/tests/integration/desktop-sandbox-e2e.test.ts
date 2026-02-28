@@ -168,10 +168,10 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
           logger: container.logger,
           taskResults,
           nodePairingDal: container.nodePairingDal,
-          onTaskResult(taskId, success, evidence, error) {
+          onTaskResult(taskId, success, result, evidence, error) {
             taskResults.resolve(
               taskId,
-              success ? { ok: true, evidence } : { ok: false, evidence, error },
+              success ? { ok: true, result, evidence } : { ok: false, result, evidence, error },
             );
           },
           onConnectionClosed(connectionId) {

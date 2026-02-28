@@ -75,6 +75,7 @@ export interface ProtocolDeps {
   onTaskResult?: (
     taskId: string,
     success: boolean,
+    result: unknown,
     evidence: unknown,
     error: string | undefined,
   ) => void;
