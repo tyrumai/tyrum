@@ -28,6 +28,7 @@ import { DashboardPage } from "./pages/dashboard-page.js";
 import { RunsPage } from "./pages/runs-page.js";
 import { PairingPage } from "./pages/pairing-page.js";
 import { SettingsPage } from "./pages/settings-page.js";
+import { toErrorMessage } from "./utils/to-error-message.js";
 import { useOperatorStore } from "./use-operator-store.js";
 import { formatErrorMessage } from "./utils/format-error-message.js";
 
