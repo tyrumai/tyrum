@@ -7,6 +7,7 @@ import { Permissions } from "./pages/Permissions.js";
 import { Diagnostics } from "./pages/Diagnostics.js";
 import { Logs } from "./pages/Logs.js";
 import { WorkBoard } from "./pages/WorkBoard.js";
+import { Memory } from "./pages/Memory.js";
 import { ConsentModal } from "./components/ConsentModal.js";
 import { getDeepLinkRoute } from "./deep-links.js";
 
@@ -16,6 +17,7 @@ type PageId =
   | "gateway"
   | "connection"
   | "permissions"
+  | "memory"
   | "diagnostics"
   | "logs";
 
@@ -25,6 +27,7 @@ const VALID_PAGES = new Set<PageId>([
   "gateway",
   "connection",
   "permissions",
+  "memory",
   "diagnostics",
   "logs",
 ]);
@@ -107,6 +110,7 @@ export function App() {
       {page === "gateway" && <Gateway />}
       {page === "connection" && <Connection />}
       {page === "permissions" && <Permissions />}
+      {page === "memory" && <Memory />}
       {page === "diagnostics" && <Diagnostics />}
       {page === "logs" && <Logs />}
       <ConsentModal />

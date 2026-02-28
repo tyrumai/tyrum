@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { id: "gateway", label: "Gateway" },
   { id: "connection", label: "Connection" },
   { id: "permissions", label: "Permissions" },
+  { id: "memory", label: "Memory" },
   { id: "diagnostics", label: "Diagnostics" },
   { id: "logs", label: "Logs" },
 ] as const;
