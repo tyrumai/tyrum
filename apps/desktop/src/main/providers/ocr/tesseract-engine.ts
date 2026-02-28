@@ -44,7 +44,6 @@ type TesseractModule = {
 function normalizeConfidence(value: unknown): number | undefined {
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
   if (value < 0) return 0;
-  if (value <= 1) return value;
   if (value <= 100) return value / 100;
   return 1;
 }

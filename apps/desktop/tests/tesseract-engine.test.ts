@@ -72,7 +72,8 @@ describe("getTesseractOcrEngine", () => {
 
       createWorker.mockResolvedValue(worker);
 
-      const { getTesseractOcrEngine } = await import("../src/main/providers/ocr/tesseract-engine.js");
+      const { getTesseractOcrEngine } =
+        await import("../src/main/providers/ocr/tesseract-engine.js");
       const engine = getTesseractOcrEngine();
       const matches = await engine.recognize({ buffer: Buffer.from([0x00]), width: 1, height: 1 });
 
@@ -114,7 +115,8 @@ describe("getTesseractOcrEngine", () => {
 
       createWorker.mockResolvedValue(worker);
 
-      const { getTesseractOcrEngine } = await import("../src/main/providers/ocr/tesseract-engine.js");
+      const { getTesseractOcrEngine } =
+        await import("../src/main/providers/ocr/tesseract-engine.js");
       const engine = getTesseractOcrEngine();
       const matches = await engine.recognize({ buffer: Buffer.from([0x00]), width: 1, height: 1 });
 
@@ -122,7 +124,7 @@ describe("getTesseractOcrEngine", () => {
         {
           text: "Cancel",
           bounds: { x: 1, y: 2, width: 3, height: 4 },
-          confidence: 0.5,
+          confidence: 0.005,
         },
       ]);
     } finally {
@@ -152,7 +154,8 @@ describe("getTesseractOcrEngine", () => {
 
       createWorker.mockResolvedValue(worker);
 
-      const { getTesseractOcrEngine } = await import("../src/main/providers/ocr/tesseract-engine.js");
+      const { getTesseractOcrEngine } =
+        await import("../src/main/providers/ocr/tesseract-engine.js");
       const engine = getTesseractOcrEngine();
       const matches = await engine.recognize({ buffer: Buffer.from([0x00]), width: 1, height: 1 });
 
@@ -185,7 +188,8 @@ describe("getTesseractOcrEngine", () => {
 
       createWorker.mockResolvedValue(worker);
 
-      const { getTesseractOcrEngine } = await import("../src/main/providers/ocr/tesseract-engine.js");
+      const { getTesseractOcrEngine } =
+        await import("../src/main/providers/ocr/tesseract-engine.js");
       const engine = getTesseractOcrEngine();
 
       await engine.recognize({ buffer: Buffer.from([0x00]), width: 1, height: 1 });
@@ -221,7 +225,8 @@ describe("getTesseractOcrEngine", () => {
           }),
       );
 
-      const { getTesseractOcrEngine } = await import("../src/main/providers/ocr/tesseract-engine.js");
+      const { getTesseractOcrEngine } =
+        await import("../src/main/providers/ocr/tesseract-engine.js");
       const engine = getTesseractOcrEngine();
 
       const promise = engine.recognize({ buffer: Buffer.from([0x00]), width: 1, height: 1 });

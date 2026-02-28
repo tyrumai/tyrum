@@ -229,8 +229,6 @@ export class DesktopProvider implements CapabilityProvider {
       };
     }
 
-    const capture = await this.backend.captureScreen("primary");
-
     const timeoutMs = resolveOcrTimeoutMs();
     const ocr = this.ocr;
     if (!ocr) {
@@ -239,6 +237,8 @@ export class DesktopProvider implements CapabilityProvider {
         error: "OCR unavailable: no OCR engine configured",
       };
     }
+
+    const capture = await this.backend.captureScreen("primary");
 
     const caseInsensitive = selector.kind === "ocr" ? selector.case_insensitive : true;
     const normalizedNeedle = normalizeForContainsText(queryText, caseInsensitive);

@@ -154,6 +154,24 @@ describe("DesktopProvider", () => {
     });
   });
 
+  it("query skips screen capture when OCR is unavailable", async () => {
+    const permissions = resolvePermissions("safe", {});
+    const backend = new MockDesktopBackend();
+    const provider = new DesktopProvider(backend, permissions, vi.fn<ConfirmationFn>());
+
+    const result = await provider.execute(
+      makeAction({
+        op: "query",
+        selector: { kind: "ocr", text: "save" },
+        limit: 1,
+      }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("OCR unavailable");
+    expect(backend.calls).toEqual([]);
+  });
+
   it("query selector bounds filter excludes matches outside the region", async () => {
     const ocr = {
       recognize: vi.fn(async () => {
