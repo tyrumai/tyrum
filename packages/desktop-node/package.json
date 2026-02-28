@@ -1,0 +1,30 @@
+{
+  "name": "@tyrum/desktop-node",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "tyrum-desktop-node": "./bin/tyrum-desktop-node.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --dts",
+    "start": "node bin/tyrum-desktop-node.mjs"
+  },
+  "dependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.6",
+    "@tyrum/client": "workspace:*",
+    "@tyrum/schemas": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.2"
+  }
+}

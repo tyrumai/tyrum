@@ -17,8 +17,8 @@
     "dist": "pnpm build:gateway && pnpm build && electron-builder --publish never"
   },
   "dependencies": {
-    "@nut-tree-fork/nut-js": "^4.2.6",
     "@tyrum/client": "workspace:*",
+    "@tyrum/desktop-node": "workspace:*",
     "@tyrum/operator-core": "workspace:*",
     "@tyrum/operator-ui": "workspace:*",
     "@tyrum/schemas": "workspace:*",

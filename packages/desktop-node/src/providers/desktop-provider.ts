@@ -1,7 +1,6 @@
 import type { ActionPrimitive, ClientCapability } from "@tyrum/schemas";
 import { DesktopActionArgs } from "@tyrum/schemas";
 import type { CapabilityProvider, TaskResult } from "@tyrum/client";
-import type { ResolvedPermissions } from "../config/permissions.js";
 import type { DesktopBackend } from "./backends/desktop-backend.js";
 import type {
   DesktopActArgs,
@@ -12,6 +11,12 @@ import type {
   DesktopWaitForArgs,
 } from "@tyrum/schemas";
 import type { OcrEngine, OcrMatch } from "./ocr/types.js";
+
+export interface DesktopProviderPermissions {
+  desktopScreenshot: boolean;
+  desktopInput: boolean;
+  desktopInputRequiresConfirmation: boolean;
+}
 
 export type ConfirmationFn = (prompt: string) => Promise<boolean>;
 
@@ -92,7 +97,7 @@ export class DesktopProvider implements CapabilityProvider {
 
   constructor(
     private backend: DesktopBackend,
-    private permissions: ResolvedPermissions,
+    private permissions: DesktopProviderPermissions,
     private requestConfirmation: ConfirmationFn,
     private ocr?: OcrEngine,
   ) {}
@@ -421,6 +426,7 @@ export class DesktopProvider implements CapabilityProvider {
         error: "Desktop input is disabled by permission profile",
       };
     }
+
     if (this.permissions.desktopInputRequiresConfirmation) {
       const approved = await this.requestConfirmation(
         `Allow mouse ${args.action} at (${args.x}, ${args.y})?`,
@@ -445,10 +451,7 @@ export class DesktopProvider implements CapabilityProvider {
         await this.backend.dragMouse(args.x, args.y, args.duration_ms);
         break;
       default:
-        return {
-          success: false,
-          error: `Unsupported mouse action: ${args.action}`,
-        };
+        return { success: false, error: `Unsupported mouse action: ${args.action}` };
     }
 
     return {
@@ -474,6 +477,7 @@ export class DesktopProvider implements CapabilityProvider {
         error: "Desktop input is disabled by permission profile",
       };
     }
+
     if (this.permissions.desktopInputRequiresConfirmation) {
       const detail =
         args.action === "type" ? args.text : args.action === "press" ? args.key : undefined;
@@ -499,10 +503,7 @@ export class DesktopProvider implements CapabilityProvider {
         await this.backend.pressKey(args.key);
         break;
       default:
-        return {
-          success: false,
-          error: `Unsupported keyboard action: ${args.action}`,
-        };
+        return { success: false, error: `Unsupported keyboard action: ${args.action}` };
     }
 
     return {

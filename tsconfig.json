@@ -4,6 +4,7 @@
     { "path": "packages/schemas" },
     { "path": "packages/gateway" },
     { "path": "packages/client" },
+    { "path": "packages/desktop-node" },
     { "path": "packages/cli" },
     { "path": "packages/operator-core" },
     { "path": "packages/operator-ui" },

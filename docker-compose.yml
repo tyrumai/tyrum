@@ -33,6 +33,34 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
+  # Optional: Linux desktop sandbox (Xfce + noVNC) + paired desktop node
+  # Enable with: docker compose --profile desktop-sandbox up --build
+  # ---------------------------------------------------------------------------
+
+  desktop-sandbox:
+    profiles: ["desktop-sandbox"]
+    build:
+      context: .
+      dockerfile: docker/desktop-sandbox/Dockerfile
+    environment:
+      TYRUM_HOME: /var/lib/tyrum-node
+      TYRUM_GATEWAY_WS_URL: ws://tyrum:8788/ws
+      TYRUM_GATEWAY_TOKEN_PATH: /gateway/.admin-token
+      TYRUM_NODE_LABEL: tyrum-desktop-sandbox
+      TYRUM_NODE_MODE: desktop-sandbox
+      # Surface a stable URL for operator takeover (shown in the pairing UI label).
+      TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL: ${TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL:-http://localhost:6080/vnc.html?autoconnect=true}
+    ports:
+      - "5900:5900"
+      - "6080:6080"
+    volumes:
+      - tyrum-data:/gateway:ro
+      - tyrum-desktop-node:/var/lib/tyrum-node
+    depends_on:
+      - tyrum
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
   # Optional: split services + Postgres (safe; no split-on-SQLite)
   # Enable with: docker compose --profile split up
   # ---------------------------------------------------------------------------
@@ -165,3 +193,4 @@ volumes:
   tyrum-data:
   tyrum-postgres:
   tyrum-minio:
+  tyrum-desktop-node:

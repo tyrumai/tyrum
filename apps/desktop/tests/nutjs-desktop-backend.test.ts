@@ -2,15 +2,13 @@ import { describe, expect, it } from "vitest";
 
 describe("NutJsDesktopBackend", () => {
   it("can be constructed without throwing", async () => {
-    const { NutJsDesktopBackend } =
-      await import("../src/main/providers/backends/nutjs-desktop-backend.js");
+    const { NutJsDesktopBackend } = await import("@tyrum/desktop-node");
     const backend = new NutJsDesktopBackend();
     expect(backend).toBeDefined();
   });
 
   it("pressKey rejects unknown key names", async () => {
-    const { NutJsDesktopBackend } =
-      await import("../src/main/providers/backends/nutjs-desktop-backend.js");
+    const { NutJsDesktopBackend } = await import("@tyrum/desktop-node");
     const backend = new NutJsDesktopBackend();
     await expect(backend.pressKey("NonExistentKey")).rejects.toThrow(
       /Unknown key: "NonExistentKey"/,
@@ -22,8 +20,7 @@ describe("NutJsDesktopBackend", () => {
     !!process.env["DISPLAY"] || process.platform === "darwin" || process.platform === "win32";
 
   it.skipIf(!hasDisplay)("captureScreen returns a PNG buffer", async () => {
-    const { NutJsDesktopBackend } =
-      await import("../src/main/providers/backends/nutjs-desktop-backend.js");
+    const { NutJsDesktopBackend } = await import("@tyrum/desktop-node");
     const backend = new NutJsDesktopBackend();
     const capture = await backend.captureScreen("primary");
 
