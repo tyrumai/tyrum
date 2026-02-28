@@ -213,7 +213,14 @@ export function RunsPage({ core }: { core: OperatorCore }) {
               <Card key={run.run_id}>
                 <div className="flex items-center justify-between gap-4 p-4">
                   <div className="flex min-w-0 flex-wrap items-center gap-3">
-                    <Badge variant={badgeVariant}>{statusLabel}</Badge>
+                    <Badge
+                      data-testid={`run-status-${run.run_id}`}
+                      variant={badgeVariant}
+                      aria-live="polite"
+                      aria-atomic="true"
+                    >
+                      {statusLabel}
+                    </Badge>
                     <CopyableId id={run.run_id} />
                     <span className="text-xs text-fg-muted">{relativeTime}</span>
                   </div>

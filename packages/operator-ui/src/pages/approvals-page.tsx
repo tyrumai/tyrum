@@ -8,6 +8,7 @@ import { Badge } from "../components/ui/badge.js";
 import { Button } from "../components/ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../components/ui/card.js";
 import { EmptyState } from "../components/ui/empty-state.js";
+import { LiveRegion } from "../components/ui/live-region.js";
 import { Spinner } from "../components/ui/spinner.js";
 import { useOperatorStore } from "../use-operator-store.js";
 import { extractTakeoverUrlFromNodeLabel } from "../utils/takeover-url.js";
@@ -139,6 +140,10 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
           </Button>
         }
       />
+
+      <LiveRegion data-testid="approvals-pending-live">
+        {approvals.pendingIds.length} pending approvals
+      </LiveRegion>
 
       {approvals.error ? (
         <Alert variant="error" title="Approvals failed to load" description={approvals.error} />

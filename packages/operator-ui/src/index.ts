@@ -13,6 +13,9 @@ export { ThemeProvider, useTheme } from "./hooks/use-theme.js";
 
 export { useMediaQuery } from "./hooks/use-media-query.js";
 
+export type { KeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
+export { useKeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
+
 export type { AppShellMode, AppShellProps } from "./components/layout/app-shell.js";
 export { AppShell } from "./components/layout/app-shell.js";
 

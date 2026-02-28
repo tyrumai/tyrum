@@ -5,6 +5,7 @@ import { PageHeader } from "../components/layout/page-header.js";
 import { Badge } from "../components/ui/badge.js";
 import { Button } from "../components/ui/button.js";
 import { Card, CardContent, CardHeader } from "../components/ui/card.js";
+import { LiveRegion } from "../components/ui/live-region.js";
 import { Skeleton } from "../components/ui/skeleton.js";
 import { StatusDot } from "../components/ui/status-dot.js";
 import { cn } from "../lib/cn.js";
@@ -122,6 +123,10 @@ export function DashboardPage({ core, onNavigate }: DashboardPageProps) {
           </Button>
         }
       />
+
+      <LiveRegion data-testid="dashboard-approvals-live">
+        {approvals.pendingIds.length} pending approvals
+      </LiveRegion>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         <StatCard
