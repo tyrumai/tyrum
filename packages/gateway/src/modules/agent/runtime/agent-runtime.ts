@@ -95,7 +95,10 @@ import type { ApprovalDal, ApprovalStatus } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
 import { canonicalizeToolMatchTarget } from "../../policy/match-target.js";
-import { suggestedOverridesForToolCall } from "../../policy/suggested-overrides.js";
+import {
+  suggestedOverridesForToolCall,
+  type SuggestedOverride,
+} from "../../policy/suggested-overrides.js";
 import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { wildcardMatch } from "../../policy/wildcard.js";
 import { createProviderFromNpm } from "../../models/provider-factory.js";
@@ -288,9 +291,7 @@ type ToolCallPolicyState = {
   policyDecision?: Decision;
   policySnapshotId?: string;
   appliedOverrideIds?: string[];
-  suggestedOverrides?:
-    | Array<{ tool_id: string; pattern: string; workspace_id: string }>
-    | undefined;
+  suggestedOverrides?: SuggestedOverride[];
   approvalStepIndex?: number;
   shouldRequireApproval: boolean;
 };
