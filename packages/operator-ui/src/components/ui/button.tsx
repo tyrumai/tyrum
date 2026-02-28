@@ -3,7 +3,7 @@ import * as React from "react";
 import { cn } from "../../lib/cn.js";
 import { Spinner } from "./spinner.js";
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "outline";
+export type ButtonVariant = "primary" | "success" | "secondary" | "danger" | "ghost" | "outline";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -15,6 +15,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: "bg-primary text-white hover:bg-primary/90",
+  success: "bg-success text-white hover:bg-success/90",
   secondary: "bg-bg-card text-fg border border-border hover:bg-bg-subtle",
   danger: "bg-error text-white hover:bg-error/90",
   ghost: "bg-transparent text-fg hover:bg-primary-dim",
