@@ -12,6 +12,7 @@ import {
 import type { OperatorWsClient, OperatorHttpClient } from "../../operator-core/src/deps.js";
 import { AdminModeGate, AdminModeProvider, OperatorUiApp } from "../src/index.js";
 import * as operatorUi from "../src/index.js";
+import { PairingPage } from "../src/pages/pairing-page.js";
 import { stubMatchMedia } from "./test-utils.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -1604,6 +1605,174 @@ describe("operator-ui", () => {
       '[data-testid="pairing-approve-1"]',
     );
     expect(approveButtonAfter).toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("does not get stuck in a loading state under StrictMode when approve fails", async () => {
+    const ws = new FakeWsClient();
+    const { http, pairingsList, pairingsApprove } = createFakeHttpClient();
+    pairingsList.mockResolvedValueOnce({ status: "ok", pairings: [samplePairingRequestPending()] });
+    pairingsApprove.mockRejectedValueOnce(new Error("nope"));
+    vi.spyOn(
+      operatorUi.toast as unknown as { error: (message: string) => void },
+      "error",
+    ).mockImplementation(() => {});
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(React.StrictMode, null, React.createElement(PairingPage, { core })),
+      );
+    });
+
+    const refreshButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="pairing-refresh"]',
+    );
+    expect(refreshButton).not.toBeNull();
+
+    await act(async () => {
+      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const approveButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="pairing-approve-1"]',
+    );
+    expect(approveButton).not.toBeNull();
+
+    await act(async () => {
+      approveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(pairingsApprove).toHaveBeenCalledTimes(1);
+
+    const approveButtonAfter = container.querySelector<HTMLButtonElement>(
+      '[data-testid="pairing-approve-1"]',
+    );
+    expect(approveButtonAfter).not.toBeNull();
+    expect(approveButtonAfter?.disabled).toBe(false);
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("disables deny while approve is in flight", async () => {
+    const ws = new FakeWsClient();
+    const { http, pairingsList, pairingsApprove } = createFakeHttpClient();
+    pairingsList.mockResolvedValueOnce({ status: "ok", pairings: [samplePairingRequestPending()] });
+
+    let resolveApprove: ((value: unknown) => void) | null = null;
+    const approvePromise = new Promise((resolve) => {
+      resolveApprove = resolve;
+    });
+    pairingsApprove.mockImplementationOnce(() => approvePromise as never);
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(PairingPage, { core }));
+    });
+
+    const refreshButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="pairing-refresh"]',
+    );
+    expect(refreshButton).not.toBeNull();
+
+    await act(async () => {
+      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const approveButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="pairing-approve-1"]',
+    );
+    expect(approveButton).not.toBeNull();
+
+    act(() => {
+      approveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const denyButtonWhileBusy = container.querySelector<HTMLButtonElement>(
+      '[data-testid="pairing-deny-1"]',
+    );
+    expect(denyButtonWhileBusy).not.toBeNull();
+    expect(denyButtonWhileBusy?.disabled).toBe(true);
+
+    await act(async () => {
+      resolveApprove?.({ status: "ok", pairing: samplePairingRequestApproved() });
+      await Promise.resolve();
+    });
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("labels pairing groups with fieldset legends", async () => {
+    const ws = new FakeWsClient();
+    const { http, pairingsList } = createFakeHttpClient();
+    pairingsList.mockResolvedValueOnce({ status: "ok", pairings: [samplePairingRequestPending()] });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(PairingPage, { core }));
+    });
+
+    const refreshButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="pairing-refresh"]',
+    );
+    expect(refreshButton).not.toBeNull();
+
+    await act(async () => {
+      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const legends = Array.from(container.querySelectorAll("legend")).map((node) =>
+      (node.textContent ?? "").trim(),
+    );
+    expect(legends.some((text) => text.includes("Trust level"))).toBe(true);
+    expect(legends.some((text) => text.includes("Capabilities"))).toBe(true);
 
     act(() => {
       root?.unmount();

@@ -9,18 +9,15 @@ import { EmptyState } from "../components/ui/empty-state.js";
 import { Label } from "../components/ui/label.js";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group.js";
 import { Textarea } from "../components/ui/textarea.js";
+import { formatErrorMessage } from "../utils/format-error-message.js";
 import { useOperatorStore } from "../use-operator-store.js";
 
 type PairingTrustLevel = "local" | "remote";
 
-function resolveErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
-}
-
 function useMountedRef() {
   const mountedRef = useRef(true);
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
@@ -38,6 +35,7 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
     () => new Set(pairing.capability_allowlist.map((capability) => capability.id)),
   );
   const reasonRef = useRef<HTMLTextAreaElement | null>(null);
+  const isBusy = busy !== null;
 
   const onApprove = async (): Promise<void> => {
     if (busy) return;
@@ -54,7 +52,7 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
       });
       toast.success("Pairing approved");
     } catch (error) {
-      toast.error(resolveErrorMessage(error));
+      toast.error(formatErrorMessage(error));
     } finally {
       if (mountedRef.current) setBusy(null);
     }
@@ -71,7 +69,7 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
       );
       toast.success("Pairing denied");
     } catch (error) {
-      toast.error(resolveErrorMessage(error));
+      toast.error(formatErrorMessage(error));
     } finally {
       if (mountedRef.current) setBusy(null);
     }
@@ -88,8 +86,13 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
         </div>
       </CardHeader>
       <CardContent className="grid gap-6">
-        <div className="grid gap-3">
-          <Label required={true}>Trust level</Label>
+        <fieldset className="grid gap-3">
+          <legend className="text-sm font-medium leading-none text-fg">
+            Trust level{" "}
+            <span aria-hidden="true" className="text-error">
+              *
+            </span>
+          </legend>
           <RadioGroup
             value={trustLevel}
             onValueChange={(value) => {
@@ -104,6 +107,7 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
                 id={`pairing-${pairing.pairing_id}-trust-local`}
                 data-testid={`pairing-trust-level-${pairing.pairing_id}-local`}
                 value="local"
+                disabled={isBusy}
               />
               <Label htmlFor={`pairing-${pairing.pairing_id}-trust-local`}>Local</Label>
             </div>
@@ -112,20 +116,21 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
                 id={`pairing-${pairing.pairing_id}-trust-remote`}
                 data-testid={`pairing-trust-level-${pairing.pairing_id}-remote`}
                 value="remote"
+                disabled={isBusy}
               />
               <Label htmlFor={`pairing-${pairing.pairing_id}-trust-remote`}>Remote</Label>
             </div>
           </RadioGroup>
-        </div>
+        </fieldset>
 
-        <div className="grid gap-3">
-          <Label>Capabilities</Label>
+        <fieldset className="grid gap-3">
+          <legend className="text-sm font-medium leading-none text-fg">Capabilities</legend>
           {pairing.capability_allowlist.length === 0 ? (
             <div className="text-sm text-fg-muted">No capabilities requested.</div>
           ) : (
             <div className="grid gap-2">
               {pairing.capability_allowlist.map((capability, index) => {
-                const checkboxId = `pairing-${pairing.pairing_id}-cap-${index}`;
+                const checkboxId = `pairing-${pairing.pairing_id}-cap-${capability.id}`;
                 const checked = selectedCapabilityIds.has(capability.id);
                 return (
                   <div key={checkboxId} className="flex items-start gap-2">
@@ -133,6 +138,7 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
                       id={checkboxId}
                       data-testid={`pairing-capability-${pairing.pairing_id}-${index}`}
                       checked={checked}
+                      disabled={isBusy}
                       onCheckedChange={(nextChecked) => {
                         setSelectedCapabilityIds((prev) => {
                           const next = new Set(prev);
@@ -153,7 +159,7 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
               })}
             </div>
           )}
-        </div>
+        </fieldset>
 
         <Textarea
           data-testid={`pairing-reason-${pairing.pairing_id}`}
@@ -161,12 +167,14 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
           rows={3}
           ref={reasonRef}
           placeholder="Optional"
+          disabled={isBusy}
         />
       </CardContent>
       <CardFooter className="gap-2">
         <Button
           data-testid={`pairing-approve-${pairing.pairing_id}`}
           isLoading={busy === "approve"}
+          disabled={isBusy}
           onClick={() => {
             void onApprove();
           }}
@@ -177,6 +185,7 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
           variant="secondary"
           data-testid={`pairing-deny-${pairing.pairing_id}`}
           isLoading={busy === "deny"}
+          disabled={isBusy}
           onClick={() => {
             void onDeny();
           }}
@@ -199,7 +208,7 @@ function ApprovedPairingCard({ core, pairing }: { core: OperatorCore; pairing: P
     try {
       await core.pairingStore.revoke(pairing.pairing_id);
     } catch (error) {
-      toast.error(resolveErrorMessage(error));
+      toast.error(formatErrorMessage(error));
     } finally {
       if (mountedRef.current) setBusy(false);
     }
