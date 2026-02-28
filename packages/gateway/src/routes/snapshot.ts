@@ -241,7 +241,8 @@ async function repairSqliteAutoincrement(db: SqlDb, tables: string[]): Promise<v
          SET seq = (SELECT COALESCE(MAX(${quoteIdent(pk)}), 0) FROM ${quoteIdent(table)})
          WHERE name = '${table.replaceAll("'", "''")}'`,
       );
-    } catch {
+    } catch (err) {
+      void err;
       // ignore: sqlite_sequence may not exist for non-AUTOINCREMENT tables
     }
   }

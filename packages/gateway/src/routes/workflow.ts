@@ -84,7 +84,8 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
       if (parsedKey.kind === "agent") {
         agentId = parsedKey.agent_id;
       }
-    } catch {
+    } catch (err) {
+      void err;
       // ignore; treat as default agent
     }
 

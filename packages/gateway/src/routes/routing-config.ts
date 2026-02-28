@@ -41,7 +41,8 @@ function emitEvent(deps: RoutingConfigRouteDeps, evt: WsEventEnvelope): void {
     if (!shouldDeliverToWsAudience(client, ROUTING_CONFIG_WS_AUDIENCE)) continue;
     try {
       client.ws.send(payload);
-    } catch {
+    } catch (err) {
+      void err;
       // ignore best-effort sends
     }
   }
@@ -74,7 +75,8 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
         reason: latest?.reason ?? undefined,
         reverted_from_revision: latest?.revertedFromRevision ?? undefined,
       });
-    } catch {
+    } catch (err) {
+      void err;
       return c.json(
         {
           error: "corrupt_state",

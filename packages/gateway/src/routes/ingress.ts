@@ -87,7 +87,10 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
     if (deps.routingConfigDal) {
       try {
         durable = await deps.routingConfigDal.getLatest();
-      } catch {
+      } catch (err) {
+        deps.logger?.warn("ingress.telegram.routing_config_load_failed", {
+          error: safeDetail(err) ?? "unknown_error",
+        });
         durable = undefined;
       }
     }
@@ -107,7 +110,8 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
           deduped: enqueued.deduped,
           status: enqueued.inbox.status,
         });
-      } catch {
+      } catch (err) {
+        void err;
         return c.json(
           {
             error: "temporary_failure",
@@ -187,15 +191,24 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         await deps.telegramBot.sendMessage(chatId, chunk, { parse_mode: "HTML" });
       }
       return c.json({ ok: true, session_id: result.session_id });
-    } catch {
+    } catch (err) {
+      deps.logger?.warn("ingress.telegram.agent_turn_failed", {
+        agent_id: routedAgentId,
+        thread_id: chatId,
+        error: safeDetail(err) ?? "unknown_error",
+      });
       try {
         await deps.telegramBot.sendMessage(
           chatId,
           "Sorry, something went wrong. Please try again later.",
           { parse_mode: "HTML" },
         );
-      } catch {
-        // If we can't even send the error message, just return 200 to Telegram
+      } catch (sendErr) {
+        deps.logger?.warn("ingress.telegram.error_message_send_failed", {
+          agent_id: routedAgentId,
+          thread_id: chatId,
+          error: safeDetail(sendErr) ?? "unknown_error",
+        });
       }
       return c.json({ ok: true, error: "agent_error" });
     }

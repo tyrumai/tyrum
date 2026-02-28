@@ -41,7 +41,8 @@ function emitEvent(deps: PolicyBundleRouteDeps, evt: WsEventEnvelope): void {
   for (const client of ws.connectionManager.allClients()) {
     try {
       client.ws.send(payload);
-    } catch {
+    } catch (err) {
+      void err;
       // ignore best-effort sends
     }
   }

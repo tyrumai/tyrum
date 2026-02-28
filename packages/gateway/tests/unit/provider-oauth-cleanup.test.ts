@@ -262,4 +262,49 @@ describe("provider OAuth callback cleanup", () => {
       "https://example.test/prefix/providers/test/oauth/callback",
     );
   });
+
+  it("logs when pending cleanup fails during authorization", async () => {
+    const secretProvider = new MemorySecretProvider();
+    const registry = new MemoryProviderRegistry({
+      provider_id: "test",
+      display_name: "Test",
+      authorization_endpoint: "https://auth.test/authorize",
+      token_endpoint: "https://auth.test/token",
+      scopes: ["scope1"],
+      client_id_env: "TEST_CLIENT_ID",
+      client_secret_env: "TEST_CLIENT_SECRET",
+      token_endpoint_basic_auth: false,
+    });
+
+    const oauthPendingDal = {
+      async deleteExpired() {
+        throw new Error("db down");
+      },
+      async create() {},
+    } as any;
+
+    const logger = { warn: vi.fn(), info: vi.fn() } as any;
+
+    const app = createProviderOAuthRoutes({
+      oauthPendingDal,
+      oauthProviderRegistry: registry as any,
+      authProfileDal: {} as any,
+      secretProviderForAgent: async () => secretProvider,
+      logger,
+    });
+
+    const res = await app.request(
+      new Request("https://example.test/providers/test/oauth/authorize", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "oauth.pending_delete_expired_failed",
+      expect.objectContaining({ error: "db down" }),
+    );
+  });
 });

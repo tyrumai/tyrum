@@ -127,7 +127,8 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
       let json: unknown;
       try {
         json = JSON.parse(row.cost_json) as unknown;
-      } catch {
+      } catch (err) {
+        void err;
         invalid += 1;
         continue;
       }

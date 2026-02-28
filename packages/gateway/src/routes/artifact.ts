@@ -134,7 +134,8 @@ function authClaimsForAudit(c: { get?: (key: string) => unknown }): DeviceTokenC
     const raw = rawGet.call(c, "authClaims") as unknown;
     const parsed = DeviceTokenClaims.safeParse(raw);
     return parsed.success ? parsed.data : undefined;
-  } catch {
+  } catch (err) {
+    void err;
     return undefined;
   }
 }

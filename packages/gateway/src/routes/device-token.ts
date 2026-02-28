@@ -35,7 +35,8 @@ export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
     let body: unknown;
     try {
       body = (await c.req.json()) as unknown;
-    } catch {
+    } catch (err) {
+      void err;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
     const parsed = DeviceTokenIssueRequest.safeParse(body);
@@ -65,7 +66,8 @@ export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
     let body: unknown;
     try {
       body = (await c.req.json()) as unknown;
-    } catch {
+    } catch (err) {
+      void err;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
     const parsed = DeviceTokenRevokeRequest.safeParse(body);

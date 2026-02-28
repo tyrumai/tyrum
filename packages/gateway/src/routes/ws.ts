@@ -103,7 +103,8 @@ function decodeBase64Url(input: string): string | undefined {
     const padded = normalized + "=".repeat(padding);
     const decoded = Buffer.from(padded, "base64").toString("utf-8");
     return decoded.length > 0 ? decoded : undefined;
-  } catch {
+  } catch (err) {
+    void err;
     return undefined;
   }
 }
@@ -182,7 +183,8 @@ function isSameOriginUpgrade(req: IncomingMessage): boolean {
   let originUrl: URL;
   try {
     originUrl = new URL(originValue);
-  } catch {
+  } catch (err) {
+    void err;
     return false;
   }
   if (originUrl.protocol !== "http:" && originUrl.protocol !== "https:") return false;
@@ -325,7 +327,8 @@ export function createWsHandler(opts: WsRouteOptions): {
             for (const peer of connectionManager.allClients()) {
               try {
                 peer.ws.send(JSON.stringify(evt));
-              } catch {
+              } catch (err) {
+                void err;
                 // ignore
               }
             }
@@ -447,7 +450,8 @@ export function createWsHandler(opts: WsRouteOptions): {
         let json: unknown;
         try {
           json = JSON.parse(raw);
-        } catch {
+        } catch (err) {
+          void err;
           ws.close(4003, "invalid json");
           return;
         }
@@ -546,7 +550,8 @@ export function createWsHandler(opts: WsRouteOptions): {
               challenge: pendingInit.challenge,
             });
             ok = verify(null, transcript, key, sig);
-          } catch {
+          } catch (err) {
+            void err;
             ok = false;
           }
 
@@ -629,7 +634,8 @@ export function createWsHandler(opts: WsRouteOptions): {
                 for (const peer of connectionManager.allClients()) {
                   try {
                     peer.ws.send(JSON.stringify(evt));
-                  } catch {
+                  } catch (err) {
+                    void err;
                     // ignore
                   }
                 }
@@ -688,7 +694,8 @@ export function createWsHandler(opts: WsRouteOptions): {
                     for (const peer of connectionManager.allClients()) {
                       try {
                         peer.ws.send(JSON.stringify(evt));
-                      } catch {
+                      } catch (err) {
+                        void err;
                         // ignore
                       }
                     }
@@ -803,7 +810,8 @@ export function createWsHandler(opts: WsRouteOptions): {
     const requestPath = (() => {
       try {
         return new URL(req.url ?? "/", "http://localhost").pathname;
-      } catch {
+      } catch (err) {
+        void err;
         return undefined;
       }
     })();
@@ -826,7 +834,8 @@ export function createWsHandler(opts: WsRouteOptions): {
           user_agent: userAgent,
           request_id: requestId,
         });
-      } catch {
+      } catch (err) {
+        void err;
         // ignore audit failures; the socket still must close
       }
     };
@@ -879,12 +888,14 @@ export function createWsHandler(opts: WsRouteOptions): {
 
           try {
             socket.write(response);
-          } catch {
+          } catch (err) {
+            void err;
             // ignore
           }
           try {
             socket.destroy();
-          } catch {
+          } catch (err) {
+            void err;
             // ignore
           }
           return;

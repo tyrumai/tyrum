@@ -172,7 +172,12 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     const nowIso = new Date(nowMs).toISOString();
     const expiresAt = new Date(nowMs + PENDING_TTL_MS).toISOString();
 
-    await deps.oauthPendingDal.deleteExpired(nowIso).catch(() => {});
+    await deps.oauthPendingDal.deleteExpired(nowIso).catch((err) => {
+      deps.logger?.warn("oauth.pending_delete_expired_failed", {
+        provider: providerId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
     await deps.oauthPendingDal.create({
       state,
       provider_id: providerId,
@@ -207,7 +212,13 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     if (error) {
       // Consume the pending row (if present) so OAuth `state` remains single-use even on error callbacks.
       if (state) {
-        await deps.oauthPendingDal.consume(state).catch(() => {});
+        await deps.oauthPendingDal.consume(state).catch((err) => {
+          deps.logger?.warn("oauth.pending_consume_failed", {
+            provider: providerId,
+            state,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
       }
       return c.html(
         renderHtml(
@@ -248,7 +259,13 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     const nowMs = Date.now();
     const nowIso = new Date(nowMs).toISOString();
     if (pending.expires_at <= nowIso) {
-      await deps.oauthPendingDal.delete(state).catch(() => {});
+      await deps.oauthPendingDal.delete(state).catch((err) => {
+        deps.logger?.warn("oauth.pending_delete_failed", {
+          provider: providerId,
+          state,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
       return c.html(
         renderHtml("Authorization failed", "OAuth request expired. Please retry."),
         400,
