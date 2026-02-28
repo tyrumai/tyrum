@@ -1,3 +1,10 @@
+/**
+ * Backwards-compat for renamed migration filenames.
+ *
+ * IMPORTANT: Keep this mapping forever and append-only. Existing databases
+ * record applied migrations by filename in `_migrations.name`; removing a rename
+ * can cause a previously-applied migration to run again after an upgrade.
+ */
 export const MIGRATION_FILENAME_RENAMES: ReadonlyArray<readonly [from: string, to: string]> = [
   ["019_node_pairing_trust_allowlist.sql", "020_node_pairing_trust_allowlist.sql"],
   ["020_execution_attempt_policy.sql", "021_execution_attempt_policy.sql"],
