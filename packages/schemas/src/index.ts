@@ -867,6 +867,8 @@ export {
 
 export { WorkArtifactId, WorkArtifactKind, WorkArtifact } from "./work-artifacts.js";
 
+export { ToolIntentCostBudget, ToolIntentV1, ToolIntent } from "./tool-intent.js";
+
 export { DecisionRecordId, DecisionRecord } from "./work-decisions.js";
 
 export {
