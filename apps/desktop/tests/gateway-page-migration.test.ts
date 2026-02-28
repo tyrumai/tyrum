@@ -14,4 +14,3 @@ describe("Gateway page migration", () => {
     expect(source).not.toContain('from "../theme.js"');
   });
 });
-

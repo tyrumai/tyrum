@@ -1,16 +1,14 @@
 import { useEffect, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
 import {
-  colors,
-  heading,
-  card,
-  label,
-  value,
-  badge,
-  btn,
-  statusDot,
-  STATUS_COLORS,
-} from "../theme.js";
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  StatusDot,
+  type StatusDotVariant,
+} from "@tyrum/operator-ui";
 
 interface StatusInfo {
   gatewayMode: string;
@@ -27,6 +25,27 @@ function formatUptime(seconds: number): string {
   if (m < 60) return `${m}m ${s}s`;
   const h = Math.floor(m / 60);
   return `${h}h ${m % 60}m`;
+}
+
+function resolveGatewayVariant(status: string): { variant: StatusDotVariant; pulse: boolean } {
+  if (status === "running") {
+    return { variant: "success", pulse: false };
+  }
+  if (status === "starting") {
+    return { variant: "warning", pulse: true };
+  }
+  if (status === "error") {
+    return { variant: "danger", pulse: false };
+  }
+  if (status === "stopped") {
+    return { variant: "neutral", pulse: false };
+  }
+  return { variant: "neutral", pulse: false };
+}
+
+function titleCase(value: string): string {
+  if (value.length === 0) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 export function Overview() {
@@ -86,7 +105,6 @@ export function Overview() {
     return unsubscribe;
   }, []);
 
-  const color = STATUS_COLORS[status.gatewayStatus] ?? colors.neutral;
   const api = window.tyrumDesktop;
 
   const startGateway = async () => {
@@ -129,75 +147,86 @@ export function Overview() {
   };
 
   return (
-    <div>
-      <h1 style={heading}>Overview</h1>
+    <div className="grid gap-6">
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Overview</h1>
 
-      <div style={card}>
-        <div style={label}>Gateway Status</div>
-        <div style={value}>
-          <span style={statusDot(color)} />
-          {status.gatewayStatus.charAt(0).toUpperCase() + status.gatewayStatus.slice(1)}
-        </div>
-
-        {(status.gatewayStatus === "stopped" || status.gatewayStatus === "error") && (
-          <button
-            style={{ ...btn("primary"), marginBottom: 14 }}
-            onClick={startGateway}
-            disabled={busy}
-          >
-            {busy ? "Starting..." : "Start Gateway"}
-          </button>
-        )}
-        {(status.gatewayStatus === "running" || status.gatewayStatus === "starting") && (
-          <button
-            style={{ ...btn("danger"), marginBottom: 14 }}
-            onClick={stopGateway}
-            disabled={busy}
-          >
-            {busy ? "Stopping..." : "Stop Gateway"}
-          </button>
-        )}
-
-        {gatewayError && (
-          <div style={{ marginBottom: 16, color: colors.error, fontSize: 13 }}>
-            Reason: {gatewayError}
+      <Card>
+        <CardContent className="grid gap-4 pt-6">
+          <div className="grid gap-1">
+            <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              Gateway Status
+            </div>
+            <div className="flex items-center gap-2 text-base font-medium text-fg">
+              <StatusDot {...resolveGatewayVariant(status.gatewayStatus)} aria-hidden="true" />
+              <span>{titleCase(status.gatewayStatus)}</span>
+            </div>
           </div>
-        )}
 
-        <div style={label}>Mode</div>
-        <div style={value}>
-          {status.gatewayMode === "embedded" ? "Embedded Gateway" : "Remote Gateway"}
-        </div>
-
-        {status.port > 0 && (
-          <>
-            <div style={label}>Port</div>
-            <div style={value}>{status.port}</div>
-          </>
-        )}
-
-        {status.uptime > 0 && (
-          <>
-            <div style={label}>Uptime</div>
-            <div style={value}>{formatUptime(status.uptime)}</div>
-          </>
-        )}
-      </div>
-
-      <div style={card}>
-        <div style={label}>Connected Capabilities</div>
-        <div style={{ marginTop: 8 }}>
-          {status.capabilities.length === 0 ? (
-            <span style={{ color: colors.neutral, fontSize: 14 }}>No capabilities enabled</span>
-          ) : (
-            status.capabilities.map((cap) => (
-              <span key={cap} style={badge}>
-                {cap}
-              </span>
-            ))
+          {(status.gatewayStatus === "stopped" || status.gatewayStatus === "error") && (
+            <div>
+              <Button onClick={startGateway} disabled={busy} isLoading={busy}>
+                {busy ? "Starting..." : "Start Gateway"}
+              </Button>
+            </div>
           )}
-        </div>
-      </div>
+
+          {(status.gatewayStatus === "running" || status.gatewayStatus === "starting") && (
+            <div>
+              <Button variant="danger" onClick={stopGateway} disabled={busy} isLoading={busy}>
+                {busy ? "Stopping..." : "Stop Gateway"}
+              </Button>
+            </div>
+          )}
+
+          {gatewayError ? (
+            <Alert variant="error" title="Gateway error" description={gatewayError} />
+          ) : null}
+
+          <div className="grid gap-1">
+            <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Mode</div>
+            <div className="text-sm font-medium text-fg">
+              {status.gatewayMode === "embedded" ? "Embedded Gateway" : "Remote Gateway"}
+            </div>
+          </div>
+
+          {status.port > 0 ? (
+            <div className="grid gap-1">
+              <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                Port
+              </div>
+              <div className="text-sm font-medium text-fg">{status.port}</div>
+            </div>
+          ) : null}
+
+          {status.uptime > 0 ? (
+            <div className="grid gap-1">
+              <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                Uptime
+              </div>
+              <div className="text-sm font-medium text-fg">{formatUptime(status.uptime)}</div>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="grid gap-3 pt-6">
+          <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            Connected Capabilities
+          </div>
+          {status.capabilities.length === 0 ? (
+            <div className="text-sm text-fg-muted">No capabilities enabled</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {status.capabilities.map((cap) => (
+                <Badge key={cap} variant="outline">
+                  {cap}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
