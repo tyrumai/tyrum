@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTestApp } from "./helpers.js";
 
-function parseStructuredLogRecords(logSpy: { mock: { calls: unknown[][] } }): Record<string, unknown>[] {
+function parseStructuredLogRecords(logSpy: {
+  mock: { calls: unknown[][] };
+}): Record<string, unknown>[] {
   return logSpy.mock.calls
     .map((call) => call[0])
     .filter((arg): arg is string => typeof arg === "string" && arg.startsWith("{"))
@@ -12,7 +14,9 @@ function parseStructuredLogRecords(logSpy: { mock: { calls: unknown[][] } }): Re
         return undefined;
       }
     })
-    .filter((record): record is Record<string, unknown> => typeof record === "object" && record !== null);
+    .filter(
+      (record): record is Record<string, unknown> => typeof record === "object" && record !== null,
+    );
 }
 
 describe("gateway app global error handling", () => {
