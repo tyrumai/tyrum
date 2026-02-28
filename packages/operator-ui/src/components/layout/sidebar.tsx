@@ -1,10 +1,11 @@
 import * as React from "react";
 import { Moon, Sun } from "lucide-react";
 import { useThemeOptional, type ThemeMode } from "../../hooks/use-theme.js";
+import { getConnectionDisplay, type ConnectionStatus } from "../../lib/connection-display.js";
 import { cn } from "../../lib/cn.js";
 import { StatusDot } from "../ui/status-dot.js";
 
-export type SidebarConnectionStatus = "disconnected" | "connecting" | "connected";
+export type SidebarConnectionStatus = ConnectionStatus;
 
 export interface SidebarNavItem {
   id: string;
@@ -40,19 +41,10 @@ export function Sidebar({
 }: SidebarProps) {
   const theme = useThemeOptional();
 
-  const dotVariant =
-    connectionStatus === "connected"
-      ? "success"
-      : connectionStatus === "connecting"
-        ? "primary"
-        : "danger";
-  const dotPulse = connectionStatus === "connecting";
-  const connectionLabel =
-    connectionStatus === "connected"
-      ? "Connected"
-      : connectionStatus === "connecting"
-        ? "Connecting"
-        : "Disconnected";
+  const connectionDisplay = getConnectionDisplay(connectionStatus);
+  const dotVariant = connectionDisplay.variant;
+  const dotPulse = connectionDisplay.pulse;
+  const connectionLabel = connectionDisplay.label;
 
   const renderItem = (item: SidebarNavItem) => {
     const Icon = item.icon;

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader } from "../components/ui/card.js";
 import { Skeleton } from "../components/ui/skeleton.js";
 import { StatusDot } from "../components/ui/status-dot.js";
 import { cn } from "../lib/cn.js";
+import { getConnectionDisplay } from "../lib/connection-display.js";
 import { useOperatorStore } from "../use-operator-store.js";
 
 export interface DashboardPageProps {
@@ -89,19 +90,10 @@ export function DashboardPage({ core, onNavigate }: DashboardPageProps) {
   const tokensUsedText =
     typeof tokensUsed === "number" ? new Intl.NumberFormat().format(tokensUsed) : "-";
 
-  const connectionVariant =
-    connection.status === "connected"
-      ? "success"
-      : connection.status === "connecting"
-        ? "primary"
-        : "danger";
-  const connectionPulse = connection.status === "connecting";
-  const connectionLabel =
-    connection.status === "connected"
-      ? "Connected"
-      : connection.status === "connecting"
-        ? "Connecting"
-        : "Disconnected";
+  const connectionDisplay = getConnectionDisplay(connection.status);
+  const connectionVariant = connectionDisplay.variant;
+  const connectionPulse = connectionDisplay.pulse;
+  const connectionLabel = connectionDisplay.label;
 
   const refreshDashboard = (): void => {
     void Promise.allSettled([
