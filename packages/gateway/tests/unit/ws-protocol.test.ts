@@ -24,6 +24,11 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 // Mock WebSocket helper
 // ---------------------------------------------------------------------------
 
+type SpyLogger = NonNullable<ProtocolDeps["logger"]> & {
+  warn: ReturnType<typeof vi.fn>;
+  error: ReturnType<typeof vi.fn>;
+};
+
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
@@ -38,6 +43,17 @@ function createMockWs(): MockWebSocket {
     on: vi.fn(() => undefined as never),
     readyState: 1,
   };
+}
+
+function createSpyLogger(): SpyLogger {
+  const logger = {
+    child: vi.fn((_fields: Record<string, unknown>) => logger),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  };
+  return logger as unknown as SpyLogger;
 }
 
 function makeDeps(cm: ConnectionManager, overrides?: Partial<ProtocolDeps>): ProtocolDeps {
@@ -318,6 +334,110 @@ describe("handleClientMessage", () => {
           (msg["payload"] as { node_id?: string } | undefined)?.node_id === "dev_test",
       ),
     ).toBe(true);
+  });
+
+  it("logs capability.ready persistence failures (best-effort)", async () => {
+    const cm = new ConnectionManager();
+    const { id: nodeConnId } = makeClient(cm, ["cli"], {
+      role: "node",
+      deviceId: "dev_test",
+      protocolRev: 2,
+    });
+    makeClient(cm, ["cli"], { protocolRev: 2 });
+    const node = cm.getClient(nodeConnId)!;
+
+    const logger = createSpyLogger();
+    const setReadyCapabilities = vi.fn(async () => {
+      throw new Error("persist failed");
+    });
+    const enqueue = vi.fn(async () => undefined as never);
+
+    const deps = makeDeps(cm, {
+      logger,
+      cluster: {
+        edgeId: "edge-1",
+        outboxDal: { enqueue } as never,
+        connectionDirectory: { setReadyCapabilities } as never,
+      },
+    });
+
+    const result = await handleClientMessage(
+      node,
+      JSON.stringify({
+        request_id: "r-cap-ready-persist-fail-1",
+        type: "capability.ready",
+        payload: {
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        request_id: "r-cap-ready-persist-fail-1",
+        client_id: node.id,
+        request_type: "capability.ready",
+      }),
+    );
+  });
+
+  it("logs attempt.evidence node pairing lookup failures", async () => {
+    const cm = new ConnectionManager();
+    const { id: nodeConnId } = makeClient(cm, ["cli"], {
+      role: "node",
+      deviceId: "dev_test",
+      protocolRev: 2,
+    });
+    const node = cm.getClient(nodeConnId)!;
+    const logger = createSpyLogger();
+
+    const deps = makeDeps(cm, {
+      logger,
+      nodePairingDal: {
+        getByNodeId: vi.fn(async () => {
+          throw new Error("db down");
+        }),
+      } as never,
+    });
+
+    const result = await handleClientMessage(
+      node,
+      JSON.stringify({
+        request_id: "r-attempt-evidence-pairing-fail-1",
+        type: "attempt.evidence",
+        payload: {
+          run_id: "550e8400-e29b-41d4-a716-446655440000",
+          step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+          evidence: { log: "ok" },
+        },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(false);
+    expect((result as unknown as { type: string }).type).toBe("attempt.evidence");
+    expect((result as unknown as { error: { code: string } }).error.code).toBe("unauthorized");
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        request_id: "r-attempt-evidence-pairing-fail-1",
+        client_id: node.id,
+        request_type: "attempt.evidence",
+      }),
+    );
   });
 
   it("accepts attempt.evidence from nodes and broadcasts an attempt.evidence event", async () => {
@@ -1315,6 +1435,60 @@ describe("handleClientMessage", () => {
     expect((result as unknown as { ok: boolean }).ok).toBe(false);
     expect((result as unknown as { error: { code: string } }).error.code).toBe(
       "unsupported_request",
+    );
+  });
+
+  it("logs presence.beacon broadcast send failures (best-effort)", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"], {
+      role: "client",
+      deviceId: "dev_client_1",
+      protocolRev: 2,
+    });
+    const client = cm.getClient(id)!;
+
+    const { ws: throwingPeerWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+    throwingPeerWs.send.mockImplementation(() => {
+      throw new Error("send failed");
+    });
+
+    const logger = createSpyLogger();
+    const deps = makeDeps(cm, {
+      logger,
+      presenceDal: {
+        upsert: vi.fn(async () => ({
+          instance_id: "dev_client_1",
+          role: "client",
+          connection_id: id,
+          host: null,
+          ip: null,
+          version: null,
+          mode: null,
+          last_input_seconds: null,
+          metadata: {},
+          connected_at_ms: Date.now(),
+          last_seen_at_ms: Date.now(),
+          expires_at_ms: Date.now() + 60_000,
+        })),
+      } as never,
+    });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({ request_id: "r-presence-beacon-1", type: "presence.beacon", payload: {} }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+    expect((result as unknown as { type: string }).type).toBe("presence.beacon");
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        request_id: "r-presence-beacon-1",
+        client_id: client.id,
+        request_type: "presence.beacon",
+      }),
     );
   });
 

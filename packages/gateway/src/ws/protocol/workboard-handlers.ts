@@ -335,6 +335,9 @@ export async function handleWorkboardMessage(
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           deps.logger?.warn("workboard.notification_failed", {
+            request_id: msg.request_id,
+            client_id: client.id,
+            request_type: msg.type,
             work_item_id: item.work_item_id,
             status: payload.status,
             error: message,
