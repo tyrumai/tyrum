@@ -13,6 +13,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = resolve(__dirname, "../fixtures/operator-ui");
 
 const OPERATOR_UI_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
+const OPERATOR_UI_CSP_POLICY =
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; frame-ancestors 'none'";
 
 describe("operator UI static hosting (/ui)", () => {
   const prevUiDir = process.env[OPERATOR_UI_DIR_ENV];
@@ -37,6 +39,14 @@ describe("operator UI static hosting (/ui)", () => {
     expect(html).toContain("Operator UI Fixture");
   });
 
+  it("sets security headers on the SPA entry response (/ui/)", async () => {
+    const res = await app.request("/ui/");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-security-policy")).toBe(OPERATOR_UI_CSP_POLICY);
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("x-frame-options")).toBe("DENY");
+  });
+
   it("serves /ui/index.html with conservative cache headers", async () => {
     const res = await app.request("/ui/index.html");
     expect(res.status).toBe(200);
@@ -49,6 +59,9 @@ describe("operator UI static hosting (/ui)", () => {
   it("serves static assets with correct content-type and long cache headers", async () => {
     const res = await app.request("/ui/assets/app.js");
     expect(res.status).toBe(200);
+    expect(res.headers.get("content-security-policy")).toBe(OPERATOR_UI_CSP_POLICY);
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("x-frame-options")).toBe("DENY");
     expect(res.headers.get("content-type")).toContain("javascript");
     expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
     const js = await res.text();
