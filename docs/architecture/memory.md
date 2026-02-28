@@ -177,7 +177,7 @@ Agents must support explicit, targeted forgetting:
 
 For auditability, forgetting produces **tombstones**:
 
-- Tombstones preserve stable ids and minimal metadata (who/when/why), without retaining the deleted content.
+- Tombstones preserve stable ids and minimal metadata (who/when, and an optional reason when available), without retaining the deleted content.
 - Tombstones are queryable for “deletion proof” and compliance workflows.
 - Tombstones themselves are small and can have their own budget, but should be retained long enough to meet audit policy.
 
