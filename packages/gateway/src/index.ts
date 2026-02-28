@@ -272,15 +272,6 @@ type CliCommand =
   | { kind: "update"; channel: UpdateChannel; version?: string }
   | { kind: "plugin_install"; source_dir: string; home?: string };
 
-function parseGatewayRole(raw: string | undefined): GatewayRole | undefined {
-  const value = raw?.trim().toLowerCase();
-  if (!value) return undefined;
-  if (value === "all" || value === "edge" || value === "worker" || value === "scheduler") {
-    return value;
-  }
-  return undefined;
-}
-
 export function assertSplitRoleUsesPostgres(role: GatewayRole, dbPath: string): void {
   if (role === "all") return;
   if (isPostgresDbUri(dbPath)) return;
@@ -643,6 +634,35 @@ function shortHash(value: string): string {
   return trimmed.slice(0, 12);
 }
 
+type AdminTokenSource = "env" | "file" | "generated";
+
+type GatewayPortInfo =
+  | { valid: true; port: number }
+  | { valid: false; port: number; raw: string | undefined };
+
+function extractInvalidGatewayPortRaw(message: string): string | undefined {
+  const match = message.match(/\bGATEWAY_PORT\b.*\bgot '([^']*)'/i);
+  return match?.[1];
+}
+
+function loadConfigForCheck(overrides: NodeJS.ProcessEnv = {}): {
+  config: ReturnType<typeof loadConfigFromProcessEnv>;
+  portInfo: GatewayPortInfo;
+} {
+  try {
+    const config = loadConfigFromProcessEnv(overrides);
+    return { config, portInfo: { valid: true, port: config.server.port } };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/\bGATEWAY_PORT\b/i.test(message)) {
+      const raw = extractInvalidGatewayPortRaw(message);
+      const config = loadConfigFromProcessEnv({ ...overrides, GATEWAY_PORT: undefined });
+      return { config, portInfo: { valid: false, port: config.server.port, raw } };
+    }
+    throw error;
+  }
+}
+
 async function tryFetchJson(
   url: string,
   init: RequestInit & { timeoutMs: number },
@@ -678,15 +698,44 @@ async function tryFetchJson(
 
 async function runGatewayCheck(): Promise<number> {
   let config: ReturnType<typeof loadConfigFromProcessEnv>;
+  let portInfo: GatewayPortInfo;
+  let adminTokenSource: AdminTokenSource;
+  let token: string | undefined;
+
   try {
-    config = loadConfigFromProcessEnv();
+    const loaded = loadConfigForCheck();
+    config = loaded.config;
+    portInfo = loaded.portInfo;
+    adminTokenSource = "env";
+    token = config.auth.token;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (/GATEWAY_TOKEN/i.test(message)) {
-      config = loadConfigFromProcessEnv({ GATEWAY_TOKEN: "check-token" });
-    } else {
+    if (!/GATEWAY_TOKEN/i.test(message)) {
       console.error(`check: failed: ${message}`);
       return 1;
+    }
+
+    const loaded = loadConfigForCheck({ GATEWAY_TOKEN: "check-token" });
+    config = loaded.config;
+    portInfo = loaded.portInfo;
+
+    const tokenPath = join(config.paths.home, ".admin-token");
+    try {
+      const raw = await readFile(tokenPath, "utf-8");
+      const trimmed = raw.trim();
+      if (trimmed.length > 0) {
+        const fileLoaded = loadConfigForCheck({ GATEWAY_TOKEN: trimmed });
+        config = fileLoaded.config;
+        portInfo = fileLoaded.portInfo;
+        adminTokenSource = "file";
+        token = trimmed;
+      } else {
+        adminTokenSource = "generated";
+        token = undefined;
+      }
+    } catch {
+      adminTokenSource = "generated";
+      token = undefined;
     }
   }
 
@@ -719,13 +768,13 @@ async function runGatewayCheck(): Promise<number> {
     const hostRaw = config.server.host;
     const hostSplit = splitHostAndPort(hostRaw);
     const hostForProbe = hostSplit.host.length > 0 ? hostSplit.host : hostRaw;
-    const port = config.server.port;
     const isLocalOnly = isLoopbackHost(hostForProbe);
-    console.log(`static.exposure: host=${hostRaw} port=${port} is_exposed=${!isLocalOnly}`);
+    console.log(
+      `static.exposure: host=${hostRaw} port=${portInfo.valid ? portInfo.port : `invalid(raw=${portInfo.raw})`} is_exposed=${!isLocalOnly}`,
+    );
 
     const tokenPath = join(tyrumHome, ".admin-token");
-    console.log(`static.auth: token_path=${tokenPath}`);
-    const token = config.auth.token;
+    console.log(`static.auth: admin_token_source=${adminTokenSource} token_path=${tokenPath}`);
 
     try {
       const policy = await container.policyService?.getStatus?.();
@@ -774,6 +823,11 @@ async function runGatewayCheck(): Promise<number> {
 
     // --- Live HTTP probes (best-effort) ---
     try {
+      if (!portInfo.valid) {
+        console.log(`live.http: skipped=invalid_port raw=${portInfo.raw}`);
+        return 0;
+      }
+
       if (hostSplit.port) {
         console.log(
           `live.http: skipped=host_includes_port raw_host=${hostRaw} ignored_port=${hostSplit.port}`,
@@ -782,7 +836,7 @@ async function runGatewayCheck(): Promise<number> {
       }
 
       const probeHost = normalizeProbeHost(hostForProbe);
-      const baseUrl = `http://${hostForUrl(probeHost)}:${port}`;
+      const baseUrl = `http://${hostForUrl(probeHost)}:${portInfo.port}`;
       const health = await tryFetchJson(`${baseUrl}/healthz`, { timeoutMs: 500 });
       const statusPublic = await tryFetchJson(`${baseUrl}/status`, { timeoutMs: 500 });
 
