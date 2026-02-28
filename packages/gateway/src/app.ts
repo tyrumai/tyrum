@@ -41,7 +41,7 @@ import { createPresenceRoutes } from "./routes/presence.js";
 import { createMetricsRoutes } from "./routes/metrics.js";
 import { loadAllPlaybooks } from "./modules/playbook/loader.js";
 import { ExecutionEngine } from "./modules/execution/engine.js";
-import { isChannelPipelineEnabled, TelegramChannelQueue } from "./modules/channels/telegram.js";
+import { TelegramChannelQueue } from "./modules/channels/telegram.js";
 import { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
 import { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "./modules/models/session-pin-dal.js";
@@ -194,6 +194,8 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     );
   }
 
+  const channelPipelineEnabled = container.gatewayConfig?.channels.pipelineEnabled ?? true;
+
   // Apply auth middleware if a token store is provided
   if (opts.authRateLimiter) {
     const rateLimit = createRateLimitMiddleware(opts.authRateLimiter, { prefix: "auth" });
@@ -311,7 +313,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     createIngressRoutes({
       telegramBot: container.telegramBot,
       telegramQueue:
-        isChannelPipelineEnabled() && container.telegramBot && opts.agents
+        channelPipelineEnabled && container.telegramBot && opts.agents
           ? new TelegramChannelQueue(container.db, {
               logger: container.logger,
               ws: opts.connectionManager
