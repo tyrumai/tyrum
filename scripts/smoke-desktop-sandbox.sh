@@ -82,7 +82,7 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
   async function waitForPendingPairing() {
     const deadlineMs = Date.now() + 60_000;
     for (;;) {
-      const data = await fetchJson("/pairings?status=pending");
+      const data = await fetchJson("/pairings?status=pending", { headers });
       const pairings = Array.isArray(data.pairings) ? data.pairings : [];
       const pairing =
         pairings.find((p) => Array.isArray(p?.node?.capabilities) && p.node.capabilities.includes("desktop")) ??
@@ -198,4 +198,3 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
 
   console.log(`SMOKE_RUN_ID=${runId}`);
 '
-
