@@ -17,9 +17,10 @@ export type ConfirmationFn = (prompt: string) => Promise<boolean>;
 
 type PixelPoint = { x: number; y: number };
 
-const DEFAULT_OCR_TIMEOUT_MS = 10_000;
+const DEFAULT_OCR_TIMEOUT_MS = 30_000;
 const MAX_OCR_TIMEOUT_MS = 60_000;
 const MAX_OCR_MATCH_TEXT_BYTES = 8_192;
+const MAX_OCR_MATCH_TEXT_CHARS = 512;
 
 function parsePixelRef(ref: string): PixelPoint | null {
   const match = /^pixel:\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(ref.trim());
@@ -71,6 +72,19 @@ function rectsIntersect(a: DesktopUiRect, b: DesktopUiRect): boolean {
   const bx2 = b.x + b.width;
   const by2 = b.y + b.height;
   return a.x < bx2 && ax2 > b.x && a.y < by2 && ay2 > b.y;
+}
+
+function boundTextAroundMatch(value: string, matchIndex: number): string {
+  if (value.length <= MAX_OCR_MATCH_TEXT_CHARS) return value;
+
+  const windowSize = MAX_OCR_MATCH_TEXT_CHARS;
+  const safeIndex = matchIndex >= 0 ? matchIndex : 0;
+  const preferredStart = safeIndex - Math.floor(windowSize / 4);
+  const maxStart = Math.max(0, value.length - windowSize);
+  const start = Math.max(0, Math.min(maxStart, preferredStart));
+  const sliced = value.slice(start, start + windowSize).trim();
+
+  return sliced.length > 0 ? sliced : value.slice(0, windowSize).trim();
 }
 
 export class DesktopProvider implements CapabilityProvider {
@@ -203,12 +217,15 @@ export class DesktopProvider implements CapabilityProvider {
       selector.kind === "ocr"
         ? selector.text
         : selector.kind === "a11y"
-          ? (selector.name ?? "")
-          : "";
-    if (!queryText.trim()) {
+          ? selector.name
+          : undefined;
+    if (!queryText || !queryText.trim()) {
       return {
         success: false,
-        error: `Unsupported query selector kind for pixel mode: ${selector.kind}`,
+        error:
+          selector.kind === "a11y"
+            ? "Pixel query requires an a11y selector name for OCR text search"
+            : `Unsupported query selector kind for pixel mode: ${selector.kind}`,
       };
     }
 
@@ -255,17 +272,21 @@ export class DesktopProvider implements CapabilityProvider {
       if (!candidateText) continue;
 
       const normalizedHaystack = normalizeForContainsText(candidateText, caseInsensitive);
-      if (!normalizedHaystack.includes(normalizedNeedle)) continue;
+      const matchIndex = normalizedHaystack.indexOf(normalizedNeedle);
+      if (matchIndex === -1) continue;
 
       if (boundsFilter && !rectsIntersect(candidate.bounds, boundsFilter)) continue;
 
-      const nextBytes = Buffer.byteLength(candidateText, "utf8");
-      if (totalTextBytes + nextBytes > MAX_OCR_MATCH_TEXT_BYTES) break;
+      const boundedText = boundTextAroundMatch(candidateText, matchIndex);
+      if (!boundedText) continue;
+
+      const nextBytes = Buffer.byteLength(boundedText, "utf8");
+      if (totalTextBytes + nextBytes > MAX_OCR_MATCH_TEXT_BYTES) continue;
       totalTextBytes += nextBytes;
 
       matches.push({
         kind: "ocr",
-        text: candidateText,
+        text: boundedText,
         bounds: candidate.bounds,
         confidence: candidate.confidence,
       });

@@ -29,6 +29,9 @@ For pixel-mode `Desktop.query` text search, the desktop node runs OCR locally an
 `{ text, bounds, confidence? }` matches (screenshot coordinate space) so agents can locate UI targets
 without embedding full screenshots in tool outputs.
 
+When `selector.bounds` is provided, OCR matches are filtered to those whose bounds intersect the
+requested region.
+
 Implementation choice: **WASM OCR** (`tesseract.js`) is preferred over system binaries so the desktop
 node works out-of-the-box across macOS/Windows/Linux.
 
@@ -39,9 +42,10 @@ Tradeoffs:
 
 Configuration:
 
-- `TYRUM_DESKTOP_OCR_TIMEOUT_MS` (default 10s; max 60s)
+- `TYRUM_DESKTOP_OCR_TIMEOUT_MS` (default 30s; max 60s)
 - `TYRUM_DESKTOP_OCR_LANG` (default `eng`)
 - `TYRUM_DESKTOP_OCR_LANG_PATH` (optional override for offline/local language data)
+- `TYRUM_DESKTOP_OCR_CACHE_PATH` (optional; defaults to OS temp dir)
 
 ## Pairing posture
 

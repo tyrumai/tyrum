@@ -1,3 +1,7 @@
+import { mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import type { OcrEngine, OcrMatch } from "./types.js";
 
 type TesseractBbox = {
@@ -97,6 +101,11 @@ function resolveOcrLangPath(): string | undefined {
   return raw && raw.length > 0 ? raw : undefined;
 }
 
+function resolveOcrCachePath(): string | undefined {
+  const raw = process.env["TYRUM_DESKTOP_OCR_CACHE_PATH"]?.trim();
+  return raw && raw.length > 0 ? raw : join(tmpdir(), "tyrum-ocr-cache");
+}
+
 let cachedEngine: OcrEngine | undefined;
 
 export function getTesseractOcrEngine(): OcrEngine {
@@ -108,8 +117,10 @@ function createTesseractOcrEngine(): OcrEngine {
   let worker: TesseractWorker | null = null;
   let workerPromise: Promise<TesseractWorker> | null = null;
   let queue: Promise<void> = Promise.resolve();
+  let generation = 0;
 
   const reset = async (): Promise<void> => {
+    generation += 1;
     const current = worker;
     worker = null;
     workerPromise = null;
@@ -123,40 +134,40 @@ function createTesseractOcrEngine(): OcrEngine {
 
     const lang = resolveOcrLang();
     const langPath = resolveOcrLangPath();
+    let cachePath = resolveOcrCachePath();
+    if (cachePath) {
+      try {
+        await mkdir(cachePath, { recursive: true });
+      } catch {
+        cachePath = undefined;
+      }
+    }
 
-    workerPromise = (async () => {
+    const requestGeneration = generation;
+
+    const createdPromise = (async (): Promise<TesseractWorker> => {
       const mod = (await import("tesseract.js")) as unknown as TesseractModule;
       const createWorker = mod.createWorker ?? mod.default?.createWorker;
-      if (!createWorker) {
-        throw new Error("tesseract.js missing createWorker export");
-      }
+      if (!createWorker) throw new Error("tesseract.js missing createWorker export");
 
       const logger = () => undefined;
-      const options = { logger, ...(langPath ? { langPath } : {}) };
+      const options = {
+        logger,
+        ...(langPath ? { langPath } : {}),
+        ...(cachePath ? { cachePath } : {}),
+      };
 
-      let created: TesseractWorker | undefined;
-      let lastError: unknown;
-
-      for (const args of [[lang, undefined, options], [lang, options], [lang], [options]]) {
-        try {
-          created = await Promise.resolve(createWorker(...args));
-          break;
-        } catch (err) {
-          lastError = err;
-        }
-      }
-
-      if (!created) {
-        const message = lastError instanceof Error ? lastError.message : String(lastError);
+      let created: TesseractWorker;
+      try {
+        created = await Promise.resolve(createWorker(lang, undefined, options));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to create Tesseract worker: ${message}`);
       }
 
-      if (created.load) await created.load();
-      if (created.reinitialize) {
-        await created.reinitialize(lang);
-      } else {
-        if (created.loadLanguage) await created.loadLanguage(lang);
-        if (created.initialize) await created.initialize(lang);
+      if (generation !== requestGeneration) {
+        await created.terminate?.().catch(() => undefined);
+        throw new Error("OCR worker was reset");
       }
 
       if (created.setParameters) {
@@ -166,12 +177,21 @@ function createTesseractOcrEngine(): OcrEngine {
         });
       }
 
+      if (generation !== requestGeneration) {
+        await created.terminate?.().catch(() => undefined);
+        throw new Error("OCR worker was reset");
+      }
+
       worker = created;
       return created;
-    })().catch((err) => {
-      workerPromise = null;
+    })();
+
+    let wrappedPromise: Promise<TesseractWorker>;
+    wrappedPromise = createdPromise.catch((err) => {
+      if (workerPromise === wrappedPromise) workerPromise = null;
       throw err;
     });
+    workerPromise = wrappedPromise;
 
     return await workerPromise;
   };

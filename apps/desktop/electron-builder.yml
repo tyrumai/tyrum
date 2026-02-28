@@ -14,6 +14,9 @@ files:
   - dist/**/*
   - "!dist/gateway/**"
   - "!node_modules"
+asarUnpack:
+  - node_modules/tesseract.js/**
+  - node_modules/tesseract.js-core/**
 extraResources:
   - from: dist/gateway/index.mjs
     to: gateway/index.mjs

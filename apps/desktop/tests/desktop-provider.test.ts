@@ -3,7 +3,7 @@ import type { ActionPrimitive } from "@tyrum/schemas";
 import { resolvePermissions } from "../src/main/config/permissions.js";
 import { DesktopProvider, type ConfirmationFn } from "../src/main/providers/desktop-provider.js";
 import { MockDesktopBackend } from "../src/main/providers/backends/desktop-backend.js";
-import type { OcrEngine } from "../src/main/providers/ocr/types.js";
+import type { OcrEngine, OcrMatch } from "../src/main/providers/ocr/types.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -109,7 +109,7 @@ describe("DesktopProvider", () => {
           },
         ];
       }),
-    } satisfies OcrEngineStub;
+    } satisfies OcrEngine;
 
     const provider = makeProviderWithOcr("safe", ocr);
     const result = await provider.execute(
@@ -162,7 +162,7 @@ describe("DesktopProvider", () => {
           { text: "Outside", bounds: { x: 500, y: 600, width: 50, height: 10 } },
         ];
       }),
-    } satisfies OcrEngineStub;
+    } satisfies OcrEngine;
 
     const provider = makeProviderWithOcr("safe", ocr);
     const result = await provider.execute(
@@ -198,7 +198,7 @@ describe("DesktopProvider", () => {
           { text: "Cancel", bounds: { x: 100, y: 20, width: 90, height: 24 } },
         ];
       }),
-    } satisfies OcrEngineStub;
+    } satisfies OcrEngine;
 
     const provider = makeProviderWithOcr("safe", ocr);
     const result = await provider.execute(
@@ -232,11 +232,11 @@ describe("DesktopProvider", () => {
     try {
       const ocr = {
         recognize: vi.fn(async () => {
-          return await new Promise<OcrMatchStub[]>(() => {
+          return await new Promise<OcrMatch[]>(() => {
             // never resolve
           });
         }),
-      } satisfies OcrEngineStub;
+      } satisfies OcrEngine;
 
       const provider = makeProviderWithOcr("safe", ocr);
 
