@@ -25,7 +25,9 @@ import { ThemeProvider } from "./hooks/use-theme.js";
 import { ApprovalsPage } from "./pages/approvals-page.js";
 import { ConnectPage } from "./pages/connect-page.js";
 import { RunsPage } from "./pages/runs-page.js";
+import { PairingPage } from "./pages/pairing-page.js";
 import { useOperatorStore } from "./use-operator-store.js";
+import { formatErrorMessage } from "./utils/format-error-message.js";
 
 export type OperatorUiMode = "web" | "desktop";
 
@@ -102,11 +104,6 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
   const [configSaved, setConfigSaved] = useState(false);
 
   const [macPermissionSummary, setMacPermissionSummary] = useState<string | null>(null);
-
-  const toErrorMessage = (error: unknown): string => {
-    if (error instanceof Error) return error.message;
-    return String(error);
-  };
 
   useEffect(() => {
     return () => {
@@ -191,7 +188,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
       setPort(result.port);
       core.connect();
     } catch (error) {
-      setErrorMessage(toErrorMessage(error));
+      setErrorMessage(formatErrorMessage(error));
     } finally {
       setBusy(null);
     }
@@ -205,7 +202,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
       const result = await api.gateway.stop();
       setGatewayStatus(result.status);
     } catch (error) {
-      setErrorMessage(toErrorMessage(error));
+      setErrorMessage(formatErrorMessage(error));
     } finally {
       setBusy(null);
     }
@@ -219,7 +216,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
       const result = await api.node.connect();
       setNodeStatus(result.status);
     } catch (error) {
-      setErrorMessage(toErrorMessage(error));
+      setErrorMessage(formatErrorMessage(error));
     } finally {
       setBusy(null);
     }
@@ -233,7 +230,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
       const result = await api.node.disconnect();
       setNodeStatus(result.status);
     } catch (error) {
-      setErrorMessage(toErrorMessage(error));
+      setErrorMessage(formatErrorMessage(error));
     } finally {
       setBusy(null);
     }
@@ -266,7 +263,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
         saveResetTimer.current = null;
       }, 1500);
     } catch (error) {
-      setErrorMessage(toErrorMessage(error));
+      setErrorMessage(formatErrorMessage(error));
     } finally {
       setBusy(null);
     }
@@ -299,7 +296,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
         }
       }
     } catch (error) {
-      setErrorMessage(toErrorMessage(error));
+      setErrorMessage(formatErrorMessage(error));
     }
   };
 
@@ -311,7 +308,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
       await api.requestMacPermission(permission);
       void checkMacPermissions();
     } catch (error) {
-      setErrorMessage(toErrorMessage(error));
+      setErrorMessage(formatErrorMessage(error));
     } finally {
       setRequestingPermission(null);
     }
@@ -539,70 +536,11 @@ function DashboardPage({ core }: { core: OperatorCore }) {
   );
 }
 
-function PairingPage({ core }: { core: OperatorCore }) {
-  const pairing = useOperatorStore(core.pairingStore);
-  return (
-    <>
-      <h1>Pairing</h1>
-      <button
-        type="button"
-        data-testid="pairing-refresh"
-        onClick={() => {
-          void core.pairingStore.refresh();
-        }}
-      >
-        Refresh
-      </button>
-      {pairing.pendingIds.length === 0 ? (
-        <div>No pending pairing requests.</div>
-      ) : (
-        <ul>
-          {pairing.pendingIds.map((pairingId) => {
-            const req = pairing.byId[pairingId];
-            if (!req) return null;
-            return (
-              <li key={pairingId}>
-                <div>{req.node.node_id}</div>
-                <button
-                  type="button"
-                  data-testid={`pairing-approve-${pairingId}`}
-                  onClick={() => {
-                    void core.pairingStore.approve(pairingId, {
-                      trust_level: "local",
-                      capability_allowlist: req.capability_allowlist,
-                    });
-                  }}
-                >
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  data-testid={`pairing-deny-${pairingId}`}
-                  onClick={() => {
-                    void core.pairingStore.deny(pairingId);
-                  }}
-                >
-                  Deny
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </>
-  );
-}
-
 function SettingsPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
   const statusState = useOperatorStore(core.statusStore);
   const totalTokens = statusState.usage?.local.totals.total_tokens;
   const [adminCommandBusy, setAdminCommandBusy] = useState(false);
   const [adminCommandError, setAdminCommandError] = useState<string | null>(null);
-
-  const toErrorMessage = (error: unknown): string => {
-    if (error instanceof Error) return error.message;
-    return String(error);
-  };
 
   const runAdminCommand = async (): Promise<void> => {
     if (adminCommandBusy) return;
@@ -617,7 +555,7 @@ function SettingsPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode
       }
       await core.ws.commandExecute("/help");
     } catch (error) {
-      setAdminCommandError(toErrorMessage(error));
+      setAdminCommandError(formatErrorMessage(error));
     } finally {
       setAdminCommandBusy(false);
     }

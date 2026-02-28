@@ -1,14 +1,10 @@
 import { TriangleAlert } from "lucide-react";
 import { Button } from "../ui/button.js";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
 
 export interface ErrorFallbackProps {
   error: unknown;
   onReloadPage: () => void;
-}
-
-function formatErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  return String(error);
 }
 
 export function ErrorFallback({ error, onReloadPage }: ErrorFallbackProps) {
