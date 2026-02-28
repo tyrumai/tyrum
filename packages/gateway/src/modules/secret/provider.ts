@@ -1,5 +1,6 @@
 import { randomUUID, createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
 import { readFile, writeFile, access } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import type { SecretHandle as SecretHandleT } from "@tyrum/schemas";
 
 /** Interface for all secret providers. */
@@ -190,6 +191,53 @@ interface SecretStore {
   handles: Record<string, EncryptedEntry>;
 }
 
+const FILE_SECRET_PBKDF2_ITERATIONS = 100_000;
+const FILE_SECRET_PBKDF2_KEY_LENGTH_BYTES = 32;
+const FILE_SECRET_PBKDF2_DIGEST = "sha256";
+const FILE_SECRET_LEGACY_PBKDF2_SALT = "tyrum-secrets-v1";
+
+function resolveFileSecretSaltPath(secretsPath: string): string {
+  return join(dirname(secretsPath), ".salt");
+}
+
+function deriveFileSecretKey(adminToken: string, salt: Buffer | string): Buffer {
+  return pbkdf2Sync(
+    adminToken,
+    salt,
+    FILE_SECRET_PBKDF2_ITERATIONS,
+    FILE_SECRET_PBKDF2_KEY_LENGTH_BYTES,
+    FILE_SECRET_PBKDF2_DIGEST,
+  );
+}
+
+function encryptWithKey(
+  key: Buffer,
+  data: string,
+): { iv: string; authTag: string; ciphertext: string } {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update(data, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return {
+    iv: iv.toString("hex"),
+    authTag: authTag.toString("hex"),
+    ciphertext: encrypted.toString("hex"),
+  };
+}
+
+function decryptWithKey(
+  key: Buffer,
+  entry: Pick<EncryptedEntry, "iv" | "authTag" | "ciphertext">,
+): string {
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(entry.iv, "hex"));
+  decipher.setAuthTag(Buffer.from(entry.authTag, "hex"));
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(entry.ciphertext, "hex")),
+    decipher.final(),
+  ]);
+  return decrypted.toString("utf8");
+}
+
 /** File-based encrypted secret provider using AES-256-GCM. */
 export class FileSecretProvider implements SecretProvider {
   private constructor(
@@ -199,8 +247,69 @@ export class FileSecretProvider implements SecretProvider {
 
   /** Create a FileSecretProvider with PBKDF2-derived key. */
   static async create(secretsPath: string, adminToken: string): Promise<FileSecretProvider> {
-    const key = pbkdf2Sync(adminToken, "tyrum-secrets-v1", 100_000, 32, "sha256");
-    return new FileSecretProvider(secretsPath, key);
+    const saltPath = resolveFileSecretSaltPath(secretsPath);
+
+    let storedSalt: Buffer | null = null;
+    try {
+      storedSalt = await readFile(saltPath);
+    } catch {
+      // ignore missing salt file
+    }
+
+    const store = await FileSecretProvider.readStoreFromPath(secretsPath);
+    const legacyKey = deriveFileSecretKey(adminToken, FILE_SECRET_LEGACY_PBKDF2_SALT);
+    const entries = Object.entries(store.handles);
+
+    if (entries.length === 0) {
+      if (!storedSalt) {
+        storedSalt = randomBytes(32);
+        await writeFile(saltPath, storedSalt, { mode: 0o600 });
+      }
+      return new FileSecretProvider(secretsPath, deriveFileSecretKey(adminToken, storedSalt));
+    }
+
+    const instanceKey = storedSalt ? deriveFileSecretKey(adminToken, storedSalt) : null;
+    const firstEntry = entries[0];
+    if (!firstEntry) {
+      return new FileSecretProvider(secretsPath, instanceKey ?? legacyKey);
+    }
+    const [, sample] = firstEntry;
+
+    if (instanceKey) {
+      try {
+        decryptWithKey(instanceKey, sample);
+        return new FileSecretProvider(secretsPath, instanceKey);
+      } catch {
+        // fall through
+      }
+    }
+
+    try {
+      decryptWithKey(legacyKey, sample);
+
+      let saltToUse = storedSalt;
+      if (!saltToUse) {
+        saltToUse = randomBytes(32);
+        await writeFile(saltPath, saltToUse, { mode: 0o600 });
+      }
+
+      const migratedKey = deriveFileSecretKey(adminToken, saltToUse);
+      const migrated: SecretStore = { handles: {} };
+
+      for (const [handleId, existing] of entries) {
+        const plaintext = decryptWithKey(legacyKey, existing);
+        const encrypted = encryptWithKey(migratedKey, plaintext);
+        migrated.handles[handleId] = { handle: existing.handle, ...encrypted };
+      }
+
+      await FileSecretProvider.writeStoreToPath(secretsPath, migrated);
+      return new FileSecretProvider(secretsPath, migratedKey);
+    } catch {
+      if (instanceKey) {
+        return new FileSecretProvider(secretsPath, instanceKey);
+      }
+      return new FileSecretProvider(secretsPath, legacyKey);
+    }
   }
 
   async resolve(handle: SecretHandleT): Promise<string | null> {
@@ -240,46 +349,36 @@ export class FileSecretProvider implements SecretProvider {
   }
 
   private encrypt(data: string): { iv: string; authTag: string; ciphertext: string } {
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", this.encryptionKey, iv);
-    const encrypted = Buffer.concat([cipher.update(data, "utf8"), cipher.final()]);
-    const authTag = cipher.getAuthTag();
-    return {
-      iv: iv.toString("hex"),
-      authTag: authTag.toString("hex"),
-      ciphertext: encrypted.toString("hex"),
-    };
+    return encryptWithKey(this.encryptionKey, data);
   }
 
   private decrypt(entry: EncryptedEntry): string {
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      this.encryptionKey,
-      Buffer.from(entry.iv, "hex"),
-    );
-    decipher.setAuthTag(Buffer.from(entry.authTag, "hex"));
-    const decrypted = Buffer.concat([
-      decipher.update(Buffer.from(entry.ciphertext, "hex")),
-      decipher.final(),
-    ]);
-    return decrypted.toString("utf8");
+    return decryptWithKey(this.encryptionKey, entry);
   }
 
   private async readStore(): Promise<SecretStore> {
+    return await FileSecretProvider.readStoreFromPath(this.secretsPath);
+  }
+
+  private async writeStore(store: SecretStore): Promise<void> {
+    await FileSecretProvider.writeStoreToPath(this.secretsPath, store);
+  }
+
+  private static async readStoreFromPath(secretsPath: string): Promise<SecretStore> {
     try {
-      await access(this.secretsPath);
+      await access(secretsPath);
     } catch {
       return { handles: {} };
     }
     try {
-      const raw = await readFile(this.secretsPath, "utf8");
+      const raw = await readFile(secretsPath, "utf8");
       return JSON.parse(raw) as SecretStore;
     } catch {
       return { handles: {} };
     }
   }
 
-  private async writeStore(store: SecretStore): Promise<void> {
-    await writeFile(this.secretsPath, JSON.stringify(store), { mode: 0o600 });
+  private static async writeStoreToPath(secretsPath: string, store: SecretStore): Promise<void> {
+    await writeFile(secretsPath, JSON.stringify(store), { mode: 0o600 });
   }
 }

@@ -1,7 +1,8 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
+import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
+import { mkdtempSync, rmSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import {
   EnvSecretProvider,
   FileSecretProvider,
@@ -64,16 +65,47 @@ describe("EnvSecretProvider", () => {
 describe("FileSecretProvider", () => {
   let tempDir: string;
   let secretsPath: string;
+  let saltPath: string;
   const adminToken = "test-admin-token-for-testing";
+  const legacySalt = "tyrum-secrets-v1";
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "tyrum-secret-test-"));
     secretsPath = join(tempDir, ".secrets.enc");
+    saltPath = join(tempDir, ".salt");
   });
 
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true });
   });
+
+  function encryptWithKey(
+    key: Buffer,
+    data: string,
+  ): { iv: string; authTag: string; ciphertext: string } {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv("aes-256-gcm", key, iv);
+    const encrypted = Buffer.concat([cipher.update(data, "utf8"), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    return {
+      iv: iv.toString("hex"),
+      authTag: authTag.toString("hex"),
+      ciphertext: encrypted.toString("hex"),
+    };
+  }
+
+  function decryptWithKey(
+    key: Buffer,
+    entry: { iv: string; authTag: string; ciphertext: string },
+  ): string {
+    const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(entry.iv, "hex"));
+    decipher.setAuthTag(Buffer.from(entry.authTag, "hex"));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(entry.ciphertext, "hex")),
+      decipher.final(),
+    ]);
+    return decrypted.toString("utf8");
+  }
 
   it("encrypt/decrypt round-trip via store and resolve", async () => {
     const provider = await FileSecretProvider.create(secretsPath, adminToken);
@@ -84,6 +116,75 @@ describe("FileSecretProvider", () => {
 
     const resolved = await provider.resolve(handle);
     expect(resolved).toBe("super-secret-123");
+  });
+
+  it("generates an instance-specific salt file", async () => {
+    const provider = await FileSecretProvider.create(secretsPath, adminToken);
+    await provider.store("A", "a");
+
+    expect(existsSync(saltPath)).toBe(true);
+    const salt1 = readFileSync(saltPath);
+    expect(salt1).toHaveLength(32);
+
+    const tempDir2 = mkdtempSync(join(tmpdir(), "tyrum-secret-test-"));
+    const secretsPath2 = join(tempDir2, ".secrets.enc");
+    const saltPath2 = join(tempDir2, ".salt");
+    try {
+      const provider2 = await FileSecretProvider.create(secretsPath2, adminToken);
+      await provider2.store("B", "b");
+      const salt2 = readFileSync(saltPath2);
+      expect(salt2).toHaveLength(32);
+      expect(salt1.equals(salt2)).toBe(false);
+    } finally {
+      rmSync(tempDir2, { recursive: true, force: true });
+    }
+  });
+
+  it("creates the salt file with restrictive permissions", async () => {
+    const provider = await FileSecretProvider.create(secretsPath, adminToken);
+    await provider.store("A", "a");
+
+    expect(existsSync(saltPath)).toBe(true);
+
+    if (process.platform !== "win32") {
+      const mode = statSync(saltPath).mode & 0o777;
+      expect(mode).toBe(0o600);
+    }
+  });
+
+  it("migrates legacy secrets when the salt file is missing", async () => {
+    const handle = {
+      handle_id: "legacy-handle",
+      provider: "file" as const,
+      scope: "LEGACY",
+      created_at: new Date().toISOString(),
+    };
+
+    const legacyKey = pbkdf2Sync(adminToken, legacySalt, 100_000, 32, "sha256");
+    const legacyEncrypted = encryptWithKey(legacyKey, "legacy-value");
+    const legacyStore = { handles: { [handle.handle_id]: { handle, ...legacyEncrypted } } };
+    writeFileSync(secretsPath, JSON.stringify(legacyStore), { mode: 0o600 });
+
+    const before = readFileSync(secretsPath, "utf8");
+
+    const provider = await FileSecretProvider.create(secretsPath, adminToken);
+
+    expect(existsSync(saltPath)).toBe(true);
+    expect(await provider.resolve(handle)).toBe("legacy-value");
+
+    const after = readFileSync(secretsPath, "utf8");
+    expect(after).not.toBe(before);
+
+    const migrated = JSON.parse(after) as {
+      handles: Record<string, { iv: string; authTag: string; ciphertext: string }>;
+    };
+    const migratedEntry = migrated.handles[handle.handle_id];
+
+    const instanceSalt = readFileSync(saltPath);
+    const instanceKey = pbkdf2Sync(adminToken, instanceSalt, 100_000, 32, "sha256");
+
+    expect(() => decryptWithKey(legacyKey, migratedEntry)).toThrow();
+    expect(decryptWithKey(instanceKey, migratedEntry)).toBe("legacy-value");
   });
 
   it("store persists to disk", async () => {
