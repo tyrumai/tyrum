@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import mitt from "mitt";
-import { MemoryDal } from "../../src/modules/memory/dal.js";
+import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
 import type { GatewayEvents } from "../../src/event-bus.js";
+import { listWatcherEpisodes } from "../helpers/memory-v1-helpers.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { PolicyBundle } from "@tyrum/schemas";
@@ -12,17 +13,17 @@ import type { PolicyService } from "../../src/modules/policy/service.js";
 
 describe("WatcherScheduler", () => {
   let db: SqliteDb;
-  let memoryDal: MemoryDal;
+  let memoryV1Dal: MemoryV1Dal;
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
   let scheduler: WatcherScheduler;
 
   beforeEach(() => {
     db = openTestSqliteDb();
-    memoryDal = new MemoryDal(db);
+    memoryV1Dal = new MemoryV1Dal(db);
     eventBus = mitt<GatewayEvents>();
-    processor = new WatcherProcessor({ db, memoryDal, eventBus });
-    scheduler = new WatcherScheduler({ db, memoryDal, eventBus, tickMs: 100 });
+    processor = new WatcherProcessor({ db, memoryV1Dal, eventBus });
+    scheduler = new WatcherScheduler({ db, memoryV1Dal, eventBus, tickMs: 100 });
   });
 
   afterEach(async () => {
@@ -34,13 +35,58 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(1);
-    expect(events[0]!.event_type).toBe("periodic_fired");
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
+    expect(
+      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "periodic_fired"),
+    ).toHaveLength(1);
 
     const firings = await db.all<{ status: string }>("SELECT status FROM watcher_firings");
     expect(firings).toHaveLength(1);
     expect(firings[0]!.status).toBe("enqueued");
+  });
+
+  it("treats periodic episode recording as best-effort and continues firing batch processing", async () => {
+    const watcher1 = await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
+    const watcher2 = await processor.createWatcher("plan-2", "periodic", { intervalMs: 1000 });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const createSpy = vi
+      .spyOn(memoryV1Dal, "create")
+      .mockRejectedValue(new Error("episode recording failure"));
+
+    const received: GatewayEvents["watcher:fired"][] = [];
+    eventBus.on("watcher:fired", (e) => received.push(e));
+
+    await scheduler.tick();
+
+    expect(received).toHaveLength(2);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "watcher.periodic_episode_record_failed",
+      expect.objectContaining({
+        watcher_id: watcher1,
+        plan_id: "plan-1",
+        error: "episode recording failure",
+      }),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      "watcher.periodic_episode_record_failed",
+      expect.objectContaining({
+        watcher_id: watcher2,
+        plan_id: "plan-2",
+        error: "episode recording failure",
+      }),
+    );
+
+    const firings = await db.all<{ watcher_id: number; status: string }>(
+      "SELECT watcher_id, status FROM watcher_firings ORDER BY watcher_id",
+    );
+    expect(firings).toHaveLength(2);
+    expect(firings[0]!.status).toBe("enqueued");
+    expect(firings[1]!.status).toBe("enqueued");
+
+    createSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
   it("does not fire if interval has not elapsed", async () => {
@@ -49,8 +95,10 @@ describe("WatcherScheduler", () => {
     await scheduler.tick();
     await scheduler.tick(); // second tick, interval not yet elapsed
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(1); // only fired once
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
+    expect(
+      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "periodic_fired"),
+    ).toHaveLength(1); // only fired once
   });
 
   it("skips watchers with invalid config", async () => {
@@ -63,8 +111,8 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(0);
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
+    expect(episodes).toHaveLength(0);
   });
 
   it("skips watchers with non-positive intervalMs", async () => {
@@ -73,8 +121,8 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(0);
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
+    expect(episodes).toHaveLength(0);
   });
 
   it("ignores non-periodic watchers", async () => {
@@ -82,8 +130,8 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(0);
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
+    expect(episodes).toHaveLength(0);
   });
 
   it("emits watcher:fired event on fire", async () => {
@@ -122,7 +170,7 @@ describe("WatcherScheduler", () => {
   it("keeps the interval timer refed when keepProcessAlive is true", () => {
     const keepAliveScheduler = new WatcherScheduler({
       db,
-      memoryDal,
+      memoryV1Dal,
       eventBus,
       tickMs: 100,
       keepProcessAlive: true,
@@ -146,8 +194,8 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events).toHaveLength(0);
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
+    expect(episodes).toHaveLength(0);
   });
 
   it("claims webhook firings without emitting periodic events", async () => {
@@ -179,9 +227,13 @@ describe("WatcherScheduler", () => {
     expect(firings[0]!.trigger_type).toBe("webhook");
     expect(firings[0]!.status).toBe("enqueued");
 
-    const events = await memoryDal.getEpisodicEvents();
-    expect(events.filter((event) => event.event_type === "webhook_fired")).toHaveLength(1);
-    expect(events.filter((event) => event.event_type === "periodic_fired")).toHaveLength(0);
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
+    expect(
+      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "webhook_fired"),
+    ).toHaveLength(1);
+    expect(
+      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "periodic_fired"),
+    ).toHaveLength(0);
   });
 
   it("includes firing + lease ids in the cron execution trigger metadata", async () => {
@@ -192,7 +244,7 @@ describe("WatcherScheduler", () => {
     const policyBundle = PolicyBundle.parse({ v: 1 });
     const schedulerWithEngine = new WatcherScheduler({
       db,
-      memoryDal,
+      memoryV1Dal,
       eventBus,
       owner: "scheduler-1",
       firingLeaseTtlMs: 10_000,
@@ -256,7 +308,7 @@ describe("WatcherScheduler", () => {
     const policyBundle = PolicyBundle.parse({ v: 1 });
     const schedulerWithEngine = new WatcherScheduler({
       db,
-      memoryDal,
+      memoryV1Dal,
       eventBus,
       owner: "scheduler-1",
       firingLeaseTtlMs: 10_000,
@@ -313,7 +365,7 @@ describe("WatcherScheduler", () => {
     const policyBundle = PolicyBundle.parse({ v: 1 });
     const schedulerWithEngine = new WatcherScheduler({
       db,
-      memoryDal,
+      memoryV1Dal,
       eventBus,
       owner: "scheduler-1",
       firingLeaseTtlMs: 10_000,

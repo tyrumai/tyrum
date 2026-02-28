@@ -5,7 +5,7 @@
  */
 
 import type { EventBus } from "./event-bus.js";
-import type { MemoryDal } from "./modules/memory/dal.js";
+import type { MemoryV1Dal } from "./modules/memory/v1-dal.js";
 import type { EventLog } from "./modules/planner/event-log.js";
 import type { DiscoveryPipeline } from "./modules/discovery/pipeline.js";
 import type { RiskClassifier } from "./modules/risk/classifier.js";
@@ -29,7 +29,7 @@ import type { OauthRefreshLeaseDal } from "./modules/oauth/refresh-lease-dal.js"
 import type { OAuthProviderRegistry } from "./modules/oauth/provider-registry.js";
 
 import { createEventBus } from "./event-bus.js";
-import { MemoryDal as MemoryDalImpl } from "./modules/memory/dal.js";
+import { MemoryV1Dal as MemoryV1DalImpl } from "./modules/memory/v1-dal.js";
 import { EventLog as EventLogImpl } from "./modules/planner/event-log.js";
 import { ApprovalDal as ApprovalDalImpl } from "./modules/approval/dal.js";
 import {
@@ -78,7 +78,7 @@ export interface GatewayContainerConfig {
 
 export interface GatewayContainer {
   db: SqlDb;
-  memoryDal: MemoryDal;
+  memoryV1Dal: MemoryV1Dal;
   contextReportDal: ContextReportDal;
   secretResolutionAuditDal: SecretResolutionAuditDal;
   eventLog: EventLog;
@@ -138,16 +138,14 @@ function wireContainer(
   config: GatewayContainerConfig,
   opts?: { redactionEngine?: RedactionEngine; gatewayConfig?: GatewayRuntimeConfig },
 ): GatewayContainer {
-  const memoryDal = new MemoryDalImpl(db);
+  const memoryV1Dal = new MemoryV1DalImpl(db);
   const contextReportDal = new ContextReportDalImpl(db);
   const redactionEngine = opts?.redactionEngine ?? new RedactionEngine();
   const logger = new Logger({ base: { service: "tyrum-gateway" } });
   const secretResolutionAuditDal = new SecretResolutionAuditDalImpl(db, logger);
   const eventLog = new EventLogImpl(db, redactionEngine, logger);
   const connectorCache = new InMemoryConnectorCache();
-  const discoveryPipeline = new DiscoveryPipelineImpl(connectorCache, {
-    capabilityMemorySource: memoryDal,
-  });
+  const discoveryPipeline = new DiscoveryPipelineImpl(connectorCache);
   const riskClassifier = new RiskClassifierImpl(defaultRiskConfig());
   const sessionDal = new SessionDalImpl(db);
   const eventBus = createEventBus();
@@ -159,7 +157,7 @@ function wireContainer(
   const policySnapshotDal = new PolicySnapshotDalImpl(db);
   const policyOverrideDal = new PolicyOverrideDalImpl(db);
   const nodePairingDal = new NodePairingDalImpl(db);
-  const watcherProcessor = new WatcherProcessorImpl({ db, memoryDal, eventBus });
+  const watcherProcessor = new WatcherProcessorImpl({ db, memoryV1Dal, eventBus });
   const canvasDal = new CanvasDalImpl(db);
   const jobQueue = new JobQueueImpl(db);
 
@@ -193,7 +191,7 @@ function wireContainer(
 
   return {
     db,
-    memoryDal,
+    memoryV1Dal,
     contextReportDal,
     secretResolutionAuditDal,
     eventLog,

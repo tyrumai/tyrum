@@ -37,8 +37,8 @@ describe("Auth integration", () => {
       expect(body.is_exposed).toBe(true);
     });
 
-    it("rejects /memory/facts without token", async () => {
-      const res = await app.request("/memory/facts");
+    it("rejects /watchers without token", async () => {
+      const res = await app.request("/watchers");
       expect(res.status).toBe(401);
     });
 
@@ -47,8 +47,8 @@ describe("Auth integration", () => {
       expect(res.status).toBe(401);
     });
 
-    it("allows /memory/facts with valid token", async () => {
-      const res = await app.request("/memory/facts", {
+    it("allows /watchers with valid token", async () => {
+      const res = await app.request("/watchers", {
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       expect(res.status).toBe(200);
@@ -61,8 +61,8 @@ describe("Auth integration", () => {
       expect(res.status).toBe(200);
     });
 
-    it("rejects /memory/facts with invalid token", async () => {
-      const res = await app.request("/memory/facts", {
+    it("rejects /watchers with invalid token", async () => {
+      const res = await app.request("/watchers", {
         headers: { Authorization: "Bearer invalid" },
       });
       expect(res.status).toBe(401);
@@ -98,7 +98,7 @@ describe("Auth integration", () => {
       expect(body.error).toBe("forbidden");
     });
 
-    it("forbids POST /memory/facts with a read-only device token", async () => {
+    it("forbids POST /watchers with a read-only device token", async () => {
       const issued = await tokenStore.issueDeviceToken({
         deviceId: "dev_client_1",
         role: "client",
@@ -106,18 +106,16 @@ describe("Auth integration", () => {
         ttlSeconds: 300,
       });
 
-      const res = await app.request("/memory/facts", {
+      const res = await app.request("/watchers", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${issued.token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          fact_key: "k",
-          fact_value: "v",
-          source: "test",
-          observed_at: new Date().toISOString(),
-          confidence: 0.5,
+          plan_id: "plan-1",
+          trigger_type: "periodic",
+          trigger_config: { intervalMs: 1000 },
         }),
       });
       expect(res.status).toBe(403);
@@ -161,8 +159,8 @@ describe("Auth integration", () => {
       expect(body.is_exposed).toBe(false);
     });
 
-    it("rejects /memory/facts without token", async () => {
-      const res = await app.request("/memory/facts");
+    it("rejects /watchers without token", async () => {
+      const res = await app.request("/watchers");
       expect(res.status).toBe(401);
     });
 
@@ -171,8 +169,8 @@ describe("Auth integration", () => {
       expect(res.status).toBe(401);
     });
 
-    it("allows /memory/facts with valid token", async () => {
-      const res = await app.request("/memory/facts", {
+    it("allows /watchers with valid token", async () => {
+      const res = await app.request("/watchers", {
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       expect(res.status).toBe(200);

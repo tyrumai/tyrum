@@ -10,7 +10,6 @@ import { createStatusRoutes } from "./routes/status.js";
 import { createUsageRoutes } from "./routes/usage.js";
 import { policy } from "./routes/policy.js";
 import { createPolicyBundleRoutes } from "./routes/policy-bundle.js";
-import { createMemoryRoutes } from "./routes/memory.js";
 import { createMemoryExportRoutes } from "./routes/memory-export.js";
 import { createIngressRoutes } from "./routes/ingress.js";
 import { createRoutingConfigRoutes } from "./routes/routing-config.js";
@@ -291,7 +290,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   if (opts.plugins) {
     app.route("/", createPluginRoutes({ plugins: opts.plugins }));
   }
-  app.route("/", createMemoryRoutes(container.memoryDal));
   app.route("/", createMemoryExportRoutes({ artifactStore: container.artifactStore }));
   app.route(
     "/",
@@ -309,8 +307,9 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
             })
           : undefined,
       agents: opts.agents,
-      memoryDal: container.memoryDal,
+      memoryV1Dal: container.memoryV1Dal,
       routingConfigDal,
+      logger: container.logger,
       home: container.config?.tyrumHome,
     }),
   );

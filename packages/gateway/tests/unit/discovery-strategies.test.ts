@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveFromCapabilityMemory,
+  type CapabilityMemoryRow,
   type CapabilityMemorySource,
 } from "../../src/modules/discovery/strategies/capability-memory.js";
 import {
   resolveFromMcpTools,
   type McpToolSource,
 } from "../../src/modules/discovery/strategies/mcp-tools.js";
-import type { CapabilityMemoryRow } from "../../src/modules/memory/dal.js";
 import type { DiscoveryRequest } from "@tyrum/schemas";
 
 function makeRow(overrides: Partial<CapabilityMemoryRow> = {}): CapabilityMemoryRow {

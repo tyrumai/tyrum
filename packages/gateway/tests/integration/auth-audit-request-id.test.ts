@@ -54,18 +54,16 @@ describe("Auth audit request_id correlation", () => {
 
     const { app, container } = await createTestApp({ tokenStore, isLocalOnly: false });
     try {
-      const res = await app.request("/memory/facts", {
+      const res = await app.request("/watchers", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${issued.token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          fact_key: "k",
-          fact_value: "v",
-          source: "test",
-          observed_at: new Date().toISOString(),
-          confidence: 0.5,
+          plan_id: "plan-1",
+          trigger_type: "periodic",
+          trigger_config: { intervalMs: 1000 },
         }),
       });
       expect(res.status).toBe(403);

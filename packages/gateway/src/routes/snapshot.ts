@@ -22,18 +22,26 @@ export interface SnapshotRouteDeps {
   version: string;
 }
 
+const LEGACY_TABLES = new Set([
+  "facts",
+  "episodic_events",
+  "capability_memories",
+  "pam_profiles",
+  "pvp_profiles",
+]);
+
 const DEFAULT_TABLES = [
   // Audit + sessions
   "sessions",
   "planner_events",
   "context_reports",
-  // Memory
-  "facts",
-  "episodic_events",
+  // Memory (v1 canonical)
+  "memory_items",
+  "memory_item_provenance",
+  "memory_item_tags",
+  "memory_tombstones",
+  "memory_item_embeddings",
   "vector_metadata",
-  "capability_memories",
-  "pam_profiles",
-  "pvp_profiles",
   // Automation + approvals
   "watchers",
   "watcher_firings",
@@ -66,12 +74,12 @@ const IMPORT_ORDER = [
   "sessions",
   "planner_events",
   "context_reports",
-  "facts",
-  "episodic_events",
+  "memory_items",
+  "memory_item_provenance",
+  "memory_item_tags",
+  "memory_tombstones",
+  "memory_item_embeddings",
   "vector_metadata",
-  "capability_memories",
-  "pam_profiles",
-  "pvp_profiles",
   "watchers",
   "watcher_firings",
   "approvals",
@@ -308,7 +316,8 @@ export function createSnapshotRoutes(deps: SnapshotRouteDeps): Hono {
     }
 
     const bundle = parsed.data.bundle;
-    const tables = Object.keys(bundle.tables);
+    const bundleTables = Object.keys(bundle.tables);
+    const tables = bundleTables.filter((t) => !LEGACY_TABLES.has(t));
     for (const t of tables) {
       if (!DEFAULT_TABLES.includes(t as (typeof DEFAULT_TABLES)[number])) {
         return c.json({ error: "invalid_request", message: `unknown table '${t}'` }, 400);

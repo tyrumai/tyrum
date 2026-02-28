@@ -97,6 +97,38 @@ describe("AgentRuntime", () => {
     expect(result.used_tools).toEqual([]);
   }, 10_000);
 
+  it("records agent_turn episodes using the container memoryV1Dal instance", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const createSpy = vi.spyOn(container.memoryV1Dal, "create");
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+    });
+
+    await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "hi",
+    });
+
+    expect(createSpy).toHaveBeenCalled();
+
+    const agentTurnEpisode = createSpy.mock.calls.find(([input]) => {
+      const meta = input?.provenance?.metadata as Record<string, unknown> | undefined;
+      return input?.kind === "episode" && meta?.["event_type"] === "agent_turn";
+    });
+
+    expect(agentTurnEpisode).toBeDefined();
+  }, 10_000);
+
   it("clears lane interrupt signals when the lane lease is released", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({

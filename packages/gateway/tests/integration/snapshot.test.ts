@@ -62,6 +62,75 @@ describe("snapshot routes", () => {
     }
   });
 
+  it("ignores legacy memory tables in snapshot bundles (forward compatible)", async () => {
+    const originalFlag = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+    process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
+
+    let container: Awaited<ReturnType<typeof createTestApp>>["container"] | undefined;
+    let container2: Awaited<ReturnType<typeof createTestApp>>["container"] | undefined;
+
+    try {
+      const app1 = await createTestApp();
+      container = app1.container;
+
+      await container.db.run(
+        `INSERT INTO sessions (session_id, channel, thread_id)
+         VALUES (?, ?, ?)`,
+        ["session-legacy", "telegram", "thread-legacy"],
+      );
+
+      const exportRes = await app1.app.request("/snapshot/export");
+      expect(exportRes.status).toBe(200);
+      const bundle = (await exportRes.json()) as Record<string, unknown>;
+
+      const tables = bundle["tables"] as Record<string, unknown> | undefined;
+      if (!tables) throw new Error("expected snapshot export to include tables");
+
+      const legacyEmptyTable = { columns: ["id"], rows: [] };
+      tables["facts"] = legacyEmptyTable;
+      tables["episodic_events"] = legacyEmptyTable;
+      tables["capability_memories"] = legacyEmptyTable;
+      tables["pam_profiles"] = legacyEmptyTable;
+      tables["pvp_profiles"] = legacyEmptyTable;
+
+      const app2 = await createTestApp();
+      container2 = app2.container;
+
+      const importRes = await app2.app.request("/snapshot/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirm: "IMPORT", bundle }),
+      });
+      expect(importRes.status).toBe(200);
+      const importBody = (await importRes.json()) as Record<string, unknown>;
+
+      expect(importBody["tables"]).not.toEqual(
+        expect.arrayContaining([
+          "facts",
+          "episodic_events",
+          "capability_memories",
+          "pam_profiles",
+          "pvp_profiles",
+        ]),
+      );
+
+      const importedSession = await container2.db.get<{ session_id: string }>(
+        "SELECT session_id FROM sessions WHERE session_id = ?",
+        ["session-legacy"],
+      );
+      expect(importedSession?.session_id).toBe("session-legacy");
+    } finally {
+      await container?.db.close();
+      await container2?.db.close();
+
+      if (originalFlag === undefined) {
+        delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+      } else {
+        process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = originalFlag;
+      }
+    }
+  });
+
   it("imports v1 snapshot bundles (backward compatible)", async () => {
     const originalFlag = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
     process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
