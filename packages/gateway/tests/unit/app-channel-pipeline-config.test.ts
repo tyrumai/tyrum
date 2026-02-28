@@ -11,8 +11,7 @@ const migrationsDir = join(__dirname, "../../migrations/sqlite");
 const telegramQueueCtor = vi.fn();
 
 vi.mock("../../src/modules/channels/telegram.js", async (importOriginal) => {
-  const original =
-    await importOriginal<typeof import("../../src/modules/channels/telegram.js")>();
+  const original = await importOriginal<typeof import("../../src/modules/channels/telegram.js")>();
 
   return {
     ...original,
@@ -56,4 +55,3 @@ describe("createApp channel pipeline wiring", () => {
     expect(telegramQueueCtor).not.toHaveBeenCalled();
   });
 });
-
