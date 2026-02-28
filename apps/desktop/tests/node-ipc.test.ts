@@ -49,6 +49,7 @@ vi.mock("../src/main/config/token-store.js", () => ({
 }));
 
 vi.mock("@tyrum/desktop-node", () => ({
+  AtSpiDesktopA11yBackend: vi.fn(),
   DesktopProvider: vi.fn(),
   NutJsDesktopBackend: vi.fn(),
 }));

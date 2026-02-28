@@ -1,0 +1,286 @@
+import { describe, expect, it, vi } from "vitest";
+import { DesktopQueryResult } from "@tyrum/schemas";
+import { AtSpiDesktopA11yBackend } from "../src/providers/backends/atspi-a11y-backend.js";
+import { DEFAULT_A11Y_MAX_DEPTH } from "../src/providers/a11y/prune-ui-tree.js";
+
+describe("AtSpiDesktopA11yBackend", () => {
+  it("does not treat the desktop frame as the focused window root", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const focus = { busName: "app", objectPath: "/focus" };
+    const windowFrame = { busName: "app", objectPath: "/frame" };
+    const application = { busName: "app", objectPath: "/app" };
+    const desktopFrame = { busName: "app", objectPath: "/desktop" };
+
+    backend.getFocusedAccessible = vi.fn(async () => focus);
+    backend.getParent = vi.fn(async (ref: { objectPath: string }) => {
+      switch (ref.objectPath) {
+        case "/focus":
+          return windowFrame;
+        case "/frame":
+          return application;
+        case "/app":
+          return desktopFrame;
+        default:
+          return null;
+      }
+    });
+    backend.describeAccessible = vi.fn(async (ref: { objectPath: string }) => ({
+      elementRef: `atspi:app|${ref.objectPath}`,
+      role:
+        ref.objectPath === "/frame"
+          ? "frame"
+          : ref.objectPath === "/desktop"
+            ? "desktop frame"
+            : "application",
+      name: "",
+      bounds: { x: 0, y: 0, width: 0, height: 0 },
+      actions: [],
+      states: [],
+    }));
+
+    const resolved = await backend.resolveRootAccessible();
+    expect(resolved).toEqual(windowFrame);
+  });
+
+  it("caps GetChildAtIndex enumeration per call", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const getChildAtIndex = vi.fn(async (i: number) => ["app", `/child/${String(i)}`]);
+    const iface = {
+      GetChildCount: vi.fn(async () => 20),
+      GetChildAtIndex: getChildAtIndex,
+    };
+
+    backend.getInterface = vi.fn(async () => iface);
+
+    const children = await backend.getChildren({ busName: "app", objectPath: "/root" }, 5);
+
+    expect(getChildAtIndex).toHaveBeenCalledTimes(5);
+    expect(children).toHaveLength(5);
+  });
+
+  it("caps GetChildren results per call", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const iface = {
+      GetChildren: vi.fn(async () =>
+        Array.from({ length: 10 }, (_, i) => ["app", `/child/${String(i)}`]),
+      ),
+    };
+
+    backend.getInterface = vi.fn(async () => iface);
+
+    const children = await backend.getChildren({ busName: "app", objectPath: "/root" }, 3);
+
+    expect(children).toHaveLength(3);
+  });
+
+  it("returns schema-compliant query(ref) matches", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const accessible = {
+      GetRoleName: vi.fn(async () => "x".repeat(100)),
+      GetName: vi.fn(async () => "y".repeat(600)),
+    };
+
+    const component = {
+      GetExtents: vi.fn(async () => [10, 20, 80, 24]),
+    };
+
+    const action = {
+      GetNActions: vi.fn(async () => 40),
+      GetName: vi.fn(async (i: number) => (i === 0 ? "click" : "a".repeat(100))),
+      DoAction: vi.fn(async () => undefined),
+    };
+
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name === "org.a11y.atspi.Accessible") return accessible;
+      if (name === "org.a11y.atspi.Component") return component;
+      if (name === "org.a11y.atspi.Action") return action;
+      return null;
+    });
+
+    const matches = await backend.query({
+      op: "query",
+      selector: { kind: "ref", ref: "atspi:app|/node" },
+      limit: 1,
+    });
+
+    const parsed = DesktopQueryResult.safeParse({ op: "query", matches });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects right_click and double_click actions", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name !== "org.a11y.atspi.Action") return null;
+      return {
+        GetNActions: vi.fn(async () => 1),
+        GetName: vi.fn(async () => "click"),
+        DoAction: vi.fn(async () => undefined),
+      };
+    });
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "right_click" },
+      }),
+    ).rejects.toThrow(/right_click/);
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "double_click" },
+      }),
+    ).rejects.toThrow(/double_click/);
+  });
+
+  it("matches state-filtered queries when GetState indicates focused", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const rootRef = { busName: "app", objectPath: "/root" };
+    backend.resolveRootAccessible = vi.fn(async () => rootRef);
+    backend.getChildren = vi.fn(async () => []);
+
+    const accessible = {
+      GetRoleName: vi.fn(async () => "frame"),
+      GetName: vi.fn(async () => "Root"),
+      GetState: vi.fn(async () => [1 << 12, 0]),
+    };
+
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name === "org.a11y.atspi.Accessible") return accessible;
+      if (name === "org.a11y.atspi.Component") {
+        return { GetExtents: vi.fn(async () => [0, 0, 100, 80]) };
+      }
+      return null;
+    });
+
+    const matches = await backend.query({
+      op: "query",
+      selector: { kind: "a11y", role: "frame", name: "Root", states: ["focused"] },
+      limit: 1,
+    });
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      kind: "a11y",
+      element_ref: "atspi:app|/root",
+      node: { states: ["focused"] },
+    });
+    expect(accessible.GetState).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not consume snapshot node budget on visited nodes", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const rootRef = { busName: "app", objectPath: "/root" };
+    backend.resolveRootAccessible = vi.fn(async () => rootRef);
+    backend.getChildren = vi.fn(async (ref: { objectPath: string }, maxChildren: number) => {
+      if (ref.objectPath === "/root") {
+        return [
+          { busName: "app", objectPath: "/a" },
+          { busName: "app", objectPath: "/b" },
+        ].slice(0, maxChildren);
+      }
+      if (ref.objectPath === "/a") {
+        return [{ busName: "app", objectPath: "/a" }].slice(0, maxChildren);
+      }
+      return [];
+    });
+    backend.describeAccessible = vi.fn(async (ref: { busName: string; objectPath: string }) => ({
+      elementRef: `atspi:${ref.busName}|${ref.objectPath}`,
+      role: "frame",
+      name: ref.objectPath,
+      bounds: { x: 0, y: 0, width: 100, height: 80 },
+      actions: [],
+      states: [],
+    }));
+
+    const snapshot = await backend.snapshot({
+      op: "snapshot",
+      include_tree: true,
+      max_nodes: 3,
+      max_text_chars: 512,
+    });
+
+    expect(snapshot.tree.root.children.map((n: { name: string }) => n.name)).toEqual(["/a", "/b"]);
+  });
+
+  it("does not consume query node budget on visited nodes", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const rootRef = { busName: "app", objectPath: "/node0" };
+    backend.resolveRootAccessible = vi.fn(async () => rootRef);
+    backend.getChildren = vi.fn(async (ref: { objectPath: string }, maxChildren: number) => {
+      const idxRaw = ref.objectPath.replace("/node", "");
+      const idx = Number(idxRaw);
+      if (!Number.isFinite(idx) || idx < 0) return [];
+      if (idx >= 19) return [];
+
+      const duplicates = Array.from({ length: 127 }, () => ({
+        busName: "app",
+        objectPath: "/node0",
+      }));
+      const next = { busName: "app", objectPath: `/node${String(idx + 1)}` };
+      const children = [...duplicates, next];
+      return children.slice(0, maxChildren);
+    });
+    backend.describeAccessible = vi.fn(async (ref: { busName: string; objectPath: string }) => ({
+      elementRef: `atspi:${ref.busName}|${ref.objectPath}`,
+      role: "button",
+      name: ref.objectPath === "/node19" ? "Target" : ref.objectPath,
+      bounds: { x: 0, y: 0, width: 100, height: 80 },
+      actions: [],
+      states: [],
+    }));
+
+    const matches = await backend.query({
+      op: "query",
+      selector: { kind: "a11y", role: "button", name: "target", states: [] },
+      limit: 1,
+    });
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.kind).toBe("a11y");
+    expect((matches[0] as { element_ref?: string }).element_ref).toBe("atspi:app|/node19");
+  });
+
+  it("finds nodes at the maximum depth", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    backend.resolveRootAccessible = vi.fn(async () => ({ busName: "app", objectPath: "/node1" }));
+    backend.getChildren = vi.fn(async (ref: { objectPath: string }, maxChildren: number) => {
+      const idxRaw = ref.objectPath.replace("/node", "");
+      const idx = Number(idxRaw);
+      if (!Number.isFinite(idx) || idx <= 0) return [];
+      if (idx >= DEFAULT_A11Y_MAX_DEPTH) return [];
+      return [{ busName: "app", objectPath: `/node${String(idx + 1)}` }].slice(0, maxChildren);
+    });
+    backend.describeAccessible = vi.fn(async (ref: { busName: string; objectPath: string }) => ({
+      elementRef: `atspi:${ref.busName}|${ref.objectPath}`,
+      role: "button",
+      name: ref.objectPath === `/node${String(DEFAULT_A11Y_MAX_DEPTH)}` ? "Target" : ref.objectPath,
+      bounds: { x: 0, y: 0, width: 100, height: 80 },
+      actions: [],
+      states: [],
+    }));
+
+    const matches = await backend.query({
+      op: "query",
+      selector: { kind: "a11y", role: "button", name: "target", states: [] },
+      limit: 1,
+    });
+
+    expect(matches).toHaveLength(1);
+    expect((matches[0] as { element_ref?: string }).element_ref).toBe(
+      `atspi:app|/node${String(DEFAULT_A11Y_MAX_DEPTH)}`,
+    );
+  });
+});

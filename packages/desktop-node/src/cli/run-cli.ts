@@ -12,6 +12,7 @@ import {
 
 import { DesktopProvider } from "../providers/desktop-provider.js";
 import { NutJsDesktopBackend } from "../providers/backends/nutjs-desktop-backend.js";
+import { AtSpiDesktopA11yBackend } from "../providers/backends/atspi-a11y-backend.js";
 import { parseDesktopNodeArgs } from "./args.js";
 
 export const VERSION = "0.1.0";
@@ -194,7 +195,14 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   };
 
   const backend = new NutJsDesktopBackend();
-  const provider = new DesktopProvider(backend, permissions, async () => true);
+  const a11yBackend = new AtSpiDesktopA11yBackend();
+  const provider = new DesktopProvider(
+    backend,
+    permissions,
+    async () => true,
+    undefined,
+    a11yBackend,
+  );
   autoExecute(client, [provider]);
 
   const stop = new Promise<void>((resolve) => {
