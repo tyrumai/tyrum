@@ -57,4 +57,3 @@ describe("SlidingWindowRateLimiter", () => {
     expect(limiter.size()).toBe(0);
   });
 });
-

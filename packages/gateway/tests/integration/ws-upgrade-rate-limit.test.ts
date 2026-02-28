@@ -123,4 +123,3 @@ describe("WS upgrade rate limiting", () => {
     upgradeRateLimiter.stop();
   });
 });
-

@@ -82,4 +82,3 @@ describe("Auth rate limiting", () => {
     await container.db.close();
   });
 });
-
