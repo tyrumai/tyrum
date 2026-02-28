@@ -4,6 +4,7 @@ import { loadConfig } from "../config/store.js";
 import { resolvePermissions } from "../config/permissions.js";
 import { decryptToken } from "../config/token-store.js";
 import { DesktopProvider } from "../providers/desktop-provider.js";
+import { getTesseractOcrEngine } from "../providers/ocr/tesseract-engine.js";
 import { PlaywrightProvider } from "../providers/playwright-provider.js";
 import { CliProvider } from "../providers/cli-provider.js";
 import { NutJsDesktopBackend } from "../providers/backends/nutjs-desktop-backend.js";
@@ -79,10 +80,15 @@ export function registerNodeIpc(window: BrowserWindow): void {
     if (config.capabilities.desktop) {
       const desktopBackend = new NutJsDesktopBackend();
       runtime.registerProvider(
-        new DesktopProvider(desktopBackend, permissions, async (_prompt) => {
-          // For V1: fail-closed - always require explicit approval through UI
-          return false;
-        }),
+        new DesktopProvider(
+          desktopBackend,
+          permissions,
+          async (_prompt) => {
+            // For V1: fail-closed - always require explicit approval through UI
+            return false;
+          },
+          getTesseractOcrEngine(),
+        ),
       );
     }
     if (config.capabilities.playwright && permissions.playwright) {

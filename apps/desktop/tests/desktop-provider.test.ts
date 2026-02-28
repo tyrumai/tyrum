@@ -3,6 +3,7 @@ import type { ActionPrimitive } from "@tyrum/schemas";
 import { resolvePermissions } from "../src/main/config/permissions.js";
 import { DesktopProvider, type ConfirmationFn } from "../src/main/providers/desktop-provider.js";
 import { MockDesktopBackend } from "../src/main/providers/backends/desktop-backend.js";
+import type { OcrEngine } from "../src/main/providers/ocr/types.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -16,6 +17,16 @@ function makeProvider(profile: "safe" | "balanced" | "poweruser", confirmFn?: Co
   const permissions = resolvePermissions(profile, {});
   const backend = new MockDesktopBackend();
   return new DesktopProvider(backend, permissions, confirmFn ?? vi.fn<ConfirmationFn>());
+}
+
+function makeProviderWithOcr(
+  profile: "safe" | "balanced" | "poweruser",
+  ocr: OcrEngine,
+  confirmFn?: ConfirmationFn,
+): DesktopProvider {
+  const permissions = resolvePermissions(profile, {});
+  const backend = new MockDesktopBackend();
+  return new DesktopProvider(backend, permissions, confirmFn ?? vi.fn<ConfirmationFn>(), ocr);
 }
 
 // ---------------------------------------------------------------------------
@@ -77,19 +88,63 @@ describe("DesktopProvider", () => {
     });
   });
 
-  it("safe profile allows query in pixel mode (returns screenshot + coordinate metadata)", async () => {
-    const provider = makeProvider("safe");
+  it("safe profile supports bounded OCR query matches in pixel mode", async () => {
+    const ocr = {
+      recognize: vi.fn(async () => {
+        return [
+          {
+            text: "Save",
+            bounds: { x: 10, y: 20, width: 80, height: 24 },
+            confidence: 0.9,
+          },
+          {
+            text: "Cancel",
+            bounds: { x: 100, y: 20, width: 90, height: 24 },
+            confidence: 0.8,
+          },
+          {
+            text: "Save As",
+            bounds: { x: 10, y: 60, width: 120, height: 24 },
+            confidence: 0.7,
+          },
+        ];
+      }),
+    } satisfies OcrEngineStub;
+
+    const provider = makeProviderWithOcr("safe", ocr);
     const result = await provider.execute(
       makeAction({
         op: "query",
-        selector: { kind: "a11y", role: "button", name: "Save" },
+        selector: { kind: "ocr", text: "save", case_insensitive: true },
+        limit: 2,
       }),
     );
+
     expect(result.success).toBe(true);
-    expect(result.result).toMatchObject({ op: "query", matches: [] });
-    expect(result.evidence).toMatchObject({
+    expect(ocr.recognize).toHaveBeenCalledOnce();
+
+    expect(result.result).toMatchObject({
+      op: "query",
+      matches: [
+        {
+          kind: "ocr",
+          text: "Save",
+          bounds: { x: 10, y: 20, width: 80, height: 24 },
+          confidence: 0.9,
+        },
+        {
+          kind: "ocr",
+          text: "Save As",
+          bounds: { x: 10, y: 60, width: 120, height: 24 },
+          confidence: 0.7,
+        },
+      ],
+    });
+
+    const evidence = result.evidence as Record<string, unknown>;
+    expect(evidence["bytesBase64"]).toBeUndefined();
+    expect(evidence).toMatchObject({
       type: "query",
-      mime: "image/png",
       width: 1920,
       height: 1080,
       coordinate_space: {
@@ -97,6 +152,110 @@ describe("DesktopProvider", () => {
         units: "px",
       },
     });
+  });
+
+  it("query selector bounds filter excludes matches outside the region", async () => {
+    const ocr = {
+      recognize: vi.fn(async () => {
+        return [
+          { text: "Inside", bounds: { x: 10, y: 20, width: 50, height: 10 } },
+          { text: "Outside", bounds: { x: 500, y: 600, width: 50, height: 10 } },
+        ];
+      }),
+    } satisfies OcrEngineStub;
+
+    const provider = makeProviderWithOcr("safe", ocr);
+    const result = await provider.execute(
+      makeAction({
+        op: "query",
+        selector: {
+          kind: "ocr",
+          text: "side",
+          bounds: { x: 0, y: 0, width: 100, height: 100 },
+        },
+        limit: 10,
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.result).toMatchObject({
+      op: "query",
+      matches: [
+        {
+          kind: "ocr",
+          text: "Inside",
+          bounds: { x: 10, y: 20, width: 50, height: 10 },
+        },
+      ],
+    });
+  });
+
+  it("pixel query treats a11y selector name as an OCR contains_text query", async () => {
+    const ocr = {
+      recognize: vi.fn(async () => {
+        return [
+          { text: "Save", bounds: { x: 10, y: 20, width: 80, height: 24 } },
+          { text: "Cancel", bounds: { x: 100, y: 20, width: 90, height: 24 } },
+        ];
+      }),
+    } satisfies OcrEngineStub;
+
+    const provider = makeProviderWithOcr("safe", ocr);
+    const result = await provider.execute(
+      makeAction({
+        op: "query",
+        selector: { kind: "a11y", role: "button", name: "Save" },
+        limit: 5,
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(ocr.recognize).toHaveBeenCalledOnce();
+    expect(result.result).toMatchObject({
+      op: "query",
+      matches: [
+        {
+          kind: "ocr",
+          text: "Save",
+          bounds: { x: 10, y: 20, width: 80, height: 24 },
+        },
+      ],
+    });
+  });
+
+  it("query returns a clear error on OCR timeout", async () => {
+    vi.useFakeTimers();
+
+    const prevTimeout = process.env["TYRUM_DESKTOP_OCR_TIMEOUT_MS"];
+    process.env["TYRUM_DESKTOP_OCR_TIMEOUT_MS"] = "10";
+
+    try {
+      const ocr = {
+        recognize: vi.fn(async () => {
+          return await new Promise<OcrMatchStub[]>(() => {
+            // never resolve
+          });
+        }),
+      } satisfies OcrEngineStub;
+
+      const provider = makeProviderWithOcr("safe", ocr);
+
+      const promise = provider.execute(
+        makeAction({
+          op: "query",
+          selector: { kind: "ocr", text: "save" },
+        }),
+      );
+
+      await vi.advanceTimersByTimeAsync(15);
+
+      const result = await promise;
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("timeout");
+    } finally {
+      process.env["TYRUM_DESKTOP_OCR_TIMEOUT_MS"] = prevTimeout;
+      vi.useRealTimers();
+    }
   });
 
   // -- Balanced profile (confirmation required) ------------------------------

@@ -23,6 +23,26 @@ Nodes are “remote hands”, so Tyrum treats node capabilities as high-risk by 
 - Execute capability requests and return results/evidence.
 - Maintain local device permissions (OS prompts, user consent) as needed.
 
+## Desktop OCR (pixel query)
+
+For pixel-mode `Desktop.query` text search, the desktop node runs OCR locally and returns bounded
+`{ text, bounds, confidence? }` matches (screenshot coordinate space) so agents can locate UI targets
+without embedding full screenshots in tool outputs.
+
+Implementation choice: **WASM OCR** (`tesseract.js`) is preferred over system binaries so the desktop
+node works out-of-the-box across macOS/Windows/Linux.
+
+Tradeoffs:
+
+- Pros: no OS-level packages; cross-platform; worker can be cached per process.
+- Cons: first call can be slow (worker init + language data); OCR accuracy varies by font/locale.
+
+Configuration:
+
+- `TYRUM_DESKTOP_OCR_TIMEOUT_MS` (default 10s; max 60s)
+- `TYRUM_DESKTOP_OCR_LANG` (default `eng`)
+- `TYRUM_DESKTOP_OCR_LANG_PATH` (optional override for offline/local language data)
+
 ## Pairing posture
 
 - Nodes connect using a public-key device identity and prove possession of the private key during handshake.

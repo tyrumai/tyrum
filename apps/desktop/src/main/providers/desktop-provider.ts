@@ -8,12 +8,18 @@ import type {
   DesktopBackendPermissions,
   DesktopQueryArgs,
   DesktopSnapshotArgs,
+  DesktopUiRect,
   DesktopWaitForArgs,
 } from "@tyrum/schemas";
+import type { OcrEngine, OcrMatch } from "./ocr/types.js";
 
 export type ConfirmationFn = (prompt: string) => Promise<boolean>;
 
 type PixelPoint = { x: number; y: number };
+
+const DEFAULT_OCR_TIMEOUT_MS = 10_000;
+const MAX_OCR_TIMEOUT_MS = 60_000;
+const MAX_OCR_MATCH_TEXT_BYTES = 8_192;
 
 function parsePixelRef(ref: string): PixelPoint | null {
   const match = /^pixel:\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(ref.trim());
@@ -24,6 +30,49 @@ function parsePixelRef(ref: string): PixelPoint | null {
   return { x, y };
 }
 
+class OcrTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`OCR timeout after ${String(timeoutMs)}ms`);
+    this.name = "OcrTimeoutError";
+  }
+}
+
+function resolveOcrTimeoutMs(): number {
+  const raw = process.env["TYRUM_DESKTOP_OCR_TIMEOUT_MS"]?.trim();
+  if (!raw) return DEFAULT_OCR_TIMEOUT_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return DEFAULT_OCR_TIMEOUT_MS;
+  const value = Math.floor(parsed);
+  if (value <= 0) return DEFAULT_OCR_TIMEOUT_MS;
+  return Math.min(value, MAX_OCR_TIMEOUT_MS);
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  if (timeoutMs <= 0) return promise;
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new OcrTimeoutError(timeoutMs)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+function normalizeForContainsText(value: string, caseInsensitive: boolean): string {
+  const trimmed = value.trim();
+  return caseInsensitive ? trimmed.toLowerCase() : trimmed;
+}
+
+function rectsIntersect(a: DesktopUiRect, b: DesktopUiRect): boolean {
+  const ax2 = a.x + a.width;
+  const ay2 = a.y + a.height;
+  const bx2 = b.x + b.width;
+  const by2 = b.y + b.height;
+  return a.x < bx2 && ax2 > b.x && a.y < by2 && ay2 > b.y;
+}
+
 export class DesktopProvider implements CapabilityProvider {
   readonly capability: ClientCapability = "desktop";
 
@@ -31,6 +80,7 @@ export class DesktopProvider implements CapabilityProvider {
     private backend: DesktopBackend,
     private permissions: ResolvedPermissions,
     private requestConfirmation: ConfirmationFn,
+    private ocr?: OcrEngine,
   ) {}
 
   async execute(action: ActionPrimitive): Promise<TaskResult> {
@@ -148,20 +198,103 @@ export class DesktopProvider implements CapabilityProvider {
       };
     }
 
+    const selector = _args.selector;
+    const queryText =
+      selector.kind === "ocr"
+        ? selector.text
+        : selector.kind === "a11y"
+          ? (selector.name ?? "")
+          : "";
+    if (!queryText.trim()) {
+      return {
+        success: false,
+        error: `Unsupported query selector kind for pixel mode: ${selector.kind}`,
+      };
+    }
+
     const capture = await this.backend.captureScreen("primary");
+
+    const timeoutMs = resolveOcrTimeoutMs();
+    const ocr = this.ocr;
+    if (!ocr) {
+      return {
+        success: false,
+        error: "OCR unavailable: no OCR engine configured",
+      };
+    }
+
+    const caseInsensitive = selector.kind === "ocr" ? selector.case_insensitive : true;
+    const normalizedNeedle = normalizeForContainsText(queryText, caseInsensitive);
+
+    let candidates: OcrMatch[];
+    try {
+      candidates = await withTimeout(
+        ocr.recognize({ buffer: capture.buffer, width: capture.width, height: capture.height }),
+        timeoutMs,
+      );
+    } catch (err) {
+      if (err instanceof OcrTimeoutError) {
+        await ocr.reset?.().catch(() => undefined);
+        return { success: false, error: err.message };
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      return { success: false, error: `OCR failed: ${message}` };
+    }
+
+    const boundsFilter = selector.kind === "ocr" ? selector.bounds : undefined;
+    const matches: Array<{
+      kind: "ocr";
+      text: string;
+      bounds: DesktopUiRect;
+      confidence?: number;
+    }> = [];
+    let totalTextBytes = 0;
+
+    for (const candidate of candidates) {
+      const candidateText = candidate.text.trim();
+      if (!candidateText) continue;
+
+      const normalizedHaystack = normalizeForContainsText(candidateText, caseInsensitive);
+      if (!normalizedHaystack.includes(normalizedNeedle)) continue;
+
+      if (boundsFilter && !rectsIntersect(candidate.bounds, boundsFilter)) continue;
+
+      const nextBytes = Buffer.byteLength(candidateText, "utf8");
+      if (totalTextBytes + nextBytes > MAX_OCR_MATCH_TEXT_BYTES) break;
+      totalTextBytes += nextBytes;
+
+      matches.push({
+        kind: "ocr",
+        text: candidateText,
+        bounds: candidate.bounds,
+        confidence: candidate.confidence,
+      });
+
+      if (matches.length >= _args.limit) break;
+    }
+
     return {
       success: true,
       result: {
         op: "query",
-        matches: [],
+        matches,
       },
-      evidence: this.toImageEvidence("query", capture, {
+      evidence: {
+        type: "query",
+        width: capture.width,
+        height: capture.height,
+        timestamp: new Date().toISOString(),
         mode: "pixel",
         coordinate_space: {
           origin: "top-left",
           units: "px",
         },
-      }),
+        ocr: {
+          contains_text: queryText,
+          case_insensitive: caseInsensitive,
+          timeout_ms: timeoutMs,
+        },
+      },
     };
   }
 
