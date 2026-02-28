@@ -16,6 +16,7 @@ interface NutJsApi {
   mouse: {
     setPosition(target: any): Promise<any>;
     click(btn: any): Promise<any>;
+    doubleClick(btn: any): Promise<any>;
     drag(path: any): Promise<any>;
   };
   keyboard: {
@@ -155,6 +156,28 @@ export class NutJsDesktopBackend implements DesktopBackend {
       await mouse.click(btn);
     } catch (err) {
       throw new Error(`Mouse click at (${x}, ${y}) failed: ${(err as Error).message}`);
+    }
+  }
+
+  async doubleClickMouse(
+    x: number,
+    y: number,
+    button?: "left" | "right" | "middle",
+  ): Promise<void> {
+    const { mouse, Point, Button } = await this.load();
+
+    const btn =
+      button === "right"
+        ? Button["RIGHT"]
+        : button === "middle"
+          ? Button["MIDDLE"]
+          : Button["LEFT"];
+
+    try {
+      await mouse.setPosition(new Point(x, y));
+      await mouse.doubleClick(btn);
+    } catch (err) {
+      throw new Error(`Mouse double click at (${x}, ${y}) failed: ${(err as Error).message}`);
     }
   }
 

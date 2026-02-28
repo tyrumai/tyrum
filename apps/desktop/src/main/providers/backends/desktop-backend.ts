@@ -18,6 +18,7 @@ export interface DesktopBackend {
   captureScreen(display: DesktopDisplayTarget): Promise<ScreenCapture>;
   moveMouse(x: number, y: number): Promise<void>;
   clickMouse(x: number, y: number, button?: "left" | "right" | "middle"): Promise<void>;
+  doubleClickMouse(x: number, y: number, button?: "left" | "right" | "middle"): Promise<void>;
   dragMouse(x: number, y: number, duration_ms?: number): Promise<void>;
   typeText(text: string): Promise<void>;
   pressKey(key: string): Promise<void>;
@@ -44,6 +45,14 @@ export class MockDesktopBackend implements DesktopBackend {
 
   async clickMouse(x: number, y: number, button?: "left" | "right" | "middle"): Promise<void> {
     this.calls.push({ method: "clickMouse", args: [x, y, button] });
+  }
+
+  async doubleClickMouse(
+    x: number,
+    y: number,
+    button?: "left" | "right" | "middle",
+  ): Promise<void> {
+    this.calls.push({ method: "doubleClickMouse", args: [x, y, button] });
   }
 
   async dragMouse(x: number, y: number, duration_ms?: number): Promise<void> {

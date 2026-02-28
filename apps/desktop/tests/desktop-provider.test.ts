@@ -234,7 +234,8 @@ describe("DesktopProvider", () => {
     );
 
     expect(result.success).toBe(true);
-    expect(backend.calls.filter((c) => c.method === "clickMouse")).toHaveLength(2);
+    expect(backend.calls).toContainEqual({ method: "doubleClickMouse", args: [10, 20, undefined] });
+    expect(backend.calls.filter((c) => c.method === "clickMouse")).toHaveLength(0);
   });
 
   it("poweruser supports act(right_click) on a pixel ref", async () => {

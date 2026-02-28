@@ -200,8 +200,7 @@ export class DesktopProvider implements CapabilityProvider {
     if (args.action.kind === "right_click") {
       await this.backend.clickMouse(point.x, point.y, "right");
     } else if (args.action.kind === "double_click") {
-      await this.backend.clickMouse(point.x, point.y);
-      await this.backend.clickMouse(point.x, point.y);
+      await this.backend.doubleClickMouse(point.x, point.y);
     } else {
       // click | focus
       await this.backend.clickMouse(point.x, point.y);
