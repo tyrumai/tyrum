@@ -25,7 +25,12 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Reference",
-      items: ["policy_service", "executors/http_executor", "executors/web_executor"],
+      items: [
+        "api-reference",
+        "policy_service",
+        "executors/http_executor",
+        "executors/web_executor",
+      ],
     },
     {
       type: "category",
