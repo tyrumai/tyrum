@@ -1,0 +1,69 @@
+import type { ArtifactRef as ArtifactRefT } from "@tyrum/schemas";
+import type { SqlDb } from "../../../statestore/types.js";
+import {
+  deriveAgentIdFromExecutionKey,
+  insertExecutionArtifactRowTx,
+} from "../../artifact/execution-artifacts.js";
+import type { ExecutionEngineEventEmitter } from "./event-emitter.js";
+
+type RedactUnknownFn = (value: unknown) => unknown;
+
+export class ExecutionEngineArtifactRecorder {
+  constructor(
+    private readonly opts: {
+      redactUnknown: RedactUnknownFn;
+      eventEmitter: ExecutionEngineEventEmitter;
+    },
+  ) {}
+
+  async recordArtifactsTx(
+    tx: SqlDb,
+    scope: {
+      runId: string;
+      stepId: string;
+      attemptId: string;
+      workspaceId: string;
+      key: string;
+    },
+    artifacts: ArtifactRefT[],
+  ): Promise<void> {
+    if (artifacts.length === 0) return;
+
+    const agentId = deriveAgentIdFromExecutionKey(scope.key);
+    const run = await tx.get<{ policy_snapshot_id: string | null }>(
+      "SELECT policy_snapshot_id FROM execution_runs WHERE run_id = ?",
+      [scope.runId],
+    );
+    const policySnapshotId = run?.policy_snapshot_id ?? null;
+
+    for (const artifact of artifacts) {
+      const labelsJson = JSON.stringify(this.opts.redactUnknown(artifact.labels ?? []));
+      const metadataJson = JSON.stringify(this.opts.redactUnknown(artifact.metadata ?? {}));
+
+      const { inserted } = await insertExecutionArtifactRowTx(tx, {
+        artifact,
+        labelsJson,
+        metadataJson,
+        scope: {
+          workspaceId: scope.workspaceId,
+          agentId,
+          runId: scope.runId,
+          stepId: scope.stepId,
+          attemptId: scope.attemptId,
+          sensitivity: "normal",
+          policySnapshotId,
+        },
+      });
+
+      if (inserted) {
+        await this.opts.eventEmitter.emitArtifactCreatedTx(tx, { runId: scope.runId, artifact });
+      }
+      await this.opts.eventEmitter.emitArtifactAttachedTx(tx, {
+        runId: scope.runId,
+        stepId: scope.stepId,
+        attemptId: scope.attemptId,
+        artifact,
+      });
+    }
+  }
+}
