@@ -230,7 +230,7 @@ describe("ToolExecutor", () => {
       }
     });
 
-    it("tool.node.dispatch returns not-yet-available", async () => {
+    it("tool.node.dispatch returns configuration error when dispatch is unavailable", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
       const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
@@ -240,7 +240,117 @@ describe("ToolExecutor", () => {
         action: "capture",
       });
 
-      expect(result.error).toBe("tool not yet available");
+      expect(result.error).toBe("node dispatch is not configured");
+    });
+
+    it("tool.node.dispatch delegates to node dispatch service and returns structured output", async () => {
+      homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
+
+      const nodeDispatchService = {
+        dispatchAndWait: vi.fn(async () => {
+          return {
+            taskId: "task-123",
+            result: { ok: true, evidence: { foo: "bar" } },
+          };
+        }),
+      };
+
+      const executor = new ToolExecutor(
+        homeDir,
+        stubMcpManager(),
+        new Map(),
+        fetch,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        nodeDispatchService,
+      );
+
+      const result = await executor.execute("tool.node.dispatch", "call-7", {
+        capability: "tyrum.desktop",
+        action: "Desktop",
+        args: { x: 1 },
+      });
+
+      expect(result.error).toBeUndefined();
+      expect(nodeDispatchService.dispatchAndWait).toHaveBeenCalledOnce();
+      expect(result.output).toContain('<data source="tool">');
+      expect(result.output).toContain('"ok":true');
+      expect(result.output).toContain('"task_id":"task-123"');
+      expect(result.output).toContain('"foo":"bar"');
+    });
+
+    it("tool.node.dispatch returns a structured, retryable timeout error", async () => {
+      homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
+
+      const nodeDispatchService = {
+        dispatchAndWait: vi.fn(async () => {
+          throw new Error("task result timeout: task-123");
+        }),
+      };
+
+      const executor = new ToolExecutor(
+        homeDir,
+        stubMcpManager(),
+        new Map(),
+        fetch,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        nodeDispatchService,
+      );
+
+      const result = await executor.execute("tool.node.dispatch", "call-7", {
+        capability: "tyrum.desktop",
+        action: "Desktop",
+        args: { x: 1 },
+      });
+
+      expect(result.error).toBeUndefined();
+      expect(result.output).toContain('"ok":false');
+      expect(result.output).toContain('"code":"timeout"');
+      expect(result.output).toContain('"retryable":true');
+    });
+
+    it("tool.node.dispatch omits oversized evidence to keep output bounded", async () => {
+      homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
+
+      const huge = "a".repeat(100_000);
+      const nodeDispatchService = {
+        dispatchAndWait: vi.fn(async () => {
+          return {
+            taskId: "task-123",
+            result: { ok: true, evidence: { blob: huge } },
+          };
+        }),
+      };
+
+      const executor = new ToolExecutor(
+        homeDir,
+        stubMcpManager(),
+        new Map(),
+        fetch,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        nodeDispatchService,
+      );
+
+      const result = await executor.execute("tool.node.dispatch", "call-7", {
+        capability: "tyrum.desktop",
+        action: "Desktop",
+      });
+
+      expect(result.error).toBeUndefined();
+      expect(result.output).toContain('"truncated":true');
+      expect(result.output).toContain("evidence too large");
+      expect(result.output).not.toContain(huge.slice(0, 200));
     });
 
     it("unknown tool returns error", async () => {

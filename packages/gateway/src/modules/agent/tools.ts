@@ -100,12 +100,19 @@ const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     inputSchema: {
       type: "object",
       properties: {
-        capability: { type: "string", description: "Node capability identifier." },
-        action: { type: "string", description: "Action to perform." },
+        capability: {
+          type: "string",
+          description: "Capability descriptor id (example: tyrum.desktop).",
+        },
+        action: { type: "string", description: "ActionPrimitiveKind (example: Desktop)." },
         args: {
           type: "object",
           additionalProperties: {},
           description: "Optional action arguments.",
+        },
+        timeout_ms: {
+          type: "number",
+          description: "Optional timeout in milliseconds (default: 30000).",
         },
       },
       required: ["capability", "action"],

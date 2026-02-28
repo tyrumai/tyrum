@@ -1161,6 +1161,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           defaultPolicyService: container.policyService,
           approvalNotifier,
           plugins,
+          protocolDeps,
           logger,
         })
       : undefined;

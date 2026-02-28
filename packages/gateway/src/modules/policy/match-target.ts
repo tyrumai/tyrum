@@ -1,4 +1,9 @@
 import { posix as pathPosix, win32 as pathWin32 } from "node:path";
+import {
+  ActionPrimitiveKind,
+  descriptorIdForClientCapability,
+  requiredCapability,
+} from "@tyrum/schemas";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -157,9 +162,15 @@ export function canonicalizeToolMatchTarget(
   }
 
   if (normalizedToolId === "tool.node.dispatch") {
-    const capability = normalizeToken(parsed?.["capability"]) ?? "";
-    const action = normalizeToken(parsed?.["action"]) ?? "";
-    return `capability:${capability};action:${action}`;
+    const actionToken = normalizeToken(parsed?.["action"]);
+    if (!actionToken) return "capability:;action:";
+
+    const parsedAction = ActionPrimitiveKind.safeParse(actionToken);
+    if (!parsedAction.success) return "capability:;action:";
+
+    const required = requiredCapability(parsedAction.data);
+    const descriptorId = required ? descriptorIdForClientCapability(required) : "";
+    return `capability:${descriptorId};action:${parsedAction.data}`;
   }
 
   if (normalizedToolId.startsWith("mcp.")) {
