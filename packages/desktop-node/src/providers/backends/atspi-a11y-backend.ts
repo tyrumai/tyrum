@@ -10,13 +10,15 @@ import type {
   DesktopUiTree,
 } from "@tyrum/schemas";
 
-import { DEFAULT_A11Y_MAX_DEPTH, pruneUiTree } from "../a11y/prune-ui-tree.js";
+import { DEFAULT_A11Y_MAX_DEPTH } from "../a11y/prune-ui-tree.js";
 import {
   MAX_ACTION_CHARS,
   MAX_NAME_CHARS,
   MAX_NODE_ACTIONS,
   MAX_NODE_CHILDREN,
+  MAX_NODE_STATES,
   MAX_ROLE_CHARS,
+  MAX_STATE_CHARS,
   clampTrimmed,
 } from "../a11y/schema-clamps.js";
 import type {
@@ -31,6 +33,111 @@ const ATSPI_REF_PREFIX = "atspi:";
 const ATSPI_REF_SEPARATOR = "|";
 
 const QUERY_MAX_NODES = 2_048;
+
+const ATSPI_STATE_TYPE_NAMES: Array<string | undefined> = [
+  "invalid",
+  "active",
+  "armed",
+  "busy",
+  "checked",
+  "collapsed",
+  "defunct",
+  "editable",
+  "enabled",
+  "expandable",
+  "expanded",
+  "focusable",
+  "focused",
+  "has_tooltip",
+  "horizontal",
+  "iconified",
+  "modal",
+  "multi_line",
+  "multiselectable",
+  "opaque",
+  "pressed",
+  "resizable",
+  "selectable",
+  "selected",
+  "sensitive",
+  "showing",
+  "single_line",
+  "stale",
+  "transient",
+  "vertical",
+  "visible",
+  "manages_descendants",
+  "indeterminate",
+  "required",
+  "truncated",
+  "animated",
+  "invalid_entry",
+  "supports_autocompletion",
+  "selectable_text",
+  "is_default",
+  "visited",
+  "checkable",
+  "has_popup",
+  "read_only",
+];
+
+function toUint32(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value >>> 0;
+  if (typeof value === "bigint") return Number(value & 0xffff_ffffn);
+  if (value && typeof value === "object") {
+    const toNumber = (value as { toNumber?: unknown }).toNumber;
+    if (typeof toNumber === "function") {
+      const num = toNumber.call(value) as unknown;
+      if (typeof num === "number" && Number.isFinite(num)) return num >>> 0;
+    }
+  }
+  return 0;
+}
+
+function extractAtSpiStateWords(raw: unknown): unknown[] {
+  if (raw === null || raw === undefined) return [];
+  if (typeof raw === "number" || typeof raw === "bigint") return [raw];
+
+  if (raw && typeof raw === "object") {
+    const value = (raw as { value?: unknown }).value;
+    if (value !== undefined) return extractAtSpiStateWords(value);
+  }
+
+  if (!Array.isArray(raw)) return [];
+  if (raw.length === 0) return [];
+
+  if (raw.every((v) => typeof v === "number" || typeof v === "bigint")) return raw;
+
+  const first = raw[0];
+  if (Array.isArray(first)) return extractAtSpiStateWords(first);
+
+  const out: unknown[] = [];
+  for (const item of raw) {
+    out.push(...extractAtSpiStateWords(item));
+    if (out.length >= 2) break;
+  }
+  return out;
+}
+
+function parseAtSpiStates(raw: unknown): string[] {
+  const wordsRaw = extractAtSpiStateWords(raw);
+  const word0 = toUint32(wordsRaw[0]);
+  const word1 = toUint32(wordsRaw[1]);
+  if (word0 === 0 && word1 === 0) return [];
+
+  const states: string[] = [];
+  for (let i = 0; i < ATSPI_STATE_TYPE_NAMES.length; i++) {
+    const name = ATSPI_STATE_TYPE_NAMES[i];
+    if (!name) continue;
+
+    const bit = i % 32;
+    const word = i < 32 ? word0 : word1;
+    if (((word >>> bit) & 1) === 1) {
+      states.push(name);
+    }
+  }
+  return states;
+}
 
 function toAtSpiElementRef(ref: AtSpiAccessibleRef): string {
   return `${ATSPI_REF_PREFIX}${ref.busName}${ATSPI_REF_SEPARATOR}${ref.objectPath}`;
@@ -309,13 +416,28 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
       }
     }
 
+    let states: string[] = [];
+    if (accessible) {
+      const getState = (accessible as any)["GetState"];
+      if (typeof getState === "function") {
+        try {
+          states = parseAtSpiStates(await getState.call(accessible))
+            .map((state) => clampTrimmed(state, MAX_STATE_CHARS))
+            .filter((state) => state.length > 0)
+            .slice(0, MAX_NODE_STATES);
+        } catch {
+          states = [];
+        }
+      }
+    }
+
     return {
       elementRef,
       role,
       name,
       bounds,
       actions,
-      states: [],
+      states,
     };
   }
 
@@ -392,18 +514,9 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     const rootNode = await build(rootRef, 1);
     if (!rootNode) throw new Error("AT-SPI snapshot unavailable");
 
-    const tree: DesktopUiTree = pruneUiTree(
-      { root: rootNode },
-      {
-        maxNodes: args.max_nodes,
-        maxTextChars: args.max_text_chars,
-        maxDepth: DEFAULT_A11Y_MAX_DEPTH,
-      },
-    );
-
     return {
       windows: [],
-      tree,
+      tree: { root: rootNode },
     };
   }
 

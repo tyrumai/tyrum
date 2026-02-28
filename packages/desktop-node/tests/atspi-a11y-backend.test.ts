@@ -139,5 +139,40 @@ describe("AtSpiDesktopA11yBackend", () => {
       }),
     ).rejects.toThrow(/double_click/);
   });
-});
 
+  it("matches state-filtered queries when GetState indicates focused", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const rootRef = { busName: "app", objectPath: "/root" };
+    backend.resolveRootAccessible = vi.fn(async () => rootRef);
+    backend.getChildren = vi.fn(async () => []);
+
+    const accessible = {
+      GetRoleName: vi.fn(async () => "frame"),
+      GetName: vi.fn(async () => "Root"),
+      GetState: vi.fn(async () => [1 << 12, 0]),
+    };
+
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name === "org.a11y.atspi.Accessible") return accessible;
+      if (name === "org.a11y.atspi.Component") {
+        return { GetExtents: vi.fn(async () => [0, 0, 100, 80]) };
+      }
+      return null;
+    });
+
+    const matches = await backend.query({
+      op: "query",
+      selector: { kind: "a11y", role: "frame", name: "Root", states: ["focused"] },
+      limit: 1,
+    });
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      kind: "a11y",
+      element_ref: "atspi:app|/root",
+      node: { states: ["focused"] },
+    });
+    expect(accessible.GetState).toHaveBeenCalledTimes(1);
+  });
+});
