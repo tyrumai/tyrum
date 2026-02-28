@@ -8,6 +8,7 @@
 import type { WebSocket } from "ws";
 import type { ClientCapability, WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
 import type { AuthTokenClaims } from "../modules/auth/token-store.js";
+import { gatewayMetrics, type MetricsRegistry } from "../modules/observability/metrics.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,6 +46,12 @@ export class ConnectionManager {
   private readonly clients = new Map<string, ConnectedClient>();
   private readonly dispatchedAttemptExecutors = new Map<string, string>();
 
+  constructor(private readonly metrics: MetricsRegistry = gatewayMetrics) {}
+
+  private updateWsConnectionsActive(): void {
+    this.metrics.wsConnectionsActive.set(this.clients.size);
+  }
+
   /**
    * Register a new peer after a successful WebSocket handshake.
    *
@@ -79,6 +86,7 @@ export class ConnectionManager {
       client.lastPong = Date.now();
     });
     this.clients.set(id, client);
+    this.updateWsConnectionsActive();
     return id;
   }
 
@@ -120,6 +128,7 @@ export class ConnectionManager {
   /** Remove a client (e.g. on disconnect or eviction). */
   removeClient(id: string): void {
     this.clients.delete(id);
+    this.updateWsConnectionsActive();
   }
 
   /** Return the first connected client that advertises the given capability. */
@@ -152,11 +161,13 @@ export class ConnectionManager {
    */
   heartbeat(): void {
     const now = Date.now();
+    let changed = false;
 
     for (const [id, client] of this.clients) {
       // Drop sockets that are no longer open (close event cleanup is best-effort).
       if (client.ws.readyState !== 1) {
         this.clients.delete(id);
+        changed = true;
         continue;
       }
       if (now - client.lastPong > HEARTBEAT_TIMEOUT_MS) {
@@ -166,6 +177,7 @@ export class ConnectionManager {
           // ignore
         }
         this.clients.delete(id);
+        changed = true;
       } else {
         try {
           client.ws.ping();
@@ -176,8 +188,13 @@ export class ConnectionManager {
             // ignore
           }
           this.clients.delete(id);
+          changed = true;
         }
       }
+    }
+
+    if (changed) {
+      this.updateWsConnectionsActive();
     }
   }
 
