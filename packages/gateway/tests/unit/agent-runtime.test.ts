@@ -298,7 +298,7 @@ describe("AgentRuntime", () => {
       "SELECT uri FROM execution_artifacts WHERE kind = 'screenshot' LIMIT 1",
     );
     expect(row).toBeTruthy();
-    expect(row?.uri).toStartWith("artifact://");
+    expect(row?.uri?.startsWith("artifact://")).toBe(true);
   }, 20_000);
 
   it("does not report context-available tools as used_tools", async () => {
