@@ -17,6 +17,7 @@ import {
   sendPlanUpdate,
   NoCapableClientError,
 } from "../../src/ws/protocol.js";
+import { NodeNotPairedError } from "../../src/ws/protocol/errors.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
@@ -1688,6 +1689,47 @@ describe("dispatchTask", () => {
       ),
     ).rejects.toBeInstanceOf(NoCapableClientError);
     expect(nodeWs.send).not.toHaveBeenCalled();
+  });
+
+  it("throws NodeNotPairedError when local node is unpaired and cluster has no candidates", async () => {
+    const cm = new ConnectionManager();
+    const nodeWs = createMockWs();
+    cm.addClient(nodeWs as never, ["desktop"] as never, {
+      id: "node-1",
+      role: "node",
+      deviceId: "dev_test",
+      protocolRev: 2,
+    });
+
+    const outboxDal = { enqueue: vi.fn(async () => undefined) };
+    const connectionDirectory = {
+      listConnectionsForCapability: vi.fn(async () => []),
+    };
+
+    const deps = makeDeps(cm, {
+      nodePairingDal: {
+        getByNodeId: async () => ({ status: "pending" }) as never,
+      } as never,
+      cluster: {
+        edgeId: "edge-local",
+        outboxDal: outboxDal as never,
+        connectionDirectory: connectionDirectory as never,
+      },
+    });
+
+    await expect(
+      dispatchTask(
+        { type: "Desktop", args: {} },
+        {
+          runId: "550e8400-e29b-41d4-a716-446655440000",
+          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        },
+        deps,
+      ),
+    ).rejects.toBeInstanceOf(NodeNotPairedError);
+    expect(nodeWs.send).not.toHaveBeenCalled();
+    expect(outboxDal.enqueue).not.toHaveBeenCalled();
   });
 
   it("dispatches to a paired node and prefers nodes over legacy clients", async () => {

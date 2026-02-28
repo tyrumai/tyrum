@@ -246,7 +246,7 @@ export function dispatchTask(
       const target = eligible2.find((c) => c.edge_id !== cluster.edgeId) ?? eligible2[0];
       if (!target || target.edge_id === cluster.edgeId) {
         if (requiresPairedNode) {
-          throw nodeCandidates.length > 0
+          throw nodeCandidates.length > 0 || hasReadyNodeCandidate
             ? new NodeNotPairedError(capability)
             : new NoCapableNodeError(capability);
         }
