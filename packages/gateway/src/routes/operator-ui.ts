@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { readFile } from "node:fs/promises";
 import { realpathSync, statSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -9,6 +9,15 @@ const OPERATOR_UI_PATH_PREFIX = "/ui";
 
 const INDEX_CACHE_CONTROL = "no-cache";
 const ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const OPERATOR_UI_CSP_POLICY =
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; frame-ancestors 'none'";
+
+const applyOperatorUiSecurityHeaders: MiddlewareHandler = async (c, next) => {
+  await next();
+  c.header("content-security-policy", OPERATOR_UI_CSP_POLICY);
+  c.header("x-content-type-options", "nosniff");
+  c.header("x-frame-options", "DENY");
+};
 
 function isFile(path: string): boolean {
   try {
@@ -140,10 +149,12 @@ export function createOperatorUiRoutes(): Hono {
   const assetsDir = resolveOperatorUiAssetsDirFrom(dirname(fileURLToPath(import.meta.url)));
   const assetsDirReal = assetsDir ? safeRealpathSync(assetsDir) : undefined;
 
+  app.use(OPERATOR_UI_PATH_PREFIX, applyOperatorUiSecurityHeaders);
+  app.use(`${OPERATOR_UI_PATH_PREFIX}/*`, applyOperatorUiSecurityHeaders);
+
   app.get(OPERATOR_UI_PATH_PREFIX, async (c) => {
     const html = await serveIndexHtml(assetsDir);
     c.header("cache-control", INDEX_CACHE_CONTROL);
-    c.header("x-content-type-options", "nosniff");
     return c.html(html);
   });
 
@@ -155,7 +166,6 @@ export function createOperatorUiRoutes(): Hono {
     if (isSpaRoute(tail)) {
       const html = await serveIndexHtml(assetsDir);
       c.header("cache-control", INDEX_CACHE_CONTROL);
-      c.header("x-content-type-options", "nosniff");
       return c.html(html);
     }
 
@@ -183,7 +193,6 @@ export function createOperatorUiRoutes(): Hono {
 
     const body = await readFile(resolvedAssetPath);
     c.header("content-type", contentTypeForPath(assetPath));
-    c.header("x-content-type-options", "nosniff");
 
     const cacheControl = tail.startsWith("assets/") ? ASSET_CACHE_CONTROL : "public, max-age=3600";
     c.header("cache-control", cacheControl);
