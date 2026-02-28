@@ -57,17 +57,6 @@ function resolvePageId(raw: string): PageId | null {
   return PAGE_ALIASES[raw] ?? null;
 }
 
-/** Pages that require operator core. */
-const OPERATOR_PAGES = new Set<PageId>([
-  "dashboard",
-  "approvals",
-  "runs",
-  "memory",
-  "connection",
-  "pairing",
-  "settings",
-]);
-
 /** Subscribes to operator core connection status via useSyncExternalStore. */
 function useConnectionStatus(
   core: import("@tyrum/operator-core").OperatorCore | null,
@@ -90,8 +79,7 @@ export function App() {
   const [page, setPage] = useState<PageId>("dashboard");
   const [workItemToOpen, setWorkItemToOpen] = useState<string | null>(null);
 
-  const operatorCoreEnabled = OPERATOR_PAGES.has(page);
-  const operatorCore = useDesktopOperatorCore({ enabled: operatorCoreEnabled });
+  const operatorCore = useDesktopOperatorCore();
   const connectionStatus = useConnectionStatus(operatorCore.core);
 
   const handleNavigate = useCallback((nextPage: string): void => {
