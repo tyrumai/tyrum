@@ -1,83 +1,23 @@
-import { useEffect, useState } from "react";
-import { colors, fonts, textarea as textareaBase } from "../theme.js";
+import { useEffect, useRef, useState } from "react";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Textarea,
+} from "@tyrum/operator-ui";
 
 interface ConsentRequest {
   requestId: string;
   context: string;
 }
 
-const overlayStyle: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0, 0, 0, 0.7)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 1000,
-};
-
-const modalStyle: React.CSSProperties = {
-  background: colors.bgCard,
-  borderRadius: 8,
-  padding: 24,
-  maxWidth: 480,
-  width: "90%",
-  boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
-  fontFamily: fonts.sans,
-  border: `1px solid ${colors.border}`,
-  color: colors.fg,
-};
-
-const titleStyle: React.CSSProperties = {
-  fontSize: 18,
-  fontWeight: 700,
-  marginBottom: 12,
-  color: colors.fg,
-};
-
-const contextStyle: React.CSSProperties = {
-  background: colors.bgSubtle,
-  borderRadius: 6,
-  padding: 12,
-  fontSize: 13,
-  lineHeight: 1.5,
-  whiteSpace: "pre-wrap",
-  marginBottom: 16,
-  maxHeight: 200,
-  overflowY: "auto",
-  border: `1px solid ${colors.border}`,
-  color: colors.fgMuted,
-};
-
-const textareaStyle: React.CSSProperties = {
-  ...textareaBase,
-  fontFamily: "inherit",
-  minHeight: 60,
-  marginBottom: 16,
-};
-
-const buttonRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 8,
-  justifyContent: "flex-end",
-};
-
-function buttonStyle(variant: "approve" | "deny"): React.CSSProperties {
-  return {
-    padding: "8px 20px",
-    borderRadius: 6,
-    border: "none",
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: "pointer",
-    background: variant === "approve" ? colors.success : colors.error,
-    color: "#ffffff",
-  };
-}
-
 export function ConsentModal() {
   const [request, setRequest] = useState<ConsentRequest | null>(null);
-  const [reason, setReason] = useState("");
+  const reasonRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     const api = window.tyrumDesktop;
@@ -115,7 +55,9 @@ export function ConsentModal() {
         requestId,
         context: `${headerParts.join(" · ")}\n\n${contextText}`.trim(),
       });
-      setReason("");
+      if (reasonRef.current) {
+        reasonRef.current.value = "";
+      }
     });
     return unsubscribe;
   }, []);
@@ -125,31 +67,45 @@ export function ConsentModal() {
   const respond = (approved: boolean) => {
     const api = window.tyrumDesktop;
     if (!api) return;
-    void api.consentRespond(request.requestId, approved, reason || undefined);
+    const reason = reasonRef.current?.value ?? "";
+    void api.consentRespond(request.requestId, approved, reason.length > 0 ? reason : undefined);
     setRequest(null);
-    setReason("");
+    if (reasonRef.current) {
+      reasonRef.current.value = "";
+    }
   };
 
   return (
-    <div style={overlayStyle}>
-      <div style={modalStyle}>
-        <div style={titleStyle}>Action Requires Approval</div>
-        <div style={contextStyle}>{request.context}</div>
-        <textarea
-          style={textareaStyle}
-          placeholder="Reason (optional)"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-        <div style={buttonRowStyle}>
-          <button style={buttonStyle("deny")} onClick={() => respond(false)}>
-            Deny
-          </button>
-          <button style={buttonStyle("approve")} onClick={() => respond(true)}>
-            Approve
-          </button>
+    <Dialog open onOpenChange={() => {}}>
+      <DialogContent
+        className="[&_[aria-label='Close']]:hidden"
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle>Action Requires Approval</DialogTitle>
+          <DialogDescription>Review the request and choose Approve or Deny.</DialogDescription>
+        </DialogHeader>
+
+        <div className="mt-4 max-h-56 overflow-y-auto rounded-md border border-border bg-bg-subtle p-3">
+          <pre className="whitespace-pre-wrap text-xs leading-relaxed text-fg-muted">
+            {request.context}
+          </pre>
         </div>
-      </div>
-    </div>
+
+        <div className="mt-4">
+          <Textarea ref={reasonRef} placeholder="Reason (optional)" />
+        </div>
+
+        <DialogFooter>
+          <Button variant="danger" onClick={() => respond(false)}>
+            Deny
+          </Button>
+          <Button variant="success" onClick={() => respond(true)}>
+            Approve
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
