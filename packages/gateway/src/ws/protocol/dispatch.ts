@@ -4,6 +4,7 @@ import {
   requiredCapability,
 } from "@tyrum/schemas";
 import type { ActionPrimitive, ClientCapability, WsRequestEnvelope } from "@tyrum/schemas";
+import { canonicalizeNodeDispatchMatchTarget } from "../../modules/policy/match-target.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { NoCapableClientError } from "./errors.js";
 import type { ProtocolDeps } from "./types.js";
@@ -29,7 +30,7 @@ export function dispatchTask(
   }
 
   const descriptorId = descriptorIdForClientCapability(capability);
-  const toolMatchTarget = `capability:${descriptorId};action:${action.type}`;
+  const toolMatchTarget = canonicalizeNodeDispatchMatchTarget(action.type, action.args);
   const policyEnabled = deps.policyService?.isEnabled() ?? false;
   const policyEvalPromise = policyEnabled
     ? deps.policyService!.evaluateToolCall({

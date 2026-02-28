@@ -129,6 +129,55 @@ function canonicalizeMessagingTarget(
   return `${action}:${toolId}`;
 }
 
+type DesktopDispatchOp = "snapshot" | "query" | "act" | "wait_for" | "unknown";
+type DesktopActSubtype = "ui" | "mouse" | "keyboard" | "unknown";
+
+function canonicalizeDesktopDispatchOp(parsed: Record<string, unknown> | null): {
+  op: DesktopDispatchOp;
+  actSubtype?: DesktopActSubtype;
+} {
+  const opRaw = normalizeToken(parsed?.["op"]);
+  if (!opRaw) return { op: "unknown" };
+
+  switch (opRaw) {
+    case "screenshot":
+      return { op: "snapshot" };
+    case "snapshot":
+    case "query":
+    case "wait_for":
+      return { op: opRaw };
+    case "mouse":
+      return { op: "act", actSubtype: "mouse" };
+    case "keyboard":
+      return { op: "act", actSubtype: "keyboard" };
+    case "act":
+      return { op: "act", actSubtype: "ui" };
+    default:
+      return { op: "unknown" };
+  }
+}
+
+export function canonicalizeNodeDispatchMatchTarget(
+  actionKind: ActionPrimitiveKind,
+  actionArgs: unknown,
+): string {
+  const required = requiredCapability(actionKind);
+  const descriptorId = required ? descriptorIdForClientCapability(required) : "";
+
+  let target = `capability:${descriptorId};action:${actionKind}`;
+
+  if (descriptorId === "tyrum.desktop") {
+    const parsed = asRecord(actionArgs);
+    const { op, actSubtype } = canonicalizeDesktopDispatchOp(parsed);
+    target += `;op:${op}`;
+    if (op === "act") {
+      target += `;act:${actSubtype ?? "unknown"}`;
+    }
+  }
+
+  return target;
+}
+
 export function canonicalizeToolMatchTarget(
   toolId: string,
   args: unknown,
@@ -168,9 +217,7 @@ export function canonicalizeToolMatchTarget(
     const parsedAction = ActionPrimitiveKind.safeParse(actionToken);
     if (!parsedAction.success) return "capability:;action:";
 
-    const required = requiredCapability(parsedAction.data);
-    const descriptorId = required ? descriptorIdForClientCapability(required) : "";
-    return `capability:${descriptorId};action:${parsedAction.data}`;
+    return canonicalizeNodeDispatchMatchTarget(parsedAction.data, parsed?.["args"]);
   }
 
   if (normalizedToolId.startsWith("mcp.")) {

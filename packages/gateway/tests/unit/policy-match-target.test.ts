@@ -110,13 +110,30 @@ describe("canonicalizeToolMatchTarget", () => {
     expect(target).toBe("mcp.calendar.events_list");
   });
 
-  it("canonicalizes node dispatch by capability descriptor + ActionPrimitiveKind (not raw args)", () => {
+  it("canonicalizes desktop node dispatch by capability + action + desktop op", () => {
     const target = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: " screen ",
       action: " Desktop ",
-      args: { secret: "should-not-appear" },
+      args: { op: "snapshot", secret: "should-not-appear" },
     });
 
-    expect(target).toBe("capability:tyrum.desktop;action:Desktop");
+    expect(target).toBe("capability:tyrum.desktop;action:Desktop;op:snapshot");
+  });
+
+  it("groups legacy desktop mouse/keyboard ops under op:act with a minimal subtype", () => {
+    const mouseTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.desktop",
+      action: "Desktop",
+      args: { op: "mouse", action: "click", x: 1, y: 2 },
+    });
+    expect(mouseTarget).toBe("capability:tyrum.desktop;action:Desktop;op:act;act:mouse");
+
+    const keyboardTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.desktop",
+      action: "Desktop",
+      args: { op: "keyboard", action: "type", text: "secret" },
+    });
+    expect(keyboardTarget).toBe("capability:tyrum.desktop;action:Desktop;op:act;act:keyboard");
+    expect(keyboardTarget).not.toContain("secret");
   });
 });

@@ -78,6 +78,64 @@ describe("NodeDispatchService", () => {
     expect(res.result).toEqual({ ok: true, evidence: { foo: "bar" } });
   });
 
+  it("evaluates policy using an op-aware desktop match target", async () => {
+    const { NodeDispatchService } =
+      await import("../../src/modules/agent/node-dispatch-service.js");
+
+    const cm = new ConnectionManager();
+    const registry = new TaskResultRegistry();
+    const nodeWs = createMockWs(registry);
+    cm.addClient(nodeWs as never, ["desktop"], {
+      id: "conn-1",
+      role: "node",
+      deviceId: "node-1",
+      protocolRev: 2,
+    });
+
+    const evaluateToolCall = vi.fn(async () => {
+      return { decision: "allow" as const };
+    });
+
+    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
+    const deps: ProtocolDeps = {
+      connectionManager: cm,
+      taskResults: registry,
+      policyService: {
+        isEnabled: () => true,
+        isObserveOnly: () => false,
+        evaluateToolCall,
+      } as never,
+      nodePairingDal: {
+        getByNodeId: async () => {
+          return {
+            status: "approved",
+            capability_allowlist: [
+              { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+            ],
+          };
+        },
+      } as never,
+    };
+
+    const service = new NodeDispatchService(deps);
+    await service.dispatchAndWait(
+      { type: "Desktop", args: { op: "mouse", action: "click", x: 1, y: 2 } },
+      {
+        runId: crypto.randomUUID(),
+        stepId: crypto.randomUUID(),
+        attemptId: crypto.randomUUID(),
+      },
+      { timeoutMs: 5_000 },
+    );
+
+    expect(evaluateToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolId: "tool.node.dispatch",
+        toolMatchTarget: "capability:tyrum.desktop;action:Desktop;op:act;act:mouse",
+      }),
+    );
+  });
+
   it("dispatches to approved nodes even when policy returns require_approval", async () => {
     const { NodeDispatchService } =
       await import("../../src/modules/agent/node-dispatch-service.js");
