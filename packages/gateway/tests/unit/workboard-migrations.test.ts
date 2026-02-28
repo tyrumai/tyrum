@@ -19,9 +19,9 @@ describe("WorkBoard migrations", () => {
     const db = openDb();
     const migration = await db.get<{ name: string }>(
       "SELECT name FROM _migrations WHERE name = ?",
-      ["026_workboard_persistence.sql"],
+      ["033_workboard_persistence.sql"],
     );
-    expect(migration?.name).toBe("026_workboard_persistence.sql");
+    expect(migration?.name).toBe("033_workboard_persistence.sql");
   });
 
   it("creates workboard tables", async () => {

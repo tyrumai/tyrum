@@ -14,8 +14,8 @@
 
 **Files:**
 
-- Create: `packages/gateway/migrations/sqlite/028_work_signal_firings.sql`
-- Create: `packages/gateway/migrations/postgres/028_work_signal_firings.sql`
+- Create: `packages/gateway/migrations/sqlite/035_work_signal_firings.sql`
+- Create: `packages/gateway/migrations/postgres/035_work_signal_firings.sql`
 - Modify: `packages/gateway/tests/contract/schema-contract.test.ts`
 - Modify: `packages/gateway/tests/unit/workboard-migrations.test.ts`
 
@@ -50,7 +50,7 @@ Expected: PASS.
 Run:
 
 ```bash
-git add packages/gateway/migrations/sqlite/028_work_signal_firings.sql packages/gateway/migrations/postgres/028_work_signal_firings.sql packages/gateway/tests/contract/schema-contract.test.ts packages/gateway/tests/unit/workboard-migrations.test.ts
+git add packages/gateway/migrations/sqlite/035_work_signal_firings.sql packages/gateway/migrations/postgres/035_work_signal_firings.sql packages/gateway/tests/contract/schema-contract.test.ts packages/gateway/tests/unit/workboard-migrations.test.ts
 git commit -m "feat(gateway): add work_signal_firings persistence"
 ```
 

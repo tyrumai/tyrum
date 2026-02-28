@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { getMigrationAliasesToMarkApplied } from "./migration-renames.js";
 
 /**
  * Applies SQL migration files in filename order from the given directory.
@@ -31,6 +32,12 @@ export function migrate(db: Database.Database, migrationsDir: string): void {
       .all()
       .map((r) => (r as { name: string }).name),
   );
+
+  const insertRenamedMigration = db.prepare("INSERT OR IGNORE INTO _migrations (name) VALUES (?)");
+  for (const alias of getMigrationAliasesToMarkApplied(applied)) {
+    insertRenamedMigration.run(alias);
+    applied.add(alias);
+  }
 
   const files = readdirSync(migrationsDir)
     .filter((f) => f.endsWith(".sql"))
