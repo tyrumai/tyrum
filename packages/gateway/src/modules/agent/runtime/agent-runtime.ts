@@ -99,6 +99,7 @@ import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
 import { canonicalizeToolMatchTarget } from "../../policy/match-target.js";
 import { isSafeSuggestedOverridePattern } from "../../policy/override-guardrails.js";
+import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { wildcardMatch } from "../../policy/wildcard.js";
 import type { AuthProfileRow } from "../../models/auth-profile-dal.js";
 import { SessionModelOverrideDal } from "../../models/session-model-override-dal.js";
@@ -1671,7 +1672,9 @@ export class AgentRuntime {
     abortSignal?: AbortSignal;
     timeoutMs?: number;
   }): Promise<void> {
-    if (!input.ctx.config.memory.markdown_enabled) {
+    const v1Enabled = input.ctx.config.memory.v1.enabled;
+    const markdownEnabled = input.ctx.config.memory.markdown_enabled;
+    if (!v1Enabled && !markdownEnabled) {
       return;
     }
 
@@ -1681,6 +1684,32 @@ export class AgentRuntime {
     );
     if (droppedTurns.length === 0) {
       return;
+    }
+
+    const flushPromptText = this.formatPreCompactionFlushPrompt(droppedTurns);
+    const flushKey = sha256HexFromString(`${input.session.session_id}\n${flushPromptText}`);
+    const flushTag = `preflush:${flushKey}`;
+
+    if (v1Enabled) {
+      try {
+        const memory = new MemoryV1Dal(this.opts.container.db);
+        const existing = await memory.list({
+          agentId: this.agentId,
+          limit: 1,
+          filter: { tags: [flushTag] },
+        });
+        if (existing.items.length > 0) {
+          return;
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.opts.container.logger.warn("memory.flush_v1_dedupe_failed", {
+          session_id: input.session.session_id,
+          channel: input.session.channel,
+          thread_id: input.session.thread_id,
+          error: message,
+        });
+      }
     }
 
     const totalTimeoutMs = input.timeoutMs;
@@ -1712,7 +1741,7 @@ export class AgentRuntime {
             content: [
               {
                 type: "text" as const,
-                text: this.formatPreCompactionFlushPrompt(droppedTurns),
+                text: flushPromptText,
               },
             ],
           },
@@ -1737,7 +1766,45 @@ export class AgentRuntime {
         return;
       }
 
-      await input.ctx.memoryStore.appendDaily(entry);
+      if (v1Enabled) {
+        try {
+          const memory = new MemoryV1Dal(this.opts.container.db);
+          await memory.create(
+            {
+              kind: "note",
+              title: "Pre-compaction memory flush",
+              body_md: flushText,
+              tags: ["pre-compaction-flush", flushTag],
+              sensitivity: "private",
+              provenance: {
+                source_kind: "system",
+                channel: input.session.channel,
+                thread_id: input.session.thread_id,
+                session_id: input.session.session_id,
+                refs: [],
+                metadata: {
+                  kind: "pre_compaction_memory_flush",
+                  flush_key: flushKey,
+                  dropped_messages: droppedTurns.length,
+                },
+              },
+            },
+            this.agentId,
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.opts.container.logger.warn("memory.flush_v1_write_failed", {
+            session_id: input.session.session_id,
+            channel: input.session.channel,
+            thread_id: input.session.thread_id,
+            error: message,
+          });
+        }
+      }
+
+      if (markdownEnabled) {
+        await input.ctx.memoryStore.appendDaily(entry);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.opts.container.logger.warn("memory.flush_failed", {
