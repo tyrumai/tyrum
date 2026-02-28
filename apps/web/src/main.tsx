@@ -62,7 +62,11 @@ const root = createRoot(container);
 const render = (): void => {
   root.render(
     <React.StrictMode>
-      <OperatorUiApp core={manager.getCore()} mode="web" />
+      <OperatorUiApp
+        core={manager.getCore()}
+        mode="web"
+        onReloadPage={() => window.location.reload()}
+      />
     </React.StrictMode>,
   );
 };

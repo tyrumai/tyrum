@@ -36,5 +36,5 @@ export function Gateway({ core, busy, errorMessage }: GatewayProps) {
     );
   }
 
-  return <OperatorUiApp core={core} mode="desktop" />;
+  return <OperatorUiApp core={core} mode="desktop" onReloadPage={() => window.location.reload()} />;
 }
