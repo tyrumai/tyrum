@@ -72,6 +72,7 @@ export interface GatewayConfig {
   dbPath: string;
   migrationsDir: string;
   tyrumHome?: string;
+  logStackTraces?: boolean;
 }
 
 export interface GatewayContainer {
