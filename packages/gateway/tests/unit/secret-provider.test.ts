@@ -2,7 +2,15 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
-import { mkdtempSync, rmSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import {
   EnvSecretProvider,
   FileSecretProvider,
@@ -185,6 +193,32 @@ describe("FileSecretProvider", () => {
 
     expect(() => decryptWithKey(legacyKey, migratedEntry)).toThrow();
     expect(decryptWithKey(instanceKey, migratedEntry)).toBe("legacy-value");
+  });
+
+  it("falls back to the legacy key when migration cannot write the store", async () => {
+    if (process.platform === "win32") return;
+
+    const handle = {
+      handle_id: "legacy-handle-with-salt",
+      provider: "file" as const,
+      scope: "LEGACY",
+      created_at: new Date().toISOString(),
+    };
+
+    const legacyKey = pbkdf2Sync(adminToken, legacySalt, 100_000, 32, "sha256");
+    const legacyEncrypted = encryptWithKey(legacyKey, "legacy-value");
+    const legacyStore = { handles: { [handle.handle_id]: { handle, ...legacyEncrypted } } };
+    writeFileSync(secretsPath, JSON.stringify(legacyStore), { mode: 0o600 });
+
+    writeFileSync(saltPath, randomBytes(32), { mode: 0o600 });
+    chmodSync(secretsPath, 0o400);
+
+    try {
+      const provider = await FileSecretProvider.create(secretsPath, adminToken);
+      expect(await provider.resolve(handle)).toBe("legacy-value");
+    } finally {
+      chmodSync(secretsPath, 0o600);
+    }
   });
 
   it("store persists to disk", async () => {

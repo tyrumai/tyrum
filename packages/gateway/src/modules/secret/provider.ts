@@ -261,7 +261,6 @@ export class FileSecretProvider implements SecretProvider {
     }
 
     const store = await FileSecretProvider.readStoreFromPath(secretsPath);
-    const legacyKey = deriveFileSecretKey(adminToken, FILE_SECRET_LEGACY_PBKDF2_SALT);
     const entries = Object.entries(store.handles);
 
     if (entries.length === 0) {
@@ -276,6 +275,7 @@ export class FileSecretProvider implements SecretProvider {
     const instanceKey = storedSalt ? deriveFileSecretKey(adminToken, storedSalt) : null;
     const firstEntry = entries[0];
     if (!firstEntry) {
+      const legacyKey = deriveFileSecretKey(adminToken, FILE_SECRET_LEGACY_PBKDF2_SALT);
       return new FileSecretProvider(secretsPath, instanceKey ?? legacyKey);
     }
     const [, sample] = firstEntry;
@@ -289,17 +289,23 @@ export class FileSecretProvider implements SecretProvider {
       }
     }
 
+    const legacyKey = deriveFileSecretKey(adminToken, FILE_SECRET_LEGACY_PBKDF2_SALT);
     try {
       decryptWithKey(legacyKey, sample);
+    } catch {
+      if (instanceKey) return new FileSecretProvider(secretsPath, instanceKey);
+      return new FileSecretProvider(secretsPath, legacyKey);
+    }
 
-      let saltToUse = storedSalt;
-      if (!saltToUse) {
-        saltToUse = randomBytes(32);
+    try {
+      const saltToUse = storedSalt ?? randomBytes(32);
+      const migratedKey = instanceKey ?? deriveFileSecretKey(adminToken, saltToUse);
+
+      if (!storedSalt) {
         await ensureParentDirExists(saltPath);
         await writeFile(saltPath, saltToUse, { mode: 0o600 });
       }
 
-      const migratedKey = deriveFileSecretKey(adminToken, saltToUse);
       const migrated: SecretStore = { handles: {} };
 
       for (const [handleId, existing] of entries) {
@@ -311,9 +317,6 @@ export class FileSecretProvider implements SecretProvider {
       await FileSecretProvider.writeStoreToPath(secretsPath, migrated);
       return new FileSecretProvider(secretsPath, migratedKey);
     } catch {
-      if (instanceKey) {
-        return new FileSecretProvider(secretsPath, instanceKey);
-      }
       return new FileSecretProvider(secretsPath, legacyKey);
     }
   }
