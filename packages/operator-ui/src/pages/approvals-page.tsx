@@ -10,6 +10,8 @@ import { Card, CardContent, CardFooter, CardHeader } from "../components/ui/card
 import { EmptyState } from "../components/ui/empty-state.js";
 import { Spinner } from "../components/ui/spinner.js";
 import { useOperatorStore } from "../use-operator-store.js";
+import { extractTakeoverUrlFromNodeLabel } from "../utils/takeover-url.js";
+import { isRecord } from "../utils/is-record.js";
 
 function formatTimestamp(value: string): string {
   const date = new Date(value);
@@ -17,11 +19,87 @@ function formatTimestamp(value: string): string {
   return date.toLocaleString();
 }
 
+type DesktopApprovalSummary = {
+  op: string;
+  actionKind?: string;
+  targetText?: string;
+};
+
+function describeDesktopApprovalContext(context: unknown): DesktopApprovalSummary | null {
+  const ctx = isRecord(context) ? context : null;
+  if (!ctx || ctx["source"] !== "agent-tool-execution" || ctx["tool_id"] !== "tool.node.dispatch") {
+    return null;
+  }
+
+  const args = isRecord(ctx["args"]) ? (ctx["args"] as Record<string, unknown>) : null;
+  if (!args) return null;
+  if (args["capability"] !== "tyrum.desktop") return null;
+  if (args["action"] !== "Desktop") return null;
+
+  const actionArgs = isRecord(args["args"]) ? (args["args"] as Record<string, unknown>) : null;
+  if (!actionArgs) return null;
+
+  const op = typeof actionArgs["op"] === "string" ? actionArgs["op"].trim() : "";
+  if (!op) return null;
+
+  const summary: DesktopApprovalSummary = { op };
+
+  if (op === "act") {
+    const action = isRecord(actionArgs["action"])
+      ? (actionArgs["action"] as Record<string, unknown>)
+      : null;
+    const kind = typeof action?.["kind"] === "string" ? action["kind"].trim() : "";
+    if (kind) summary.actionKind = kind;
+
+    const target = isRecord(actionArgs["target"])
+      ? (actionArgs["target"] as Record<string, unknown>)
+      : null;
+    if (target) {
+      const targetKind = typeof target["kind"] === "string" ? target["kind"].trim() : "";
+      if (targetKind === "a11y") {
+        const role = typeof target["role"] === "string" ? target["role"].trim() : "";
+        const name = typeof target["name"] === "string" ? target["name"].trim() : "";
+        const parts = [role ? `role=${role}` : undefined, name ? `name=${name}` : undefined].filter(
+          (part): part is string => part !== undefined,
+        );
+        if (parts.length > 0) {
+          summary.targetText = `target: a11y (${parts.join(" ")})`;
+        } else {
+          summary.targetText = "target: a11y";
+        }
+      } else if (targetKind) {
+        summary.targetText = `target: ${targetKind}`;
+      }
+    }
+  }
+
+  return summary;
+}
+
 export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const approvals = useOperatorStore(core.approvalsStore);
+  const pairingState = useOperatorStore(core.pairingStore);
   const [resolvingById, setResolvingById] = useState<
     Record<number, "approved" | "denied" | undefined>
   >({});
+
+  const desktopTakeoverLinks = Object.values(pairingState.byId)
+    .filter((pairing) => pairing.status === "approved")
+    .map((pairing) => {
+      const capabilities = pairing.node.capabilities;
+      if (!capabilities.includes("desktop")) return null;
+      const url = extractTakeoverUrlFromNodeLabel(pairing.node.label);
+      if (!url) return null;
+      return {
+        nodeId: pairing.node.node_id,
+        label: pairing.node.label,
+        url,
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    .sort((a, b) => a.nodeId.localeCompare(b.nodeId));
+
+  const takeoverUrl = desktopTakeoverLinks.at(0)?.url;
 
   const resolveApproval = async (
     approvalId: number,
@@ -109,6 +187,41 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                   <blockquote className="rounded-md border-l-4 border-primary/30 bg-primary-dim/20 px-4 py-3 text-sm text-fg">
                     {approval.prompt}
                   </blockquote>
+
+                  {(() => {
+                    const desktop = describeDesktopApprovalContext(approval.context);
+                    if (!desktop) return null;
+
+                    return (
+                      <div
+                        data-testid={`desktop-approval-summary-${approvalId}`}
+                        className="grid gap-2 rounded-md border border-border bg-bg-subtle px-4 py-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-fg">
+                          <Badge variant="outline">Desktop</Badge>
+                          <span className="font-medium text-fg">{desktop.op}</span>
+                          {desktop.actionKind ? (
+                            <span className="text-fg-muted">• {desktop.actionKind}</span>
+                          ) : null}
+                        </div>
+                        {desktop.targetText ? (
+                          <div className="text-xs text-fg-muted">{desktop.targetText}</div>
+                        ) : null}
+                        {takeoverUrl ? (
+                          <Button asChild size="sm" variant="outline" className="w-fit">
+                            <a
+                              data-testid={`approval-takeover-${approvalId}`}
+                              href={takeoverUrl}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                            >
+                              Open takeover
+                            </a>
+                          </Button>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
                 </CardContent>
                 <CardFooter className="gap-2">
                   <Button

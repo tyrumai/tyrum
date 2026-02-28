@@ -4,6 +4,7 @@ import type {
   PairingMutateResponse,
   PresenceResponse,
   StatusResponse,
+  TyrumHttpClient,
   UsageResponse,
   WsMemoryExportPayload,
   WsMemoryExportResult,
@@ -64,4 +65,5 @@ export interface OperatorHttpClient {
       options?: { signal?: AbortSignal },
     ): Promise<PairingMutateResponse>;
   };
+  artifacts?: TyrumHttpClient["artifacts"];
 }

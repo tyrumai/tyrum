@@ -8,6 +8,7 @@ import { Badge, type BadgeVariant } from "../components/ui/badge.js";
 import { Button } from "../components/ui/button.js";
 import { Card } from "../components/ui/card.js";
 import { StatusDot, type StatusDotVariant } from "../components/ui/status-dot.js";
+import { AttemptArtifactsDialog } from "../components/artifacts/attempt-artifacts-dialog.js";
 import { cn } from "../lib/cn.js";
 import { useOperatorStore } from "../use-operator-store.js";
 
@@ -301,7 +302,15 @@ export function RunsPage({ core }: { core: OperatorCore }) {
                                           {attemptStatusLabel} • {timing}
                                         </div>
                                       </div>
-                                      <CopyableId id={attempt.attempt_id} />
+                                      <div className="flex items-center gap-2">
+                                        <AttemptArtifactsDialog
+                                          core={core}
+                                          runId={run.run_id}
+                                          attemptId={attempt.attempt_id}
+                                          artifacts={attempt.artifacts}
+                                        />
+                                        <CopyableId id={attempt.attempt_id} />
+                                      </div>
                                     </div>
                                   );
                                 })}

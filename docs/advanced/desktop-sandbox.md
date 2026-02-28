@@ -24,6 +24,16 @@ docker compose exec -T tyrum sh -lc 'cat /var/lib/tyrum/.admin-token' | tr -d '\
 2. Open `http://localhost:8788/ui`, paste the token on the Connect page, and connect.
 3. Open the **Pairing** page, approve the pending pairing request, and use the **Open takeover** link to open the noVNC session.
 
+## Manual QA checklist (operator UI)
+
+- [ ] Trigger a Desktop `act` approval (any flow that causes `tool.node.dispatch` with `capability=tyrum.desktop` and `op=act`).
+- [ ] In **Approvals**, the card shows a **Desktop** summary (op + action + target) and an **Open takeover** link.
+- [ ] Approve and deny both work; the approval disappears after resolution.
+- [ ] In **Runs**, open the run → attempt → **Artifacts** and confirm:
+  - [ ] screenshot artifacts render inline
+  - [ ] a11y tree artifacts render as an expandable JSON viewer
+  - [ ] artifacts are clearly marked **Sensitive**
+
 ## Manual verification (desktop snapshot)
 
 After approving pairing, run a Desktop snapshot:
