@@ -1,6 +1,6 @@
 import type { Context, Next } from "hono";
 import { Counter, Gauge, Histogram, Registry } from "prom-client";
-import { resolveHonoRoutePath } from "../../hono-route.js";
+import { getLeafHonoRoutePath } from "../../hono-route.js";
 
 type HttpRequestTotalLabels = "method" | "path" | "status";
 type HttpRequestDurationLabels = "method" | "path";
@@ -47,7 +47,7 @@ export function createMetricsMiddleware(
     try {
       return await next();
     } finally {
-      const routePath = resolveHonoRoutePath(c);
+      const routePath = getLeafHonoRoutePath(c) ?? "/*";
       const durationSeconds = Number(process.hrtime.bigint() - startedNs) / 1e9;
 
       try {

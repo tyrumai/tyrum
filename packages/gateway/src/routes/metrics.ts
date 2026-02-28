@@ -19,4 +19,3 @@ export function createMetricsRoutes(deps: { registry: MetricsRegistry }): Hono {
 
   return app;
 }
-
