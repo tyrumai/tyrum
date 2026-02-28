@@ -43,6 +43,24 @@ otel:
   enabled: false
   otlpEndpoint: ""
 
+probes:
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 3
+    successThreshold: 1
+  liveness:
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 1
+    failureThreshold: 3
+    successThreshold: 1
+  startup:
+    failureThreshold: 30
+    periodSeconds: 1
+    timeoutSeconds: 1
+
 persistence:
   enabled: true
   existingClaim: ""
