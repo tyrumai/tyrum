@@ -1,5 +1,5 @@
 import { randomUUID, createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
-import { readFile, writeFile, access, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { SecretHandle as SecretHandleT } from "@tyrum/schemas";
 
@@ -71,6 +71,15 @@ interface KeychainEncryptedEntry {
 
 interface KeychainSecretStore {
   handles: Record<string, KeychainEncryptedEntry>;
+}
+
+function isFsErrorCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === code
+  );
 }
 
 async function loadElectronSafeStorage(): Promise<SafeStorageLike | null> {
@@ -161,24 +170,12 @@ export class KeychainSecretProvider implements SecretProvider {
 
   private async readStore(): Promise<KeychainSecretStore> {
     try {
-      await access(this.secretsPath);
-    } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "code" in error &&
-        (error as { code?: unknown }).code === "ENOENT"
-      ) {
-        return { handles: {} };
-      }
-      throw new Error(`Failed to access keychain secrets store: ${this.secretsPath}`, {
-        cause: error,
-      });
-    }
-    try {
       const raw = await readFile(this.secretsPath, "utf8");
       return JSON.parse(raw) as KeychainSecretStore;
     } catch (error) {
+      if (isFsErrorCode(error, "ENOENT")) {
+        return { handles: {} };
+      }
       throw new Error(`Failed to read keychain secrets store: ${this.secretsPath}`, {
         cause: error,
       });
@@ -391,22 +388,12 @@ export class FileSecretProvider implements SecretProvider {
 
   private static async readStoreFromPath(secretsPath: string): Promise<SecretStore> {
     try {
-      await access(secretsPath);
-    } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "code" in error &&
-        (error as { code?: unknown }).code === "ENOENT"
-      ) {
-        return { handles: {} };
-      }
-      throw new Error(`Failed to access secrets store: ${secretsPath}`, { cause: error });
-    }
-    try {
       const raw = await readFile(secretsPath, "utf8");
       return JSON.parse(raw) as SecretStore;
     } catch (error) {
+      if (isFsErrorCode(error, "ENOENT")) {
+        return { handles: {} };
+      }
       throw new Error(`Failed to read secrets store: ${secretsPath}`, { cause: error });
     }
   }
