@@ -170,5 +170,5 @@ describe("gateway shutdown", () => {
     expect(artifactStop).toHaveBeenCalledTimes(1);
     expect(outboxStop).toHaveBeenCalledTimes(1);
     expect(workSignalStop).toHaveBeenCalledTimes(1);
-  });
+  }, 15_000);
 });

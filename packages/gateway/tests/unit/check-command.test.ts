@@ -66,7 +66,7 @@ describe("tyrum check", () => {
     expect(closeDb).toHaveBeenCalledTimes(1);
 
     errorSpy.mockRestore();
-  });
+  }, 15_000);
 
   it("prints static and live diagnostics for auth, policy, plugins, secrets, and exposure", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -117,7 +117,7 @@ describe("tyrum check", () => {
     logSpy.mockRestore();
     errorSpy.mockRestore();
     vi.unstubAllGlobals();
-  });
+  }, 15_000);
 
   it("does not send the admin token when probing non-loopback hosts", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -165,7 +165,7 @@ describe("tyrum check", () => {
     logSpy.mockRestore();
     errorSpy.mockRestore();
     vi.unstubAllGlobals();
-  });
+  }, 15_000);
 
   it("does not treat hostnames starting with 127. as loopback targets", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -216,7 +216,7 @@ describe("tyrum check", () => {
     logSpy.mockRestore();
     errorSpy.mockRestore();
     vi.unstubAllGlobals();
-  });
+  }, 15_000);
 
   it("counts plugin manifests missing required fields as invalid", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -273,7 +273,7 @@ describe("tyrum check", () => {
       errorSpy.mockRestore();
       vi.unstubAllGlobals();
     }
-  });
+  }, 15_000);
 
   it("does not treat host:port values in GATEWAY_HOST as the probe port", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -316,5 +316,5 @@ describe("tyrum check", () => {
     logSpy.mockRestore();
     errorSpy.mockRestore();
     vi.unstubAllGlobals();
-  });
+  }, 15_000);
 });

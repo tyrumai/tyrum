@@ -1,8 +1,81 @@
 # Tyrum Desktop
 
-## QA
+## Purpose
+
+Tyrum Desktop is the Electron-based desktop app for Tyrum. It bundles the operator UI and provides
+desktop-local integrations (permissions, updates, deep links) plus embedded gateway/node workflows.
+
+This app lives in `apps/desktop/`.
+
+## Prerequisites
+
+- Node.js 24.x and pnpm 10.x (workspace standard).
+- macOS / Linux / Windows.
+- Playwright browsers (for running the desktop test suite):
+
+```bash
+pnpm --filter tyrum-desktop exec playwright install --with-deps
+```
+
+## Build
+
+From the repo root:
+
+```bash
+pnpm install
+pnpm --filter tyrum-desktop build
+```
+
+To stage the embedded gateway bundle used by packaged releases:
+
+```bash
+pnpm --filter tyrum-desktop build:gateway
+```
+
+To produce platform installers/artifacts (runs `build:gateway` + `build` + `electron-builder`):
+
+```bash
+pnpm --filter tyrum-desktop dist
+```
+
+Artifacts are written under `apps/desktop/release/`.
+
+## Development
+
+Run the app from the locally-built `dist/` output:
+
+```bash
+pnpm --filter tyrum-desktop build
+pnpm --filter tyrum-desktop dev
+```
+
+Run tests:
+
+```bash
+pnpm --filter tyrum-desktop test
+```
 
 Manual QA checklist for native-feel behaviors: `apps/desktop/QA.md`.
+
+## Architecture
+
+Key directories:
+
+- `apps/desktop/src/main/` — Electron main process (window lifecycle, IPC handlers, embedded
+  gateway/node management, updates, deep links).
+- `apps/desktop/src/preload/` — preload scripts; exposes the `window.tyrumDesktop` bridge via
+  `contextBridge`.
+- `apps/desktop/src/renderer/` — Vite + React renderer; uses `@tyrum/operator-ui` components and
+  desktop-only pages.
+
+IPC:
+
+- Main-side handlers live in `apps/desktop/src/main/ipc/`.
+- Renderer calls go through the preload bridge (no direct Node access from the renderer).
+
+Config:
+
+- Stored at `~/.tyrum/desktop-node.json` (or `$TYRUM_HOME/desktop-node.json`).
 
 ## Packaging assets (icons)
 

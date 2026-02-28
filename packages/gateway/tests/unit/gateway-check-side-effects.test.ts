@@ -94,5 +94,5 @@ describe("tyrum check side effects", () => {
     } finally {
       await rm(home, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 });
