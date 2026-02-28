@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as Schemas from "../src/index.js";
 import * as Protocol from "../src/protocol.js";
 import { WsEvent, WsRequest, WsResponse } from "../src/protocol.js";
+import { expectRejects } from "./test-helpers.js";
 
 describe("Subagent WS protocol", () => {
   it("exports Subagent schemas from @tyrum/schemas", () => {
@@ -150,5 +151,13 @@ describe("Subagent WS protocol", () => {
       });
       expect(parsed.success, entry.type).toBe(true);
     }
+  });
+
+  it("rejects subagent.* request envelopes missing payload", () => {
+    expectRejects(WsRequest, { request_id: "r-missing", type: "subagent.list" });
+  });
+
+  it("rejects error responses missing error payload", () => {
+    expectRejects(WsResponse, { request_id: "r-missing-error", type: "subagent.list", ok: false });
   });
 });

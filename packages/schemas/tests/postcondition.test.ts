@@ -338,6 +338,16 @@ describe("evaluatePostcondition", () => {
     expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(PostconditionError);
   });
 
+  it("json_path throws on empty field name after dot", () => {
+    const spec = { type: "json_path", path: "$..items", equals: 1 };
+    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(PostconditionError);
+  });
+
+  it("json_path throws on unexpected characters after $", () => {
+    const spec = { type: "json_path", path: "$foo", equals: 1 };
+    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(PostconditionError);
+  });
+
   it("http_status throws on non-integer equals", () => {
     const spec = { type: "http_status", equals: "200" };
     expect(() => evaluatePostcondition(spec, { http: { status: 200 } })).toThrow(

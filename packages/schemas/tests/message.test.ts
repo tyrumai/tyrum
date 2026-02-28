@@ -5,6 +5,7 @@ import {
   NormalizedMessage,
   NormalizedMessageEnvelope,
 } from "../src/index.js";
+import { expectRejects } from "./test-helpers.js";
 
 describe("NormalizedThread", () => {
   it("parses a valid thread", () => {
@@ -17,6 +18,14 @@ describe("NormalizedThread", () => {
     expect(thread.id).toBe("chat-123");
     expect(thread.kind).toBe("private");
     expect(thread.pii_fields).toEqual(["thread_title"]);
+  });
+
+  it("rejects a thread missing id", () => {
+    expectRejects(NormalizedThread, { kind: "private" });
+  });
+
+  it("rejects a thread with invalid kind", () => {
+    expectRejects(NormalizedThread, { id: "chat-1", kind: "unknown" });
   });
 
   it("defaults pii_fields to empty array", () => {
@@ -43,6 +52,27 @@ describe("NormalizedMessage", () => {
     }
   });
 
+  it("rejects a message with missing timestamp", () => {
+    const bad = {
+      id: "msg-1",
+      thread_id: "chat-123",
+      source: "telegram",
+      content: { kind: "text", text: "Hello" },
+    } as const;
+    expectRejects(NormalizedMessage, bad);
+  });
+
+  it("rejects a text message with missing text", () => {
+    const bad = {
+      id: "msg-1",
+      thread_id: "chat-123",
+      source: "telegram",
+      content: { kind: "text" },
+      timestamp: "2025-10-05T16:31:09Z",
+    } as const;
+    expectRejects(NormalizedMessage, bad);
+  });
+
   it("parses media placeholder content", () => {
     const msg = NormalizedMessage.parse({
       id: "msg-2",
@@ -56,27 +86,40 @@ describe("NormalizedMessage", () => {
 });
 
 describe("NormalizedThreadMessage", () => {
-  it("round-trips through parse/serialize", () => {
-    const threadMsg = {
-      thread: {
-        id: "chat-123",
-        kind: "private" as const,
-        pii_fields: [],
-      },
-      message: {
-        id: "msg-1",
-        thread_id: "chat-123",
-        source: "telegram" as const,
-        content: { kind: "text" as const, text: "Test" },
-        timestamp: "2025-10-05T16:31:09Z",
-        pii_fields: [],
-      },
-    };
+  const baseThreadMsg = {
+    thread: {
+      id: "chat-123",
+      kind: "private" as const,
+      pii_fields: [],
+    },
+    message: {
+      id: "msg-1",
+      thread_id: "chat-123",
+      source: "telegram" as const,
+      content: { kind: "text" as const, text: "Test" },
+      timestamp: "2025-10-05T16:31:09Z",
+      pii_fields: [],
+    },
+  } as const;
 
-    const parsed = NormalizedThreadMessage.parse(threadMsg);
+  it("round-trips through parse/serialize", () => {
+    const parsed = NormalizedThreadMessage.parse(baseThreadMsg);
     const json = JSON.parse(JSON.stringify(parsed));
     const restored = NormalizedThreadMessage.parse(json);
     expect(restored).toEqual(parsed);
+  });
+
+  it("rejects a thread message missing thread", () => {
+    const bad = { ...baseThreadMsg } as Record<string, unknown>;
+    delete bad.thread;
+    expectRejects(NormalizedThreadMessage, bad);
+  });
+
+  it("rejects a thread message with message.thread_id mismatch type", () => {
+    expectRejects(NormalizedThreadMessage, {
+      ...baseThreadMsg,
+      message: { ...baseThreadMsg.message, thread_id: 123 },
+    });
   });
 });
 
@@ -106,6 +149,31 @@ describe("NormalizedMessageEnvelope", () => {
     expect(envelope.delivery.channel).toBe("telegram");
     expect(envelope.container.kind).toBe("dm");
     expect(envelope.provenance).toEqual(["user"]);
+  });
+
+  it("rejects an envelope missing message_id", () => {
+    const bad = {
+      received_at: "2025-10-05T16:31:09Z",
+      delivery: { channel: "telegram", account: "default" },
+      container: { kind: "dm", id: "chat-123" },
+      sender: { id: "user-42" },
+      content: { text: "Hello" },
+      provenance: ["user"],
+    } as const;
+
+    expectRejects(NormalizedMessageEnvelope, bad);
+  });
+
+  it("rejects an envelope with non-string content text", () => {
+    expectRejects(NormalizedMessageEnvelope, {
+      message_id: "msg-1",
+      received_at: "2025-10-05T16:31:09Z",
+      delivery: { channel: "telegram", account: "default" },
+      container: { kind: "dm", id: "chat-123" },
+      sender: { id: "user-42" },
+      content: { text: 123 },
+      provenance: ["user"],
+    });
   });
 
   it("rejects empty content", () => {

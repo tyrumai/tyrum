@@ -9,6 +9,7 @@ import {
   parseTyrumKey,
   resolveDmScope,
 } from "../src/index.js";
+import { expectRejects } from "./test-helpers.js";
 
 describe("Lane", () => {
   it("accepts known lanes", () => {
@@ -16,6 +17,10 @@ describe("Lane", () => {
     expect(Lane.parse("cron")).toBe("cron");
     expect(Lane.parse("heartbeat")).toBe("heartbeat");
     expect(Lane.parse("subagent")).toBe("subagent");
+  });
+
+  it("rejects unknown lanes", () => {
+    expectRejects(Lane, "oops");
   });
 });
 
@@ -26,6 +31,10 @@ describe("DmScope", () => {
     expect(DmScope.parse("per_channel_peer")).toBe("per_channel_peer");
     expect(DmScope.parse("per_account_channel_peer")).toBe("per_account_channel_peer");
   });
+
+  it("rejects unknown dm scopes", () => {
+    expectRejects(DmScope, "global");
+  });
 });
 
 describe("QueueMode", () => {
@@ -35,6 +44,10 @@ describe("QueueMode", () => {
     expect(QueueMode.parse("steer")).toBe("steer");
     expect(QueueMode.parse("steer_backlog")).toBe("steer_backlog");
     expect(QueueMode.parse("interrupt")).toBe("interrupt");
+  });
+
+  it("rejects unknown queue modes", () => {
+    expectRejects(QueueMode, "fast");
   });
 });
 
@@ -143,6 +156,26 @@ describe("TyrumKey", () => {
   it("parses node key", () => {
     const key = TyrumKey.parse("node:node-123");
     expect(parseTyrumKey(key)).toEqual({ kind: "node", node_id: "node-123" });
+  });
+
+  it("rejects invalid key strings", () => {
+    expectRejects(TyrumKey, "not-a-key");
+  });
+
+  it("parseTyrumKey throws on missing agent_id", () => {
+    expect(() => parseTyrumKey("agent:" as unknown as TyrumKey)).toThrow(/invalid agent key/);
+  });
+
+  it("parseTyrumKey throws on empty cron job_id", () => {
+    expect(() => parseTyrumKey("cron:" as unknown as TyrumKey)).toThrow(/invalid cron key/);
+  });
+
+  it("parseTyrumKey throws on empty hook uuid", () => {
+    expect(() => parseTyrumKey("hook:" as unknown as TyrumKey)).toThrow(/invalid hook key/);
+  });
+
+  it("parseTyrumKey throws on empty node id", () => {
+    expect(() => parseTyrumKey("node:" as unknown as TyrumKey)).toThrow(/invalid node key/);
   });
 });
 

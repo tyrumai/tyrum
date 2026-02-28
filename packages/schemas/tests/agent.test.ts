@@ -6,6 +6,7 @@ import {
   McpServerSpec,
   AgentTurnRequest,
 } from "../src/index.js";
+import { expectRejects } from "./test-helpers.js";
 
 describe("AgentConfig", () => {
   it("parses and applies defaults", () => {
@@ -40,6 +41,14 @@ describe("AgentConfig", () => {
     expect(parsed.memory.v1.budgets.per_kind.procedure.max_items).toBeGreaterThan(0);
     expect(parsed.memory.v1.budgets.per_kind.episode.max_items).toBeGreaterThan(0);
   });
+
+  it("rejects non-object model config", () => {
+    expectRejects(AgentConfig, { model: "openai/gpt-4.1" });
+  });
+
+  it("rejects model.model with wrong type", () => {
+    expectRejects(AgentConfig, { model: { model: 42 } });
+  });
 });
 
 describe("IdentityPack", () => {
@@ -57,6 +66,22 @@ describe("IdentityPack", () => {
 
     expect(parsed.meta.name).toBe("Tyrum");
     expect(parsed.body).toContain("Tyrum");
+  });
+
+  it("rejects identity payload missing body", () => {
+    expectRejects(IdentityPack, {
+      meta: {
+        name: "Tyrum",
+        style: { tone: "direct", verbosity: "concise" },
+      },
+    });
+  });
+
+  it("rejects identity payload with blank verbosity", () => {
+    expectRejects(IdentityPack, {
+      meta: { name: "Tyrum", style: { tone: "direct", verbosity: "   " } },
+      body: "You are Tyrum.",
+    });
   });
 });
 
@@ -76,6 +101,17 @@ describe("SkillManifest", () => {
 
     expect(parsed.meta.id).toBe("local-files");
     expect(parsed.meta.requires?.tools).toEqual(["tool.fs.read"]);
+  });
+
+  it("rejects SkillManifest missing meta.id", () => {
+    expectRejects(SkillManifest, { meta: { name: "Local Files", version: "1.0.0" }, body: "x" });
+  });
+
+  it("rejects SkillManifest with non-array requires.tools", () => {
+    expectRejects(SkillManifest, {
+      meta: { id: "local-files", name: "Local Files", version: "1.0.0", requires: { tools: "*" } },
+      body: "x",
+    });
   });
 });
 
@@ -97,6 +133,19 @@ describe("McpServerSpec", () => {
     expect(parsed.command).toBe("node");
   });
 
+  it("rejects stdio server config missing command", () => {
+    expectRejects(McpServerSpec, { id: "calendar", name: "Calendar MCP", enabled: true });
+  });
+
+  it("rejects remote server config missing url", () => {
+    expectRejects(McpServerSpec, {
+      id: "calendar-remote",
+      name: "Calendar MCP (Remote)",
+      enabled: true,
+      transport: "remote",
+    });
+  });
+
   it("parses remote server configuration", () => {
     const parsed = McpServerSpec.parse({
       id: "calendar-remote",
@@ -115,32 +164,56 @@ describe("McpServerSpec", () => {
 });
 
 describe("AgentTurnRequest", () => {
+  const baseEnvelope = {
+    message_id: "msg-1",
+    received_at: "2025-10-05T16:31:09Z",
+    delivery: {
+      channel: "telegram",
+      account: "default",
+    },
+    container: {
+      kind: "dm",
+      id: "chat-123",
+    },
+    sender: {
+      id: "user-42",
+    },
+    content: {
+      attachments: [{ kind: "photo" }],
+    },
+    provenance: ["user"],
+  } as const;
+
   it("accepts an envelope-only request with attachments", () => {
     const parsed = AgentTurnRequest.safeParse({
-      envelope: {
-        message_id: "msg-1",
-        received_at: "2025-10-05T16:31:09Z",
-        delivery: {
-          channel: "telegram",
-          account: "default",
-        },
-        container: {
-          kind: "dm",
-          id: "chat-123",
-        },
-        sender: {
-          id: "user-42",
-        },
-        content: {
-          attachments: [{ kind: "photo" }],
-        },
-        provenance: ["user"],
-      },
+      envelope: baseEnvelope,
     });
 
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     expect(parsed.data.envelope?.content.attachments).toEqual([{ kind: "photo" }]);
+  });
+
+  it("rejects envelope requests with mismatched channel", () => {
+    expectRejects(AgentTurnRequest, {
+      envelope: baseEnvelope,
+      channel: "discord",
+    });
+  });
+
+  it("rejects envelope requests with mismatched thread_id", () => {
+    expectRejects(AgentTurnRequest, {
+      envelope: baseEnvelope,
+      thread_id: "chat-456",
+    });
+  });
+
+  it("rejects requests missing channel when envelope is not provided", () => {
+    expectRejects(AgentTurnRequest, { thread_id: "chat-123", message: "hi" });
+  });
+
+  it("rejects requests missing thread_id when envelope is not provided", () => {
+    expectRejects(AgentTurnRequest, { channel: "telegram", message: "hi" });
   });
 
   it("rejects blank message content", () => {
