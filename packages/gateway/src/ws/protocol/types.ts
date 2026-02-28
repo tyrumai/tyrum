@@ -18,6 +18,7 @@ import type { AuthAudit } from "../../modules/auth/audit.js";
 import type { MemoryV1Dal } from "../../modules/memory/v1-dal.js";
 import type { ArtifactStore } from "../../modules/artifact/store.js";
 import type { RedactionEngine } from "../../modules/redaction/engine.js";
+import type { TaskResultRegistry } from "./task-result-registry.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection
@@ -66,6 +67,8 @@ export interface ProtocolDeps {
     connectionDirectory: ConnectionDirectoryDal;
   };
 
+  taskResults?: TaskResultRegistry;
+
   /** Called when a task.execute response is received from a client. */
   onTaskResult?: (
     taskId: string,
@@ -73,6 +76,9 @@ export interface ProtocolDeps {
     evidence: unknown,
     error: string | undefined,
   ) => void;
+
+  /** Called when a WebSocket peer disconnects (best-effort). */
+  onConnectionClosed?: (connectionId: string) => void;
 
   /** Called when an approval.request response is received from a client. */
   onApprovalDecision?: (approvalId: number, approved: boolean, reason: string | undefined) => void;
