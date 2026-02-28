@@ -9,6 +9,7 @@ import {
   type MemoryItemId,
   type MemoryItem,
   type MemoryTombstone,
+  type TyrumClientEvents,
 } from "@tyrum/client";
 import { httpAuthForAuth, wsTokenForAuth, type OperatorAuthStrategy } from "./auth.js";
 import type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
@@ -33,7 +34,7 @@ export interface OperatorCoreOptions {
   adminModeStore?: AdminModeStore;
   deps?: {
     ws?: OperatorWsClient;
-    http?: OperatorHttpClient;
+    http?: Partial<OperatorHttpClient>;
   };
 }
 
@@ -91,18 +92,19 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
 
   const ws: OperatorWsClient =
     options.deps?.ws ??
-    (new TyrumClient({
+    new TyrumClient({
       url: options.wsUrl,
       token: wsTokenForAuth(options.auth),
       capabilities: options.capabilities ?? [],
-    }) as unknown as OperatorWsClient);
+    });
 
-  const http: OperatorHttpClient =
-    options.deps?.http ??
-    (createTyrumHttpClient({
-      baseUrl: options.httpBaseUrl,
-      auth: httpAuthForAuth(options.auth),
-    }) as unknown as OperatorHttpClient);
+  const baseHttp: OperatorHttpClient = createTyrumHttpClient({
+    baseUrl: options.httpBaseUrl,
+    auth: httpAuthForAuth(options.auth),
+  });
+  const http: OperatorHttpClient = options.deps?.http
+    ? { ...baseHttp, ...options.deps.http }
+    : baseHttp;
 
   const connection = createConnectionStore(ws);
   const approvals = createApprovalsStore(ws);
@@ -112,7 +114,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const memory = createMemoryStore(ws);
 
   const unsubscribes: Unsubscribe[] = [];
-  const on = (event: string, handler: (data: unknown) => void): void => {
+  const on = (event: keyof TyrumClientEvents, handler: (data: unknown) => void): void => {
     ws.on(event, handler);
     unsubscribes.push(() => {
       ws.off(event, handler);

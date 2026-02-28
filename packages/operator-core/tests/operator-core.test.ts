@@ -301,6 +301,25 @@ function deferred<T>(): {
 }
 
 describe("operator-core wiring", () => {
+  it("exposes full HTTP client APIs even when deps.http is partial", () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    expect(typeof (core.http as Record<string, unknown>)["models"]).toBe("object");
+    expect(typeof (core.http as Record<string, unknown>)["authProfiles"]).toBe("object");
+    expect(typeof (core.http as Record<string, unknown>)["authPins"]).toBe("object");
+    expect(typeof (core.http as Record<string, unknown>)["secrets"]).toBe("object");
+    expect(typeof (core.http as Record<string, unknown>)["policy"]).toBe("object");
+    expect(typeof (core.http as Record<string, unknown>)["deviceTokens"]).toBe("object");
+  });
+
   it("exposes wsUrl + httpBaseUrl on the core", () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();

@@ -23,7 +23,7 @@ export interface StatusState {
 
 export interface StatusStore extends ExternalStore<StatusState> {
   refreshStatus(): Promise<void>;
-  refreshUsage(query?: unknown): Promise<void>;
+  refreshUsage(query?: Parameters<OperatorHttpClient["usage"]["get"]>[0]): Promise<void>;
   refreshPresence(): Promise<void>;
 }
 
@@ -87,7 +87,9 @@ export function createStatusStore(http: OperatorHttpClient): {
     }
   }
 
-  async function refreshUsage(query?: unknown): Promise<void> {
+  async function refreshUsage(
+    query?: Parameters<OperatorHttpClient["usage"]["get"]>[0],
+  ): Promise<void> {
     const runId = ++refreshUsageRunId;
     activeRefreshUsageRunId = runId;
     setState((prev) => ({
