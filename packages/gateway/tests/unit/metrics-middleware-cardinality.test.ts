@@ -33,4 +33,3 @@ describe("createMetricsMiddleware", () => {
     expect(body).toContain('path="/*"');
   });
 });
-
