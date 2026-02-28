@@ -568,7 +568,11 @@ export class AgentRuntime {
       );
     }
     this.workspaceId = parsedWorkspaceId.data;
-    this.instanceOwner = process.env["TYRUM_INSTANCE_ID"]?.trim() || `instance-${randomUUID()}`;
+    const configuredInstanceOwner = opts.container.gatewayConfig?.runtime.instanceId?.trim();
+    this.instanceOwner =
+      configuredInstanceOwner ||
+      process.env["TYRUM_INSTANCE_ID"]?.trim() ||
+      `instance-${randomUUID()}`;
     this.languageModelOverride = opts.languageModel;
     this.mcpManager = opts.mcpManager ?? new McpManager();
     this.plugins = opts.plugins;
