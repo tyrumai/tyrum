@@ -1,5 +1,17 @@
 import type { DesktopUiNode, DesktopUiTree } from "@tyrum/schemas";
 
+import {
+  MAX_ACTION_CHARS,
+  MAX_NAME_CHARS,
+  MAX_NODE_ACTIONS,
+  MAX_NODE_CHILDREN,
+  MAX_NODE_STATES,
+  MAX_ROLE_CHARS,
+  MAX_STATE_CHARS,
+  MAX_VALUE_CHARS,
+  clampTrimmed,
+} from "./schema-clamps.js";
+
 export type UiTreeLimits = {
   maxNodes: number;
   maxTextChars: number;
@@ -8,11 +20,9 @@ export type UiTreeLimits = {
 
 export const DEFAULT_A11Y_MAX_DEPTH = 32;
 
-const MAX_NODE_STATES = 32;
-const MAX_NODE_ACTIONS = 32;
-const MAX_NODE_CHILDREN = 128;
-
-function estimateNodeText(node: Pick<DesktopUiNode, "role" | "name" | "value" | "states" | "actions">): number {
+function estimateNodeText(
+  node: Pick<DesktopUiNode, "role" | "name" | "value" | "states" | "actions">,
+): number {
   let chars = node.role.length + node.name.length;
   if (node.value) chars += node.value.length;
   for (const state of node.states) chars += state.length;
@@ -20,14 +30,28 @@ function estimateNodeText(node: Pick<DesktopUiNode, "role" | "name" | "value" | 
   return chars;
 }
 
-function fitNodeTextToBudget(node: DesktopUiNode, budget: number): { node: DesktopUiNode; cost: number } {
+function fitNodeTextToBudget(
+  node: DesktopUiNode,
+  budget: number,
+): { node: DesktopUiNode; cost: number } {
   const safeBudget = Math.max(1, Math.floor(budget));
 
-  let role = node.role;
-  let name = node.name;
-  let value = node.value;
-  let states = node.states.slice(0, MAX_NODE_STATES);
-  let actions = node.actions.slice(0, MAX_NODE_ACTIONS);
+  let role = clampTrimmed(node.role, MAX_ROLE_CHARS);
+  if (!role) role = "unknown";
+
+  let name = clampTrimmed(node.name, MAX_NAME_CHARS);
+
+  let value = node.value ? clampTrimmed(node.value, MAX_VALUE_CHARS) : undefined;
+  if (value?.length === 0) value = undefined;
+
+  let states = node.states
+    .map((state) => clampTrimmed(state, MAX_STATE_CHARS))
+    .filter((state) => state.length > 0)
+    .slice(0, MAX_NODE_STATES);
+  let actions = node.actions
+    .map((action) => clampTrimmed(action, MAX_ACTION_CHARS))
+    .filter((action) => action.length > 0)
+    .slice(0, MAX_NODE_ACTIONS);
 
   const bounds = node.bounds;
   const ref = node.ref;
@@ -189,4 +213,3 @@ export function pruneUiTree(input: DesktopUiTree, limits: UiTreeLimits): Desktop
 
   return { root };
 }
-

@@ -27,4 +27,3 @@ export interface DesktopA11yBackend {
   query(args: DesktopQueryArgs): Promise<DesktopQueryMatch[]>;
   act(args: DesktopActArgs): Promise<DesktopA11yActResult>;
 }
-

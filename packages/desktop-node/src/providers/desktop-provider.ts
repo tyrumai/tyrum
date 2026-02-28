@@ -240,8 +240,8 @@ export class DesktopProvider implements CapabilityProvider {
             maxDepth: DEFAULT_A11Y_MAX_DEPTH,
           });
         } catch {
-          // Fall back to pixel mode when AT-SPI is unavailable or errors.
-          this.a11yBackendState = "unavailable";
+          // Fall back to pixel mode, but allow future AT-SPI retries.
+          this.a11yBackendState = "unknown";
         }
       }
     }
@@ -291,9 +291,9 @@ export class DesktopProvider implements CapabilityProvider {
               timestamp: new Date().toISOString(),
             },
           };
-        } catch {
-          // Fall back to pixel mode when AT-SPI is unavailable or errors.
-          this.a11yBackendState = "unavailable";
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return { success: false, error: message };
         }
       }
     }
@@ -446,11 +446,83 @@ export class DesktopProvider implements CapabilityProvider {
               timestamp: new Date().toISOString(),
             },
           };
-        } catch {
-          // Fall back to pixel mode when AT-SPI is unavailable or errors.
-          this.a11yBackendState = "unavailable";
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return { success: false, error: message };
         }
       }
+
+      if (args.target.kind === "ref") {
+        return {
+          success: false,
+          error:
+            "AT-SPI backend unavailable for atspi: refs (pixel fallback requires an OCR selector or pixel ref)",
+        };
+      }
+
+      if (args.target.kind !== "a11y") {
+        return {
+          success: false,
+          error: `Unsupported act target kind for a11y fallback: ${args.target.kind}`,
+        };
+      }
+
+      const name = args.target.name;
+      if (!name || !name.trim()) {
+        return {
+          success: false,
+          error: "Pixel act requires an a11y selector name for OCR text search",
+        };
+      }
+
+      const ocrResult = await this.query({
+        op: "query",
+        selector: { kind: "ocr", text: name, case_insensitive: true },
+        limit: 1,
+      });
+      if (!ocrResult.success) return ocrResult;
+
+      const matches = (
+        ocrResult.result as { matches?: Array<{ kind: string; bounds?: DesktopUiRect }> }
+      )?.matches;
+      const match = matches?.[0];
+      if (!match || match.kind !== "ocr" || !match.bounds) {
+        return { success: false, error: `OCR target not found: "${name}"` };
+      }
+
+      const point: PixelPoint = {
+        x: match.bounds.x + match.bounds.width / 2,
+        y: match.bounds.y + match.bounds.height / 2,
+      };
+
+      if (this.permissions.desktopInputRequiresConfirmation) {
+        const approved = await this.requestConfirmation(
+          `Allow desktop act ${args.action.kind} at (${point.x}, ${point.y})?`,
+        );
+        if (!approved) {
+          return { success: false, error: "User denied desktop act" };
+        }
+      }
+
+      await this.performPixelAct(point, args.action);
+
+      return {
+        success: true,
+        result: {
+          op: "act",
+          target: args.target,
+          action: args.action,
+          resolved_element_ref: `pixel:${point.x},${point.y}`,
+        },
+        evidence: {
+          type: "act",
+          mode: "pixel",
+          action: args.action.kind,
+          x: point.x,
+          y: point.y,
+          timestamp: new Date().toISOString(),
+        },
+      };
     }
 
     if (args.target.kind !== "ref") {
@@ -477,14 +549,7 @@ export class DesktopProvider implements CapabilityProvider {
       }
     }
 
-    if (args.action.kind === "right_click") {
-      await this.backend.clickMouse(point.x, point.y, "right");
-    } else if (args.action.kind === "double_click") {
-      await this.backend.doubleClickMouse(point.x, point.y);
-    } else {
-      // click | focus
-      await this.backend.clickMouse(point.x, point.y);
-    }
+    await this.performPixelAct(point, args.action);
 
     return {
       success: true,
@@ -637,5 +702,23 @@ export class DesktopProvider implements CapabilityProvider {
         timestamp: new Date().toISOString(),
       },
     };
+  }
+
+  private async performPixelAct(
+    point: PixelPoint,
+    action: DesktopActArgs["action"],
+  ): Promise<void> {
+    if (action.kind === "right_click") {
+      await this.backend.clickMouse(point.x, point.y, "right");
+      return;
+    }
+
+    if (action.kind === "double_click") {
+      await this.backend.doubleClickMouse(point.x, point.y);
+      return;
+    }
+
+    // click | focus
+    await this.backend.clickMouse(point.x, point.y);
   }
 }
