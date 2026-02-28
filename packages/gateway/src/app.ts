@@ -3,6 +3,7 @@
  */
 
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import type { GatewayContainer } from "./container.js";
 import { createHealthRoute } from "./routes/health.js";
@@ -181,6 +182,23 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
 
   // Prometheus request metrics.
   app.use("*", createMetricsMiddleware(gatewayMetrics));
+
+  const corsOrigins = (process.env["TYRUM_CORS_ORIGINS"] ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
+  if (corsOrigins.length > 0) {
+    app.use(
+      "*",
+      cors({
+        origin: corsOrigins,
+        allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        allowHeaders: ["Authorization", "Content-Type"],
+        maxAge: 3600,
+      }),
+    );
+  }
 
   // Apply auth middleware if a token store is provided
   if (opts.authRateLimiter) {
