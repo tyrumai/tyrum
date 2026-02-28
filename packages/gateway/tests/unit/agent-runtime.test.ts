@@ -122,26 +122,55 @@ describe("AgentRuntime", () => {
     const nodeId = "node-1";
     const nodeWs = {
       send: vi.fn((raw: string) => {
-        try {
-          const parsed = JSON.parse(raw) as Record<string, unknown>;
-          const requestId = parsed["request_id"];
-          if (typeof requestId === "string" && requestId.trim().length > 0) {
-            taskResults.resolve(requestId, {
-              ok: true,
-              result: { op: "snapshot" },
-              evidence: {
-                type: "snapshot",
-                mime: "image/png",
-                width: 1,
-                height: 1,
-                timestamp: new Date().toISOString(),
-                bytesBase64,
-              },
-            });
-          }
-        } catch {
-          // ignore
-        }
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        expect(parsed["type"]).toBe("task.execute");
+
+        const payload = parsed["payload"];
+        expect(payload).toBeTruthy();
+        expect(payload).toSatisfy(
+          (value: unknown) => value !== null && typeof value === "object" && !Array.isArray(value),
+          "payload is an object",
+        );
+
+        const payloadObj = payload as Record<string, unknown>;
+        const action = payloadObj["action"];
+        expect(action).toBeTruthy();
+        expect(action).toSatisfy(
+          (value: unknown) => value !== null && typeof value === "object" && !Array.isArray(value),
+          "payload.action is an object",
+        );
+
+        const actionObj = action as Record<string, unknown>;
+        expect(actionObj["type"]).toBe("Desktop");
+
+        const actionArgs = actionObj["args"];
+        expect(actionArgs).toBeTruthy();
+        expect(actionArgs).toSatisfy(
+          (value: unknown) => value !== null && typeof value === "object" && !Array.isArray(value),
+          "payload.action.args is an object",
+        );
+        const actionArgsObj = actionArgs as Record<string, unknown>;
+        expect(actionArgsObj["op"]).toBe("snapshot");
+        expect(actionArgsObj["include_tree"]).toBe(false);
+
+        const requestId = parsed["request_id"];
+        expect(requestId).toSatisfy(
+          (value: unknown) => typeof value === "string" && value.trim().length > 0,
+          "request_id is a non-empty string",
+        );
+
+        taskResults.resolve(requestId as string, {
+          ok: true,
+          result: { op: "snapshot" },
+          evidence: {
+            type: "snapshot",
+            mime: "image/png",
+            width: 1,
+            height: 1,
+            timestamp: new Date().toISOString(),
+            bytesBase64,
+          },
+        });
       }),
       on: vi.fn(() => undefined as never),
       readyState: 1,
@@ -265,10 +294,11 @@ describe("AgentRuntime", () => {
     expect(result.used_tools).toContain("tool.node.dispatch");
     expect(nodeWs.send).toHaveBeenCalledTimes(1);
 
-    const row = await container.db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_artifacts WHERE kind = 'screenshot'",
+    const row = await container.db.get<{ uri: string }>(
+      "SELECT uri FROM execution_artifacts WHERE kind = 'screenshot' LIMIT 1",
     );
-    expect(row?.n).toBeGreaterThan(0);
+    expect(row).toBeTruthy();
+    expect(row?.uri).toStartWith("artifact://");
   }, 20_000);
 
   it("does not report context-available tools as used_tools", async () => {
