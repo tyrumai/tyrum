@@ -11,6 +11,7 @@ import { AgentRuntime } from "./runtime.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { LanguageModel } from "ai";
 import { TokenStore } from "../auth/token-store.js";
+import type { ProtocolDeps } from "../../ws/protocol.js";
 
 function normalizeAgentId(raw: string | undefined): string {
   const trimmed = raw?.trim();
@@ -42,6 +43,7 @@ export class AgentRegistry {
       defaultLanguageModel?: LanguageModel;
       approvalNotifier: ApprovalNotifier;
       plugins?: PluginRegistry;
+      protocolDeps?: ProtocolDeps;
       logger: Logger;
     },
   ) {
@@ -115,6 +117,7 @@ export class AgentRegistry {
         approvalNotifier: this.opts.approvalNotifier,
         plugins: this.opts.plugins,
         policyService,
+        protocolDeps: this.opts.protocolDeps,
       });
 
       this.opts.logger.info("agents.runtime_ready", {

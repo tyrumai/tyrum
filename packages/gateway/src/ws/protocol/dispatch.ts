@@ -80,7 +80,7 @@ export function dispatchTask(
       const policyDecision = policyEvaluation?.decision;
       const policySnapshotId = policyEvaluation?.policy_snapshot?.policy_snapshot_id;
       const shouldEnforcePolicy = policyEnabled && !(deps.policyService?.isObserveOnly() ?? false);
-      const nodeDispatchAllowed = !shouldEnforcePolicy || policyDecision === "allow";
+      const nodeDispatchAllowed = !shouldEnforcePolicy || policyDecision !== "deny";
       const trace =
         policySnapshotId || policyDecision
           ? { policy_snapshot_id: policySnapshotId, policy_decision: policyDecision }
@@ -168,7 +168,7 @@ export function dispatchTask(
     const policyDecision = policyEvaluation?.decision;
     const policySnapshotId = policyEvaluation?.policy_snapshot?.policy_snapshot_id;
     const shouldEnforcePolicy = policyEnabled && !(deps.policyService?.isObserveOnly() ?? false);
-    const nodeDispatchAllowed = !shouldEnforcePolicy || policyDecision === "allow";
+    const nodeDispatchAllowed = !shouldEnforcePolicy || policyDecision !== "deny";
     const trace =
       policySnapshotId || policyDecision
         ? { policy_snapshot_id: policySnapshotId, policy_decision: policyDecision }

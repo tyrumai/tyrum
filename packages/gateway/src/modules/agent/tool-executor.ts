@@ -4,11 +4,18 @@ import { lookup } from "node:dns/promises";
 import type { LookupAddress } from "node:dns";
 import { isIP } from "node:net";
 import { dirname, resolve, relative, isAbsolute } from "node:path";
-import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
+import { ActionPrimitiveKind, CapabilityDescriptor } from "@tyrum/schemas";
+import {
+  descriptorIdForClientCapability,
+  requiredCapability,
+  type ActionPrimitive,
+  type McpServerSpec as McpServerSpecT,
+} from "@tyrum/schemas";
 import type { McpManager } from "./mcp-manager.js";
 import type { TaggedContent } from "./provenance.js";
 import { tagContent } from "./provenance.js";
 import { sanitizeForModel } from "./sanitizer.js";
+import type { NodeDispatchService } from "./node-dispatch-service.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { SecretResolutionAuditDal } from "../secret/resolution-audit-dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
@@ -20,6 +27,8 @@ const TRUNCATION_MARKER = "...(truncated)";
 const HTTP_TIMEOUT_MS = 30_000;
 const DEFAULT_EXEC_TIMEOUT_MS = 30_000;
 const MAX_EXEC_TIMEOUT_MS = 300_000;
+const DEFAULT_NODE_DISPATCH_TIMEOUT_MS = 30_000;
+const MAX_NODE_DISPATCH_TIMEOUT_MS = 300_000;
 
 /** Sentinel prefix for secret handle references in tool arguments. */
 const SECRET_HANDLE_PREFIX = "secret:";
@@ -301,6 +310,7 @@ export class ToolExecutor {
     private readonly redactionEngine?: RedactionEngine,
     private readonly secretResolutionAuditDal?: SecretResolutionAuditDal,
     private readonly workspaceLease?: WorkspaceLeaseConfig,
+    private readonly nodeDispatchService?: NodeDispatchService,
   ) {}
 
   private workspaceLeaseOwner(toolCallId: string): string {
@@ -348,6 +358,8 @@ export class ToolExecutor {
       session_id?: string;
       channel?: string;
       thread_id?: string;
+      execution_run_id?: string;
+      execution_step_id?: string;
       policy_snapshot_id?: string;
     },
   ): Promise<ToolResult> {
@@ -379,11 +391,13 @@ export class ToolExecutor {
             result = await this.executeExec(toolCallId, resolvedArgs);
             break;
           case "tool.node.dispatch":
-            result = {
-              tool_call_id: toolCallId,
-              output: "",
-              error: "tool not yet available",
-            };
+            result = this.nodeDispatchService
+              ? await this.executeNodeDispatch(toolCallId, resolvedArgs, audit)
+              : {
+                  tool_call_id: toolCallId,
+                  output: "",
+                  error: "node dispatch is not configured",
+                };
             break;
           default:
             result = {
@@ -441,6 +455,151 @@ export class ToolExecutor {
       throw new Error(`path escapes workspace: ${filePath}`);
     }
     return resolvedPath;
+  }
+
+  private async executeNodeDispatch(
+    toolCallId: string,
+    args: unknown,
+    audit?: {
+      execution_run_id?: string;
+      execution_step_id?: string;
+    },
+  ): Promise<ToolResult> {
+    const parsed = args as Record<string, unknown> | null;
+    const rawCapability = typeof parsed?.["capability"] === "string" ? parsed["capability"] : "";
+    const rawAction = typeof parsed?.["action"] === "string" ? parsed["action"] : "";
+    const capability = rawCapability.trim();
+    const actionToken = rawAction.trim();
+
+    if (!capability) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: "missing required argument: capability",
+      };
+    }
+    if (!actionToken) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: "missing required argument: action",
+      };
+    }
+
+    const parsedAction = ActionPrimitiveKind.safeParse(actionToken);
+    if (!parsedAction.success) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: `invalid action: expected ActionPrimitiveKind (got '${actionToken}')`,
+      };
+    }
+
+    const required = requiredCapability(parsedAction.data);
+    if (!required) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: `unsupported action for node dispatch: '${parsedAction.data}'`,
+      };
+    }
+
+    const capabilityId = CapabilityDescriptor.safeParse({ id: capability });
+    if (!capabilityId.success) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: `invalid capability: ${capabilityId.error.message}`,
+      };
+    }
+
+    const expectedCapability = descriptorIdForClientCapability(required);
+    if (capabilityId.data.id !== expectedCapability) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: `capability '${capabilityId.data.id}' does not match action '${parsedAction.data}' (expected '${expectedCapability}')`,
+      };
+    }
+
+    const argsRaw = parsed?.["args"];
+    const actionArgs =
+      argsRaw === undefined
+        ? {}
+        : argsRaw && typeof argsRaw === "object" && !Array.isArray(argsRaw)
+          ? (argsRaw as Record<string, unknown>)
+          : undefined;
+    if (!actionArgs) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: "invalid args: expected an object",
+      };
+    }
+
+    const timeoutMsRaw = parsed?.["timeout_ms"];
+    const timeoutMs =
+      typeof timeoutMsRaw === "number"
+        ? Math.max(1, Math.min(MAX_NODE_DISPATCH_TIMEOUT_MS, Math.floor(timeoutMsRaw)))
+        : DEFAULT_NODE_DISPATCH_TIMEOUT_MS;
+
+    const runId = audit?.execution_run_id?.trim() || crypto.randomUUID();
+    const stepId = audit?.execution_step_id?.trim() || crypto.randomUUID();
+    const attemptId = crypto.randomUUID();
+
+    const action: ActionPrimitive = {
+      type: parsedAction.data,
+      args: actionArgs,
+    };
+
+    let serializedPayload: string;
+    try {
+      const { taskId, result } = await this.nodeDispatchService!.dispatchAndWait(
+        action,
+        { runId, stepId, attemptId },
+        { timeoutMs },
+      );
+
+      const payload = {
+        ok: result.ok,
+        task_id: taskId,
+        evidence: result.evidence,
+        error: result.error,
+      };
+
+      serializedPayload = JSON.stringify(payload);
+      if (serializedPayload.length > MAX_RESPONSE_BYTES) {
+        const safeError =
+          typeof result.error === "string"
+            ? result.error.length > 4_096
+              ? `${result.error.slice(0, 4_096)}${TRUNCATION_MARKER}`
+              : result.error
+            : undefined;
+        const omitted = {
+          ok: result.ok,
+          task_id: taskId,
+          error: safeError,
+          evidence: "[omitted: evidence too large]",
+          truncated: true,
+        };
+        serializedPayload = JSON.stringify(omitted);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const code = message.toLowerCase().includes("timeout") ? "timeout" : "dispatch_failed";
+      const retryable = code === "timeout";
+      serializedPayload = JSON.stringify({
+        ok: false,
+        error: { code, message, retryable },
+      });
+    }
+
+    const tagged = tagContent(serializedPayload, "tool");
+    return {
+      tool_call_id: toolCallId,
+      output: sanitizeForModel(tagged),
+      provenance: tagged,
+    };
   }
 
   private async executeFsRead(toolCallId: string, args: unknown): Promise<ToolResult> {

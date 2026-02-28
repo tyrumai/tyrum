@@ -80,6 +80,7 @@ import { getExecutionProfile, normalizeExecutionProfileId } from "../execution-p
 import type { ExecutionProfile, ExecutionProfileId } from "../execution-profiles.js";
 import { IntakeModeOverrideDal } from "../intake-mode-override-dal.js";
 import { McpManager } from "../mcp-manager.js";
+import { NodeDispatchService } from "../node-dispatch-service.js";
 import { ToolExecutor, type ToolResult } from "../tool-executor.js";
 import { tagContent } from "../provenance.js";
 import { sanitizeForModel, containsInjectionPatterns } from "../sanitizer.js";
@@ -2472,6 +2473,10 @@ export class AgentRuntime {
       mcpSpecMap.set(server.id, server);
     }
 
+    const nodeDispatchService = this.opts.protocolDeps
+      ? new NodeDispatchService(this.opts.protocolDeps)
+      : undefined;
+
     const toolExecutor = new ToolExecutor(
       this.home,
       this.mcpManager,
@@ -2486,6 +2491,7 @@ export class AgentRuntime {
         workspaceId,
         ownerPrefix: this.instanceOwner,
       },
+      nodeDispatchService,
     );
 
     const sessionCtx = formatSessionContext(session.summary, session.turns);
@@ -3358,6 +3364,8 @@ export class AgentRuntime {
                 session_id: toolExecutionContext.sessionId,
                 channel: toolExecutionContext.channel,
                 thread_id: toolExecutionContext.threadId,
+                execution_run_id: toolExecutionContext.execution?.runId,
+                execution_step_id: toolExecutionContext.execution?.stepId,
                 policy_snapshot_id: policySnapshotId,
               });
 

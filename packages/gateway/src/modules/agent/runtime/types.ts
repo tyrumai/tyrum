@@ -7,6 +7,7 @@ import type { ApprovalDal } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
 import type { SecretProvider } from "../../secret/provider.js";
+import type { ProtocolDeps } from "../../../ws/protocol.js";
 
 export interface AgentRuntimeOptions {
   container: GatewayContainer;
@@ -28,6 +29,8 @@ export interface AgentRuntimeOptions {
   secretProvider?: SecretProvider;
   approvalDal?: ApprovalDal;
   approvalNotifier?: ApprovalNotifier;
+  /** Optional protocol deps for node dispatch (tool.node.dispatch). */
+  protocolDeps?: ProtocolDeps;
   /** How long to wait for a human approval before expiring it. */
   approvalWaitMs?: number;
   /** Poll interval while waiting for human approval. */

@@ -109,4 +109,14 @@ describe("canonicalizeToolMatchTarget", () => {
 
     expect(target).toBe("mcp.calendar.events_list");
   });
+
+  it("canonicalizes node dispatch by capability descriptor + ActionPrimitiveKind (not raw args)", () => {
+    const target = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: " screen ",
+      action: " Desktop ",
+      args: { secret: "should-not-appear" },
+    });
+
+    expect(target).toBe("capability:tyrum.desktop;action:Desktop");
+  });
 });
