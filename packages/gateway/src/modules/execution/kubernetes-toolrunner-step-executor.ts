@@ -12,7 +12,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function sanitizeDnsLabelSuffix(raw: string): string {
+export function sanitizeDnsLabelSuffix(raw: string): string {
   const s = raw.toLowerCase().replace(/[^a-z0-9-]/g, "-");
   return s.replace(/^-+/, "").replace(/-+$/, "");
 }
@@ -22,7 +22,7 @@ function unwrapBody<T>(res: unknown): T {
   return (anyRes && typeof anyRes === "object" && "body" in anyRes ? anyRes.body : res) as T;
 }
 
-function buildEnv(
+export function buildEnv(
   base: NodeJS.ProcessEnv,
   overrides: Record<string, string>,
 ): Array<{ name: string; value: string }> {
@@ -42,7 +42,7 @@ function buildEnv(
   return [...out.entries()].map(([name, value]) => ({ name, value }));
 }
 
-function parseStepResultFromLogs(raw: string): StepResult | null {
+export function parseStepResultFromLogs(raw: string): StepResult | null {
   const lines = raw
     .split(/\r?\n/)
     .map((l) => l.trim())
