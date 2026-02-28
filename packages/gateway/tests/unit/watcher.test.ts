@@ -113,6 +113,50 @@ describe("WatcherProcessor", () => {
     ).toHaveLength(1);
   });
 
+  it("treats webhook episode recording as best-effort", async () => {
+    const id = await processor.createWatcher("plan-1", "webhook", {
+      secret_handle: {
+        handle_id: "secret-handle",
+        provider: "file",
+        scope: "watcher:webhook:test",
+        created_at: new Date().toISOString(),
+      },
+    });
+    const watcher = await processor.getActiveWatcherById(id);
+    expect(watcher).not.toBeNull();
+
+    const fired = vi.fn();
+    eventBus.on("watcher:fired", fired);
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const createSpy = vi
+      .spyOn(memoryV1Dal, "create")
+      .mockRejectedValue(new Error("episode recording failure"));
+
+    const recorded = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs: 1_700_000_000_000,
+      nonce: "nonce-best-effort",
+      bodySha256: "abc123",
+      bodyBytes: 11,
+    });
+    expect(recorded).toBe(true);
+    expect(fired).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "watcher.webhook_episode_record_failed",
+      expect.objectContaining({
+        watcher_id: id,
+        plan_id: "plan-1",
+        error: "episode recording failure",
+      }),
+    );
+
+    const count = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM watcher_firings");
+    expect(count?.n).toBe(1);
+
+    createSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
   it("creates durable firing rows for webhook triggers", async () => {
     const id = await processor.createWatcher("plan-1", "webhook", {
       secret_handle: {

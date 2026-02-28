@@ -297,27 +297,37 @@ export class WatcherProcessor {
       }
     }
 
-    await recordMemoryV1SystemEpisode(
-      this.memoryV1Dal,
-      {
-        occurred_at: new Date(event.timestampMs).toISOString(),
-        channel: "watcher",
-        event_type: "webhook_fired",
-        summary_md: `Watcher fired: webhook_fired`,
-        tags: ["watcher", `watcher_id:${String(watcher.id)}`, `plan_id:${watcher.plan_id}`],
-        metadata: {
-          firing_id: firingId,
-          watcher_id: watcher.id,
-          plan_id: watcher.plan_id,
-          trigger_type: watcher.trigger_type,
-          timestamp_ms: event.timestampMs,
-          nonce: event.nonce,
-          body_sha256: event.bodySha256,
-          body_bytes: event.bodyBytes,
+    try {
+      await recordMemoryV1SystemEpisode(
+        this.memoryV1Dal,
+        {
+          occurred_at: new Date(event.timestampMs).toISOString(),
+          channel: "watcher",
+          event_type: "webhook_fired",
+          summary_md: `Watcher fired: webhook_fired`,
+          tags: ["watcher", `watcher_id:${String(watcher.id)}`, `plan_id:${watcher.plan_id}`],
+          metadata: {
+            firing_id: firingId,
+            watcher_id: watcher.id,
+            plan_id: watcher.plan_id,
+            trigger_type: watcher.trigger_type,
+            timestamp_ms: event.timestampMs,
+            nonce: event.nonce,
+            body_sha256: event.bodySha256,
+            body_bytes: event.bodyBytes,
+          },
         },
-      },
-      "default",
-    );
+        "default",
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn("watcher.webhook_episode_record_failed", {
+        watcher_id: watcher.id,
+        plan_id: watcher.plan_id,
+        firing_id: firingId,
+        error: message,
+      });
+    }
 
     this.eventBus.emit("watcher:fired", {
       watcherId: watcher.id,
