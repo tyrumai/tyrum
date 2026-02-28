@@ -14,4 +14,3 @@ describe("WorkBoard page theme migration", () => {
     expect(source).not.toContain('from "../theme.js"');
   });
 });
-

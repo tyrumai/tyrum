@@ -43,29 +43,29 @@ class StubWsClient implements OperatorWsClient {
   off(_event: string, _handler: (data: unknown) => void): void {}
   approvalList = async () => ({ approvals: [], next_cursor: undefined });
   approvalResolve = async () => ({ approval: {} as never });
-  memorySearch = async () => ({ v: 1, hits: [], next_cursor: undefined } as never);
-  memoryList = async () => ({ v: 1, items: [], next_cursor: undefined } as never);
-  memoryGet = async () => ({ v: 1, item: {} } as never);
-  memoryUpdate = async () => ({ v: 1, item: {} } as never);
-  memoryForget = async () => ({ v: 1, deleted_count: 0, tombstones: [] } as never);
-  memoryExport = async () => ({ v: 1, artifact_id: "artifact-1" } as never);
+  memorySearch = async () => ({ v: 1, hits: [], next_cursor: undefined }) as never;
+  memoryList = async () => ({ v: 1, items: [], next_cursor: undefined }) as never;
+  memoryGet = async () => ({ v: 1, item: {} }) as never;
+  memoryUpdate = async () => ({ v: 1, item: {} }) as never;
+  memoryForget = async () => ({ v: 1, deleted_count: 0, tombstones: [] }) as never;
+  memoryExport = async () => ({ v: 1, artifact_id: "artifact-1" }) as never;
 }
 
 const stubHttp: OperatorHttpClient = {
   status: {
-    get: async () => ({ status: "ok" } as never),
+    get: async () => ({ status: "ok" }) as never,
   },
   usage: {
-    get: async () => ({ status: "ok" } as never),
+    get: async () => ({ status: "ok" }) as never,
   },
   presence: {
-    list: async () => ({ status: "ok" } as never),
+    list: async () => ({ status: "ok" }) as never,
   },
   pairings: {
-    list: async () => ({ status: "ok", pairings: [] } as never),
-    approve: async () => ({ status: "ok" } as never),
-    deny: async () => ({ status: "ok" } as never),
-    revoke: async () => ({ status: "ok" } as never),
+    list: async () => ({ status: "ok", pairings: [] }) as never,
+    approve: async () => ({ status: "ok" }) as never,
+    deny: async () => ({ status: "ok" }) as never,
+    revoke: async () => ({ status: "ok" }) as never,
   },
 };
 
