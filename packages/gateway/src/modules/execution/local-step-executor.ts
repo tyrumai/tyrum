@@ -99,8 +99,9 @@ async function readTextWithLimit(
     if (truncated) {
       try {
         await reader.cancel();
-      } catch {
-        // ignore
+      } catch (err) {
+        // Intentional: cancel is best-effort and can fail if the stream is already closed.
+        void err;
       }
     }
   }
@@ -141,7 +142,9 @@ function isLikelyHtml(contentType: string | null, body: string): boolean {
 function tryParseJson(text: string): unknown | undefined {
   try {
     return JSON.parse(text) as unknown;
-  } catch {
+  } catch (err) {
+    // Intentional: caller treats invalid JSON as "not JSON".
+    void err;
     return undefined;
   }
 }
@@ -418,14 +421,16 @@ class LocalStepExecutor implements StepExecutor {
       const timer = setTimeout(() => {
         try {
           child.kill("SIGTERM");
-        } catch {
-          // ignore
+        } catch (err) {
+          // Intentional: process may have already exited.
+          void err;
         }
         setTimeout(() => {
           try {
             child.kill("SIGKILL");
-          } catch {
-            // ignore
+          } catch (err) {
+            // Intentional: process may have already exited.
+            void err;
           }
         }, 5_000).unref();
       }, timeoutMs);

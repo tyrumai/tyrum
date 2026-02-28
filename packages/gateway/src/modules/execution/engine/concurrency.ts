@@ -29,8 +29,12 @@ export function parseConcurrencyLimitsFromEnv(
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw) as unknown;
-  } catch {
-    logger?.warn("execution.concurrency_limits_invalid", { reason: "invalid_json" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger?.warn("execution.concurrency_limits_invalid", {
+      reason: "invalid_json",
+      error: message,
+    });
     return undefined;
   }
 

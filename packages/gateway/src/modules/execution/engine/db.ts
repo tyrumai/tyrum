@@ -12,8 +12,9 @@ export function parsePlanIdFromTriggerJson(triggerJson: string): string | undefi
         }
       }
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    // Intentional: caller treats invalid JSON as missing metadata.
+    void err;
   }
   return undefined;
 }

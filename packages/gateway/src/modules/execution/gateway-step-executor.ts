@@ -133,7 +133,12 @@ async function loadPolicyBundleFromSnapshot(
   if (!row?.bundle_json) return undefined;
   try {
     return PolicyBundle.parse(JSON.parse(row.bundle_json) as unknown);
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    container.logger?.warn("execution.policy_snapshot_invalid", {
+      policy_snapshot_id: policySnapshotId,
+      error: message,
+    });
     return undefined;
   }
 }
@@ -149,7 +154,10 @@ async function resolveSecretScopesFromArgs(
   let handles: SecretHandleT[];
   try {
     handles = await secretProvider.list();
-  } catch {
+  } catch (err) {
+    // Intentional: if the secret provider fails, fall back to handle IDs so the policy
+    // engine still sees the secret references (but not resolved values).
+    void err;
     return handleIds;
   }
 
@@ -326,7 +334,12 @@ function buildToolSet(input: {
     let context: unknown = {};
     try {
       context = JSON.parse(row.context_json) as unknown;
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      input.container.logger?.warn("execution.approval_context_parse_failed", {
+        approval_id: approvalId,
+        error: message,
+      });
       context = {};
     }
     cachedApproval = { status: row.status, context, reason: row.response_reason };
@@ -609,7 +622,9 @@ function extractToolErrorMessage(err: unknown): string {
   if (typeof err === "string" && err.trim().length > 0) return err;
   try {
     return JSON.stringify(err);
-  } catch {
+  } catch (stringifyErr) {
+    // Intentional: JSON.stringify can throw on circular structures.
+    void stringifyErr;
     return String(err);
   }
 }
@@ -706,7 +721,12 @@ async function executeLlmAction(input: {
       let approvalContext: unknown = {};
       try {
         approvalContext = JSON.parse(row.context_json) as unknown;
-      } catch {
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        input.container.logger?.warn("execution.approval_context_parse_failed", {
+          approval_id: stepApprovalId,
+          error: message,
+        });
         approvalContext = {};
       }
 
@@ -895,7 +915,9 @@ async function executeLlmAction(input: {
   let parsed: unknown;
   try {
     parsed = JSON.parse(resultText) as unknown;
-  } catch {
+  } catch (err) {
+    // Intentional: output contract violation is returned as a structured StepResult.
+    void err;
     return {
       success: false,
       error: "Output contract violated: expected JSON model output",

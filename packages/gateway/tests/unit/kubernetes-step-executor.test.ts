@@ -205,4 +205,109 @@ describe("Kubernetes toolrunner step executor", () => {
 
     expect(result).toEqual({ success: false, error: "boom" });
   });
+
+  it("logs a warning when job logs cannot be read on failure", async () => {
+    const { createKubernetesToolRunnerStepExecutor } =
+      await import("../../src/modules/execution/kubernetes-toolrunner-step-executor.js");
+
+    const logger = {
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    batchClient.readNamespacedJobStatus.mockImplementationOnce(async () => ({
+      body: { status: { failed: 1 } },
+    }));
+    coreClient.readNamespacedPodLog.mockImplementationOnce(async () => {
+      throw new Error("log read failed");
+    });
+
+    const executor = createKubernetesToolRunnerStepExecutor({
+      namespace: "default",
+      image: "tyrum/gateway:dev",
+      workspacePvcClaim: "workspace",
+      tyrumHome: "/var/lib/tyrum",
+      logger: logger as any,
+      deleteJobAfter: false,
+    });
+
+    const result = await executor.execute(
+      { type: "CLI", args: { cmd: "echo", args: ["hi"] } },
+      "plan-1",
+      0,
+      1_000,
+      {
+        runId: "run-1",
+        stepId: "step-1",
+        attemptId: "attempt-1",
+        approvalId: null,
+        key: "k",
+        lane: "main",
+        workspaceId: "default",
+        policySnapshotId: null,
+      },
+    );
+
+    expect(result).toEqual({ success: false, error: "toolrunner job failed" });
+    expect(logger.warn).toHaveBeenCalledWith(
+      "toolrunner.k8s.logs_read_failed",
+      expect.objectContaining({
+        run_id: "run-1",
+        step_id: "step-1",
+        attempt_id: "attempt-1",
+        job: expect.any(String),
+      }),
+    );
+  });
+
+  it("logs a warning when job deletion fails during cleanup", async () => {
+    const { createKubernetesToolRunnerStepExecutor } =
+      await import("../../src/modules/execution/kubernetes-toolrunner-step-executor.js");
+
+    const logger = {
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    batchClient.deleteNamespacedJob.mockImplementationOnce(async () => {
+      throw new Error("delete failed");
+    });
+
+    const executor = createKubernetesToolRunnerStepExecutor({
+      namespace: "default",
+      image: "tyrum/gateway:dev",
+      workspacePvcClaim: "workspace",
+      tyrumHome: "/var/lib/tyrum",
+      logger: logger as any,
+      deleteJobAfter: true,
+    });
+
+    const result = await executor.execute(
+      { type: "CLI", args: { cmd: "echo", args: ["hi"] } },
+      "plan-1",
+      0,
+      1_000,
+      {
+        runId: "run-1",
+        stepId: "step-1",
+        attemptId: "attempt-1",
+        approvalId: null,
+        key: "k",
+        lane: "main",
+        workspaceId: "default",
+        policySnapshotId: null,
+      },
+    );
+
+    expect(result).toEqual({ success: true });
+    expect(logger.warn).toHaveBeenCalledWith(
+      "toolrunner.k8s.delete_job_failed",
+      expect.objectContaining({
+        run_id: "run-1",
+        step_id: "step-1",
+        attempt_id: "attempt-1",
+        job: expect.any(String),
+      }),
+    );
+  });
 });

@@ -31,8 +31,10 @@ function parseRoutingConfigOrThrow(row: RawRoutingConfigRow): RoutingConfig {
   let parsed: unknown;
   try {
     parsed = JSON.parse(row.config_json) as unknown;
-  } catch {
-    throw new Error(`routing config revision ${String(row.revision)} has invalid JSON`);
+  } catch (err) {
+    throw new Error(`routing config revision ${String(row.revision)} has invalid JSON`, {
+      cause: err,
+    });
   }
 
   const config = RoutingConfigSchema.safeParse(parsed);
@@ -91,8 +93,9 @@ async function appendAuditEventNext(
         try {
           await tx.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`);
           await tx.exec(`RELEASE SAVEPOINT ${savepoint}`);
-        } catch {
-          // ignore
+        } catch (rollbackErr) {
+          // Intentional: rollback failures should not hide the original failure.
+          void rollbackErr;
         }
         throw err;
       }
