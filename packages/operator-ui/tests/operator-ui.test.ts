@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { toast } from "sonner";
 import {
   createBearerTokenAuth,
   createBrowserCookieAuth,
@@ -156,7 +157,7 @@ function sampleApprovalApproved() {
 
 function sampleExecutionRun() {
   return {
-    run_id: "11111111-1111-1111-1111-111111111111",
+    run_id: "11111111-1111-1111-1111-deadbeefcafe",
     job_id: "22222222-2222-2222-2222-222222222222",
     key: "key-1",
     lane: "main",
@@ -168,23 +169,54 @@ function sampleExecutionRun() {
   } as const;
 }
 
-function sampleExecutionStep() {
+type SampleExecutionStepStatus =
+  | "queued"
+  | "running"
+  | "paused"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "skipped";
+
+type SampleExecutionAttemptStatus = "running" | "succeeded" | "failed" | "timed_out" | "cancelled";
+
+function sampleExecutionStep({
+  stepId,
+  stepIndex,
+  status,
+  actionType,
+}: {
+  stepId: string;
+  stepIndex: number;
+  status: SampleExecutionStepStatus;
+  actionType: "Decide" | "Research";
+}) {
   return {
-    step_id: "33333333-3333-3333-3333-333333333333",
+    step_id: stepId,
     run_id: sampleExecutionRun().run_id,
-    step_index: 0,
-    status: "running",
-    action: { type: "Decide", args: {} },
+    step_index: stepIndex,
+    status,
+    action: { type: actionType, args: {} },
     created_at: "2026-01-01T00:00:00.000Z",
   } as const;
 }
 
-function sampleExecutionAttempt() {
+function sampleExecutionAttempt({
+  attemptId,
+  attempt,
+  status,
+  stepId,
+}: {
+  attemptId: string;
+  attempt: number;
+  status: SampleExecutionAttemptStatus;
+  stepId: string;
+}) {
   return {
-    attempt_id: "44444444-4444-4444-4444-444444444444",
-    step_id: sampleExecutionStep().step_id,
-    attempt: 1,
-    status: "running",
+    attempt_id: attemptId,
+    step_id: stepId,
+    attempt,
+    status,
     started_at: "2026-01-01T00:00:00.000Z",
     finished_at: null,
     error: null,
@@ -1404,7 +1436,10 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("renders incoming runs on the timeline page", () => {
+  it("renders incoming runs on the runs page", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:02:00.000Z"));
+
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -1431,24 +1466,96 @@ describe("operator-ui", () => {
     });
 
     expect(container.textContent).toContain("No runs yet");
+    expect(container.textContent).toContain("Runs appear here when agents start executing.");
 
     act(() => {
       ws.emit("run.updated", { payload: { run: sampleExecutionRun() } });
     });
 
-    expect(container.textContent).toContain("11111111-1111-1111-1111-111111111111");
+    expect(container.textContent).toContain("running");
+    expect(container.textContent).toContain("beefcafe");
+    expect(container.textContent).toContain("2m ago");
 
-    act(() => {
-      ws.emit("step.updated", { payload: { step: sampleExecutionStep() } });
+    const step0 = sampleExecutionStep({
+      stepId: "33333333-3333-3333-3333-0123456789ab",
+      stepIndex: 0,
+      status: "queued",
+      actionType: "Decide",
+    });
+    const step1 = sampleExecutionStep({
+      stepId: "33333333-3333-3333-3333-acde0000babe",
+      stepIndex: 1,
+      status: "running",
+      actionType: "Research",
     });
 
-    expect(container.textContent).toContain("33333333-3333-3333-3333-333333333333");
-
     act(() => {
-      ws.emit("attempt.updated", { payload: { attempt: sampleExecutionAttempt() } });
+      ws.emit("step.updated", { payload: { step: step1 } });
+      ws.emit("step.updated", { payload: { step: step0 } });
     });
 
-    expect(container.textContent).toContain("44444444-4444-4444-4444-444444444444");
+    const attempt2 = sampleExecutionAttempt({
+      attemptId: "44444444-4444-4444-4444-acde0000beef",
+      stepId: step0.step_id,
+      attempt: 2,
+      status: "running",
+    });
+    const attempt1 = sampleExecutionAttempt({
+      attemptId: "44444444-4444-4444-4444-acde0000face",
+      stepId: step0.step_id,
+      attempt: 1,
+      status: "running",
+    });
+
+    act(() => {
+      ws.emit("attempt.updated", { payload: { attempt: attempt2 } });
+      ws.emit("attempt.updated", { payload: { attempt: attempt1 } });
+    });
+
+    const runToggle = container.querySelector<HTMLButtonElement>(
+      `[data-testid="run-toggle-${sampleExecutionRun().run_id}"]`,
+    );
+    expect(runToggle).not.toBeNull();
+
+    act(() => {
+      runToggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const pageText = container.textContent ?? "";
+    expect(pageText).toContain("Step 0");
+    expect(pageText).toContain("Step 1");
+    expect(pageText.indexOf("Step 0")).toBeLessThan(pageText.indexOf("Step 1"));
+
+    expect(pageText).toContain("queued");
+    expect(container.textContent).toContain("Decide");
+    expect(container.textContent).toContain("Research");
+    expect(pageText.indexOf("Attempt 1")).toBeLessThan(pageText.indexOf("Attempt 2"));
+
+    expect(container.textContent).toContain("Attempt 1");
+    expect(container.textContent).toContain("456789ab");
+    expect(container.textContent).toContain("0000face");
+    expect(container.textContent).toContain("0000beef");
+
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    const toastSuccess = vi.spyOn(toast, "success");
+
+    const copyRunId = container.querySelector<HTMLButtonElement>(
+      `[data-testid="copy-id-${sampleExecutionRun().run_id}"]`,
+    );
+    expect(copyRunId).not.toBeNull();
+    expect(copyRunId?.getAttribute("aria-label")).toBe(`Copy ID ${sampleExecutionRun().run_id}`);
+
+    await act(async () => {
+      copyRunId?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(writeText).toHaveBeenCalledWith(sampleExecutionRun().run_id);
+    expect(toastSuccess).toHaveBeenCalledWith("Copied to clipboard");
 
     act(() => {
       root?.unmount();

@@ -23,6 +23,7 @@ import { Card, CardContent } from "./components/ui/card.js";
 import { getDesktopApi } from "./desktop-api.js";
 import { ThemeProvider } from "./hooks/use-theme.js";
 import { ConnectPage } from "./pages/connect-page.js";
+import { RunsPage } from "./pages/runs-page.js";
 import { useOperatorStore } from "./use-operator-store.js";
 
 export type OperatorUiMode = "web" | "desktop";
@@ -636,57 +637,6 @@ function PairingPage({ core }: { core: OperatorCore }) {
               </li>
             );
           })}
-        </ul>
-      )}
-    </>
-  );
-}
-
-function RunsPage({ core }: { core: OperatorCore }) {
-  const runsState = useOperatorStore(core.runsStore);
-  const runs = Object.values(runsState.runsById);
-  return (
-    <>
-      <h1>Runs</h1>
-      {runs.length === 0 ? (
-        <div>No runs yet</div>
-      ) : (
-        <ul>
-          {runs.map((run) => (
-            <li key={run.run_id}>
-              <div>
-                {run.run_id} ({run.status})
-              </div>
-              <ul>
-                {(runsState.stepIdsByRunId[run.run_id] ?? [])
-                  .map((stepId) => runsState.stepsById[stepId])
-                  .filter((step) => step !== undefined)
-                  .sort((a, b) => a.step_index - b.step_index)
-                  .map((step) => (
-                    <li key={step.step_id}>
-                      <div>
-                        Step {step.step_index}: {step.action.type} ({step.status})
-                      </div>
-                      <div>{step.step_id}</div>
-                      <ul>
-                        {(runsState.attemptIdsByStepId[step.step_id] ?? [])
-                          .map((attemptId) => runsState.attemptsById[attemptId])
-                          .filter((attempt) => attempt !== undefined)
-                          .sort((a, b) => a.attempt - b.attempt)
-                          .map((attempt) => (
-                            <li key={attempt.attempt_id}>
-                              <div>
-                                Attempt {attempt.attempt}: {attempt.status}
-                              </div>
-                              <div>{attempt.attempt_id}</div>
-                            </li>
-                          ))}
-                      </ul>
-                    </li>
-                  ))}
-              </ul>
-            </li>
-          ))}
         </ul>
       )}
     </>
