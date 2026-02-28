@@ -8,12 +8,14 @@ export interface AppShellProps extends React.HTMLAttributes<HTMLDivElement> {
   mode: AppShellMode;
   sidebar: React.ReactNode;
   mobileNav: React.ReactNode;
+  fullBleed?: boolean;
 }
 
 export function AppShell({
   mode,
   sidebar,
   mobileNav,
+  fullBleed = false,
   children,
   className,
   ...props
@@ -29,11 +31,16 @@ export function AppShell({
         <div className="flex min-w-0 flex-1 flex-col">
           <main
             className={cn(
-              "flex-1 overflow-y-auto",
+              "flex-1",
+              fullBleed ? "overflow-hidden" : "overflow-y-auto",
               showMobileNav ? "pb-[calc(4rem+env(safe-area-inset-bottom))]" : null,
             )}
           >
-            <div className="mx-auto w-full max-w-6xl px-4 py-6">{children}</div>
+            {fullBleed ? (
+              children
+            ) : (
+              <div className="mx-auto w-full max-w-6xl px-4 py-6">{children}</div>
+            )}
           </main>
           {showMobileNav ? mobileNav : null}
         </div>

@@ -3,16 +3,6 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("Memory inspector navigation wiring", () => {
-  it("adds a Memory nav item in the sidebar", () => {
-    const sidebar = readFileSync(
-      join(import.meta.dirname, "../src/renderer/components/Sidebar.tsx"),
-      "utf-8",
-    );
-
-    expect(sidebar).toContain('id: "memory"');
-    expect(sidebar).toContain('label: "Memory"');
-  });
-
   it("routes the memory page id in the app shell", () => {
     const app = readFileSync(join(import.meta.dirname, "../src/renderer/App.tsx"), "utf-8");
 

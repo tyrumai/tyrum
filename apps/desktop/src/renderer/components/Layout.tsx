@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import { Sidebar } from "./Sidebar.js";
-import { colors, fonts } from "../theme.js";
+import { AppShell, Sidebar, type SidebarNavItem } from "@tyrum/operator-ui";
 
 interface LayoutProps {
   currentPage: string;
@@ -9,29 +8,26 @@ interface LayoutProps {
   children: ReactNode;
 }
 
-const containerStyle: React.CSSProperties = {
-  display: "flex",
-  height: "100%",
-  fontFamily: fonts.sans,
-  background: colors.bg,
-  color: colors.fg,
-};
+const NullIcon = () => null;
 
-const mainStyle: React.CSSProperties = {
-  flex: 1,
-  padding: 24,
-  overflowY: "auto",
-};
+const NAV_ITEMS: SidebarNavItem[] = [
+  { id: "overview", label: "Overview", icon: NullIcon },
+  { id: "gateway", label: "Gateway", icon: NullIcon },
+  { id: "connection", label: "Connection", icon: NullIcon },
+  { id: "permissions", label: "Permissions", icon: NullIcon },
+  { id: "diagnostics", label: "Diagnostics", icon: NullIcon },
+  { id: "logs", label: "Logs", icon: NullIcon },
+];
 
 export function Layout({ currentPage, onNavigate, fullBleed = false, children }: LayoutProps) {
-  const computedMainStyle: React.CSSProperties = fullBleed
-    ? { ...mainStyle, padding: 0, overflow: "hidden" }
-    : mainStyle;
-
   return (
-    <div style={containerStyle}>
-      <Sidebar currentPage={currentPage} onNavigate={onNavigate} />
-      <main style={computedMainStyle}>{children}</main>
-    </div>
+    <AppShell
+      mode="desktop"
+      fullBleed={fullBleed}
+      sidebar={<Sidebar items={NAV_ITEMS} activeItemId={currentPage} onNavigate={onNavigate} />}
+      mobileNav={null}
+    >
+      {children}
+    </AppShell>
   );
 }

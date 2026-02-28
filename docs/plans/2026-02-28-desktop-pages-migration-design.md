@@ -61,4 +61,3 @@ Manual (desktop app):
 
 If the UI migration causes regressions, revert the PR branch commits (or revert the merged PR) to restore the
 previous `theme.ts` + inline-style renderer implementation.
-
