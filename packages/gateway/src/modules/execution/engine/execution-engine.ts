@@ -43,7 +43,7 @@ import { defaultClock } from "./clock.js";
 import { normalizePositiveInt } from "../normalize-positive-int.js";
 import { parseConcurrencyLimitsFromEnv } from "./concurrency.js";
 import {
-  executeWithTimeout,
+  executeWithTimeout as executeWithTimeoutFn,
   releaseConcurrencySlotsTx,
   releaseLaneAndWorkspaceLeasesTx,
   releaseLaneLeaseTx,
@@ -63,6 +63,7 @@ import type {
   EnqueuePlanResult,
   ExecutionClock,
   ExecutionConcurrencyLimits,
+  StepExecutionContext,
   StepExecutor,
   StepResult,
   WorkerTickInput,
@@ -1846,7 +1847,7 @@ export class ExecutionEngine {
       [opts.runId],
     );
 
-    const result = await executeWithTimeout(
+    const result = await this.executeWithTimeout(
       opts.executor,
       opts.action,
       opts.planId,
@@ -2996,5 +2997,16 @@ export class ExecutionEngine {
       },
     );
     return { approvalId: paused.approvalId };
+  }
+
+  private async executeWithTimeout(
+    executor: StepExecutor,
+    action: ActionPrimitiveT,
+    planId: string,
+    stepIndex: number,
+    timeoutMs: number,
+    context: StepExecutionContext,
+  ): Promise<StepResult> {
+    return await executeWithTimeoutFn(executor, action, planId, stepIndex, timeoutMs, context);
   }
 }
