@@ -27,6 +27,8 @@ import { handleClientMessage } from "../ws/protocol.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
 import type { TokenStore } from "../modules/auth/token-store.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "../modules/auth/http.js";
+import { createTrustedProxyAllowlistFromEnv, resolveClientIp } from "../modules/auth/client-ip.js";
+import type { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import type { PresenceDal } from "../modules/presence/dal.js";
 import type { NodePairingDal } from "../modules/node/pairing-dal.js";
@@ -240,6 +242,7 @@ export interface WsRouteOptions {
   connectionManager: ConnectionManager;
   protocolDeps: ProtocolDeps;
   tokenStore: TokenStore;
+  upgradeRateLimiter?: SlidingWindowRateLimiter;
   presenceDal?: PresenceDal;
   nodePairingDal?: NodePairingDal;
   cluster?: {
@@ -265,6 +268,10 @@ export function createWsHandler(opts: WsRouteOptions): {
   stopHeartbeat: () => void;
 } {
   const { connectionManager, protocolDeps, tokenStore } = opts;
+  const upgradeRateLimiter = opts.upgradeRateLimiter;
+  const trustedProxies = upgradeRateLimiter
+    ? createTrustedProxyAllowlistFromEnv(process.env["GATEWAY_TRUSTED_PROXIES"])
+    : undefined;
   const cluster = opts.cluster;
   const connectionTtlMs = cluster?.connectionTtlMs ?? 30_000;
   const presenceDal = opts.presenceDal;
@@ -848,6 +855,43 @@ export function createWsHandler(opts: WsRouteOptions): {
   });
 
   function handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+    if (upgradeRateLimiter) {
+      const clientIp = resolveClientIp({
+        remoteAddress: req.socket.remoteAddress,
+        forwardedHeader: toSingleHeaderValue(req.headers["forwarded"]),
+        xForwardedForHeader: toSingleHeaderValue(req.headers["x-forwarded-for"]),
+        xRealIpHeader: toSingleHeaderValue(req.headers["x-real-ip"]),
+        trustedProxies,
+      });
+
+      if (clientIp) {
+        const result = upgradeRateLimiter.check(`ws:${clientIp}`);
+        if (!result.allowed) {
+          const retryAfterSeconds = Math.max(1, Math.ceil(result.retryAfterMs / 1000));
+          const response = [
+            "HTTP/1.1 429 Too Many Requests",
+            `Retry-After: ${String(retryAfterSeconds)}`,
+            "Connection: close",
+            "Content-Length: 0",
+            "",
+            "",
+          ].join("\r\n");
+
+          try {
+            socket.write(response);
+          } catch {
+            // ignore
+          }
+          try {
+            socket.destroy();
+          } catch {
+            // ignore
+          }
+          return;
+        }
+      }
+    }
+
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit("connection", ws, req);
     });

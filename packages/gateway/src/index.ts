@@ -37,6 +37,7 @@ import { TaskResultRegistry, type TaskResult } from "./ws/protocol/task-result-r
 import { createWsHandler } from "./routes/ws.js";
 import { maybeStartOtel } from "./modules/observability/otel.js";
 import { AuthAudit } from "./modules/auth/audit.js";
+import { SlidingWindowRateLimiter } from "./modules/auth/rate-limiter.js";
 import { MemoryV1Dal } from "./modules/memory/v1-dal.js";
 import {
   ExecutionEngine,
@@ -118,6 +119,15 @@ function isTruthyEnvFlag(value: string | undefined): boolean {
   const trimmed = value?.trim().toLowerCase();
   if (!trimmed) return false;
   return !["0", "false", "off", "no"].includes(trimmed);
+}
+
+function parsePositiveIntEnv(value: string | undefined): number | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  if (!/^[0-9]+$/.test(trimmed)) return undefined;
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed <= 0) return undefined;
+  return parsed;
 }
 
 export function assertNonLoopbackDeploymentGuardrails(input: {
@@ -1174,6 +1184,25 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     return config.memory.v1.budgets;
   };
 
+  const authRateLimitWindowS =
+    parsePositiveIntEnv(process.env["TYRUM_AUTH_RATE_LIMIT_WINDOW_S"]) ?? 60;
+  const authRateLimitMax = parsePositiveIntEnv(process.env["TYRUM_AUTH_RATE_LIMIT_MAX"]) ?? 20;
+  const wsUpgradeRateLimitMax = Math.max(1, Math.floor(authRateLimitMax / 2));
+
+  const authRateLimiter = shouldRunEdge
+    ? new SlidingWindowRateLimiter({
+        windowMs: authRateLimitWindowS * 1_000,
+        max: authRateLimitMax,
+      })
+    : undefined;
+
+  const wsUpgradeRateLimiter = shouldRunEdge
+    ? new SlidingWindowRateLimiter({
+        windowMs: authRateLimitWindowS * 1_000,
+        max: wsUpgradeRateLimitMax,
+      })
+    : undefined;
+
   const app = shouldRunEdge
     ? createApp(container, {
         agents,
@@ -1183,6 +1212,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         isLocalOnly,
         connectionManager,
         connectionDirectory,
+        authRateLimiter,
         engine: edgeEngine,
         wsCluster: {
           edgeId: instanceId,
@@ -1203,6 +1233,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         connectionManager,
         protocolDeps,
         tokenStore,
+        upgradeRateLimiter: wsUpgradeRateLimiter,
         presenceDal: container.presenceDal,
         nodePairingDal: container.nodePairingDal,
         cluster: {
@@ -1399,6 +1430,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     });
 
     wsHandler?.stopHeartbeat();
+    authRateLimiter?.stop();
+    wsUpgradeRateLimiter?.stop();
 
     const shutdownHookRuns =
       hooksRuntime && shouldRunWorker
