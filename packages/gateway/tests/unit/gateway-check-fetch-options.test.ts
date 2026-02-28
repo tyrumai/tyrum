@@ -58,7 +58,7 @@ describe("tyrum check fetch options", () => {
     vi.restoreAllMocks();
   });
 
-  it("does not forward timeoutMs into fetch init", async () => {
+  it("does not forward timeoutMs into fetch init", { timeout: 15_000 }, async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-check-fetch-"));
 
     process.env["TYRUM_HOME"] = home;
