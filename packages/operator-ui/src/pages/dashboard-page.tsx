@@ -95,7 +95,7 @@ export function DashboardPage({ core, onNavigate }: DashboardPageProps) {
       : connection.status === "connecting"
         ? "primary"
         : "danger";
-  const connectionPulse = connection.status !== "disconnected";
+  const connectionPulse = connection.status === "connecting";
   const connectionLabel =
     connection.status === "connected"
       ? "Connected"
