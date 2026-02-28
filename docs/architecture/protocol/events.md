@@ -1,12 +1,8 @@
 # Events
 
-## Status
-
-- **Status:** Implemented
-
 Events are gateway-emitted, server-push messages delivered to connected clients (and sometimes nodes). Events make the system observable and keep operator interfaces in sync without polling.
 
-The canonical wire shape lives in `@tyrum/schemas` (`packages/schemas/src/protocol.ts`).
+The wire shapes are defined by shared, versioned contracts (see [Contracts](../contracts.md)).
 
 ## Event envelope
 
@@ -115,10 +111,10 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 - Deduplicate using `event_id` (and treat `occurred_at` as informational, not a strict ordering guarantee).
 - Clients should tolerate reconnect and resubscribe without losing safety invariants; durable state in the StateStore remains the source of truth.
 
-### SDK semantics (`@tyrum/client`)
+### Client SDK semantics
 
-- The SDK emits parsed events using their wire `type` names (for example `run.updated`, `message.delta`) so operator clients do not need to parse raw WS JSON.
-- Event dedupe is bounded and `event_id`-based across reconnects (`maxSeenEventIds`, default `1000`).
-- Reconnect uses exponential backoff when enabled (`reconnect`, `maxReconnectDelay`) and preserves dedupe/replay safety guarantees across socket churn.
+- Client SDKs emit parsed events using their wire `type` names (for example `run.updated`, `message.delta`) so operator clients do not need to parse raw WS JSON.
+- Event dedupe is bounded and `event_id`-based across reconnects.
+- Reconnect uses exponential backoff and preserves dedupe/replay safety guarantees across socket churn.
 
 In clustered deployments, events are delivered to the owning gateway edge via the **backplane/outbox** abstraction (see [Backplane](../backplane.md)).

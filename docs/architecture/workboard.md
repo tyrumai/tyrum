@@ -1,23 +1,13 @@
 # Work board and delegated execution
 
-The WorkBoard is Tyrum's workspace-scoped backlog and work-tracking system. It exists to keep interactive sessions (chat, and future low-latency audio) responsive while long-running work is planned and executed in the background.
-
-## Status
-
-- **Status:** Partially Implemented
-
-## Current State
-
-- The gateway persists WorkItems and related drilldown data and exposes WorkBoard APIs.
-- The desktop app exposes a WorkBoard UI (Kanban + drilldown).
-- The web operator UI, CLI, and TUI do not yet provide full WorkBoard management (planned).
+The WorkBoard is Tyrum's workspace-scoped backlog and work-tracking system. It keeps interactive sessions (chat and other low-latency interactions) responsive while long-running work is decomposed and executed in the background.
 
 The WorkBoard is a Kanban view over durable work state. A WorkItem can contain an internal task graph (a DAG) that the planning loop updates and the execution engine executes.
 
 ## Goals
 
 - Keep channel-facing interactions low-latency by delegating long-running work to background runs/subagents.
-- Make background work queryable from operator clients (desktop app today) and, over time, from channels (for example Telegram) without relying on a specific session transcript.
+- Make background work queryable from operator surfaces (clients and channels) without relying on a specific session transcript.
 - Prevent "one mega task" by sizing WorkItems, enforcing WIP limits, and making consolidation explicit.
 - Preserve Tyrum's safety model: approvals, postconditions, artifacts, idempotency, and policy enforcement remain the enforcement layer.
 
@@ -34,7 +24,7 @@ The WorkBoard is a Kanban view over durable work state. A WorkItem can contain a
 A WorkBoard is a durable backlog scoped to `(tenant_id, agent_id, workspace_id)`.
 
 - It tracks WorkItems and their current state (Backlog/Ready/Doing/Blocked/Done/Cancelled).
-- It enforces a WIP limit for `Doing` items (starting default: `2`).
+- It enforces a configurable WIP limit for `Doing` items (for example `2`).
 - It is the primary place the interactive agent loop consults to answer "what are you working on?" and "status?" from any channel.
 
 Kanban is a representation. The engine runs jobs/runs; planning tasks update task graphs; the board summarizes outcomes and blockers.
@@ -243,7 +233,7 @@ Operator overrides should exist (slash commands / UI actions) to force a mode fo
 
 ## Execution flow (fan-out, fan-in)
 
-"Figure out what to do" is implemented as explicit fan-out tasks (often with different models/execution profiles) followed by a synthesis task that proposes next steps.
+"Figure out what to do" can be expressed as explicit fan-out tasks (often with different models/execution profiles) followed by a synthesis task that proposes next steps.
 
 To keep planning inspectable and resilient under interruption, these tasks write durable WorkBoard state:
 
@@ -299,7 +289,7 @@ This supports "start work on desktop, ask for status on Telegram, receive comple
 
 Multiple long-running WorkItems are expected. The WorkBoard prevents overload and thrash:
 
-- **WIP limit (Doing):** default `2`. New items over the limit stay Ready/Backlog.
+- **WIP limit (Doing):** configurable (for example `2`). New items over the limit stay Ready/Backlog.
 - **Overlap detection:** compare WorkItem fingerprints to warn about resource contention.
 - **No auto-merge:** overlap produces an operator-visible choice (queue, link as dependency, or explicitly merge).
 - **Explicit linking:** prefer dependency links (WorkItem B depends on A) over merging content into a single "blob" item.
@@ -311,8 +301,8 @@ stateDiagram-v2
 
   [*] --> Backlog: created
   Backlog --> Ready: triaged
-  Ready --> Doing: lease acquired (WIP < 2)
-  Ready --> Ready: WIP limit reached (2)
+  Ready --> Doing: lease acquired (WIP < limit)
+  Ready --> Ready: WIP limit reached
   Ready --> Cancelled: operator cancels
 
   Doing --> Blocked: awaiting approval / external dependency
@@ -344,17 +334,16 @@ Spawning subagents and mutating the WorkBoard should be controlled by execution 
 
 ## Data model sketch (durable state)
 
-Exact schemas belong in `@tyrum/schemas`, but the durable record shapes are:
+Exact schemas belong in versioned contracts, but the durable entities are:
 
-- `work_items(id, tenant_id, agent_id, workspace_id, kind, title, status, priority, created_at, created_from_session_key, last_active_at, fingerprint, acceptance, budgets, parent_work_item_id?)`
-- `work_item_tasks(id, work_item_id, status, depends_on[], execution_profile, side_effect_class, run_id?, approval_id?, artifacts[], started_at, finished_at, result_summary)`
-- `work_item_events(id, work_item_id, created_at, kind, payload_json)` (append-only audit trail for board state changes)
-- `work_artifacts(id, tenant_id, agent_id, workspace_id, work_item_id?, kind, title, body_md?, refs[], confidence?, created_at, created_by_run_id?, created_by_subagent_id?)`
-- `work_decisions(id, tenant_id, agent_id, workspace_id, work_item_id?, question, chosen, alternatives[], rationale_md, input_artifact_ids[], created_at, created_by_run_id?, created_by_subagent_id?)`
-- `work_signals(id, tenant_id, agent_id, workspace_id, work_item_id?, trigger_kind, trigger_spec_json, payload_json, status, created_at, last_fired_at?)`
-- `work_item_state_kv(work_item_id, key, value_json, updated_at, updated_by_run_id?, provenance_json)`
-- `agent_state_kv(agent_id, key, value_json, updated_at, updated_by_run_id?, provenance_json)`
-- `subagents(id, agent_id, workspace_id, execution_profile, session_key, status, created_at, last_heartbeat_at)`
+- `WorkItem`: scoped to `(tenant_id, agent_id, workspace_id)` and includes kind/title/status/priority, acceptance criteria, budgets, timestamps, fingerprints, and optional parent linkage.
+- `WorkItemTask`: task graph nodes with status, dependencies, execution profile, side-effect class, links to runs/approvals/artifacts, timing, and result summary.
+- `WorkItemEvent`: append-only audit trail for WorkBoard state changes.
+- `WorkArtifact`: typed blackboard items with optional body/refs/confidence and provenance links.
+- `DecisionRecord`: question, chosen option, alternatives, rationale, and input artifact links.
+- `WorkSignal`: trigger kind/spec, payload, status, and firing metadata.
+- `StateKV`: authoritative key/value state for agents and work items with provenance.
+- `Subagent`: delegated execution unit with execution profile, session key, status, and heartbeats.
 
 ## Events and observability
 

@@ -1,9 +1,5 @@
 # Sandbox and Policy
 
-## Status
-
-- **Status:** Implemented
-
 Tyrum enforces safety through layered controls that do not depend on prompt text alone. Policies, approvals, and sandboxing define what execution is allowed to do.
 
 ## Enforcement layers
@@ -25,11 +21,11 @@ Tyrum treats untrusted content as data. Inputs from tools, web pages, channels, 
 
 Policy rules can depend on provenance (for example: “deny shell when the input originated from web content”, or “require approval before sending an outbound message derived from an untrusted source”).
 
-### Current provenance rule (v1)
+### Provenance rule (v1)
 
-The initial provenance policy surface is a single conservative rule:
+A conservative provenance rule is:
 
-- `PolicyBundle.provenance.untrusted_shell_requires_approval` (default: `true`) escalates `tool.exec` from `allow → require_approval` when the tool call is driven by untrusted-input provenance.
+- `PolicyBundle.provenance.untrusted_shell_requires_approval` escalates `tool.exec` from `allow → require_approval` when enabled and when the tool call is driven by untrusted-input provenance.
 
 Operators can relax this behavior by setting `provenance.untrusted_shell_requires_approval: false` in policy bundles (deployment/agent/playbook). For narrow exceptions, prefer `approve always` policy overrides on stable tool match targets rather than broad allowlists.
 
@@ -108,12 +104,12 @@ Profiles:
 
 ### Configuration
 
-Set `TYRUM_TOOLRUNNER_HARDENING_PROFILE`:
+The hardening profile is deployment-configurable:
 
 - `baseline` (default)
 - `hardened`
 
-In Kubernetes deployments, the gateway uses this profile to harden ToolRunner job/pod specs. In local-subprocess deployments, the value is treated as **operator-provided signaling** (the runtime cannot reliably detect host/container hardening automatically).
+In containerized deployments, the gateway uses this profile to harden ToolRunner job/pod specs. In local-subprocess deployments, the value is treated as **operator-provided signaling** (the runtime cannot reliably detect host/container hardening automatically).
 
 ### Observability and signaling
 

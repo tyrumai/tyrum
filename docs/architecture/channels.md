@@ -1,9 +1,5 @@
 # Channels
 
-## Status
-
-- **Status:** Implemented
-
 Channels are message transports that connect Tyrum to external chat surfaces. A channel connector normalizes inbound messages into session events and sends outbound messages when the agent replies.
 
 Channel connectors are a high-risk integration boundary. They are responsible for preserving identity, provenance, and auditability while presenting a consistent messaging model to the gateway.

@@ -1,9 +1,5 @@
 # Operations and onboarding
 
-## Status
-
-- **Status:** Partially Implemented
-
 This document describes Tyrum’s operational model and the onboarding/diagnostics surfaces that keep deployments hardened and maintainable. Ops ergonomics are part of the architecture: if the secure configuration is hard to reach, insecure defaults tend to win in practice.
 
 ## Goals
@@ -70,7 +66,7 @@ Check supports both:
 `tyrum check` prints a short, line-oriented report intended for humans and log capture.
 
 - `static.exposure`: host/port and whether the configured bind address is loopback-only.
-- `static.auth`: where the admin token is sourced from (`GATEWAY_TOKEN`, existing `.admin-token`, or generated) without printing the token value.
+- `static.auth`: where the admin token is sourced from (environment/config file/generated) without printing the token value.
 - `static.policy`: policy enablement and the effective policy bundle hash + sources.
 - `static.plugins`: manifest discovery counts per plugin source (workspace/user/bundled), without executing plugin entry code.
 - `static.secrets`: secret provider kind + basic initialization status.

@@ -1,16 +1,12 @@
 # Skills
 
-## Status
-
-- **Status:** Implemented
-
 A skill is an instruction bundle that teaches the agent how to perform a specialized workflow. Skills are loaded on demand and are meant to be readable by humans.
 
 ## Load order
 
 Skills can be loaded from multiple locations. When the same skill id exists in more than one place, the more specific location wins:
 
-1. Bundled skills (shipped with Tyrum)
+1. Bundled skills (provided by Tyrum)
 2. User skills directory (for example under a home directory)
 3. Workspace skills directory (wins on conflicts **when trusted**)
 
@@ -32,8 +28,7 @@ Skills are discoverable and installable from a curated catalog.
 
 Workspace skill loading is gated by agent configuration:
 
-- Set `skills.workspace_trusted: true` in `agent.yml` (under `TYRUM_HOME`) to allow loading skills from the workspace skills directory.
-- This is a behavior change from the historical “workspace always wins” load order; set `workspace_trusted: true` to restore workspace overrides for a given `TYRUM_HOME`.
+- Enable workspace skills only in trusted workspaces (for example `skills.workspace_trusted: true`).
 - Operator clients can display provenance via `GET /agent/status` (`skills_detailed[].source`) and show whether workspace skills are trusted (`workspace_skills_trusted`).
 
-Security note: treat `workspace_trusted: true` as a workspace trust decision. Do not point `TYRUM_HOME` at an unreviewed checkout and expect skills to remain untrusted.
+Security note: treat enabling workspace skills as a workspace trust decision. Do not enable workspace skills for unreviewed checkouts.

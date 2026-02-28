@@ -1,9 +1,5 @@
 # Node
 
-## Status
-
-- **Status:** Partially Implemented
-
 A node is a companion runtime that connects to the gateway with `role: node` and exposes capabilities (for example `camera.*`, `canvas.*`, `system.*`). Nodes let Tyrum safely use device-specific interfaces without baking that logic into the gateway.
 
 ## Integration quality bar
@@ -16,18 +12,11 @@ Nodes are “remote hands”, so Tyrum treats node capabilities as high-risk by 
 
 ## Node forms
 
-### Implemented
+Nodes can run on a variety of devices:
 
 - Desktop node (Windows/Linux/macOS)
-
-### Planned
-
 - Mobile node (iOS/Android)
 - Headless node (server or embedded device)
-
-## Current State
-
-The only shipped node runtime today is the desktop node (`@tyrum/desktop-node`), which is used by the desktop app.
 
 ## Responsibilities
 
@@ -45,8 +34,9 @@ without embedding full screenshots in tool outputs.
 When `selector.bounds` is provided, OCR matches are filtered to those whose bounds intersect the
 requested region.
 
-Implementation choice: **WASM OCR** (`tesseract.js`) is preferred over system binaries so the desktop
-node works out-of-the-box across macOS/Windows/Linux.
+Architecture notes:
+
+- Prefer self-contained, cross-platform OCR runtimes (for example WASM-based OCR) over system binaries so the desktop node works out-of-the-box across macOS/Windows/Linux.
 
 Tradeoffs:
 
@@ -55,15 +45,15 @@ Tradeoffs:
 
 Configuration:
 
-- `TYRUM_DESKTOP_OCR_TIMEOUT_MS` (default 30s; max 60s)
-- `TYRUM_DESKTOP_OCR_LANG` (default `eng`)
-- `TYRUM_DESKTOP_OCR_LANG_PATH` (optional override for offline/local language data)
-- `TYRUM_DESKTOP_OCR_CACHE_PATH` (optional; defaults to OS temp dir)
+- OCR timeout
+- OCR language(s)
+- Optional offline/local language data path
+- Optional cache directory
 
 ## Pairing posture
 
 - Nodes connect using a public-key device identity and prove possession of the private key during handshake.
-- When a node connects and is not yet paired, the gateway creates a pairing request for the node device.
+- When a node connects without an active pairing record, the gateway creates a pairing request for the node device.
 - Local nodes can be auto-approved by explicit policy; remote nodes require an explicit operator approval.
 - Pairing results in a scoped authorization (for example a node-scoped token and a capability allowlist) that can be revoked.
 
@@ -81,7 +71,7 @@ sequenceDiagram
   Node-->>Gateway: attempt.evidence(...)
 ```
 
-After pairing approval, nodes SHOULD report which capabilities are currently ready to execute via `capability.ready` (for example after verifying OS permissions, local dependencies, or warmup).
+After pairing approval, nodes SHOULD report which capabilities are ready to execute via `capability.ready` (for example after verifying OS permissions, local dependencies, or warmup).
 
 During capability execution, nodes MAY stream operator-visible evidence for a given attempt via `attempt.evidence` so UIs and audits can observe progress without polling.
 

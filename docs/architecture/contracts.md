@@ -1,9 +1,5 @@
 # Contracts
 
-## Status
-
-- **Status:** Implemented
-
 Contracts define the shapes and semantics of Tyrum interfaces. They are used to validate:
 
 - WebSocket protocol messages
@@ -23,19 +19,17 @@ JSON Schema is the default interchange format for contracts. Internally, contrac
 
 ## JSON Schema artifacts
 
-The canonical JSON Schema artifacts are generated from `@tyrum/schemas` during build and include:
+Contracts are exported to JSON Schema artifacts during build and include:
 
 - Individual `*.json` schemas (one per exported contract)
 - A `catalog.json` index (format: `tyrum.contracts.jsonschema.catalog.v1`)
-
-In a workspace checkout, run `pnpm --filter @tyrum/schemas build` to (re)generate artifacts under `packages/schemas/dist/jsonschema/`.
 
 The gateway publishes these artifacts for clients/operators to fetch:
 
 - `GET /contracts/jsonschema/catalog.json`
 - `GET /contracts/jsonschema/<SchemaName>.json`
 
-Operational note: when the gateway auth middleware is enabled, these endpoints require an admin token (`Authorization: Bearer <token>`), consistent with other HTTP routes.
+Security note: these endpoints require appropriate operator/admin authorization, consistent with other HTTP routes.
 
 ## Versioning rules
 
@@ -51,14 +45,14 @@ For the WebSocket protocol:
 
 Core contract families include:
 
-- **Keys and lanes:** `TyrumKey`, `Lane`, `QueueMode` (`packages/schemas/src/keys.ts`)
-- **Execution:** `ExecutionJob`, `ExecutionRun`, `ExecutionStep`, `ExecutionAttempt` + status enums (`packages/schemas/src/execution.ts`)
-- **Approvals:** `Approval` + request/response envelopes (`packages/schemas/src/approval.ts`)
-- **Artifacts and postconditions:** `ArtifactRef` + postcondition contracts (`packages/schemas/src/artifact.ts`, `packages/schemas/src/postcondition.ts`)
-- **Secrets:** `SecretHandle` + provider request/response contracts (`packages/schemas/src/secret.ts`)
-- **Nodes and pairing:** node identity and pairing contracts (`packages/schemas/src/node.ts`)
-- **Policy:** `PolicyBundle` and policy decision outputs (`@tyrum/schemas`)
-- **Protocol envelopes:** request/response/event base envelopes and typed unions (`packages/schemas/src/protocol.ts`)
+- **Keys and lanes:** session keys, lanes, and queueing modes.
+- **Execution:** jobs/runs/steps/attempts plus status enums.
+- **Approvals:** approval records and request/response envelopes.
+- **Artifacts and postconditions:** artifact references and postcondition contracts.
+- **Secrets:** secret handles and provider request/response contracts.
+- **Nodes and pairing:** node identity, pairing, and capability contracts.
+- **Policy:** policy bundles and policy decision outputs.
+- **Protocol envelopes:** request/response/event base envelopes and typed unions.
 - **Protocol operations:** handshake (`connect.init`, `connect.proof`), `ping`, `session.send`, `workflow.run|resume|cancel`, `approval.list|resolve`, `pairing.approve|deny`, `task.execute`
 - **Tools:** built-in tool schemas and the ToolRunner invocation envelope
 - **Playbooks:** workflow file schema (YAML/JSON) and compilation rules

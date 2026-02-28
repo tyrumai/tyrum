@@ -1,12 +1,8 @@
 # Requests and Responses
 
-## Status
-
-- **Status:** Implemented
-
 Requests are typed operations initiated by either peer (gateway, client, or node). Responses are typed replies correlated by `request_id`.
 
-The canonical wire shapes live in `@tyrum/schemas` (`packages/schemas/src/protocol.ts`).
+The wire shapes are defined by shared, versioned contracts (see [Contracts](../contracts.md)).
 
 ## Request envelope
 

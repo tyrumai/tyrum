@@ -1,9 +1,5 @@
 # Artifacts
 
-## Status
-
-- **Status:** Implemented
-
 Artifacts are evidence objects captured during execution (screenshots, diffs, logs, HTTP traces). They exist to make outcomes verifiable, auditable, and reviewable by operators.
 
 Artifacts are attached to execution scope (`run_id`, `step_id`, `attempt_id`) and referenced from events and UI timelines.

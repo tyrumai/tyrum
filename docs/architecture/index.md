@@ -1,9 +1,5 @@
 # Architecture
 
-## Status
-
-- **Status:** Partially Implemented
-
 Tyrum is a WebSocket-first autonomous worker agent platform built around a long-lived gateway that coordinates durable execution, approvals, and audit evidence.
 
 ## Positioning
@@ -30,7 +26,7 @@ Tyrum’s architecture is intentionally conservative:
 ```mermaid
 flowchart LR
   subgraph Operator["Operator surfaces"]
-    C["Client<br/>(Desktop • CLI/TUI • Web App)<br/>(Planned: Mobile)"]
+    C["Client<br/>(Desktop • CLI/TUI • Web App • Mobile)"]
   end
 
   subgraph Runtime["Tyrum runtime"]
@@ -80,7 +76,7 @@ flowchart LR
 
 - **Gateway:** the long-lived service that owns edge connectivity (WebSocket), routing, and contract validation. See [Gateway](./gateway/index.md).
 - **Tenancy:** the isolation boundary for identity, policy, and durable state. See [Tenancy](./tenancy.md).
-- **StateStore:** durable state and logs (SQLite local; Postgres for HA/scale). See [Scaling and high availability](./scaling-ha.md).
+- **StateStore:** durable state and logs (for example SQLite for single-host deployments; Postgres for HA/scale). See [Scaling and high availability](./scaling-ha.md).
 - **Event backplane:** cross-instance delivery via a durable outbox (in-process for replica count = 1; shared for clusters). See [Backplane](./backplane.md), [Scaling and high availability](./scaling-ha.md), and [Events](./protocol/events.md).
 - **Execution engine:** the durable orchestration runtime (retries, idempotency, pause/resume, evidence). See [Execution engine](./execution-engine.md).
 - **WorkBoard:** workspace-scoped work tracking (Kanban) plus a drilldown "global workspace" for artifacts/decisions/signals that keeps interactive sessions responsive by delegating long-running work. See [Work board and delegated execution](./workboard.md).
@@ -92,8 +88,8 @@ flowchart LR
 - **Secrets:** a first-class boundary; raw secrets stay behind a secret provider and are referenced via handles.
 - **Auth profiles:** provider credentials (API keys/OAuth) expressed as metadata + secret handles for deterministic selection and rotation. See [Provider Auth and Onboarding](./auth.md).
 - **Artifacts:** evidence objects stored outside the StateStore with policy-gated access. See [Artifacts](./artifacts.md).
-- **Client:** an operator interface connected to the gateway (desktop/web/CLI/TUI; planned: mobile).
-- **Node:** a capability provider connected to the gateway (desktop node today; planned: mobile/headless).
+- **Client:** an operator interface connected to the gateway (for example desktop/web/CLI/TUI/mobile).
+- **Node:** a capability provider connected to the gateway (for example desktop/mobile/headless nodes).
 - **Protocol:** typed WebSocket messages (requests/responses and server-push events).
 - **Contracts:** versioned schemas used to validate protocol messages and extension boundaries.
 

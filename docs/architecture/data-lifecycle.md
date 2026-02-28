@@ -1,9 +1,5 @@
 # Data lifecycle and retention
 
-## Status
-
-- **Status:** Implemented
-
 Tyrum is durable by design: the StateStore is the source of truth for sessions, execution, approvals, and audit evidence.
 That durability must be paired with explicit **retention** and **deletion** rules so deployments remain operable (bounded cost), safe (privacy), and explainable (audit).
 
@@ -57,11 +53,11 @@ Lifecycle expectations:
 - TTL pruning is safe under clustered edges (no correctness dependence on long-lived cache rows).
 - TTL windows are chosen to tolerate normal jitter and brief partitions without creating “ghost ownership”.
 
-Implementation note (gateway defaults):
+Architecture notes:
 
-- The gateway periodically prunes TTL-derived tables (`presence_entries`, `connection_directory`, `channel_inbound_dedupe`) based on their `expires_at_ms` columns.
-- The gateway also prunes expired sessions/transcripts by deleting `sessions` rows whose `updated_at` is older than `TYRUM_SESSIONS_TTL_DAYS` (default: 30 days), including dependent rows in `session_provider_pins` and `context_reports`.
-- Pruning runs on the `all` and `scheduler` gateway roles, with tick interval configurable via `TYRUM_STATESTORE_RETENTION_TICK_MS` (default: 5 minutes) and batch size configurable via `TYRUM_STATESTORE_RETENTION_BATCH_SIZE` (default: 10,000). In Postgres deployments, an advisory lock ensures only one instance runs per tick.
+- TTL-derived state is pruned periodically based on explicit expiry timestamps.
+- Session/transcript retention is enforced by configurable lifecycle policies (for example last-activity windows), with safe cascading to dependent derived records.
+- In clustered deployments, retention jobs run under a single-writer lock/lease so pruning is correct and predictable.
 
 ### Artifact bytes (FS/S3)
 
@@ -134,8 +130,7 @@ If a deployment supports “forget” or data deletion requests, it MUST define:
 - how linked artifacts are handled (metadata and bytes), and
 - how the system proves deletion occurred (auditable events).
 
-Implementation note (gateway audit streams):
+Architecture notes:
 
-- The gateway exposes `POST /audit/forget` to process explicit forget requests for audit streams stored in `planner_events`.
-- Requests must include an explicit decision (`delete`, `anonymize`, or `retain`) and a confirmation string.
-- The gateway records a `forget.proof` event with the decision and outcome; for destructive decisions it preserves hash-chain continuity via `prev_hash` linkage without retaining prior content.
+- “Forget” requests are explicit and confirmed, and require a declared decision (for example delete/anonymize/retain) with an auditable outcome.
+- Destructive decisions preserve audit-chain continuity (for example via hash chaining) without retaining the deleted content.

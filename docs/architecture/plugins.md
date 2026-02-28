@@ -1,9 +1,5 @@
 # Gateway plugins
 
-## Status
-
-- **Status:** Implemented
-
 A gateway plugin is an **in-process** code module that extends Tyrum with additional features such as commands, tools, and gateway RPC endpoints.
 
 Gateway plugins are **trusted extensions** (they run inside the gateway process). They are not the primary mechanism for per-vendor/per-app integrations; those should generally live in **capability providers** (nodes and MCP servers) so scopes are explicit and blast radius is smaller.
@@ -55,9 +51,9 @@ Requirements:
 - Optional tools must be explicitly enabled via allowlists (global or per-agent), and must still respect policy/approvals/sandboxing.
 - Tool inputs/outputs are contract-validated, redacted, and sized-capped like built-in tools.
 
-Implementation note:
+Architecture notes:
 
-- Side-effecting plugin tools (`requires_confirmation: true`) are **not exposed** to the agent tool directory unless the effective `PolicyBundle.tools` explicitly opts them in via `allow` or `require_approval` (deployment or agent policy). This makes risky plugin tools opt-in per agent/workspace.
+- Side-effecting plugin tools (declared as requiring confirmation) are **not exposed** to the agent tool directory unless the effective tool policy explicitly opts them in (`allow` or `require_approval`). This makes risky plugin tools opt-in per agent/workspace.
 
 ## Relationship to capability providers
 
@@ -89,7 +85,7 @@ Plugin discovery/install must be hardened because plugins run in-process:
 - Prefer registry installs that can record integrity metadata (hashes) and pin versions.
 - Avoid executing arbitrary lifecycle scripts during install; prefer “pure JS/TS” dependency trees.
 
-Implementation notes:
+Architecture notes:
 
 - Entry points are validated twice: lexically (no `..` traversal outside the plugin directory) and by resolved real path (no symlink escape outside the plugin directory).
 - On POSIX systems, the gateway treats plugin search roots and plugin directories as unsafe when they are world-writable or owned by a different user than the gateway process (root ownership is permitted).

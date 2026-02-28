@@ -1,9 +1,5 @@
 # Messages and Sessions
 
-## Status
-
-- **Status:** Implemented
-
 This document defines how Tyrum turns inbound messages into durable sessions and serialized execution, while keeping chat UX responsive and safe across channels.
 
 ## Message flow (end-to-end)
@@ -69,7 +65,9 @@ Dedupe is keyed by stable identifiers, typically:
 
 Dedupe entries are time-bounded (TTL) and stored in a way that remains correct under clustered gateway edges. When a duplicate delivery is detected, Tyrum records an audit event and drops the duplicate without starting another run.
 
-Implementation note: the gateway persists inbound dedupe keys in `channel_inbound_dedupe` and prunes expired entries using `TYRUM_CHANNEL_INBOUND_DEDUPE_TTL_MS` (default 7 days).
+Architecture notes:
+
+- Inbound dedupe keys are persisted durably and pruned under a configurable TTL.
 
 ## Inbound debouncing (batch rapid bursts)
 
@@ -93,10 +91,10 @@ When a run is active for a `(session_key, lane)`, inbound messages are handled b
 - **`steer_backlog`:** steer now and also preserve the message for a follow-up turn.
 - **`interrupt`:** abort the active run (at the next safe boundary) and run the newest message.
 
-Implementation notes:
+Architecture notes:
 
-- Queue mode is persisted per message (for example `channel_inbox.queue_mode`, default `collect`) so batch/debounce behavior is deterministic.
-- `steer`/`interrupt` are represented as durable lane-scoped signals (for example `lane_queue_signals`) so they remain correct even if the gateway restarts mid-run.
+- Queue mode is persisted with the inbound message so queueing behavior is deterministic under retries and restarts.
+- `steer` and `interrupt` are represented as durable lane-scoped signals so they remain correct across restarts and multi-instance edges.
 
 ### Queue limits and overflow policy
 
@@ -109,11 +107,10 @@ Queueing is bounded to keep the system predictable:
   - `drop_newest`
   - `summarize_dropped` (creates a synthetic follow-up message that summarizes the dropped items)
 
-Implementation notes:
+Architecture notes:
 
-- `cap` is configured via `TYRUM_CHANNEL_INBOUND_QUEUE_CAP` (default `100`; set `0` to disable bounding).
-- `overflow` is configured via `TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW` (default `drop_oldest`).
-- Overflow emits a WS event (`channel.queue.overflow`) so operators can see when messages were dropped or summarized.
+- Queue bounds (`cap`) and overflow behavior are configurable per deployment.
+- Overflow emits a structured event (for example `channel.queue.overflow`) so operators can see when messages were dropped or summarized.
 
 ### Interaction with execution guarantees
 
@@ -135,17 +132,17 @@ Tyrum uses multiple layers of loop control, because there is no single knob that
 - **Cross-turn repetition warning:** if the assistant reply repeats itself across multiple turns in the same session, Tyrum appends a short warning to prompt the operator/user to change constraints. This is **warning-only** (it does not block execution).
 - **Session context retention (`sessions.max_turns`):** this bounds how many recent user/assistant messages are retained in the session context before compaction; it is **not** an execution limiter.
 
-Loop detection configuration lives in `${TYRUM_HOME}/agent.yml` under `sessions.loop_detection`.
+Loop detection configuration lives in agent configuration under `sessions.loop_detection`.
 
-Configuration (defaults):
+Configuration (example):
 
 ```yaml
 sessions:
   loop_detection:
     within_turn:
       enabled: true
-      consecutive_repeat_limit: 3 # stop on AAA
-      cycle_repeat_limit: 3 # stop on ABABAB
+      consecutive_repeat_limit: 3
+      cycle_repeat_limit: 3
     cross_turn:
       enabled: true
       window_assistant_messages: 3
@@ -204,11 +201,11 @@ Typing start behavior is explicit and policy-driven:
 
 Typing refresh cadence is bounded and disabled for non-interactive automation lanes unless explicitly enabled.
 
-Implementation notes:
+Architecture notes:
 
-- `TYRUM_CHANNEL_TYPING_MODE`: `never|message|thinking|instant` (default `never`)
-- `TYRUM_CHANNEL_TYPING_REFRESH_MS`: refresh cadence in milliseconds (default `4000`, clamped to `1000–10000`, set `0` to disable refresh)
-- Typing is disabled for non-`main` lanes unless `TYRUM_CHANNEL_TYPING_AUTOMATION_ENABLED=1`.
+- Typing start mode is configurable per connector.
+- Typing refresh cadence is configurable and bounded.
+- Typing indicators are disabled by default for non-interactive automation lanes unless explicitly enabled.
 
 ## Markdown formatting and chunking (channel-safe)
 
