@@ -26,4 +26,3 @@ describe("Operator UI app/page component structure", () => {
     }
   });
 });
-

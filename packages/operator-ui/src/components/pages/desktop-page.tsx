@@ -456,4 +456,3 @@ export function DesktopPage({ core }: { core: OperatorCore }) {
     </div>
   );
 }
-

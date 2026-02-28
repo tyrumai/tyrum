@@ -4,4 +4,3 @@ import { MemoryInspector } from "../memory/memory-inspector.js";
 export function MemoryPage({ core }: { core: OperatorCore }) {
   return <MemoryInspector core={core} />;
 }
-
