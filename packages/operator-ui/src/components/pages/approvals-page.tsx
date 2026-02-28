@@ -2,17 +2,17 @@ import type { OperatorCore } from "@tyrum/operator-core";
 import { CircleCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { PageHeader } from "../components/layout/page-header.js";
-import { Alert } from "../components/ui/alert.js";
-import { Badge } from "../components/ui/badge.js";
-import { Button } from "../components/ui/button.js";
-import { Card, CardContent, CardFooter, CardHeader } from "../components/ui/card.js";
-import { EmptyState } from "../components/ui/empty-state.js";
-import { LiveRegion } from "../components/ui/live-region.js";
-import { Spinner } from "../components/ui/spinner.js";
-import { useOperatorStore } from "../use-operator-store.js";
-import { extractTakeoverUrlFromNodeLabel } from "../utils/takeover-url.js";
-import { isRecord } from "../utils/is-record.js";
+import { PageHeader } from "../layout/page-header.js";
+import { Alert } from "../ui/alert.js";
+import { Badge } from "../ui/badge.js";
+import { Button } from "../ui/button.js";
+import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
+import { EmptyState } from "../ui/empty-state.js";
+import { LiveRegion } from "../ui/live-region.js";
+import { Spinner } from "../ui/spinner.js";
+import { useOperatorStore } from "../../use-operator-store.js";
+import { extractTakeoverUrlFromNodeLabel } from "../../utils/takeover-url.js";
+import { isRecord } from "../../utils/is-record.js";
 
 function formatTimestamp(value: string): string {
   const date = new Date(value);

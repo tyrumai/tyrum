@@ -1,18 +1,18 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useState } from "react";
-import type { OperatorUiMode } from "../app.js";
-import { AdminModeGate } from "../admin-mode.js";
-import { PageHeader } from "../components/layout/page-header.js";
-import { Alert } from "../components/ui/alert.js";
-import { Button } from "../components/ui/button.js";
-import { Card, CardContent, CardHeader } from "../components/ui/card.js";
-import { Input } from "../components/ui/input.js";
-import { Label } from "../components/ui/label.js";
-import { useTheme, type ThemeMode } from "../hooks/use-theme.js";
-import { cn } from "../lib/cn.js";
-import { formatErrorMessage } from "../utils/format-error-message.js";
-import { useOperatorStore } from "../use-operator-store.js";
+import type { OperatorUiMode } from "../../app.js";
+import { AdminModeGate } from "../../admin-mode.js";
+import { PageHeader } from "../layout/page-header.js";
+import { Alert } from "../ui/alert.js";
+import { Button } from "../ui/button.js";
+import { Card, CardContent, CardHeader } from "../ui/card.js";
+import { Input } from "../ui/input.js";
+import { Label } from "../ui/label.js";
+import { useTheme, type ThemeMode } from "../../hooks/use-theme.js";
+import { cn } from "../../lib/cn.js";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
+import { useOperatorStore } from "../../use-operator-store.js";
 
 type ThemeOption = {
   mode: ThemeMode;

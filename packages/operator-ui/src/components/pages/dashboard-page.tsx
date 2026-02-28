@@ -1,16 +1,16 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import type * as React from "react";
 import { Activity, Hash, Link2, Play, ShieldCheck, Wallet } from "lucide-react";
-import { PageHeader } from "../components/layout/page-header.js";
-import { Badge } from "../components/ui/badge.js";
-import { Button } from "../components/ui/button.js";
-import { Card, CardContent, CardHeader } from "../components/ui/card.js";
-import { LiveRegion } from "../components/ui/live-region.js";
-import { Skeleton } from "../components/ui/skeleton.js";
-import { StatusDot } from "../components/ui/status-dot.js";
-import { cn } from "../lib/cn.js";
-import { getConnectionDisplay } from "../lib/connection-display.js";
-import { useOperatorStore } from "../use-operator-store.js";
+import { PageHeader } from "../layout/page-header.js";
+import { Badge } from "../ui/badge.js";
+import { Button } from "../ui/button.js";
+import { Card, CardContent, CardHeader } from "../ui/card.js";
+import { LiveRegion } from "../ui/live-region.js";
+import { Skeleton } from "../ui/skeleton.js";
+import { StatusDot } from "../ui/status-dot.js";
+import { cn } from "../../lib/cn.js";
+import { getConnectionDisplay } from "../../lib/connection-display.js";
+import { useOperatorStore } from "../../use-operator-store.js";
 
 export interface DashboardPageProps {
   core: OperatorCore;

@@ -14,7 +14,7 @@ import {
 import type { OperatorWsClient, OperatorHttpClient } from "../../operator-core/src/deps.js";
 import { AdminModeGate, AdminModeProvider, OperatorUiApp } from "../src/index.js";
 import * as operatorUi from "../src/index.js";
-import { PairingPage } from "../src/pages/pairing-page.js";
+import { PairingPage } from "../src/components/pages/pairing-page.js";
 import { stubMatchMedia } from "./test-utils.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;

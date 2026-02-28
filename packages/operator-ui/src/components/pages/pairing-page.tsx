@@ -2,16 +2,16 @@ import type { OperatorCore, Pairing } from "@tyrum/operator-core";
 import { Link2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "../components/ui/button.js";
-import { Card, CardContent, CardFooter, CardHeader } from "../components/ui/card.js";
-import { Checkbox } from "../components/ui/checkbox.js";
-import { EmptyState } from "../components/ui/empty-state.js";
-import { Label } from "../components/ui/label.js";
-import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group.js";
-import { Textarea } from "../components/ui/textarea.js";
-import { formatErrorMessage } from "../utils/format-error-message.js";
-import { extractTakeoverUrlFromNodeLabel } from "../utils/takeover-url.js";
-import { useOperatorStore } from "../use-operator-store.js";
+import { Button } from "../ui/button.js";
+import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
+import { Checkbox } from "../ui/checkbox.js";
+import { EmptyState } from "../ui/empty-state.js";
+import { Label } from "../ui/label.js";
+import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
+import { Textarea } from "../ui/textarea.js";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
+import { extractTakeoverUrlFromNodeLabel } from "../../utils/takeover-url.js";
+import { useOperatorStore } from "../../use-operator-store.js";
 
 type PairingTrustLevel = "local" | "remote";
 

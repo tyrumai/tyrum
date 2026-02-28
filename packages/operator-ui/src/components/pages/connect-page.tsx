@@ -1,12 +1,12 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useRef, useState } from "react";
-import type { OperatorUiMode } from "../app.js";
-import { Button } from "../components/ui/button.js";
-import { Card, CardContent, CardFooter, CardHeader } from "../components/ui/card.js";
-import { Textarea } from "../components/ui/textarea.js";
-import { Alert } from "../components/ui/alert.js";
-import { readGatewayError } from "../utils/gateway-error.js";
-import { useOperatorStore } from "../use-operator-store.js";
+import type { OperatorUiMode } from "../../app.js";
+import { Button } from "../ui/button.js";
+import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
+import { Textarea } from "../ui/textarea.js";
+import { Alert } from "../ui/alert.js";
+import { readGatewayError } from "../../utils/gateway-error.js";
+import { useOperatorStore } from "../../use-operator-store.js";
 
 export function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
   const connection = useOperatorStore(core.connectionStore);
