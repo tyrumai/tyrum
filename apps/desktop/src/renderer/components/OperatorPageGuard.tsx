@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
-import { Alert, Spinner } from "@tyrum/operator-ui";
+import { AdminModeProvider, Alert, Spinner, type OperatorCore } from "@tyrum/operator-ui";
 import type { DesktopOperatorCoreState } from "../lib/desktop-operator-core.js";
 
 interface OperatorPageGuardProps extends DesktopOperatorCoreState {
-  children: ReactNode;
+  render: (core: OperatorCore) => ReactNode;
 }
 
-export function OperatorPageGuard({ core, busy, errorMessage, children }: OperatorPageGuardProps) {
+export function OperatorPageGuard({ core, busy, errorMessage, render }: OperatorPageGuardProps) {
   if (!window.tyrumDesktop) {
     return <Alert variant="error" title="Desktop API not available." />;
   }
@@ -26,5 +26,9 @@ export function OperatorPageGuard({ core, busy, errorMessage, children }: Operat
     );
   }
 
-  return <>{children}</>;
+  return (
+    <AdminModeProvider core={core} mode="desktop">
+      {render(core)}
+    </AdminModeProvider>
+  );
 }

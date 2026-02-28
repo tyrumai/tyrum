@@ -147,9 +147,7 @@ export function Dashboard({ core, onNavigate }: DashboardProps) {
 
       <Card>
         <CardContent className="grid gap-4 pt-6">
-          <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Gateway
-          </div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Gateway</div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="grid gap-1">
@@ -189,7 +187,13 @@ export function Dashboard({ core, onNavigate }: DashboardProps) {
               </Button>
             )}
             {(status.gatewayStatus === "running" || status.gatewayStatus === "starting") && (
-              <Button size="sm" variant="danger" onClick={stopGateway} disabled={busy} isLoading={busy}>
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={stopGateway}
+                disabled={busy}
+                isLoading={busy}
+              >
                 {busy ? "Stopping..." : "Stop Gateway"}
               </Button>
             )}

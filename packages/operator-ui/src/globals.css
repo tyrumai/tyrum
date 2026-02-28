@@ -11,10 +11,18 @@
 @source ".";
 
 @layer base {
-  /* Reset browser-default button chrome (preflight is disabled). */
+  /*
+   * Reset browser-default button chrome. Tailwind preflight is disabled to
+   * avoid global visual regressions, so native <button> elements inherit
+   * browser-default borders, backgrounds, and padding. This reset removes
+   * those defaults so all buttons start from a neutral base.
+   *
+   * Scope: <button> elements only — does not affect <input type="button">,
+   * <input type="submit">, or <select>.
+   */
   button {
     appearance: none;
-    border: none;
+    border: 0 solid;
     background: none;
     color: inherit;
     font: inherit;

@@ -170,6 +170,11 @@ function CheckboxField({
   );
 }
 
+/** Prevent Radix Dialog dismiss on outside click (pointerdown). */
+function preventInteractOutside(e: Event): void {
+  e.preventDefault();
+}
+
 export interface MemoryInspectorProps {
   core: OperatorCore;
 }
@@ -442,10 +447,7 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
                 }}
               >
                 <ChevronDown
-                  className={cn(
-                    "h-3 w-3 transition-transform",
-                    filtersOpen ? "" : "-rotate-90",
-                  )}
+                  className={cn("h-3 w-3 transition-transform", filtersOpen ? "" : "-rotate-90")}
                 />
                 Filters
               </button>
@@ -650,7 +652,11 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
             })()
           : null}
         {downloadError ? (
-          <span className="text-xs text-error" role="alert" data-testid="memory-export-download-error">
+          <span
+            className="text-xs text-error"
+            role="alert"
+            data-testid="memory-export-download-error"
+          >
             {downloadError}
           </span>
         ) : null}
@@ -683,7 +689,7 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
                 data-testid={`memory-item-${row.memoryItemId}`}
                 className={cn(
                   "w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
-                  "hover:bg-black/5 dark:hover:bg-white/5",
+                  "hover:bg-bg-subtle",
                   inspectedItem?.memory_item_id === row.memoryItemId
                     ? "border-l-2 border-primary bg-primary-dim"
                     : "",
@@ -693,7 +699,10 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
                 }}
               >
                 <div className="truncate font-mono text-xs text-fg-muted">{row.memoryItemId}</div>
-                <div data-testid={`memory-item-snippet-${row.memoryItemId}`} className="truncate text-fg">
+                <div
+                  data-testid={`memory-item-snippet-${row.memoryItemId}`}
+                  className="truncate text-fg"
+                >
                   {row.snippet}
                 </div>
                 {row.provenance ? (
@@ -739,7 +748,10 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
                 {inspectedItem.kind === "fact" ? (
                   <div className="grid gap-1">
                     <div className="text-xs font-medium text-fg-muted">Key</div>
-                    <div data-testid="memory-detail-fact-key" className="text-sm font-medium text-fg">
+                    <div
+                      data-testid="memory-detail-fact-key"
+                      className="text-sm font-medium text-fg"
+                    >
                       {inspectedItem.key}
                     </div>
                     <pre
@@ -867,7 +879,7 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
           }
         }}
       >
-        <DialogContent onInteractOutside={(e) => { e.preventDefault(); }}>
+        <DialogContent onInteractOutside={preventInteractOutside}>
           <DialogHeader>
             <DialogTitle>Forget memory item</DialogTitle>
             <DialogDescription>

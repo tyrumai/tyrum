@@ -126,13 +126,3 @@ export function LogsContent() {
     </div>
   );
 }
-
-/** @deprecated Use `LogsContent` instead. Kept for backward compatibility. */
-export function Logs() {
-  return (
-    <div className="grid gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-fg">Logs</h1>
-      <LogsContent />
-    </div>
-  );
-}

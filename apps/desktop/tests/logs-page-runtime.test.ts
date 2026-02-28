@@ -31,10 +31,10 @@ describe("Logs page", () => {
   });
 
   it("disables auto-scroll when the viewport is scrolled up", async () => {
-    const { Logs } = await import("../src/renderer/pages/Logs.js");
+    const { LogsContent } = await import("../src/renderer/pages/Logs.js");
 
     await act(async () => {
-      testRoot.root.render(createElement(Logs));
+      testRoot.root.render(createElement(LogsContent));
     });
 
     expect(document.body.textContent).toContain("No log entries yet");
