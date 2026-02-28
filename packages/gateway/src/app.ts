@@ -213,7 +213,10 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       eventLog: container.eventLog,
       logger: container.logger,
     });
-    app.use("*", createAuthMiddleware(opts.tokenStore, { audit: authAudit }));
+    app.use(
+      "*",
+      createAuthMiddleware(opts.tokenStore, { audit: authAudit, logger: container.logger }),
+    );
     app.use("*", createHttpScopeAuthorizationMiddleware({ audit: authAudit }));
   }
 

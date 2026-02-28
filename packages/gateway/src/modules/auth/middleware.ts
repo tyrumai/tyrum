@@ -11,6 +11,7 @@ import { matchedRoutes } from "hono/route";
 import { matchesPathPrefixSegment } from "../../app-path.js";
 import { getClientIp } from "./client-ip.js";
 import { requestIdForAudit } from "../observability/request-id.js";
+import type { Logger } from "../observability/logger.js";
 import type { TokenStore } from "./token-store.js";
 import type { AuthTokenClaims } from "./token-store.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "./http.js";
@@ -19,6 +20,11 @@ import type { AuthAudit } from "./audit.js";
 const AUTH_ERROR_BODY = {
   error: "unauthorized",
   message: "Provide a valid token via Authorization: Bearer <token> header",
+};
+
+const AUTH_UNAVAILABLE_BODY = {
+  error: "service_unavailable",
+  message: "Authentication service is unavailable; please try again later.",
 };
 
 const AUTH_SESSION_ROUTE_PATH = "/auth/session";
@@ -40,31 +46,76 @@ function isPublicOAuthCallbackRoute(c: Context): boolean {
   return OAUTH_CALLBACK_REQUEST_PATH_PATTERN.test(c.req.path);
 }
 
+type PublicPathExemption = Readonly<{
+  label: string;
+  matches: (c: Context) => boolean;
+}>;
+
+export const PUBLIC_PATHS: readonly PublicPathExemption[] = [
+  {
+    label: "/healthz",
+    matches: (c) => c.req.path === "/healthz",
+  },
+  {
+    label: `${UI_PATH_PREFIX}/*`,
+    matches: (c) => matchesPathPrefixSegment(c.req.path, UI_PATH_PREFIX),
+  },
+  {
+    label: AUTH_SESSION_ROUTE_PATH,
+    matches: (c) => c.req.path === AUTH_SESSION_ROUTE_PATH,
+  },
+  {
+    label: AUTH_LOGOUT_ROUTE_PATH,
+    matches: (c) => c.req.path === AUTH_LOGOUT_ROUTE_PATH,
+  },
+  {
+    label: OAUTH_CALLBACK_ROUTE_PATH_SUFFIX,
+    matches: (c) => isPublicOAuthCallbackRoute(c),
+  },
+];
+
+function matchPublicPathExemption(c: Context): PublicPathExemption | undefined {
+  for (const exemption of PUBLIC_PATHS) {
+    try {
+      if (exemption.matches(c)) return exemption;
+    } catch {
+      // Fail closed when path matchers throw.
+    }
+  }
+  return undefined;
+}
+
 export function createAuthMiddleware(
-  tokenStore: TokenStore,
+  tokenStore: TokenStore | undefined,
   opts?: {
     audit?: AuthAudit;
+    logger?: Logger;
   },
 ) {
+  let didLogMissingTokenStore = false;
   return async (c: Context, next: Next) => {
-    // /healthz is always public
-    if (c.req.path === "/healthz") {
-      return next();
+    if (!tokenStore) {
+      if (!didLogMissingTokenStore) {
+        didLogMissingTokenStore = true;
+        opts?.logger?.error("auth.token_store_missing", {
+          client_ip: getClientIp(c),
+          method: c.req.method,
+          path: c.req.path,
+          request_id: requestIdForAudit(c),
+        });
+      }
+      return c.json(AUTH_UNAVAILABLE_BODY, 503);
     }
 
-    // /ui/* is public (static operator SPA).
-    if (matchesPathPrefixSegment(c.req.path, UI_PATH_PREFIX)) {
-      return next();
-    }
-
-    // Cookie bootstrap/logout endpoints must be accessible before authentication.
-    if (c.req.path === AUTH_SESSION_ROUTE_PATH || c.req.path === AUTH_LOGOUT_ROUTE_PATH) {
-      return next();
-    }
-
-    // OAuth callback is public (state/PKCE-protected) and should not require an admin token.
-    // Use the router's matched route to avoid accidentally exempting other paths with similar suffixes.
-    if (isPublicOAuthCallbackRoute(c)) {
+    const publicPathExemption = matchPublicPathExemption(c);
+    if (publicPathExemption) {
+      opts?.logger?.debug("auth.public_path_exempted", {
+        exemption: publicPathExemption.label,
+        client_ip: getClientIp(c),
+        method: c.req.method,
+        path: c.req.path,
+        request_id: requestIdForAudit(c),
+      });
       return next();
     }
 
