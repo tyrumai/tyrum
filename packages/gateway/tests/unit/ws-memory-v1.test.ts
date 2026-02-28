@@ -649,4 +649,54 @@ describe("WS memory v1 handlers", () => {
       (res as unknown as { error: { code: string; message: string } }).error.message,
     ).toContain("query too long");
   });
+
+  it("does not fail memory.create when budgets provider/consolidation throws", async () => {
+    const cm = new ConnectionManager();
+    const { id: requesterId, ws: requesterWs } = makeClient(cm);
+
+    const logger = {
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const deps = makeDeps(cm, { db, logger } as unknown as Partial<ProtocolDeps>);
+    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
+    (
+      deps as unknown as { memoryV1BudgetsProvider: (agentId?: string) => Promise<unknown> }
+    ).memoryV1BudgetsProvider = async () => {
+      throw new Error("boom");
+    };
+
+    const requester = cm.getClient(requesterId)!;
+    const createRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-create-err-1",
+        type: "memory.create",
+        payload: {
+          v: 1,
+          item: {
+            kind: "note",
+            body_md: "Remember to check dashboards.",
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "operator" },
+          },
+        },
+      }),
+      deps,
+    );
+
+    expect(createRes).toBeDefined();
+    expect((createRes as unknown as { ok: boolean }).ok).toBe(true);
+
+    const createEvents = parseSentJson(requesterWs).filter(
+      (m) => (m as { type?: unknown }).type === "memory.item.created",
+    );
+    expect(createEvents.length).toBe(1);
+
+    expect(logger.error.mock.calls.some((c) => c[0] === "memory.v1.consolidation_failed")).toBe(
+      true,
+    );
+  });
 });

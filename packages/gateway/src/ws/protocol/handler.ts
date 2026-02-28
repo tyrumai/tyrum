@@ -2432,33 +2432,46 @@ export async function handleClientMessage(
         );
 
         if (deps.memoryV1BudgetsProvider) {
-          const budgets = await deps.memoryV1BudgetsProvider();
-          const consolidation = await deps.memoryV1Dal.consolidateToBudgets({ budgets });
+          try {
+            const budgets = await deps.memoryV1BudgetsProvider(item.agent_id);
+            const consolidation = await deps.memoryV1Dal.consolidateToBudgets({
+              budgets,
+              agentId: item.agent_id,
+            });
 
-          for (const created of consolidation.created_items) {
-            broadcastEvent(
-              {
-                event_id: crypto.randomUUID(),
-                type: "memory.item.created",
-                occurred_at: created.created_at,
-                payload: { item: created },
-              },
-              deps,
-              OPERATOR_MEMORY_EVENT_AUDIENCE,
-            );
-          }
+            for (const created of consolidation.created_items) {
+              broadcastEvent(
+                {
+                  event_id: crypto.randomUUID(),
+                  type: "memory.item.created",
+                  occurred_at: created.created_at,
+                  payload: { item: created },
+                },
+                deps,
+                OPERATOR_MEMORY_EVENT_AUDIENCE,
+              );
+            }
 
-          for (const tombstone of consolidation.deleted_tombstones) {
-            broadcastEvent(
-              {
-                event_id: crypto.randomUUID(),
-                type: "memory.item.deleted",
-                occurred_at: tombstone.deleted_at,
-                payload: { tombstone },
-              },
-              deps,
-              OPERATOR_MEMORY_EVENT_AUDIENCE,
-            );
+            for (const tombstone of consolidation.deleted_tombstones) {
+              broadcastEvent(
+                {
+                  event_id: crypto.randomUUID(),
+                  type: "memory.item.deleted",
+                  occurred_at: tombstone.deleted_at,
+                  payload: { tombstone },
+                },
+                deps,
+                OPERATOR_MEMORY_EVENT_AUDIENCE,
+              );
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            deps.logger?.error("memory.v1.consolidation_failed", {
+              op: "create",
+              agent_id: item.agent_id,
+              memory_item_id: item.memory_item_id,
+              error: message,
+            });
           }
         }
 
@@ -2495,33 +2508,46 @@ export async function handleClientMessage(
         );
 
         if (deps.memoryV1BudgetsProvider) {
-          const budgets = await deps.memoryV1BudgetsProvider();
-          const consolidation = await deps.memoryV1Dal.consolidateToBudgets({ budgets });
+          try {
+            const budgets = await deps.memoryV1BudgetsProvider(item.agent_id);
+            const consolidation = await deps.memoryV1Dal.consolidateToBudgets({
+              budgets,
+              agentId: item.agent_id,
+            });
 
-          for (const created of consolidation.created_items) {
-            broadcastEvent(
-              {
-                event_id: crypto.randomUUID(),
-                type: "memory.item.created",
-                occurred_at: created.created_at,
-                payload: { item: created },
-              },
-              deps,
-              OPERATOR_MEMORY_EVENT_AUDIENCE,
-            );
-          }
+            for (const created of consolidation.created_items) {
+              broadcastEvent(
+                {
+                  event_id: crypto.randomUUID(),
+                  type: "memory.item.created",
+                  occurred_at: created.created_at,
+                  payload: { item: created },
+                },
+                deps,
+                OPERATOR_MEMORY_EVENT_AUDIENCE,
+              );
+            }
 
-          for (const tombstone of consolidation.deleted_tombstones) {
-            broadcastEvent(
-              {
-                event_id: crypto.randomUUID(),
-                type: "memory.item.deleted",
-                occurred_at: tombstone.deleted_at,
-                payload: { tombstone },
-              },
-              deps,
-              OPERATOR_MEMORY_EVENT_AUDIENCE,
-            );
+            for (const tombstone of consolidation.deleted_tombstones) {
+              broadcastEvent(
+                {
+                  event_id: crypto.randomUUID(),
+                  type: "memory.item.deleted",
+                  occurred_at: tombstone.deleted_at,
+                  payload: { tombstone },
+                },
+                deps,
+                OPERATOR_MEMORY_EVENT_AUDIENCE,
+              );
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            deps.logger?.error("memory.v1.consolidation_failed", {
+              op: "update",
+              agent_id: item.agent_id,
+              memory_item_id: item.memory_item_id,
+              error: message,
+            });
           }
         }
 

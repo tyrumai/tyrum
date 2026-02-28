@@ -154,6 +154,7 @@ type RawBudgetRow = {
   summary_md: string | null;
   confidence: number | null;
   created_at: string | Date;
+  updated_at: string | Date | null;
 };
 
 function normalizeBudgets(budgets: AgentConfig["memory"]["v1"]["budgets"]): MemoryV1BudgetLimits {
@@ -223,6 +224,12 @@ function overBudget(usage: MemoryV1BudgetUsage, limits: MemoryV1BudgetLimits): b
     if (actual.chars > limit.max_chars) return true;
   }
   return false;
+}
+
+function sensitivityRank(value: MemorySensitivity): number {
+  if (value === "public") return 0;
+  if (value === "private") return 1;
+  return 2;
 }
 
 function normalizeSummaryLine(value: string): string {
@@ -1441,20 +1448,21 @@ export class MemoryV1Dal {
     const loadRows = async (): Promise<RawBudgetRow[]> =>
       await this.db.all<RawBudgetRow>(
         `SELECT
-           memory_item_id,
-           kind,
-           sensitivity,
-           key,
-           value_json,
-           observed_at,
-           title,
-           body_md,
-           occurred_at,
-           summary_md,
-           confidence,
-           created_at
-         FROM memory_items
-         WHERE agent_id = ?`,
+	           memory_item_id,
+	           kind,
+	           sensitivity,
+	           key,
+	           value_json,
+	           observed_at,
+	           title,
+	           body_md,
+	           occurred_at,
+	           summary_md,
+	           confidence,
+	           created_at,
+	           updated_at
+	         FROM memory_items
+	         WHERE agent_id = ?`,
         [agent],
       );
 
@@ -1474,13 +1482,16 @@ export class MemoryV1Dal {
     const createdItems: MemoryItem[] = [];
     const deletedTombstones: MemoryTombstone[] = [];
 
-    // Stage 1: Dedupe facts by key (keep highest confidence / newest observed_at).
+    // Stage 1: Dedupe facts by key (prefer most-restrictive sensitivity, then best confidence/recency).
     {
       const facts = beforeRows.filter((row) => row.kind === "fact" && row.key);
       const bestByKey = new Map<string, RawBudgetRow>();
       const dupes: string[] = [];
 
       const compare = (a: RawBudgetRow, b: RawBudgetRow): number => {
+        const sensA = sensitivityRank(a.sensitivity);
+        const sensB = sensitivityRank(b.sensitivity);
+        if (sensA !== sensB) return sensB - sensA;
         const confA = a.confidence ?? 0;
         const confB = b.confidence ?? 0;
         if (confA !== confB) return confB - confA;
@@ -1528,6 +1539,16 @@ export class MemoryV1Dal {
 
     let rows = await loadRows();
     let usage = computeBudgetUsage(rows);
+    if (!overBudget(usage, limits)) {
+      return {
+        ran: true,
+        created_items: createdItems,
+        deleted_tombstones: deletedTombstones,
+        dropped_derived_indexes: { deleted_vectors: 0, deleted_links: 0 },
+        before: beforeUsage,
+        after: usage,
+      };
+    }
 
     // Stage 2: Episodic consolidation into a semantic note (best-effort).
     if (rows.some((row) => row.kind === "episode") && overBudget(usage, limits)) {
@@ -1553,8 +1574,8 @@ export class MemoryV1Dal {
 
       const noteLimit = limits.per_kind.note;
       const noteUsage = usage.per_kind.note;
-      const canAddNote =
-        noteLimit.max_items > noteUsage.items && noteLimit.max_chars > noteUsage.chars;
+      const remainingNoteChars = Math.max(0, noteLimit.max_chars - noteUsage.chars);
+      const canAddNote = noteLimit.max_items > noteUsage.items && remainingNoteChars > 0;
 
       if (canAddNote && targetCount > 0) {
         const selected = episodes.slice(0, targetCount);
@@ -1564,61 +1585,77 @@ export class MemoryV1Dal {
         );
         const maxNewNoteChars = Math.max(
           0,
-          Math.min(noteLimit.max_chars - noteUsage.chars, Math.floor(removedEpisodeChars * 0.7)),
+          Math.floor(Math.min(remainingNoteChars, removedEpisodeChars * 0.7)),
         );
+        if (maxNewNoteChars >= 1) {
+          const occurredLines = selected.map((row) => {
+            const occurred = row.occurred_at ?? "unknown-time";
+            const summary = row.summary_md
+              ? truncate(normalizeSummaryLine(row.summary_md), 180)
+              : "";
+            return `- ${occurred} — ${summary}`.trim();
+          });
 
-        const occurredLines = selected.map((row) => {
-          const occurred = row.occurred_at ?? "unknown-time";
-          const summary = row.summary_md ? truncate(normalizeSummaryLine(row.summary_md), 180) : "";
-          return `- ${occurred} — ${summary}`.trim();
-        });
+          const header = `Consolidated ${selected.length} episode(s) to stay within memory budgets.`;
+          const body = [header, "", ...occurredLines].join("\n").trim();
+          const titleCandidate = "Episodic consolidation";
+          const title = maxNewNoteChars >= titleCandidate.length + 1 ? titleCandidate : undefined;
+          const bodyBudget = maxNewNoteChars - (title?.length ?? 0);
+          const finalBody = truncate(body, bodyBudget);
 
-        const header = `Consolidated ${selected.length} episode(s) to stay within memory budgets.`;
-        const body = [header, "", ...occurredLines].join("\n").trim();
-        const title = "Episodic consolidation";
+          const sensitivity: MemorySensitivity = selected.some(
+            (row) => row.sensitivity === "sensitive",
+          )
+            ? "sensitive"
+            : selected.some((row) => row.sensitivity === "private")
+              ? "private"
+              : "public";
 
-        const bodyBudget = Math.max(1, Math.max(0, maxNewNoteChars - title.length));
-        const finalBody = truncate(body, bodyBudget);
-
-        const sensitivity: MemorySensitivity = selected.some(
-          (row) => row.sensitivity === "sensitive",
-        )
-          ? "sensitive"
-          : selected.some((row) => row.sensitivity === "private")
-            ? "private"
-            : "public";
-
-        const note = await this.create(
-          {
-            kind: "note",
-            title,
-            body_md: finalBody.length > 0 ? finalBody : header,
-            tags: ["consolidated"],
-            sensitivity,
-            provenance: {
-              source_kind: "system",
-              refs: [],
-              metadata: { kind: "episodic_consolidation", episode_count: selected.length },
+          const note = await this.create(
+            {
+              kind: "note",
+              ...(title ? { title } : {}),
+              body_md: finalBody.length > 0 ? finalBody : header,
+              tags: ["consolidated"],
+              sensitivity,
+              provenance: {
+                source_kind: "system",
+                refs: [],
+                metadata: { kind: "episodic_consolidation", episode_count: selected.length },
+              },
             },
-          },
-          agent,
-        );
-        createdItems.push(note);
+            agent,
+          );
+          createdItems.push(note);
 
-        for (const episode of selected) {
-          try {
-            const tombstone = await this.delete(
-              episode.memory_item_id,
-              { deleted_by: "consolidation", reason: "episodic consolidation" },
-              agent,
-            );
-            deletedTombstones.push(tombstone);
-          } catch (err) {
-            if (err instanceof Error && err.message === "memory item not found") continue;
-            throw err;
+          for (const episode of selected) {
+            try {
+              const tombstone = await this.delete(
+                episode.memory_item_id,
+                { deleted_by: "consolidation", reason: "episodic consolidation" },
+                agent,
+              );
+              deletedTombstones.push(tombstone);
+            } catch (err) {
+              if (err instanceof Error && err.message === "memory item not found") continue;
+              throw err;
+            }
           }
         }
       }
+    }
+
+    rows = await loadRows();
+    usage = computeBudgetUsage(rows);
+    if (!overBudget(usage, limits)) {
+      return {
+        ran: true,
+        created_items: createdItems,
+        deleted_tombstones: deletedTombstones,
+        dropped_derived_indexes: { deleted_vectors: 0, deleted_links: 0 },
+        before: beforeUsage,
+        after: usage,
+      };
     }
 
     // Stage 3: Drop derived indexes (embeddings) — expendable.
@@ -1628,8 +1665,8 @@ export class MemoryV1Dal {
     const deletedVectors = (
       await this.db.run(
         `DELETE FROM vector_metadata
-         WHERE agent_id = ?
-           AND label LIKE ?`,
+	         WHERE agent_id = ?
+	           AND label LIKE ?`,
         [agent, "memory_item:%"],
       )
     ).changes;
@@ -1661,7 +1698,8 @@ export class MemoryV1Dal {
     const rowUtilityKey = (row: RawBudgetRow): string => {
       if (row.kind === "fact") return row.observed_at ?? normalizeTime(row.created_at);
       if (row.kind === "episode") return row.occurred_at ?? normalizeTime(row.created_at);
-      return normalizeTime(row.created_at);
+      const updated = row.updated_at ? normalizeTime(row.updated_at) : undefined;
+      return updated ?? normalizeTime(row.created_at);
     };
 
     while (overBudget(usage, limits)) {
