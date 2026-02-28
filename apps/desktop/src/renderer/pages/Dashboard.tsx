@@ -219,7 +219,7 @@ export function Dashboard({ core, onNavigate }: DashboardProps) {
       </Card>
 
       {core ? (
-        <OperatorDashboard core={core} onNavigate={onNavigate} />
+        <OperatorDashboard core={core} onNavigate={onNavigate} hideHeader />
       ) : (
         <Card>
           <CardContent className="grid gap-4 pt-6">

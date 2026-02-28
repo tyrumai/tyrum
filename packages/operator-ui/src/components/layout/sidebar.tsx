@@ -79,15 +79,20 @@ export function Sidebar({
     secondaryCollapsible ? readStoredBool(STORAGE_KEY_SECONDARY, secondaryDefaultCollapsed) : false,
   );
 
-  // Auto-expand when active item is in secondary section
+  // Auto-expand when navigating TO a secondary item. We read the collapsed
+  // state via a ref so the effect doesn't re-fire when the user manually
+  // toggles the section (which would immediately undo their toggle).
+  const secondaryCollapsedRef = React.useRef(secondaryCollapsed);
+  secondaryCollapsedRef.current = secondaryCollapsed;
+
   React.useEffect(() => {
     if (!secondaryCollapsible || !secondaryItems) return;
     const isSecondaryActive = secondaryItems.some((item) => item.id === activeItemId);
-    if (isSecondaryActive && secondaryCollapsed) {
+    if (isSecondaryActive && secondaryCollapsedRef.current) {
       setSecondaryCollapsed(false);
       writeStoredBool(STORAGE_KEY_SECONDARY, false);
     }
-  }, [activeItemId, secondaryCollapsible, secondaryItems, secondaryCollapsed]);
+  }, [activeItemId, secondaryCollapsible, secondaryItems]);
 
   const toggleCollapsed = () => {
     const next = !collapsed;
