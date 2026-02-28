@@ -571,10 +571,9 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
 
   const navigate = (id: string): void => {
     if (!isOperatorUiRouteId(id)) return;
-    const doc = document as unknown as { startViewTransition?: (callback: () => void) => unknown };
-    const startViewTransition = doc.startViewTransition;
-    if (typeof startViewTransition === "function") {
-      startViewTransition(() => {
+    const doc = document as Document & { startViewTransition?: (callback: () => void) => unknown };
+    if (typeof doc.startViewTransition === "function") {
+      doc.startViewTransition(() => {
         setRoute(id);
       });
       return;

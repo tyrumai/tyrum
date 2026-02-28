@@ -1452,7 +1452,7 @@ describe("operator-ui", () => {
   });
 
   it("wraps navigation in the View Transitions API when available", () => {
-    const startViewTransition = vi.fn((callback: () => void) => {
+    const startViewTransition = vi.fn(function (this: unknown, callback: () => void) {
       callback();
       return { finished: Promise.resolve() };
     });
@@ -1490,6 +1490,7 @@ describe("operator-ui", () => {
       });
 
       expect(startViewTransition).toHaveBeenCalledTimes(1);
+      expect(startViewTransition.mock.contexts[0]).toBe(document);
 
       act(() => {
         root?.unmount();
