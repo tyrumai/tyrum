@@ -37,6 +37,6 @@ describe("Issue #841 desktop docs", () => {
 
   it("links desktop docs in the docs sidebar", async () => {
     const sidebars = await readFile(resolve(repoRoot, "apps/docs/sidebars.ts"), "utf8");
-    expect(sidebars).toMatch(/\"desktop\"/);
+    expect(sidebars).toMatch(/"desktop"/);
   });
 });
