@@ -1,6 +1,19 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
+import {
+  Database,
+  LayoutDashboard,
+  Link2,
+  LogIn,
+  Monitor,
+  Play,
+  Settings,
+  ShieldCheck,
+} from "lucide-react";
 import { AdminModeGate, AdminModeProvider } from "./admin-mode.js";
+import { AppShell } from "./components/layout/app-shell.js";
+import { MobileNav } from "./components/layout/mobile-nav.js";
+import { Sidebar } from "./components/layout/sidebar.js";
 import { MemoryInspector } from "./components/memory/memory-inspector.js";
 import { getDesktopApi } from "./desktop-api.js";
 import { OPERATOR_UI_CSS } from "./style.js";
@@ -23,19 +36,36 @@ type OperatorUiRouteId =
   | "settings"
   | "desktop";
 
-const NAV_ITEMS: Array<{ id: OperatorUiRouteId; label: string }> = [
-  { id: "connect", label: "Connect" },
-  { id: "dashboard", label: "Dashboard" },
-  { id: "memory", label: "Memory" },
-  { id: "approvals", label: "Approvals" },
-  { id: "runs", label: "Runs" },
-  { id: "pairing", label: "Pairing" },
-  { id: "settings", label: "Settings" },
+type NavIcon = ComponentType<{ className?: string }>;
+
+const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon }> = {
+  connect: { label: "Connect", icon: LogIn },
+  dashboard: { label: "Dashboard", icon: LayoutDashboard },
+  memory: { label: "Memory", icon: Database },
+  approvals: { label: "Approvals", icon: ShieldCheck },
+  runs: { label: "Runs", icon: Play },
+  pairing: { label: "Pairing", icon: Link2 },
+  settings: { label: "Settings", icon: Settings },
+  desktop: { label: "Desktop", icon: Monitor },
+};
+
+const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
+  "connect",
+  "dashboard",
+  "memory",
+  "approvals",
+  "runs",
+  "pairing",
+  "settings",
 ];
 
-const DESKTOP_NAV_ITEMS: Array<{ id: OperatorUiRouteId; label: string }> = [
-  { id: "desktop", label: "Desktop" },
-];
+const MOBILE_NAV_ORDER: OperatorUiRouteId[] = ["dashboard", "approvals", "runs", "settings"];
+const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["memory", "pairing", "connect"];
+const DESKTOP_NAV_ORDER: OperatorUiRouteId[] = ["desktop"];
+
+function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {
+  return Object.prototype.hasOwnProperty.call(NAV_ITEM_CONFIG, value);
+}
 
 function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
   const connection = useOperatorStore(core.connectionStore);
@@ -874,62 +904,53 @@ function SettingsPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode
 
 export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
   const [route, setRoute] = useState<OperatorUiRouteId>("connect");
-  const navItems = NAV_ITEMS.map((item) => {
-    if (mode === "web" && item.id === "connect") return { ...item, label: "Login" };
-    return item;
+  const connection = useOperatorStore(core.connectionStore);
+
+  const resolveLabel = (id: OperatorUiRouteId): string => {
+    if (mode === "web" && id === "connect") return "Login";
+    return NAV_ITEM_CONFIG[id].label;
+  };
+
+  const toNavItem = (id: OperatorUiRouteId) => ({
+    id,
+    label: resolveLabel(id),
+    icon: NAV_ITEM_CONFIG[id].icon,
+    testId: `nav-${id}`,
   });
-  const desktopNavItems = mode === "desktop" ? DESKTOP_NAV_ITEMS : [];
+
+  const sidebarItems = SIDEBAR_NAV_ORDER.map(toNavItem);
+  const desktopItems = mode === "desktop" ? DESKTOP_NAV_ORDER.map(toNavItem) : [];
+  const mobileItems = MOBILE_NAV_ORDER.map(toNavItem);
+  const mobileOverflowItems = MOBILE_OVERFLOW_NAV_ORDER.map(toNavItem);
+
+  const navigate = (id: string): void => {
+    if (!isOperatorUiRouteId(id)) return;
+    setRoute(id);
+  };
   return (
     <div className="tyrum-operator-ui">
       <style>{OPERATOR_UI_CSS}</style>
-      <div className="layout">
-        <aside className="sidebar">
-          <div className="brand">Tyrum</div>
-          <nav className="nav">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                data-testid={`nav-${item.id}`}
-                className={route === item.id ? "active" : undefined}
-                onClick={() => {
-                  setRoute(item.id);
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
-            {desktopNavItems.length > 0 ? (
-              <>
-                <div
-                  style={{
-                    margin: "10px 16px 6px",
-                    fontSize: 12,
-                    letterSpacing: 0.8,
-                    textTransform: "uppercase",
-                    color: "var(--muted)",
-                  }}
-                >
-                  Desktop
-                </div>
-                {desktopNavItems.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    data-testid={`nav-${item.id}`}
-                    className={route === item.id ? "active" : undefined}
-                    onClick={() => {
-                      setRoute(item.id);
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </>
-            ) : null}
-          </nav>
-        </aside>
-        <main className="main">
+      <AppShell
+        mode={mode}
+        sidebar={
+          <Sidebar
+            items={sidebarItems}
+            secondaryItems={desktopItems}
+            activeItemId={route}
+            onNavigate={navigate}
+            connectionStatus={connection.status}
+          />
+        }
+        mobileNav={
+          <MobileNav
+            items={mobileItems}
+            overflowItems={mobileOverflowItems}
+            activeItemId={route}
+            onNavigate={navigate}
+          />
+        }
+      >
+        <div className="tyrum-legacy">
           <AdminModeProvider core={core} mode={mode}>
             {route === "connect" && <ConnectPage core={core} mode={mode} />}
             {route === "dashboard" && <DashboardPage core={core} />}
@@ -940,8 +961,8 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
             {route === "settings" && <SettingsPage core={core} mode={mode} />}
             {route === "desktop" && mode === "desktop" && <DesktopSetupPage core={core} />}
           </AdminModeProvider>
-        </main>
-      </div>
+        </div>
+      </AppShell>
     </div>
   );
 }
