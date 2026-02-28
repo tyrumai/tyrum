@@ -281,6 +281,29 @@ describe("DesktopProvider", () => {
     expect(backend.calls).toEqual([]);
   });
 
+  it("wait_for is blocked when screenshot permission is disabled", async () => {
+    const permissions = resolvePermissions("balanced", {
+      desktopScreenshot: false,
+      desktopInput: false,
+    });
+    const backend = new MockDesktopBackend();
+    const provider = new DesktopProvider(backend, permissions, vi.fn<ConfirmationFn>());
+
+    const result = await provider.execute(
+      makeAction({
+        op: "wait_for",
+        selector: { kind: "a11y", role: "dialog", name: "Settings" },
+        state: "visible",
+        timeout_ms: 0,
+        poll_ms: 50,
+      }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Desktop screenshot is disabled by permission profile");
+    expect(backend.calls).toEqual([]);
+  });
+
   // -- Argument validation ---------------------------------------------------
 
   it("invalid args rejected with parse error", async () => {

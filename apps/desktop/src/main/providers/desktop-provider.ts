@@ -226,6 +226,13 @@ export class DesktopProvider implements CapabilityProvider {
   }
 
   private async waitFor(args: DesktopWaitForArgs): Promise<TaskResult> {
+    if (!this.permissions.desktopScreenshot) {
+      return {
+        success: false,
+        error: "Desktop screenshot is disabled by permission profile",
+      };
+    }
+
     const start = Date.now();
     while (Date.now() - start < args.timeout_ms) {
       const remaining = args.timeout_ms - (Date.now() - start);
