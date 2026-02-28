@@ -145,9 +145,9 @@ describe("AgentRuntime", () => {
       }),
       on: vi.fn(() => undefined as never),
       readyState: 1,
-    } as never;
+    };
 
-    connectionManager.addClient(nodeWs, ["desktop"], {
+    connectionManager.addClient(nodeWs as never, ["desktop"], {
       id: "conn-1",
       role: "node",
       deviceId: nodeId,
@@ -263,6 +263,7 @@ describe("AgentRuntime", () => {
 
     expect(result.reply).toBe("done");
     expect(result.used_tools).toContain("tool.node.dispatch");
+    expect(nodeWs.send).toHaveBeenCalledTimes(1);
 
     const row = await container.db.get<{ n: number }>(
       "SELECT COUNT(*) AS n FROM execution_artifacts WHERE kind = 'screenshot'",
