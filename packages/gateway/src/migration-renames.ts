@@ -24,6 +24,7 @@ export const MIGRATION_FILENAME_RENAMES: ReadonlyArray<readonly [from: string, t
   ["028_work_signal_firings.sql", "035_work_signal_firings.sql"],
   ["028_workboard_task_leases.sql", "036_workboard_task_leases.sql"],
   ["029_intake_mode_overrides.sql", "037_intake_mode_overrides.sql"],
+  ["030_drop_legacy_memory.sql", "038_drop_legacy_memory.sql"],
 ];
 
 export function getMigrationAliasesToMarkApplied(applied: ReadonlySet<string>): string[] {
