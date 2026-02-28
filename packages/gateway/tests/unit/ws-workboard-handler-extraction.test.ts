@@ -11,7 +11,9 @@ describe("workboard WS handler extraction", () => {
     );
 
     expect(handlerSource).toContain("handleWorkboardMessage(");
-    expect(handlerSource).not.toMatch(/msg\\.type === "work\\./);
+    const inlineCheckExample = 'if (msg.type === "work.create") {';
+    expect(inlineCheckExample).toMatch(/msg\.type === "work\./);
+    expect(handlerSource).not.toMatch(/msg\.type === "work\./);
 
     const workboardSource = await readFile(
       new URL("../../src/ws/protocol/workboard-handlers.ts", import.meta.url),
