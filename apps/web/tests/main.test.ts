@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tyrum/operator-core", () => ({
   createAdminModeStore: vi.fn(),
@@ -25,11 +25,45 @@ vi.mock("../src/url-auth.js", () => ({
 }));
 
 describe("apps/web main bootstrap", () => {
-  it("creates the operator core manager and scrubs auth token from the URL", async () => {
+  const setupDom = (url: string): ReturnType<typeof vi.spyOn> => {
     document.body.innerHTML = '<div id="root"></div>';
-    window.history.replaceState({}, "", "/ui?token=test#hash");
+    window.history.replaceState({}, "", url);
+    return vi.spyOn(window.history, "replaceState");
+  };
 
-    const replaceStateSpy = vi.spyOn(window.history, "replaceState");
+  const makeManagerMock = (): {
+    manager: {
+      getCore: ReturnType<typeof vi.fn>;
+      subscribe: ReturnType<typeof vi.fn>;
+      dispose: ReturnType<typeof vi.fn>;
+    };
+    unsubscribe: ReturnType<typeof vi.fn>;
+  } => {
+    const unsubscribe = vi.fn();
+    return {
+      unsubscribe,
+      manager: {
+        getCore: vi.fn(() => ({})),
+        subscribe: vi.fn(() => unsubscribe),
+        dispose: vi.fn(),
+      },
+    };
+  };
+
+  const expectDisposedOnUnload = (params: {
+    unsubscribe: ReturnType<typeof vi.fn>;
+    manager: { dispose: ReturnType<typeof vi.fn> };
+    adminModeStore: { dispose: ReturnType<typeof vi.fn> };
+  }): void => {
+    window.dispatchEvent(new Event("beforeunload"));
+
+    expect(params.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(params.manager.dispose).toHaveBeenCalledTimes(1);
+    expect(params.adminModeStore.dispose).toHaveBeenCalledTimes(1);
+  };
+
+  const arrangeBootstrap = async (initialUrl: string) => {
+    const replaceStateSpy = setupDom(initialUrl);
 
     const operatorCore = await import("@tyrum/operator-core");
     const urlAuth = await import("../src/url-auth.js");
@@ -39,6 +73,36 @@ describe("apps/web main bootstrap", () => {
     vi.mocked(operatorCore.createAdminModeStore).mockReturnValue(
       adminModeStore as unknown as ReturnType<typeof operatorCore.createAdminModeStore>,
     );
+
+    const { manager, unsubscribe } = makeManagerMock();
+    vi.mocked(operatorCore.createOperatorCoreManager).mockReturnValue(
+      manager as unknown as ReturnType<typeof operatorCore.createOperatorCoreManager>,
+    );
+
+    const root = { render: vi.fn() };
+    vi.mocked(reactDomClient.createRoot).mockReturnValue(root as never);
+
+    return {
+      adminModeStore,
+      manager,
+      operatorCore,
+      replaceStateSpy,
+      root,
+      unsubscribe,
+      urlAuth,
+    };
+  };
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.resetModules();
+    vi.clearAllMocks();
+    document.body.innerHTML = "";
+  });
+
+  it("creates the operator core manager and scrubs auth token from the URL", async () => {
+    const { adminModeStore, manager, operatorCore, replaceStateSpy, root, unsubscribe, urlAuth } =
+      await arrangeBootstrap("/ui?token=test#hash");
 
     const bearerAuth = { type: "bearer-token", token: "test-token" } as const;
     vi.mocked(operatorCore.createBearerTokenAuth).mockReturnValue(
@@ -51,19 +115,6 @@ describe("apps/web main bootstrap", () => {
 
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue("test-token");
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui#hash");
-
-    const unsubscribe = vi.fn();
-    const manager = {
-      getCore: vi.fn(() => ({})),
-      subscribe: vi.fn(() => unsubscribe),
-      dispose: vi.fn(),
-    };
-    vi.mocked(operatorCore.createOperatorCoreManager).mockReturnValue(
-      manager as unknown as ReturnType<typeof operatorCore.createOperatorCoreManager>,
-    );
-
-    const root = { render: vi.fn() };
-    vi.mocked(reactDomClient.createRoot).mockReturnValue(root as never);
 
     await import("../src/main.tsx");
 
@@ -88,10 +139,39 @@ describe("apps/web main bootstrap", () => {
     expect(replaceStateSpy).toHaveBeenCalledWith(expect.anything(), "", "/ui#hash");
     expect(root.render).toHaveBeenCalled();
 
-    window.dispatchEvent(new Event("beforeunload"));
+    expectDisposedOnUnload({ unsubscribe, manager, adminModeStore });
+  });
 
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
-    expect(manager.dispose).toHaveBeenCalledTimes(1);
-    expect(adminModeStore.dispose).toHaveBeenCalledTimes(1);
+  it("uses browser cookie auth when no token is present and does not rewrite the URL", async () => {
+    const { adminModeStore, manager, operatorCore, replaceStateSpy, root, unsubscribe, urlAuth } =
+      await arrangeBootstrap("/ui");
+
+    const cookieAuth = { type: "browser-cookie" } as const;
+    vi.mocked(operatorCore.createBrowserCookieAuth).mockReturnValue(
+      cookieAuth as unknown as ReturnType<typeof operatorCore.createBrowserCookieAuth>,
+    );
+
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+
+    await import("../src/main.tsx");
+
+    expect(operatorCore.createBrowserCookieAuth).toHaveBeenCalledTimes(1);
+    expect(operatorCore.createBearerTokenAuth).not.toHaveBeenCalled();
+    expect(operatorCore.createGatewayAuthSession).not.toHaveBeenCalled();
+    expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baselineAuth: cookieAuth,
+        adminModeStore,
+      }),
+    );
+    expect(replaceStateSpy).not.toHaveBeenCalled();
+    expect(root.render).toHaveBeenCalled();
+
+    expectDisposedOnUnload({ unsubscribe, manager, adminModeStore });
+  });
+
+  it("throws when the root element is missing", async () => {
+    await expect(import("../src/main.tsx")).rejects.toThrow("Missing root element (#root).");
   });
 });
