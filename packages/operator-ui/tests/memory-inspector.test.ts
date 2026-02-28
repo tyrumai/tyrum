@@ -127,6 +127,46 @@ function sampleFact(memoryItemId: string, key: string, value: unknown): MemoryIt
   };
 }
 
+/**
+ * Sets a value on a React-controlled input/textarea by going through the
+ * native property setter so React's internal value tracker is updated.
+ */
+function setNativeValue(element: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+  const proto =
+    element instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+  if (setter) {
+    setter.call(element, value);
+  }
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+/** Click helper that dispatches the full pointer/mouse sequence Radix components expect. */
+function click(element: HTMLElement): void {
+  element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  element.click();
+  element.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+  element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+}
+
+/** Expand the collapsible "Filters" section if it's collapsed. */
+async function openFilters(container: HTMLElement): Promise<void> {
+  // The filters toggle is a button whose text content is "Filters"
+  const buttons = container.querySelectorAll<HTMLButtonElement>("button");
+  for (const btn of buttons) {
+    if (btn.textContent?.trim() === "Filters") {
+      await act(async () => {
+        click(btn);
+      });
+      return;
+    }
+  }
+}
+
 describe("MemoryInspector", () => {
   it("lists memory items on mount", async () => {
     const ws = new FakeWsClient();
@@ -187,7 +227,7 @@ describe("MemoryInspector", () => {
     expect(itemButton).not.toBeNull();
 
     await act(async () => {
-      itemButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemButton!);
     });
 
     expect(ws.memoryGet).toHaveBeenCalledWith({ v: 1, memory_item_id: item.memory_item_id });
@@ -220,7 +260,7 @@ describe("MemoryInspector", () => {
     expect(itemButton).not.toBeNull();
 
     await act(async () => {
-      itemButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemButton!);
     });
 
     const bodyField = testRoot.container.querySelector<HTMLTextAreaElement>(
@@ -256,7 +296,7 @@ describe("MemoryInspector", () => {
     expect(itemButton).not.toBeNull();
 
     await act(async () => {
-      itemButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemButton!);
     });
 
     const summaryField = testRoot.container.querySelector<HTMLTextAreaElement>(
@@ -292,7 +332,7 @@ describe("MemoryInspector", () => {
     expect(itemButton).not.toBeNull();
 
     await act(async () => {
-      itemButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemButton!);
     });
 
     const keyField = testRoot.container.querySelector<HTMLDivElement>(
@@ -336,7 +376,7 @@ describe("MemoryInspector", () => {
     expect(itemButton).not.toBeNull();
 
     await act(async () => {
-      itemButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemButton!);
     });
 
     const bodyField = testRoot.container.querySelector<HTMLTextAreaElement>(
@@ -345,9 +385,7 @@ describe("MemoryInspector", () => {
     expect(bodyField).not.toBeNull();
 
     await act(async () => {
-      bodyField!.value = "After";
-      bodyField!.dispatchEvent(new Event("input", { bubbles: true }));
-      bodyField!.dispatchEvent(new Event("change", { bubbles: true }));
+      setNativeValue(bodyField!, "After");
     });
 
     const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
@@ -356,7 +394,7 @@ describe("MemoryInspector", () => {
     expect(saveButton).not.toBeNull();
 
     await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(saveButton!);
     });
 
     expect(ws.memoryUpdate).toHaveBeenCalledWith({
@@ -405,7 +443,7 @@ describe("MemoryInspector", () => {
     expect(itemButton).not.toBeNull();
 
     await act(async () => {
-      itemButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemButton!);
     });
 
     const bodyField = testRoot.container.querySelector<HTMLTextAreaElement>(
@@ -414,9 +452,7 @@ describe("MemoryInspector", () => {
     expect(bodyField).not.toBeNull();
 
     await act(async () => {
-      bodyField!.value = "After";
-      bodyField!.dispatchEvent(new Event("input", { bubbles: true }));
-      bodyField!.dispatchEvent(new Event("change", { bubbles: true }));
+      setNativeValue(bodyField!, "After");
     });
 
     const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
@@ -425,7 +461,7 @@ describe("MemoryInspector", () => {
     expect(saveButton).not.toBeNull();
 
     await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(saveButton!);
     });
 
     const disabledBodyField = testRoot.container.querySelector<HTMLTextAreaElement>(
@@ -469,7 +505,7 @@ describe("MemoryInspector", () => {
     expect(itemButton).not.toBeNull();
 
     await act(async () => {
-      itemButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemButton!);
     });
 
     const bodyField = testRoot.container.querySelector<HTMLTextAreaElement>(
@@ -478,9 +514,7 @@ describe("MemoryInspector", () => {
     expect(bodyField).not.toBeNull();
 
     await act(async () => {
-      bodyField!.value = "User draft";
-      bodyField!.dispatchEvent(new Event("input", { bubbles: true }));
-      bodyField!.dispatchEvent(new Event("change", { bubbles: true }));
+      setNativeValue(bodyField!, "User draft");
     });
 
     await act(async () => {
@@ -526,7 +560,7 @@ describe("MemoryInspector", () => {
     expect(itemButton).not.toBeNull();
 
     await act(async () => {
-      itemButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemButton!);
     });
 
     const tagsField = testRoot.container.querySelector<HTMLInputElement>(
@@ -535,9 +569,7 @@ describe("MemoryInspector", () => {
     expect(tagsField).not.toBeNull();
 
     await act(async () => {
-      tagsField!.value = "x, y";
-      tagsField!.dispatchEvent(new Event("input", { bubbles: true }));
-      tagsField!.dispatchEvent(new Event("change", { bubbles: true }));
+      setNativeValue(tagsField!, "x, y");
     });
 
     const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
@@ -546,7 +578,7 @@ describe("MemoryInspector", () => {
     expect(saveButton).not.toBeNull();
 
     await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(saveButton!);
     });
 
     expect(ws.memoryUpdate).toHaveBeenCalledWith({
@@ -592,7 +624,7 @@ describe("MemoryInspector", () => {
     expect(itemAButton).not.toBeNull();
 
     await act(async () => {
-      itemAButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemAButton!);
     });
 
     const bodyField = testRoot.container.querySelector<HTMLTextAreaElement>(
@@ -601,9 +633,7 @@ describe("MemoryInspector", () => {
     expect(bodyField).not.toBeNull();
 
     await act(async () => {
-      bodyField!.value = "Changed body";
-      bodyField!.dispatchEvent(new Event("input", { bubbles: true }));
-      bodyField!.dispatchEvent(new Event("change", { bubbles: true }));
+      setNativeValue(bodyField!, "Changed body");
     });
 
     const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
@@ -612,7 +642,7 @@ describe("MemoryInspector", () => {
     expect(saveButton).not.toBeNull();
 
     await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(saveButton!);
     });
     await act(async () => {});
 
@@ -628,7 +658,7 @@ describe("MemoryInspector", () => {
     expect(itemBButton).not.toBeNull();
 
     await act(async () => {
-      itemBButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemBButton!);
     });
     await act(async () => {});
 
@@ -675,7 +705,7 @@ describe("MemoryInspector", () => {
     expect(itemButton).not.toBeNull();
 
     await act(async () => {
-      itemButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemButton!);
     });
 
     const forgetButton = testRoot.container.querySelector<HTMLButtonElement>(
@@ -684,27 +714,26 @@ describe("MemoryInspector", () => {
     expect(forgetButton).not.toBeNull();
 
     await act(async () => {
-      forgetButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(forgetButton!);
     });
 
-    const confirmField = testRoot.container.querySelector<HTMLInputElement>(
+    // Dialog renders in a portal — query from document
+    const confirmField = document.querySelector<HTMLInputElement>(
       '[data-testid="memory-forget-confirm"]',
     );
     expect(confirmField).not.toBeNull();
 
     await act(async () => {
-      confirmField!.value = "FORGET";
-      confirmField!.dispatchEvent(new Event("input", { bubbles: true }));
-      confirmField!.dispatchEvent(new Event("change", { bubbles: true }));
+      setNativeValue(confirmField!, "FORGET");
     });
 
-    const confirmButton = testRoot.container.querySelector<HTMLButtonElement>(
+    const confirmButton = document.querySelector<HTMLButtonElement>(
       '[data-testid="memory-forget-submit"]',
     );
     expect(confirmButton).not.toBeNull();
 
     await act(async () => {
-      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(confirmButton!);
     });
 
     expect(ws.memoryForget).toHaveBeenCalledWith({
@@ -768,7 +797,7 @@ describe("MemoryInspector", () => {
     expect(itemAButton).not.toBeNull();
 
     await act(async () => {
-      itemAButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemAButton!);
     });
 
     const forgetButton = testRoot.container.querySelector<HTMLButtonElement>(
@@ -777,7 +806,7 @@ describe("MemoryInspector", () => {
     expect(forgetButton).not.toBeNull();
 
     await act(async () => {
-      forgetButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(forgetButton!);
     });
 
     const itemBButton = testRoot.container.querySelector<HTMLButtonElement>(
@@ -786,27 +815,26 @@ describe("MemoryInspector", () => {
     expect(itemBButton).not.toBeNull();
 
     await act(async () => {
-      itemBButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemBButton!);
     });
 
-    const confirmField = testRoot.container.querySelector<HTMLInputElement>(
+    // Dialog renders in a portal — query from document
+    const confirmField = document.querySelector<HTMLInputElement>(
       '[data-testid="memory-forget-confirm"]',
     );
     expect(confirmField).not.toBeNull();
 
     await act(async () => {
-      confirmField!.value = "FORGET";
-      confirmField!.dispatchEvent(new Event("input", { bubbles: true }));
-      confirmField!.dispatchEvent(new Event("change", { bubbles: true }));
+      setNativeValue(confirmField!, "FORGET");
     });
 
-    const confirmButton = testRoot.container.querySelector<HTMLButtonElement>(
+    const confirmButton = document.querySelector<HTMLButtonElement>(
       '[data-testid="memory-forget-submit"]',
     );
     expect(confirmButton).not.toBeNull();
 
     await act(async () => {
-      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(confirmButton!);
     });
 
     expect(ws.memoryForget).toHaveBeenCalledWith({
@@ -842,7 +870,7 @@ describe("MemoryInspector", () => {
     expect(itemButton).not.toBeNull();
 
     await act(async () => {
-      itemButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemButton!);
     });
 
     const forgetButton = testRoot.container.querySelector<HTMLButtonElement>(
@@ -851,30 +879,31 @@ describe("MemoryInspector", () => {
     expect(forgetButton).not.toBeNull();
 
     await act(async () => {
-      forgetButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(forgetButton!);
     });
 
-    const dialog = testRoot.container.querySelector<HTMLDivElement>(
+    // Dialog renders in a portal — query from document
+    const dialog = document.querySelector<HTMLDivElement>(
       '[data-testid="memory-forget-dialog"]',
     );
     expect(dialog).not.toBeNull();
 
-    const target = testRoot.container.querySelector<HTMLDivElement>(
+    const target = document.querySelector<HTMLElement>(
       '[data-testid="memory-forget-target"]',
     );
     expect(target).not.toBeNull();
     expect(target?.textContent).toContain(item.memory_item_id);
 
-    const cancelButton = testRoot.container.querySelector<HTMLButtonElement>(
+    const cancelButton = document.querySelector<HTMLButtonElement>(
       '[data-testid="memory-forget-cancel"]',
     );
     expect(cancelButton).not.toBeNull();
 
     await act(async () => {
-      cancelButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(cancelButton!);
     });
 
-    expect(testRoot.container.querySelector('[data-testid="memory-forget-dialog"]')).toBeNull();
+    expect(document.querySelector('[data-testid="memory-forget-dialog"]')).toBeNull();
     expect(ws.memoryForget).not.toHaveBeenCalled();
 
     cleanupTestRoot(testRoot);
@@ -911,7 +940,7 @@ describe("MemoryInspector", () => {
     expect(itemAButton).not.toBeNull();
 
     await act(async () => {
-      itemAButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemAButton!);
     });
 
     const forgetButton = testRoot.container.querySelector<HTMLButtonElement>(
@@ -920,10 +949,11 @@ describe("MemoryInspector", () => {
     expect(forgetButton).not.toBeNull();
 
     await act(async () => {
-      forgetButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(forgetButton!);
     });
 
-    expect(testRoot.container.querySelector('[data-testid="memory-forget-dialog"]')).not.toBeNull();
+    // Dialog renders in a portal — query from document
+    expect(document.querySelector('[data-testid="memory-forget-dialog"]')).not.toBeNull();
 
     await act(async () => {
       ws.emit("memory.item.forgotten", {
@@ -947,11 +977,11 @@ describe("MemoryInspector", () => {
     expect(itemBButton).not.toBeNull();
 
     await act(async () => {
-      itemBButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(itemBButton!);
     });
     await act(async () => {});
 
-    expect(testRoot.container.querySelector('[data-testid="memory-forget-dialog"]')).toBeNull();
+    expect(document.querySelector('[data-testid="memory-forget-dialog"]')).toBeNull();
 
     cleanupTestRoot(testRoot);
   });
@@ -980,7 +1010,7 @@ describe("MemoryInspector", () => {
     expect(exportButton).not.toBeNull();
 
     await act(async () => {
-      exportButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(exportButton!);
     });
 
     expect(ws.memoryExport).toHaveBeenCalledWith({
@@ -1050,7 +1080,7 @@ describe("MemoryInspector", () => {
       expect(exportButton).not.toBeNull();
 
       await act(async () => {
-        exportButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        click(exportButton!);
       });
 
       const downloadButton = testRoot.container.querySelector<HTMLElement>(
@@ -1060,7 +1090,7 @@ describe("MemoryInspector", () => {
       expect(downloadButton?.tagName.toLowerCase()).toBe("button");
 
       await act(async () => {
-        downloadButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        click(downloadButton!);
       });
 
       expect(httpFetch).toHaveBeenCalledWith({
@@ -1124,7 +1154,7 @@ describe("MemoryInspector", () => {
       expect(exportButton).not.toBeNull();
 
       await act(async () => {
-        exportButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        click(exportButton!);
       });
       await act(async () => {});
 
@@ -1134,7 +1164,7 @@ describe("MemoryInspector", () => {
       expect(downloadButton).not.toBeNull();
 
       await act(async () => {
-        downloadButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        click(downloadButton!);
       });
       await act(async () => {});
 
@@ -1145,7 +1175,7 @@ describe("MemoryInspector", () => {
       expect(downloadError?.textContent).toContain("Missing gateway token");
 
       await act(async () => {
-        exportButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        click(exportButton!);
       });
       await act(async () => {});
 
@@ -1184,7 +1214,7 @@ describe("MemoryInspector", () => {
     expect(exportButton).not.toBeNull();
 
     await act(async () => {
-      exportButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(exportButton!);
     });
 
     const error = testRoot.container.querySelector<HTMLDivElement>(
@@ -1213,13 +1243,14 @@ describe("MemoryInspector", () => {
     const testRoot = renderIntoDocument(React.createElement(MemoryInspector, { core }));
     await act(async () => {});
 
+    // Switch to search tab (Radix TabsTrigger)
     const searchMode = testRoot.container.querySelector<HTMLButtonElement>(
       '[data-testid="memory-mode-search"]',
     );
     expect(searchMode).not.toBeNull();
 
     await act(async () => {
-      searchMode?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(searchMode!);
     });
 
     const queryField = testRoot.container.querySelector<HTMLInputElement>(
@@ -1228,18 +1259,20 @@ describe("MemoryInspector", () => {
     expect(queryField).not.toBeNull();
 
     await act(async () => {
-      queryField!.value = "hello";
-      queryField!.dispatchEvent(new Event("input", { bubbles: true }));
-      queryField!.dispatchEvent(new Event("change", { bubbles: true }));
+      setNativeValue(queryField!, "hello");
     });
 
-    const kindNote = testRoot.container.querySelector<HTMLInputElement>(
+    // Open the collapsed filters panel
+    await openFilters(testRoot.container);
+
+    // Radix Checkbox renders as <button> — click to toggle
+    const kindNote = testRoot.container.querySelector<HTMLButtonElement>(
       '[data-testid="memory-filter-kind-note"]',
     );
     expect(kindNote).not.toBeNull();
 
     await act(async () => {
-      kindNote!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(kindNote!);
     });
 
     const tagsField = testRoot.container.querySelector<HTMLInputElement>(
@@ -1248,18 +1281,16 @@ describe("MemoryInspector", () => {
     expect(tagsField).not.toBeNull();
 
     await act(async () => {
-      tagsField!.value = "demo";
-      tagsField!.dispatchEvent(new Event("input", { bubbles: true }));
-      tagsField!.dispatchEvent(new Event("change", { bubbles: true }));
+      setNativeValue(tagsField!, "demo");
     });
 
-    const sourceOperator = testRoot.container.querySelector<HTMLInputElement>(
+    const sourceOperator = testRoot.container.querySelector<HTMLButtonElement>(
       '[data-testid="memory-filter-provenance-source-operator"]',
     );
     expect(sourceOperator).not.toBeNull();
 
     await act(async () => {
-      sourceOperator!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(sourceOperator!);
     });
 
     const channelField = testRoot.container.querySelector<HTMLInputElement>(
@@ -1268,9 +1299,7 @@ describe("MemoryInspector", () => {
     expect(channelField).not.toBeNull();
 
     await act(async () => {
-      channelField!.value = "cli";
-      channelField!.dispatchEvent(new Event("input", { bubbles: true }));
-      channelField!.dispatchEvent(new Event("change", { bubbles: true }));
+      setNativeValue(channelField!, "cli");
     });
 
     const runButton = testRoot.container.querySelector<HTMLButtonElement>(
@@ -1279,7 +1308,7 @@ describe("MemoryInspector", () => {
     expect(runButton).not.toBeNull();
 
     await act(async () => {
-      runButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(runButton!);
     });
 
     expect(ws.memorySearch).toHaveBeenCalledWith(

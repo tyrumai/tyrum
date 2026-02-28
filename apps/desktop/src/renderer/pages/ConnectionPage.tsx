@@ -5,16 +5,20 @@ import {
   Button,
   Card,
   CardContent,
+  ConnectPage as OperatorConnectPage,
   Input,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@tyrum/operator-ui";
+import type { DesktopOperatorCoreState } from "../lib/desktop-operator-core.js";
 
-type Tab = "embedded" | "remote";
+type Tab = "embedded" | "remote" | "operator";
 
-export function Connection() {
+export type ConnectionPageProps = DesktopOperatorCoreState;
+
+export function ConnectionPage({ core }: ConnectionPageProps) {
   const [tab, setTab] = useState<Tab>("embedded");
   const [mode, setMode] = useState<string>("embedded");
   const [port, setPort] = useState(8788);
@@ -83,10 +87,7 @@ export function Connection() {
     setBusy(true);
     setGatewayError(null);
     try {
-      await api.setConfig({
-        mode: "embedded",
-        embedded: { port },
-      });
+      await api.setConfig({ mode: "embedded", embedded: { port } });
       const result = await api.gateway.start();
       setGatewayStatus(result.status);
       setPort(result.port);
@@ -150,6 +151,7 @@ export function Connection() {
         <TabsList>
           <TabsTrigger value="embedded">Embedded</TabsTrigger>
           <TabsTrigger value="remote">Remote</TabsTrigger>
+          <TabsTrigger value="operator">Operator</TabsTrigger>
         </TabsList>
 
         <TabsContent value="embedded">
@@ -239,6 +241,18 @@ export function Connection() {
               <div className="text-sm text-fg-muted">Node status: {nodeStatus}</div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="operator">
+          {core ? (
+            <OperatorConnectPage core={core} mode="desktop" />
+          ) : (
+            <Card>
+              <CardContent className="py-6 text-center text-sm text-fg-muted">
+                Operator connection not available. Start the gateway to connect.
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>

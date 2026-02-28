@@ -74,7 +74,7 @@ function DetailRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export function Diagnostics() {
+export function DiagnosticsContent() {
   const [checks, setChecks] = useState<CheckItem[]>([
     { label: "Gateway process", status: "pending", detail: "Checking..." },
     { label: "Node runtime", status: "pending", detail: "Checking..." },
@@ -306,8 +306,6 @@ export function Diagnostics() {
 
   return (
     <div className="grid gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-fg">Diagnostics</h1>
-
       <Card>
         <CardContent className="grid gap-4 pt-6">
           <div className="text-sm font-semibold text-fg">Environment Checks</div>
@@ -456,6 +454,16 @@ export function Diagnostics() {
           ) : null}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/** @deprecated Use `DiagnosticsContent` instead. Kept for backward compatibility. */
+export function Diagnostics() {
+  return (
+    <div className="grid gap-6">
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Diagnostics</h1>
+      <DiagnosticsContent />
     </div>
   );
 }

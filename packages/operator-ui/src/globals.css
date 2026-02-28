@@ -7,7 +7,21 @@
 
 @import "tailwindcss/utilities.css" layer(utilities);
 
+/* Ensure Tailwind scans operator-ui component sources for class names. */
+@source ".";
+
 @layer base {
+  /* Reset browser-default button chrome (preflight is disabled). */
+  button {
+    appearance: none;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    padding: 0;
+    cursor: pointer;
+  }
+
   ::view-transition-old(root) {
     animation: tyrum-fade-out 200ms ease-in both;
   }

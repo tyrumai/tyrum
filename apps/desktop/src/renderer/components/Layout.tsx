@@ -1,30 +1,68 @@
 import type { ReactNode } from "react";
-import { AppShell, Sidebar, type SidebarNavItem } from "@tyrum/operator-ui";
+import {
+  AppShell,
+  Sidebar,
+  type SidebarConnectionStatus,
+  type SidebarNavItem,
+} from "@tyrum/operator-ui";
+import {
+  BrainCircuit,
+  Cable,
+  CheckSquare,
+  LayoutDashboard,
+  Link2,
+  Play,
+  Settings,
+  Shield,
+  SquareKanban,
+  Wrench,
+} from "lucide-react";
 
 interface LayoutProps {
   currentPage: string;
   onNavigate: (page: string) => void;
-  fullBleed?: boolean;
+  connectionStatus?: SidebarConnectionStatus;
   children: ReactNode;
 }
 
-const NullIcon = () => null;
-
-const NAV_ITEMS: SidebarNavItem[] = [
-  { id: "overview", label: "Overview", icon: NullIcon },
-  { id: "gateway", label: "Gateway", icon: NullIcon },
-  { id: "connection", label: "Connection", icon: NullIcon },
-  { id: "permissions", label: "Permissions", icon: NullIcon },
-  { id: "diagnostics", label: "Diagnostics", icon: NullIcon },
-  { id: "logs", label: "Logs", icon: NullIcon },
+const PRIMARY_NAV: SidebarNavItem[] = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "approvals", label: "Approvals", icon: CheckSquare },
+  { id: "runs", label: "Runs", icon: Play },
+  { id: "work", label: "Work", icon: SquareKanban },
+  { id: "memory", label: "Memory", icon: BrainCircuit },
 ];
 
-export function Layout({ currentPage, onNavigate, fullBleed = false, children }: LayoutProps) {
+const SETUP_NAV: SidebarNavItem[] = [
+  { id: "connection", label: "Connection", icon: Cable },
+  { id: "pairing", label: "Pairing", icon: Link2 },
+  { id: "permissions", label: "Permissions", icon: Shield },
+  { id: "settings", label: "Settings", icon: Settings },
+  { id: "debug", label: "Debug", icon: Wrench },
+];
+
+export function Layout({
+  currentPage,
+  onNavigate,
+  connectionStatus = "disconnected",
+  children,
+}: LayoutProps) {
   return (
     <AppShell
       mode="desktop"
-      fullBleed={fullBleed}
-      sidebar={<Sidebar items={NAV_ITEMS} activeItemId={currentPage} onNavigate={onNavigate} />}
+      sidebar={
+        <Sidebar
+          items={PRIMARY_NAV}
+          secondaryItems={SETUP_NAV}
+          secondaryLabel="Setup"
+          secondaryCollapsible
+          collapsible
+          showHeader={false}
+          activeItemId={currentPage}
+          onNavigate={onNavigate}
+          connectionStatus={connectionStatus}
+        />
+      }
       mobileNav={null}
     >
       {children}

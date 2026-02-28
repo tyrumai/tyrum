@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
-import { toErrorMessage } from "../lib/errors.js";
 import {
   Alert,
   Badge,
   Button,
   Card,
   CardContent,
+  DashboardPage as OperatorDashboard,
+  Skeleton,
   StatusDot,
   type StatusDotVariant,
 } from "@tyrum/operator-ui";
+import type { OperatorCore } from "@tyrum/operator-core";
+import { toErrorMessage } from "../lib/errors.js";
 
 interface StatusInfo {
   gatewayMode: string;
@@ -28,18 +31,9 @@ function formatUptime(seconds: number): string {
 }
 
 function resolveGatewayVariant(status: string): { variant: StatusDotVariant; pulse: boolean } {
-  if (status === "running") {
-    return { variant: "success", pulse: false };
-  }
-  if (status === "starting") {
-    return { variant: "warning", pulse: true };
-  }
-  if (status === "error") {
-    return { variant: "danger", pulse: false };
-  }
-  if (status === "stopped") {
-    return { variant: "neutral", pulse: false };
-  }
+  if (status === "running") return { variant: "success", pulse: false };
+  if (status === "starting") return { variant: "warning", pulse: true };
+  if (status === "error") return { variant: "danger", pulse: false };
   return { variant: "neutral", pulse: false };
 }
 
@@ -48,7 +42,12 @@ function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-export function Overview() {
+export interface DashboardProps {
+  core: OperatorCore | null;
+  onNavigate?: (id: string) => void;
+}
+
+export function Dashboard({ core, onNavigate }: DashboardProps) {
   const [status, setStatus] = useState<StatusInfo>({
     gatewayMode: "embedded",
     gatewayStatus: "stopped",
@@ -63,7 +62,6 @@ export function Overview() {
     const api = window.tyrumDesktop;
     if (!api) return;
 
-    // Load initial config
     void api.getConfig().then((cfg) => {
       const c = cfg as Record<string, unknown>;
       const mode = (c?.["mode"] as string) ?? "embedded";
@@ -113,10 +111,7 @@ export function Overview() {
     setGatewayError(null);
     const port = status.port > 0 ? status.port : 8788;
     try {
-      await api.setConfig({
-        mode: "embedded",
-        embedded: { port },
-      });
+      await api.setConfig({ mode: "embedded", embedded: { port } });
       const result = await api.gateway.start();
       setStatus((prev) => ({
         ...prev,
@@ -148,85 +143,93 @@ export function Overview() {
 
   return (
     <div className="grid gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-fg">Overview</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Dashboard</h1>
 
       <Card>
         <CardContent className="grid gap-4 pt-6">
-          <div className="grid gap-1">
-            <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-              Gateway Status
-            </div>
-            <div className="flex items-center gap-2 text-base font-medium text-fg">
-              <StatusDot {...resolveGatewayVariant(status.gatewayStatus)} aria-hidden="true" />
-              <span>{titleCase(status.gatewayStatus)}</span>
-            </div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            Gateway
           </div>
 
-          {(status.gatewayStatus === "stopped" || status.gatewayStatus === "error") && (
-            <div>
-              <Button onClick={startGateway} disabled={busy} isLoading={busy}>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-1">
+              <div className="text-xs text-fg-muted">Status</div>
+              <div className="flex items-center gap-2 text-sm font-medium text-fg">
+                <StatusDot {...resolveGatewayVariant(status.gatewayStatus)} aria-hidden="true" />
+                <span>{titleCase(status.gatewayStatus)}</span>
+              </div>
+            </div>
+
+            <div className="grid gap-1">
+              <div className="text-xs text-fg-muted">Mode</div>
+              <div className="text-sm font-medium text-fg">
+                {status.gatewayMode === "embedded" ? "Embedded" : "Remote"}
+              </div>
+            </div>
+
+            {status.port > 0 ? (
+              <div className="grid gap-1">
+                <div className="text-xs text-fg-muted">Port</div>
+                <div className="text-sm font-medium text-fg">{status.port}</div>
+              </div>
+            ) : null}
+
+            {status.uptime > 0 ? (
+              <div className="grid gap-1">
+                <div className="text-xs text-fg-muted">Uptime</div>
+                <div className="text-sm font-medium text-fg">{formatUptime(status.uptime)}</div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {(status.gatewayStatus === "stopped" || status.gatewayStatus === "error") && (
+              <Button size="sm" onClick={startGateway} disabled={busy} isLoading={busy}>
                 {busy ? "Starting..." : "Start Gateway"}
               </Button>
-            </div>
-          )}
-
-          {(status.gatewayStatus === "running" || status.gatewayStatus === "starting") && (
-            <div>
-              <Button variant="danger" onClick={stopGateway} disabled={busy} isLoading={busy}>
+            )}
+            {(status.gatewayStatus === "running" || status.gatewayStatus === "starting") && (
+              <Button size="sm" variant="danger" onClick={stopGateway} disabled={busy} isLoading={busy}>
                 {busy ? "Stopping..." : "Stop Gateway"}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
 
           {gatewayError ? (
             <Alert variant="error" title="Gateway error" description={gatewayError} />
           ) : null}
 
-          <div className="grid gap-1">
-            <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Mode</div>
-            <div className="text-sm font-medium text-fg">
-              {status.gatewayMode === "embedded" ? "Embedded Gateway" : "Remote Gateway"}
-            </div>
-          </div>
-
-          {status.port > 0 ? (
+          {status.capabilities.length > 0 ? (
             <div className="grid gap-1">
-              <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                Port
+              <div className="text-xs text-fg-muted">Capabilities</div>
+              <div className="flex flex-wrap gap-2">
+                {status.capabilities.map((cap) => (
+                  <Badge key={cap} variant="outline">
+                    {cap}
+                  </Badge>
+                ))}
               </div>
-              <div className="text-sm font-medium text-fg">{status.port}</div>
-            </div>
-          ) : null}
-
-          {status.uptime > 0 ? (
-            <div className="grid gap-1">
-              <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                Uptime
-              </div>
-              <div className="text-sm font-medium text-fg">{formatUptime(status.uptime)}</div>
             </div>
           ) : null}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="grid gap-3 pt-6">
-          <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Connected Capabilities
-          </div>
-          {status.capabilities.length === 0 ? (
-            <div className="text-sm text-fg-muted">No capabilities enabled</div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {status.capabilities.map((cap) => (
-                <Badge key={cap} variant="outline">
-                  {cap}
-                </Badge>
-              ))}
+      {core ? (
+        <OperatorDashboard core={core} onNavigate={onNavigate} />
+      ) : (
+        <Card>
+          <CardContent className="grid gap-4 pt-6">
+            <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              Operator
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <Skeleton className="h-24 rounded-xl" />
+              <Skeleton className="h-24 rounded-xl" />
+              <Skeleton className="h-24 rounded-xl" />
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -9,12 +9,12 @@ describe("renderer theme token usage", () => {
     );
   });
 
-  it("does not hardcode gateway error message color", () => {
-    const gateway = readFileSync(
-      join(import.meta.dirname, "../src/renderer/pages/Gateway.tsx"),
+  it("does not hardcode error message colors in Dashboard", () => {
+    const dashboard = readFileSync(
+      join(import.meta.dirname, "../src/renderer/pages/Dashboard.tsx"),
       "utf-8",
     );
 
-    expect(gateway).not.toContain("#fecaca");
+    expect(dashboard).not.toContain("#fecaca");
   });
 });

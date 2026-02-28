@@ -25,21 +25,28 @@ export function AppShell({
   const showMobileNav = mode === "web" && !mdUp;
 
   return (
-    <div className={cn("min-h-screen bg-bg text-fg font-sans antialiased", className)} {...props}>
-      <div className="flex min-h-screen">
+    <div
+      className={cn(
+        "bg-bg text-fg font-sans antialiased overflow-hidden",
+        mode === "desktop" ? "h-screen" : "min-h-screen",
+        className,
+      )}
+      {...props}
+    >
+      <div className={cn("flex", mode === "desktop" ? "h-full" : "min-h-screen")}>
         {showSidebar ? sidebar : null}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <main
             className={cn(
-              "flex-1",
-              fullBleed ? "overflow-hidden" : "overflow-y-auto",
+              "flex-1 overflow-x-hidden",
+              fullBleed ? "overflow-y-hidden" : "overflow-y-auto",
               showMobileNav ? "pb-[calc(4rem+env(safe-area-inset-bottom))]" : null,
             )}
           >
             {fullBleed ? (
               children
             ) : (
-              <div className="mx-auto w-full max-w-6xl px-4 py-6">{children}</div>
+              <div className={cn("min-w-0 px-4 py-6", mode === "web" ? "mx-auto max-w-6xl" : null)}>{children}</div>
             )}
           </main>
           {showMobileNav ? mobileNav : null}

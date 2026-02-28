@@ -34,8 +34,14 @@ const {
     },
   );
 
+  const connectionStore = {
+    getSnapshot: () => ({ status: "disconnected" }),
+    subscribe: vi.fn(() => () => {}),
+  };
+
   const createOperatorCoreMock = vi.fn(() => ({
     connect: coreConnectMock,
+    connectionStore,
   }));
 
   const createOperatorCoreManagerMock = vi.fn(
@@ -89,12 +95,17 @@ vi.mock("@tyrum/operator-ui", async (importOriginal) => {
     ...actual,
     OperatorUiApp: () => createElement("div", { "data-testid": "operator-ui-app" }),
     MemoryInspector: () => createElement("div", { "data-testid": "memory-inspector" }),
+    DashboardPage: () => createElement("div", { "data-testid": "operator-dashboard" }),
+    ApprovalsPage: () => createElement("div", { "data-testid": "operator-approvals" }),
+    RunsPage: () => createElement("div", { "data-testid": "operator-runs" }),
+    ConnectPage: () => createElement("div", { "data-testid": "operator-connect" }),
+    PairingPage: () => createElement("div", { "data-testid": "operator-pairing" }),
+    MemoryPage: () => createElement("div", { "data-testid": "operator-memory" }),
+    SettingsPage: () => createElement("div", { "data-testid": "operator-settings" }),
+    AdminModeProvider: ({ children }: { children: unknown }) => children,
+    ToastProvider: ({ children }: { children: unknown }) => children,
   };
 });
-
-vi.mock("../src/renderer/pages/Overview.js", () => ({
-  Overview: () => null,
-}));
 
 vi.mock("../src/renderer/components/ConsentModal.js", () => ({
   ConsentModal: () => null,
@@ -126,8 +137,10 @@ describe("desktop operator-core diff line coverage", () => {
       getConfig: vi.fn(async () => ({ mode: "remote" })),
       gateway: {
         getOperatorConnection,
+        getStatus: vi.fn(async () => ({ status: "stopped", port: 8788 })),
         httpFetch,
       },
+      onStatusChange: vi.fn(() => () => {}),
     };
 
     document.body.innerHTML = '<div id="root"></div>';
@@ -140,18 +153,7 @@ describe("desktop operator-core diff line coverage", () => {
       root.render(createElement(App));
     });
 
-    const clickNavItem = (id: string): void => {
-      const button = document.querySelector(`[data-testid="nav-${id}"]`);
-      if (!(button instanceof HTMLButtonElement)) {
-        throw new Error(`nav item not found: ${id}`);
-      }
-      button.click();
-    };
-
-    await act(async () => {
-      clickNavItem("gateway");
-    });
-
+    // Dashboard is the default page and it enables operator core
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
@@ -166,8 +168,17 @@ describe("desktop operator-core diff line coverage", () => {
     expect(createOperatorCoreManagerMock).toHaveBeenCalledTimes(1);
     expect(coreConnectMock).toHaveBeenCalledTimes(1);
 
+    // Navigate to a non-operator page to exercise the disable path
+    const clickNavItem = (id: string): void => {
+      const button = document.querySelector(`[data-testid="nav-${id}"]`);
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error(`nav item not found: ${id}`);
+      }
+      button.click();
+    };
+
     await act(async () => {
-      clickNavItem("overview");
+      clickNavItem("work");
     });
 
     await act(async () => {

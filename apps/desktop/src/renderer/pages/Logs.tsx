@@ -21,7 +21,7 @@ const LEVEL_CLASS_NAMES: Record<string, string> = {
   debug: "text-fg-muted",
 };
 
-export function Logs() {
+export function LogsContent() {
   const [tab, setTab] = useState<LogTab>("gateway");
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const scrollRootRef = useRef<HTMLDivElement>(null);
@@ -82,24 +82,22 @@ export function Logs() {
   };
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4">
       <div className="flex items-center gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Logs</h1>
+        <Tabs value={tab} onValueChange={(value) => setTab(value as LogTab)}>
+          <TabsList>
+            <TabsTrigger value="gateway">Gateway</TabsTrigger>
+            <TabsTrigger value="node">Node</TabsTrigger>
+          </TabsList>
+        </Tabs>
         <Button variant="secondary" size="sm" onClick={clearLogs} className="ml-auto">
           Clear
         </Button>
       </div>
 
-      <Tabs value={tab} onValueChange={(value) => setTab(value as LogTab)}>
-        <TabsList>
-          <TabsTrigger value="gateway">Gateway</TabsTrigger>
-          <TabsTrigger value="node">Node</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
       <ScrollArea
         ref={scrollRootRef}
-        className="min-h-[400px] max-h-[calc(100vh-200px)] rounded-lg border border-border bg-bg-subtle"
+        className="min-h-[400px] max-h-[calc(100vh-300px)] rounded-lg border border-border bg-bg-subtle"
         onScroll={handleScroll}
       >
         <div className="p-3 font-mono text-xs leading-relaxed text-fg">
@@ -125,6 +123,16 @@ export function Logs() {
           )}
         </div>
       </ScrollArea>
+    </div>
+  );
+}
+
+/** @deprecated Use `LogsContent` instead. Kept for backward compatibility. */
+export function Logs() {
+  return (
+    <div className="grid gap-6">
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Logs</h1>
+      <LogsContent />
     </div>
   );
 }

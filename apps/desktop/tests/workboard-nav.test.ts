@@ -9,32 +9,45 @@ describe("Desktop navigation wiring", () => {
       "utf-8",
     );
 
-    expect(layout).toContain('id: "overview"');
-    expect(layout).toContain('label: "Overview"');
+    // Primary nav
+    expect(layout).toContain('id: "dashboard"');
+    expect(layout).toContain('label: "Dashboard"');
 
-    expect(layout).toContain('id: "gateway"');
-    expect(layout).toContain('label: "Gateway"');
+    expect(layout).toContain('id: "approvals"');
+    expect(layout).toContain('label: "Approvals"');
 
+    expect(layout).toContain('id: "runs"');
+    expect(layout).toContain('label: "Runs"');
+
+    expect(layout).toContain('id: "work"');
+    expect(layout).toContain('label: "Work"');
+
+    expect(layout).toContain('id: "memory"');
+    expect(layout).toContain('label: "Memory"');
+
+    // Setup nav (secondary collapsible)
     expect(layout).toContain('id: "connection"');
     expect(layout).toContain('label: "Connection"');
+
+    expect(layout).toContain('id: "pairing"');
+    expect(layout).toContain('label: "Pairing"');
 
     expect(layout).toContain('id: "permissions"');
     expect(layout).toContain('label: "Permissions"');
 
-    expect(layout).toContain('id: "diagnostics"');
-    expect(layout).toContain('label: "Diagnostics"');
+    expect(layout).toContain('id: "settings"');
+    expect(layout).toContain('label: "Settings"');
 
-    expect(layout).toContain('id: "logs"');
-    expect(layout).toContain('label: "Logs"');
+    expect(layout).toContain('id: "debug"');
+    expect(layout).toContain('label: "Debug"');
 
-    expect(layout).not.toContain('id: "work"');
-    expect(layout).not.toContain('id: "memory"');
+    expect(layout).toContain("secondaryCollapsible");
   });
 
   it("keeps the work page route for deep links", () => {
     const app = readFileSync(join(import.meta.dirname, "../src/renderer/App.tsx"), "utf-8");
 
-    expect(app).toContain('page === "work"');
+    expect(app).toContain('"work"');
     expect(app).toContain("<WorkBoard");
     expect(app).toContain("deepLinkWorkItemId");
   });
