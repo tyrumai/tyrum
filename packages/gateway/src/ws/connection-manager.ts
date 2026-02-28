@@ -8,6 +8,7 @@
 import type { WebSocket } from "ws";
 import type { ClientCapability, WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
 import type { AuthTokenClaims } from "../modules/auth/token-store.js";
+import { gatewayMetrics } from "../modules/observability/metrics.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,6 +80,7 @@ export class ConnectionManager {
       client.lastPong = Date.now();
     });
     this.clients.set(id, client);
+    gatewayMetrics.wsConnectionsActive.set(this.clients.size);
     return id;
   }
 
@@ -120,6 +122,7 @@ export class ConnectionManager {
   /** Remove a client (e.g. on disconnect or eviction). */
   removeClient(id: string): void {
     this.clients.delete(id);
+    gatewayMetrics.wsConnectionsActive.set(this.clients.size);
   }
 
   /** Return the first connected client that advertises the given capability. */
@@ -152,11 +155,13 @@ export class ConnectionManager {
    */
   heartbeat(): void {
     const now = Date.now();
+    let changed = false;
 
     for (const [id, client] of this.clients) {
       // Drop sockets that are no longer open (close event cleanup is best-effort).
       if (client.ws.readyState !== 1) {
         this.clients.delete(id);
+        changed = true;
         continue;
       }
       if (now - client.lastPong > HEARTBEAT_TIMEOUT_MS) {
@@ -166,6 +171,7 @@ export class ConnectionManager {
           // ignore
         }
         this.clients.delete(id);
+        changed = true;
       } else {
         try {
           client.ws.ping();
@@ -176,8 +182,13 @@ export class ConnectionManager {
             // ignore
           }
           this.clients.delete(id);
+          changed = true;
         }
       }
+    }
+
+    if (changed) {
+      gatewayMetrics.wsConnectionsActive.set(this.clients.size);
     }
   }
 

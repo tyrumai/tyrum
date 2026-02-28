@@ -9,13 +9,13 @@
  */
 
 import type { Context, Next } from "hono";
-import { matchedRoutes } from "hono/route";
 import type { AuthTokenClaims } from "../auth/token-store.js";
 import { hasAnyRequiredScope } from "../auth/scopes.js";
 import { matchesPathPrefixSegment } from "../../app-path.js";
 import type { AuthAudit } from "../auth/audit.js";
 import { getClientIp } from "../auth/client-ip.js";
 import { requestIdForAudit } from "../observability/request-id.js";
+import { resolveHonoRoutePath } from "../../hono-route.js";
 
 const FORBIDDEN_BODY = {
   error: "forbidden",
@@ -31,6 +31,7 @@ const METHOD_SCOPED_OPERATOR_ROUTE_PREFIXES = [
   "/contracts",
   "/ingress",
   "/memory",
+  "/metrics",
   "/models",
   "/plan",
   "/playbooks",
@@ -46,20 +47,6 @@ function getAuthClaims(c: Context): AuthTokenClaims | undefined {
   // Populated by createAuthMiddleware.
   const value = c.get("authClaims") as unknown;
   return value as AuthTokenClaims | undefined;
-}
-
-function getLeafRoutePath(c: Context): string | undefined {
-  try {
-    const routes = matchedRoutes(c);
-    if (!Array.isArray(routes) || routes.length === 0) return undefined;
-
-    // Filter out "*" middleware routes and pick the last concrete route.
-    const concrete = routes.filter((route) => typeof route.path === "string" && route.path !== "*");
-    const leaf = concrete.at(-1);
-    return typeof leaf?.path === "string" ? leaf.path : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function isMethodScopedOperatorRoute(routePath: string): boolean {
@@ -137,7 +124,7 @@ export function createHttpScopeAuthorizationMiddleware(opts?: {
     // Prefer the router's matched route template (ex: "/approvals/:id") when available,
     // but fall back to the concrete request path to avoid failing open when route
     // metadata isn't exposed (ex: mocked matchedRoutes or unsupported router composition).
-    const routePath = getLeafRoutePath(c) ?? c.req.path;
+    const routePath = resolveHonoRoutePath(c);
 
     const requiredScopes = resolveScopes({ method: c.req.method, routePath });
     if (!requiredScopes) {

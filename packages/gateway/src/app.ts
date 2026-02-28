@@ -37,6 +37,7 @@ import { createContractRoutes } from "./routes/contracts.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { createOperatorUiRoutes } from "./routes/operator-ui.js";
 import { createPresenceRoutes } from "./routes/presence.js";
+import { createMetricsRoutes } from "./routes/metrics.js";
 import { loadAllPlaybooks } from "./modules/playbook/loader.js";
 import { ExecutionEngine } from "./modules/execution/engine.js";
 import { isChannelPipelineEnabled, TelegramChannelQueue } from "./modules/channels/telegram.js";
@@ -65,6 +66,7 @@ import {
   createRateLimitMiddleware,
   type SlidingWindowRateLimiter,
 } from "./modules/auth/rate-limiter.js";
+import { createMetricsMiddleware, gatewayMetrics } from "./modules/observability/metrics.js";
 
 export interface AppOptions {
   agents?: AgentRegistry;
@@ -174,6 +176,9 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     }
   });
 
+  // Prometheus request metrics.
+  app.use("*", createMetricsMiddleware(gatewayMetrics));
+
   // Apply auth middleware if a token store is provided
   if (opts.authRateLimiter) {
     const rateLimit = createRateLimitMiddleware(opts.authRateLimiter, { prefix: "auth" });
@@ -193,6 +198,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
 
   // Register all routes
   app.route("/", createHealthRoute({ isLocalOnly }));
+  app.route("/", createMetricsRoutes({ registry: gatewayMetrics }));
   app.route(
     "/",
     createStatusRoutes({
