@@ -51,4 +51,3 @@ describe("Memory page padding", () => {
     expect(container.textContent).toContain("Loading memory...");
   });
 });
-
