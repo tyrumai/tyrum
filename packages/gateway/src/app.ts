@@ -148,7 +148,9 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     };
   })();
 
-  const trustedProxies = createTrustedProxyAllowlistFromEnv(process.env["GATEWAY_TRUSTED_PROXIES"]);
+  const trustedProxies = createTrustedProxyAllowlistFromEnv(
+    container.gatewayConfig?.server.trustedProxies ?? process.env["GATEWAY_TRUSTED_PROXIES"],
+  );
   app.use("*", createClientIpMiddleware({ trustedProxies }));
 
   // Baseline structured request logging with stable request_id.
@@ -366,8 +368,12 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   );
 
   // Playbook routes — load from TYRUM_HOME/playbooks or use pre-loaded set
-  const tyrumHome = process.env["TYRUM_HOME"];
-  const playbooks = opts.playbooks ?? (tyrumHome ? loadAllPlaybooks(`${tyrumHome}/playbooks`) : []);
+  const playbookHome =
+    container.gatewayConfig?.paths.homeExplicit === true
+      ? container.gatewayConfig.paths.home
+      : process.env["TYRUM_HOME"];
+  const playbooks =
+    opts.playbooks ?? (playbookHome ? loadAllPlaybooks(`${playbookHome}/playbooks`) : []);
   const playbookRunner = new PlaybookRunner();
   app.route(
     "/",
