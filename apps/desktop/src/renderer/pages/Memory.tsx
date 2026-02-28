@@ -1,14 +1,13 @@
 import type { ReactNode } from "react";
 import { MemoryInspector } from "@tyrum/operator-ui";
 import type { DesktopOperatorCoreState } from "../lib/desktop-operator-core.js";
-import { colors } from "../theme.js";
 
 export type MemoryProps = DesktopOperatorCoreState;
 
 function MemoryFallback({ children }: { children: ReactNode }) {
   return (
-    <div>
-      <h1>Memory</h1>
+    <div className="grid gap-4">
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Memory</h1>
       {children}
     </div>
   );
@@ -28,7 +27,7 @@ export function Memory({ core, busy, errorMessage }: MemoryProps) {
   if (errorMessage) {
     return (
       <MemoryFallback>
-        <div style={{ marginTop: 12, color: colors.error }}>{errorMessage}</div>
+        <div className="mt-3 text-sm text-error">{errorMessage}</div>
       </MemoryFallback>
     );
   }
