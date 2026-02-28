@@ -32,4 +32,3 @@ describe("AgentRuntime instance ownership", () => {
     expect((runtime as unknown as { instanceOwner: string }).instanceOwner).toBe("cfg-instance");
   });
 });
-
