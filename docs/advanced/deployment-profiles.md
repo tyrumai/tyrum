@@ -17,6 +17,8 @@ The repo ships a `docker-compose.yml` with these profiles:
 
 > Safety note: `docker-compose.yml` is **local-first**. It allows plaintext HTTP for convenience and publishes Postgres on `5432`. For remote deployments, add firewalling/allowlists, use TLS termination, and set strong database credentials. See `docs/advanced/remote-gateway.md`.
 
+The `desktop-sandbox` profile publishes an unauthenticated desktop takeover endpoint for local use (bound to `127.0.0.1` by default).
+
 ### Single-host
 
 ```bash

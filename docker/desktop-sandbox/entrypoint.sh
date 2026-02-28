@@ -26,12 +26,18 @@ fi
 echo "desktop-sandbox: starting Xvfb (${DISPLAY})"
 Xvfb "$DISPLAY" -screen 0 "${DESKTOP_GEOMETRY}x${DESKTOP_DEPTH}" -nolisten tcp -ac &
 
+display_ready=0
 for _ in $(seq 1 50); do
   if xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
+    display_ready=1
     break
   fi
   sleep 0.1
 done
+if [[ "$display_ready" != "1" ]]; then
+  echo "desktop-sandbox: Xvfb did not become ready" >&2
+  exit 1
+fi
 
 echo "desktop-sandbox: starting Xfce session"
 startxfce4 >/tmp/xfce4.log 2>&1 &

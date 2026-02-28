@@ -51,8 +51,8 @@ services:
       # Surface a stable URL for operator takeover (shown in the pairing UI label).
       TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL: ${TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL:-http://localhost:6080/vnc.html?autoconnect=true}
     ports:
-      - "5900:5900"
-      - "6080:6080"
+      - "127.0.0.1:5900:5900"
+      - "127.0.0.1:6080:6080"
     volumes:
       - tyrum-data:/gateway:ro
       - tyrum-desktop-node:/var/lib/tyrum-node
