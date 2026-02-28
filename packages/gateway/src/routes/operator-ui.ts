@@ -22,7 +22,8 @@ const applyOperatorUiSecurityHeaders: MiddlewareHandler = async (c, next) => {
 function isFile(path: string): boolean {
   try {
     return statSync(path).isFile();
-  } catch {
+  } catch (err) {
+    void err;
     return false;
   }
 }
@@ -92,7 +93,8 @@ function isSpaRoute(tail: string): boolean {
 function safeRealpathSync(path: string): string | undefined {
   try {
     return realpathSync(path);
-  } catch {
+  } catch (err) {
+    void err;
     return undefined;
   }
 }

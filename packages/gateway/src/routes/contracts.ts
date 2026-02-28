@@ -69,7 +69,8 @@ export function createContractRoutes(): Hono {
   try {
     jsonSchemaDir = resolveSchemasJsonSchemaDir();
     jsonSchemaDirResolved = resolve(jsonSchemaDir);
-  } catch {
+  } catch (err) {
+    void err;
     jsonSchemaDir = undefined;
     jsonSchemaDirResolved = undefined;
   }
@@ -110,7 +111,8 @@ export function createContractRoutes(): Hono {
       }
 
       return c.json(parsed);
-    } catch {
+    } catch (err) {
+      void err;
       return c.json(
         {
           error: "contracts_unavailable",

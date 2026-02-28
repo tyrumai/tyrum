@@ -15,6 +15,7 @@ import type { SecretProvider } from "../modules/secret/provider.js";
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import { coerceRecord, coerceString } from "../modules/util/coerce.js";
+import { safeDetail } from "../utils/safe-detail.js";
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
 
@@ -172,7 +173,12 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     const nowIso = new Date(nowMs).toISOString();
     const expiresAt = new Date(nowMs + PENDING_TTL_MS).toISOString();
 
-    await deps.oauthPendingDal.deleteExpired(nowIso).catch(() => {});
+    await deps.oauthPendingDal.deleteExpired(nowIso).catch((err) => {
+      deps.logger?.warn("oauth.pending_delete_expired_failed", {
+        provider: providerId,
+        error: safeDetail(err) ?? "unknown_error",
+      });
+    });
     await deps.oauthPendingDal.create({
       state,
       provider_id: providerId,
@@ -207,7 +213,12 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     if (error) {
       // Consume the pending row (if present) so OAuth `state` remains single-use even on error callbacks.
       if (state) {
-        await deps.oauthPendingDal.consume(state).catch(() => {});
+        await deps.oauthPendingDal.consume(state).catch((err) => {
+          deps.logger?.warn("oauth.pending_consume_failed", {
+            provider: providerId,
+            error: safeDetail(err) ?? "unknown_error",
+          });
+        });
       }
       return c.html(
         renderHtml(
@@ -248,7 +259,12 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     const nowMs = Date.now();
     const nowIso = new Date(nowMs).toISOString();
     if (pending.expires_at <= nowIso) {
-      await deps.oauthPendingDal.delete(state).catch(() => {});
+      await deps.oauthPendingDal.delete(state).catch((err) => {
+        deps.logger?.warn("oauth.pending_delete_failed", {
+          provider: providerId,
+          error: safeDetail(err) ?? "unknown_error",
+        });
+      });
       return c.html(
         renderHtml("Authorization failed", "OAuth request expired. Please retry."),
         400,
@@ -379,7 +395,10 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
         );
       }
       const message = err instanceof Error ? err.message : String(err);
-      deps.logger?.warn("oauth.callback_failed", { provider: providerId, error: message });
+      deps.logger?.warn("oauth.callback_failed", {
+        provider: providerId,
+        error: safeDetail(err) ?? "unknown_error",
+      });
       return c.html(renderHtml("Authorization failed", message), 502);
     }
   });

@@ -10,7 +10,8 @@ export interface AuthSessionRouteDeps {
 function isHttpsRequest(url: string): boolean {
   try {
     return new URL(url).protocol === "https:";
-  } catch {
+  } catch (err) {
+    void err;
     return false;
   }
 }
@@ -22,7 +23,8 @@ export function createAuthSessionRoutes(deps: AuthSessionRouteDeps): Hono {
     let body: unknown;
     try {
       body = (await c.req.json()) as unknown;
-    } catch {
+    } catch (err) {
+      void err;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
 

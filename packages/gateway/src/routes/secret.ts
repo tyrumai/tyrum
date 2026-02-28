@@ -10,6 +10,7 @@ import { SecretRotateRequest, SecretStoreRequest } from "@tyrum/schemas";
 import { EnvSecretProvider, type SecretProvider } from "../modules/secret/provider.js";
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
+import { safeDetail } from "../utils/safe-detail.js";
 
 export interface SecretRouteDeps {
   secretProviderForAgent: (agentId: string) => Promise<SecretProvider>;
@@ -257,9 +258,10 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
    */
   app.post("/secrets/:id/rotate", async (c) => {
     const handleId = c.req.param("id");
+    const agentId = agentIdFromReq(c);
     let secretProvider: SecretProvider;
     try {
-      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
+      secretProvider = await deps.secretProviderForAgent(agentId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);
@@ -298,7 +300,7 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
       try {
         await rotateAuthProfilesReferencingSecretHandleId({
           authProfileDal: deps.authProfileDal,
-          agentId: agentIdFromReq(c),
+          agentId,
           fromHandleId: handleId,
           toHandleId: handle.handle_id,
         });
@@ -306,7 +308,13 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
         const shouldRevokeNewHandle =
           err instanceof SecretRotationPropagationError && err.updatedCount === 0;
         if (shouldRevokeNewHandle) {
-          await secretProvider.revoke(handle.handle_id).catch(() => {});
+          await secretProvider.revoke(handle.handle_id).catch((cleanupErr) => {
+            deps.logger?.warn("secret.rotate.cleanup_revoke_failed", {
+              agent_id: agentId,
+              handle_id: handle.handle_id,
+              error: safeDetail(cleanupErr) ?? "unknown_error",
+            });
+          });
         }
         const message = err instanceof Error ? err.message : String(err);
         return c.json(
