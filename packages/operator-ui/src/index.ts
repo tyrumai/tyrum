@@ -46,11 +46,20 @@ export { Input } from "./components/ui/input.js";
 export type { TextareaProps } from "./components/ui/textarea.js";
 export { Textarea } from "./components/ui/textarea.js";
 
+export type { JsonViewerProps } from "./components/ui/json-viewer.js";
+export { JsonViewer } from "./components/ui/json-viewer.js";
+
+export type { JsonTextareaProps } from "./components/ui/json-textarea.js";
+export { JsonTextarea } from "./components/ui/json-textarea.js";
+
 export type { LabelProps } from "./components/ui/label.js";
 export { Label } from "./components/ui/label.js";
 
 export type { AlertProps, AlertVariant } from "./components/ui/alert.js";
 export { Alert } from "./components/ui/alert.js";
+
+export type { ApiResultCardProps } from "./components/ui/api-result-card.js";
+export { ApiResultCard } from "./components/ui/api-result-card.js";
 
 export type { StatusDotProps, StatusDotVariant } from "./components/ui/status-dot.js";
 export { StatusDot } from "./components/ui/status-dot.js";
@@ -79,6 +88,9 @@ export {
   DialogTitle,
   DialogTrigger,
 } from "./components/ui/dialog.js";
+
+export type { ConfirmDangerDialogProps } from "./components/ui/confirm-danger-dialog.js";
+export { ConfirmDangerDialog } from "./components/ui/confirm-danger-dialog.js";
 
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs.js";
 

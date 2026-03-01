@@ -1,7 +1,6 @@
 import type { ExecutionAttempt } from "@tyrum/client";
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useState } from "react";
-import { isRecord } from "../../utils/is-record.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import {
@@ -11,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog.js";
+import { JsonViewer } from "../ui/json-viewer.js";
 import { Spinner } from "../ui/spinner.js";
 
 type ArtifactRef = ExecutionAttempt["artifacts"][number];
@@ -43,44 +43,6 @@ function normalizeHttpUrl(rawUrl: string, baseUrl?: string): string | undefined 
 function buildArtifactGatewayUrl(core: OperatorCore, runId: string, artifactId: string): string {
   const base = core.httpBaseUrl.replace(/\/$/, "");
   return `${base}/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}`;
-}
-
-function JsonTreeNode({ name, value, level }: { name: string; value: unknown; level: number }) {
-  if (Array.isArray(value)) {
-    const preview = `${name}: [${String(value.length)}]`;
-    return (
-      <details className="ml-3" open={level < 2}>
-        <summary className="cursor-pointer select-none text-xs text-fg">{preview}</summary>
-        <div className="mt-1 grid gap-1">
-          {value.map((entry, index) => (
-            <JsonTreeNode key={index} name={String(index)} value={entry} level={level + 1} />
-          ))}
-        </div>
-      </details>
-    );
-  }
-
-  if (isRecord(value)) {
-    const keys = Object.keys(value);
-    const preview = `${name}: {${String(keys.length)}}`;
-    return (
-      <details className="ml-3" open={level < 2}>
-        <summary className="cursor-pointer select-none text-xs text-fg">{preview}</summary>
-        <div className="mt-1 grid gap-1">
-          {keys.map((key) => (
-            <JsonTreeNode key={key} name={key} value={value[key]} level={level + 1} />
-          ))}
-        </div>
-      </details>
-    );
-  }
-
-  return (
-    <div className="ml-3 flex flex-wrap items-center gap-2 text-xs text-fg">
-      <span className="text-fg-muted">{name}</span>
-      <span className="font-mono">{String(value)}</span>
-    </div>
-  );
 }
 
 function ArtifactInlinePreview({
@@ -261,9 +223,7 @@ function ArtifactInlinePreview({
             {text}
           </pre>
         ) : (
-          <div className="max-h-[420px] overflow-auto rounded-md border border-border bg-bg px-3 py-2">
-            <JsonTreeNode name="root" value={parsed} level={0} />
-          </div>
+          <JsonViewer value={parsed} contentClassName="max-h-[420px]" />
         )}
       </div>
     );
