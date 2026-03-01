@@ -93,4 +93,33 @@ describe("WsJsonPanel", () => {
 
     cleanupTestRoot(testRoot);
   });
+
+  it("guards against concurrent requests before busy is rendered", async () => {
+    const run = vi.fn(async () => ({ ok: true }));
+
+    const testRoot = renderIntoDocument(
+      React.createElement(WsJsonPanel, {
+        title: "work.list",
+        scope: { tenant_id: "tenant-1", agent_id: "agent-1", workspace_id: "ws-1" },
+        onScopeErrors: vi.fn(),
+        payloadTestId: "payload",
+        runTestId: "run",
+        defaultPayload: {},
+        run,
+      }),
+    );
+
+    const runButton = testRoot.container.querySelector<HTMLButtonElement>('[data-testid="run"]');
+    expect(runButton).not.toBeNull();
+
+    await act(async () => {
+      click(runButton!);
+      click(runButton!);
+      await Promise.resolve();
+    });
+
+    expect(run).toHaveBeenCalledTimes(1);
+
+    cleanupTestRoot(testRoot);
+  });
 });

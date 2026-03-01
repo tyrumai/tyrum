@@ -75,6 +75,7 @@ async function runWsJsonPanelRequest<TResult>({
 
   const payload: Record<string, unknown> = { ...parsedPayload.value, ...normalized.scope };
 
+  busyRef.current = true;
   setBusy(true);
   setValue(undefined);
   setError(undefined);
@@ -84,6 +85,7 @@ async function runWsJsonPanelRequest<TResult>({
   } catch (error) {
     setError(error);
   } finally {
+    busyRef.current = false;
     setBusy(false);
   }
 }

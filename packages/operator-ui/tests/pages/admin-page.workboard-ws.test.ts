@@ -61,6 +61,8 @@ describe("AdminPage WorkBoard WS panels", () => {
       httpBaseUrl: "http://example.test",
       adminModeStore,
       ws: {
+        on: vi.fn(),
+        off: vi.fn(),
         workList,
         workGet,
         workCreate,
@@ -83,6 +85,14 @@ describe("AdminPage WorkBoard WS panels", () => {
     expect(wsTab).not.toBeNull();
     await act(async () => {
       click(wsTab!);
+    });
+
+    const workboardTab = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-tab-workboard"]',
+    );
+    expect(workboardTab).not.toBeNull();
+    await act(async () => {
+      click(workboardTab!);
     });
 
     const tenant = testRoot.container.querySelector<HTMLInputElement>(
