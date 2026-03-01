@@ -58,6 +58,23 @@ function parseJsonPayload(raw: string): { value: unknown; errorMessage: string |
   }
 }
 
+type JsonObjectPayloadParseResult =
+  | { value: Record<string, unknown>; errorMessage: null }
+  | { value: undefined; errorMessage: string };
+
+function parseJsonObjectPayload(raw: string): JsonObjectPayloadParseResult {
+  const parsed = parseJsonPayload(raw);
+  if (parsed.errorMessage) {
+    return { value: undefined, errorMessage: `Invalid JSON: ${parsed.errorMessage}` };
+  }
+
+  if (!parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
+    return { value: undefined, errorMessage: "Payload must be a JSON object." };
+  }
+
+  return { value: parsed.value as Record<string, unknown>, errorMessage: null };
+}
+
 function CommandExecutePanel({ core }: { core: OperatorCore }): React.ReactElement {
   const [command, setCommand] = useState("/help");
   const result = useAsyncResult<unknown>();
@@ -196,13 +213,13 @@ function PresenceBeaconPanel({ core }: { core: OperatorCore }): React.ReactEleme
                 return;
               }
 
-              const parsed = parseJsonPayload(rawPayload);
-              if (parsed.errorMessage) {
-                result.fail(`Invalid JSON: ${parsed.errorMessage}`);
+              const parsed = parseJsonObjectPayload(rawPayload);
+              if (parsed.errorMessage !== null) {
+                result.fail(parsed.errorMessage);
                 return;
               }
 
-              const payload = parsed.value as Record<string, unknown>;
+              const payload = parsed.value;
               void result.run(async () => core.ws.presenceBeacon(payload));
             }}
           >
@@ -258,13 +275,13 @@ function CapabilityReadyPanel({ core }: { core: OperatorCore }): React.ReactElem
                 return;
               }
 
-              const parsed = parseJsonPayload(rawPayload);
-              if (parsed.errorMessage) {
-                result.fail(`Invalid JSON: ${parsed.errorMessage}`);
+              const parsed = parseJsonObjectPayload(rawPayload);
+              if (parsed.errorMessage !== null) {
+                result.fail(parsed.errorMessage);
                 return;
               }
 
-              const payload = parsed.value as Record<string, unknown>;
+              const payload = parsed.value;
               void result.run(async () => {
                 await core.ws.capabilityReady(payload as unknown as CapabilityReadyPayload);
                 return { ok: true };
@@ -323,13 +340,13 @@ function AttemptEvidencePanel({ core }: { core: OperatorCore }): React.ReactElem
                 return;
               }
 
-              const parsed = parseJsonPayload(rawPayload);
-              if (parsed.errorMessage) {
-                result.fail(`Invalid JSON: ${parsed.errorMessage}`);
+              const parsed = parseJsonObjectPayload(rawPayload);
+              if (parsed.errorMessage !== null) {
+                result.fail(parsed.errorMessage);
                 return;
               }
 
-              const payload = parsed.value as Record<string, unknown>;
+              const payload = parsed.value;
               void result.run(async () => {
                 await core.ws.attemptEvidence(payload as unknown as AttemptEvidencePayload);
                 return { ok: true };
