@@ -1,7 +1,11 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
-import { WorkScopeSelector, type WorkScopeDraft, type WorkScopeErrors } from "./work-scope-selector.js";
+import {
+  WorkScopeSelector,
+  type WorkScopeDraft,
+  type WorkScopeErrors,
+} from "./work-scope-selector.js";
 import { WsJsonPanel } from "./ws-json-panel.js";
 import { WorkItemsTable } from "./work-items-table.js";
 

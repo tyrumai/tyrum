@@ -64,4 +64,3 @@ export function WorkScopeSelector({
     </div>
   );
 }
-

@@ -4,34 +4,13 @@ import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
-import type { AdminModeState, AdminModeStore } from "../../../operator-core/src/stores/admin-mode-store.js";
+import type {
+  AdminModeState,
+  AdminModeStore,
+} from "../../../operator-core/src/stores/admin-mode-store.js";
 import { AdminModeProvider } from "../../src/admin-mode.js";
 import { AdminPage } from "../../src/components/pages/admin-page.js";
-import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
-
-/**
- * Sets a value on a React-controlled input/textarea by going through the
- * native property setter so React's internal value tracker is updated.
- */
-function setNativeValue(element: HTMLInputElement | HTMLTextAreaElement, value: string): void {
-  const proto =
-    element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-  if (setter) {
-    setter.call(element, value);
-  }
-  element.dispatchEvent(new Event("input", { bubbles: true }));
-  element.dispatchEvent(new Event("change", { bubbles: true }));
-}
-
-/** Click helper that dispatches the full pointer/mouse sequence Radix components expect. */
-function click(element: HTMLElement): void {
-  element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-  element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-  element.click();
-  element.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
-  element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-}
+import { cleanupTestRoot, click, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 function createActiveAdminModeStore(): AdminModeStore {
   const activeState: AdminModeState = {
@@ -98,7 +77,9 @@ describe("AdminPage WorkBoard WS panels", () => {
       }),
     );
 
-    const wsTab = testRoot.container.querySelector<HTMLButtonElement>('[data-testid="admin-tab-ws"]');
+    const wsTab = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-tab-ws"]',
+    );
     expect(wsTab).not.toBeNull();
     await act(async () => {
       click(wsTab!);
@@ -107,7 +88,9 @@ describe("AdminPage WorkBoard WS panels", () => {
     const tenant = testRoot.container.querySelector<HTMLInputElement>(
       '[data-testid="work-scope-tenant-id"]',
     );
-    const agent = testRoot.container.querySelector<HTMLInputElement>('[data-testid="work-scope-agent-id"]');
+    const agent = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="work-scope-agent-id"]',
+    );
     const workspace = testRoot.container.querySelector<HTMLInputElement>(
       '[data-testid="work-scope-workspace-id"]',
     );
@@ -176,7 +159,10 @@ describe("AdminPage WorkBoard WS panels", () => {
     expect(createRun).not.toBeNull();
 
     await act(async () => {
-      setNativeValue(createPayload!, JSON.stringify({ item: { kind: "action", title: "New item" } }));
+      setNativeValue(
+        createPayload!,
+        JSON.stringify({ item: { kind: "action", title: "New item" } }),
+      );
       click(createRun!);
       await Promise.resolve();
     });
@@ -198,7 +184,10 @@ describe("AdminPage WorkBoard WS panels", () => {
     expect(updateRun).not.toBeNull();
 
     await act(async () => {
-      setNativeValue(updatePayload!, JSON.stringify({ work_item_id: "work-1", patch: { title: "Updated" } }));
+      setNativeValue(
+        updatePayload!,
+        JSON.stringify({ work_item_id: "work-1", patch: { title: "Updated" } }),
+      );
       click(updateRun!);
       await Promise.resolve();
     });
@@ -241,4 +230,3 @@ describe("AdminPage WorkBoard WS panels", () => {
     cleanupTestRoot(testRoot);
   });
 });
-

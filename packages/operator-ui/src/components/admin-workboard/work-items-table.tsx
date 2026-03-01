@@ -13,7 +13,11 @@ export interface WorkItemsTableProps extends React.HTMLAttributes<HTMLDivElement
   items: ReadonlyArray<WorkItemsTableItem>;
 }
 
-export function WorkItemsTable({ items, className, ...props }: WorkItemsTableProps): React.ReactElement {
+export function WorkItemsTable({
+  items,
+  className,
+  ...props
+}: WorkItemsTableProps): React.ReactElement {
   return (
     <div className={cn("grid gap-2", className)} {...props}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -55,4 +59,3 @@ export function WorkItemsTable({ items, className, ...props }: WorkItemsTablePro
     </div>
   );
 }
-

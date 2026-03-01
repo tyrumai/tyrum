@@ -6,7 +6,10 @@ import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { JsonTextarea } from "../ui/json-textarea.js";
 import type { WorkScopeDraft, WorkScopeErrors } from "./work-scope-selector.js";
 
-function normalizeScope(scope: WorkScopeDraft): { scope: WorkScopeDraft | null; errors: WorkScopeErrors } {
+function normalizeScope(scope: WorkScopeDraft): {
+  scope: WorkScopeDraft | null;
+  errors: WorkScopeErrors;
+} {
   const tenant_id = scope.tenant_id.trim();
   const agent_id = scope.agent_id.trim();
   const workspace_id = scope.workspace_id.trim();
@@ -63,11 +66,13 @@ export function WsJsonPanel<TResult>({
       try {
         const parsed = JSON.parse(trimmed) as unknown;
         if (!isRecord(parsed)) {
+          setValue(undefined);
           setError(new Error("Payload must be a JSON object."));
           return;
         }
         payloadInput = parsed;
       } catch (err) {
+        setValue(undefined);
         setError(err);
         return;
       }
