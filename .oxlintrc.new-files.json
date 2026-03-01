@@ -1,9 +1,21 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": ["./.oxlintrc.json"],
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/coverage/**",
+    "**/.worktrees/**"
+  ],
   "categories": {
+    "correctness": "deny",
     "suspicious": "deny",
-    "perf": "deny"
+    "perf": "deny",
+    "style": "off",
+    "restriction": "off",
+    "pedantic": "off",
+    "nursery": "off"
   },
   "rules": {
     "max-lines": ["deny", { "max": 500, "skipBlankLines": true, "skipComments": true }],
