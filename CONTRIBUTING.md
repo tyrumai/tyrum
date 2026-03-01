@@ -47,8 +47,8 @@ pnpm setup:githooks
 
 The repo-local hooks are:
 
-- `pre-commit`: runs `pnpm format:check-staged` for fast staged-file formatting checks.
-- `pre-push`: runs `pnpm lint` and `pnpm typecheck` for stronger validation before pushing.
+- `pre-commit`: runs `pnpm format:check-staged` and `pnpm lint` for fast checks on commit.
+- `pre-push`: runs `pnpm lint`, `pnpm typecheck`, and `pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json` for stronger validation before pushing.
 
 ## 4. Before Opening a PR
 
