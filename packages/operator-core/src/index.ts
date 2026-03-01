@@ -64,7 +64,13 @@ export type {
 } from "@tyrum/schemas";
 export { checkPostcondition, deviceIdFromSha256Digest } from "@tyrum/schemas";
 
-export { TyrumClient, autoExecute, createTyrumHttpClient } from "@tyrum/client";
+export {
+  TyrumClient,
+  autoExecute,
+  createTyrumHttpClient,
+  createNodeFileDeviceIdentityStorage,
+  loadOrCreateDeviceIdentity,
+} from "@tyrum/client";
 export type {
   CapabilityProvider,
   ExecutionAttempt,
