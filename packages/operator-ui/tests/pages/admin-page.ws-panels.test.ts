@@ -9,6 +9,8 @@ import { AdminPage } from "../../src/components/pages/admin-page.js";
 import { cleanupTestRoot, createTestRoot, type TestRoot } from "../test-utils.js";
 
 type WsStub = {
+  on: ReturnType<typeof vi.fn>;
+  off: ReturnType<typeof vi.fn>;
   sessionSend: ReturnType<typeof vi.fn>;
   workflowRun: ReturnType<typeof vi.fn>;
   workflowResume: ReturnType<typeof vi.fn>;
@@ -52,6 +54,8 @@ async function switchToWsTab(container: HTMLElement): Promise<void> {
 
 async function setupAdminWsTab(): Promise<AdminWsSetup> {
   const ws: WsStub = {
+    on: vi.fn(),
+    off: vi.fn(),
     sessionSend: vi.fn(async () => ({ session_id: "session-1", assistant_message: "ok" })),
     workflowRun: vi.fn(async () => ({ run_id: "run-1" })),
     workflowResume: vi.fn(async () => ({ run_id: "run-1" })),
