@@ -46,6 +46,23 @@ class FakeWsClient implements OperatorWsClient {
   memoryForget = vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] }) as unknown);
   memoryExport = vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" }) as unknown);
   commandExecute = vi.fn(async () => ({}));
+  sessionSend = vi.fn(
+    async () => ({ session_id: "session-1", assistant_message: "ok" }) as unknown,
+  );
+  workflowRun = vi.fn(
+    async () =>
+      ({
+        job_id: "job-1",
+        run_id: "run-1",
+        plan_id: "plan-1",
+        request_id: "req-1",
+        key: "node:node-1",
+        lane: "main",
+        steps_count: 1,
+      }) as unknown,
+  );
+  workflowResume = vi.fn(async () => ({ run_id: "run-1" }) as unknown);
+  workflowCancel = vi.fn(async () => ({ run_id: "run-1", cancelled: true }) as unknown);
 
   private readonly handlers = new Map<string, Set<Handler>>();
 
@@ -602,6 +619,146 @@ describe("operator-ui", () => {
       expect(container.querySelector("[data-testid='admin-tab-http']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-tab-ws']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-mode-gate']")).not.toBeNull();
+    } finally {
+      act(() => {
+        root?.unmount();
+      });
+      container.remove();
+    }
+  });
+
+  it("wires Admin hub WebSocket panels for sessions and workflows", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    try {
+      act(() => {
+        root = createRoot(container);
+        root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      });
+
+      const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
+      expect(adminLink).not.toBeNull();
+
+      act(() => {
+        adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      act(() => {
+        core.adminModeStore.enter({
+          elevatedToken: "elevated-1",
+          expiresAt: new Date(Date.now() + 600_000).toISOString(),
+        });
+      });
+
+      const wsTab = container.querySelector<HTMLButtonElement>('[data-testid="admin-tab-ws"]');
+      expect(wsTab).not.toBeNull();
+      act(() => {
+        wsTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      const sessionPayload = container.querySelector<HTMLTextAreaElement>(
+        '[data-testid="admin-ws-session-send-payload"]',
+      );
+      expect(sessionPayload).not.toBeNull();
+      act(() => {
+        if (!sessionPayload) return;
+        sessionPayload.value = JSON.stringify({
+          channel: "test",
+          thread_id: "thread-1",
+          content: "Hello",
+        });
+        sessionPayload.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      });
+
+      const sessionExecute = container.querySelector<HTMLButtonElement>(
+        '[data-testid="admin-ws-session-send-execute"]',
+      );
+      expect(sessionExecute).not.toBeNull();
+      await act(async () => {
+        sessionExecute?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+      expect(ws.sessionSend).toHaveBeenCalledWith({
+        channel: "test",
+        thread_id: "thread-1",
+        content: "Hello",
+      });
+
+      const workflowRunPayload = container.querySelector<HTMLTextAreaElement>(
+        '[data-testid="admin-ws-workflow-run-payload"]',
+      );
+      expect(workflowRunPayload).not.toBeNull();
+      act(() => {
+        if (!workflowRunPayload) return;
+        workflowRunPayload.value = JSON.stringify({
+          key: "node:node-1",
+          lane: "main",
+          steps: [{ type: "Decide", args: {} }],
+        });
+        workflowRunPayload.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      });
+      const workflowRunExecute = container.querySelector<HTMLButtonElement>(
+        '[data-testid="admin-ws-workflow-run-execute"]',
+      );
+      expect(workflowRunExecute).not.toBeNull();
+      await act(async () => {
+        workflowRunExecute?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+      expect(ws.workflowRun).toHaveBeenCalledWith({
+        key: "node:node-1",
+        lane: "main",
+        steps: [{ type: "Decide", args: {} }],
+      });
+
+      const workflowResumePayload = container.querySelector<HTMLTextAreaElement>(
+        '[data-testid="admin-ws-workflow-resume-payload"]',
+      );
+      expect(workflowResumePayload).not.toBeNull();
+      act(() => {
+        if (!workflowResumePayload) return;
+        workflowResumePayload.value = JSON.stringify({ token: "resume-token-1" });
+        workflowResumePayload.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      });
+      const workflowResumeExecute = container.querySelector<HTMLButtonElement>(
+        '[data-testid="admin-ws-workflow-resume-execute"]',
+      );
+      expect(workflowResumeExecute).not.toBeNull();
+      await act(async () => {
+        workflowResumeExecute?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+      expect(ws.workflowResume).toHaveBeenCalledWith({ token: "resume-token-1" });
+
+      const workflowCancelPayload = container.querySelector<HTMLTextAreaElement>(
+        '[data-testid="admin-ws-workflow-cancel-payload"]',
+      );
+      expect(workflowCancelPayload).not.toBeNull();
+      act(() => {
+        if (!workflowCancelPayload) return;
+        workflowCancelPayload.value = JSON.stringify({ run_id: "run-1", reason: "stop" });
+        workflowCancelPayload.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      });
+      const workflowCancelExecute = container.querySelector<HTMLButtonElement>(
+        '[data-testid="admin-ws-workflow-cancel-execute"]',
+      );
+      expect(workflowCancelExecute).not.toBeNull();
+      await act(async () => {
+        workflowCancelExecute?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+      expect(ws.workflowCancel).toHaveBeenCalledWith({ run_id: "run-1", reason: "stop" });
     } finally {
       act(() => {
         root?.unmount();
