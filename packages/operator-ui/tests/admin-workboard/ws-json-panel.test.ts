@@ -23,7 +23,8 @@ describe("WsJsonPanel", () => {
       }),
     );
 
-    const payload = testRoot.container.querySelector<HTMLTextAreaElement>('[data-testid="payload"]');
+    const payload =
+      testRoot.container.querySelector<HTMLTextAreaElement>('[data-testid="payload"]');
     const runButton = testRoot.container.querySelector<HTMLButtonElement>('[data-testid="run"]');
     expect(payload).not.toBeNull();
     expect(runButton).not.toBeNull();
@@ -66,7 +67,8 @@ describe("WsJsonPanel", () => {
       }),
     );
 
-    const payload = testRoot.container.querySelector<HTMLTextAreaElement>('[data-testid="payload"]');
+    const payload =
+      testRoot.container.querySelector<HTMLTextAreaElement>('[data-testid="payload"]');
     const runButton = testRoot.container.querySelector<HTMLButtonElement>('[data-testid="run"]');
     expect(payload).not.toBeNull();
     expect(runButton).not.toBeNull();
