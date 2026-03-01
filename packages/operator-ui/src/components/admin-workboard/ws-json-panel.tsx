@@ -23,6 +23,71 @@ function normalizeScope(scope: WorkScopeDraft): {
   return { scope: { tenant_id, agent_id, workspace_id }, errors: {} };
 }
 
+type ParsedPayload = { ok: true; value: Record<string, unknown> } | { ok: false; error: unknown };
+
+function parsePayload(rawPayload: string): ParsedPayload {
+  const trimmed = rawPayload.trim();
+  if (!trimmed) return { ok: true, value: {} };
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (!isRecord(parsed)) {
+      return { ok: false, error: new Error("Payload must be a JSON object.") };
+    }
+
+    return { ok: true, value: parsed };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+async function runWsJsonPanelRequest<TResult>({
+  busyRef,
+  scope,
+  rawPayload,
+  onScopeErrors,
+  run,
+  setBusy,
+  setValue,
+  setError,
+}: {
+  busyRef: React.MutableRefObject<boolean>;
+  scope: WorkScopeDraft;
+  rawPayload: string;
+  onScopeErrors: (errors: WorkScopeErrors) => void;
+  run: (payload: Record<string, unknown>) => Promise<TResult>;
+  setBusy: (busy: boolean) => void;
+  setValue: (value: TResult | undefined) => void;
+  setError: (error: unknown | undefined) => void;
+}): Promise<void> {
+  if (busyRef.current) return;
+
+  const normalized = normalizeScope(scope);
+  onScopeErrors(normalized.errors);
+  if (!normalized.scope) return;
+
+  const parsedPayload = parsePayload(rawPayload);
+  if (!parsedPayload.ok) {
+    setValue(undefined);
+    setError(parsedPayload.error);
+    return;
+  }
+
+  const payload: Record<string, unknown> = { ...parsedPayload.value, ...normalized.scope };
+
+  setBusy(true);
+  setValue(undefined);
+  setError(undefined);
+  try {
+    const result = await run(payload);
+    setValue(result);
+  } catch (error) {
+    setError(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
 export interface WsJsonPanelProps<TResult> {
   scope: WorkScopeDraft;
   onScopeErrors: (errors: WorkScopeErrors) => void;
@@ -53,45 +118,20 @@ export function WsJsonPanel<TResult>({
   const [value, setValue] = React.useState<TResult | undefined>(undefined);
   const [error, setError] = React.useState<unknown | undefined>(undefined);
 
-  const runRequest = async (): Promise<void> => {
-    if (busyRef.current) return;
-
-    const normalized = normalizeScope(scope);
-    onScopeErrors(normalized.errors);
-    if (!normalized.scope) return;
-
-    let payloadInput: Record<string, unknown> = {};
-    const trimmed = rawPayload.trim();
-    if (trimmed) {
-      try {
-        const parsed = JSON.parse(trimmed) as unknown;
-        if (!isRecord(parsed)) {
-          setValue(undefined);
-          setError(new Error("Payload must be a JSON object."));
-          return;
-        }
-        payloadInput = parsed;
-      } catch (err) {
-        setValue(undefined);
-        setError(err);
-        return;
-      }
-    }
-
-    const payload: Record<string, unknown> = { ...payloadInput, ...normalized.scope };
-
-    setBusy(true);
-    setValue(undefined);
-    setError(undefined);
-    try {
-      const result = await run(payload);
-      setValue(result);
-    } catch (err) {
-      setError(err);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const runRequest = React.useCallback(
+    () =>
+      runWsJsonPanelRequest({
+        busyRef,
+        scope,
+        rawPayload,
+        onScopeErrors,
+        run,
+        setBusy,
+        setValue,
+        setError,
+      }),
+    [onScopeErrors, rawPayload, run, scope],
+  );
 
   return (
     <Card data-testid={`admin-ws-panel-${title}`}>

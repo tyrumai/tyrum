@@ -20,6 +20,22 @@ type WorkUpdatePayload = Parameters<OperatorCore["ws"]["workUpdate"]>[0];
 type WorkTransitionPayload = Parameters<OperatorCore["ws"]["workTransition"]>[0];
 type WorkListResult = Awaited<ReturnType<OperatorCore["ws"]["workList"]>>;
 
+function renderWorkListResult(result: WorkListResult): React.ReactNode {
+  return (
+    <div className="grid gap-3">
+      <WorkItemsTable data-testid="admin-ws-work-list-table" items={result.items} />
+      {result.next_cursor ? (
+        <div className="text-xs text-fg-muted">
+          next_cursor{" "}
+          <code className="break-all rounded bg-bg-subtle px-1 py-0.5 text-fg">
+            {result.next_cursor}
+          </code>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function AdminWorkBoardWsHub({ core }: AdminWorkBoardWsHubProps): React.ReactElement {
   const [scope, setScope] = React.useState<WorkScopeDraft>({
     tenant_id: "",
@@ -59,20 +75,8 @@ export function AdminWorkBoardWsHub({ core }: AdminWorkBoardWsHubProps): React.R
           payloadTestId="admin-ws-work-list-payload"
           runTestId="admin-ws-work-list-run"
           defaultPayload={{ limit: 50 }}
-          run={async (payload) => await core.ws.workList(payload as WorkListPayload)}
-          renderResult={(result: WorkListResult) => (
-            <div className="grid gap-3">
-              <WorkItemsTable data-testid="admin-ws-work-list-table" items={result.items} />
-              {result.next_cursor ? (
-                <div className="text-xs text-fg-muted">
-                  next_cursor{" "}
-                  <code className="break-all rounded bg-bg-subtle px-1 py-0.5 text-fg">
-                    {result.next_cursor}
-                  </code>
-                </div>
-              ) : null}
-            </div>
-          )}
+          run={(payload) => core.ws.workList(payload as WorkListPayload)}
+          renderResult={renderWorkListResult}
         />
         <WsJsonPanel
           scope={scope}
@@ -81,7 +85,7 @@ export function AdminWorkBoardWsHub({ core }: AdminWorkBoardWsHubProps): React.R
           payloadTestId="admin-ws-work-get-payload"
           runTestId="admin-ws-work-get-run"
           defaultPayload={{ work_item_id: "" }}
-          run={async (payload) => await core.ws.workGet(payload as WorkGetPayload)}
+          run={(payload) => core.ws.workGet(payload as WorkGetPayload)}
         />
         <WsJsonPanel
           scope={scope}
@@ -90,7 +94,7 @@ export function AdminWorkBoardWsHub({ core }: AdminWorkBoardWsHubProps): React.R
           payloadTestId="admin-ws-work-create-payload"
           runTestId="admin-ws-work-create-run"
           defaultPayload={{ item: { kind: "action", title: "" } }}
-          run={async (payload) => await core.ws.workCreate(payload as WorkCreatePayload)}
+          run={(payload) => core.ws.workCreate(payload as WorkCreatePayload)}
         />
         <WsJsonPanel
           scope={scope}
@@ -99,7 +103,7 @@ export function AdminWorkBoardWsHub({ core }: AdminWorkBoardWsHubProps): React.R
           payloadTestId="admin-ws-work-update-payload"
           runTestId="admin-ws-work-update-run"
           defaultPayload={{ work_item_id: "", patch: { title: "" } }}
-          run={async (payload) => await core.ws.workUpdate(payload as WorkUpdatePayload)}
+          run={(payload) => core.ws.workUpdate(payload as WorkUpdatePayload)}
         />
         <WsJsonPanel
           scope={scope}
@@ -108,7 +112,7 @@ export function AdminWorkBoardWsHub({ core }: AdminWorkBoardWsHubProps): React.R
           payloadTestId="admin-ws-work-transition-payload"
           runTestId="admin-ws-work-transition-run"
           defaultPayload={{ work_item_id: "", status: "ready", reason: "" }}
-          run={async (payload) => await core.ws.workTransition(payload as WorkTransitionPayload)}
+          run={(payload) => core.ws.workTransition(payload as WorkTransitionPayload)}
         />
       </div>
     </div>
