@@ -1,6 +1,6 @@
 import type { ExecutionAttempt } from "@tyrum/client";
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import {
@@ -13,6 +13,8 @@ import {
 import { JsonViewer } from "../ui/json-viewer.js";
 import { Spinner } from "../ui/spinner.js";
 import { toArrayBufferBytes } from "../../utils/blob-bytes.js";
+import { buildGatewayArtifactUrl } from "../../utils/gateway-artifact-url.js";
+import { normalizeHttpUrl } from "../../utils/normalize-http-url.js";
 
 type ArtifactRef = ExecutionAttempt["artifacts"][number];
 
@@ -29,24 +31,7 @@ type ArtifactMetadataState =
   | { status: "error"; message: string }
   | { status: "ready"; sensitivity?: string };
 
-function normalizeHttpUrl(rawUrl: string, baseUrl?: string): string | undefined {
-  const trimmed = rawUrl.trim();
-  if (!trimmed) return undefined;
-  try {
-    const url = baseUrl ? new URL(trimmed, baseUrl) : new URL(trimmed);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
-    return url.toString();
-  } catch {
-    return undefined;
-  }
-}
-
-function buildArtifactGatewayUrl(core: OperatorCore, runId: string, artifactId: string): string {
-  const base = core.httpBaseUrl.replace(/\/$/, "");
-  return `${base}/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}`;
-}
-
-function ArtifactInlinePreview({
+function useArtifactInlinePreviewState({
   core,
   runId,
   artifact,
@@ -54,7 +39,12 @@ function ArtifactInlinePreview({
   core: OperatorCore;
   runId: string;
   artifact: ArtifactRef;
-}) {
+}): {
+  artifactsApi: OperatorCore["http"]["artifacts"] | undefined;
+  metadata: ArtifactMetadataState;
+  bytes: ArtifactBytesState;
+  blobUrl: string | null;
+} {
   const artifactsApi = core.http.artifacts;
   const [metadata, setMetadata] = useState<ArtifactMetadataState>({ status: "idle" });
   const [bytes, setBytes] = useState<ArtifactBytesState>({ status: "idle" });
@@ -102,136 +92,255 @@ function ArtifactInlinePreview({
     if (!contentType.startsWith("image/")) return;
 
     const blobBytes = toArrayBufferBytes(bytes.bytes);
-
     const url = URL.createObjectURL(new Blob([blobBytes], { type: contentType }));
     setBlobUrl(url);
+
     return () => {
       URL.revokeObjectURL(url);
       setBlobUrl((prev) => (prev === url ? null : prev));
     };
   }, [artifact.mime_type, bytes]);
 
-  const sensitivityBadge = (() => {
-    if (metadata.status === "ready" && typeof metadata.sensitivity === "string") {
-      return metadata.sensitivity.toLowerCase().includes("sensitive") ? (
-        <Badge variant="danger">Sensitive</Badge>
+  return { artifactsApi, metadata, bytes, blobUrl };
+}
+
+function ArtifactSensitivityBadge({ metadata }: { metadata: ArtifactMetadataState }) {
+  if (metadata.status === "ready" && typeof metadata.sensitivity === "string") {
+    return metadata.sensitivity.toLowerCase().includes("sensitive") ? (
+      <Badge variant="danger">Sensitive</Badge>
+    ) : (
+      <Badge variant="outline">{metadata.sensitivity}</Badge>
+    );
+  }
+
+  if (metadata.status === "error") {
+    return <Badge variant="outline">Sensitivity unknown</Badge>;
+  }
+
+  if (metadata.status === "loading") {
+    return <Badge variant="outline">Sensitivity…</Badge>;
+  }
+
+  return null;
+}
+
+function ArtifactInlinePreviewLoading({ badge }: { badge: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted" aria-busy={true}>
+      {badge}
+      <Spinner aria-hidden={true} />
+      Loading preview...
+    </div>
+  );
+}
+
+function ArtifactInlinePreviewError({ badge, message }: { badge: ReactNode; message: string }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      {badge}
+      <span className="text-error">Preview failed: {message}</span>
+    </div>
+  );
+}
+
+function ArtifactInlinePreviewRedirect({
+  badge,
+  core,
+  runId,
+  artifactId,
+  url,
+}: {
+  badge: ReactNode;
+  core: OperatorCore;
+  runId: string;
+  artifactId: string;
+  url: string;
+}) {
+  const safeUrl = normalizeHttpUrl(url, core.httpBaseUrl);
+  const href = safeUrl ?? buildGatewayArtifactUrl(core.httpBaseUrl, runId, artifactId);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+      {badge}
+      <a className="underline" href={href} target="_blank" rel="noreferrer noopener">
+        Open artifact
+      </a>
+    </div>
+  );
+}
+
+function ArtifactInlinePreviewImage({
+  badge,
+  artifactId,
+  blobUrl,
+}: {
+  badge: ReactNode;
+  artifactId: string;
+  blobUrl: string | null;
+}) {
+  if (!blobUrl) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted" aria-busy={true}>
+        {badge}
+        <Spinner aria-hidden={true} />
+        Rendering preview...
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-2">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">{badge}</div>
+      <img
+        data-testid={`artifact-preview-image-${artifactId}`}
+        src={blobUrl}
+        alt="Artifact preview"
+        className="max-h-[420px] w-full rounded-md border border-border object-contain"
+      />
+    </div>
+  );
+}
+
+function ArtifactInlinePreviewJson({
+  badge,
+  artifactId,
+  bytes,
+}: {
+  badge: ReactNode;
+  artifactId: string;
+  bytes: Uint8Array;
+}) {
+  let text = "";
+  try {
+    text = new TextDecoder().decode(bytes);
+  } catch {
+    text = "";
+  }
+
+  let parsed: unknown | null = null;
+  try {
+    parsed = JSON.parse(text) as unknown;
+  } catch {
+    parsed = null;
+  }
+
+  return (
+    <div className="grid gap-2" data-testid={`artifact-preview-json-${artifactId}`}>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">{badge}</div>
+      {parsed === null ? (
+        <pre className="max-h-[420px] overflow-auto rounded-md border border-border bg-bg px-3 py-2 text-xs text-fg">
+          {text}
+        </pre>
       ) : (
-        <Badge variant="outline">{metadata.sensitivity}</Badge>
-      );
-    }
+        <JsonViewer value={parsed} contentClassName="max-h-[420px]" />
+      )}
+    </div>
+  );
+}
 
-    if (metadata.status === "error") {
-      return <Badge variant="outline">Sensitivity unknown</Badge>;
-    }
+function ArtifactInlinePreviewUnsupported({
+  badge,
+  contentType,
+  kind,
+}: {
+  badge: ReactNode;
+  contentType: string;
+  kind: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+      {badge}
+      <span>Unsupported preview ({contentType || kind}).</span>
+    </div>
+  );
+}
 
-    if (metadata.status === "loading") {
-      return <Badge variant="outline">Sensitivity…</Badge>;
-    }
+function ArtifactInlinePreviewBytes({
+  badge,
+  artifact,
+  contentType,
+  bytes,
+  blobUrl,
+}: {
+  badge: ReactNode;
+  artifact: ArtifactRef;
+  contentType: string;
+  bytes: Uint8Array;
+  blobUrl: string | null;
+}) {
+  if (contentType.startsWith("image/")) {
+    return (
+      <ArtifactInlinePreviewImage
+        badge={badge}
+        artifactId={artifact.artifact_id}
+        blobUrl={blobUrl}
+      />
+    );
+  }
 
-    return null;
-  })();
+  if (contentType.includes("json")) {
+    return (
+      <ArtifactInlinePreviewJson badge={badge} artifactId={artifact.artifact_id} bytes={bytes} />
+    );
+  }
+
+  return (
+    <ArtifactInlinePreviewUnsupported
+      badge={badge}
+      contentType={contentType}
+      kind={artifact.kind}
+    />
+  );
+}
+
+function ArtifactInlinePreview({
+  core,
+  runId,
+  artifact,
+}: {
+  core: OperatorCore;
+  runId: string;
+  artifact: ArtifactRef;
+}) {
+  const { artifactsApi, metadata, bytes, blobUrl } = useArtifactInlinePreviewState({
+    core,
+    runId,
+    artifact,
+  });
+  const badge = <ArtifactSensitivityBadge metadata={metadata} />;
 
   if (!artifactsApi) {
     return <div className="text-xs text-fg-muted">Artifacts API unavailable.</div>;
   }
 
   if (bytes.status === "loading" || bytes.status === "idle") {
-    return (
-      <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted" aria-busy={true}>
-        {sensitivityBadge}
-        <Spinner aria-hidden={true} />
-        Loading preview...
-      </div>
-    );
+    return <ArtifactInlinePreviewLoading badge={badge} />;
   }
 
   if (bytes.status === "error") {
-    return (
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        {sensitivityBadge}
-        <span className="text-error">Preview failed: {bytes.message}</span>
-      </div>
-    );
+    return <ArtifactInlinePreviewError badge={badge} message={bytes.message} />;
   }
 
   if (bytes.status === "redirect") {
-    const safeUrl = normalizeHttpUrl(bytes.url, core.httpBaseUrl);
-    const href = safeUrl ?? buildArtifactGatewayUrl(core, runId, artifact.artifact_id);
-
     return (
-      <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-        {sensitivityBadge}
-        <a className="underline" href={href} target="_blank" rel="noreferrer noopener">
-          Open artifact
-        </a>
-      </div>
-    );
-  }
-
-  const contentType = bytes.contentType ?? artifact.mime_type ?? "";
-
-  if (contentType.startsWith("image/")) {
-    if (!blobUrl) {
-      return (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted" aria-busy={true}>
-          {sensitivityBadge}
-          <Spinner aria-hidden={true} />
-          Rendering preview...
-        </div>
-      );
-    }
-
-    return (
-      <div className="grid gap-2">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-          {sensitivityBadge}
-        </div>
-        <img
-          data-testid={`artifact-preview-image-${artifact.artifact_id}`}
-          src={blobUrl}
-          alt="Artifact preview"
-          className="max-h-[420px] w-full rounded-md border border-border object-contain"
-        />
-      </div>
-    );
-  }
-
-  if (contentType.includes("json")) {
-    let text = "";
-    try {
-      text = new TextDecoder().decode(bytes.bytes);
-    } catch {
-      text = "";
-    }
-
-    let parsed: unknown | null = null;
-    try {
-      parsed = JSON.parse(text) as unknown;
-    } catch {
-      parsed = null;
-    }
-
-    return (
-      <div className="grid gap-2" data-testid={`artifact-preview-json-${artifact.artifact_id}`}>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-          {sensitivityBadge}
-        </div>
-        {parsed === null ? (
-          <pre className="max-h-[420px] overflow-auto rounded-md border border-border bg-bg px-3 py-2 text-xs text-fg">
-            {text}
-          </pre>
-        ) : (
-          <JsonViewer value={parsed} contentClassName="max-h-[420px]" />
-        )}
-      </div>
+      <ArtifactInlinePreviewRedirect
+        badge={badge}
+        core={core}
+        runId={runId}
+        artifactId={artifact.artifact_id}
+        url={bytes.url}
+      />
     );
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-      {sensitivityBadge}
-      <span>Unsupported preview ({contentType || artifact.kind}).</span>
-    </div>
+    <ArtifactInlinePreviewBytes
+      badge={badge}
+      artifact={artifact}
+      contentType={bytes.contentType ?? artifact.mime_type ?? ""}
+      bytes={bytes.bytes}
+      blobUrl={blobUrl}
+    />
   );
 }
 
