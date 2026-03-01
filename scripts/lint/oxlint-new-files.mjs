@@ -42,8 +42,8 @@ function resolveBaseCommit(explicitBase) {
   throw new Error("unable to resolve base commit (use --base <sha>)");
 }
 
-function listChangedFiles(base) {
-  const diff = runGit(["diff", "--name-only", "--diff-filter=ACMRT", `${base}...HEAD`]).trim();
+function listAddedFiles(base) {
+  const diff = runGit(["diff", "--name-only", "--diff-filter=A", `${base}...HEAD`]).trim();
 
   return diff.length === 0 ? [] : diff.split("\n").map((l) => l.trim());
 }
@@ -54,15 +54,13 @@ function isTypeScriptSourceFile(filePath) {
   return true;
 }
 
-function runMaxLinesGate({ repoRoot, files, verbose }) {
-  const configPath = path.join(repoRoot, "scripts/oxlint-max-lines.json");
+function runNewFilesGate({ repoRoot, files, verbose }) {
+  const configPath = path.join(repoRoot, ".oxlintrc.new-files.json");
 
-  const args = ["exec", "oxlint", "-c", configPath, ...files];
+  const args = ["exec", "oxlint", "-c", configPath, "--deny-warnings", ...files];
 
   if (verbose) {
-    console.log(
-      `[max-lines] checking ${files.length} file(s) (max 500 lines, max 80 lines/function)`,
-    );
+    console.log(`[oxlint] checking ${files.length} new file(s) (no warnings allowed)`);
   }
 
   const result = spawnSync("pnpm", args, { stdio: "inherit", cwd: repoRoot });
@@ -74,10 +72,10 @@ const args = parseArgs(process.argv.slice(2));
 const repoRoot = getRepoRoot();
 const base = resolveBaseCommit(args.base);
 
-const files = listChangedFiles(base).filter(isTypeScriptSourceFile);
+const files = listAddedFiles(base).filter(isTypeScriptSourceFile);
 if (files.length === 0) {
-  if (args.verbose) console.log("[max-lines] no changed TypeScript files");
+  if (args.verbose) console.log("[oxlint] no added TypeScript files");
   process.exit(0);
 }
 
-process.exit(runMaxLinesGate({ repoRoot, files, verbose: args.verbose }));
+process.exit(runNewFilesGate({ repoRoot, files, verbose: args.verbose }));

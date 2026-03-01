@@ -35,16 +35,20 @@ Thanks for helping build the Tyrum assistant platform.
 | Build all packages   | `pnpm build`                         |
 | Start gateway        | `pnpm --filter @tyrum/gateway start` |
 
-Optional: local hooks (pre-commit/pre-push)
+Local hooks (pre-commit/pre-push)
+
+Hooks are installed automatically when you run `pnpm install` (via the `prepare` script).
+
+If you need to (re)install them manually:
 
 ```bash
-git config core.hooksPath .githooks
+pnpm setup:githooks
 ```
 
-This enables repo-local hooks:
+The repo-local hooks are:
 
-- `pre-commit`: runs `pnpm format:check-staged` for fast staged-file formatting checks.
-- `pre-push`: runs `pnpm lint` and `pnpm typecheck` for stronger validation before pushing.
+- `pre-commit`: runs `pnpm format:check-staged` and `pnpm lint` for fast checks on commit.
+- `pre-push`: runs `pnpm lint`, `pnpm typecheck`, and `pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json` for stronger validation before pushing.
 
 ## 4. Before Opening a PR
 
@@ -77,13 +81,19 @@ node scripts/coverage/diff-lines.mjs --base "$BASE_SHA" --min 80
 
 Note: this diff-coverage check is optional and not enforced in CI.
 
-### Max lines (enforced in CI for PRs)
+### New-file lint gate (enforced in CI for PRs)
 
-CI enforces file/function length limits for changed TypeScript files only.
+CI enforces lint rules on newly added TypeScript files only (no legacy refactors required).
 
 ```bash
 BASE_SHA="$(git merge-base HEAD origin/main)"
-node scripts/lint/max-lines-diff.mjs --base "$BASE_SHA"
+node scripts/lint/oxlint-new-files.mjs --base "$BASE_SHA"
+```
+
+To audit the whole repo (warnings only):
+
+```bash
+pnpm lint:oxlint:report
 ```
 
 ## 5. Branch Protections & Reviews

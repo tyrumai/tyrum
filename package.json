@@ -5,6 +5,10 @@
     "node": "24.x"
   },
   "scripts": {
+    "ci": "pnpm ci:ubuntu",
+    "ci:ubuntu": "pnpm install --frozen-lockfile && pnpm typecheck && pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json && pnpm lint && pnpm format:check && pnpm build && pnpm --filter tyrum-desktop exec playwright install chromium && xvfb-run -a --server-args=\"-screen 0 1920x1080x24\" pnpm test --coverage.enabled --coverage.reporter=text-summary",
+    "prepare": "node scripts/setup-githooks.mjs",
+    "setup:githooks": "node scripts/setup-githooks.mjs",
     "pretypecheck": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/desktop-node build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build && node -e \"require('node:fs').rmSync('packages/schemas/tsconfig.tsbuildinfo',{force:true})\"",
     "build": "pnpm -r run build",
     "pretest": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build",
@@ -12,7 +16,8 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "docs:public-check": "bash scripts/check-public-docs.sh",
-    "lint": "oxlint --ignore-pattern '**/dist/**' .",
+    "lint": "oxlint --quiet .",
+    "lint:oxlint:report": "oxlint -f unix .",
     "format": "node scripts/format-repo.mjs --write",
     "format:check": "node scripts/format-repo.mjs --check",
     "format:check-staged": "node scripts/format-changed.mjs --check --staged",

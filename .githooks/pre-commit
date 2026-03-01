@@ -3,3 +3,6 @@ set -eu
 
 echo "Running staged file format check..."
 pnpm format:check-staged
+
+echo "Running lint..."
+pnpm lint
