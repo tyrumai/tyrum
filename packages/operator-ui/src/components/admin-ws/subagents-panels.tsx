@@ -7,21 +7,6 @@ import { JsonTextarea } from "../ui/json-textarea.js";
 import { Label } from "../ui/label.js";
 import { JsonViewer } from "../ui/json-viewer.js";
 
-function parseJsonPayload(rawValue: string): {
-  value: unknown | undefined;
-  errorMessage: string | null;
-} {
-  const trimmed = rawValue.trim();
-  if (!trimmed) return { value: undefined, errorMessage: null };
-
-  try {
-    return { value: JSON.parse(trimmed) as unknown, errorMessage: null };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { value: undefined, errorMessage: message };
-  }
-}
-
 type JsonWsPanelProps = {
   title: string;
   description?: string;
@@ -46,11 +31,24 @@ function JsonWsPanel({
   onSubmit,
 }: JsonWsPanelProps): React.ReactElement {
   const [rawPayload, setRawPayload] = React.useState(() => JSON.stringify(initialPayload, null, 2));
+  const [parsedPayload, setParsedPayload] = React.useState<{
+    value: unknown | undefined;
+    errorMessage: string | null;
+  }>(() => ({
+    value: initialPayload,
+    errorMessage: null,
+  }));
   const [busy, setBusy] = React.useState(false);
   const [result, setResult] = React.useState<unknown | undefined>(undefined);
   const [error, setError] = React.useState<unknown | undefined>(undefined);
 
-  const parsedPayload = React.useMemo(() => parseJsonPayload(rawPayload), [rawPayload]);
+  const handleJsonChange = React.useCallback(
+    (value: unknown | undefined, errorMessage: string | null) => {
+      setParsedPayload({ value, errorMessage });
+    },
+    [],
+  );
+
   const canSubmit =
     !busy &&
     parsedPayload.errorMessage === null &&
@@ -75,6 +73,7 @@ function JsonWsPanel({
               data-testid={payloadTestId}
               value={rawPayload}
               rows={6}
+              onJsonChange={handleJsonChange}
               onChange={(event) => {
                 setRawPayload(event.target.value);
               }}

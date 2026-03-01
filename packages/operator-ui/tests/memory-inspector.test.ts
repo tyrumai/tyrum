@@ -5,12 +5,7 @@ import React, { act } from "react";
 import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import type { OperatorHttpClient, OperatorWsClient } from "../../operator-core/src/deps.js";
 import type { MemoryItem } from "@tyrum/client";
-import {
-  cleanupTestRoot,
-  clickRadix as click,
-  renderIntoDocument,
-  setNativeValue,
-} from "./test-utils.js";
+import { cleanupTestRoot, renderIntoDocument } from "./test-utils.js";
 import { MemoryInspector } from "../src/index.js";
 
 type Handler = (data: unknown) => void;
@@ -130,6 +125,32 @@ function sampleFact(memoryItemId: string, key: string, value: unknown): MemoryIt
     observed_at: "2026-02-19T12:00:00Z",
     confidence: 0.9,
   };
+}
+
+/**
+ * Sets a value on a React-controlled input/textarea by going through the
+ * native property setter so React's internal value tracker is updated.
+ */
+function setNativeValue(element: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+  const proto =
+    element instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+  if (setter) {
+    setter.call(element, value);
+  }
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+/** Click helper that dispatches the full pointer/mouse sequence Radix components expect. */
+function click(element: HTMLElement): void {
+  element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  element.click();
+  element.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+  element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
 }
 
 /** Expand the collapsible "Filters" section if it's collapsed. */
