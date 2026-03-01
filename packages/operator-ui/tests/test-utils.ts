@@ -59,6 +59,35 @@ export function cleanupTestRoot(testRoot: TestRoot): void {
   testRoot.container.remove();
 }
 
+/**
+ * Sets a value on a React-controlled input/textarea by going through the
+ * native property setter so React's internal value tracker is updated.
+ */
+export function setNativeValue(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  value: string,
+): void {
+  const proto =
+    element instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+  if (setter) {
+    setter.call(element, value);
+  }
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+/** Click helper that dispatches the full pointer/mouse sequence Radix components expect. */
+export function clickRadix(element: HTMLElement): void {
+  element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  element.click();
+  element.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+  element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+}
+
 export function stubMatchMedia(
   query: string,
   initialMatches: boolean,

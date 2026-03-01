@@ -2,6 +2,7 @@ import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { AdminModeGate } from "../../admin-mode.js";
 import { parseJsonInput } from "../../utils/parse-json-input.js";
+import { SubagentsPanels } from "../admin-ws/subagents-panels.js";
 import { PageHeader } from "../layout/page-header.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
@@ -529,14 +530,7 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
           </TabsContent>
 
           <TabsContent value="ws">
-            <Card>
-              <CardHeader>
-                <div className="text-sm font-medium text-fg">WebSocket</div>
-              </CardHeader>
-              <CardContent className="text-sm text-fg-muted">
-                Admin WebSocket panels will appear here.
-              </CardContent>
-            </Card>
+            <SubagentsPanels core={core} />
           </TabsContent>
         </AdminModeGate>
       </Tabs>
