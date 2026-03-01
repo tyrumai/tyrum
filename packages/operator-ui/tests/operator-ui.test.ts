@@ -31,6 +31,26 @@ function openSettings(container: HTMLElement): void {
   });
 }
 
+async function openAdminGatewayTab(container: HTMLElement): Promise<void> {
+  const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
+  expect(adminLink).not.toBeNull();
+
+  await act(async () => {
+    adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await Promise.resolve();
+  });
+
+  const gatewayTab = container.querySelector<HTMLButtonElement>(
+    '[data-testid="admin-http-tab-gateway"]',
+  );
+  expect(gatewayTab).not.toBeNull();
+
+  await act(async () => {
+    gatewayTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    await Promise.resolve();
+  });
+}
+
 function setControlledInputValue(input: HTMLInputElement, value: string): void {
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set as
     | ((this: HTMLInputElement, value: string) => void)
@@ -40,6 +60,62 @@ function setControlledInputValue(input: HTMLInputElement, value: string): void {
   }
   setValue.call(input, value);
   input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function stubUrlObjectUrls(): { restore: () => void } {
+  const originalCreateObjectURL = (URL as unknown as { createObjectURL?: unknown }).createObjectURL;
+  const originalRevokeObjectURL = (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL;
+
+  Object.defineProperty(URL, "createObjectURL", {
+    value: vi.fn(() => "blob:json"),
+    configurable: true,
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    value: vi.fn(() => {}),
+    configurable: true,
+  });
+
+  return {
+    restore: () => {
+      if (typeof originalCreateObjectURL === "undefined") {
+        Reflect.deleteProperty(URL, "createObjectURL");
+      } else {
+        Object.defineProperty(URL, "createObjectURL", {
+          value: originalCreateObjectURL,
+          configurable: true,
+        });
+      }
+
+      if (typeof originalRevokeObjectURL === "undefined") {
+        Reflect.deleteProperty(URL, "revokeObjectURL");
+      } else {
+        Object.defineProperty(URL, "revokeObjectURL", {
+          value: originalRevokeObjectURL,
+          configurable: true,
+        });
+      }
+    },
+  };
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: unknown) => void;
+} {
+  let resolve: ((value: T) => void) | null = null;
+  let reject: ((error: unknown) => void) | null = null;
+
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  if (!resolve || !reject) {
+    throw new Error("Failed to create deferred promise");
+  }
+
+  return { promise, resolve, reject };
 }
 
 class FakeWsClient implements OperatorWsClient {
@@ -621,7 +697,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("renders Admin HTTP panels when Admin Mode is active", () => {
+  it("renders Admin HTTP panels when Admin Mode is active", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -645,14 +721,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-
-      const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
-      expect(adminLink).not.toBeNull();
-
-      act(() => {
-        adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
+      await openAdminGatewayTab(container);
       expect(container.querySelector("[data-testid='admin-http-device-tokens']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-http-plugins']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-http-contracts']")).not.toBeNull();
@@ -664,7 +733,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("requires confirmation before issuing a device token from the Admin hub", () => {
+  it("requires confirmation before issuing a device token from the Admin hub", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -688,14 +757,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-
-      const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
-      expect(adminLink).not.toBeNull();
-
-      act(() => {
-        adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
+      await openAdminGatewayTab(container);
       const issueButton = container.querySelector<HTMLButtonElement>(
         '[data-testid="admin-http-device-tokens-issue"]',
       );
@@ -727,7 +789,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("requires confirmation before revoking a device token from the Admin hub", () => {
+  it("requires confirmation before revoking a device token from the Admin hub", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -751,14 +813,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-
-      const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
-      expect(adminLink).not.toBeNull();
-
-      act(() => {
-        adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
+      await openAdminGatewayTab(container);
       const deviceTokensCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-device-tokens"]',
       );
@@ -827,14 +882,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-
-      const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
-      expect(adminLink).not.toBeNull();
-
-      act(() => {
-        adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
+      await openAdminGatewayTab(container);
       const pluginsCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-plugins"]',
       );
@@ -897,14 +945,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-
-      const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
-      expect(adminLink).not.toBeNull();
-
-      act(() => {
-        adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
+      await openAdminGatewayTab(container);
       const contractsCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-contracts"]',
       );
@@ -943,7 +984,26 @@ describe("operator-ui", () => {
     }
   });
 
-  it("shows a friendly error when issuing a device token with an invalid TTL", async () => {
+  it("disables Admin hub Plugins actions while a request is in flight", async () => {
+    const listDeferred = createDeferred<Response>();
+    const getDeferred = createDeferred<Response>();
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+      if (url === "http://example.test/plugins") {
+        return await listDeferred.promise;
+      }
+
+      if (url === "http://example.test/plugins/echo") {
+        return await getDeferred.promise;
+      }
+
+      throw new Error(`Unexpected fetch request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -968,13 +1028,485 @@ describe("operator-ui", () => {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
 
-      const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
-      expect(adminLink).not.toBeNull();
+      await openAdminGatewayTab(container);
+      const pluginsCard = container.querySelector<HTMLElement>(
+        '[data-testid="admin-http-plugins"]',
+      );
+      expect(pluginsCard).not.toBeNull();
 
-      act(() => {
-        adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      const pluginIdInput = pluginsCard?.querySelector<HTMLInputElement>("input");
+      expect(pluginIdInput).not.toBeNull();
+
+      await act(async () => {
+        setControlledInputValue(pluginIdInput!, "echo");
+        await Promise.resolve();
       });
 
+      const listButton = Array.from(
+        pluginsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).find((button) => button.textContent?.trim() === "List");
+      expect(listButton).not.toBeUndefined();
+      expect(listButton?.disabled).toBe(false);
+
+      const getButton = Array.from(
+        pluginsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).find((button) => button.textContent?.trim() === "Get");
+      expect(getButton).not.toBeUndefined();
+      expect(getButton?.disabled).toBe(false);
+
+      await act(async () => {
+        listButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      const buttonsDuringList = Array.from(
+        pluginsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      );
+      const getDuringList = buttonsDuringList.find(
+        (button) => button.textContent?.trim() === "Get",
+      );
+      expect(getDuringList).not.toBeUndefined();
+      expect(getDuringList?.disabled).toBe(true);
+
+      listDeferred.resolve(
+        new Response(JSON.stringify({ status: "ok", plugins: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const getAfterList = Array.from(
+        pluginsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).find((button) => button.textContent?.trim() === "Get");
+      expect(getAfterList).not.toBeUndefined();
+      expect(getAfterList?.disabled).toBe(false);
+
+      await act(async () => {
+        getAfterList?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      const buttonsDuringGet = Array.from(
+        pluginsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      );
+      const listDuringGet = buttonsDuringGet.find(
+        (button) => button.textContent?.trim() === "List",
+      );
+      expect(listDuringGet).not.toBeUndefined();
+      expect(listDuringGet?.disabled).toBe(true);
+
+      getDeferred.resolve(
+        new Response(
+          JSON.stringify({
+            status: "ok",
+            plugin: { id: "echo", name: "Echo", version: "1.0.0", config_schema: {} },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const listAfterGet = Array.from(
+        pluginsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).find((button) => button.textContent?.trim() === "List");
+      expect(listAfterGet).not.toBeUndefined();
+      expect(listAfterGet?.disabled).toBe(false);
+    } finally {
+      act(() => {
+        root?.unmount();
+      });
+      container.remove();
+    }
+  });
+
+  it("disables Admin hub Contracts actions while a request is in flight", async () => {
+    const catalogDeferred = createDeferred<Response>();
+    const schemaDeferred = createDeferred<Response>();
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+      if (url === "http://example.test/contracts/jsonschema/catalog.json") {
+        return await catalogDeferred.promise;
+      }
+
+      if (url === "http://example.test/contracts/jsonschema/schema-a.json") {
+        return await schemaDeferred.promise;
+      }
+
+      throw new Error(`Unexpected fetch request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    core.adminModeStore.enter({
+      elevatedToken: "elevated-test-token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    try {
+      act(() => {
+        root = createRoot(container);
+        root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      });
+
+      await openAdminGatewayTab(container);
+      const contractsCard = container.querySelector<HTMLElement>(
+        '[data-testid="admin-http-contracts"]',
+      );
+      expect(contractsCard).not.toBeNull();
+
+      const schemaFileInput = contractsCard?.querySelector<HTMLInputElement>("input");
+      expect(schemaFileInput).not.toBeNull();
+
+      await act(async () => {
+        setControlledInputValue(schemaFileInput!, "schema-a.json");
+        await Promise.resolve();
+      });
+
+      const getCatalogButton = Array.from(
+        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).find((button) => button.textContent?.trim() === "Get catalog");
+      expect(getCatalogButton).not.toBeUndefined();
+      expect(getCatalogButton?.disabled).toBe(false);
+
+      const getSchemaButton = Array.from(
+        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).find((button) => button.textContent?.trim() === "Get schema");
+      expect(getSchemaButton).not.toBeUndefined();
+      expect(getSchemaButton?.disabled).toBe(false);
+
+      await act(async () => {
+        getCatalogButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      const buttonsDuringCatalog = Array.from(
+        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      );
+      const schemaDuringCatalog = buttonsDuringCatalog.find(
+        (button) => button.textContent?.trim() === "Get schema",
+      );
+      expect(schemaDuringCatalog).not.toBeUndefined();
+      expect(schemaDuringCatalog?.disabled).toBe(true);
+
+      catalogDeferred.resolve(
+        new Response(
+          JSON.stringify({ format: "jsonschema", schemas: [{ file: "schema-a.json" }] }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const schemaAfterCatalog = Array.from(
+        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).find((button) => button.textContent?.trim() === "Get schema");
+      expect(schemaAfterCatalog).not.toBeUndefined();
+      expect(schemaAfterCatalog?.disabled).toBe(false);
+
+      await act(async () => {
+        schemaAfterCatalog?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      const buttonsDuringSchema = Array.from(
+        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      );
+      const catalogDuringSchema = buttonsDuringSchema.find(
+        (button) => button.textContent?.trim() === "Get catalog",
+      );
+      expect(catalogDuringSchema).not.toBeUndefined();
+      expect(catalogDuringSchema?.disabled).toBe(true);
+
+      schemaDeferred.resolve(
+        new Response(JSON.stringify({ title: "schema-a" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const catalogAfterSchema = Array.from(
+        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).find((button) => button.textContent?.trim() === "Get catalog");
+      expect(catalogAfterSchema).not.toBeUndefined();
+      expect(catalogAfterSchema?.disabled).toBe(false);
+    } finally {
+      act(() => {
+        root?.unmount();
+      });
+      container.remove();
+    }
+  });
+
+  it("keeps Admin hub Plugins.get download filename stable after input changes", async () => {
+    const { restore } = stubUrlObjectUrls();
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+      if (url === "http://example.test/plugins/echo") {
+        return new Response(
+          JSON.stringify({
+            status: "ok",
+            plugin: { id: "echo", name: "Echo", version: "1.0.0", config_schema: {} },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      throw new Error(`Unexpected fetch request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const clickedDownloads: string[] = [];
+    const originalCreateElement = document.createElement.bind(document);
+    const createElement = vi
+      .spyOn(document, "createElement")
+      .mockImplementation((tagName: string) => {
+        const element = originalCreateElement(tagName);
+        if (tagName === "a") {
+          const anchor = element as HTMLAnchorElement;
+          Object.defineProperty(anchor, "click", {
+            value: () => {
+              clickedDownloads.push(anchor.download);
+            },
+            configurable: true,
+          });
+        }
+        return element;
+      });
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    core.adminModeStore.enter({
+      elevatedToken: "elevated-test-token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    try {
+      act(() => {
+        root = createRoot(container);
+        root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      });
+      await openAdminGatewayTab(container);
+      const pluginsCard = container.querySelector<HTMLElement>(
+        '[data-testid="admin-http-plugins"]',
+      );
+      expect(pluginsCard).not.toBeNull();
+
+      const pluginIdInput = pluginsCard?.querySelector<HTMLInputElement>("input");
+      expect(pluginIdInput).not.toBeNull();
+
+      await act(async () => {
+        setControlledInputValue(pluginIdInput!, "echo");
+        await Promise.resolve();
+      });
+
+      const getButton = Array.from(
+        pluginsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).find((button) => button.textContent?.trim() === "Get");
+      expect(getButton).not.toBeUndefined();
+
+      await act(async () => {
+        getButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const downloadButton = pluginsCard?.querySelector<HTMLButtonElement>(
+        "button[aria-label='Download JSON']",
+      );
+      expect(downloadButton).not.toBeNull();
+
+      await act(async () => {
+        setControlledInputValue(pluginIdInput!, "other");
+        await Promise.resolve();
+      });
+
+      clickedDownloads.length = 0;
+      downloadButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      expect(clickedDownloads).toEqual(["echo.json"]);
+    } finally {
+      restore();
+      createElement.mockRestore();
+      act(() => {
+        root?.unmount();
+      });
+      container.remove();
+    }
+  });
+
+  it("keeps Admin hub Contracts.getSchema download filename stable after input changes", async () => {
+    const { restore } = stubUrlObjectUrls();
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+      if (url === "http://example.test/contracts/jsonschema/schema-a.json") {
+        return new Response(JSON.stringify({ title: "schema-a" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unexpected fetch request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const clickedDownloads: string[] = [];
+    const originalCreateElement = document.createElement.bind(document);
+    const createElement = vi
+      .spyOn(document, "createElement")
+      .mockImplementation((tagName: string) => {
+        const element = originalCreateElement(tagName);
+        if (tagName === "a") {
+          const anchor = element as HTMLAnchorElement;
+          Object.defineProperty(anchor, "click", {
+            value: () => {
+              clickedDownloads.push(anchor.download);
+            },
+            configurable: true,
+          });
+        }
+        return element;
+      });
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    core.adminModeStore.enter({
+      elevatedToken: "elevated-test-token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    try {
+      act(() => {
+        root = createRoot(container);
+        root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      });
+      await openAdminGatewayTab(container);
+      const contractsCard = container.querySelector<HTMLElement>(
+        '[data-testid="admin-http-contracts"]',
+      );
+      expect(contractsCard).not.toBeNull();
+
+      const schemaInput = contractsCard?.querySelector<HTMLInputElement>("input");
+      expect(schemaInput).not.toBeNull();
+
+      await act(async () => {
+        setControlledInputValue(schemaInput!, "schema-a.json");
+        await Promise.resolve();
+      });
+
+      const getSchemaButton = Array.from(
+        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).find((button) => button.textContent?.trim() === "Get schema");
+      expect(getSchemaButton).not.toBeUndefined();
+
+      await act(async () => {
+        getSchemaButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const downloadButton = contractsCard?.querySelector<HTMLButtonElement>(
+        "button[aria-label='Download JSON']",
+      );
+      expect(downloadButton).not.toBeNull();
+
+      await act(async () => {
+        setControlledInputValue(schemaInput!, "schema-b.json");
+        await Promise.resolve();
+      });
+
+      clickedDownloads.length = 0;
+      downloadButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+      expect(clickedDownloads).toEqual(["schema-a.json"]);
+    } finally {
+      restore();
+      createElement.mockRestore();
+      act(() => {
+        root?.unmount();
+      });
+      container.remove();
+    }
+  });
+
+  it("shows a friendly error when issuing a device token with an invalid TTL", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    core.adminModeStore.enter({
+      elevatedToken: "elevated-test-token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    try {
+      act(() => {
+        root = createRoot(container);
+        root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      });
+      await openAdminGatewayTab(container);
       const deviceTokensCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-device-tokens"]',
       );
