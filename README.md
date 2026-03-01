@@ -42,6 +42,10 @@ Self-hosted autonomous worker agent platform with a single gateway runtime that 
 
 Docs are deployed to Cloudflare Pages (`tyrum-docs`) by `.github/workflows/docs-pages.yml`.
 
+## Licensing
+
+See `LICENSES.md` for the per-package license breakdown.
+
 ## Installation
 
 The gateway can be installed in multiple ways:

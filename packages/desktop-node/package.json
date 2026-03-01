@@ -1,6 +1,7 @@
 {
   "name": "@tyrum/desktop-node",
   "version": "0.1.0",
+  "license": "Elastic-2.0",
   "type": "module",
   "bin": {
     "tyrum-desktop-node": "./bin/tyrum-desktop-node.mjs"
