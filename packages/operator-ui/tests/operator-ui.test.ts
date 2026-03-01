@@ -2562,6 +2562,14 @@ describe("operator-ui", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(issuedAt));
 
+    const expectedScopes = [
+      "operator.read",
+      "operator.write",
+      "operator.approvals",
+      "operator.pairing",
+      "operator.admin",
+    ];
+
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const headers = new Headers(init?.headers);
       expect(init?.method).toBe("POST");
@@ -2574,7 +2582,7 @@ describe("operator-ui", () => {
           token_id: "token-1",
           device_id: "operator-ui",
           role: "client",
-          scopes: ["operator.admin"],
+          scopes: expectedScopes,
           issued_at: issuedAt,
           expires_at: expiresAt,
         }),
@@ -2641,6 +2649,14 @@ describe("operator-ui", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, callInit] = fetchMock.mock.calls[0] ?? [];
+    const bodyText = typeof callInit?.body === "string" ? callInit.body : "";
+    const body = JSON.parse(bodyText) as { scopes?: unknown; ttl_seconds?: unknown };
+    expect(body).toMatchObject({
+      ttl_seconds: 60 * 10,
+    });
+    expect(body.scopes).toEqual(expect.arrayContaining(expectedScopes));
+    expect(body.scopes).toHaveLength(expectedScopes.length);
     expect(core.adminModeStore.getSnapshot()).toMatchObject({
       status: "active",
       elevatedToken: "elevated-device-token",
