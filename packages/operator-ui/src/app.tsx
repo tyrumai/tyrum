@@ -8,6 +8,7 @@ import {
   Monitor,
   Play,
   Settings,
+  Shield,
   ShieldCheck,
 } from "lucide-react";
 import { AdminModeProvider } from "./admin-mode.js";
@@ -15,6 +16,7 @@ import { ErrorBoundary } from "./components/error/error-boundary.js";
 import { AppShell } from "./components/layout/app-shell.js";
 import { MobileNav } from "./components/layout/mobile-nav.js";
 import { Sidebar } from "./components/layout/sidebar.js";
+import { AdminPage } from "./components/pages/admin-page.js";
 import { ApprovalsPage } from "./components/pages/approvals-page.js";
 import { ConnectPage } from "./components/pages/connect-page.js";
 import { DashboardPage } from "./components/pages/dashboard-page.js";
@@ -43,6 +45,7 @@ type OperatorUiRouteId =
   | "approvals"
   | "runs"
   | "pairing"
+  | "admin"
   | "settings"
   | "desktop";
 
@@ -55,6 +58,7 @@ const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon 
   approvals: { label: "Approvals", icon: ShieldCheck },
   runs: { label: "Runs", icon: Play },
   pairing: { label: "Pairing", icon: Link2 },
+  admin: { label: "Admin", icon: Shield },
   settings: { label: "Settings", icon: Settings },
   desktop: { label: "Desktop", icon: Monitor },
 };
@@ -66,11 +70,12 @@ const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
   "approvals",
   "runs",
   "pairing",
+  "admin",
   "settings",
 ];
 
 const MOBILE_NAV_ORDER: OperatorUiRouteId[] = ["dashboard", "approvals", "runs", "settings"];
-const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["memory", "pairing", "connect"];
+const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["memory", "pairing", "admin", "connect"];
 const DESKTOP_NAV_ORDER: OperatorUiRouteId[] = ["desktop"];
 
 const KEYBOARD_NAV_ORDER: OperatorUiRouteId[] = [
@@ -176,6 +181,7 @@ function OperatorUiAppRoot({ core, mode }: Pick<OperatorUiAppProps, "core" | "mo
             {route === "approvals" && <ApprovalsPage core={core} />}
             {route === "runs" && <RunsPage core={core} />}
             {route === "pairing" && <PairingPage core={core} />}
+            {route === "admin" && <AdminPage core={core} onNavigate={navigate} />}
             {route === "settings" && <SettingsPage core={core} mode={mode} />}
             {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
           </AdminModeProvider>
