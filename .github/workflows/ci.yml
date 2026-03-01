@@ -232,7 +232,7 @@ jobs:
   test-merge:
     name: Test + coverage (merge) (ubuntu-latest)
     needs: [changes, validation, test-shards]
-    if: needs.validation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
+    if: needs.validation.result == 'success' && needs.test-shards.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
