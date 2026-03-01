@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
 import { isAbsolute, relative, resolve } from "node:path";
-import type { ActionPrimitive, ClientCapability } from "@tyrum/schemas";
-import { checkPostcondition } from "@tyrum/schemas";
-import type { EvaluationContext } from "@tyrum/schemas";
-import type { CapabilityProvider, TaskResult } from "@tyrum/client";
+import type { ActionPrimitive, ClientCapability } from "@tyrum/operator-core";
+import { checkPostcondition } from "@tyrum/operator-core";
+import type { EvaluationContext } from "@tyrum/operator-core";
+import type { CapabilityProvider, TaskResult } from "@tyrum/operator-core";
 
 const MAX_OUTPUT_BYTES = 1_000_000; // 1MB output cap
 const DEFAULT_TIMEOUT_MS = 30_000;

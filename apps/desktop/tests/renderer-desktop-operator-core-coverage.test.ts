@@ -36,7 +36,7 @@ const {
 
   const connectionStore = {
     getSnapshot: () => ({ status: "disconnected" }),
-    subscribe: vi.fn(() => () => {}),
+    subscribe: vi.fn(() => () => { }),
   };
 
   const createOperatorCoreMock = vi.fn(() => ({
@@ -61,7 +61,7 @@ const {
 
       const manager = {
         getCore: () => core,
-        subscribe: vi.fn(() => () => {}),
+        subscribe: vi.fn(() => () => { }),
         dispose: vi.fn(),
       };
 
@@ -87,6 +87,8 @@ vi.mock("@tyrum/operator-core", () => ({
   createOperatorCore: createOperatorCoreMock,
   createOperatorCoreManager: createOperatorCoreManagerMock,
   httpAuthForAuth: vi.fn((auth: unknown) => auth),
+  deviceIdFromSha256Digest: vi.fn((fingerprint: string) => `device-${fingerprint}`),
+  createTyrumHttpClient: createTyrumHttpClientMock,
 }));
 
 vi.mock("@tyrum/operator-ui", async (importOriginal) => {
@@ -140,7 +142,7 @@ describe("desktop operator-core diff line coverage", () => {
         getStatus: vi.fn(async () => ({ status: "stopped", port: 8788 })),
         httpFetch,
       },
-      onStatusChange: vi.fn(() => () => {}),
+      onStatusChange: vi.fn(() => () => { }),
     };
 
     document.body.innerHTML = '<div id="root"></div>';

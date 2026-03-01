@@ -5,7 +5,7 @@ import {
   type OperatorCore,
   type OperatorCoreManager,
 } from "@tyrum/operator-core";
-import type { MemoryItem } from "@tyrum/client";
+import type { MemoryItem } from "@tyrum/operator-core";
 import { Box, Text, useApp, useInput } from "ink";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ResolvedTuiConfig } from "./config.js";

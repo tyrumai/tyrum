@@ -1,11 +1,11 @@
-import { TyrumClient } from "@tyrum/client";
+import { TyrumClient } from "@tyrum/operator-core";
 import type {
   DecisionRecord,
   WorkArtifact,
   WorkItem,
   WorkSignal,
   WorkStateKVScope,
-} from "@tyrum/schemas";
+} from "@tyrum/operator-core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
