@@ -162,7 +162,7 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
           value={
             connection.status === "connected" && status.status?.instance_id
               ? status.status.instance_id
-              : "Not Connected"
+              : "-"
           }
         />
 
@@ -173,7 +173,7 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
           value={
             connection.status === "connected" && typeof tokensUsed === "number"
               ? tokensUsedText
-              : "Not Connected"
+              : "-"
           }
         />
 

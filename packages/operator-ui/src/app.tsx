@@ -1,8 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useState, type ComponentType, type ReactNode } from "react";
 import {
-  Brain,
-  Cpu,
   Database,
   KeyRound,
   LayoutGrid,
