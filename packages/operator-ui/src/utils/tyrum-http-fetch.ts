@@ -21,7 +21,18 @@ export function resolveTyrumHttpFetch(mode: "web" | "desktop"): TyrumHttpFetch |
     const url =
       typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     const headers = headersToRecord(init?.headers);
-    const body = typeof init?.body === "string" ? init.body : undefined;
+    const rawBody = init?.body;
+    const body =
+      typeof rawBody === "string"
+        ? rawBody
+        : rawBody == null
+          ? undefined
+          : (() => {
+              const kind = Object.prototype.toString.call(rawBody);
+              throw new Error(
+                `Desktop httpFetch only supports string request bodies (got ${kind}).`,
+              );
+            })();
 
     const result = await httpFetch({
       url,

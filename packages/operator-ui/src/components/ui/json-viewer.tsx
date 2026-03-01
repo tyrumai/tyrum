@@ -132,7 +132,14 @@ export function JsonViewer({
       link.click();
       link.remove();
     } finally {
-      URL.revokeObjectURL(url);
+      const revoke = () => {
+        URL.revokeObjectURL(url);
+      };
+      if (typeof globalThis.queueMicrotask === "function") {
+        queueMicrotask(revoke);
+      } else {
+        setTimeout(revoke, 0);
+      }
     }
   };
 
