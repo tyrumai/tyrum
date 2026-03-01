@@ -54,6 +54,4 @@ Admin Mode (step-up) is intentionally **transport-agnostic**:
 - the SDK uses that token for both **WS requests** and **HTTP calls** during the TTL window
 - exiting Admin Mode returns to the baseline scoped token
 
-See: [Gateway authN/authZ](./gateway-authz.md).
-
 Changes to API surfaces are contract changes: update the relevant contracts, enforcement (authZ/audit), and documentation together.

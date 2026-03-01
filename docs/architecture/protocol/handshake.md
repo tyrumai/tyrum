@@ -89,8 +89,6 @@ Operational note: some intermediaries log `Sec-WebSocket-Protocol`. Treat it as 
 
 After a connection is authenticated, the gateway authorizes what the peer can do based on its role and (for operator clients) its granted scopes. The gateway can also issue device-bound tokens to reduce bootstrap-token usage during normal operation.
 
-Details: [Gateway authN/authZ](../gateway-authz.md).
-
 ## Pairing hook (nodes)
 
 Nodes require pairing approval before they can execute capabilities. Pairing binds a node device identity to a trust level and a scoped capability allowlist, and it can be revoked at any time.

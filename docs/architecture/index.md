@@ -75,7 +75,6 @@ flowchart LR
 ## Building blocks
 
 - **Gateway:** the long-lived service that owns edge connectivity (WebSocket), routing, and contract validation. See [Gateway](./gateway/index.md).
-- **Tenancy:** the isolation boundary for identity, policy, and durable state. See [Tenancy](./tenancy.md).
 - **StateStore:** durable state and logs (for example SQLite for single-host deployments; Postgres for HA/scale). See [Scaling and high availability](./scaling-ha.md).
 - **Event backplane:** cross-instance delivery via a durable outbox (in-process for replica count = 1; shared for clusters). See [Backplane](./backplane.md), [Scaling and high availability](./scaling-ha.md), and [Events](./protocol/events.md).
 - **Execution engine:** the durable orchestration runtime (retries, idempotency, pause/resume, evidence). See [Execution engine](./execution-engine.md).
@@ -107,7 +106,6 @@ flowchart LR
 ## Architecture commitments
 
 - **Ops ergonomics:** onboarding and diagnostics default to a hardened configuration.
-- **Gateway authN/authZ:** explicit operator scopes, per-method authorization, device-token lifecycle, and a documented trusted-proxy + TLS/pinning story.
 - **Plugins:** require manifests + config schemas, make risky tools opt-in, and harden discovery/install (path/ownership checks, safe dependency rules).
 - **Scale validation:** reference deployments and a failure-matrix test suite are hard gates.
 - **Integration quality bar:** channels and node capabilities are idempotent, approval-gated, and evidence-rich.
@@ -116,8 +114,6 @@ flowchart LR
 
 - [Scaling and high availability](./scaling-ha.md)
 - [Gateway](./gateway/index.md)
-- [Tenancy](./tenancy.md)
-- [Gateway authN/authZ](./gateway-authz.md)
 - [API surfaces (WebSocket vs HTTP)](./api-surfaces.md)
 - [Identity](./identity.md)
 - [Execution engine](./execution-engine.md)
@@ -132,7 +128,6 @@ flowchart LR
 - [Artifacts](./artifacts.md)
 - [Backplane (outbox contract)](./backplane.md)
 - [Sandbox and policy](./sandbox-policy.md)
-- [Operations and onboarding](./operations.md)
 - [Observability](./observability.md)
 - [Data lifecycle and retention](./data-lifecycle.md)
 - [Presence](./presence.md)

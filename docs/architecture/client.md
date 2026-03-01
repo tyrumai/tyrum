@@ -15,14 +15,14 @@ Clients can take multiple forms, depending on deployment and operator preference
 ## Responsibilities
 
 - Establish a single WebSocket connection per client device identity (`role: client`).
-- Authenticate a user and bind activity to a tenant membership (see [Tenancy](./tenancy.md) and [Gateway authN/authZ](./gateway-authz.md)).
+- Authenticate to the gateway and obtain a scoped device token for the client device identity.
 - Send requests (commands, session interactions, configuration changes).
 - Subscribe to events (status updates, audit evidence, approvals, pairing requests).
 - Provide human approvals and explanations when the gateway escalates.
 - Resume or cancel paused workflow runs (via resume tokens) when approvals are resolved.
 - Initiate and manage node pairing (approve/deny, label devices, revoke access).
-- Provide onboarding and diagnostics surfaces so hardened configuration is easy to reach (see [Operations and onboarding](./operations.md)).
-- Support **Admin Mode** (time-bounded step-up) for tenant administration actions.
+- Provide onboarding and diagnostics surfaces so hardened configuration is easy to reach.
+- Support **Admin Mode** (time-bounded step-up) for administration actions.
 
 ## Transports and API surfaces
 

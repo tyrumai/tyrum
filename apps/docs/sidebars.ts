@@ -41,7 +41,6 @@ const sidebars: SidebarsConfig = {
           id: "architecture/index",
           label: "Overview",
         },
-        "architecture/tenancy",
         {
           type: "doc",
           id: "architecture/scaling-ha",
@@ -65,7 +64,6 @@ const sidebars: SidebarsConfig = {
             "architecture/playbooks",
             "architecture/approvals",
             "architecture/policy-overrides",
-            "architecture/gateway-authz",
             "architecture/secrets",
             "architecture/auth",
             "architecture/artifacts",
@@ -120,7 +118,7 @@ const sidebars: SidebarsConfig = {
         {
           type: "category",
           label: "Operations & Observability",
-          items: ["architecture/operations", "architecture/observability", "architecture/presence"],
+          items: ["architecture/observability", "architecture/presence"],
         },
         "architecture/glossary",
       ],
