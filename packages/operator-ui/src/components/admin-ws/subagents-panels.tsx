@@ -19,6 +19,75 @@ type JsonWsPanelProps = {
   onSubmit: (payload: unknown) => Promise<unknown>;
 };
 
+type JsonWsPanelFormProps = {
+  title: string;
+  description?: string;
+  payloadLabel: string;
+  payloadTestId: string;
+  rawPayload: string;
+  onRawPayloadChange: (nextValue: string) => void;
+  onJsonChange: (value: unknown | undefined, errorMessage: string | null) => void;
+  busy: boolean;
+  canSubmit: boolean;
+  submitTestId: string;
+  submitLabel: string;
+  onSubmitClick: () => void;
+};
+
+function JsonWsPanelForm({
+  title,
+  description,
+  payloadLabel,
+  payloadTestId,
+  rawPayload,
+  onRawPayloadChange,
+  onJsonChange,
+  busy,
+  canSubmit,
+  submitTestId,
+  submitLabel,
+  onSubmitClick,
+}: JsonWsPanelFormProps): React.ReactElement {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="grid gap-1">
+          <div className="text-sm font-medium text-fg">{title}</div>
+          {description ? <div className="text-xs text-fg-muted">{description}</div> : null}
+        </div>
+      </CardHeader>
+
+      <CardContent className="grid gap-3">
+        <div className="grid gap-2">
+          <Label htmlFor={payloadTestId}>{payloadLabel}</Label>
+          <JsonTextarea
+            id={payloadTestId}
+            data-testid={payloadTestId}
+            value={rawPayload}
+            rows={6}
+            onJsonChange={onJsonChange}
+            onChange={(event) => {
+              onRawPayloadChange(event.target.value);
+            }}
+          />
+        </div>
+      </CardContent>
+
+      <CardFooter>
+        <Button
+          type="button"
+          data-testid={submitTestId}
+          isLoading={busy}
+          disabled={!canSubmit}
+          onClick={onSubmitClick}
+        >
+          {submitLabel}
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
 function JsonWsPanel({
   title,
   description,
@@ -55,60 +124,40 @@ function JsonWsPanel({
     typeof parsedPayload.value !== "undefined" &&
     rawPayload.trim().length > 0;
 
+  const handleSubmitClick = React.useCallback(() => {
+    if (!canSubmit) return;
+
+    setBusy(true);
+    setError(undefined);
+    setResult(undefined);
+    void onSubmit(parsedPayload.value)
+      .then((value) => {
+        setResult(value);
+      })
+      .catch((caught) => {
+        setError(caught);
+      })
+      .finally(() => {
+        setBusy(false);
+      });
+  }, [canSubmit, onSubmit, parsedPayload.value]);
+
   return (
     <div className="grid gap-4">
-      <Card>
-        <CardHeader>
-          <div className="grid gap-1">
-            <div className="text-sm font-medium text-fg">{title}</div>
-            {description ? <div className="text-xs text-fg-muted">{description}</div> : null}
-          </div>
-        </CardHeader>
-
-        <CardContent className="grid gap-3">
-          <div className="grid gap-2">
-            <Label htmlFor={payloadTestId}>{payloadLabel}</Label>
-            <JsonTextarea
-              id={payloadTestId}
-              data-testid={payloadTestId}
-              value={rawPayload}
-              rows={6}
-              onJsonChange={handleJsonChange}
-              onChange={(event) => {
-                setRawPayload(event.target.value);
-              }}
-            />
-          </div>
-        </CardContent>
-
-        <CardFooter>
-          <Button
-            type="button"
-            data-testid={submitTestId}
-            isLoading={busy}
-            disabled={!canSubmit}
-            onClick={() => {
-              if (!canSubmit) return;
-
-              setBusy(true);
-              setError(undefined);
-              setResult(undefined);
-              void onSubmit(parsedPayload.value)
-                .then((value) => {
-                  setResult(value);
-                })
-                .catch((caught) => {
-                  setError(caught);
-                })
-                .finally(() => {
-                  setBusy(false);
-                });
-            }}
-          >
-            {submitLabel}
-          </Button>
-        </CardFooter>
-      </Card>
+      <JsonWsPanelForm
+        title={title}
+        description={description}
+        payloadLabel={payloadLabel}
+        payloadTestId={payloadTestId}
+        rawPayload={rawPayload}
+        onRawPayloadChange={setRawPayload}
+        onJsonChange={handleJsonChange}
+        busy={busy}
+        canSubmit={canSubmit}
+        submitTestId={submitTestId}
+        submitLabel={submitLabel}
+        onSubmitClick={handleSubmitClick}
+      />
 
       <ApiResultCard heading={resultHeading} value={result} error={error} />
     </div>
