@@ -20,6 +20,19 @@ function parseScopesInput(value: string): string[] {
   return Array.from(new Set(scopes));
 }
 
+function toSafeJsonDownloadFileName(rawName: string, fallback: string): string {
+  const trimmed = rawName.trim();
+  const normalizedBase = trimmed
+    .replaceAll(/[/\\]/g, "_")
+    .replaceAll(/[^a-zA-Z0-9._-]/g, "_")
+    .replaceAll(/_+/g, "_")
+    .replaceAll(/^_+|_+$/g, "")
+    .slice(0, 128);
+
+  const base = normalizedBase || fallback.replace(/\.json$/i, "");
+  return base.toLowerCase().endsWith(".json") ? base : `${base}.json`;
+}
+
 function useAdminHttpClient() {
   const { core, mode } = useAdminModeUiContext();
   const adminMode = useOperatorStore(core.adminModeStore);
@@ -49,6 +62,9 @@ function DeviceTokensCard() {
   const [revokeError, setRevokeError] = useState<unknown | undefined>(undefined);
   const [revokeToken, setRevokeToken] = useState("");
   const [revokeOpen, setRevokeOpen] = useState(false);
+
+  const canIssue = Boolean(http) && issueDeviceId.trim().length > 0;
+  const canRevoke = Boolean(http) && revokeToken.trim().length > 0;
 
   return (
     <Card data-testid="admin-http-device-tokens">
@@ -136,6 +152,7 @@ function DeviceTokensCard() {
           type="button"
           variant="danger"
           data-testid="admin-http-device-tokens-issue"
+          disabled={!canIssue}
           onClick={() => {
             setIssueOpen(true);
           }}
@@ -146,6 +163,7 @@ function DeviceTokensCard() {
           type="button"
           variant="danger"
           data-testid="admin-http-device-tokens-revoke"
+          disabled={!canRevoke}
           onClick={() => {
             setRevokeOpen(true);
           }}
@@ -220,6 +238,10 @@ function PluginsCard() {
   const [getResult, setGetResult] = useState<unknown | undefined>(undefined);
   const [getError, setGetError] = useState<unknown | undefined>(undefined);
 
+  const trimmedPluginId = pluginId.trim();
+  const canList = Boolean(http);
+  const canGet = Boolean(http) && trimmedPluginId.length > 0;
+
   return (
     <Card data-testid="admin-http-plugins">
       <CardHeader>
@@ -230,6 +252,7 @@ function PluginsCard() {
           <Button
             type="button"
             isLoading={busy === "list"}
+            disabled={!canList}
             onClick={() => {
               if (busy) return;
               if (!http) return;
@@ -267,6 +290,7 @@ function PluginsCard() {
           <Button
             type="button"
             isLoading={busy === "get"}
+            disabled={!canGet}
             onClick={() => {
               if (busy) return;
               if (!http) return;
@@ -302,7 +326,7 @@ function PluginsCard() {
           error={getError}
           jsonViewerProps={{
             withDownloadButton: true,
-            downloadFileName: pluginId.trim() ? `${pluginId.trim()}.json` : "plugin.json",
+            downloadFileName: toSafeJsonDownloadFileName(trimmedPluginId, "plugin.json"),
           }}
         />
       </CardContent>
@@ -319,6 +343,10 @@ function ContractsCard() {
   const [schemaResult, setSchemaResult] = useState<unknown | undefined>(undefined);
   const [schemaError, setSchemaError] = useState<unknown | undefined>(undefined);
 
+  const trimmedSchemaFile = schemaFile.trim();
+  const canGetCatalog = Boolean(http);
+  const canGetSchema = Boolean(http) && trimmedSchemaFile.length > 0;
+
   return (
     <Card data-testid="admin-http-contracts">
       <CardHeader>
@@ -328,6 +356,7 @@ function ContractsCard() {
         <Button
           type="button"
           isLoading={busy === "catalog"}
+          disabled={!canGetCatalog}
           onClick={() => {
             if (busy) return;
             if (!http) return;
@@ -364,6 +393,7 @@ function ContractsCard() {
           <Button
             type="button"
             isLoading={busy === "schema"}
+            disabled={!canGetSchema}
             onClick={() => {
               if (busy) return;
               if (!http) return;
@@ -399,7 +429,7 @@ function ContractsCard() {
           error={schemaError}
           jsonViewerProps={{
             withDownloadButton: true,
-            downloadFileName: schemaFile.trim() ? schemaFile.trim() : "schema.json",
+            downloadFileName: toSafeJsonDownloadFileName(trimmedSchemaFile, "schema.json"),
           }}
         />
       </CardContent>

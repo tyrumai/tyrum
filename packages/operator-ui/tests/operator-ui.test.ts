@@ -31,6 +31,17 @@ function openSettings(container: HTMLElement): void {
   });
 }
 
+function setControlledInputValue(input: HTMLInputElement, value: string): void {
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set as
+    | ((this: HTMLInputElement, value: string) => void)
+    | undefined;
+  if (!setValue) {
+    throw new Error("Failed to resolve HTMLInputElement value setter");
+  }
+  setValue.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 class FakeWsClient implements OperatorWsClient {
   connected = false;
   connect = vi.fn(() => {});
@@ -708,6 +719,152 @@ describe("operator-ui", () => {
       });
 
       expect(confirmButton?.disabled).toBe(false);
+    } finally {
+      act(() => {
+        root?.unmount();
+      });
+      container.remove();
+    }
+  });
+
+  it("requires confirmation before revoking a device token from the Admin hub", () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    core.adminModeStore.enter({
+      elevatedToken: "elevated-test-token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    try {
+      act(() => {
+        root = createRoot(container);
+        root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      });
+
+      const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
+      expect(adminLink).not.toBeNull();
+
+      act(() => {
+        adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      const deviceTokensCard = container.querySelector<HTMLElement>(
+        '[data-testid="admin-http-device-tokens"]',
+      );
+      expect(deviceTokensCard).not.toBeNull();
+
+      const tokenInput =
+        deviceTokensCard?.querySelector<HTMLInputElement>('input[type="password"]');
+      expect(tokenInput).not.toBeNull();
+
+      act(() => {
+        setControlledInputValue(tokenInput!, "dev_test_token");
+      });
+
+      const revokeButton = container.querySelector<HTMLButtonElement>(
+        '[data-testid="admin-http-device-tokens-revoke"]',
+      );
+      expect(revokeButton).not.toBeNull();
+
+      act(() => {
+        revokeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      const confirmButton = document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="confirm-danger-confirm"]',
+      );
+      expect(confirmButton).not.toBeNull();
+      expect(confirmButton?.disabled).toBe(true);
+
+      const checkbox = document.body.querySelector('[data-testid="confirm-danger-checkbox"]');
+      expect(checkbox).not.toBeNull();
+
+      act(() => {
+        checkbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(confirmButton?.disabled).toBe(false);
+    } finally {
+      act(() => {
+        root?.unmount();
+      });
+      container.remove();
+    }
+  });
+
+  it("disables Admin hub Plugins.get until a plugin id is provided", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    core.adminModeStore.enter({
+      elevatedToken: "elevated-test-token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    try {
+      act(() => {
+        root = createRoot(container);
+        root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      });
+
+      const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
+      expect(adminLink).not.toBeNull();
+
+      act(() => {
+        adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      const pluginsCard = container.querySelector<HTMLElement>(
+        '[data-testid="admin-http-plugins"]',
+      );
+      expect(pluginsCard).not.toBeNull();
+
+      const buttons = Array.from(pluginsCard?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+      const listButton = buttons.find((button) => button.textContent?.trim() === "List");
+      expect(listButton).not.toBeUndefined();
+      expect(listButton?.disabled).toBe(false);
+
+      const getButton = buttons.find((button) => button.textContent?.trim() === "Get");
+      expect(getButton).not.toBeUndefined();
+      expect(getButton?.disabled).toBe(true);
+
+      const pluginIdInput = pluginsCard?.querySelector<HTMLInputElement>("input");
+      expect(pluginIdInput).not.toBeNull();
+
+      await act(async () => {
+        setControlledInputValue(pluginIdInput!, "echo");
+        await Promise.resolve();
+      });
+
+      expect(pluginIdInput?.value).toBe("echo");
+
+      const nextButtons = Array.from(
+        pluginsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      );
+      const nextGetButton = nextButtons.find((button) => button.textContent?.trim() === "Get");
+      expect(nextGetButton).not.toBeUndefined();
+      expect(nextGetButton?.disabled).toBe(false);
     } finally {
       act(() => {
         root?.unmount();

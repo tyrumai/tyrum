@@ -38,4 +38,3 @@ export function resolveTyrumHttpFetch(mode: "web" | "desktop"): TyrumHttpFetch |
     });
   };
 }
-
