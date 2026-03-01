@@ -92,7 +92,7 @@ To audit the whole repo (warnings only):
 pnpm lint:max-lines:warn
 ```
 
-To see suspicious/perf-style warnings the repo currently has:
+To see additional Oxlint warnings (currently the `suspicious` category):
 
 ```bash
 pnpm lint:oxlint:categories:warn
