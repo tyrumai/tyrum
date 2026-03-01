@@ -60,9 +60,7 @@ function runNewFilesGate({ repoRoot, files, verbose }) {
   const args = ["exec", "oxlint", "-c", configPath, "--deny-warnings", ...files];
 
   if (verbose) {
-    console.log(
-      `[oxlint] checking ${files.length} new file(s) (no warnings allowed)`,
-    );
+    console.log(`[oxlint] checking ${files.length} new file(s) (no warnings allowed)`);
   }
 
   const result = spawnSync("pnpm", args, { stdio: "inherit", cwd: repoRoot });
