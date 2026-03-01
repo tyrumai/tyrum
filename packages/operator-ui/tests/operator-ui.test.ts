@@ -571,6 +571,45 @@ describe("operator-ui", () => {
     container.remove();
   });
 
+  it("renders an Admin nav item and an Admin hub skeleton", () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    try {
+      act(() => {
+        root = createRoot(container);
+        root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      });
+
+      const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
+      expect(adminLink).not.toBeNull();
+
+      act(() => {
+        adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(container.querySelector("[data-testid='admin-page']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-tab-http']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-tab-ws']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-mode-gate']")).not.toBeNull();
+    } finally {
+      act(() => {
+        root?.unmount();
+      });
+      container.remove();
+    }
+  });
+
   it("connects and disconnects via operator-core", () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();

@@ -17,6 +17,7 @@ describe("Operator UI app/page component structure", () => {
       { specifier: "../src/components/pages/runs-page.js", exportName: "RunsPage" },
       { specifier: "../src/components/pages/pairing-page.js", exportName: "PairingPage" },
       { specifier: "../src/components/pages/settings-page.js", exportName: "SettingsPage" },
+      { specifier: "../src/components/pages/admin-page.js", exportName: "AdminPage" },
       { specifier: "../src/components/pages/desktop-page.js", exportName: "DesktopPage" },
     ] as const;
 
