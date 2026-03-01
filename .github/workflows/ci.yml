@@ -260,7 +260,7 @@ jobs:
           set -euo pipefail
           mkdir -p vitest-reports
           find artifacts -type f -name 'blob-*.json' -print -exec cp {} vitest-reports/ \;
-          count="$(ls -1 vitest-reports/blob-*.json 2>/dev/null | wc -l | tr -d ' ')"
+          count="$(find vitest-reports -maxdepth 1 -type f -name 'blob-*.json' | wc -l | tr -d ' ')"
           if [ "$count" -eq 0 ]; then
             echo "No blob reports found under artifacts/. Expected vitest-blob-*/blob-*.json."
             exit 1
