@@ -51,6 +51,7 @@ RUN apt-get update \
     xfce4 \
     xfce4-terminal \
     xvfb \
+    zenity \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

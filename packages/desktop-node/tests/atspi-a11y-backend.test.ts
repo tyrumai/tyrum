@@ -49,6 +49,23 @@ describe("AtSpiDesktopA11yBackend", () => {
     expect(children).toHaveLength(5);
   });
 
+  it("supports BigInt and Variant child counts in getChildren()", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const getChildAtIndex = vi.fn(async (i: number) => ["app", `/child/${String(i)}`]);
+    const iface = {
+      GetChildCount: vi.fn(async () => ({ value: 2n })),
+      GetChildAtIndex: getChildAtIndex,
+    };
+
+    backend.getInterface = vi.fn(async () => iface);
+
+    const children = await backend.getChildren({ busName: "app", objectPath: "/root" }, 5);
+
+    expect(getChildAtIndex).toHaveBeenCalledTimes(2);
+    expect(children).toHaveLength(2);
+  });
+
   it("caps GetChildren results per call", async () => {
     const backend = new AtSpiDesktopA11yBackend() as any;
 
@@ -130,6 +147,159 @@ describe("AtSpiDesktopA11yBackend", () => {
     ).rejects.toThrow(/double_click/);
   });
 
+  it("unwraps dbus-next Variant action names for click actions", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const doAction = vi.fn(async () => undefined);
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name !== "org.a11y.atspi.Action") return null;
+      return {
+        GetNActions: vi.fn(async () => 1n),
+        GetName: vi.fn(async () => ({ value: "click" })),
+        DoAction: doAction,
+      };
+    });
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "click" },
+      }),
+    ).resolves.toEqual({ resolved_element_ref: "atspi:app|/node" });
+    expect(doAction).toHaveBeenCalledTimes(1);
+    expect(doAction).toHaveBeenCalledWith(0);
+  });
+
+  it("falls back to DoAction(0) when click/activate action names are unavailable", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const doAction = vi.fn(async () => undefined);
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name !== "org.a11y.atspi.Action") return null;
+      return {
+        GetNActions: vi.fn(async () => 1n),
+        GetName: vi.fn(async () => ({ value: "invoke" })),
+        DoAction: doAction,
+      };
+    });
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "click" },
+      }),
+    ).resolves.toEqual({ resolved_element_ref: "atspi:app|/node" });
+    expect(doAction).toHaveBeenCalledTimes(1);
+    expect(doAction).toHaveBeenCalledWith(0);
+  });
+
+  it("supports dbus-next array-wrapped action counts in act()", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const doAction = vi.fn(async () => undefined);
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name !== "org.a11y.atspi.Action") return null;
+      return {
+        GetNActions: vi.fn(async () => [1n]),
+        GetName: vi.fn(async () => ({ value: "click" })),
+        DoAction: doAction,
+      };
+    });
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "click" },
+      }),
+    ).resolves.toEqual({ resolved_element_ref: "atspi:app|/node" });
+
+    expect(doAction).toHaveBeenCalledTimes(1);
+    expect(doAction).toHaveBeenCalledWith(0);
+  });
+
+  it("fails when DoAction reports false for click actions", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const doAction = vi.fn(async () => false);
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name !== "org.a11y.atspi.Action") return null;
+      return {
+        GetNActions: vi.fn(async () => 1n),
+        GetName: vi.fn(async () => ({ value: "click" })),
+        DoAction: doAction,
+      };
+    });
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "click" },
+      }),
+    ).rejects.toThrow(/click\/activate unsupported/i);
+    expect(doAction).toHaveBeenCalledTimes(1);
+    expect(doAction).toHaveBeenCalledWith(0);
+  });
+
+  it("tries alternate click candidates when the first action returns false", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const doAction = vi.fn(async (index: number) => index !== 0);
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name !== "org.a11y.atspi.Action") return null;
+      return {
+        GetNActions: vi.fn(async () => 2n),
+        GetName: vi.fn(async (i: number) => ({ value: i === 0 ? "click" : "press" })),
+        DoAction: doAction,
+      };
+    });
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "click" },
+      }),
+    ).resolves.toEqual({ resolved_element_ref: "atspi:app|/node" });
+
+    expect(doAction).toHaveBeenCalledTimes(2);
+    expect(doAction).toHaveBeenNthCalledWith(1, 0);
+    expect(doAction).toHaveBeenNthCalledWith(2, 1);
+  });
+
+  it("fails when the target exposes zero actions and DoAction reports false", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const doAction = vi.fn(async () => false);
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name !== "org.a11y.atspi.Action") return null;
+      return {
+        GetNActions: vi.fn(async () => 0n),
+        GetName: vi.fn(async () => ({ value: "invoke" })),
+        DoAction: doAction,
+      };
+    });
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "click" },
+      }),
+    ).rejects.toThrow(/click\/activate unsupported/i);
+    expect(doAction).toHaveBeenCalledTimes(1);
+    expect(doAction).toHaveBeenCalledWith(0);
+  });
+
   it("matches state-filtered queries when GetState indicates focused", async () => {
     const backend = new AtSpiDesktopA11yBackend() as any;
 
@@ -200,6 +370,75 @@ describe("AtSpiDesktopA11yBackend", () => {
     });
 
     expect(snapshot.tree.root.children.map((n: { name: string }) => n.name)).toEqual(["/a", "/b"]);
+  });
+
+  it("includes top-level frame nodes as windows in snapshot()", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    backend.resolveRootAccessible = vi.fn(async () => ({ busName: "app", objectPath: "/root" }));
+    backend.getChildren = vi.fn(async (ref: { objectPath: string }) => {
+      if (ref.objectPath === "/root") {
+        return [
+          { busName: "app", objectPath: "/win1" },
+          { busName: "app", objectPath: "/win2" },
+        ];
+      }
+      return [];
+    });
+    backend.describeAccessible = vi.fn(async (ref: { busName: string; objectPath: string }) => {
+      if (ref.objectPath === "/root") {
+        return {
+          elementRef: "atspi:app|/root",
+          role: "desktop frame",
+          name: "",
+          bounds: { x: 0, y: 0, width: 1280, height: 720 },
+          actions: [],
+          states: [],
+        };
+      }
+
+      if (ref.objectPath === "/win1") {
+        return {
+          elementRef: "atspi:app|/win1",
+          role: "frame",
+          name: "Window One",
+          bounds: { x: 10, y: 20, width: 300, height: 200 },
+          actions: [],
+          states: ["active"],
+        };
+      }
+
+      return {
+        elementRef: "atspi:app|/win2",
+        role: "frame",
+        name: "Window Two",
+        bounds: { x: 400, y: 20, width: 300, height: 200 },
+        actions: [],
+        states: [],
+      };
+    });
+
+    const snapshot = await backend.snapshot({
+      op: "snapshot",
+      include_tree: true,
+      max_nodes: 16,
+      max_text_chars: 1024,
+    });
+
+    expect(snapshot.windows).toEqual([
+      {
+        ref: "atspi:app|/win1",
+        title: "Window One",
+        bounds: { x: 10, y: 20, width: 300, height: 200 },
+        focused: true,
+      },
+      {
+        ref: "atspi:app|/win2",
+        title: "Window Two",
+        bounds: { x: 400, y: 20, width: 300, height: 200 },
+        focused: false,
+      },
+    ]);
   });
 
   it("does not consume query node budget on visited nodes", async () => {

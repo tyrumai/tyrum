@@ -10,6 +10,7 @@ export NOVNC_PORT="${NOVNC_PORT:-6080}"
 # Maximize a11y availability for future AT-SPI backends.
 export NO_AT_BRIDGE="${NO_AT_BRIDGE:-0}"
 export QT_ACCESSIBILITY="${QT_ACCESSIBILITY:-1}"
+export GTK_MODULES="${GTK_MODULES:-gail:atk-bridge}"
 
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime}"
 mkdir -p "$XDG_RUNTIME_DIR"
@@ -22,6 +23,20 @@ dbus-daemon --system --fork --nopidfile --print-address >/dev/null
 if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
   eval "$(dbus-launch --sh-syntax)"
 fi
+
+mkdir -p /etc/profile.d
+cat >/etc/profile.d/tyrum-desktop-sandbox-env.sh <<EOF
+export DISPLAY=$(printf %q "$DISPLAY")
+export DESKTOP_GEOMETRY=$(printf %q "$DESKTOP_GEOMETRY")
+export DESKTOP_DEPTH=$(printf %q "$DESKTOP_DEPTH")
+export NO_AT_BRIDGE=$(printf %q "$NO_AT_BRIDGE")
+export QT_ACCESSIBILITY=$(printf %q "$QT_ACCESSIBILITY")
+export XDG_RUNTIME_DIR=$(printf %q "$XDG_RUNTIME_DIR")
+export DBUS_SESSION_BUS_ADDRESS=$(printf %q "${DBUS_SESSION_BUS_ADDRESS:-}")
+export DBUS_SESSION_BUS_PID=$(printf %q "${DBUS_SESSION_BUS_PID:-}")
+export GTK_MODULES=$(printf %q "$GTK_MODULES")
+EOF
+chmod 0644 /etc/profile.d/tyrum-desktop-sandbox-env.sh
 
 echo "desktop-sandbox: starting Xvfb (${DISPLAY})"
 Xvfb "$DISPLAY" -screen 0 "${DESKTOP_GEOMETRY}x${DESKTOP_DEPTH}" -nolisten tcp -ac &

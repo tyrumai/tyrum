@@ -15,6 +15,21 @@ function stubMcpManager(): McpManager {
   } as unknown as McpManager;
 }
 
+function unwrapToolOutput(output: string): string {
+  const trimmed = output.trim();
+  const match = trimmed.match(/^<data source="tool">\s*([\s\S]*)\s*<\/data>$/);
+  return (match?.[1] ?? trimmed).trim();
+}
+
+function extractEvidenceArtifactId(output: string, key: "artifact" | "tree_artifact"): string {
+  const parsed = JSON.parse(unwrapToolOutput(output)) as { evidence?: unknown } | undefined;
+  const evidence = parsed?.evidence as Record<string, unknown> | undefined;
+  const artifact = evidence?.[key] as { artifact_id?: unknown } | undefined;
+  const artifactId = artifact?.artifact_id;
+  expect(typeof artifactId).toBe("string");
+  return artifactId as string;
+}
+
 describe("tool.node.dispatch desktop evidence artifacts", () => {
   let originalTyrumHome: string | undefined;
   let homeDir: string | undefined;
@@ -124,6 +139,8 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     expect(result.output).not.toContain("bytesBase64");
     expect(result.output).not.toContain(bytesBase64);
 
+    const artifactId = extractEvidenceArtifactId(result.output, "artifact");
+
     const row = await container.db.get<{
       artifact_id: string;
       run_id: string | null;
@@ -134,17 +151,15 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     }>(
       `SELECT artifact_id, run_id, step_id, attempt_id, sensitivity, labels_json
        FROM execution_artifacts
-       WHERE run_id = ? AND step_id = ? AND kind = 'screenshot'
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [scope.runId, scope.stepId],
+       WHERE artifact_id = ?`,
+      [artifactId],
     );
     expect(row).toBeTruthy();
     expect(row?.attempt_id).toBe(scope.attemptId);
     expect(row?.sensitivity).toBe("sensitive");
     expect(row?.labels_json).toContain("desktop");
 
-    const res = await app.request(`/runs/${scope.runId}/artifacts/${row!.artifact_id}`);
+    const res = await app.request(`/runs/${scope.runId}/artifacts/${artifactId}`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/png");
     expect(Buffer.from(await res.arrayBuffer())).toEqual(pngBytes);
@@ -224,6 +239,8 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     expect(result.output).not.toContain("bytesBase64");
     expect(result.output).not.toContain(bytesBase64);
 
+    const artifactId = extractEvidenceArtifactId(result.output, "tree_artifact");
+
     const row = await container.db.get<{
       artifact_id: string;
       kind: string;
@@ -233,10 +250,8 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     }>(
       `SELECT artifact_id, kind, mime_type, sensitivity, labels_json
        FROM execution_artifacts
-       WHERE run_id = ? AND step_id = ? AND kind = 'dom_snapshot'
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [scope.runId, scope.stepId],
+       WHERE artifact_id = ?`,
+      [artifactId],
     );
     expect(row).toBeTruthy();
     expect(row?.kind).toBe("dom_snapshot");
@@ -244,7 +259,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     expect(row?.sensitivity).toBe("sensitive");
     expect(row?.labels_json).toContain("a11y-tree");
 
-    const res = await app.request(`/runs/${scope.runId}/artifacts/${row!.artifact_id}`);
+    const res = await app.request(`/runs/${scope.runId}/artifacts/${artifactId}`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("application/json");
     expect(await res.json()).toEqual(tree);
@@ -313,6 +328,8 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     expect(result.output).toContain("tree_artifact");
     expect(result.output).not.toContain('"tree":{');
 
+    const artifactId = extractEvidenceArtifactId(result.output, "tree_artifact");
+
     const row = await container.db.get<{
       artifact_id: string;
       kind: string;
@@ -322,10 +339,8 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     }>(
       `SELECT artifact_id, kind, mime_type, sensitivity, labels_json
        FROM execution_artifacts
-       WHERE run_id = ? AND step_id = ? AND kind = 'dom_snapshot'
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [scope.runId, scope.stepId],
+       WHERE artifact_id = ?`,
+      [artifactId],
     );
     expect(row).toBeTruthy();
     expect(row?.kind).toBe("dom_snapshot");
@@ -333,7 +348,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     expect(row?.sensitivity).toBe("sensitive");
     expect(row?.labels_json).toContain("a11y-tree");
 
-    const res = await app.request(`/runs/${scope.runId}/artifacts/${row!.artifact_id}`);
+    const res = await app.request(`/runs/${scope.runId}/artifacts/${artifactId}`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("application/json");
     expect(await res.json()).toEqual(tree);
@@ -410,13 +425,13 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     expect(result.output).toContain("artifact://");
     expect(result.output).not.toContain(bytesBase64);
 
+    const artifactId = extractEvidenceArtifactId(result.output, "artifact");
+
     const row = await container.db.get<{ sensitivity: string }>(
       `SELECT sensitivity
        FROM execution_artifacts
-       WHERE run_id = ? AND step_id = ? AND kind = 'screenshot'
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [scope.runId, scope.stepId],
+       WHERE artifact_id = ?`,
+      [artifactId],
     );
     expect(row).toBeTruthy();
     expect(row?.sensitivity).toBe("normal");
@@ -439,13 +454,13 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
 
     expect(result2.error).toBeUndefined();
 
+    const artifactId2 = extractEvidenceArtifactId(result2.output, "artifact");
+
     const row2 = await container.db.get<{ sensitivity: string }>(
       `SELECT sensitivity
        FROM execution_artifacts
-       WHERE run_id = ? AND step_id = ? AND kind = 'screenshot'
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [scope.runId, scope.stepId],
+       WHERE artifact_id = ?`,
+      [artifactId2],
     );
     expect(row2).toBeTruthy();
     expect(row2?.sensitivity).toBe("sensitive");

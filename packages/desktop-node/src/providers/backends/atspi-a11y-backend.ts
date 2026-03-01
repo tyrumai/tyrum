@@ -8,6 +8,7 @@ import type {
   DesktopUiNodeSummary,
   DesktopUiRect,
   DesktopUiTree,
+  DesktopWindow,
 } from "@tyrum/schemas";
 
 import { DEFAULT_A11Y_MAX_DEPTH } from "../a11y/prune-ui-tree.js";
@@ -38,7 +39,10 @@ const ATSPI_ROOT_ACCESSIBLE_REF: AtSpiAccessibleRef = {
   objectPath: ATSPI_ROOT_ACCESSIBLE_PATH,
 };
 
-const QUERY_MAX_NODES = 2_048;
+const QUERY_MAX_NODES = 8_192;
+const QUERY_MAX_CHILDREN = 512;
+
+const MAX_WINDOWS = 32;
 
 const ATSPI_STATE_TYPE_NAMES: Array<string | undefined> = [
   "invalid",
@@ -87,6 +91,15 @@ const ATSPI_STATE_TYPE_NAMES: Array<string | undefined> = [
   "read_only",
 ];
 
+function unwrapDbusValue(value: unknown): unknown {
+  if (Array.isArray(value) && value.length === 1) return unwrapDbusValue(value[0]);
+  if (!value || typeof value !== "object") return value;
+
+  const nested = (value as { value?: unknown }).value;
+  if (nested === undefined) return value;
+  return unwrapDbusValue(nested);
+}
+
 function toUint32(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value >>> 0;
   if (typeof value === "bigint") return Number(value & 0xffff_ffffn);
@@ -98,6 +111,49 @@ function toUint32(value: unknown): number {
     }
   }
   return 0;
+}
+
+function toNonNegativeInt(value: unknown): number {
+  const unwrapped = unwrapDbusValue(value);
+
+  if (unwrapped && typeof unwrapped === "object") {
+    const toNumber = (unwrapped as { toNumber?: unknown }).toNumber;
+    if (typeof toNumber === "function") {
+      const num = toNumber.call(unwrapped) as unknown;
+      if (typeof num === "number" && Number.isFinite(num)) {
+        return Math.max(0, Math.floor(num));
+      }
+    }
+  }
+
+  if (typeof unwrapped === "number" && Number.isFinite(unwrapped)) {
+    return Math.max(0, Math.floor(unwrapped));
+  }
+
+  if (typeof unwrapped === "bigint") {
+    if (unwrapped <= 0n) return 0;
+    const max = BigInt(Number.MAX_SAFE_INTEGER);
+    return Number(unwrapped > max ? max : unwrapped);
+  }
+
+  return 0;
+}
+
+function normalizeDbusBoolean(value: unknown): boolean | undefined {
+  const unwrapped = unwrapDbusValue(value);
+  if (typeof unwrapped === "boolean") return unwrapped;
+
+  if (typeof unwrapped === "number" && Number.isFinite(unwrapped)) {
+    if (unwrapped === 0) return false;
+    if (unwrapped === 1) return true;
+  }
+
+  if (typeof unwrapped === "bigint") {
+    if (unwrapped === 0n) return false;
+    if (unwrapped === 1n) return true;
+  }
+
+  return undefined;
 }
 
 function extractAtSpiStateWords(raw: unknown): unknown[] {
@@ -171,8 +227,9 @@ function parseAccessibleRef(value: unknown): AtSpiAccessibleRef | null {
 }
 
 function normalizeMaybe(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
+  const unwrapped = unwrapDbusValue(value);
+  if (typeof unwrapped !== "string") return undefined;
+  const trimmed = unwrapped.trim();
   return trimmed ? trimmed : undefined;
 }
 
@@ -226,6 +283,45 @@ function matchesSelector(input: {
   }
 
   return true;
+}
+
+function extractWindowsFromTree(root: DesktopUiTree["root"]): DesktopWindow[] {
+  const windows: DesktopWindow[] = [];
+  const seen = new Set<string>();
+
+  const visit = (node: DesktopUiTree["root"]): void => {
+    if (windows.length >= MAX_WINDOWS) return;
+
+    const role = node.role.trim().toLowerCase();
+    const isWindowRole = role === "frame" || role === "dialog" || role === "window";
+
+    if (
+      isWindowRole &&
+      typeof node.ref === "string" &&
+      node.ref.length > 0 &&
+      node.ref.length <= 256
+    ) {
+      const ref = node.ref;
+      if (!seen.has(ref)) {
+        seen.add(ref);
+        const title = node.name.trim();
+        windows.push({
+          ref,
+          title: title.length > 0 ? title : undefined,
+          bounds: node.bounds,
+          focused: node.states.some((state) => state.trim().toLowerCase() === "active"),
+        });
+      }
+    }
+
+    for (const child of node.children) {
+      if (windows.length >= MAX_WINDOWS) break;
+      visit(child);
+    }
+  };
+
+  visit(root);
+  return windows;
 }
 
 async function loadDbus(): Promise<typeof import("dbus-next")> {
@@ -332,7 +428,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     if (typeof getChildCount !== "function" || typeof getChildAtIndex !== "function") return [];
 
     const countRaw = await getChildCount.call(iface);
-    const count = typeof countRaw === "number" ? Math.max(0, Math.floor(countRaw)) : 0;
+    const count = toNonNegativeInt(countRaw);
     const maxCount = Math.min(count, limit);
     const children: AtSpiAccessibleRef[] = [];
     for (let i = 0; i < maxCount; i++) {
@@ -372,7 +468,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     if (action) {
       const getNActions = (action as any)["GetNActions"];
       const countRaw = typeof getNActions === "function" ? await getNActions.call(action) : 0;
-      const count = typeof countRaw === "number" ? Math.max(0, Math.floor(countRaw)) : 0;
+      const count = toNonNegativeInt(countRaw);
       const getName = (action as any)["GetName"];
       const getActionName = (action as any)["GetActionName"];
 
@@ -385,8 +481,8 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
               : null;
         if (!fn) break;
         const raw = await fn.call(action, i);
-        const name = typeof raw === "string" ? clampTrimmed(raw, MAX_ACTION_CHARS) : "";
-        if (name) actions.push(name);
+        const name = normalizeMaybe(raw);
+        if (name) actions.push(clampTrimmed(name, MAX_ACTION_CHARS));
       }
     }
 
@@ -470,7 +566,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     if (!rootNode) throw new Error("AT-SPI snapshot unavailable");
 
     return {
-      windows: [],
+      windows: extractWindowsFromTree(rootNode),
       tree: { root: rootNode },
     };
   }
@@ -537,7 +633,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
 
       if (depth >= DEFAULT_A11Y_MAX_DEPTH) return;
 
-      const childLimit = Math.min(MAX_NODE_CHILDREN, remainingNodes);
+      const childLimit = Math.min(QUERY_MAX_CHILDREN, remainingNodes);
       const children = await this.getChildren(ref, childLimit);
       for (const child of children) {
         if (matches.length >= args.limit) break;
@@ -587,35 +683,61 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
 
     const getNActions = (action as any)["GetNActions"];
     const countRaw = typeof getNActions === "function" ? await getNActions.call(action) : 0;
-    const count = typeof countRaw === "number" ? Math.max(0, Math.floor(countRaw)) : 0;
+    const count = toNonNegativeInt(countRaw);
 
     const getName = (action as any)["GetName"];
     const getActionName = (action as any)["GetActionName"];
     const doAction = (action as any)["DoAction"];
     if (typeof doAction !== "function") throw new Error("AT-SPI action unsupported");
 
+    const actionNameFn =
+      typeof getName === "function"
+        ? getName
+        : typeof getActionName === "function"
+          ? getActionName
+          : null;
+
     const candidates = ["click", "activate", "press"];
-    let chosenIndex: number | null = null;
-    for (let i = 0; i < count; i++) {
-      const fn =
-        typeof getName === "function"
-          ? getName
-          : typeof getActionName === "function"
-            ? getActionName
-            : null;
-      if (!fn) break;
-      const raw = await fn.call(action, i);
-      const name = normalizeMaybe(raw)?.toLowerCase();
-      if (!name) continue;
-      if (candidates.includes(name)) {
-        chosenIndex = i;
-        break;
+    const candidateIndices: number[] = [];
+    const actionNamesByIndex: Array<string | undefined> = [];
+    if (actionNameFn) {
+      for (let i = 0; i < count && i < MAX_NODE_ACTIONS; i++) {
+        const raw = await actionNameFn.call(action, i);
+        const name = normalizeMaybe(raw)?.toLowerCase();
+        actionNamesByIndex[i] = name;
+        if (!name) continue;
+        if (candidates.includes(name)) candidateIndices.push(i);
       }
     }
 
-    if (chosenIndex === null) throw new Error("AT-SPI click/activate unsupported");
+    const indicesToTry = candidateIndices.length > 0 ? candidateIndices : [0];
 
-    await doAction.call(action, chosenIndex);
-    return { resolved_element_ref: toAtSpiElementRef(ref) };
+    let lastError: unknown;
+    for (const index of indicesToTry) {
+      let didAct: unknown;
+      try {
+        didAct = await doAction.call(action, index);
+      } catch (err) {
+        lastError = err;
+        continue;
+      }
+
+      if (normalizeDbusBoolean(didAct) === false) {
+        const actionName = actionNamesByIndex[index];
+        lastError = new Error(
+          `DoAction(${index}${actionName ? `:${actionName}` : ""}) returned ${String(didAct)}`,
+        );
+        continue;
+      }
+
+      return { resolved_element_ref: toAtSpiElementRef(ref) };
+    }
+
+    if (lastError instanceof Error) {
+      throw new Error(`AT-SPI click/activate unsupported (${lastError.message})`, {
+        cause: lastError,
+      });
+    }
+    throw new Error("AT-SPI click/activate unsupported");
   }
 }
