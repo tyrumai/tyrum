@@ -20,6 +20,19 @@ function setNativeValue(element: HTMLInputElement | HTMLTextAreaElement, value: 
   element.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+async function switchHttpTab(
+  container: HTMLElement,
+  tabTestId: string,
+): Promise<HTMLButtonElement> {
+  const button = container.querySelector<HTMLButtonElement>(`[data-testid="${tabTestId}"]`);
+  expect(button).not.toBeNull();
+  await act(async () => {
+    button?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    await Promise.resolve();
+  });
+  return button!;
+}
+
 function createTestCore(): {
   core: OperatorCore;
   routingConfigUpdate: ReturnType<typeof vi.fn>;
@@ -59,7 +72,7 @@ function createTestCore(): {
 }
 
 describe("AdminPage (HTTP)", () => {
-  it("renders Routing config and Secrets panels", () => {
+  it("renders Routing config and Secrets panels", async () => {
     const { core } = createTestCore();
 
     const { container, root } = renderIntoDocument(
@@ -68,7 +81,10 @@ describe("AdminPage (HTTP)", () => {
       ]),
     );
 
+    await switchHttpTab(container, "admin-http-tab-routing-config");
     expect(container.querySelector(`[data-testid="admin-http-routing-config"]`)).not.toBeNull();
+
+    await switchHttpTab(container, "admin-http-tab-secrets");
     expect(container.querySelector(`[data-testid="admin-http-secrets"]`)).not.toBeNull();
 
     cleanupTestRoot({ container, root });
@@ -84,6 +100,8 @@ describe("AdminPage (HTTP) routing config", () => {
         React.createElement(AdminPage, { key: "page", core }),
       ]),
     );
+
+    await switchHttpTab(container, "admin-http-tab-routing-config");
 
     const configTextarea = container.querySelector<HTMLTextAreaElement>(
       `[data-testid="routing-config-update-json"]`,
@@ -143,6 +161,8 @@ describe("AdminPage (HTTP) secrets", () => {
         React.createElement(AdminPage, { key: "page", core }),
       ]),
     );
+
+    await switchHttpTab(container, "admin-http-tab-secrets");
 
     const rotateButton = container.querySelector<HTMLButtonElement>(
       `[data-testid="secrets-rotate-open"]`,
