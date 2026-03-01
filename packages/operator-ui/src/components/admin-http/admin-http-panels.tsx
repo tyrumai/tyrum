@@ -9,6 +9,7 @@ import { JsonTextarea } from "../ui/json-textarea.js";
 import { Label } from "../ui/label.js";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
+import { toArrayBufferBytes } from "../../utils/blob-bytes.js";
 
 type ApiActionState<T> =
   | { status: "idle" }
@@ -310,8 +311,8 @@ function ContextPanel({ core }: { core: OperatorCore }) {
   const parsedLimit = (() => {
     const trimmed = listLimit.trim();
     if (!trimmed) return undefined;
-    const n = Number.parseInt(trimmed, 10);
-    return Number.isFinite(n) && n > 0 ? n : undefined;
+    const n = Number(trimmed);
+    return Number.isFinite(n) && Number.isInteger(n) && n > 0 ? n : undefined;
   })();
 
   const invalidLimit = listLimit.trim() !== "" && parsedLimit === undefined;
@@ -570,7 +571,8 @@ function ArtifactsPanel({ core }: { core: OperatorCore }) {
           return;
         }
         const contentType = res.contentType ?? "application/octet-stream";
-        const blob = new Blob([res.bytes], { type: contentType });
+        const blobBytes = toArrayBufferBytes(res.bytes);
+        const blob = new Blob([blobBytes], { type: contentType });
         const url = URL.createObjectURL(blob);
         setBytesResult({
           kind: "bytes",

@@ -12,6 +12,7 @@ import {
 } from "../ui/dialog.js";
 import { JsonViewer } from "../ui/json-viewer.js";
 import { Spinner } from "../ui/spinner.js";
+import { toArrayBufferBytes } from "../../utils/blob-bytes.js";
 
 type ArtifactRef = ExecutionAttempt["artifacts"][number];
 
@@ -100,10 +101,7 @@ function ArtifactInlinePreview({
     const contentType = bytes.contentType ?? artifact.mime_type ?? "application/octet-stream";
     if (!contentType.startsWith("image/")) return;
 
-    const blobBytes =
-      bytes.bytes.buffer instanceof ArrayBuffer
-        ? (bytes.bytes as Uint8Array<ArrayBuffer>)
-        : new Uint8Array(bytes.bytes);
+    const blobBytes = toArrayBufferBytes(bytes.bytes);
 
     const url = URL.createObjectURL(new Blob([blobBytes], { type: contentType }));
     setBlobUrl(url);
