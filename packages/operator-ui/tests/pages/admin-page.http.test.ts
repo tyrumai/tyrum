@@ -23,6 +23,7 @@ function setNativeValue(element: HTMLInputElement | HTMLTextAreaElement, value: 
 function createTestCore(): {
   core: OperatorCore;
   routingConfigUpdate: ReturnType<typeof vi.fn>;
+  secretsRotate: ReturnType<typeof vi.fn>;
 } {
   const adminModeStore = createAdminModeStore({
     tickIntervalMs: 0,
@@ -34,6 +35,7 @@ function createTestCore(): {
   });
 
   const routingConfigUpdate = vi.fn(async () => ({ revision: 1, config: { v: 1 } }) as unknown);
+  const secretsRotate = vi.fn(async () => ({ revoked: true, handle: {} }) as unknown);
 
   const core = {
     httpBaseUrl: "http://example.test",
@@ -47,13 +49,13 @@ function createTestCore(): {
       secrets: {
         store: vi.fn(async () => ({ handle: {} }) as unknown),
         list: vi.fn(async () => ({ handles: [] }) as unknown),
-        rotate: vi.fn(async () => ({ revoked: false, handle: {} }) as unknown),
+        rotate: secretsRotate,
         revoke: vi.fn(async () => ({ revoked: true }) as unknown),
       },
     },
   } as unknown as OperatorCore;
 
-  return { core, routingConfigUpdate };
+  return { core, routingConfigUpdate, secretsRotate };
 }
 
 describe("AdminPage (HTTP)", () => {
@@ -71,7 +73,9 @@ describe("AdminPage (HTTP)", () => {
 
     cleanupTestRoot({ container, root });
   });
+});
 
+describe("AdminPage (HTTP) routing config", () => {
   it("requires confirmation before updating routing config", async () => {
     const { core, routingConfigUpdate } = createTestCore();
 
@@ -125,6 +129,77 @@ describe("AdminPage (HTTP)", () => {
     });
 
     expect(routingConfigUpdate).toHaveBeenCalledTimes(1);
+
+    cleanupTestRoot({ container, root });
+  });
+});
+
+describe("AdminPage (HTTP) secrets", () => {
+  it("preserves whitespace when rotating secrets", async () => {
+    const { core, secretsRotate } = createTestCore();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(AdminModeProvider, { core, mode: "web" }, [
+        React.createElement(AdminPage, { key: "page", core }),
+      ]),
+    );
+
+    const rotateButton = container.querySelector<HTMLButtonElement>(
+      `[data-testid="secrets-rotate-open"]`,
+    );
+    expect(rotateButton).not.toBeNull();
+
+    const rotateCard = rotateButton?.closest<HTMLDivElement>("div.rounded-lg");
+    expect(rotateCard).not.toBeNull();
+
+    const labels = Array.from(rotateCard?.querySelectorAll<HTMLLabelElement>("label") ?? []);
+
+    const handleIdLabel = labels.find((label) => label.textContent?.trim().startsWith("Handle ID"));
+    expect(handleIdLabel).toBeDefined();
+    const handleId = handleIdLabel?.getAttribute("for") ?? "";
+    expect(handleId).toBeTruthy();
+    const handleIdInput = rotateCard?.querySelector<HTMLInputElement>(`input[id="${handleId}"]`);
+    expect(handleIdInput).not.toBeNull();
+
+    const valueLabel = labels.find((label) => label.textContent?.trim().startsWith("New value"));
+    expect(valueLabel).toBeDefined();
+    const valueId = valueLabel?.getAttribute("for") ?? "";
+    expect(valueId).toBeTruthy();
+    const valueInput = rotateCard?.querySelector<HTMLInputElement>(`input[id="${valueId}"]`);
+    expect(valueInput).not.toBeNull();
+
+    act(() => {
+      setNativeValue(handleIdInput!, "h-1");
+      setNativeValue(valueInput!, "  new-secret  ");
+    });
+
+    expect(rotateButton?.disabled).toBe(false);
+
+    act(() => {
+      rotateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = document.body.querySelector(`[data-testid="confirm-danger-dialog"]`);
+    expect(dialog).not.toBeNull();
+
+    const checkbox = document.body.querySelector(`[data-testid="confirm-danger-checkbox"]`);
+    expect(checkbox).not.toBeNull();
+
+    const confirmButton = document.body.querySelector<HTMLButtonElement>(
+      `[data-testid="confirm-danger-confirm"]`,
+    );
+    expect(confirmButton).not.toBeNull();
+
+    act(() => {
+      checkbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(secretsRotate).toHaveBeenCalledWith("h-1", { value: "  new-secret  " }, undefined);
 
     cleanupTestRoot({ container, root });
   });

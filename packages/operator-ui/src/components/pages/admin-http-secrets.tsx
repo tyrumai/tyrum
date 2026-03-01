@@ -9,6 +9,7 @@ import { Label } from "../ui/label.js";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
 
 type SecretProviderKind = "env" | "file" | "keychain";
+type SecretsApi = OperatorCore["http"]["secrets"];
 
 function normalizeAgentId(agentIdRaw: string): { agent_id?: string } | undefined {
   const agentId = agentIdRaw.trim();
@@ -17,159 +18,131 @@ function normalizeAgentId(agentIdRaw: string): { agent_id?: string } | undefined
 }
 
 export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.ReactElement {
-  const api = core.http.secrets;
-
   const [agentIdRaw, setAgentIdRaw] = React.useState("");
 
-  const [listBusy, setListBusy] = React.useState(false);
-  const [listResult, setListResult] = React.useState<unknown>(undefined);
-  const [listError, setListError] = React.useState<unknown>(undefined);
-
-  const [storeOpen, setStoreOpen] = React.useState(false);
-  const [storeScope, setStoreScope] = React.useState("");
-  const [storeProvider, setStoreProvider] = React.useState<SecretProviderKind>("env");
-  const [storeValue, setStoreValue] = React.useState("");
-  const [storeResult, setStoreResult] = React.useState<unknown>(undefined);
-  const [storeError, setStoreError] = React.useState<unknown>(undefined);
-
-  const [rotateOpen, setRotateOpen] = React.useState(false);
-  const [rotateHandleId, setRotateHandleId] = React.useState("");
-  const [rotateValue, setRotateValue] = React.useState("");
-  const [rotateResult, setRotateResult] = React.useState<unknown>(undefined);
-  const [rotateError, setRotateError] = React.useState<unknown>(undefined);
-
-  const [revokeOpen, setRevokeOpen] = React.useState(false);
-  const [revokeHandleId, setRevokeHandleId] = React.useState("");
-  const [revokeResult, setRevokeResult] = React.useState<unknown>(undefined);
-  const [revokeError, setRevokeError] = React.useState<unknown>(undefined);
-
+  const api = core.http.secrets;
   const agentQuery = normalizeAgentId(agentIdRaw);
-
-  const canStore = storeScope.trim().length > 0;
-  const canRotate = rotateHandleId.trim().length > 0 && rotateValue.trim().length > 0;
-  const canRevoke = revokeHandleId.trim().length > 0;
-
-  const runList = async (): Promise<void> => {
-    if (listBusy) return;
-    setListBusy(true);
-    setListResult(undefined);
-    setListError(undefined);
-    try {
-      const result = await api.list(agentQuery);
-      setListResult(result);
-    } catch (error) {
-      setListError(error);
-    } finally {
-      setListBusy(false);
-    }
-  };
-
-  const runStore = async (): Promise<void> => {
-    setStoreResult(undefined);
-    setStoreError(undefined);
-    const scope = storeScope.trim();
-    if (!scope) {
-      setStoreError(new Error("scope is required"));
-      return;
-    }
-
-    const rawValue = storeValue;
-    const value = rawValue ? rawValue : undefined;
-
-    try {
-      const result = await api.store({ scope, value, provider: storeProvider }, agentQuery);
-      setStoreResult(result);
-      setStoreValue("");
-    } catch (error) {
-      setStoreError(error);
-      throw error;
-    }
-  };
-
-  const runRotate = async (): Promise<void> => {
-    setRotateResult(undefined);
-    setRotateError(undefined);
-
-    const handleId = rotateHandleId.trim();
-    if (!handleId) {
-      setRotateError(new Error("handle_id is required"));
-      return;
-    }
-    const value = rotateValue.trim();
-    if (!value) {
-      setRotateError(new Error("value is required"));
-      return;
-    }
-
-    try {
-      const result = await api.rotate(handleId, { value }, agentQuery);
-      setRotateResult(result);
-      setRotateValue("");
-    } catch (error) {
-      setRotateError(error);
-      throw error;
-    }
-  };
-
-  const runRevoke = async (): Promise<void> => {
-    setRevokeResult(undefined);
-    setRevokeError(undefined);
-
-    const handleId = revokeHandleId.trim();
-    if (!handleId) {
-      setRevokeError(new Error("handle_id is required"));
-      return;
-    }
-
-    try {
-      const result = await api.revoke(handleId, agentQuery);
-      setRevokeResult(result);
-    } catch (error) {
-      setRevokeError(error);
-      throw error;
-    }
-  };
 
   return (
     <section className="grid gap-3" data-testid="admin-http-secrets">
       <div className="text-sm font-medium text-fg">Secrets</div>
 
-      <Card>
-        <CardHeader>
-          <div className="text-sm font-medium text-fg">Agent scope (optional)</div>
-        </CardHeader>
-        <CardContent>
-          <Input
-            label="Agent ID"
-            placeholder="Optional"
-            value={agentIdRaw}
-            onChange={(event) => {
-              setAgentIdRaw(event.target.value);
-            }}
-          />
-        </CardContent>
-      </Card>
+      <AgentScopeCard agentIdRaw={agentIdRaw} onAgentIdRawChange={setAgentIdRaw} />
+      <SecretsListCard api={api} agentQuery={agentQuery} />
+      <SecretsStoreCard api={api} agentQuery={agentQuery} />
+      <SecretsRotateCard api={api} agentQuery={agentQuery} />
+      <SecretsRevokeCard api={api} agentQuery={agentQuery} />
+    </section>
+  );
+}
 
-      <Card>
-        <CardHeader>
-          <div className="text-sm font-medium text-fg">List</div>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <Button
-            type="button"
-            variant="secondary"
-            data-testid="secrets-list"
-            isLoading={listBusy}
-            onClick={() => {
-              void runList();
-            }}
-          >
-            List secrets
-          </Button>
-          <ApiResultCard heading="Secrets" value={listResult} error={listError} />
-        </CardContent>
-      </Card>
+function AgentScopeCard({
+  agentIdRaw,
+  onAgentIdRawChange,
+}: {
+  agentIdRaw: string;
+  onAgentIdRawChange: (next: string) => void;
+}): React.ReactElement {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="text-sm font-medium text-fg">Agent scope (optional)</div>
+      </CardHeader>
+      <CardContent>
+        <Input
+          label="Agent ID"
+          placeholder="Optional"
+          value={agentIdRaw}
+          onChange={(event) => onAgentIdRawChange(event.target.value)}
+        />
+      </CardContent>
+    </Card>
+  );
+}
 
+function SecretsListCard({
+  api,
+  agentQuery,
+}: {
+  api: SecretsApi;
+  agentQuery: ReturnType<typeof normalizeAgentId>;
+}): React.ReactElement {
+  const [busy, setBusy] = React.useState(false);
+  const [result, setResult] = React.useState<unknown>(undefined);
+  const [error, setError] = React.useState<unknown>(undefined);
+
+  const runList = async (): Promise<void> => {
+    if (busy) return;
+    setBusy(true);
+    setResult(undefined);
+    setError(undefined);
+    try {
+      setResult(await api.list(agentQuery));
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="text-sm font-medium text-fg">List</div>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        <Button
+          type="button"
+          variant="secondary"
+          data-testid="secrets-list"
+          isLoading={busy}
+          onClick={() => void runList()}
+        >
+          List secrets
+        </Button>
+        <ApiResultCard heading="Secrets" value={result} error={error} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function SecretsStoreCard({
+  api,
+  agentQuery,
+}: {
+  api: SecretsApi;
+  agentQuery: ReturnType<typeof normalizeAgentId>;
+}): React.ReactElement {
+  const [open, setOpen] = React.useState(false);
+  const [scopeRaw, setScopeRaw] = React.useState("");
+  const [provider, setProvider] = React.useState<SecretProviderKind>("env");
+  const [valueRaw, setValueRaw] = React.useState("");
+  const [result, setResult] = React.useState<unknown>(undefined);
+  const [error, setError] = React.useState<unknown>(undefined);
+
+  const canStore = scopeRaw.trim().length > 0;
+
+  const runStore = async (): Promise<void> => {
+    setResult(undefined);
+    setError(undefined);
+
+    const scope = scopeRaw.trim();
+    if (!scope) return void setError(new Error("scope is required"));
+
+    const rawValue = valueRaw;
+    const value = rawValue ? rawValue : undefined;
+
+    try {
+      setResult(await api.store({ scope, value, provider }, agentQuery));
+      setValueRaw("");
+    } catch (e) {
+      setError(e);
+      throw e;
+    }
+  };
+
+  return (
+    <>
       <Card>
         <CardHeader>
           <div className="text-sm font-medium text-fg">Store</div>
@@ -178,36 +151,11 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
           <Input
             label="Scope"
             required
-            value={storeScope}
-            onChange={(event) => {
-              setStoreScope(event.target.value);
-            }}
+            value={scopeRaw}
+            onChange={(event) => setScopeRaw(event.target.value)}
           />
 
-          <fieldset className="grid gap-2">
-            <legend className="text-sm font-medium leading-none text-fg">Provider</legend>
-            <RadioGroup
-              value={storeProvider}
-              onValueChange={(value) => {
-                if (value === "env" || value === "file" || value === "keychain") {
-                  setStoreProvider(value);
-                }
-              }}
-              className="grid gap-2"
-            >
-              {(["env", "file", "keychain"] as const).map((kind) => {
-                const id = `secret-provider-${kind}`;
-                return (
-                  <div key={kind} className="flex items-center gap-2">
-                    <RadioGroupItem id={id} value={kind} />
-                    <Label htmlFor={id} className="text-sm font-normal text-fg">
-                      {kind}
-                    </Label>
-                  </div>
-                );
-              })}
-            </RadioGroup>
-          </fieldset>
+          <SecretProviderFieldset provider={provider} onProviderChange={setProvider} />
 
           <Input
             label="Value"
@@ -217,13 +165,11 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
             autoCorrect="off"
             autoComplete="off"
             spellCheck={false}
-            value={storeValue}
-            onChange={(event) => {
-              setStoreValue(event.target.value);
-            }}
+            value={valueRaw}
+            onChange={(event) => setValueRaw(event.target.value)}
           />
 
-          <ApiResultCard heading="Store result" value={storeResult} error={storeError} />
+          <ApiResultCard heading="Store result" value={result} error={error} />
         </CardContent>
         <CardFooter>
           <Button
@@ -231,9 +177,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
             variant="danger"
             data-testid="secrets-store-open"
             disabled={!canStore}
-            onClick={() => {
-              setStoreOpen(true);
-            }}
+            onClick={() => setOpen(true)}
           >
             Store secret
           </Button>
@@ -241,14 +185,86 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
       </Card>
 
       <ConfirmDangerDialog
-        open={storeOpen}
-        onOpenChange={setStoreOpen}
+        open={open}
+        onOpenChange={setOpen}
         title="Store secret"
         description="Secret values are write-only and will not be displayed after submission."
         confirmLabel="Store"
         onConfirm={runStore}
       />
+    </>
+  );
+}
 
+function SecretProviderFieldset({
+  provider,
+  onProviderChange,
+}: {
+  provider: SecretProviderKind;
+  onProviderChange: (next: SecretProviderKind) => void;
+}): React.ReactElement {
+  return (
+    <fieldset className="grid gap-2">
+      <legend className="text-sm font-medium leading-none text-fg">Provider</legend>
+      <RadioGroup
+        value={provider}
+        onValueChange={(value) => {
+          if (value === "env" || value === "file" || value === "keychain") onProviderChange(value);
+        }}
+        className="grid gap-2"
+      >
+        {(["env", "file", "keychain"] as const).map((kind) => {
+          const id = `secret-provider-${kind}`;
+          return (
+            <div key={kind} className="flex items-center gap-2">
+              <RadioGroupItem id={id} value={kind} />
+              <Label htmlFor={id} className="text-sm font-normal text-fg">
+                {kind}
+              </Label>
+            </div>
+          );
+        })}
+      </RadioGroup>
+    </fieldset>
+  );
+}
+
+function SecretsRotateCard({
+  api,
+  agentQuery,
+}: {
+  api: SecretsApi;
+  agentQuery: ReturnType<typeof normalizeAgentId>;
+}): React.ReactElement {
+  const [open, setOpen] = React.useState(false);
+  const [handleIdRaw, setHandleIdRaw] = React.useState("");
+  const [valueRaw, setValueRaw] = React.useState("");
+  const [result, setResult] = React.useState<unknown>(undefined);
+  const [error, setError] = React.useState<unknown>(undefined);
+
+  const canRotate = handleIdRaw.trim().length > 0 && valueRaw.trim().length > 0;
+
+  const runRotate = async (): Promise<void> => {
+    setResult(undefined);
+    setError(undefined);
+
+    const handleId = handleIdRaw.trim();
+    if (!handleId) return void setError(new Error("handle_id is required"));
+
+    const rawValue = valueRaw;
+    if (rawValue.trim().length === 0) return void setError(new Error("value is required"));
+
+    try {
+      setResult(await api.rotate(handleId, { value: rawValue }, agentQuery));
+      setValueRaw("");
+    } catch (e) {
+      setError(e);
+      throw e;
+    }
+  };
+
+  return (
+    <>
       <Card>
         <CardHeader>
           <div className="text-sm font-medium text-fg">Rotate</div>
@@ -257,10 +273,8 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
           <Input
             label="Handle ID"
             required
-            value={rotateHandleId}
-            onChange={(event) => {
-              setRotateHandleId(event.target.value);
-            }}
+            value={handleIdRaw}
+            onChange={(event) => setHandleIdRaw(event.target.value)}
           />
           <Input
             label="New value"
@@ -271,12 +285,10 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
             autoCorrect="off"
             autoComplete="off"
             spellCheck={false}
-            value={rotateValue}
-            onChange={(event) => {
-              setRotateValue(event.target.value);
-            }}
+            value={valueRaw}
+            onChange={(event) => setValueRaw(event.target.value)}
           />
-          <ApiResultCard heading="Rotate result" value={rotateResult} error={rotateError} />
+          <ApiResultCard heading="Rotate result" value={result} error={error} />
         </CardContent>
         <CardFooter>
           <Button
@@ -284,9 +296,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
             variant="danger"
             data-testid="secrets-rotate-open"
             disabled={!canRotate}
-            onClick={() => {
-              setRotateOpen(true);
-            }}
+            onClick={() => setOpen(true)}
           >
             Rotate secret
           </Button>
@@ -294,14 +304,48 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
       </Card>
 
       <ConfirmDangerDialog
-        open={rotateOpen}
-        onOpenChange={setRotateOpen}
+        open={open}
+        onOpenChange={setOpen}
         title="Rotate secret"
         description="Secret values are write-only and will not be displayed after submission."
         confirmLabel="Rotate"
         onConfirm={runRotate}
       />
+    </>
+  );
+}
 
+function SecretsRevokeCard({
+  api,
+  agentQuery,
+}: {
+  api: SecretsApi;
+  agentQuery: ReturnType<typeof normalizeAgentId>;
+}): React.ReactElement {
+  const [open, setOpen] = React.useState(false);
+  const [handleIdRaw, setHandleIdRaw] = React.useState("");
+  const [result, setResult] = React.useState<unknown>(undefined);
+  const [error, setError] = React.useState<unknown>(undefined);
+
+  const canRevoke = handleIdRaw.trim().length > 0;
+
+  const runRevoke = async (): Promise<void> => {
+    setResult(undefined);
+    setError(undefined);
+
+    const handleId = handleIdRaw.trim();
+    if (!handleId) return void setError(new Error("handle_id is required"));
+
+    try {
+      setResult(await api.revoke(handleId, agentQuery));
+    } catch (e) {
+      setError(e);
+      throw e;
+    }
+  };
+
+  return (
+    <>
       <Card>
         <CardHeader>
           <div className="text-sm font-medium text-fg">Revoke</div>
@@ -310,12 +354,10 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
           <Input
             label="Handle ID"
             required
-            value={revokeHandleId}
-            onChange={(event) => {
-              setRevokeHandleId(event.target.value);
-            }}
+            value={handleIdRaw}
+            onChange={(event) => setHandleIdRaw(event.target.value)}
           />
-          <ApiResultCard heading="Revoke result" value={revokeResult} error={revokeError} />
+          <ApiResultCard heading="Revoke result" value={result} error={error} />
         </CardContent>
         <CardFooter>
           <Button
@@ -323,9 +365,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
             variant="danger"
             data-testid="secrets-revoke-open"
             disabled={!canRevoke}
-            onClick={() => {
-              setRevokeOpen(true);
-            }}
+            onClick={() => setOpen(true)}
           >
             Revoke secret
           </Button>
@@ -333,13 +373,13 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
       </Card>
 
       <ConfirmDangerDialog
-        open={revokeOpen}
-        onOpenChange={setRevokeOpen}
+        open={open}
+        onOpenChange={setOpen}
         title="Revoke secret"
         description="Revoking a secret cannot be undone."
         confirmLabel="Revoke"
         onConfirm={runRevoke}
       />
-    </section>
+    </>
   );
 }

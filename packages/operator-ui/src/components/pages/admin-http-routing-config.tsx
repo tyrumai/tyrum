@@ -8,127 +8,91 @@ import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { Input } from "../ui/input.js";
 import { JsonTextarea } from "../ui/json-textarea.js";
 
+type RoutingConfigApi = OperatorCore["http"]["routingConfig"];
+
 export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): React.ReactElement {
   const api = core.http.routingConfig;
-
-  const [getResult, setGetResult] = React.useState<unknown>(undefined);
-  const [getError, setGetError] = React.useState<unknown>(undefined);
-  const [getBusy, setGetBusy] = React.useState(false);
-
-  const [updateOpen, setUpdateOpen] = React.useState(false);
-  const [updateConfigRaw, setUpdateConfigRaw] = React.useState("");
-  const [updateConfigValue, setUpdateConfigValue] = React.useState<unknown | undefined>(undefined);
-  const [updateConfigError, setUpdateConfigError] = React.useState<string | null>(null);
-  const [updateReason, setUpdateReason] = React.useState("");
-  const [updateResult, setUpdateResult] = React.useState<unknown>(undefined);
-  const [updateError, setUpdateError] = React.useState<unknown>(undefined);
-
-  const [revertOpen, setRevertOpen] = React.useState(false);
-  const [revertRevisionRaw, setRevertRevisionRaw] = React.useState("");
-  const [revertReason, setRevertReason] = React.useState("");
-  const [revertResult, setRevertResult] = React.useState<unknown>(undefined);
-  const [revertError, setRevertError] = React.useState<unknown>(undefined);
-
-  const canUpdate = updateConfigError === null && isRecord(updateConfigValue);
-
-  const parsedRevertRevision = Number(revertRevisionRaw);
-  const canRevert =
-    Number.isInteger(parsedRevertRevision) &&
-    Number.isFinite(parsedRevertRevision) &&
-    parsedRevertRevision > 0;
-
-  const runGet = async (): Promise<void> => {
-    if (getBusy) return;
-    setGetBusy(true);
-    setGetResult(undefined);
-    setGetError(undefined);
-    try {
-      if (!api) {
-        throw new Error("Routing config API unavailable.");
-      }
-      const result = await api.get();
-      setGetResult(result);
-    } catch (error) {
-      setGetError(error);
-    } finally {
-      setGetBusy(false);
-    }
-  };
-
-  const runUpdate = async (): Promise<void> => {
-    setUpdateResult(undefined);
-    setUpdateError(undefined);
-    if (!api) {
-      setUpdateError(new Error("Routing config API unavailable."));
-      return;
-    }
-    if (!canUpdate) {
-      setUpdateError(new Error("A valid config JSON object is required."));
-      return;
-    }
-
-    const reason = updateReason.trim();
-    try {
-      const result = await api.update({
-        config: updateConfigValue,
-        ...(reason ? { reason } : {}),
-      });
-      setUpdateResult(result);
-    } catch (error) {
-      setUpdateError(error);
-      throw error;
-    }
-  };
-
-  const runRevert = async (): Promise<void> => {
-    setRevertResult(undefined);
-    setRevertError(undefined);
-    if (!api) {
-      setRevertError(new Error("Routing config API unavailable."));
-      return;
-    }
-    if (!canRevert) {
-      setRevertError(new Error("A positive revision number is required."));
-      return;
-    }
-
-    const reason = revertReason.trim();
-    try {
-      const result = await api.revert({
-        revision: parsedRevertRevision,
-        ...(reason ? { reason } : {}),
-      });
-      setRevertResult(result);
-    } catch (error) {
-      setRevertError(error);
-      throw error;
-    }
-  };
 
   return (
     <section className="grid gap-3" data-testid="admin-http-routing-config">
       <div className="text-sm font-medium text-fg">Routing config</div>
 
-      <Card>
-        <CardHeader>
-          <div className="text-sm font-medium text-fg">Get</div>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <Button
-            type="button"
-            variant="secondary"
-            data-testid="routing-config-get"
-            isLoading={getBusy}
-            onClick={() => {
-              void runGet();
-            }}
-          >
-            Fetch routing config
-          </Button>
-          <ApiResultCard heading="Routing config" value={getResult} error={getError} />
-        </CardContent>
-      </Card>
+      <RoutingConfigGetCard api={api} />
+      <RoutingConfigUpdateCard api={api} />
+      <RoutingConfigRevertCard api={api} />
+    </section>
+  );
+}
 
+function RoutingConfigGetCard({ api }: { api: RoutingConfigApi }): React.ReactElement {
+  const [busy, setBusy] = React.useState(false);
+  const [result, setResult] = React.useState<unknown>(undefined);
+  const [error, setError] = React.useState<unknown>(undefined);
+
+  const runGet = async (): Promise<void> => {
+    if (busy) return;
+    setBusy(true);
+    setResult(undefined);
+    setError(undefined);
+    try {
+      if (!api) throw new Error("Routing config API unavailable.");
+      setResult(await api.get());
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="text-sm font-medium text-fg">Get</div>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        <Button
+          type="button"
+          variant="secondary"
+          data-testid="routing-config-get"
+          isLoading={busy}
+          onClick={() => void runGet()}
+        >
+          Fetch routing config
+        </Button>
+        <ApiResultCard heading="Routing config" value={result} error={error} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function RoutingConfigUpdateCard({ api }: { api: RoutingConfigApi }): React.ReactElement {
+  const [open, setOpen] = React.useState(false);
+  const [configRaw, setConfigRaw] = React.useState("");
+  const [configValue, setConfigValue] = React.useState<unknown | undefined>(undefined);
+  const [configError, setConfigError] = React.useState<string | null>(null);
+  const [reasonRaw, setReasonRaw] = React.useState("");
+  const [result, setResult] = React.useState<unknown>(undefined);
+  const [error, setError] = React.useState<unknown>(undefined);
+
+  const canUpdate = configError === null && isRecord(configValue);
+
+  const runUpdate = async (): Promise<void> => {
+    setResult(undefined);
+    setError(undefined);
+    if (!api) return void setError(new Error("Routing config API unavailable."));
+    if (!canUpdate) return void setError(new Error("A valid config JSON object is required."));
+
+    const reason = reasonRaw.trim();
+    try {
+      setResult(await api.update({ config: configValue, ...(reason ? { reason } : {}) }));
+    } catch (e) {
+      setError(e);
+      throw e;
+    }
+  };
+
+  return (
+    <>
       <Card>
         <CardHeader>
           <div className="text-sm font-medium text-fg">Update</div>
@@ -137,27 +101,23 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
           <Input
             label="Reason"
             placeholder="Optional"
-            value={updateReason}
-            onChange={(event) => {
-              setUpdateReason(event.target.value);
-            }}
+            value={reasonRaw}
+            onChange={(e) => setReasonRaw(e.target.value)}
           />
           <JsonTextarea
             data-testid="routing-config-update-json"
             label="Config JSON"
             rows={10}
-            value={updateConfigRaw}
-            onChange={(event) => {
-              setUpdateConfigRaw(event.target.value);
-            }}
+            value={configRaw}
+            onChange={(e) => setConfigRaw(e.target.value)}
             onJsonChange={(value, errorMessage) => {
-              setUpdateConfigValue(value);
-              setUpdateConfigError(errorMessage);
+              setConfigValue(value);
+              setConfigError(errorMessage);
             }}
             helperText='Example: { "v": 1 }'
             placeholder='{\n  "v": 1\n}\n'
           />
-          <ApiResultCard heading="Update result" value={updateResult} error={updateError} />
+          <ApiResultCard heading="Update result" value={result} error={error} />
         </CardContent>
         <CardFooter>
           <Button
@@ -165,9 +125,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
             variant="danger"
             data-testid="routing-config-update-open"
             disabled={!canUpdate}
-            onClick={() => {
-              setUpdateOpen(true);
-            }}
+            onClick={() => setOpen(true)}
           >
             Update routing config
           </Button>
@@ -175,14 +133,44 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
       </Card>
 
       <ConfirmDangerDialog
-        open={updateOpen}
-        onOpenChange={setUpdateOpen}
+        open={open}
+        onOpenChange={setOpen}
         title="Update routing config"
         description="This will create a new routing config revision."
         confirmLabel="Update"
         onConfirm={runUpdate}
       />
+    </>
+  );
+}
 
+function RoutingConfigRevertCard({ api }: { api: RoutingConfigApi }): React.ReactElement {
+  const [open, setOpen] = React.useState(false);
+  const [revisionRaw, setRevisionRaw] = React.useState("");
+  const [reasonRaw, setReasonRaw] = React.useState("");
+  const [result, setResult] = React.useState<unknown>(undefined);
+  const [error, setError] = React.useState<unknown>(undefined);
+
+  const revision = Number(revisionRaw);
+  const canRevert = Number.isInteger(revision) && Number.isFinite(revision) && revision > 0;
+
+  const runRevert = async (): Promise<void> => {
+    setResult(undefined);
+    setError(undefined);
+    if (!api) return void setError(new Error("Routing config API unavailable."));
+    if (!canRevert) return void setError(new Error("A positive revision number is required."));
+
+    const reason = reasonRaw.trim();
+    try {
+      setResult(await api.revert({ revision, ...(reason ? { reason } : {}) }));
+    } catch (e) {
+      setError(e);
+      throw e;
+    }
+  };
+
+  return (
+    <>
       <Card>
         <CardHeader>
           <div className="text-sm font-medium text-fg">Revert</div>
@@ -192,20 +180,16 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
             label="Revision"
             placeholder="e.g. 12"
             inputMode="numeric"
-            value={revertRevisionRaw}
-            onChange={(event) => {
-              setRevertRevisionRaw(event.target.value);
-            }}
+            value={revisionRaw}
+            onChange={(e) => setRevisionRaw(e.target.value)}
           />
           <Input
             label="Reason"
             placeholder="Optional"
-            value={revertReason}
-            onChange={(event) => {
-              setRevertReason(event.target.value);
-            }}
+            value={reasonRaw}
+            onChange={(e) => setReasonRaw(e.target.value)}
           />
-          <ApiResultCard heading="Revert result" value={revertResult} error={revertError} />
+          <ApiResultCard heading="Revert result" value={result} error={error} />
         </CardContent>
         <CardFooter>
           <Button
@@ -213,9 +197,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
             variant="danger"
             data-testid="routing-config-revert-open"
             disabled={!canRevert}
-            onClick={() => {
-              setRevertOpen(true);
-            }}
+            onClick={() => setOpen(true)}
           >
             Revert routing config
           </Button>
@@ -223,13 +205,13 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
       </Card>
 
       <ConfirmDangerDialog
-        open={revertOpen}
-        onOpenChange={setRevertOpen}
+        open={open}
+        onOpenChange={setOpen}
         title="Revert routing config"
         description="This will create a new routing config revision from a previous revision."
         confirmLabel="Revert"
         onConfirm={runRevert}
       />
-    </section>
+    </>
   );
 }
