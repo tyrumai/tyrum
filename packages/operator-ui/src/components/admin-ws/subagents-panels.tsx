@@ -7,6 +7,21 @@ import { JsonTextarea } from "../ui/json-textarea.js";
 import { Label } from "../ui/label.js";
 import { JsonViewer } from "../ui/json-viewer.js";
 
+function parseJsonPayload(rawValue: string): {
+  value: unknown | undefined;
+  errorMessage: string | null;
+} {
+  const trimmed = rawValue.trim();
+  if (!trimmed) return { value: undefined, errorMessage: null };
+
+  try {
+    return { value: JSON.parse(trimmed) as unknown, errorMessage: null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { value: undefined, errorMessage: message };
+  }
+}
+
 type JsonWsPanelProps = {
   title: string;
   description?: string;
@@ -31,14 +46,16 @@ function JsonWsPanel({
   onSubmit,
 }: JsonWsPanelProps): React.ReactElement {
   const [rawPayload, setRawPayload] = React.useState(() => JSON.stringify(initialPayload, null, 2));
-  const [payloadValue, setPayloadValue] = React.useState<unknown | undefined>(undefined);
-  const [payloadError, setPayloadError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [result, setResult] = React.useState<unknown | undefined>(undefined);
   const [error, setError] = React.useState<unknown | undefined>(undefined);
 
+  const parsedPayload = React.useMemo(() => parseJsonPayload(rawPayload), [rawPayload]);
   const canSubmit =
-    !busy && payloadError === null && typeof payloadValue !== "undefined" && rawPayload.trim();
+    !busy &&
+    parsedPayload.errorMessage === null &&
+    typeof parsedPayload.value !== "undefined" &&
+    rawPayload.trim().length > 0;
 
   return (
     <div className="grid gap-4">
@@ -61,10 +78,6 @@ function JsonWsPanel({
               onChange={(event) => {
                 setRawPayload(event.target.value);
               }}
-              onJsonChange={(value, errorMessage) => {
-                setPayloadValue(value);
-                setPayloadError(errorMessage);
-              }}
             />
           </div>
         </CardContent>
@@ -80,7 +93,8 @@ function JsonWsPanel({
 
               setBusy(true);
               setError(undefined);
-              void onSubmit(payloadValue)
+              setResult(undefined);
+              void onSubmit(parsedPayload.value)
                 .then((value) => {
                   setResult(value);
                 })
@@ -121,18 +135,13 @@ function SubagentEventLog({ core }: { core: OperatorCore }): React.ReactElement 
       setEvents((prev) => [{ type, occurred_at: occurredAt, data }, ...prev].slice(0, 100));
     };
 
-    const client = core.ws as unknown as {
-      on: (event: string, fn: (data: unknown) => void) => void;
-      off: (event: string, fn: (data: unknown) => void) => void;
-    };
-
     const types = ["subagent.spawned", "subagent.updated", "subagent.closed", "subagent.output"];
-    for (const t of types) client.on(t, handler);
+    for (const t of types) core.ws.on(t, handler as never);
 
     return () => {
-      for (const t of types) client.off(t, handler);
+      for (const t of types) core.ws.off(t, handler as never);
     };
-  }, [core]);
+  }, [core.ws]);
 
   return (
     <Card>
@@ -163,7 +172,7 @@ function SubagentEventLog({ core }: { core: OperatorCore }): React.ReactElement 
 }
 
 export function SubagentsPanels({ core }: { core: OperatorCore }): React.ReactElement {
-  const scope = { tenant_id: "tenant-1", agent_id: "agent-1", workspace_id: "default" } as const;
+  const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
   const subagentId = "123e4567-e89b-12d3-a456-426614174222";
 
   return (
