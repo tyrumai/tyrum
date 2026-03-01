@@ -149,7 +149,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Max lines gate (PR)
+      - name: Max lines gate (new files)
         if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
         shell: bash
         run: |

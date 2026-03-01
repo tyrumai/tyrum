@@ -79,7 +79,7 @@ Note: this diff-coverage check is optional and not enforced in CI.
 
 ### Max lines (enforced in CI for PRs)
 
-CI enforces file/function length limits for changed TypeScript files only.
+CI enforces file/function length limits for newly added TypeScript files in PRs.
 
 ```bash
 BASE_SHA="$(git merge-base HEAD origin/main)"

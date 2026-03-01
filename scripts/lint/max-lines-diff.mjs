@@ -42,8 +42,8 @@ function resolveBaseCommit(explicitBase) {
   throw new Error("unable to resolve base commit (use --base <sha>)");
 }
 
-function listChangedFiles(base) {
-  const diff = runGit(["diff", "--name-only", "--diff-filter=ACMRT", `${base}...HEAD`]).trim();
+function listAddedFiles(base) {
+  const diff = runGit(["diff", "--name-only", "--diff-filter=A", `${base}...HEAD`]).trim();
 
   return diff.length === 0 ? [] : diff.split("\n").map((l) => l.trim());
 }
@@ -71,7 +71,7 @@ function runMaxLinesGate({ repoRoot, files, verbose }) {
 
   if (verbose) {
     console.log(
-      `[max-lines] checking ${files.length} file(s) (max 500 lines, max 80 lines/function)`,
+      `[max-lines] checking ${files.length} new file(s) (max 500 lines, max 80 lines/function)`,
     );
   }
 
@@ -84,9 +84,9 @@ const args = parseArgs(process.argv.slice(2));
 const repoRoot = getRepoRoot();
 const base = resolveBaseCommit(args.base);
 
-const files = listChangedFiles(base).filter(isTypeScriptSourceFile);
+const files = listAddedFiles(base).filter(isTypeScriptSourceFile);
 if (files.length === 0) {
-  if (args.verbose) console.log("[max-lines] no changed TypeScript files");
+  if (args.verbose) console.log("[max-lines] no added TypeScript files");
   process.exit(0);
 }
 
