@@ -9,7 +9,7 @@ import {
   type OperatorCore,
   type OperatorCoreManager,
 } from "@tyrum/operator-core";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toErrorMessage } from "./errors.js";
 
 type OperatorConnectionInfo = {
@@ -35,6 +35,7 @@ export type DesktopOperatorCoreState = {
   core: OperatorCore | null;
   busy: boolean;
   errorMessage: string | null;
+  retry: () => void;
 };
 
 export type UseDesktopOperatorCoreOptions = {
@@ -49,9 +50,14 @@ export function useDesktopOperatorCore(
   const [core, setCore] = useState<OperatorCore | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const managerRef = useRef<OperatorCoreManager | null>(null);
   const unsubManagerRef = useRef<(() => void) | null>(null);
   const adminModeStoreRef = useRef<AdminModeStore | null>(null);
+
+  const retry = useCallback(() => {
+    setRetryCount((c) => c + 1);
+  }, []);
 
   useEffect(() => {
     if (!api || !enabled) {
@@ -155,7 +161,7 @@ export function useDesktopOperatorCore(
       adminModeStoreRef.current?.dispose();
       adminModeStoreRef.current = null;
     };
-  }, [api, enabled]);
+  }, [api, enabled, retryCount]);
 
-  return { core, busy, errorMessage };
+  return { core, busy, errorMessage, retry };
 }
