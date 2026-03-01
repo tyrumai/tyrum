@@ -155,7 +155,7 @@ export function App() {
           <OperatorPageGuard {...operatorCore} render={(core) => <MemoryPage core={core} />} />
         );
       case "connection":
-        return <ConnectionPage {...operatorCore} />;
+        return <ConnectionPage core={operatorCore.core} />;
       case "pairing":
         return (
           <OperatorPageGuard {...operatorCore} render={(core) => <PairingPage core={core} />} />
