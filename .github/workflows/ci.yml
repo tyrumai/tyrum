@@ -154,6 +154,7 @@ jobs:
 
       - name: Oxlint report (warn)
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         run: pnpm lint:oxlint:report
 
       - name: Typecheck (packages)
@@ -171,21 +172,106 @@ jobs:
       - name: Build
         run: pnpm build
 
+  test-shards:
+    name: Test shards (ubuntu-latest) (${{ matrix.shard }}/4)
+    needs: [changes, validation]
+    if: needs.validation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Cache Playwright browsers (Chromium)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - run: pnpm install --frozen-lockfile
+
       - name: Install Playwright (Chromium)
         shell: bash
         run: pnpm --filter tyrum-desktop exec playwright install --with-deps chromium
 
-      - name: Test + coverage
+      - name: Test (shard) + blob report
+        env:
+          VITEST_SHARD_RUN: "1"
         run: >
           xvfb-run -a --server-args="-screen 0 1920x1080x24"
           pnpm test
+          --passWithNoTests
+          --shard=${{ matrix.shard }}/4
+          --reporter=blob
+          --outputFile=vitest-reports/blob-${{ matrix.shard }}.json
           --coverage.enabled
-          --coverage.reporter=text-summary
-          --coverage.reporter=html
-          --coverage.reporter=clover
           --coverage.reporter=json
 
-      - name: Coverage summary
+      - name: Upload vitest blob report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vitest-blob-${{ matrix.shard }}
+          path: vitest-reports/blob-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  test-merge:
+    name: Test + coverage (merge) (ubuntu-latest)
+    needs: [changes, validation, test-shards]
+    if: needs.validation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Download shard reports
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+
+      - name: Collect blob reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p vitest-reports
+          find artifacts -type f -name 'blob-*.json' -print -exec cp {} vitest-reports/ \;
+          count="$(ls -1 vitest-reports/blob-*.json 2>/dev/null | wc -l | tr -d ' ')"
+          if [ "$count" -eq 0 ]; then
+            echo "No blob reports found under artifacts/. Expected vitest-blob-*/blob-*.json."
+            exit 1
+          fi
+          echo "Found $count blob report(s)."
+
+      - name: Merge reports + coverage gate
+        shell: bash
+        run: pnpm exec vitest --mergeReports vitest-reports --coverage.enabled --coverage.reporter=text-summary --coverage.reporter=json
+
+      - name: Coverage by component
         if: always()
         shell: bash
         run: |
@@ -193,45 +279,7 @@ jobs:
           {
             echo "## Coverage (ubuntu-latest)"
             echo ""
-            echo "Download the full HTML report from the \`coverage-report-ubuntu\` artifact."
-            echo ""
-
-            if [ ! -f coverage/index.html ]; then
-              echo "No coverage report found at \`coverage/index.html\`."
-              exit 0
-            fi
-
-            python3 - <<'PY'
-          import re
-          from pathlib import Path
-
-          html = Path("coverage/index.html").read_text("utf-8", errors="ignore")
-
-          def grab(label: str):
-              pat = (
-                  rf'<span class="strong">\s*([0-9.]+)%\s*</span>'
-                  rf'\s*<span class="quiet">{re.escape(label)}</span>'
-                  r"\s*<span class='fraction'>(\d+)/(\d+)</span>"
-              )
-              match = re.search(pat, html, re.S)
-              if not match:
-                  return None
-              pct, covered, total = match.groups()
-              return float(pct), int(covered), int(total)
-
-          labels = ["Statements", "Branches", "Functions", "Lines"]
-          rows = {label: grab(label) for label in labels}
-
-          print("| Metric | % | Covered / Total |")
-          print("|---|---:|---:|")
-          for label in labels:
-              row = rows[label]
-              if row is None:
-                  print(f"| {label} | n/a | n/a |")
-                  continue
-              pct, covered, total = row
-              print(f"| {label} | {pct:.2f}% | {covered}/{total} |")
-          PY
+            node scripts/coverage/components.mjs
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage artifact
@@ -243,20 +291,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Coverage by component
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          {
-            echo ""
-            node scripts/coverage/components.mjs
-          } >> "$GITHUB_STEP_SUMMARY"
-
   desktop-suite:
     name: Desktop Suite (${{ matrix.os }})
-    needs: [changes, validation]
-    if: needs.validation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
+    needs: [changes, validation, test-merge]
+    if: needs.validation.result == 'success' && needs.test-merge.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
     strategy:
       fail-fast: false
       matrix:
