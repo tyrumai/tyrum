@@ -75,6 +75,17 @@ BASE_SHA="$(git merge-base HEAD origin/main)"
 node scripts/coverage/diff-lines.mjs --base "$BASE_SHA" --min 80
 ```
 
+Note: this diff-coverage check is optional and not enforced in CI.
+
+### Max lines (enforced in CI for PRs)
+
+CI enforces file/function length limits for changed TypeScript files only.
+
+```bash
+BASE_SHA="$(git merge-base HEAD origin/main)"
+node scripts/lint/max-lines-diff.mjs --base "$BASE_SHA"
+```
+
 ## 5. Branch Protections & Reviews
 
 Pull requests must reference their GitHub Issue and pass all required checks:
