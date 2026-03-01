@@ -86,6 +86,43 @@ it("sanitizes redirect URLs in the Artifacts download flow", async () => {
   }
 });
 
+it("hides the bytes result card while artifact bytes are loading", async () => {
+  const getBytes = vi.fn(async () => new Promise(() => {}));
+  const core = createStubCore({
+    artifacts: { getMetadata: vi.fn(), getBytes },
+  });
+
+  const testRoot = renderIntoDocument(React.createElement(AdminHttpPanels, { core }));
+  try {
+    const artifactsPanel = expectElement(
+      testRoot.container.querySelector<HTMLElement>("[data-testid='admin-http-artifacts-panel']"),
+    );
+
+    const runIdInput = expectElement(
+      artifactsPanel.querySelector<HTMLInputElement>('input[placeholder="uuid"]'),
+    );
+    const artifactIdInput = expectElement(
+      artifactsPanel.querySelector<HTMLInputElement>('input[placeholder="artifact-..."]'),
+    );
+    act(() => {
+      setInputValue(runIdInput, "run-123");
+      setInputValue(artifactIdInput, "artifact-123");
+    });
+
+    const fetchBytesButton = expectElement(
+      artifactsPanel.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-http-artifacts-download']",
+      ),
+    );
+    await clickAndFlush(fetchBytesButton);
+
+    expect(artifactsPanel.textContent ?? "").not.toContain("Bytes result");
+    expect(artifactsPanel.textContent ?? "").not.toContain("Success");
+  } finally {
+    cleanupTestRoot(testRoot);
+  }
+});
+
 async function confirmDangerDialog(): Promise<void> {
   const checkbox = expectElement(
     document.body.querySelector<HTMLElement>('[data-testid="confirm-danger-checkbox"]'),

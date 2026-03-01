@@ -28,8 +28,6 @@ function toArtifactBytesCardValue(result: ArtifactBytesUiResult): unknown | unde
       return { kind: result.kind, byteLength: result.byteLength, contentType: result.contentType };
     case "redirect":
       return { kind: result.kind, url: result.url };
-    case "loading":
-      return { kind: result.kind };
     default:
       return undefined;
   }
