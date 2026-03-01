@@ -86,7 +86,13 @@ export function AdminModeEnterDialog() {
     const issued = await http.deviceTokens.issue({
       device_id: "operator-ui",
       role: "client",
-      scopes: ["operator.admin"],
+      scopes: [
+        "operator.read",
+        "operator.write",
+        "operator.approvals",
+        "operator.pairing",
+        "operator.admin",
+      ],
       ttl_seconds: 60 * 10,
     });
 
