@@ -109,7 +109,19 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
 
   return (
     <div className="grid gap-6">
-      {hideHeader ? null : (
+      {hideHeader ? (
+        <div className="flex justify-end">
+          <Button
+            variant="secondary"
+            data-testid="dashboard-refresh-status"
+            onClick={() => {
+              refreshDashboard();
+            }}
+          >
+            Refresh
+          </Button>
+        </div>
+      ) : (
         <PageHeader
           title="Dashboard"
           className="mb-0"
