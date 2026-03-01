@@ -197,6 +197,32 @@ describe("AtSpiDesktopA11yBackend", () => {
     expect(doAction).toHaveBeenCalledWith(0);
   });
 
+  it("supports dbus-next array-wrapped action counts in act()", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const doAction = vi.fn(async () => undefined);
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name !== "org.a11y.atspi.Action") return null;
+      return {
+        GetNActions: vi.fn(async () => [1n]),
+        GetName: vi.fn(async () => ({ value: "click" })),
+        DoAction: doAction,
+      };
+    });
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "click" },
+      }),
+    ).resolves.toEqual({ resolved_element_ref: "atspi:app|/node" });
+
+    expect(doAction).toHaveBeenCalledTimes(1);
+    expect(doAction).toHaveBeenCalledWith(0);
+  });
+
   it("fails when DoAction reports false for click actions", async () => {
     const backend = new AtSpiDesktopA11yBackend() as any;
 
@@ -222,7 +248,34 @@ describe("AtSpiDesktopA11yBackend", () => {
     expect(doAction).toHaveBeenCalledWith(0);
   });
 
-  it("does not fall back to DoAction(0) when the target exposes zero actions", async () => {
+  it("tries alternate click candidates when the first action returns false", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const doAction = vi.fn(async (index: number) => index !== 0);
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name !== "org.a11y.atspi.Action") return null;
+      return {
+        GetNActions: vi.fn(async () => 2n),
+        GetName: vi.fn(async (i: number) => ({ value: i === 0 ? "click" : "press" })),
+        DoAction: doAction,
+      };
+    });
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "click" },
+      }),
+    ).resolves.toEqual({ resolved_element_ref: "atspi:app|/node" });
+
+    expect(doAction).toHaveBeenCalledTimes(2);
+    expect(doAction).toHaveBeenNthCalledWith(1, 0);
+    expect(doAction).toHaveBeenNthCalledWith(2, 1);
+  });
+
+  it("fails when the target exposes zero actions and DoAction reports false", async () => {
     const backend = new AtSpiDesktopA11yBackend() as any;
 
     const doAction = vi.fn(async () => false);
@@ -243,7 +296,8 @@ describe("AtSpiDesktopA11yBackend", () => {
         action: { kind: "click" },
       }),
     ).rejects.toThrow(/click\/activate unsupported/i);
-    expect(doAction).toHaveBeenCalledTimes(0);
+    expect(doAction).toHaveBeenCalledTimes(1);
+    expect(doAction).toHaveBeenCalledWith(0);
   });
 
   it("matches state-filtered queries when GetState indicates focused", async () => {

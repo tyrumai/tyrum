@@ -92,6 +92,7 @@ const ATSPI_STATE_TYPE_NAMES: Array<string | undefined> = [
 ];
 
 function unwrapDbusValue(value: unknown): unknown {
+  if (Array.isArray(value) && value.length === 1) return unwrapDbusValue(value[0]);
   if (!value || typeof value !== "object") return value;
 
   const nested = (value as { value?: unknown }).value;
@@ -150,10 +151,6 @@ function normalizeDbusBoolean(value: unknown): boolean | undefined {
   if (typeof unwrapped === "bigint") {
     if (unwrapped === 0n) return false;
     if (unwrapped === 1n) return true;
-  }
-
-  if (Array.isArray(unwrapped) && unwrapped.length === 1) {
-    return normalizeDbusBoolean(unwrapped[0]);
   }
 
   return undefined;
@@ -693,44 +690,54 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     const doAction = (action as any)["DoAction"];
     if (typeof doAction !== "function") throw new Error("AT-SPI action unsupported");
 
+    const actionNameFn =
+      typeof getName === "function"
+        ? getName
+        : typeof getActionName === "function"
+          ? getActionName
+          : null;
+
     const candidates = ["click", "activate", "press"];
-    let chosenIndex: number | null = null;
-    for (let i = 0; i < count; i++) {
-      const fn =
-        typeof getName === "function"
-          ? getName
-          : typeof getActionName === "function"
-            ? getActionName
-            : null;
-      if (!fn) break;
-      const raw = await fn.call(action, i);
-      const name = normalizeMaybe(raw)?.toLowerCase();
-      if (!name) continue;
-      if (candidates.includes(name)) {
-        chosenIndex = i;
-        break;
+    const candidateIndices: number[] = [];
+    const actionNamesByIndex: Array<string | undefined> = [];
+    if (actionNameFn) {
+      for (let i = 0; i < count && i < MAX_NODE_ACTIONS; i++) {
+        const raw = await actionNameFn.call(action, i);
+        const name = normalizeMaybe(raw)?.toLowerCase();
+        actionNamesByIndex[i] = name;
+        if (!name) continue;
+        if (candidates.includes(name)) candidateIndices.push(i);
       }
     }
 
-    if (chosenIndex === null) {
-      if (count <= 0) throw new Error("AT-SPI click/activate unsupported");
+    const indicesToTry = candidateIndices.length > 0 ? candidateIndices : [0];
 
+    let lastError: unknown;
+    for (const index of indicesToTry) {
       let didAct: unknown;
       try {
-        didAct = await doAction.call(action, 0);
+        didAct = await doAction.call(action, index);
       } catch (err) {
-        throw new Error("AT-SPI click/activate unsupported", { cause: err as Error });
+        lastError = err;
+        continue;
       }
+
       if (normalizeDbusBoolean(didAct) === false) {
-        throw new Error("AT-SPI click/activate unsupported");
+        const actionName = actionNamesByIndex[index];
+        lastError = new Error(
+          `DoAction(${index}${actionName ? `:${actionName}` : ""}) returned ${String(didAct)}`,
+        );
+        continue;
       }
+
       return { resolved_element_ref: toAtSpiElementRef(ref) };
     }
 
-    const didAct = await doAction.call(action, chosenIndex);
-    if (normalizeDbusBoolean(didAct) === false) {
-      throw new Error("AT-SPI click/activate unsupported");
+    if (lastError instanceof Error) {
+      throw new Error(`AT-SPI click/activate unsupported (${lastError.message})`, {
+        cause: lastError,
+      });
     }
-    return { resolved_element_ref: toAtSpiElementRef(ref) };
+    throw new Error("AT-SPI click/activate unsupported");
   }
 }
