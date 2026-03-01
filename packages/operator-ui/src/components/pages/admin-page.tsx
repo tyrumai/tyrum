@@ -13,6 +13,8 @@ import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { Input } from "../ui/input.js";
 import { JsonTextarea } from "../ui/json-textarea.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
+import { AdminHttpRoutingConfigPanel } from "./admin-http-routing-config.js";
+import { AdminHttpSecretsPanel } from "./admin-http-secrets.js";
 
 export interface AdminPageProps {
   core: OperatorCore;
@@ -522,6 +524,12 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
                 <TabsTrigger value="gateway" data-testid="admin-http-tab-gateway">
                   Gateway
                 </TabsTrigger>
+                <TabsTrigger value="routing-config" data-testid="admin-http-tab-routing-config">
+                  Routing config
+                </TabsTrigger>
+                <TabsTrigger value="secrets" data-testid="admin-http-tab-secrets">
+                  Secrets
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="observability">
@@ -534,6 +542,14 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
 
               <TabsContent value="gateway">
                 <AdminHttpPanels />
+              </TabsContent>
+
+              <TabsContent value="routing-config">
+                <AdminHttpRoutingConfigPanel core={core} />
+              </TabsContent>
+
+              <TabsContent value="secrets">
+                <AdminHttpSecretsPanel core={core} />
               </TabsContent>
             </Tabs>
           </TabsContent>
