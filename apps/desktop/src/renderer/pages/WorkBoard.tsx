@@ -287,7 +287,7 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
               if (res.signal.work_item_id !== selectedIdRef.current) return;
               setSignals((prev) => upsertWorkSignal(prev, res.signal));
             })
-            .catch(() => { });
+            .catch(() => {});
         };
 
         onWorkStateKvUpdated = (event) => {
@@ -312,7 +312,7 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
                 setWorkItemKvEntries((prev) => upsertWorkStateKvEntry(prev, entry));
               }
             })
-            .catch(() => { });
+            .catch(() => {});
         };
 
         wsClient.on("connected", onConnected);
@@ -701,14 +701,14 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
                         {(task.run_id ||
                           typeof task.approval_id === "number" ||
                           task.result_summary) && (
-                            <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
-                              {task.run_id ? <span>run {task.run_id}</span> : null}
-                              {typeof task.approval_id === "number" ? (
-                                <span>approval {task.approval_id}</span>
-                              ) : null}
-                              {task.result_summary ? <span>result {task.result_summary}</span> : null}
-                            </div>
-                          )}
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
+                            {task.run_id ? <span>run {task.run_id}</span> : null}
+                            {typeof task.approval_id === "number" ? (
+                              <span>approval {task.approval_id}</span>
+                            ) : null}
+                            {task.result_summary ? <span>result {task.result_summary}</span> : null}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

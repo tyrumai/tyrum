@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const { createOperatorCoreManagerMock } = vi.hoisted(() => {
   const connectionStore = {
     getSnapshot: () => ({ status: "disconnected" }),
-    subscribe: vi.fn(() => () => { }),
+    subscribe: vi.fn(() => () => {}),
   };
   const coreInstance = { connect: vi.fn(), connectionStore };
 
@@ -30,7 +30,7 @@ const { createOperatorCoreManagerMock } = vi.hoisted(() => {
       });
       return {
         getCore: () => coreInstance,
-        subscribe: vi.fn(() => () => { }),
+        subscribe: vi.fn(() => () => {}),
         dispose: vi.fn(),
       };
     },
@@ -125,10 +125,10 @@ describe("App page routing", () => {
           bodyText: "ok",
         })),
       },
-      onStatusChange: vi.fn(() => () => { }),
+      onStatusChange: vi.fn(() => () => {}),
       onNavigationRequest: vi.fn((cb: (req: unknown) => void) => {
         navCallback = cb;
-        return () => { };
+        return () => {};
       }),
     };
 
