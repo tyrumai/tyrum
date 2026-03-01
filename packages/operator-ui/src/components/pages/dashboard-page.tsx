@@ -159,14 +159,22 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
           label="Instance ID"
           icon={Hash}
           loading={status.loading.status}
-          value={status.status?.instance_id ?? "-"}
+          value={
+            connection.status === "connected" && status.status?.instance_id
+              ? status.status.instance_id
+              : "Not Connected"
+          }
         />
 
         <StatCard
           label="Tokens Used"
           icon={Wallet}
           loading={status.loading.usage}
-          value={tokensUsedText}
+          value={
+            connection.status === "connected" && typeof tokensUsed === "number"
+              ? tokensUsedText
+              : "Not Connected"
+          }
         />
 
         <StatCard label="Active Runs" icon={Play} value={String(activeRunsCount)} />
