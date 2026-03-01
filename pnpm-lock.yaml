@@ -55,9 +55,6 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@tyrum/client':
-        specifier: workspace:*
-        version: link:../../packages/client
       '@tyrum/desktop-node':
         specifier: workspace:*
         version: link:../../packages/desktop-node
@@ -67,9 +64,6 @@ importers:
       '@tyrum/operator-ui':
         specifier: workspace:*
         version: link:../../packages/operator-ui
-      '@tyrum/schemas':
-        specifier: workspace:*
-        version: link:../../packages/schemas
       electron-updater:
         specifier: ^6.6.2
         version: 6.8.3
@@ -400,6 +394,9 @@ importers:
       '@tyrum/client':
         specifier: workspace:*
         version: link:../client
+      '@tyrum/schemas':
+        specifier: workspace:*
+        version: link:../schemas
 
   packages/operator-ui:
     dependencies:
@@ -482,9 +479,6 @@ importers:
 
   packages/tui:
     dependencies:
-      '@tyrum/client':
-        specifier: workspace:*
-        version: link:../client
       '@tyrum/operator-core':
         specifier: workspace:*
         version: link:../operator-core
