@@ -43,12 +43,7 @@ function resolveBaseCommit(explicitBase) {
 }
 
 function listChangedFiles(base) {
-  const diff = runGit([
-    "diff",
-    "--name-only",
-    "--diff-filter=ACMRT",
-    `${base}...HEAD`,
-  ]).trim();
+  const diff = runGit(["diff", "--name-only", "--diff-filter=ACMRT", `${base}...HEAD`]).trim();
 
   return diff.length === 0 ? [] : diff.split("\n").map((l) => l.trim());
 }
@@ -66,7 +61,7 @@ function runMaxLinesGate({ repoRoot, files, verbose }) {
 
   if (verbose) {
     console.log(
-      `[max-lines] checking ${files.length} file(s) (max 500 lines, max 80 lines/function)`
+      `[max-lines] checking ${files.length} file(s) (max 500 lines, max 80 lines/function)`,
     );
   }
 
