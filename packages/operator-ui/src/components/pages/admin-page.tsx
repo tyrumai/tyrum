@@ -7,6 +7,7 @@ import { AdminWsPanels } from "../admin/admin-ws-panels.js";
 import { AdminWorkBoardWsHub } from "../admin-workboard/admin-workboard-ws-hub.js";
 import { JsonWsPanel } from "../admin-ws/json-ws-panel.js";
 import { SubagentsPanels } from "../admin-ws/subagents-panels.js";
+import { AdminHttpPanels as AdminHubHttpPanels } from "../admin-http/admin-http-panels.js";
 import { PageHeader } from "../layout/page-header.js";
 import { AdminHttpPanels } from "./admin-http-panels.js";
 import { AdminHttpPolicyAuthPanels } from "./admin-http-policy-auth-panels.js";
@@ -429,7 +430,6 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
     </div>
   );
 }
-
 export function AdminPage({ core, onNavigate }: AdminPageProps) {
   return (
     <div className="grid gap-6" data-testid="admin-page">
@@ -470,6 +470,9 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
                 <TabsTrigger value="observability" data-testid="admin-http-tab-observability">
                   Observability
                 </TabsTrigger>
+                <TabsTrigger value="hub" data-testid="admin-http-tab-hub">
+                  Hub
+                </TabsTrigger>
                 <TabsTrigger value="models" data-testid="admin-http-tab-models">
                   Models
                 </TabsTrigger>
@@ -489,6 +492,10 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
 
               <TabsContent value="observability">
                 <ObservabilityPanels core={core} />
+              </TabsContent>
+
+              <TabsContent value="hub">
+                <AdminHubHttpPanels core={core} />
               </TabsContent>
 
               <TabsContent value="models">
