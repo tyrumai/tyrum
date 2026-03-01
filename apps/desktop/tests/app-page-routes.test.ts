@@ -49,6 +49,8 @@ vi.mock("@tyrum/operator-core", () => ({
   createOperatorCore: vi.fn((opts: unknown) => opts),
   createOperatorCoreManager: createOperatorCoreManagerMock,
   httpAuthForAuth: vi.fn((auth: unknown) => auth),
+  deviceIdFromSha256Digest: vi.fn((fingerprint: string) => `device-${fingerprint}`),
+  createTyrumHttpClient: vi.fn(() => ({})),
 }));
 
 // ---------------------------------------------------------------------------

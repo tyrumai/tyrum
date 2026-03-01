@@ -1,7 +1,7 @@
-import type { ActionPrimitive, ClientCapability } from "@tyrum/schemas";
-import { checkPostcondition } from "@tyrum/schemas";
-import type { EvaluationContext } from "@tyrum/schemas";
-import type { CapabilityProvider, TaskResult } from "@tyrum/client";
+import type { ActionPrimitive, ClientCapability } from "@tyrum/operator-core";
+import { checkPostcondition } from "@tyrum/operator-core";
+import type { EvaluationContext } from "@tyrum/operator-core";
+import type { CapabilityProvider, TaskResult } from "@tyrum/operator-core";
 import type { PlaywrightBackend } from "./backends/playwright-backend.js";
 
 export interface PlaywrightProviderConfig {

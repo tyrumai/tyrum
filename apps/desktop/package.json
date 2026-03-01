@@ -17,11 +17,9 @@
     "dist": "pnpm build:gateway && pnpm build && electron-builder --publish never"
   },
   "dependencies": {
-    "@tyrum/client": "workspace:*",
     "@tyrum/desktop-node": "workspace:*",
     "@tyrum/operator-core": "workspace:*",
     "@tyrum/operator-ui": "workspace:*",
-    "@tyrum/schemas": "workspace:*",
     "electron-updater": "^6.6.2",
     "playwright": "^1.58.2",
     "tesseract.js": "^7.0.0",

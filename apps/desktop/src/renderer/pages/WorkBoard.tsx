@@ -1,11 +1,11 @@
-import { TyrumClient } from "@tyrum/client";
+import { TyrumClient } from "@tyrum/operator-core";
 import type {
   DecisionRecord,
   WorkArtifact,
   WorkItem,
   WorkSignal,
   WorkStateKVScope,
-} from "@tyrum/schemas";
+} from "@tyrum/operator-core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -146,8 +146,8 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
           reason,
         });
 
-        setItems((prev) => upsertWorkItem(prev, res.item));
-        setSelectedItem((prev) => {
+        setItems((prev: WorkItem[]) => upsertWorkItem(prev, res.item));
+        setSelectedItem((prev: WorkItem | null) => {
           if (selectedIdRef.current !== res.item.work_item_id) return prev;
           return res.item;
         });
@@ -236,8 +236,8 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
 
         onWorkItemEvent = (event) => {
           if (disposed) return;
-          setItems((prev) => upsertWorkItem(prev, event.payload.item));
-          setSelectedItem((prev) => {
+          setItems((prev: WorkItem[]) => upsertWorkItem(prev, event.payload.item));
+          setSelectedItem((prev: WorkItem | null) => {
             if (!prev) return prev;
             return prev.work_item_id === event.payload.item.work_item_id
               ? event.payload.item

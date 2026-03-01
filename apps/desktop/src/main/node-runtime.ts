@@ -1,6 +1,6 @@
-import { TyrumClient, autoExecute } from "@tyrum/client";
-import type { CapabilityProvider } from "@tyrum/client";
-import { deviceIdFromSha256Digest, type ClientCapability } from "@tyrum/schemas";
+import { TyrumClient, autoExecute } from "@tyrum/operator-core";
+import type { CapabilityProvider } from "@tyrum/operator-core";
+import { deviceIdFromSha256Digest, type ClientCapability } from "@tyrum/operator-core";
 import type { DesktopNodeConfig } from "./config/schema.js";
 import type { ResolvedPermissions } from "./config/permissions.js";
 import { saveConfig } from "./config/store.js";

@@ -1,4 +1,4 @@
-import { TyrumClient } from "@tyrum/client";
+import { TyrumClient } from "@tyrum/operator-core";
 import { Notification } from "electron";
 import { loadConfig } from "./config/store.js";
 import { resolveOperatorConnection, startEmbeddedGatewayFromConfig } from "./ipc/gateway-ipc.js";

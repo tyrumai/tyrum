@@ -55,3 +55,34 @@ export type {
   MemoryStore,
   MemoryTombstonesState,
 } from "./stores/memory-store.js";
+
+// Re-exports for consumers (apps/desktop, packages/tui)
+export type {
+  ActionPrimitive,
+  ClientCapability,
+  EvaluationContext,
+  AgentStateKVEntry,
+  DecisionRecord,
+  WorkArtifact,
+  WorkItem,
+  WorkItemStateKVEntry,
+  WorkSignal,
+  WorkStateKVScope,
+} from "@tyrum/schemas";
+export { checkPostcondition, deviceIdFromSha256Digest } from "@tyrum/schemas";
+
+export {
+  TyrumClient,
+  autoExecute,
+  createTyrumHttpClient,
+  createNodeFileDeviceIdentityStorage,
+  loadOrCreateDeviceIdentity,
+} from "@tyrum/client";
+export type {
+  CapabilityProvider,
+  ExecutionAttempt,
+  ExecutionRun,
+  ExecutionStep,
+  MemoryItem,
+  TaskResult,
+} from "@tyrum/client";

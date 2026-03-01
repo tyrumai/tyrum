@@ -1,4 +1,4 @@
-import { createTyrumHttpClient } from "@tyrum/client";
+import { createTyrumHttpClient } from "@tyrum/operator-core";
 import {
   createAdminModeStore,
   createBearerTokenAuth,

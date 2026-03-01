@@ -1,4 +1,4 @@
-import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/client";
+import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/operator-core";
 import type { RunsState } from "@tyrum/operator-core";
 
 export function getRunList(state: RunsState): ExecutionRun[] {
