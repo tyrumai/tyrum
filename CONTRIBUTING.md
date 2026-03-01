@@ -77,25 +77,19 @@ node scripts/coverage/diff-lines.mjs --base "$BASE_SHA" --min 80
 
 Note: this diff-coverage check is optional and not enforced in CI.
 
-### Max lines (enforced in CI for PRs)
+### New-file lint gate (enforced in CI for PRs)
 
-CI enforces file/function length limits for newly added TypeScript files in PRs.
+CI enforces lint rules on newly added TypeScript files only (no legacy refactors required).
 
 ```bash
 BASE_SHA="$(git merge-base HEAD origin/main)"
-node scripts/lint/max-lines-diff.mjs --base "$BASE_SHA"
+node scripts/lint/oxlint-new-files.mjs --base "$BASE_SHA"
 ```
 
 To audit the whole repo (warnings only):
 
 ```bash
-pnpm lint:max-lines:warn
-```
-
-To see additional Oxlint warnings (currently the `suspicious` category):
-
-```bash
-pnpm lint:oxlint:categories:warn
+pnpm lint:oxlint:report
 ```
 
 ## 5. Branch Protections & Reviews

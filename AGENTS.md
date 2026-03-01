@@ -53,7 +53,7 @@
 ## Conventions
 
 - TypeScript ESM workspace (`"type": "module"`); relative TS imports use `.js` specifiers (e.g. `./foo.js`), matching `tsconfig.base.json` (`moduleResolution: Node16`).
-- Lint: oxlint (`oxlint.json`).
+- Lint: oxlint (`.oxlintrc.json`).
 - Tests: Vitest (`vitest.config.ts`); tests live under `packages/*/tests` and `apps/*/tests`.
 
 ## Safety / do-not-touch

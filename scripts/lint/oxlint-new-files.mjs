@@ -44,6 +44,7 @@ function resolveBaseCommit(explicitBase) {
 
 function listAddedFiles(base) {
   const diff = runGit(["diff", "--name-only", "--diff-filter=A", `${base}...HEAD`]).trim();
+
   return diff.length === 0 ? [] : diff.split("\n").map((l) => l.trim());
 }
 
@@ -53,13 +54,15 @@ function isTypeScriptSourceFile(filePath) {
   return true;
 }
 
-function runCategoryGate({ repoRoot, files, verbose }) {
-  const configPath = path.join(repoRoot, "scripts/oxlint-categories-warn.json");
+function runNewFilesGate({ repoRoot, files, verbose }) {
+  const configPath = path.join(repoRoot, ".oxlintrc.new-files.json");
 
   const args = ["exec", "oxlint", "-c", configPath, "--deny-warnings", ...files];
 
   if (verbose) {
-    console.log(`[oxlint] checking ${files.length} new file(s) (no warnings allowed)`);
+    console.log(
+      `[oxlint] checking ${files.length} new file(s) (no warnings allowed)`,
+    );
   }
 
   const result = spawnSync("pnpm", args, { stdio: "inherit", cwd: repoRoot });
@@ -77,4 +80,4 @@ if (files.length === 0) {
   process.exit(0);
 }
 
-process.exit(runCategoryGate({ repoRoot, files, verbose: args.verbose }));
+process.exit(runNewFilesGate({ repoRoot, files, verbose: args.verbose }));

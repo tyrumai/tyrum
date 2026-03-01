@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/coverage/**",
+    "**/.worktrees/**"
+  ],
+  "categories": {
+    "correctness": "deny",
+    "suspicious": "warn",
+    "perf": "warn",
+    "style": "off",
+    "restriction": "off",
+    "pedantic": "off",
+    "nursery": "off"
+  },
+  "rules": {
+    "max-lines": ["warn", { "max": 500, "skipBlankLines": true, "skipComments": true }],
+    "max-lines-per-function": ["warn", { "max": 80, "skipBlankLines": true, "skipComments": true }],
+    "preserve-caught-error": "off",
+    "unicorn/consistent-function-scoping": "off",
+    "no-await-in-loop": "off"
+  }
+}

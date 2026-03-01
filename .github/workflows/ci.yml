@@ -63,7 +63,8 @@ jobs:
               - "patches/**"
               - "Dockerfile"
               - "docker-compose.yml"
-              - "oxlint.json"
+              - ".oxlintrc.json"
+              - ".oxlintrc.new-files.json"
               - "tsconfig.json"
               - "tsconfig.base.json"
               - "vitest.config.ts"
@@ -161,16 +162,11 @@ jobs:
           if git rev-parse --verify HEAD^2 >/dev/null 2>&1; then
             base="$(git rev-parse HEAD^1)"
           fi
-          node scripts/lint/max-lines-diff.mjs --base "$base"
-          node scripts/lint/oxlint-categories-new-files.mjs --base "$base"
+          node scripts/lint/oxlint-new-files.mjs --base "$base"
 
-      - name: Max lines report (warn)
+      - name: Oxlint report (warn)
         if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
-        run: pnpm lint:max-lines:warn
-
-      - name: Oxlint categories report (warn)
-        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
-        run: pnpm lint:oxlint:categories:warn
+        run: pnpm lint:oxlint:report
 
       - name: Typecheck (packages)
         if: matrix.os == 'ubuntu-latest'
