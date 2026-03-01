@@ -22,6 +22,19 @@ type ArtifactBytesUiResult =
   | { kind: "redirect"; url: string }
   | { kind: "bytes"; url: string; contentType?: string; byteLength: number };
 
+function toArtifactBytesCardValue(result: ArtifactBytesUiResult): unknown | undefined {
+  switch (result.kind) {
+    case "bytes":
+      return { kind: result.kind, byteLength: result.byteLength, contentType: result.contentType };
+    case "redirect":
+      return { kind: result.kind, url: result.url };
+    case "loading":
+      return { kind: result.kind };
+    default:
+      return undefined;
+  }
+}
+
 function ArtifactDownloadLink({
   core,
   runId,
@@ -123,15 +136,7 @@ function ArtifactsDownloadTab({
 
   const canQuery = Boolean(runId && artifactId);
 
-  const value =
-    result.kind === "bytes"
-      ? { kind: result.kind, byteLength: result.byteLength, contentType: result.contentType }
-      : result.kind === "redirect"
-        ? { kind: result.kind, url: result.url }
-        : result.kind === "loading"
-          ? { kind: result.kind }
-          : undefined;
-
+  const value = toArtifactBytesCardValue(result);
   const error = result.kind === "error" ? result.error : undefined;
 
   return (
