@@ -1,4 +1,5 @@
 import * as React from "react";
+import { toast } from "sonner";
 import { isRecord } from "../../utils/is-record.js";
 import { cn } from "../../lib/cn.js";
 import { Button } from "./button.js";
@@ -93,16 +94,25 @@ export function JsonViewer({
   className,
   ...props
 }: JsonViewerProps): React.ReactElement {
+  const clipboard = globalThis.navigator?.clipboard;
+  const canCopy = withCopyButton && typeof clipboard?.writeText === "function";
+
   const copy = (): void => {
+    if (!canCopy) return;
     const serialized = serializeJsonValue(value);
-    const clipboard = globalThis.navigator?.clipboard;
-    const promise = clipboard?.writeText?.(serialized);
-    promise?.catch?.(() => {});
+    void clipboard
+      .writeText(serialized)
+      .then(() => {
+        toast.success("Copied to clipboard");
+      })
+      .catch(() => {
+        toast.error("Failed to copy to clipboard");
+      });
   };
 
   return (
     <div className={cn("grid gap-2", className)} {...props}>
-      {withCopyButton ? (
+      {canCopy ? (
         <div className="flex items-center justify-end">
           <Button
             type="button"

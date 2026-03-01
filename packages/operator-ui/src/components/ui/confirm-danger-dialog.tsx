@@ -1,5 +1,8 @@
 import * as React from "react";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
+import { Alert } from "./alert.js";
 import { Button } from "./button.js";
+import { Checkbox } from "./checkbox.js";
 import {
   Dialog,
   DialogContent,
@@ -35,21 +38,35 @@ export function ConfirmDangerDialog({
   children,
 }: ConfirmDangerDialogProps): React.ReactElement {
   const [confirmed, setConfirmed] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (open) return;
     setConfirmed(false);
+    setSubmitting(false);
+    setErrorMessage(null);
   }, [open]);
 
+  const busy = isLoading || submitting;
+
   const close = (): void => {
-    if (isLoading) return;
+    if (busy) return;
     onOpenChange(false);
   };
 
-  const submit = (): void => {
-    if (!confirmed || isLoading) return;
-    void onConfirm();
-    onOpenChange(false);
+  const submit = async (): Promise<void> => {
+    if (!confirmed || busy) return;
+    setSubmitting(true);
+    setErrorMessage(null);
+    try {
+      await onConfirm();
+      onOpenChange(false);
+    } catch (error) {
+      setErrorMessage(formatErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -67,10 +84,10 @@ export function ConfirmDangerDialog({
         data-testid="confirm-danger-dialog"
         aria-modal="true"
         onEscapeKeyDown={(event) => {
-          if (isLoading) event.preventDefault();
+          if (busy) event.preventDefault();
         }}
         onPointerDownOutside={(event) => {
-          if (isLoading) event.preventDefault();
+          if (busy) event.preventDefault();
         }}
       >
         <DialogHeader>
@@ -81,17 +98,19 @@ export function ConfirmDangerDialog({
         <div className="mt-4 grid gap-4">
           {children}
           <label className="flex items-center gap-3 text-sm text-fg">
-            <input
-              type="checkbox"
+            <Checkbox
               data-testid="confirm-danger-checkbox"
               checked={confirmed}
-              disabled={isLoading}
-              onChange={(event) => {
-                setConfirmed(event.target.checked);
+              disabled={busy}
+              onCheckedChange={(nextChecked) => {
+                setConfirmed(Boolean(nextChecked));
               }}
             />
             <span>{confirmationLabel}</span>
           </label>
+          {errorMessage ? (
+            <Alert variant="error" title="Action failed" description={errorMessage} />
+          ) : null}
         </div>
 
         <DialogFooter>
@@ -99,7 +118,7 @@ export function ConfirmDangerDialog({
             type="button"
             data-testid="confirm-danger-cancel"
             variant="secondary"
-            disabled={isLoading}
+            disabled={busy}
             onClick={() => {
               close();
             }}
@@ -110,9 +129,10 @@ export function ConfirmDangerDialog({
             type="button"
             data-testid="confirm-danger-confirm"
             variant="danger"
-            disabled={!confirmed || isLoading}
+            isLoading={submitting}
+            disabled={!confirmed || busy}
             onClick={() => {
-              submit();
+              void submit();
             }}
           >
             {confirmLabel}
@@ -122,4 +142,3 @@ export function ConfirmDangerDialog({
     </Dialog>
   );
 }
-

@@ -54,4 +54,3 @@ describe("JsonViewer", () => {
     cleanupTestRoot({ container, root });
   });
 });
-

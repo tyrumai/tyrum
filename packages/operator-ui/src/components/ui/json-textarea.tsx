@@ -1,9 +1,10 @@
 import * as React from "react";
 import { Textarea, type TextareaProps } from "./textarea.js";
 
-function parseJsonInput(
-  rawValue: string,
-): { value: unknown | undefined; errorMessage: string | null } {
+function parseJsonInput(rawValue: string): {
+  value: unknown | undefined;
+  errorMessage: string | null;
+} {
   const trimmed = rawValue.trim();
   if (!trimmed) return { value: undefined, errorMessage: null };
 
@@ -51,4 +52,3 @@ export function JsonTextarea({
     />
   );
 }
-

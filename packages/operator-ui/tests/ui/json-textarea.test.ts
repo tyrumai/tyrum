@@ -36,7 +36,7 @@ describe("JsonTextarea", () => {
       React.createElement(JsonTextarea as React.ComponentType, {
         id: "payload",
         label: "Payload",
-        value: "{\"a\":1}",
+        value: '{"a":1}',
         onChange: () => {},
         onJsonChange,
       }),
@@ -50,4 +50,3 @@ describe("JsonTextarea", () => {
     cleanupTestRoot({ container, root });
   });
 });
-

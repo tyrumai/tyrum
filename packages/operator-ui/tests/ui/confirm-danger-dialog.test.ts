@@ -6,7 +6,7 @@ import * as operatorUi from "../../src/index.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 describe("ConfirmDangerDialog", () => {
-  it("requires explicit confirmation before enabling the danger action", () => {
+  it("requires explicit confirmation before enabling the danger action", async () => {
     const ConfirmDangerDialog = (operatorUi as Record<string, unknown>)["ConfirmDangerDialog"];
     expect(ConfirmDangerDialog).toBeDefined();
 
@@ -30,9 +30,7 @@ describe("ConfirmDangerDialog", () => {
     expect(confirmButton).not.toBeNull();
     expect(confirmButton?.disabled).toBe(true);
 
-    const checkbox = document.body.querySelector<HTMLInputElement>(
-      `[data-testid="confirm-danger-checkbox"]`,
-    );
+    const checkbox = document.body.querySelector(`[data-testid="confirm-danger-checkbox"]`);
     expect(checkbox).not.toBeNull();
 
     act(() => {
@@ -41,8 +39,9 @@ describe("ConfirmDangerDialog", () => {
 
     expect(confirmButton?.disabled).toBe(false);
 
-    act(() => {
+    await act(async () => {
       confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
     });
 
     expect(onConfirm).toHaveBeenCalledTimes(1);
@@ -51,4 +50,3 @@ describe("ConfirmDangerDialog", () => {
     cleanupTestRoot({ container, root });
   });
 });
-

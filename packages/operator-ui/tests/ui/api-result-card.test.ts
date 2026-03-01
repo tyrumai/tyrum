@@ -41,4 +41,3 @@ describe("ApiResultCard", () => {
     cleanupTestRoot({ container, root });
   });
 });
-
