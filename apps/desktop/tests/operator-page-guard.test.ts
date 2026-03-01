@@ -37,6 +37,7 @@ describe("OperatorPageGuard", () => {
           core: null,
           busy: false,
           errorMessage: null,
+          retry: () => {},
           render: () => createElement("div", null, "content"),
         }),
       );
@@ -44,8 +45,9 @@ describe("OperatorPageGuard", () => {
     expect(document.body.textContent).toContain("Desktop API not available");
   });
 
-  it("shows error alert for errorMessage", async () => {
+  it("shows error alert with retry button for errorMessage", async () => {
     (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = {};
+    const retrySpy = vi.fn();
     const { OperatorPageGuard } = await import("../src/renderer/components/OperatorPageGuard.js");
     await act(async () => {
       testRoot.root.render(
@@ -53,12 +55,21 @@ describe("OperatorPageGuard", () => {
           core: null,
           busy: false,
           errorMessage: "connection failed",
+          retry: retrySpy,
           render: () => createElement("div", null, "content"),
         }),
       );
     });
     expect(document.body.textContent).toContain("connection failed");
     expect(document.body.textContent).not.toContain("content");
+
+    const retryButton = document.querySelector("button");
+    expect(retryButton).not.toBeNull();
+    expect(retryButton!.textContent).toBe("Retry");
+    await act(async () => {
+      retryButton!.click();
+    });
+    expect(retrySpy).toHaveBeenCalledOnce();
   });
 
   it("shows loading spinner when core is null and busy", async () => {
@@ -70,6 +81,7 @@ describe("OperatorPageGuard", () => {
           core: null,
           busy: true,
           errorMessage: null,
+          retry: () => {},
           render: () => createElement("div", null, "content"),
         }),
       );
@@ -88,6 +100,7 @@ describe("OperatorPageGuard", () => {
           core: fakeCore,
           busy: false,
           errorMessage: null,
+          retry: () => {},
           render: () => createElement("div", { "data-testid": "child" }, "rendered"),
         }),
       );
