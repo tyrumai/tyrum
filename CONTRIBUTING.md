@@ -35,13 +35,17 @@ Thanks for helping build the Tyrum assistant platform.
 | Build all packages   | `pnpm build`                         |
 | Start gateway        | `pnpm --filter @tyrum/gateway start` |
 
-Optional: local hooks (pre-commit/pre-push)
+Local hooks (pre-commit/pre-push)
+
+Hooks are installed automatically when you run `pnpm install` (via the `prepare` script).
+
+If you need to (re)install them manually:
 
 ```bash
-git config core.hooksPath .githooks
+pnpm setup:githooks
 ```
 
-This enables repo-local hooks:
+The repo-local hooks are:
 
 - `pre-commit`: runs `pnpm format:check-staged` for fast staged-file formatting checks.
 - `pre-push`: runs `pnpm lint` and `pnpm typecheck` for stronger validation before pushing.
