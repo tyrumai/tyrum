@@ -43,7 +43,7 @@ function StatCard({
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
       className={cn(
-        interactive ? "cursor-pointer transition-colors hover:bg-bg-subtle" : null,
+        interactive ? "cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all duration-300" : null,
         interactive
           ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
           : null,

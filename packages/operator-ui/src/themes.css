@@ -1,44 +1,46 @@
 :root {
-  /* Dark is the default theme. */
+  /* Dark is the default premium theme. */
   color-scheme: dark;
 
-  --tyrum-color-bg: #000000;
-  --tyrum-color-bg-subtle: #0a0a0a;
-  --tyrum-color-bg-card: #111111;
-  --tyrum-color-fg: #ededed;
-  --tyrum-color-fg-muted: #a1a1aa;
-  --tyrum-color-border: #262626;
+  --tyrum-color-bg: transparent; /* Handled by gradient in AppShell */
+  --tyrum-app-bg-image: linear-gradient(135deg, #0B0F19 0%, #05050A 50%, #110B1E 100%);
+  --tyrum-color-bg-subtle: rgba(15, 23, 42, 0.4);
+  --tyrum-color-bg-card: rgba(15, 23, 42, 0.6);
+  --tyrum-color-fg: #f8fafc;
+  --tyrum-color-fg-muted: #94a3b8;
+  --tyrum-color-border: rgba(255, 255, 255, 0.08);
 
-  --tyrum-color-primary: #6366f1;
-  --tyrum-color-primary-dim: rgba(99, 102, 241, 0.12);
+  --tyrum-color-primary: #818cf8;
+  --tyrum-color-primary-dim: rgba(129, 140, 248, 0.15);
 
-  --tyrum-color-success: #22c55e;
-  --tyrum-color-warning: #eab308;
-  --tyrum-color-error: #ef4444;
-  --tyrum-color-neutral: #9ca3af;
-  --tyrum-color-focus-ring: #a5b4fc;
-  --tyrum-color-selection: rgba(99, 102, 241, 0.3);
+  --tyrum-color-success: #34d399;
+  --tyrum-color-warning: #fbbf24;
+  --tyrum-color-error: #f87171;
+  --tyrum-color-neutral: #94a3b8;
+  --tyrum-color-focus-ring: rgba(129, 140, 248, 0.5);
+  --tyrum-color-selection: rgba(129, 140, 248, 0.3);
 }
 
 html[data-theme="light"] {
   color-scheme: light;
 
-  --tyrum-color-bg: #ffffff;
-  --tyrum-color-bg-subtle: #f3f4f6;
-  --tyrum-color-bg-card: #ffffff;
-  --tyrum-color-fg: #111827;
-  --tyrum-color-fg-muted: #6b7280;
-  --tyrum-color-border: #e5e7eb;
+  --tyrum-color-bg: transparent; /* Handled by gradient in AppShell */
+  --tyrum-app-bg-image: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
+  --tyrum-color-bg-subtle: rgba(255, 255, 255, 0.5);
+  --tyrum-color-bg-card: rgba(255, 255, 255, 0.8);
+  --tyrum-color-fg: #0f172a;
+  --tyrum-color-fg-muted: #64748b;
+  --tyrum-color-border: rgba(0, 0, 0, 0.06);
 
-  --tyrum-color-primary: #6366f1;
-  --tyrum-color-primary-dim: rgba(99, 102, 241, 0.12);
+  --tyrum-color-primary: #4f46e5;
+  --tyrum-color-primary-dim: rgba(79, 70, 229, 0.1);
 
-  --tyrum-color-success: #16a34a;
-  --tyrum-color-warning: #ca8a04;
-  --tyrum-color-error: #dc2626;
-  --tyrum-color-neutral: #6b7280;
-  --tyrum-color-focus-ring: #6366f1;
-  --tyrum-color-selection: rgba(99, 102, 241, 0.2);
+  --tyrum-color-success: #10b981;
+  --tyrum-color-warning: #f59e0b;
+  --tyrum-color-error: #ef4444;
+  --tyrum-color-neutral: #64748b;
+  --tyrum-color-focus-ring: rgba(79, 70, 229, 0.4);
+  --tyrum-color-selection: rgba(79, 70, 229, 0.2);
 }
 
 /* System mode: rely on prefers-color-scheme when data-theme-mode=system. */
@@ -50,21 +52,22 @@ html[data-theme-mode="system"] {
   html[data-theme-mode="system"] {
     color-scheme: light;
 
-    --tyrum-color-bg: #ffffff;
-    --tyrum-color-bg-subtle: #f3f4f6;
-    --tyrum-color-bg-card: #ffffff;
-    --tyrum-color-fg: #111827;
-    --tyrum-color-fg-muted: #6b7280;
-    --tyrum-color-border: #e5e7eb;
+    --tyrum-color-bg: transparent;
+    --tyrum-app-bg-image: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
+    --tyrum-color-bg-subtle: rgba(255, 255, 255, 0.5);
+    --tyrum-color-bg-card: rgba(255, 255, 255, 0.8);
+    --tyrum-color-fg: #0f172a;
+    --tyrum-color-fg-muted: #64748b;
+    --tyrum-color-border: rgba(0, 0, 0, 0.06);
 
-    --tyrum-color-primary: #6366f1;
-    --tyrum-color-primary-dim: rgba(99, 102, 241, 0.12);
+    --tyrum-color-primary: #4f46e5;
+    --tyrum-color-primary-dim: rgba(79, 70, 229, 0.1);
 
-    --tyrum-color-success: #16a34a;
-    --tyrum-color-warning: #ca8a04;
-    --tyrum-color-error: #dc2626;
-    --tyrum-color-neutral: #6b7280;
-    --tyrum-color-focus-ring: #6366f1;
-    --tyrum-color-selection: rgba(99, 102, 241, 0.2);
+    --tyrum-color-success: #10b981;
+    --tyrum-color-warning: #f59e0b;
+    --tyrum-color-error: #ef4444;
+    --tyrum-color-neutral: #64748b;
+    --tyrum-color-focus-ring: rgba(79, 70, 229, 0.4);
+    --tyrum-color-selection: rgba(79, 70, 229, 0.2);
   }
 }

@@ -61,7 +61,7 @@ export function MobileNav({
   return (
     <nav
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-bg-card pb-[env(safe-area-inset-bottom)]",
+        "fixed bottom-0 left-0 right-0 z-40 border-t border-border/60 bg-bg-card/70 backdrop-blur-2xl pb-[env(safe-area-inset-bottom)]",
         className,
       )}
       {...props}

@@ -30,8 +30,8 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           aria-invalid={error ? "true" : undefined}
           aria-describedby={describedById}
           className={cn(
-            "flex h-9 w-full rounded-md border border-border bg-bg px-3 py-1 text-sm text-fg shadow-sm transition-colors",
-            "placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+            "flex h-9 w-full rounded-md border border-border/80 bg-bg-card/40 backdrop-blur-md px-3 py-1 text-sm text-fg shadow-inner transition-all duration-200",
+            "placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-transparent hover:bg-bg-card/60 focus-visible:bg-bg-card/80",
             "disabled:cursor-not-allowed disabled:opacity-50",
             error ? "border-error focus-visible:ring-error" : null,
             className,
