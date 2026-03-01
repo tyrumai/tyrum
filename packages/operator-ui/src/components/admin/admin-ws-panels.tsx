@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 import { JsonTextarea } from "../ui/json-textarea.js";
 
+type PresenceBeaconPayload = Parameters<OperatorCore["ws"]["presenceBeacon"]>[0];
 type CapabilityReadyPayload = Parameters<OperatorCore["ws"]["capabilityReady"]>[0];
 type AttemptEvidencePayload = Parameters<OperatorCore["ws"]["attemptEvidence"]>[0];
 
@@ -220,7 +221,9 @@ function PresenceBeaconPanel({ core }: { core: OperatorCore }): React.ReactEleme
               }
 
               const payload = parsed.value;
-              void result.run(async () => core.ws.presenceBeacon(payload));
+              void result.run(async () =>
+                core.ws.presenceBeacon(payload as unknown as PresenceBeaconPayload),
+              );
             }}
           >
             {result.busy ? "Sending..." : "Send"}

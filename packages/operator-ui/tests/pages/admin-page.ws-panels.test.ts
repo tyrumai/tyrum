@@ -2,6 +2,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createAdminModeStore } from "../../../operator-core/src/index.js";
 import { AdminModeProvider } from "../../src/admin-mode.js";
@@ -16,8 +18,24 @@ function setReactTextValue(el: HTMLInputElement | HTMLTextAreaElement, value: st
 }
 
 describe("AdminPage WebSocket panels", () => {
+  it("keeps WS payload typing consistent across panels", () => {
+    const source = readFileSync(
+      join(process.cwd(), "packages/operator-ui/src/components/admin/admin-ws-panels.tsx"),
+      "utf8",
+    );
+
+    expect(source).toMatch(
+      /type PresenceBeaconPayload = Parameters<OperatorCore\["ws"\]\["presenceBeacon"\]>\[0\];/,
+    );
+    expect(source).toMatch(
+      /core\.ws\.presenceBeacon\(\s*payload as unknown as PresenceBeaconPayload\s*\)/,
+    );
+  });
+
   it("renders WS panels and wires requests", async () => {
     const ws = {
+      on: vi.fn(),
+      off: vi.fn(),
       commandExecute: vi.fn(async (command: string) => ({ output: `ok:${command}` })),
       ping: vi.fn(async () => {}),
       presenceBeacon: vi.fn(async (payload: unknown) => ({
