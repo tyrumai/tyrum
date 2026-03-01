@@ -126,7 +126,7 @@ function SubagentEventLog({ core }: { core: OperatorCore }): React.ReactElement 
   const [events, setEvents] = React.useState<LoggedEvent[]>([]);
 
   React.useEffect(() => {
-    const handler = (data: unknown): void => {
+    const handler = (data: any): void => {
       const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
       const type = typeof record?.["type"] === "string" ? (record["type"] as string) : "unknown";
       const occurredAt =
@@ -135,11 +135,16 @@ function SubagentEventLog({ core }: { core: OperatorCore }): React.ReactElement 
       setEvents((prev) => [{ type, occurred_at: occurredAt, data }, ...prev].slice(0, 100));
     };
 
-    const types = ["subagent.spawned", "subagent.updated", "subagent.closed", "subagent.output"];
-    for (const t of types) core.ws.on(t, handler as never);
+    const types = [
+      "subagent.spawned",
+      "subagent.updated",
+      "subagent.closed",
+      "subagent.output",
+    ] as const;
+    for (const t of types) core.ws.on(t, handler);
 
     return () => {
-      for (const t of types) core.ws.off(t, handler as never);
+      for (const t of types) core.ws.off(t, handler);
     };
   }, [core.ws]);
 
