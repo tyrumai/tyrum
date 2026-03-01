@@ -184,16 +184,20 @@ function DeviceTokensCard() {
           if (!http) throw new Error("Admin Mode is required");
 
           const ttlSecondsRaw = issueTtlSeconds.trim();
-          const ttl_seconds = ttlSecondsRaw ? Number.parseInt(ttlSecondsRaw, 10) : undefined;
+          const ttl_seconds = ttlSecondsRaw.length > 0 ? Number(ttlSecondsRaw) : undefined;
+          if (
+            typeof ttl_seconds === "number" &&
+            (!Number.isInteger(ttl_seconds) || ttl_seconds <= 0)
+          ) {
+            throw new Error("TTL must be a positive integer number of seconds.");
+          }
 
           try {
             const result = await http.deviceTokens.issue({
               device_id: issueDeviceId.trim(),
               role: issueRole,
               scopes: parseScopesInput(issueScopes),
-              ...(typeof ttl_seconds === "number" && Number.isFinite(ttl_seconds)
-                ? { ttl_seconds }
-                : {}),
+              ...(typeof ttl_seconds === "number" ? { ttl_seconds } : {}),
             });
             setIssueResult(result);
           } catch (error) {

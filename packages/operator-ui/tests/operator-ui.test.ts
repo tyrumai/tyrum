@@ -873,6 +873,162 @@ describe("operator-ui", () => {
     }
   });
 
+  it("disables Admin hub Contracts.getSchema until a schema file is provided", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    core.adminModeStore.enter({
+      elevatedToken: "elevated-test-token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    try {
+      act(() => {
+        root = createRoot(container);
+        root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      });
+
+      const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
+      expect(adminLink).not.toBeNull();
+
+      act(() => {
+        adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      const contractsCard = container.querySelector<HTMLElement>(
+        '[data-testid="admin-http-contracts"]',
+      );
+      expect(contractsCard).not.toBeNull();
+
+      const buttons = Array.from(
+        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      );
+      const getSchemaButton = buttons.find((button) => button.textContent?.trim() === "Get schema");
+      expect(getSchemaButton).not.toBeUndefined();
+      expect(getSchemaButton?.disabled).toBe(true);
+
+      const schemaFileInput = contractsCard?.querySelector<HTMLInputElement>("input");
+      expect(schemaFileInput).not.toBeNull();
+
+      await act(async () => {
+        setControlledInputValue(schemaFileInput!, "some-contract.json");
+        await Promise.resolve();
+      });
+
+      expect(schemaFileInput?.value).toBe("some-contract.json");
+
+      const nextButtons = Array.from(
+        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      );
+      const nextGetSchemaButton = nextButtons.find(
+        (button) => button.textContent?.trim() === "Get schema",
+      );
+      expect(nextGetSchemaButton).not.toBeUndefined();
+      expect(nextGetSchemaButton?.disabled).toBe(false);
+    } finally {
+      act(() => {
+        root?.unmount();
+      });
+      container.remove();
+    }
+  });
+
+  it("shows a friendly error when issuing a device token with an invalid TTL", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    core.adminModeStore.enter({
+      elevatedToken: "elevated-test-token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    try {
+      act(() => {
+        root = createRoot(container);
+        root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      });
+
+      const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
+      expect(adminLink).not.toBeNull();
+
+      act(() => {
+        adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      const deviceTokensCard = container.querySelector<HTMLElement>(
+        '[data-testid="admin-http-device-tokens"]',
+      );
+      expect(deviceTokensCard).not.toBeNull();
+
+      const ttlInput = deviceTokensCard?.querySelector<HTMLInputElement>('input[type="number"]');
+      expect(ttlInput).not.toBeNull();
+
+      act(() => {
+        setControlledInputValue(ttlInput!, "0");
+      });
+
+      const issueButton = container.querySelector<HTMLButtonElement>(
+        '[data-testid="admin-http-device-tokens-issue"]',
+      );
+      expect(issueButton).not.toBeNull();
+
+      act(() => {
+        issueButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      const checkbox = document.body.querySelector('[data-testid="confirm-danger-checkbox"]');
+      expect(checkbox).not.toBeNull();
+      act(() => {
+        checkbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      const confirmButton = document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="confirm-danger-confirm"]',
+      );
+      expect(confirmButton).not.toBeNull();
+      expect(confirmButton?.disabled).toBe(false);
+
+      await act(async () => {
+        confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      const dialog = document.body.querySelector<HTMLElement>(
+        '[data-testid="confirm-danger-dialog"]',
+      );
+      expect(dialog).not.toBeNull();
+
+      const alert = dialog?.querySelector('[role="alert"]');
+      expect(alert?.textContent).toContain("Action failed");
+      expect(alert?.textContent).toContain("TTL must be a positive integer");
+    } finally {
+      act(() => {
+        root?.unmount();
+      });
+      container.remove();
+    }
+  });
+
   it("connects and disconnects via operator-core", () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();

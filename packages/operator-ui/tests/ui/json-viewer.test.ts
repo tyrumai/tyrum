@@ -53,4 +53,55 @@ describe("JsonViewer", () => {
 
     cleanupTestRoot({ container, root });
   });
+
+  it("downloads JSON when enabled", async () => {
+    const JsonViewer = (operatorUi as Record<string, unknown>)["JsonViewer"];
+    expect(JsonViewer).toBeDefined();
+
+    const createObjectURL = vi.fn(() => "blob:json");
+    const revokeObjectURL = vi.fn(() => {});
+    vi.stubGlobal("URL", {
+      ...globalThis.URL,
+      createObjectURL,
+      revokeObjectURL,
+    });
+
+    const click = vi.fn();
+    const originalCreateElement = document.createElement.bind(document);
+    const createElement = vi
+      .spyOn(document, "createElement")
+      .mockImplementation((tagName: string) => {
+        const element = originalCreateElement(tagName);
+        if (tagName === "a") {
+          Object.defineProperty(element, "click", { value: click, configurable: true });
+        }
+        return element;
+      });
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        JsonViewer as React.ComponentType<{ value: unknown; withDownloadButton: boolean }>,
+        {
+          value: { a: 1 },
+          withDownloadButton: true,
+        },
+      ),
+    );
+
+    const button = container.querySelector("button[aria-label='Download JSON']");
+    expect(button).not.toBeNull();
+
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledTimes(1);
+
+    await new Promise<void>((resolve) => {
+      queueMicrotask(() => resolve());
+    });
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+
+    createElement.mockRestore();
+    vi.unstubAllGlobals();
+    cleanupTestRoot({ container, root });
+  });
 });
