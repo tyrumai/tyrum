@@ -119,14 +119,10 @@ jobs:
       - uses: actions/dependency-review-action@v4
 
   validation:
-    name: Validation (${{ matrix.os }})
+    name: Validation (ubuntu-latest)
     needs: changes
     if: needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
@@ -140,18 +136,10 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: Configure node-gyp to use local headers (macOS)
-        if: matrix.os == 'macos-latest'
-        shell: bash
-        run: |
-          set -euo pipefail
-          node_prefix="$(dirname "$(dirname "$(command -v node)")")"
-          echo "npm_config_nodedir=$node_prefix" >> "$GITHUB_ENV"
-
       - run: pnpm install --frozen-lockfile
 
       - name: New-file lint gates (PR)
-        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
+        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -165,49 +153,29 @@ jobs:
           node scripts/lint/oxlint-new-files.mjs --base "$base"
 
       - name: Oxlint report (warn)
-        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
+        if: github.event_name == 'pull_request'
         run: pnpm lint:oxlint:report
 
       - name: Typecheck (packages)
-        if: matrix.os == 'ubuntu-latest'
         run: pnpm typecheck
 
       - name: Typecheck (desktop app)
-        if: matrix.os == 'ubuntu-latest'
         run: pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json
 
       - name: Lint
-        if: matrix.os == 'ubuntu-latest'
         run: pnpm lint
 
       - name: Prettier format check
-        if: matrix.os == 'ubuntu-latest'
         run: pnpm format:check
 
       - name: Build
-        if: matrix.os == 'ubuntu-latest'
         run: pnpm build
-
-      - name: Build desktop type dependencies
-        if: matrix.os != 'ubuntu-latest'
-        run: pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build
-
-      - name: Build desktop app
-        if: matrix.os != 'ubuntu-latest'
-        run: pnpm --filter tyrum-desktop build
 
       - name: Install Playwright (Chromium)
         shell: bash
-        run: |
-          set -euo pipefail
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            pnpm --filter tyrum-desktop exec playwright install --with-deps chromium
-          else
-            pnpm --filter tyrum-desktop exec playwright install chromium
-          fi
+        run: pnpm --filter tyrum-desktop exec playwright install --with-deps chromium
 
       - name: Test + coverage
-        if: matrix.os == 'ubuntu-latest'
         run: >
           xvfb-run -a --server-args="-screen 0 1920x1080x24"
           pnpm test
@@ -217,13 +185,8 @@ jobs:
           --coverage.reporter=clover
           --coverage.reporter=json
 
-      - name: Test desktop suite
-        if: matrix.os != 'ubuntu-latest'
-        shell: bash
-        run: pnpm exec vitest run apps/desktop/tests --passWithNoTests
-
       - name: Coverage summary
-        if: always() && matrix.os == 'ubuntu-latest'
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -272,7 +235,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage artifact
-        if: always() && matrix.os == 'ubuntu-latest'
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: coverage-report-ubuntu
@@ -281,7 +244,7 @@ jobs:
           retention-days: 7
 
       - name: Coverage by component
-        if: always() && matrix.os == 'ubuntu-latest'
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -289,6 +252,64 @@ jobs:
             echo ""
             node scripts/coverage/components.mjs
           } >> "$GITHUB_STEP_SUMMARY"
+
+  desktop-suite:
+    name: Desktop Suite (${{ matrix.os }})
+    needs: [changes, validation]
+    if: needs.validation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Configure node-gyp to use local headers (macOS)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node_prefix="$(dirname "$(dirname "$(command -v node)")")"
+          echo "npm_config_nodedir=$node_prefix" >> "$GITHUB_ENV"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build desktop type dependencies
+        run: pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build
+
+      - name: Build desktop app
+        run: pnpm --filter tyrum-desktop build
+
+      - name: Install Playwright (Chromium)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            pnpm --filter tyrum-desktop exec playwright install --with-deps chromium
+          else
+            pnpm --filter tyrum-desktop exec playwright install chromium
+          fi
+
+      - name: Test desktop suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm exec vitest run apps/desktop/tests --passWithNoTests
+          else
+            pnpm exec vitest run apps/desktop/tests --passWithNoTests
+          fi
 
   reference-deployment-smoke:
     name: Reference Deployment Smoke (Docker)
