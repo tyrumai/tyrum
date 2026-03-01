@@ -86,6 +86,12 @@ BASE_SHA="$(git merge-base HEAD origin/main)"
 node scripts/lint/max-lines-diff.mjs --base "$BASE_SHA"
 ```
 
+To audit the whole repo (warnings only):
+
+```bash
+pnpm lint:max-lines:warn
+```
+
 ## 5. Branch Protections & Reviews
 
 Pull requests must reference their GitHub Issue and pass all required checks:

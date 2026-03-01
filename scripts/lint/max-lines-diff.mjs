@@ -57,7 +57,17 @@ function isTypeScriptSourceFile(filePath) {
 function runMaxLinesGate({ repoRoot, files, verbose }) {
   const configPath = path.join(repoRoot, "scripts/oxlint-max-lines.json");
 
-  const args = ["exec", "oxlint", "-c", configPath, ...files];
+  const args = [
+    "exec",
+    "oxlint",
+    "-c",
+    configPath,
+    "-D",
+    "max-lines",
+    "-D",
+    "max-lines-per-function",
+    ...files,
+  ];
 
   if (verbose) {
     console.log(

@@ -163,6 +163,10 @@ jobs:
           fi
           node scripts/lint/max-lines-diff.mjs --base "$base"
 
+      - name: Max lines report (warn)
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
+        run: pnpm lint:max-lines:warn
+
       - name: Typecheck (packages)
         if: matrix.os == 'ubuntu-latest'
         run: pnpm typecheck
