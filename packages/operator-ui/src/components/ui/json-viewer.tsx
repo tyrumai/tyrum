@@ -83,6 +83,8 @@ export interface JsonViewerProps extends React.HTMLAttributes<HTMLDivElement> {
   value: unknown;
   defaultExpandedDepth?: number;
   withCopyButton?: boolean;
+  withDownloadButton?: boolean;
+  downloadFileName?: string;
   contentClassName?: string;
 }
 
@@ -90,12 +92,19 @@ export function JsonViewer({
   value,
   defaultExpandedDepth = 2,
   withCopyButton = true,
+  withDownloadButton = false,
+  downloadFileName = "data.json",
   contentClassName,
   className,
   ...props
 }: JsonViewerProps): React.ReactElement {
   const clipboard = globalThis.navigator?.clipboard;
   const canCopy = withCopyButton && typeof clipboard?.writeText === "function";
+  const canDownload =
+    withDownloadButton &&
+    typeof globalThis.Blob === "function" &&
+    typeof globalThis.URL?.createObjectURL === "function" &&
+    typeof globalThis.document?.createElement === "function";
 
   const copy = (): void => {
     if (!canCopy) return;
@@ -110,21 +119,53 @@ export function JsonViewer({
       });
   };
 
+  const download = (): void => {
+    if (!canDownload) return;
+    const serialized = serializeJsonValue(value);
+    const blob = new Blob([serialized], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = downloadFileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
   return (
     <div className={cn("grid gap-2", className)} {...props}>
-      {canCopy ? (
-        <div className="flex items-center justify-end">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            aria-label="Copy JSON"
-            onClick={() => {
-              copy();
-            }}
-          >
-            Copy
-          </Button>
+      {canCopy || canDownload ? (
+        <div className="flex items-center justify-end gap-2">
+          {canDownload ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              aria-label="Download JSON"
+              onClick={() => {
+                download();
+              }}
+            >
+              Download
+            </Button>
+          ) : null}
+          {canCopy ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              aria-label="Copy JSON"
+              onClick={() => {
+                copy();
+              }}
+            >
+              Copy
+            </Button>
+          ) : null}
         </div>
       ) : null}
       <div

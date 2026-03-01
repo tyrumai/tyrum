@@ -5,6 +5,7 @@ import { parseJsonInput } from "../../utils/parse-json-input.js";
 import { AdminWorkBoardWsHub } from "../admin-workboard/admin-workboard-ws-hub.js";
 import { SubagentsPanels } from "../admin-ws/subagents-panels.js";
 import { PageHeader } from "../layout/page-header.js";
+import { AdminHttpPanels } from "./admin-http-panels.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -518,6 +519,9 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
                 <TabsTrigger value="models" data-testid="admin-http-tab-models">
                   Models
                 </TabsTrigger>
+                <TabsTrigger value="gateway" data-testid="admin-http-tab-gateway">
+                  Gateway
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="observability">
@@ -526,6 +530,10 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
 
               <TabsContent value="models">
                 <ModelsPanels core={core} />
+              </TabsContent>
+
+              <TabsContent value="gateway">
+                <AdminHttpPanels />
               </TabsContent>
             </Tabs>
           </TabsContent>
