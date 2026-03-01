@@ -39,7 +39,8 @@ const ATSPI_ROOT_ACCESSIBLE_REF: AtSpiAccessibleRef = {
   objectPath: ATSPI_ROOT_ACCESSIBLE_PATH,
 };
 
-const QUERY_MAX_NODES = 2_048;
+const QUERY_MAX_NODES = 8_192;
+const QUERY_MAX_CHILDREN = 512;
 
 const MAX_WINDOWS = 32;
 
@@ -100,6 +101,33 @@ function toUint32(value: unknown): number {
       if (typeof num === "number" && Number.isFinite(num)) return num >>> 0;
     }
   }
+  return 0;
+}
+
+function toNonNegativeInt(value: unknown): number {
+  if (value && typeof value === "object") {
+    const toNumber = (value as { toNumber?: unknown }).toNumber;
+    if (typeof toNumber === "function") {
+      const num = toNumber.call(value) as unknown;
+      if (typeof num === "number" && Number.isFinite(num)) {
+        return Math.max(0, Math.floor(num));
+      }
+    }
+
+    const nested = (value as { value?: unknown }).value;
+    if (nested !== undefined) return toNonNegativeInt(nested);
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value));
+  }
+
+  if (typeof value === "bigint") {
+    if (value <= 0n) return 0;
+    const max = BigInt(Number.MAX_SAFE_INTEGER);
+    return Number(value > max ? max : value);
+  }
+
   return 0;
 }
 
@@ -174,6 +202,10 @@ function parseAccessibleRef(value: unknown): AtSpiAccessibleRef | null {
 }
 
 function normalizeMaybe(value: unknown): string | undefined {
+  if (value && typeof value === "object") {
+    const nested = (value as { value?: unknown }).value;
+    if (nested !== undefined) return normalizeMaybe(nested);
+  }
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
@@ -255,7 +287,7 @@ function extractWindowsFromTree(root: DesktopUiTree["root"]): DesktopWindow[] {
           ref,
           title: title.length > 0 ? title : undefined,
           bounds: node.bounds,
-          focused: node.states.some((state) => state.trim().toLowerCase() === "focused"),
+          focused: node.states.some((state) => state.trim().toLowerCase() === "active"),
         });
       }
     }
@@ -414,7 +446,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     if (action) {
       const getNActions = (action as any)["GetNActions"];
       const countRaw = typeof getNActions === "function" ? await getNActions.call(action) : 0;
-      const count = typeof countRaw === "number" ? Math.max(0, Math.floor(countRaw)) : 0;
+      const count = toNonNegativeInt(countRaw);
       const getName = (action as any)["GetName"];
       const getActionName = (action as any)["GetActionName"];
 
@@ -427,8 +459,8 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
               : null;
         if (!fn) break;
         const raw = await fn.call(action, i);
-        const name = typeof raw === "string" ? clampTrimmed(raw, MAX_ACTION_CHARS) : "";
-        if (name) actions.push(name);
+        const name = normalizeMaybe(raw);
+        if (name) actions.push(clampTrimmed(name, MAX_ACTION_CHARS));
       }
     }
 
@@ -579,7 +611,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
 
       if (depth >= DEFAULT_A11Y_MAX_DEPTH) return;
 
-      const childLimit = Math.min(MAX_NODE_CHILDREN, remainingNodes);
+      const childLimit = Math.min(QUERY_MAX_CHILDREN, remainingNodes);
       const children = await this.getChildren(ref, childLimit);
       for (const child of children) {
         if (matches.length >= args.limit) break;
@@ -629,7 +661,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
 
     const getNActions = (action as any)["GetNActions"];
     const countRaw = typeof getNActions === "function" ? await getNActions.call(action) : 0;
-    const count = typeof countRaw === "number" ? Math.max(0, Math.floor(countRaw)) : 0;
+    const count = toNonNegativeInt(countRaw);
 
     const getName = (action as any)["GetName"];
     const getActionName = (action as any)["GetActionName"];
@@ -655,7 +687,14 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
       }
     }
 
-    if (chosenIndex === null) throw new Error("AT-SPI click/activate unsupported");
+    if (chosenIndex === null) {
+      try {
+        await doAction.call(action, 0);
+      } catch (err) {
+        throw new Error("AT-SPI click/activate unsupported", { cause: err as Error });
+      }
+      return { resolved_element_ref: toAtSpiElementRef(ref) };
+    }
 
     await doAction.call(action, chosenIndex);
     return { resolved_element_ref: toAtSpiElementRef(ref) };

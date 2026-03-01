@@ -130,6 +130,56 @@ describe("AtSpiDesktopA11yBackend", () => {
     ).rejects.toThrow(/double_click/);
   });
 
+  it("unwraps dbus-next Variant action names for click actions", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const doAction = vi.fn(async () => undefined);
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name !== "org.a11y.atspi.Action") return null;
+      return {
+        GetNActions: vi.fn(async () => 1n),
+        GetName: vi.fn(async () => ({ value: "click" })),
+        DoAction: doAction,
+      };
+    });
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "click" },
+      }),
+    ).resolves.toEqual({ resolved_element_ref: "atspi:app|/node" });
+    expect(doAction).toHaveBeenCalledTimes(1);
+    expect(doAction).toHaveBeenCalledWith(0);
+  });
+
+  it("falls back to DoAction(0) when click/activate action names are unavailable", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const doAction = vi.fn(async () => undefined);
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name !== "org.a11y.atspi.Action") return null;
+      return {
+        GetNActions: vi.fn(async () => 1n),
+        GetName: vi.fn(async () => ({ value: "invoke" })),
+        DoAction: doAction,
+      };
+    });
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "click" },
+      }),
+    ).resolves.toEqual({ resolved_element_ref: "atspi:app|/node" });
+    expect(doAction).toHaveBeenCalledTimes(1);
+    expect(doAction).toHaveBeenCalledWith(0);
+  });
+
   it("matches state-filtered queries when GetState indicates focused", async () => {
     const backend = new AtSpiDesktopA11yBackend() as any;
 
@@ -234,7 +284,7 @@ describe("AtSpiDesktopA11yBackend", () => {
           name: "Window One",
           bounds: { x: 10, y: 20, width: 300, height: 200 },
           actions: [],
-          states: ["focused"],
+          states: ["active"],
         };
       }
 
