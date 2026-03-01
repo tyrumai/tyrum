@@ -22,5 +22,13 @@
     "preserve-caught-error": "off",
     "unicorn/consistent-function-scoping": "off",
     "no-await-in-loop": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["**/tests/**", "**/__tests__/**", "**/*.test.*", "**/*.spec.*"],
+      "rules": {
+        "max-lines-per-function": "off"
+      }
+    }
+  ]
 }
