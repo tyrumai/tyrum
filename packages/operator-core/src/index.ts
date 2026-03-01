@@ -61,6 +61,13 @@ export type {
   ActionPrimitive,
   ClientCapability,
   EvaluationContext,
+  AgentStateKVEntry,
+  DecisionRecord,
+  WorkArtifact,
+  WorkItem,
+  WorkItemStateKVEntry,
+  WorkSignal,
+  WorkStateKVScope,
 } from "@tyrum/schemas";
 export { checkPostcondition, deviceIdFromSha256Digest } from "@tyrum/schemas";
 
