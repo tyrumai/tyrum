@@ -2,6 +2,7 @@ import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { AdminModeGate } from "../../admin-mode.js";
 import { parseJsonInput } from "../../utils/parse-json-input.js";
+import { AdminWsPanels } from "../admin/admin-ws-panels.js";
 import { AdminWorkBoardWsHub } from "../admin-workboard/admin-workboard-ws-hub.js";
 import { JsonWsPanel } from "../admin-ws/json-ws-panel.js";
 import { SubagentsPanels } from "../admin-ws/subagents-panels.js";
@@ -561,8 +562,11 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
           </TabsContent>
 
           <TabsContent value="ws">
-            <Tabs defaultValue="subagents" className="grid gap-3">
+            <Tabs defaultValue="commands" className="grid gap-3">
               <TabsList aria-label="Admin WebSocket API sections">
+                <TabsTrigger value="commands" data-testid="admin-ws-tab-commands">
+                  Commands &amp; diagnostics
+                </TabsTrigger>
                 <TabsTrigger value="subagents" data-testid="admin-ws-tab-subagents">
                   Subagents
                 </TabsTrigger>
@@ -576,6 +580,13 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
                   Workflows
                 </TabsTrigger>
               </TabsList>
+
+              <TabsContent value="commands">
+                <section className="grid gap-4" aria-label="WebSocket commands and diagnostics">
+                  <div className="text-sm font-medium text-fg">Commands &amp; diagnostics</div>
+                  <AdminWsPanels core={core} />
+                </section>
+              </TabsContent>
 
               <TabsContent value="subagents">
                 <SubagentsPanels core={core} />
