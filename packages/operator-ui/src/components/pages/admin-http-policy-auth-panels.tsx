@@ -224,6 +224,7 @@ export function AdminHttpPolicyAuthPanels() {
                   data-testid="admin-policy-overrides-list"
                   variant="secondary"
                   isLoading={overrides.state.busy}
+                  disabled={listOverridesQuery.errorMessage !== null}
                   onClick={() => {
                     const query = resolveJsonValue(listOverridesQuery, {});
                     void overrides.run("Policy overrides", async () => await http.policy.listOverrides(query as never));
@@ -241,6 +242,10 @@ export function AdminHttpPolicyAuthPanels() {
                 <Button
                   data-testid="admin-policy-override-create"
                   variant="danger"
+                  disabled={
+                    createOverrideBody.errorMessage !== null ||
+                    typeof createOverrideBody.value === "undefined"
+                  }
                   onClick={() => {
                     const input = resolveJsonValue(createOverrideBody, undefined);
                     openMutation({
@@ -269,6 +274,10 @@ export function AdminHttpPolicyAuthPanels() {
                 <Button
                   data-testid="admin-policy-override-revoke"
                   variant="danger"
+                  disabled={
+                    revokeOverrideBody.errorMessage !== null ||
+                    typeof revokeOverrideBody.value === "undefined"
+                  }
                   onClick={() => {
                     const input = resolveJsonValue(revokeOverrideBody, undefined);
                     openMutation({
@@ -314,6 +323,7 @@ export function AdminHttpPolicyAuthPanels() {
                 data-testid="admin-auth-profiles-list"
                 variant="secondary"
                 isLoading={profiles.state.busy}
+                disabled={listProfilesQuery.errorMessage !== null}
                 onClick={() => {
                   const query = resolveJsonValue(listProfilesQuery, {});
                   void profiles.run("Auth profiles", async () => await http.authProfiles.list(query as never));
@@ -333,6 +343,10 @@ export function AdminHttpPolicyAuthPanels() {
               <Button
                 data-testid="admin-auth-profiles-create"
                 variant="danger"
+                disabled={
+                  createProfileBody.errorMessage !== null ||
+                  typeof createProfileBody.value === "undefined"
+                }
                 onClick={() => {
                   const input = resolveJsonValue(createProfileBody, undefined);
                   openMutation({
@@ -384,6 +398,9 @@ export function AdminHttpPolicyAuthPanels() {
               <Button
                 data-testid="admin-auth-profiles-update"
                 variant="danger"
+                disabled={
+                  profileIdForUpdate.trim().length === 0 || updateProfileBody.errorMessage !== null
+                }
                 onClick={() => {
                   const profileId = profileIdForUpdate.trim();
                   const input = resolveJsonValue(updateProfileBody, {});
@@ -440,6 +457,9 @@ export function AdminHttpPolicyAuthPanels() {
               <Button
                 data-testid="admin-auth-profiles-enable"
                 variant="danger"
+                disabled={
+                  profileIdForEnable.trim().length === 0 || enableProfileBody.errorMessage !== null
+                }
                 onClick={() => {
                   const profileId = profileIdForEnable.trim();
                   const input = resolveJsonValue(enableProfileBody, {});
@@ -492,6 +512,9 @@ export function AdminHttpPolicyAuthPanels() {
               <Button
                 data-testid="admin-auth-profiles-disable"
                 variant="danger"
+                disabled={
+                  profileIdForDisable.trim().length === 0 || disableProfileBody.errorMessage !== null
+                }
                 onClick={() => {
                   const profileId = profileIdForDisable.trim();
                   const input = resolveJsonValue(disableProfileBody, {});
@@ -550,6 +573,7 @@ export function AdminHttpPolicyAuthPanels() {
                 data-testid="admin-auth-pins-list"
                 variant="secondary"
                 isLoading={pins.state.busy}
+                disabled={listPinsQuery.errorMessage !== null}
                 onClick={() => {
                   const query = resolveJsonValue(listPinsQuery, {});
                   void pins.run("Auth pins", async () => await http.authPins.list(query as never));
@@ -574,6 +598,7 @@ export function AdminHttpPolicyAuthPanels() {
               <Button
                 data-testid="admin-auth-pins-set"
                 variant="danger"
+                disabled={setPinBody.errorMessage !== null || typeof setPinBody.value === "undefined"}
                 onClick={() => {
                   const input = resolveJsonValue(setPinBody, undefined);
                   openMutation({

@@ -236,6 +236,80 @@ describe("AdminPage (HTTP) policy + auth", () => {
     cleanupTestRoot({ container, root });
   });
 
+  it("disables policy override creation when JSON is invalid", async () => {
+    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
+    adminModeStore.enter({
+      elevatedToken: "elevated",
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    });
+
+    const core = {
+      httpBaseUrl: "http://example.test",
+      adminModeStore,
+    } as unknown as OperatorCore;
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(AdminModeProvider, {
+        core,
+        mode: "web",
+        children: React.createElement(AdminPage, { core }),
+      }),
+    );
+
+    openPolicyAuthTab(container);
+
+    const jsonTextarea = container.querySelector<HTMLTextAreaElement>(
+      "[data-testid='admin-policy-override-create-json']",
+    );
+    expect(jsonTextarea).not.toBeNull();
+
+    await act(async () => {
+      setNativeValue(jsonTextarea as HTMLTextAreaElement, "{");
+      await Promise.resolve();
+    });
+
+    const createButton = container.querySelector<HTMLButtonElement>(
+      "[data-testid='admin-policy-override-create']",
+    );
+    expect(createButton).not.toBeNull();
+    expect(createButton?.disabled).toBe(true);
+
+    cleanupTestRoot({ container, root });
+    adminModeStore.dispose();
+  });
+
+  it("disables auth profile updates when profile id is missing", () => {
+    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
+    adminModeStore.enter({
+      elevatedToken: "elevated",
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    });
+
+    const core = {
+      httpBaseUrl: "http://example.test",
+      adminModeStore,
+    } as unknown as OperatorCore;
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(AdminModeProvider, {
+        core,
+        mode: "web",
+        children: React.createElement(AdminPage, { core }),
+      }),
+    );
+
+    openPolicyAuthTab(container);
+
+    const updateButton = container.querySelector<HTMLButtonElement>(
+      "[data-testid='admin-auth-profiles-update']",
+    );
+    expect(updateButton).not.toBeNull();
+    expect(updateButton?.disabled).toBe(true);
+
+    cleanupTestRoot({ container, root });
+    adminModeStore.dispose();
+  });
+
   it("requires confirmation before creating policy overrides", async () => {
     const { core } = createTestCore();
 
