@@ -92,6 +92,12 @@ To audit the whole repo (warnings only):
 pnpm lint:max-lines:warn
 ```
 
+To see suspicious/perf-style warnings the repo currently has:
+
+```bash
+pnpm lint:oxlint:categories:warn
+```
+
 ## 5. Branch Protections & Reviews
 
 Pull requests must reference their GitHub Issue and pass all required checks:
