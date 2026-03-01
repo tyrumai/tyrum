@@ -91,6 +91,14 @@ const ATSPI_STATE_TYPE_NAMES: Array<string | undefined> = [
   "read_only",
 ];
 
+function unwrapDbusValue(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+
+  const nested = (value as { value?: unknown }).value;
+  if (nested === undefined) return value;
+  return unwrapDbusValue(nested);
+}
+
 function toUint32(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value >>> 0;
   if (typeof value === "bigint") return Number(value & 0xffff_ffffn);
@@ -105,30 +113,50 @@ function toUint32(value: unknown): number {
 }
 
 function toNonNegativeInt(value: unknown): number {
-  if (value && typeof value === "object") {
-    const toNumber = (value as { toNumber?: unknown }).toNumber;
+  const unwrapped = unwrapDbusValue(value);
+
+  if (unwrapped && typeof unwrapped === "object") {
+    const toNumber = (unwrapped as { toNumber?: unknown }).toNumber;
     if (typeof toNumber === "function") {
-      const num = toNumber.call(value) as unknown;
+      const num = toNumber.call(unwrapped) as unknown;
       if (typeof num === "number" && Number.isFinite(num)) {
         return Math.max(0, Math.floor(num));
       }
     }
-
-    const nested = (value as { value?: unknown }).value;
-    if (nested !== undefined) return toNonNegativeInt(nested);
   }
 
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.max(0, Math.floor(value));
+  if (typeof unwrapped === "number" && Number.isFinite(unwrapped)) {
+    return Math.max(0, Math.floor(unwrapped));
   }
 
-  if (typeof value === "bigint") {
-    if (value <= 0n) return 0;
+  if (typeof unwrapped === "bigint") {
+    if (unwrapped <= 0n) return 0;
     const max = BigInt(Number.MAX_SAFE_INTEGER);
-    return Number(value > max ? max : value);
+    return Number(unwrapped > max ? max : unwrapped);
   }
 
   return 0;
+}
+
+function normalizeDbusBoolean(value: unknown): boolean | undefined {
+  const unwrapped = unwrapDbusValue(value);
+  if (typeof unwrapped === "boolean") return unwrapped;
+
+  if (typeof unwrapped === "number" && Number.isFinite(unwrapped)) {
+    if (unwrapped === 0) return false;
+    if (unwrapped === 1) return true;
+  }
+
+  if (typeof unwrapped === "bigint") {
+    if (unwrapped === 0n) return false;
+    if (unwrapped === 1n) return true;
+  }
+
+  if (Array.isArray(unwrapped) && unwrapped.length === 1) {
+    return normalizeDbusBoolean(unwrapped[0]);
+  }
+
+  return undefined;
 }
 
 function extractAtSpiStateWords(raw: unknown): unknown[] {
@@ -202,12 +230,9 @@ function parseAccessibleRef(value: unknown): AtSpiAccessibleRef | null {
 }
 
 function normalizeMaybe(value: unknown): string | undefined {
-  if (value && typeof value === "object") {
-    const nested = (value as { value?: unknown }).value;
-    if (nested !== undefined) return normalizeMaybe(nested);
-  }
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
+  const unwrapped = unwrapDbusValue(value);
+  if (typeof unwrapped !== "string") return undefined;
+  const trimmed = unwrapped.trim();
   return trimmed ? trimmed : undefined;
 }
 
@@ -406,7 +431,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     if (typeof getChildCount !== "function" || typeof getChildAtIndex !== "function") return [];
 
     const countRaw = await getChildCount.call(iface);
-    const count = typeof countRaw === "number" ? Math.max(0, Math.floor(countRaw)) : 0;
+    const count = toNonNegativeInt(countRaw);
     const maxCount = Math.min(count, limit);
     const children: AtSpiAccessibleRef[] = [];
     for (let i = 0; i < maxCount; i++) {
@@ -688,15 +713,24 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     }
 
     if (chosenIndex === null) {
+      if (count <= 0) throw new Error("AT-SPI click/activate unsupported");
+
+      let didAct: unknown;
       try {
-        await doAction.call(action, 0);
+        didAct = await doAction.call(action, 0);
       } catch (err) {
         throw new Error("AT-SPI click/activate unsupported", { cause: err as Error });
+      }
+      if (normalizeDbusBoolean(didAct) === false) {
+        throw new Error("AT-SPI click/activate unsupported");
       }
       return { resolved_element_ref: toAtSpiElementRef(ref) };
     }
 
-    await doAction.call(action, chosenIndex);
+    const didAct = await doAction.call(action, chosenIndex);
+    if (normalizeDbusBoolean(didAct) === false) {
+      throw new Error("AT-SPI click/activate unsupported");
+    }
     return { resolved_element_ref: toAtSpiElementRef(ref) };
   }
 }

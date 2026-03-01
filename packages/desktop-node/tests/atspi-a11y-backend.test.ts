@@ -49,6 +49,23 @@ describe("AtSpiDesktopA11yBackend", () => {
     expect(children).toHaveLength(5);
   });
 
+  it("supports BigInt and Variant child counts in getChildren()", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const getChildAtIndex = vi.fn(async (i: number) => ["app", `/child/${String(i)}`]);
+    const iface = {
+      GetChildCount: vi.fn(async () => ({ value: 2n })),
+      GetChildAtIndex: getChildAtIndex,
+    };
+
+    backend.getInterface = vi.fn(async () => iface);
+
+    const children = await backend.getChildren({ busName: "app", objectPath: "/root" }, 5);
+
+    expect(getChildAtIndex).toHaveBeenCalledTimes(2);
+    expect(children).toHaveLength(2);
+  });
+
   it("caps GetChildren results per call", async () => {
     const backend = new AtSpiDesktopA11yBackend() as any;
 
@@ -178,6 +195,55 @@ describe("AtSpiDesktopA11yBackend", () => {
     ).resolves.toEqual({ resolved_element_ref: "atspi:app|/node" });
     expect(doAction).toHaveBeenCalledTimes(1);
     expect(doAction).toHaveBeenCalledWith(0);
+  });
+
+  it("fails when DoAction reports false for click actions", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const doAction = vi.fn(async () => false);
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name !== "org.a11y.atspi.Action") return null;
+      return {
+        GetNActions: vi.fn(async () => 1n),
+        GetName: vi.fn(async () => ({ value: "click" })),
+        DoAction: doAction,
+      };
+    });
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "click" },
+      }),
+    ).rejects.toThrow(/click\/activate unsupported/i);
+    expect(doAction).toHaveBeenCalledTimes(1);
+    expect(doAction).toHaveBeenCalledWith(0);
+  });
+
+  it("does not fall back to DoAction(0) when the target exposes zero actions", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    const doAction = vi.fn(async () => false);
+    backend.connect = vi.fn(async () => undefined);
+    backend.getInterface = vi.fn(async (_ref: unknown, name: string) => {
+      if (name !== "org.a11y.atspi.Action") return null;
+      return {
+        GetNActions: vi.fn(async () => 0n),
+        GetName: vi.fn(async () => ({ value: "invoke" })),
+        DoAction: doAction,
+      };
+    });
+
+    await expect(
+      backend.act({
+        op: "act",
+        target: { kind: "ref", ref: "atspi:app|/node" },
+        action: { kind: "click" },
+      }),
+    ).rejects.toThrow(/click\/activate unsupported/i);
+    expect(doAction).toHaveBeenCalledTimes(0);
   });
 
   it("matches state-filtered queries when GetState indicates focused", async () => {
