@@ -1,11 +1,16 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createAdminModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
 import { AdminModeProvider } from "../../src/admin-mode.js";
 import { AdminPage } from "../../src/components/pages/admin-page.js";
 import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 async function switchHttpTab(
   container: HTMLElement,
@@ -211,3 +216,123 @@ describe("AdminPage (HTTP) secrets", () => {
     cleanupTestRoot({ container, root });
   });
 });
+
+describe("AdminPage (HTTP) policy + auth", () => {
+  it("renders Policy + Auth panels when Admin Mode is active", async () => {
+    const { core } = createTestCore();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(AdminModeProvider, { core, mode: "web" }, [
+        React.createElement(AdminPage, { key: "page", core }),
+      ]),
+    );
+
+    await switchHttpTab(container, "admin-http-tab-policy-auth");
+
+    expect(container.querySelector("[data-testid='admin-http-policy']")).not.toBeNull();
+    expect(container.querySelector("[data-testid='admin-http-auth-profiles']")).not.toBeNull();
+    expect(container.querySelector("[data-testid='admin-http-auth-pins']")).not.toBeNull();
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("requires confirmation before creating policy overrides", async () => {
+    const { core } = createTestCore();
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+      if (url !== "http://example.test/policy/overrides" || init?.method !== "POST") {
+        throw new Error(`Unexpected fetch call: ${init?.method ?? "GET"} ${url}`);
+      }
+
+      const headers = init?.headers as Headers | undefined;
+      expect(headers?.get("authorization")).toBe("Bearer test-elevated-token");
+
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      expect(body).toEqual({ agent_id: "agent-1", tool_id: "tool-1", pattern: ".*" });
+
+      return new Response(
+        JSON.stringify({
+          override: {
+            policy_override_id: "00000000-0000-0000-0000-000000000000",
+            status: "active",
+            created_at: new Date().toISOString(),
+            agent_id: "agent-1",
+            tool_id: "tool-1",
+            pattern: ".*",
+          },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(AdminModeProvider, { core, mode: "web" }, [
+        React.createElement(AdminPage, { key: "page", core }),
+      ]),
+    );
+
+    await switchHttpTab(container, "admin-http-tab-policy-auth");
+
+    const jsonTextarea = container.querySelector<HTMLTextAreaElement>(
+      "[data-testid='admin-policy-override-create-json']",
+    );
+    expect(jsonTextarea).not.toBeNull();
+
+    await act(async () => {
+      setNativeValue(
+        jsonTextarea as HTMLTextAreaElement,
+        JSON.stringify(
+          {
+            agent_id: "agent-1",
+            tool_id: "tool-1",
+            pattern: ".*",
+          },
+          null,
+          2,
+        ),
+      );
+      await Promise.resolve();
+    });
+
+    const createButton = container.querySelector<HTMLButtonElement>(
+      "[data-testid='admin-policy-override-create']",
+    );
+    expect(createButton).not.toBeNull();
+
+    act(() => {
+      createButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+
+    const confirmButton = document.body.querySelector<HTMLButtonElement>(
+      "[data-testid='confirm-danger-confirm']",
+    );
+    expect(confirmButton).not.toBeNull();
+    expect(confirmButton?.disabled).toBe(true);
+
+    const checkbox = document.body.querySelector("[data-testid='confirm-danger-checkbox']");
+    expect(checkbox).not.toBeNull();
+
+    act(() => {
+      checkbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(confirmButton?.disabled).toBe(false);
+
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    cleanupTestRoot({ container, root });
+  });
+});
+

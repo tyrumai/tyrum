@@ -9,6 +9,7 @@ import { JsonWsPanel } from "../admin-ws/json-ws-panel.js";
 import { SubagentsPanels } from "../admin-ws/subagents-panels.js";
 import { PageHeader } from "../layout/page-header.js";
 import { AdminHttpPanels } from "./admin-http-panels.js";
+import { AdminHttpPolicyAuthPanels } from "./admin-http-policy-auth-panels.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -475,6 +476,9 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
                 <TabsTrigger value="gateway" data-testid="admin-http-tab-gateway">
                   Gateway
                 </TabsTrigger>
+                <TabsTrigger value="policy-auth" data-testid="admin-http-tab-policy-auth">
+                  Policy + Auth
+                </TabsTrigger>
                 <TabsTrigger value="routing-config" data-testid="admin-http-tab-routing-config">
                   Routing config
                 </TabsTrigger>
@@ -493,6 +497,10 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
 
               <TabsContent value="gateway">
                 <AdminHttpPanels />
+              </TabsContent>
+
+              <TabsContent value="policy-auth">
+                <AdminHttpPolicyAuthPanels />
               </TabsContent>
 
               <TabsContent value="routing-config">
