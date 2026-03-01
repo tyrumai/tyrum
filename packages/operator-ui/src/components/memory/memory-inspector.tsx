@@ -71,11 +71,11 @@ function buildFilter(input: {
   const provenance =
     sourceKinds.length > 0 || channels.length > 0 || threadIds.length > 0 || sessionIds.length > 0
       ? {
-          ...(sourceKinds.length > 0 ? { source_kinds: sourceKinds } : {}),
-          ...(channels.length > 0 ? { channels } : {}),
-          ...(threadIds.length > 0 ? { thread_ids: threadIds } : {}),
-          ...(sessionIds.length > 0 ? { session_ids: sessionIds } : {}),
-        }
+        ...(sourceKinds.length > 0 ? { source_kinds: sourceKinds } : {}),
+        ...(channels.length > 0 ? { channels } : {}),
+        ...(threadIds.length > 0 ? { thread_ids: threadIds } : {}),
+        ...(sessionIds.length > 0 ? { session_ids: sessionIds } : {}),
+      }
       : undefined;
 
   if (kinds.length === 0 && tags.length === 0 && sensitivities.length === 0 && !provenance) {
@@ -618,38 +618,38 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
         </Button>
         {memory.export.artifactId
           ? (() => {
-              const api = getDesktopApi();
-              const canDownloadDesktop =
-                Boolean(api?.gateway.httpFetch) && Boolean(api?.gateway.getOperatorConnection);
-              const url = `${core.httpBaseUrl.replace(/\/$/, "")}/memory/exports/${memory.export.artifactId}`;
+            const api = getDesktopApi();
+            const canDownloadDesktop =
+              Boolean(api?.gateway.httpFetch) && Boolean(api?.gateway.getOperatorConnection);
+            const url = `${core.httpBaseUrl.replace(/\/$/, "")}/memory/exports/${memory.export.artifactId}`;
 
-              if (canDownloadDesktop) {
-                return (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    data-testid="memory-export-download"
-                    disabled={downloadBusy}
-                    isLoading={downloadBusy}
-                    onClick={() => {
-                      void downloadExport(memory.export.artifactId!);
-                    }}
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Download
-                  </Button>
-                );
-              }
-
+            if (canDownloadDesktop) {
               return (
-                <Button size="sm" variant="secondary" asChild>
-                  <a data-testid="memory-export-download" href={url}>
-                    <Download className="h-3.5 w-3.5" />
-                    Download
-                  </a>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  data-testid="memory-export-download"
+                  disabled={downloadBusy}
+                  isLoading={downloadBusy}
+                  onClick={() => {
+                    void downloadExport(memory.export.artifactId!);
+                  }}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
                 </Button>
               );
-            })()
+            }
+
+            return (
+              <Button size="sm" variant="secondary" asChild>
+                <a data-testid="memory-export-download" href={url}>
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </a>
+              </Button>
+            );
+          })()
           : null}
         {downloadError ? (
           <span
@@ -782,7 +782,7 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
                     onChange={(event) => {
                       setSensitivityDraft(event.currentTarget.value as MemorySensitivity);
                     }}
-                    className="flex h-9 w-full rounded-md border border-border bg-bg px-3 py-1 text-sm text-fg shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                    className="flex h-9 w-full rounded-md border border-border bg-bg-card/40 px-3 py-1 text-sm text-fg shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
                   >
                     {MEMORY_SENSITIVITIES.map((sensitivity) => (
                       <option key={sensitivity} value={sensitivity}>
