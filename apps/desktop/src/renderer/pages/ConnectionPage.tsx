@@ -12,11 +12,13 @@ import {
   TabsList,
   TabsTrigger,
 } from "@tyrum/operator-ui";
-import type { DesktopOperatorCoreState } from "../lib/desktop-operator-core.js";
+import type { OperatorCore } from "@tyrum/operator-core";
 
 type Tab = "embedded" | "remote" | "operator";
 
-export type ConnectionPageProps = DesktopOperatorCoreState;
+export interface ConnectionPageProps {
+  core: OperatorCore | null;
+}
 
 export function ConnectionPage({ core }: ConnectionPageProps) {
   const [tab, setTab] = useState<Tab>("embedded");
