@@ -7,10 +7,11 @@ import { AdminHttpAuthPinsCard } from "./admin-http-auth-pins-card.js";
 import { AdminHttpAuthProfilesCard } from "./admin-http-auth-profiles-card.js";
 import { AdminHttpPolicyCard } from "./admin-http-policy-card.js";
 import type { PendingMutation } from "./admin-http-panels.shared.js";
-import { useAdminMutationAccess } from "./admin-http-shared.js";
+import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
 
 export function AdminHttpPolicyAuthPanels({ core }: { core: OperatorCore }) {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
+  const http = useAdminHttpClient() ?? core.http;
   const [pendingMutation, setPendingMutation] = React.useState<PendingMutation | null>(null);
 
   const openMutation = React.useCallback(
@@ -51,13 +52,9 @@ export function AdminHttpPolicyAuthPanels({ core }: { core: OperatorCore }) {
         </div>
       ) : null}
 
-      <AdminHttpPolicyCard http={core.http} openMutation={openMutation} canMutate={canMutate} />
-      <AdminHttpAuthProfilesCard
-        http={core.http}
-        openMutation={openMutation}
-        canMutate={canMutate}
-      />
-      <AdminHttpAuthPinsCard http={core.http} openMutation={openMutation} canMutate={canMutate} />
+      <AdminHttpPolicyCard http={http} openMutation={openMutation} canMutate={canMutate} />
+      <AdminHttpAuthProfilesCard http={http} openMutation={openMutation} canMutate={canMutate} />
+      <AdminHttpAuthPinsCard http={http} openMutation={openMutation} canMutate={canMutate} />
 
       <ConfirmDangerDialog
         open={pendingMutation !== null}

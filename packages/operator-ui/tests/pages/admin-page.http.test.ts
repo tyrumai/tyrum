@@ -118,6 +118,21 @@ describe("AdminPage (HTTP) routing config", () => {
   it("requires confirmation before updating routing config", async () => {
     const { core, routingConfigUpdate } = createTestCore();
 
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      expect(url).toBe("http://example.test/routing/config");
+      expect(init?.method).toBe("PUT");
+
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
+
+      const bodyRaw = String(init?.body ?? "");
+      expect(JSON.parse(bodyRaw)).toEqual({ config: { v: 1 } });
+
+      return new Response(JSON.stringify({ revision: 1, config: { v: 1 } }), { status: 201 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
     const { container, root } = renderIntoDocument(
       React.createElement(AdminModeProvider, { core, mode: "web" }, [
         React.createElement(AdminPage, { key: "page", core }),
@@ -169,7 +184,8 @@ describe("AdminPage (HTTP) routing config", () => {
       await Promise.resolve();
     });
 
-    expect(routingConfigUpdate).toHaveBeenCalledTimes(1);
+    expect(routingConfigUpdate).toHaveBeenCalledTimes(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
     cleanupTestRoot({ container, root });
   });
@@ -178,6 +194,32 @@ describe("AdminPage (HTTP) routing config", () => {
 describe("AdminPage (HTTP) secrets", () => {
   it("preserves whitespace when rotating secrets", async () => {
     const { core, secretsRotate } = createTestCore();
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      expect(url).toBe("http://example.test/secrets/h-1/rotate");
+      expect(init?.method).toBe("POST");
+
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
+
+      const bodyRaw = String(init?.body ?? "");
+      expect(JSON.parse(bodyRaw)).toEqual({ value: "  new-secret  " });
+
+      return new Response(
+        JSON.stringify({
+          revoked: true,
+          handle: {
+            handle_id: "h-1",
+            provider: "env",
+            scope: "scope-1",
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+        }),
+        { status: 201 },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     const { container, root } = renderIntoDocument(
       React.createElement(AdminModeProvider, { core, mode: "web" }, [
@@ -244,7 +286,8 @@ describe("AdminPage (HTTP) secrets", () => {
       await Promise.resolve();
     });
 
-    expect(secretsRotate).toHaveBeenCalledWith("h-1", { value: "  new-secret  " }, undefined);
+    expect(secretsRotate).toHaveBeenCalledTimes(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
     cleanupTestRoot({ container, root });
   });
@@ -346,6 +389,37 @@ describe("AdminPage (HTTP) policy + auth", () => {
   it("requires confirmation before creating policy overrides", async () => {
     const { core, policyCreateOverride } = createTestCore();
 
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      expect(url).toBe("http://example.test/policy/overrides");
+      expect(init?.method).toBe("POST");
+
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
+
+      const bodyRaw = String(init?.body ?? "");
+      expect(JSON.parse(bodyRaw)).toEqual({
+        agent_id: "agent-1",
+        tool_id: "tool-1",
+        pattern: ".*",
+      });
+
+      return new Response(
+        JSON.stringify({
+          override: {
+            policy_override_id: "00000000-0000-0000-0000-000000000001",
+            status: "active",
+            created_at: "2026-03-01T00:00:00.000Z",
+            agent_id: "agent-1",
+            tool_id: "tool-1",
+            pattern: ".*",
+          },
+        }),
+        { status: 201 },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
     const { container, root } = renderIntoDocument(
       React.createElement(AdminModeProvider, { core, mode: "web" }, [
         React.createElement(AdminPage, { key: "page", core }),
@@ -385,6 +459,7 @@ describe("AdminPage (HTTP) policy + auth", () => {
     });
 
     expect(policyCreateOverride).toHaveBeenCalledTimes(0);
+    expect(fetchMock).toHaveBeenCalledTimes(0);
 
     const confirmButton = document.body.querySelector<HTMLButtonElement>(
       "[data-testid='confirm-danger-confirm']",
@@ -406,12 +481,8 @@ describe("AdminPage (HTTP) policy + auth", () => {
       await Promise.resolve();
     });
 
-    expect(policyCreateOverride).toHaveBeenCalledTimes(1);
-    expect(policyCreateOverride).toHaveBeenCalledWith({
-      agent_id: "agent-1",
-      tool_id: "tool-1",
-      pattern: ".*",
-    });
+    expect(policyCreateOverride).toHaveBeenCalledTimes(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
     cleanupTestRoot({ container, root });
   });

@@ -7,7 +7,7 @@ import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { Input } from "../ui/input.js";
 import { Label } from "../ui/label.js";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
-import { useAdminMutationAccess } from "./admin-http-shared.js";
+import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
 
 type SecretProviderKind = "env" | "file" | "keychain";
 type SecretsApi = OperatorCore["http"]["secrets"];
@@ -22,7 +22,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
   const [agentIdRaw, setAgentIdRaw] = React.useState("");
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
-  const api = core.http.secrets;
+  const api = (useAdminHttpClient() ?? core.http).secrets;
   const agentQuery = normalizeAgentId(agentIdRaw);
 
   return (

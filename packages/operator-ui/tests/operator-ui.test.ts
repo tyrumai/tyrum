@@ -1163,7 +1163,7 @@ describe("operator-ui", () => {
   });
 
   it("disables Admin hub models refresh action while a request is in flight", async () => {
-    const refreshDeferred = createDeferred<{ status: string }>();
+    const refreshDeferred = createDeferred<Response>();
 
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -1174,13 +1174,13 @@ describe("operator-ui", () => {
       deps: { ws, http },
     });
 
-    const refreshSpy = vi.fn(async () => await refreshDeferred.promise);
-    core.http.models.refresh = refreshSpy;
-
     core.adminModeStore.enter({
       elevatedToken: "elevated-test-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
+
+    const fetchMock = vi.fn(async () => await refreshDeferred.promise);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -1219,7 +1219,15 @@ describe("operator-ui", () => {
         await Promise.resolve();
       });
 
-      expect(refreshSpy).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [input, init] = fetchMock.mock.calls[0] ?? [];
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      expect(url).toBe("http://example.test/models/refresh");
+      expect(init?.method).toBe("POST");
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer elevated-test-token");
+
       const confirmButtonDuringRequest = document.body.querySelector<HTMLButtonElement>(
         '[data-testid="confirm-danger-confirm"]',
       );
@@ -1227,7 +1235,12 @@ describe("operator-ui", () => {
       expect(confirmButtonDuringRequest?.disabled).toBe(true);
       expect(openButton?.disabled).toBe(false);
 
-      refreshDeferred.resolve({ status: "ok" });
+      refreshDeferred.resolve(
+        new Response(JSON.stringify({ status: "ok", models_dev: {} }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
       await act(async () => {
         await Promise.resolve();
       });
@@ -1361,13 +1374,18 @@ describe("operator-ui", () => {
       deps: { ws, http },
     });
 
-    const refreshSpy = vi.fn(async () => ({ status: "ok" }));
-    core.http.models.refresh = refreshSpy;
-
     core.adminModeStore.enter({
       elevatedToken: "elevated-test-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ status: "ok", models_dev: {} }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -1389,7 +1407,7 @@ describe("operator-ui", () => {
         refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
 
-      expect(refreshSpy).toHaveBeenCalledTimes(0);
+      expect(fetchMock).toHaveBeenCalledTimes(0);
 
       const confirmButton = document.body.querySelector<HTMLButtonElement>(
         '[data-testid="confirm-danger-confirm"]',
@@ -1410,7 +1428,14 @@ describe("operator-ui", () => {
         await Promise.resolve();
       });
 
-      expect(refreshSpy).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [input, init] = fetchMock.mock.calls[0] ?? [];
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      expect(url).toBe("http://example.test/models/refresh");
+      expect(init?.method).toBe("POST");
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer elevated-test-token");
     } finally {
       act(() => {
         root?.unmount();

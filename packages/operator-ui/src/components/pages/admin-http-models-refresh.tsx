@@ -4,10 +4,11 @@ import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
-import { useAdminMutationAccess } from "./admin-http-shared.js";
+import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
 
 export function AdminHttpModelsRefreshPanel({ core }: { core: OperatorCore }): React.ReactElement {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
+  const http = useAdminHttpClient() ?? core.http;
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [value, setValue] = React.useState<unknown>(undefined);
@@ -23,7 +24,7 @@ export function AdminHttpModelsRefreshPanel({ core }: { core: OperatorCore }): R
     setValue(undefined);
     setError(undefined);
     try {
-      const next = await core.http.models.refresh();
+      const next = await http.models.refresh();
       setValue(next);
     } catch (caught) {
       setError(caught);

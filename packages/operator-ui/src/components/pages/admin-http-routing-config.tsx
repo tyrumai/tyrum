@@ -7,12 +7,12 @@ import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { Input } from "../ui/input.js";
 import { JsonTextarea } from "../ui/json-textarea.js";
-import { useAdminMutationAccess } from "./admin-http-shared.js";
+import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
 
 type RoutingConfigApi = OperatorCore["http"]["routingConfig"];
 
 export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): React.ReactElement {
-  const api = core.http.routingConfig;
+  const api = (useAdminHttpClient() ?? core.http).routingConfig;
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
   return (

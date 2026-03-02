@@ -1,6 +1,10 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useState } from "react";
-import { useAdminMutationAccess } from "./admin-http-shared.js";
+import {
+  type AdminHttpClient,
+  useAdminHttpClient,
+  useAdminMutationAccess,
+} from "./admin-http-shared.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
@@ -143,12 +147,12 @@ function DeviceTokensRevokeFields({
 }
 
 function DeviceTokenIssueDialog({
-  core,
+  http,
   canMutate,
   requestEnter,
   issue,
 }: {
-  core: OperatorCore;
+  http: AdminHttpClient;
   canMutate: boolean;
   requestEnter: () => void;
   issue: ReturnType<typeof useDeviceTokensIssueState>;
@@ -178,7 +182,7 @@ function DeviceTokenIssueDialog({
         }
 
         try {
-          const result = await core.http.deviceTokens.issue({
+          const result = await http.deviceTokens.issue({
             device_id: issue.deviceId.trim(),
             role: issue.role,
             scopes: parseScopesInput(issue.scopes),
@@ -195,12 +199,12 @@ function DeviceTokenIssueDialog({
 }
 
 function DeviceTokenRevokeDialog({
-  core,
+  http,
   canMutate,
   requestEnter,
   revoke,
 }: {
-  core: OperatorCore;
+  http: AdminHttpClient;
   canMutate: boolean;
   requestEnter: () => void;
   revoke: ReturnType<typeof useDeviceTokensRevokeState>;
@@ -221,7 +225,7 @@ function DeviceTokenRevokeDialog({
         }
 
         try {
-          const result = await core.http.deviceTokens.revoke({
+          const result = await http.deviceTokens.revoke({
             token: revoke.token.trim(),
           });
           revoke.setResult(result);
@@ -236,6 +240,7 @@ function DeviceTokenRevokeDialog({
 
 export function DeviceTokensCard({ core }: { core: OperatorCore }) {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
+  const http = useAdminHttpClient() ?? core.http;
   const issue = useDeviceTokensIssueState();
   const revoke = useDeviceTokensRevokeState();
 
@@ -290,13 +295,13 @@ export function DeviceTokensCard({ core }: { core: OperatorCore }) {
         ) : null}
       </CardFooter>
       <DeviceTokenIssueDialog
-        core={core}
+        http={http}
         canMutate={canMutate}
         requestEnter={requestEnter}
         issue={issue}
       />
       <DeviceTokenRevokeDialog
-        core={core}
+        http={http}
         canMutate={canMutate}
         requestEnter={requestEnter}
         revoke={revoke}
