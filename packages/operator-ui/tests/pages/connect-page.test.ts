@@ -1,0 +1,63 @@
+// @vitest-environment jsdom
+
+import { describe, expect, it, vi } from "vitest";
+import React, { act } from "react";
+import type { OperatorCore } from "../../../operator-core/src/index.js";
+import { createStore } from "../../../operator-core/src/store.js";
+import { ConnectPage } from "../../src/components/pages/connect-page.js";
+import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
+
+describe("ConnectPage", () => {
+  it("builds the websocket URL without a double slash when gateway URL ends with /", async () => {
+    const { store: connectionStore } = createStore({
+      status: "disconnected",
+      clientId: null,
+      lastDisconnect: null,
+      transportError: null,
+    });
+
+    const core = {
+      connectionStore,
+      httpBaseUrl: "https://gateway.example",
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    } as unknown as OperatorCore;
+
+    const onReconfigureGateway = vi.fn();
+
+    const testRoot = renderIntoDocument(
+      React.createElement(ConnectPage, {
+        core,
+        mode: "desktop",
+        onReconfigureGateway,
+      }),
+    );
+
+    const gatewayInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="gateway-url"]',
+    );
+    expect(gatewayInput).not.toBeNull();
+
+    act(() => {
+      setNativeValue(gatewayInput as HTMLInputElement, "https://gateway.example/");
+    });
+
+    const loginButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="login-button"]',
+    );
+    expect(loginButton).not.toBeNull();
+
+    await act(async () => {
+      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(onReconfigureGateway).toHaveBeenCalledTimes(1);
+    expect(onReconfigureGateway).toHaveBeenCalledWith(
+      "https://gateway.example/",
+      "wss://gateway.example/ws",
+    );
+
+    cleanupTestRoot(testRoot);
+  });
+});

@@ -33,7 +33,8 @@ export function ConnectPage({
   const loginOrConnect = async (): Promise<void> => {
     const trimmedUrl = gatewayUrl.trim();
     if (onReconfigureGateway && trimmedUrl !== core.httpBaseUrl) {
-      const wsUrl = trimmedUrl.replace(/^http/, "ws") + "/ws";
+      const wsBaseUrl = trimmedUrl.replace(/\/+$/, "");
+      const wsUrl = wsBaseUrl.replace(/^http/, "ws") + "/ws";
       onReconfigureGateway(trimmedUrl, wsUrl);
       return;
     }
