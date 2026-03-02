@@ -55,7 +55,10 @@ type NavIcon = ComponentType<{ className?: string }>;
 const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon }> = {
   connect: { label: "Connect", icon: KeyRound },
   dashboard: { label: "Dashboard", icon: LayoutGrid },
-  memory: { label: "Memory", icon: Database }, /* NOTE: replacing with Database since the other icons aren't standard yet, will revisit if needed */
+  memory: {
+    label: "Memory",
+    icon: Database,
+  } /* NOTE: replacing with Database since the other icons aren't standard yet, will revisit if needed */,
   approvals: { label: "Approvals", icon: ShieldCheck },
   runs: { label: "Runs", icon: Play },
   pairing: { label: "Pairing", icon: Link2 },
@@ -99,7 +102,12 @@ function MaybeThemeProvider({ children }: { children: ReactNode }) {
   return <ThemeProvider>{children}</ThemeProvider>;
 }
 
-export function OperatorUiApp({ core, mode, onReloadPage, onReconfigureGateway }: OperatorUiAppProps) {
+export function OperatorUiApp({
+  core,
+  mode,
+  onReloadPage,
+  onReconfigureGateway,
+}: OperatorUiAppProps) {
   return (
     <ErrorBoundary onReloadPage={onReloadPage}>
       <OperatorUiAppRoot core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />

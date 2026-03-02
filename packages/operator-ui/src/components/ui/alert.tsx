@@ -57,7 +57,9 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
           <Icon aria-hidden="true" className={cn("mt-0.5 h-5 w-5 shrink-0", styles.icon)} />
           <div className="min-w-0 flex-1">
             <div className="font-medium leading-none">{title}</div>
-            {description ? <div className="mt-1 text-sm text-fg-muted break-words break-all">{description}</div> : null}
+            {description ? (
+              <div className="mt-1 text-sm text-fg-muted break-words break-all">{description}</div>
+            ) : null}
           </div>
         </div>
       </div>

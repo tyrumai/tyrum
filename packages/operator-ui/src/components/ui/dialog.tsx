@@ -62,12 +62,12 @@ export const DialogContent = React.forwardRef<
 });
 DialogContent.displayName = "DialogContent";
 
-export interface DialogHeaderProps extends React.HTMLAttributes<HTMLDivElement> { }
+export interface DialogHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
 export function DialogHeader({ className, ...props }: DialogHeaderProps): React.ReactElement {
   return <div className={cn("flex flex-col gap-1.5", className)} {...props} />;
 }
 
-export interface DialogFooterProps extends React.HTMLAttributes<HTMLDivElement> { }
+export interface DialogFooterProps extends React.HTMLAttributes<HTMLDivElement> {}
 export function DialogFooter({ className, ...props }: DialogFooterProps): React.ReactElement {
   return (
     <div

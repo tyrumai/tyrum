@@ -79,9 +79,15 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all duration-200 ease-out active:scale-95",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
           "disabled:pointer-events-none disabled:opacity-50",
-          variant === "primary" ? "shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/40 hover:-translate-y-0.5" : "",
-          variant === "success" ? "shadow-md shadow-success/20 hover:shadow-lg hover:shadow-success/40 hover:-translate-y-0.5" : "",
-          variant === "danger" ? "shadow-md shadow-error/20 hover:shadow-lg hover:shadow-error/40 hover:-translate-y-0.5" : "",
+          variant === "primary"
+            ? "shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/40 hover:-translate-y-0.5"
+            : "",
+          variant === "success"
+            ? "shadow-md shadow-success/20 hover:shadow-lg hover:shadow-success/40 hover:-translate-y-0.5"
+            : "",
+          variant === "danger"
+            ? "shadow-md shadow-error/20 hover:shadow-lg hover:shadow-error/40 hover:-translate-y-0.5"
+            : "",
           variant === "secondary" ? "backdrop-blur-xl hover:-translate-y-0.5" : "",
           VARIANT_CLASSES[variant],
           SIZE_CLASSES[size],

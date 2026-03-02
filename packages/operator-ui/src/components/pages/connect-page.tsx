@@ -80,7 +80,9 @@ export function ConnectPage({
       <Card>
         <CardHeader className="pb-4">
           <div className="text-sm text-fg-muted">
-            {isWeb ? "Enter your gateway token to start a session." : "Connect to the local operator gateway."}
+            {isWeb
+              ? "Enter your gateway token to start a session."
+              : "Connect to the local operator gateway."}
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -134,9 +136,17 @@ export function ConnectPage({
           {loginError ? (
             <Alert variant="error" title="Login failed" description={loginError} />
           ) : connection.transportError ? (
-            <Alert variant="error" title="Connection error" description={connection.transportError} />
+            <Alert
+              variant="error"
+              title="Connection error"
+              description={connection.transportError}
+            />
           ) : connection.status === "disconnected" && connection.lastDisconnect ? (
-            <Alert variant="error" title="Disconnected" description={`${connection.lastDisconnect.code} ${connection.lastDisconnect.reason}`} />
+            <Alert
+              variant="error"
+              title="Disconnected"
+              description={`${connection.lastDisconnect.code} ${connection.lastDisconnect.reason}`}
+            />
           ) : null}
         </CardContent>
       </Card>

@@ -22,7 +22,7 @@ function resolveGatewayHttpBaseUrl(): string {
   try {
     const stored = localStorage.getItem("tyrum-gateway-http");
     if (stored) return stored;
-  } catch { }
+  } catch {}
   const override = import.meta.env.VITE_GATEWAY_HTTP_BASE_URL?.trim();
   if (override) return override;
   return window.location.origin;
@@ -34,7 +34,7 @@ function resolveAuthFromLocation(
   const token = readAuthTokenFromUrl(window.location.href);
   scrubAuthTokenFromUrl();
   if (token) {
-    void createGatewayAuthSession({ token, httpBaseUrl }).catch(() => { });
+    void createGatewayAuthSession({ token, httpBaseUrl }).catch(() => {});
     return createBearerTokenAuth(token);
   }
   return createBrowserCookieAuth();
@@ -44,7 +44,7 @@ function resolveGatewayWsUrl(): string {
   try {
     const stored = localStorage.getItem("tyrum-gateway-ws");
     if (stored) return stored;
-  } catch { }
+  } catch {}
   const override = import.meta.env.VITE_GATEWAY_WS_URL?.trim();
   if (override) return override;
 
@@ -78,7 +78,7 @@ const render = (): void => {
           try {
             localStorage.setItem("tyrum-gateway-http", httpUrl);
             localStorage.setItem("tyrum-gateway-ws", wsUrl);
-          } catch { }
+          } catch {}
           window.location.reload();
         }}
       />
