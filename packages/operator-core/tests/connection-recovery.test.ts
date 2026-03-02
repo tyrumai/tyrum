@@ -219,4 +219,35 @@ describe("connection recovery grace", () => {
       vi.useRealTimers();
     }
   });
+
+  it("keeps disconnected state after intentional disconnect close event", () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws: ws as any, http },
+    });
+
+    core.connect();
+    ws.emit("connected", { clientId: "client-123" });
+    expect(core.connectionStore.getSnapshot()).toMatchObject({
+      status: "connected",
+      recovering: false,
+    });
+
+    core.disconnect();
+    expect(core.connectionStore.getSnapshot()).toMatchObject({
+      status: "disconnected",
+      recovering: false,
+    });
+
+    // Simulate the async close event emitted after ws.disconnect().
+    ws.emit("disconnected", { code: 1000, reason: "client disconnect" });
+    expect(core.connectionStore.getSnapshot()).toMatchObject({
+      status: "disconnected",
+      recovering: false,
+    });
+  });
 });
