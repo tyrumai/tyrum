@@ -175,10 +175,7 @@ function AuthProfilesListRow({
           disabled={query.errorMessage !== null}
           onClick={() => {
             const value = resolveJsonValue(query, {});
-            void run(
-              "Auth profiles",
-              async () => await http.authProfiles.list(value as never),
-            );
+            void run("Auth profiles", async () => await http.authProfiles.list(value as never));
           }}
         >
           List profiles
@@ -283,14 +280,14 @@ function AuthProfilesUpdateSection({
               description: "This updates labels/expiry for an auth profile.",
               confirmLabel: "Update profile",
               content: <ProfileMutationPreview profileId={trimmed} input={input} />,
-          onConfirm: async () => {
-            const outcome = await run("Auth profile updated", async () => {
-              return await http.authProfiles.update(trimmed, input as never);
+              onConfirm: async () => {
+                const outcome = await run("Auth profile updated", async () => {
+                  return await http.authProfiles.update(trimmed, input as never);
+                });
+                if (!outcome.ok) throw outcome.error;
+              },
             });
-            if (!outcome.ok) throw outcome.error;
-          },
-        });
-      }}
+          }}
         >
           Update
         </Button>
@@ -343,14 +340,14 @@ function AuthProfilesEnableSection({
             description: "This re-enables an auth profile for use in sessions.",
             confirmLabel: "Enable profile",
             content: <ProfileMutationPreview profileId={trimmed} input={input} />,
-        onConfirm: async () => {
-          const outcome = await run("Auth profile enabled", async () => {
-            return await http.authProfiles.enable(trimmed, input as never);
+            onConfirm: async () => {
+              const outcome = await run("Auth profile enabled", async () => {
+                return await http.authProfiles.enable(trimmed, input as never);
+              });
+              if (!outcome.ok) throw outcome.error;
+            },
           });
-          if (!outcome.ok) throw outcome.error;
-        },
-      });
-    }}
+        }}
       >
         Enable
       </Button>
@@ -402,14 +399,14 @@ function AuthProfilesDisableSection({
             description: "This disables an auth profile until re-enabled.",
             confirmLabel: "Disable profile",
             content: <ProfileMutationPreview profileId={trimmed} input={input} />,
-        onConfirm: async () => {
-          const outcome = await run("Auth profile disabled", async () => {
-            return await http.authProfiles.disable(trimmed, input as never);
+            onConfirm: async () => {
+              const outcome = await run("Auth profile disabled", async () => {
+                return await http.authProfiles.disable(trimmed, input as never);
+              });
+              if (!outcome.ok) throw outcome.error;
+            },
           });
-          if (!outcome.ok) throw outcome.error;
-        },
-      });
-    }}
+        }}
       >
         Disable
       </Button>

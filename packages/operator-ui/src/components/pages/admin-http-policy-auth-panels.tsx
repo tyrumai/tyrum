@@ -57,4 +57,3 @@ export function AdminHttpPolicyAuthPanels() {
     </div>
   );
 }
-
