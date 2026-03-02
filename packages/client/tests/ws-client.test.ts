@@ -2394,11 +2394,7 @@ describe("TyrumClient", () => {
 
     ws1.close(1001, "gone");
 
-    const reconnectSchedule = await withTimeout(
-      reconnectScheduledP,
-      2_000,
-      "reconnect_scheduled",
-    );
+    const reconnectSchedule = await withTimeout(reconnectScheduledP, 2_000, "reconnect_scheduled");
     expect(reconnectSchedule.delayMs).toBe(5_000);
     expect(reconnectSchedule.attempt).toBe(1);
     expect(reconnectSchedule.nextRetryAtMs).toBeGreaterThan(Date.now());
