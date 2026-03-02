@@ -286,6 +286,20 @@ describe("FileSecretProvider", () => {
     expect(await provider.list()).toHaveLength(2);
   });
 
+  it("rejects truncated GCM authentication tags (fail closed)", async () => {
+    const provider = await FileSecretProvider.create(secretsPath, adminToken);
+    const handle = await provider.store("SECRET", "classified");
+
+    const raw = readFileSync(secretsPath, "utf8");
+    const store = JSON.parse(raw) as {
+      handles: Record<string, { authTag: string }>;
+    };
+    store.handles[handle.handle_id].authTag = store.handles[handle.handle_id].authTag.slice(0, 16);
+    writeFileSync(secretsPath, JSON.stringify(store), { mode: 0o600 });
+
+    await expect(provider.resolve(handle)).rejects.toThrow();
+  });
+
   it("different admin tokens cannot decrypt", async () => {
     const provider1 = await FileSecretProvider.create(secretsPath, "token-alpha");
     const handle = await provider1.store("SECRET", "classified");

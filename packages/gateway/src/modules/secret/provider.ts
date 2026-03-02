@@ -204,6 +204,7 @@ const FILE_SECRET_PBKDF2_ITERATIONS = 100_000;
 const FILE_SECRET_PBKDF2_KEY_LENGTH_BYTES = 32;
 const FILE_SECRET_PBKDF2_DIGEST = "sha256";
 const FILE_SECRET_LEGACY_PBKDF2_SALT = "tyrum-secrets-v1";
+const FILE_SECRET_GCM_AUTH_TAG_LENGTH_BYTES = 16;
 
 function resolveFileSecretSaltPath(secretsPath: string): string {
   return join(dirname(secretsPath), ".salt");
@@ -228,7 +229,9 @@ function encryptWithKey(
   data: string,
 ): { iv: string; authTag: string; ciphertext: string } {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const cipher = createCipheriv("aes-256-gcm", key, iv, {
+    authTagLength: FILE_SECRET_GCM_AUTH_TAG_LENGTH_BYTES,
+  });
   const encrypted = Buffer.concat([cipher.update(data, "utf8"), cipher.final()]);
   const authTag = cipher.getAuthTag();
   return {
@@ -242,7 +245,9 @@ function decryptWithKey(
   key: Buffer,
   entry: Pick<EncryptedEntry, "iv" | "authTag" | "ciphertext">,
 ): string {
-  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(entry.iv, "hex"));
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(entry.iv, "hex"), {
+    authTagLength: FILE_SECRET_GCM_AUTH_TAG_LENGTH_BYTES,
+  });
   decipher.setAuthTag(Buffer.from(entry.authTag, "hex"));
   const decrypted = Buffer.concat([
     decipher.update(Buffer.from(entry.ciphertext, "hex")),
