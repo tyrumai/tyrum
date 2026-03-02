@@ -27,7 +27,7 @@ export function useApiResultState(initialHeading: string): {
     setState((prev) => ({ ...prev, heading, busy: true, error: undefined }));
     try {
       const value = await fn();
-      setState((prev) => ({ ...prev, value, busy: false }));
+      setState((prev) => ({ ...prev, value, busy: false, error: undefined }));
       return { ok: true, value };
     } catch (error) {
       setState((prev) => ({ ...prev, error, value: undefined, busy: false }));

@@ -25,6 +25,18 @@ async function switchHttpTab(
   return button!;
 }
 
+function openPolicyAuthTab(container: HTMLElement): void {
+  const trigger = container.querySelector<HTMLButtonElement>(
+    "[data-testid='admin-http-tab-policy-auth']",
+  );
+  expect(trigger).not.toBeNull();
+
+  act(() => {
+    trigger?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    trigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
 function createTestCore(): {
   core: OperatorCore;
   routingConfigUpdate: ReturnType<typeof vi.fn>;
