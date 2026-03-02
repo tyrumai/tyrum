@@ -19,6 +19,14 @@ type WorkGetPayload = Parameters<OperatorCore["ws"]["workGet"]>[0];
 type WorkCreatePayload = Parameters<OperatorCore["ws"]["workCreate"]>[0];
 type WorkUpdatePayload = Parameters<OperatorCore["ws"]["workUpdate"]>[0];
 type WorkTransitionPayload = Parameters<OperatorCore["ws"]["workTransition"]>[0];
+type WorkLinkCreatePayload = Parameters<OperatorCore["ws"]["workLinkCreate"]>[0];
+type WorkLinkListPayload = Parameters<OperatorCore["ws"]["workLinkList"]>[0];
+type WorkArtifactListPayload = Parameters<OperatorCore["ws"]["workArtifactList"]>[0];
+type WorkArtifactGetPayload = Parameters<OperatorCore["ws"]["workArtifactGet"]>[0];
+type WorkArtifactCreatePayload = Parameters<OperatorCore["ws"]["workArtifactCreate"]>[0];
+type WorkDecisionListPayload = Parameters<OperatorCore["ws"]["workDecisionList"]>[0];
+type WorkDecisionGetPayload = Parameters<OperatorCore["ws"]["workDecisionGet"]>[0];
+type WorkDecisionCreatePayload = Parameters<OperatorCore["ws"]["workDecisionCreate"]>[0];
 type WorkListResult = Awaited<ReturnType<OperatorCore["ws"]["workList"]>>;
 type WorkSignalListPayload = Parameters<OperatorCore["ws"]["workSignalList"]>[0];
 type WorkSignalGetPayload = Parameters<OperatorCore["ws"]["workSignalGet"]>[0];
@@ -148,6 +156,85 @@ export function AdminWorkBoardWsHub({ core }: AdminWorkBoardWsHubProps): React.R
         <WsJsonPanel
           scope={scope}
           onScopeErrors={setScopeErrors}
+          title="work.link.create"
+          payloadTestId="admin-ws-work-link-create-payload"
+          runTestId="admin-ws-work-link-create-run"
+          defaultPayload={{
+            work_item_id: "",
+            linked_work_item_id: "",
+            kind: "depends_on",
+          }}
+          run={(payload) => core.ws.workLinkCreate(payload as WorkLinkCreatePayload)}
+        />
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.link.list"
+          payloadTestId="admin-ws-work-link-list-payload"
+          runTestId="admin-ws-work-link-list-run"
+          defaultPayload={{ work_item_id: "", limit: 50 }}
+          run={(payload) => core.ws.workLinkList(payload as WorkLinkListPayload)}
+        />
+
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.artifact.list"
+          payloadTestId="admin-ws-work-artifact-list-payload"
+          runTestId="admin-ws-work-artifact-list-run"
+          defaultPayload={{ limit: 50 }}
+          run={(payload) => core.ws.workArtifactList(payload as WorkArtifactListPayload)}
+        />
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.artifact.get"
+          payloadTestId="admin-ws-work-artifact-get-payload"
+          runTestId="admin-ws-work-artifact-get-run"
+          defaultPayload={{ artifact_id: "" }}
+          run={(payload) => core.ws.workArtifactGet(payload as WorkArtifactGetPayload)}
+        />
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.artifact.create"
+          payloadTestId="admin-ws-work-artifact-create-payload"
+          runTestId="admin-ws-work-artifact-create-run"
+          defaultPayload={{ artifact: { kind: "other", title: "" } }}
+          run={(payload) => core.ws.workArtifactCreate(payload as WorkArtifactCreatePayload)}
+        />
+
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.decision.list"
+          payloadTestId="admin-ws-work-decision-list-payload"
+          runTestId="admin-ws-work-decision-list-run"
+          defaultPayload={{ limit: 50 }}
+          run={(payload) => core.ws.workDecisionList(payload as WorkDecisionListPayload)}
+        />
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.decision.get"
+          payloadTestId="admin-ws-work-decision-get-payload"
+          runTestId="admin-ws-work-decision-get-run"
+          defaultPayload={{ decision_id: "" }}
+          run={(payload) => core.ws.workDecisionGet(payload as WorkDecisionGetPayload)}
+        />
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.decision.create"
+          payloadTestId="admin-ws-work-decision-create-payload"
+          runTestId="admin-ws-work-decision-create-run"
+          defaultPayload={{ decision: { question: "", chosen: "", rationale_md: "" } }}
+          run={(payload) => core.ws.workDecisionCreate(payload as WorkDecisionCreatePayload)}
+        />
+
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
           title="work.signal.list"
           payloadTestId="admin-ws-work-signal-list-payload"
           runTestId="admin-ws-work-signal-list-run"
@@ -188,6 +275,7 @@ export function AdminWorkBoardWsHub({ core }: AdminWorkBoardWsHubProps): React.R
           defaultPayload={{ signal_id: "", patch: { status: "paused" } }}
           run={(payload) => core.ws.workSignalUpdate(payload as WorkSignalUpdatePayload)}
         />
+
         <WsJsonPanel
           scope={scope}
           onScopeErrors={setScopeErrors}
