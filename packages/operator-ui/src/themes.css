@@ -2,7 +2,7 @@
   /* Dark is the default premium theme. */
   color-scheme: dark;
 
-  --tyrum-color-bg: transparent; /* Handled by gradient in AppShell */
+  --tyrum-color-bg: #05050a;
   --tyrum-app-bg-image: linear-gradient(135deg, #0B0F19 0%, #05050A 50%, #110B1E 100%);
   --tyrum-color-bg-subtle: rgba(15, 23, 42, 0.4);
   --tyrum-color-bg-card: rgba(15, 23, 42, 0.6);
@@ -24,7 +24,7 @@
 html[data-theme="light"] {
   color-scheme: light;
 
-  --tyrum-color-bg: transparent; /* Handled by gradient in AppShell */
+  --tyrum-color-bg: #f8fafc;
   --tyrum-app-bg-image: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
   --tyrum-color-bg-subtle: rgba(255, 255, 255, 0.5);
   --tyrum-color-bg-card: rgba(255, 255, 255, 0.8);
@@ -52,7 +52,7 @@ html[data-theme-mode="system"] {
   html[data-theme-mode="system"] {
     color-scheme: light;
 
-    --tyrum-color-bg: transparent;
+    --tyrum-color-bg: #f8fafc;
     --tyrum-app-bg-image: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
     --tyrum-color-bg-subtle: rgba(255, 255, 255, 0.5);
     --tyrum-color-bg-card: rgba(255, 255, 255, 0.8);

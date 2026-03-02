@@ -169,7 +169,7 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
           label="Tokens Used"
           icon={Wallet}
           loading={status.loading.usage}
-          value={typeof tokensUsed === "number" ? tokensUsedText : "-"}
+          value={tokensUsedText}
         />
 
         <StatCard label="Active Runs" icon={Play} value={String(activeRunsCount)} />

@@ -2,12 +2,23 @@
 
 import { describe, expect, it } from "vitest";
 import React, { act } from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import { DashboardPage } from "../../src/components/pages/dashboard-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 describe("DashboardPage", () => {
+  it("uses the precomputed tokens text value without a duplicate type guard in JSX", () => {
+    const source = readFileSync(
+      join(process.cwd(), "packages/operator-ui/src/components/pages/dashboard-page.tsx"),
+      "utf8",
+    );
+
+    expect(source).not.toContain('value={typeof tokensUsed === "number" ? tokensUsedText : "-"}');
+  });
+
   it("pulses the connection dot only while connecting", () => {
     const { store: connectionStore, setState: setConnectionState } = createStore({
       status: "disconnected",

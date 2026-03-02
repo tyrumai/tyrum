@@ -36,6 +36,16 @@ describe("renderer shell document", () => {
     expect(indexHtml).not.toContain("fonts.gstatic.com");
   });
 
+  it("does not pull Google Fonts from imported operator-ui styles", () => {
+    const operatorUiGlobalsCss = readFileSync(
+      join(import.meta.dirname, "../../../packages/operator-ui/src/globals.css"),
+      "utf-8",
+    );
+
+    expect(operatorUiGlobalsCss).not.toContain("fonts.googleapis.com");
+    expect(operatorUiGlobalsCss).not.toContain("fonts.gstatic.com");
+  });
+
   it("does not apply web-only custom scrollbar styling", () => {
     const indexHtml = readFileSync(
       join(import.meta.dirname, "../src/renderer/index.html"),

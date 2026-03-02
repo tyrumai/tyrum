@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
-
 @layer theme, base, components, utilities;
 
 /* Tailwind 4 (CSS-first). Keep preflight disabled for now to avoid global visual changes. */
