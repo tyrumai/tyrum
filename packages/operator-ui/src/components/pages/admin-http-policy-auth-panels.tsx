@@ -1,19 +1,16 @@
-import { isAdminModeActive, type OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
-import { useOperatorStore } from "../../use-operator-store.js";
-import { useAdminModeUiContext } from "../admin-mode/admin-mode-provider.js";
 import { AdminHttpAuthPinsCard } from "./admin-http-auth-pins-card.js";
 import { AdminHttpAuthProfilesCard } from "./admin-http-auth-profiles-card.js";
 import { AdminHttpPolicyCard } from "./admin-http-policy-card.js";
 import type { PendingMutation } from "./admin-http-panels.shared.js";
+import { useAdminMutationAccess } from "./admin-http-shared.js";
 
 export function AdminHttpPolicyAuthPanels({ core }: { core: OperatorCore }) {
-  const { requestEnter } = useAdminModeUiContext();
-  const adminMode = useOperatorStore(core.adminModeStore);
-  const canMutate = isAdminModeActive(adminMode);
+  const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const [pendingMutation, setPendingMutation] = React.useState<PendingMutation | null>(null);
 
   const openMutation = React.useCallback(
