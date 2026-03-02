@@ -2596,6 +2596,50 @@ describe("operator-ui", () => {
     container.remove();
   });
 
+  it("ignores Cmd/Ctrl+1-6 shortcuts while disconnected and lands on dashboard after reconnect", async () => {
+    const ws = new FakeWsClient(false);
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    expect(container.querySelector('[data-testid="login-button"]')).not.toBeNull();
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "2", ctrlKey: true, bubbles: true }),
+      );
+    });
+
+    expect(container.querySelector('[data-testid="login-button"]')).not.toBeNull();
+
+    await act(async () => {
+      ws.connected = true;
+      ws.emit("connected", { clientId: null });
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="dashboard-refresh-status"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="memory-inspector"]')).toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
   it("has no axe violations on the connect page", async () => {
     await expectNoAxeViolationsForRoute({ mode: "desktop" });
   });

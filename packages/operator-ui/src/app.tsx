@@ -136,13 +136,15 @@ function OperatorUiAppRoot({
   };
 
   useKeyboardShortcut(
-    KEYBOARD_NAV_ORDER.map((id, index) => ({
-      key: String(index + 1),
-      requireCmdOrCtrl: true,
-      handler: () => {
-        navigate(id);
-      },
-    })),
+    isConnected
+      ? KEYBOARD_NAV_ORDER.map((id, index) => ({
+          key: String(index + 1),
+          requireCmdOrCtrl: true,
+          handler: () => {
+            navigate(id);
+          },
+        }))
+      : [],
   );
 
   const app = (
