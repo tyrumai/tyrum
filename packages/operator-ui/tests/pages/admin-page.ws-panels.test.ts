@@ -42,6 +42,33 @@ describe("AdminPage WebSocket panels", () => {
     expect(source).not.toMatch(/function parseJsonPayload/);
   });
 
+  it("does not wrap WS panels with a redundant heading", () => {
+    const source = readFileSync(
+      join(process.cwd(), "packages/operator-ui/src/components/pages/admin-page.tsx"),
+      "utf8",
+    );
+
+    expect(source).not.toMatch(
+      /<div className="text-sm font-medium text-fg">Commands &amp; diagnostics<\/div>/,
+    );
+  });
+
+  it("shares async request state logic across admin panels", () => {
+    const adminPageSource = readFileSync(
+      join(process.cwd(), "packages/operator-ui/src/components/pages/admin-page.tsx"),
+      "utf8",
+    );
+    expect(adminPageSource).toContain('from "../../hooks/use-api-call-state.js"');
+    expect(adminPageSource).not.toMatch(/function useApiCallState/);
+
+    const wsPanelsSource = readFileSync(
+      join(process.cwd(), "packages/operator-ui/src/components/admin/admin-ws-panels.tsx"),
+      "utf8",
+    );
+    expect(wsPanelsSource).toContain('from "../../hooks/use-api-call-state.js"');
+    expect(wsPanelsSource).not.toMatch(/function useAsyncResult/);
+  });
+
   it("prevents concurrent WS actions when double-clicking", async () => {
     let resolvePing: (() => void) | undefined;
     const pingPromise = new Promise<void>((resolve) => {

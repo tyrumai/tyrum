@@ -1,5 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useRef, useState } from "react";
+import { useState } from "react";
+import { useApiCallState } from "../../hooks/use-api-call-state.js";
 import { parseJsonInput } from "../../utils/parse-json-input.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
@@ -10,46 +11,6 @@ import { JsonTextarea } from "../ui/json-textarea.js";
 type PresenceBeaconPayload = Parameters<OperatorCore["ws"]["presenceBeacon"]>[0];
 type CapabilityReadyPayload = Parameters<OperatorCore["ws"]["capabilityReady"]>[0];
 type AttemptEvidencePayload = Parameters<OperatorCore["ws"]["attemptEvidence"]>[0];
-
-type AsyncResult<T> = {
-  busy: boolean;
-  value: T | undefined;
-  error: unknown | undefined;
-  run: (handler: () => Promise<T>) => Promise<void>;
-  fail: (error: unknown) => void;
-};
-
-function useAsyncResult<T>(): AsyncResult<T> {
-  const inFlightRef = useRef(false);
-  const [busy, setBusy] = useState(false);
-  const [value, setValue] = useState<T | undefined>(undefined);
-  const [error, setError] = useState<unknown | undefined>(undefined);
-
-  const run = async (handler: () => Promise<T>): Promise<void> => {
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
-    setBusy(true);
-    setError(undefined);
-
-    try {
-      const result = await handler();
-      setValue(result);
-    } catch (err) {
-      setValue(undefined);
-      setError(err);
-    } finally {
-      setBusy(false);
-      inFlightRef.current = false;
-    }
-  };
-
-  const fail = (nextError: unknown): void => {
-    setValue(undefined);
-    setError(nextError);
-  };
-
-  return { busy, value, error, run, fail };
-}
 
 type JsonObjectPayloadParseResult =
   | { value: Record<string, unknown>; errorMessage: null }
@@ -71,7 +32,10 @@ function parseJsonObjectPayload(raw: string): JsonObjectPayloadParseResult {
 
 function CommandExecutePanel({ core }: { core: OperatorCore }): React.ReactElement {
   const [command, setCommand] = useState("/help");
-  const result = useAsyncResult<unknown>();
+  const result = useApiCallState();
+  const busy = result.state.status === "loading";
+  const value = result.state.status === "success" ? result.state.value : undefined;
+  const error = result.state.status === "error" ? result.state.error : undefined;
 
   return (
     <Card data-testid="admin-ws-command-execute">
@@ -96,7 +60,7 @@ function CommandExecutePanel({ core }: { core: OperatorCore }): React.ReactEleme
           <Button
             type="button"
             variant="secondary"
-            isLoading={result.busy}
+            isLoading={busy}
             data-testid="admin-ws-command-run"
             onClick={() => {
               const trimmed = command.trim();
@@ -112,14 +76,14 @@ function CommandExecutePanel({ core }: { core: OperatorCore }): React.ReactEleme
               void result.run(async () => core.ws.commandExecute(trimmed));
             }}
           >
-            {result.busy ? "Running..." : "Run"}
+            {busy ? "Running..." : "Run"}
           </Button>
         </div>
 
         <ApiResultCard
           heading="Result"
-          value={result.value}
-          error={result.error}
+          value={value}
+          error={error}
           data-testid="admin-ws-command-result"
         />
       </CardContent>
@@ -128,7 +92,10 @@ function CommandExecutePanel({ core }: { core: OperatorCore }): React.ReactEleme
 }
 
 function PingPanel({ core }: { core: OperatorCore }): React.ReactElement {
-  const result = useAsyncResult<{ latency_ms: number }>();
+  const result = useApiCallState();
+  const busy = result.state.status === "loading";
+  const value = result.state.status === "success" ? result.state.value : undefined;
+  const error = result.state.status === "error" ? result.state.error : undefined;
 
   return (
     <Card data-testid="admin-ws-ping">
@@ -141,7 +108,7 @@ function PingPanel({ core }: { core: OperatorCore }): React.ReactElement {
           <Button
             type="button"
             variant="secondary"
-            isLoading={result.busy}
+            isLoading={busy}
             data-testid="admin-ws-ping-run"
             onClick={() => {
               if (typeof core.ws.ping !== "function") {
@@ -157,14 +124,14 @@ function PingPanel({ core }: { core: OperatorCore }): React.ReactElement {
               });
             }}
           >
-            {result.busy ? "Pinging..." : "Ping"}
+            {busy ? "Pinging..." : "Ping"}
           </Button>
         </div>
 
         <ApiResultCard
           heading="Result"
-          value={result.value}
-          error={result.error}
+          value={value}
+          error={error}
           data-testid="admin-ws-ping-result"
         />
       </CardContent>
@@ -174,7 +141,10 @@ function PingPanel({ core }: { core: OperatorCore }): React.ReactElement {
 
 function PresenceBeaconPanel({ core }: { core: OperatorCore }): React.ReactElement {
   const [rawPayload, setRawPayload] = useState<string>(JSON.stringify({ mode: "ui" }, null, 2));
-  const result = useAsyncResult<unknown>();
+  const result = useApiCallState();
+  const busy = result.state.status === "loading";
+  const value = result.state.status === "success" ? result.state.value : undefined;
+  const error = result.state.status === "error" ? result.state.error : undefined;
 
   return (
     <Card data-testid="admin-ws-presence-beacon">
@@ -199,7 +169,7 @@ function PresenceBeaconPanel({ core }: { core: OperatorCore }): React.ReactEleme
           <Button
             type="button"
             variant="secondary"
-            isLoading={result.busy}
+            isLoading={busy}
             data-testid="admin-ws-presence-beacon-send"
             onClick={() => {
               if (typeof core.ws.presenceBeacon !== "function") {
@@ -219,14 +189,14 @@ function PresenceBeaconPanel({ core }: { core: OperatorCore }): React.ReactEleme
               );
             }}
           >
-            {result.busy ? "Sending..." : "Send"}
+            {busy ? "Sending..." : "Send"}
           </Button>
         </div>
 
         <ApiResultCard
           heading="Result"
-          value={result.value}
-          error={result.error}
+          value={value}
+          error={error}
           data-testid="admin-ws-presence-beacon-result"
         />
       </CardContent>
@@ -238,7 +208,10 @@ function CapabilityReadyPanel({ core }: { core: OperatorCore }): React.ReactElem
   const [rawPayload, setRawPayload] = useState<string>(
     JSON.stringify({ capabilities: [] }, null, 2),
   );
-  const result = useAsyncResult<{ ok: true }>();
+  const result = useApiCallState();
+  const busy = result.state.status === "loading";
+  const value = result.state.status === "success" ? result.state.value : undefined;
+  const error = result.state.status === "error" ? result.state.error : undefined;
 
   return (
     <Card data-testid="admin-ws-capability-ready">
@@ -263,7 +236,7 @@ function CapabilityReadyPanel({ core }: { core: OperatorCore }): React.ReactElem
           <Button
             type="button"
             variant="secondary"
-            isLoading={result.busy}
+            isLoading={busy}
             data-testid="admin-ws-capability-ready-send"
             onClick={() => {
               if (typeof core.ws.capabilityReady !== "function") {
@@ -284,14 +257,14 @@ function CapabilityReadyPanel({ core }: { core: OperatorCore }): React.ReactElem
               });
             }}
           >
-            {result.busy ? "Sending..." : "Send"}
+            {busy ? "Sending..." : "Send"}
           </Button>
         </div>
 
         <ApiResultCard
           heading="Result"
-          value={result.value}
-          error={result.error}
+          value={value}
+          error={error}
           data-testid="admin-ws-capability-ready-result"
         />
       </CardContent>
@@ -303,7 +276,10 @@ function AttemptEvidencePanel({ core }: { core: OperatorCore }): React.ReactElem
   const [rawPayload, setRawPayload] = useState<string>(
     JSON.stringify({ run_id: "", step_id: "", attempt_id: "", evidence: {} }, null, 2),
   );
-  const result = useAsyncResult<{ ok: true }>();
+  const result = useApiCallState();
+  const busy = result.state.status === "loading";
+  const value = result.state.status === "success" ? result.state.value : undefined;
+  const error = result.state.status === "error" ? result.state.error : undefined;
 
   return (
     <Card data-testid="admin-ws-attempt-evidence">
@@ -328,7 +304,7 @@ function AttemptEvidencePanel({ core }: { core: OperatorCore }): React.ReactElem
           <Button
             type="button"
             variant="secondary"
-            isLoading={result.busy}
+            isLoading={busy}
             data-testid="admin-ws-attempt-evidence-send"
             onClick={() => {
               if (typeof core.ws.attemptEvidence !== "function") {
@@ -349,14 +325,14 @@ function AttemptEvidencePanel({ core }: { core: OperatorCore }): React.ReactElem
               });
             }}
           >
-            {result.busy ? "Sending..." : "Send"}
+            {busy ? "Sending..." : "Send"}
           </Button>
         </div>
 
         <ApiResultCard
           heading="Result"
-          value={result.value}
-          error={result.error}
+          value={value}
+          error={error}
           data-testid="admin-ws-attempt-evidence-result"
         />
       </CardContent>
