@@ -45,7 +45,7 @@ export function useApiCallState(): {
     }
   }, []);
 
-  const runAndThrow = useCallback(async <T,>(request: () => Promise<T>): Promise<T> => {
+  const runAndThrow = useCallback(async <T>(request: () => Promise<T>): Promise<T> => {
     if (inFlightRef.current) throw new Error("Request already in progress");
     inFlightRef.current = true;
     setState({ status: "loading" });
@@ -63,4 +63,3 @@ export function useApiCallState(): {
 
   return { state, run, runAndThrow, fail };
 }
-
