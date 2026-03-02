@@ -2,7 +2,6 @@ import type { OperatorCore } from "@tyrum/operator-core";
 import { useState, type ComponentType } from "react";
 import {
   Database,
-  KeyRound,
   LayoutGrid,
   Link2,
   Monitor,
@@ -40,7 +39,6 @@ export interface OperatorUiAppProps {
 }
 
 type OperatorUiRouteId =
-  | "connect"
   | "dashboard"
   | "memory"
   | "approvals"
@@ -53,7 +51,6 @@ type OperatorUiRouteId =
 type NavIcon = ComponentType<{ className?: string }>;
 
 const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon }> = {
-  connect: { label: "Connect", icon: KeyRound },
   dashboard: { label: "Dashboard", icon: LayoutGrid },
   memory: { label: "Memory", icon: Database },
   approvals: { label: "Approvals", icon: ShieldCheck },
@@ -65,7 +62,6 @@ const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon 
 };
 
 const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
-  "connect",
   "dashboard",
   "memory",
   "approvals",
@@ -76,7 +72,7 @@ const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
 ];
 
 const MOBILE_NAV_ORDER: OperatorUiRouteId[] = ["dashboard", "approvals", "runs", "settings"];
-const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["memory", "pairing", "admin", "connect"];
+const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["memory", "pairing", "admin"];
 const DESKTOP_NAV_ORDER: OperatorUiRouteId[] = ["desktop"];
 
 const KEYBOARD_NAV_ORDER: OperatorUiRouteId[] = [
@@ -110,18 +106,14 @@ function OperatorUiAppRoot({
   mode,
   onReconfigureGateway,
 }: Pick<OperatorUiAppProps, "core" | "mode" | "onReconfigureGateway">) {
-  const [route, setRoute] = useState<OperatorUiRouteId>("connect");
+  const [route, setRoute] = useState<OperatorUiRouteId>("dashboard");
   const connection = useOperatorStore(core.connectionStore);
+  const isConnected = connection.status === "connected";
   const existingTheme = useThemeOptional();
-
-  const resolveLabel = (id: OperatorUiRouteId): string => {
-    if (mode === "web" && id === "connect") return "Login";
-    return NAV_ITEM_CONFIG[id].label;
-  };
 
   const toNavItem = (id: OperatorUiRouteId) => ({
     id,
-    label: resolveLabel(id),
+    label: NAV_ITEM_CONFIG[id].label,
     icon: NAV_ITEM_CONFIG[id].icon,
     testId: `nav-${id}`,
   });
@@ -158,35 +150,44 @@ function OperatorUiAppRoot({
       <AppShell
         mode={mode}
         sidebar={
-          <Sidebar
-            items={sidebarItems}
-            secondaryItems={desktopItems}
-            activeItemId={route}
-            onNavigate={navigate}
-            connectionStatus={connection.status}
-          />
+          isConnected ? (
+            <Sidebar
+              items={sidebarItems}
+              secondaryItems={desktopItems}
+              activeItemId={route}
+              onNavigate={navigate}
+              connectionStatus={connection.status}
+            />
+          ) : null
         }
         mobileNav={
-          <MobileNav
-            items={mobileItems}
-            overflowItems={mobileOverflowItems}
-            activeItemId={route}
-            onNavigate={navigate}
-          />
+          isConnected ? (
+            <MobileNav
+              items={mobileItems}
+              overflowItems={mobileOverflowItems}
+              activeItemId={route}
+              onNavigate={navigate}
+            />
+          ) : null
         }
       >
         <AdminModeProvider core={core} mode={mode}>
-          {route === "connect" && (
-            <ConnectPage core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />
+          {!isConnected ? (
+            <div className="mx-auto mt-20 max-w-md w-full px-4">
+              <ConnectPage core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />
+            </div>
+          ) : (
+            <>
+              {route === "dashboard" && <DashboardPage core={core} onNavigate={navigate} />}
+              {route === "memory" && <MemoryPage core={core} />}
+              {route === "approvals" && <ApprovalsPage core={core} />}
+              {route === "runs" && <RunsPage core={core} />}
+              {route === "pairing" && <PairingPage core={core} />}
+              {route === "admin" && <AdminPage core={core} onNavigate={navigate} />}
+              {route === "settings" && <SettingsPage core={core} mode={mode} />}
+              {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
+            </>
           )}
-          {route === "dashboard" && <DashboardPage core={core} onNavigate={navigate} />}
-          {route === "memory" && <MemoryPage core={core} />}
-          {route === "approvals" && <ApprovalsPage core={core} />}
-          {route === "runs" && <RunsPage core={core} />}
-          {route === "pairing" && <PairingPage core={core} />}
-          {route === "admin" && <AdminPage core={core} onNavigate={navigate} />}
-          {route === "settings" && <SettingsPage core={core} mode={mode} />}
-          {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
         </AdminModeProvider>
       </AppShell>
     </ToastProvider>
