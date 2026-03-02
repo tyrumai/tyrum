@@ -172,4 +172,98 @@ describe("ConnectPage", () => {
 
     cleanupTestRoot(testRoot);
   });
+
+  it("shows connecting state and allows canceling the connection attempt", () => {
+    const { store: connectionStore } = createStore({
+      status: "connecting",
+      recovering: false,
+      nextRetryAtMs: null,
+      clientId: null,
+      lastDisconnect: null,
+      transportError: null,
+    });
+
+    const core = {
+      connectionStore,
+      httpBaseUrl: "https://gateway.example",
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    } as unknown as OperatorCore;
+
+    const testRoot = renderIntoDocument(
+      React.createElement(ConnectPage, {
+        core,
+        mode: "desktop",
+      }),
+    );
+
+    const loginButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="login-button"]',
+    );
+    expect(loginButton).not.toBeNull();
+    expect(loginButton?.textContent).toContain("Connecting");
+    expect(loginButton?.className).toContain("bg-primary");
+    expect(loginButton?.getAttribute("aria-busy")).toBe("true");
+    expect(loginButton?.disabled).toBe(true);
+
+    const cancelButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="cancel-connect-button"]',
+    );
+    expect(cancelButton).not.toBeNull();
+
+    act(() => {
+      cancelButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(core.disconnect).toHaveBeenCalledTimes(1);
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("shows a retry countdown while reconnect is scheduled from the background", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+      const baseNow = Date.now();
+
+      const { store: connectionStore } = createStore({
+        status: "disconnected",
+        recovering: false,
+        nextRetryAtMs: baseNow + 12_000,
+        clientId: null,
+        lastDisconnect: null,
+        transportError: null,
+      });
+
+      const core = {
+        connectionStore,
+        httpBaseUrl: "https://gateway.example",
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+      } as unknown as OperatorCore;
+
+      const testRoot = renderIntoDocument(
+        React.createElement(ConnectPage, {
+          core,
+          mode: "desktop",
+        }),
+      );
+
+      const loginButton = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="login-button"]',
+      );
+      expect(loginButton).not.toBeNull();
+      expect(loginButton?.className).toContain("bg-primary");
+      expect(loginButton?.textContent).toContain("Connecting (12s)");
+
+      act(() => {
+        vi.advanceTimersByTime(3_000);
+      });
+      expect(loginButton?.textContent).toContain("Connecting (9s)");
+
+      cleanupTestRoot(testRoot);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

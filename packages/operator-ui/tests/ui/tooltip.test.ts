@@ -42,6 +42,7 @@ describe("Tooltip", () => {
 
     const content = document.body.querySelector(".test-tooltip");
     expect(content?.textContent).toContain("Hello");
+    expect(content?.className).toContain("font-sans");
 
     const arrow = document.body.querySelector("[data-tooltip-arrow]");
     expect(arrow).not.toBeNull();

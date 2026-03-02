@@ -1,9 +1,9 @@
 import { type OperatorCore, createGatewayAuthSession } from "@tyrum/operator-core";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import type { OperatorUiMode } from "../../app.js";
 import { Button } from "../ui/button.js";
-import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
+import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 import { Alert } from "../ui/alert.js";
 import { readGatewayError } from "../../utils/gateway-error.js";
@@ -33,10 +33,43 @@ export function ConnectPage({
   const [loginError, setLoginError] = useState<string | null>(null);
   const [showToken, setShowToken] = useState(false);
   const [gatewayUrl, setGatewayUrl] = useState(core.httpBaseUrl);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const tokenRef = useRef<HTMLInputElement | null>(null);
-  const title = mode === "web" ? "Login" : "Connect";
+  const title = "Connect";
   const isWeb = mode === "web";
+
+  const lastDisconnect = connection.lastDisconnect;
+  const nextRetryAtMs = connection.nextRetryAtMs;
+  const hasScheduledRetry = typeof nextRetryAtMs === "number";
+  const isConnecting = connection.status === "connecting" || hasScheduledRetry;
+  const connectButtonBusy = loginBusy || isConnecting;
+  const disconnectDescription = lastDisconnect
+    ? lastDisconnect.reason.trim().length > 0
+      ? `${lastDisconnect.reason} (code ${lastDisconnect.code})`
+      : `Code ${lastDisconnect.code}`
+    : null;
+
+  useEffect(() => {
+    if (!hasScheduledRetry) return;
+    setNowMs(Date.now());
+    const timer = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1_000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [hasScheduledRetry, nextRetryAtMs]);
+
+  const retryCountdownSeconds =
+    hasScheduledRetry && nextRetryAtMs !== null
+      ? Math.max(0, Math.ceil((nextRetryAtMs - nowMs) / 1_000))
+      : null;
+  const connectButtonLabel = isConnecting
+    ? retryCountdownSeconds !== null
+      ? `Connecting (${String(retryCountdownSeconds)}s)`
+      : "Connecting"
+    : "Connect";
 
   const loginOrConnect = async (): Promise<void> => {
     const trimmedUrl = gatewayUrl.trim();
@@ -138,63 +171,35 @@ export function ConnectPage({
 
           <Button
             data-testid="login-button"
-            isLoading={loginBusy || connection.status === "connecting"}
+            isLoading={connectButtonBusy}
             onClick={() => {
               void loginOrConnect();
             }}
           >
-            {isWeb ? "Login" : "Connect"}
+            {connectButtonLabel}
           </Button>
+          {isConnecting ? (
+            <Button
+              data-testid="cancel-connect-button"
+              variant="secondary"
+              onClick={() => {
+                core.disconnect();
+              }}
+            >
+              Cancel
+            </Button>
+          ) : null}
 
           {loginError ? (
             <Alert variant="error" title="Login failed" description={loginError} />
           ) : null}
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader className="pb-4">
-          <div className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
-            <span>Connection status:</span>
-            <span className="font-medium text-fg">{connection.status}</span>
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          {connection.transportError ? (
-            <Alert
-              variant="error"
-              title="Transport error"
-              description={connection.transportError}
-            />
-          ) : null}
-          {connection.lastDisconnect ? (
-            <Alert
-              variant="error"
-              title="Last disconnect"
-              description={`${connection.lastDisconnect.code} ${connection.lastDisconnect.reason}`}
-            />
+          {disconnectDescription ? (
+            <Alert variant="error" title="Disconnected" description={disconnectDescription} />
+          ) : connection.transportError ? (
+            <Alert variant="error" title="Transport error" description={connection.transportError} />
           ) : null}
         </CardContent>
-        <CardFooter className="gap-2">
-          <Button
-            variant="secondary"
-            data-testid="connect-button"
-            onClick={() => {
-              core.connect();
-            }}
-          >
-            Connect
-          </Button>
-          <Button
-            variant="outline"
-            data-testid="disconnect-button"
-            onClick={() => {
-              core.disconnect();
-            }}
-          >
-            Disconnect
-          </Button>
-        </CardFooter>
       </Card>
     </div>
   );

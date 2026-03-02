@@ -10,6 +10,6 @@ export type ConnectionDisplay = {
 
 export function getConnectionDisplay(status: ConnectionStatus): ConnectionDisplay {
   if (status === "connected") return { variant: "success", pulse: false, label: "Connected" };
-  if (status === "connecting") return { variant: "primary", pulse: true, label: "Connecting" };
+  if (status === "connecting") return { variant: "warning", pulse: true, label: "Connecting" };
   return { variant: "danger", pulse: false, label: "Disconnected" };
 }

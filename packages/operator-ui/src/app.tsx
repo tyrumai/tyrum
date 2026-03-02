@@ -108,7 +108,8 @@ function OperatorUiAppRoot({
 }: Pick<OperatorUiAppProps, "core" | "mode" | "onReconfigureGateway">) {
   const [route, setRoute] = useState<OperatorUiRouteId>("dashboard");
   const connection = useOperatorStore(core.connectionStore);
-  const isConnected = connection.status === "connected";
+  const showShell =
+    connection.status === "connected" || (connection.status === "connecting" && connection.recovering);
   const existingTheme = useThemeOptional();
 
   const toNavItem = (id: OperatorUiRouteId) => ({
@@ -136,7 +137,7 @@ function OperatorUiAppRoot({
   };
 
   useKeyboardShortcut(
-    isConnected
+    showShell
       ? KEYBOARD_NAV_ORDER.map((id, index) => ({
           key: String(index + 1),
           requireCmdOrCtrl: true,
@@ -152,7 +153,7 @@ function OperatorUiAppRoot({
       <AppShell
         mode={mode}
         sidebar={
-          isConnected ? (
+          showShell ? (
             <Sidebar
               items={sidebarItems}
               secondaryItems={desktopItems}
@@ -163,7 +164,7 @@ function OperatorUiAppRoot({
           ) : null
         }
         mobileNav={
-          isConnected ? (
+          showShell ? (
             <MobileNav
               items={mobileItems}
               overflowItems={mobileOverflowItems}
@@ -174,7 +175,7 @@ function OperatorUiAppRoot({
         }
       >
         <AdminModeProvider core={core} mode={mode}>
-          {!isConnected ? (
+          {!showShell ? (
             <div className="mx-auto mt-20 max-w-md w-full px-4">
               <ConnectPage core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />
             </div>

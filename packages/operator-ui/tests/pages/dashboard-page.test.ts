@@ -82,16 +82,19 @@ describe("DashboardPage", () => {
       return dot as HTMLSpanElement;
     };
 
+    expect(getConnectionDot().className).toContain("bg-error");
     expect(getConnectionDot().className).not.toContain("animate-pulse");
 
     act(() => {
       setConnectionState((prev) => ({ ...prev, status: "connecting" }));
     });
+    expect(getConnectionDot().className).toContain("bg-warning");
     expect(getConnectionDot().className).toContain("animate-pulse");
 
     act(() => {
       setConnectionState((prev) => ({ ...prev, status: "connected" }));
     });
+    expect(getConnectionDot().className).toContain("bg-success");
     expect(getConnectionDot().className).not.toContain("animate-pulse");
 
     cleanupTestRoot({ container, root });

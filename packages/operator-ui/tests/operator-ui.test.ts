@@ -629,7 +629,7 @@ describe("operator-ui", () => {
     expect(container.querySelector('[data-testid="login-button"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="nav-dashboard"]')).toBeNull();
     expect(container.querySelector('[data-testid="nav-admin"]')).toBeNull();
-    expect(container.textContent).toContain("Connection status:");
+    expect(container.textContent).not.toContain("Connection status:");
 
     act(() => {
       root?.unmount();
@@ -1609,7 +1609,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("connects and disconnects via operator-core", () => {
+  it("connects via the primary connect action", () => {
     const ws = new FakeWsClient(false);
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -1628,11 +1628,7 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    expect(container.textContent).toContain("disconnected");
-
-    const connectButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="connect-button"]',
-    );
+    const connectButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
     expect(connectButton).not.toBeNull();
 
     act(() => {
@@ -1640,19 +1636,22 @@ describe("operator-ui", () => {
     });
 
     expect(ws.connect).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("connecting");
+    const connectingButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
+    expect(connectingButton).not.toBeNull();
+    expect(connectingButton?.textContent).toContain("Connecting");
+    expect(connectingButton?.className).toContain("bg-primary");
+    expect(connectingButton?.getAttribute("aria-busy")).toBe("true");
 
-    const disconnectButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="disconnect-button"]',
+    const cancelButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="cancel-connect-button"]',
     );
-    expect(disconnectButton).not.toBeNull();
-
+    expect(cancelButton).not.toBeNull();
     act(() => {
-      disconnectButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      cancelButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-
     expect(ws.disconnect).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("disconnected");
+
+    expect(container.querySelector('[data-testid="disconnect-button"]')).toBeNull();
 
     act(() => {
       root?.unmount();
@@ -2334,7 +2333,7 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("surfaces transport and disconnect details on the connect page", () => {
+  it("surfaces disconnect details on the connect page", () => {
     const ws = new FakeWsClient(false);
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -2354,22 +2353,92 @@ describe("operator-ui", () => {
     });
 
     act(() => {
-      ws.emit("transport_error", { message: "socket blew up" });
-    });
-
-    expect(container.textContent).toContain("socket blew up");
-
-    act(() => {
       ws.emit("disconnected", { code: 4001, reason: "unauthorized" });
     });
 
-    expect(container.textContent).toContain("4001");
+    expect(container.textContent).toContain("Disconnected");
     expect(container.textContent).toContain("unauthorized");
+    expect(container.textContent).toContain("4001");
 
     act(() => {
       root?.unmount();
     });
     container.remove();
+  });
+
+  it("keeps the app shell visible while recovering from a transient disconnect", () => {
+    vi.useFakeTimers();
+    try {
+      const ws = new FakeWsClient();
+      const { http } = createFakeHttpClient();
+      const core = createOperatorCore({
+        wsUrl: "ws://example.test/ws",
+        httpBaseUrl: "http://example.test",
+        auth: createBearerTokenAuth("test"),
+        deps: { ws, http },
+      });
+
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+
+      let root: Root | null = null;
+      act(() => {
+        root = createRoot(container);
+        root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      });
+
+      // Shell is visible while connected.
+      expect(container.querySelector('[data-testid="nav-dashboard"]')).not.toBeNull();
+
+      act(() => {
+        ws.emit("disconnected", { code: 1006, reason: "net down" });
+        ws.emit("reconnect_scheduled", {
+          delayMs: 20_000,
+          nextRetryAtMs: Date.now() + 20_000,
+          attempt: 1,
+        });
+      });
+
+      // Still visible while recovering (connecting).
+      expect(container.querySelector('[data-testid="nav-dashboard"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="login-button"]')).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(10_001);
+      });
+
+      // After grace expires, fall back to the connect screen but stay in a
+      // visible reconnecting state if a retry is scheduled.
+      expect(container.querySelector('[data-testid="login-button"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="nav-dashboard"]')).toBeNull();
+      expect(container.querySelector('[data-testid="login-button"]')?.textContent).toContain(
+        "Connecting",
+      );
+      expect(container.querySelector('[data-testid="cancel-connect-button"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="login-button"]')?.textContent).toMatch(
+        /Connecting \(\d+s\)/,
+      );
+
+      act(() => {
+        ws.emit("disconnected", { code: 1006, reason: "still down" });
+      });
+
+      // Once gated, repeated transient disconnect events should not re-show shell,
+      // and should keep showing a reconnecting state on the connect page.
+      expect(container.querySelector('[data-testid="login-button"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="nav-dashboard"]')).toBeNull();
+      expect(container.querySelector('[data-testid="login-button"]')?.textContent).toContain(
+        "Connecting",
+      );
+      expect(container.querySelector('[data-testid="cancel-connect-button"]')).not.toBeNull();
+
+      act(() => {
+        root?.unmount();
+      });
+      container.remove();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("refreshes and displays status on the dashboard", async () => {

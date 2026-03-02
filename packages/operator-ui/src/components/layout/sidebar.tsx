@@ -1,9 +1,9 @@
 import * as React from "react";
-import { ChevronDown, ChevronsLeft, ChevronsRight, Moon, Sun } from "lucide-react";
-import { useThemeOptional, type ThemeMode } from "../../hooks/use-theme.js";
+import { ChevronDown, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { getConnectionDisplay, type ConnectionStatus } from "../../lib/connection-display.js";
 import { cn } from "../../lib/cn.js";
 import { StatusDot } from "../ui/status-dot.js";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip.js";
 
 export type SidebarConnectionStatus = ConnectionStatus;
 
@@ -25,12 +25,6 @@ export interface SidebarProps extends React.HTMLAttributes<HTMLElement> {
   collapsible?: boolean;
   showHeader?: boolean;
   connectionStatus?: SidebarConnectionStatus;
-}
-
-function nextThemeMode(current: ThemeMode): ThemeMode {
-  if (current === "dark") return "light";
-  if (current === "light") return "system";
-  return "dark";
 }
 
 const STORAGE_KEY_SECONDARY = "tyrum-sidebar-secondary-collapsed";
@@ -69,8 +63,6 @@ export function Sidebar({
   className,
   ...props
 }: SidebarProps) {
-  const theme = useThemeOptional();
-
   const [collapsed, setCollapsed] = React.useState(() =>
     collapsible ? readStoredBool(STORAGE_KEY_SIDEBAR, false) : false,
   );
@@ -141,9 +133,6 @@ export function Sidebar({
     );
   };
 
-  const canToggleTheme = Boolean(theme);
-  const ThemeIcon = theme?.mode === "light" ? Sun : Moon;
-
   const showSecondaryItems = secondaryItems && secondaryItems.length > 0;
   const secondaryVisible = showSecondaryItems && (!secondaryCollapsible || !secondaryCollapsed);
 
@@ -203,49 +192,37 @@ export function Sidebar({
           collapsed ? "p-2" : "p-4",
         )}
       >
-        {collapsed ? (
-          <div className="flex justify-center" title={connectionLabel}>
-            <StatusDot
-              data-testid="connection-status-dot"
-              variant={dotVariant}
-              pulse={dotPulse}
-              aria-hidden="true"
-            />
-          </div>
-        ) : (
-          <div className="flex items-center justify-between gap-2 text-xs text-fg-muted">
-            <div className="flex items-center gap-2">
-              <StatusDot
-                data-testid="connection-status-dot"
-                variant={dotVariant}
-                pulse={dotPulse}
-                aria-hidden="true"
-              />
-              <span>Connection</span>
-            </div>
-            <span>{connectionLabel}</span>
-          </div>
-        )}
-
-        {canToggleTheme ? (
-          <button
-            type="button"
-            data-testid="theme-toggle"
-            title={collapsed ? "Theme" : undefined}
-            className={cn(
-              "flex items-center rounded-md text-sm transition-colors",
-              collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
-              "text-fg-muted hover:bg-bg-subtle hover:text-fg",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-            )}
-            onClick={() => {
-              theme?.setMode(nextThemeMode(theme.mode));
-            }}
-          >
-            <ThemeIcon className="h-4 w-4" />
-            {!collapsed ? <span>Theme</span> : null}
-          </button>
-        ) : null}
+        <div
+          data-testid="sidebar-status-controls"
+          className={cn("flex items-center", collapsed ? "justify-center" : "justify-start")}
+        >
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-md text-sm text-fg-muted",
+                    collapsed ? "justify-center px-2 py-2" : "w-full gap-2 px-3 py-2",
+                  )}
+                >
+                  <StatusDot
+                    data-testid="connection-status-dot"
+                    variant={dotVariant}
+                    pulse={dotPulse}
+                    role="img"
+                    aria-label={`Connection ${connectionLabel}`}
+                  />
+                  {!collapsed ? (
+                    <span data-testid="connection-status-label" className="truncate">
+                      {connectionLabel}
+                    </span>
+                  ) : null}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side={collapsed ? "right" : "top"}>{connectionLabel}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
 
         {collapsible ? (
           <button
