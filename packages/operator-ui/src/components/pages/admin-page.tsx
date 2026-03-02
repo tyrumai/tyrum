@@ -1,7 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { AdminModeGate } from "../../admin-mode.js";
-import { useApiAction } from "../../hooks/use-api-action.js";
+import { type ApiCallState, useApiCallState } from "../../hooks/use-api-call-state.js";
 import { parseJsonInput } from "../../utils/parse-json-input.js";
 import { AdminWsPanels } from "../admin/admin-ws-panels.js";
 import { AdminWorkBoardWsHub } from "../admin-workboard/admin-workboard-ws-hub.js";
@@ -48,12 +48,18 @@ type WorkflowRunPayload = Parameters<OperatorCore["ws"]["workflowRun"]>[0];
 type WorkflowResumePayload = Parameters<OperatorCore["ws"]["workflowResume"]>[0];
 type WorkflowCancelPayload = Parameters<OperatorCore["ws"]["workflowCancel"]>[0];
 
+function ApiResultSection({ state, heading }: { state: ApiCallState; heading: string }) {
+  const value = state.status === "success" ? state.value : undefined;
+  const error = state.status === "error" ? state.error : undefined;
+  return <ApiResultCard heading={heading} value={value} error={error} />;
+}
+
 function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactElement {
-  const status = useApiAction<unknown>();
-  const usage = useApiAction<unknown>();
-  const presence = useApiAction<unknown>();
-  const pairingsList = useApiAction<unknown>();
-  const pairingsMutate = useApiAction<unknown>();
+  const status = useApiCallState();
+  const usage = useApiCallState();
+  const presence = useApiCallState();
+  const pairingsList = useApiCallState();
+  const pairingsMutate = useApiCallState();
 
   const [usageQueryRaw, setUsageQueryRaw] = React.useState("");
   const usageQuery = React.useMemo(() => parseJsonInput(usageQueryRaw), [usageQueryRaw]);
@@ -116,7 +122,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               data-testid="admin-http-status-get"
               size="sm"
               variant="secondary"
-              isLoading={status.isLoading}
+              isLoading={status.state.status === "loading"}
               onClick={() => {
                 void status.run(() => core.http.status.get());
               }}
@@ -124,7 +130,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               Fetch
             </Button>
           </div>
-          <ApiResultCard heading="Status" value={status.value} error={status.error} />
+          <ApiResultSection heading="Status" state={status.state} />
         </div>
 
         <div className="grid gap-3">
@@ -134,7 +140,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               data-testid="admin-http-usage-get"
               size="sm"
               variant="secondary"
-              isLoading={usage.isLoading}
+              isLoading={usage.state.status === "loading"}
               disabled={usageQuery.errorMessage !== null}
               onClick={() => {
                 const query: UsageGetQuery =
@@ -156,7 +162,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               setUsageQueryRaw(event.currentTarget.value);
             }}
           />
-          <ApiResultCard heading="Usage" value={usage.value} error={usage.error} />
+          <ApiResultSection heading="Usage" state={usage.state} />
         </div>
 
         <div className="grid gap-3">
@@ -166,7 +172,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               data-testid="admin-http-presence-list"
               size="sm"
               variant="secondary"
-              isLoading={presence.isLoading}
+              isLoading={presence.state.status === "loading"}
               onClick={() => {
                 void presence.run(() => core.http.presence.list());
               }}
@@ -174,7 +180,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               Fetch
             </Button>
           </div>
-          <ApiResultCard heading="Presence" value={presence.value} error={presence.error} />
+          <ApiResultSection heading="Presence" state={presence.state} />
         </div>
       </section>
 
@@ -186,7 +192,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               data-testid="admin-http-pairings-list"
               size="sm"
               variant="secondary"
-              isLoading={pairingsList.isLoading}
+              isLoading={pairingsList.state.status === "loading"}
               onClick={() => {
                 void pairingsList.run(() => core.http.pairings.list());
               }}
@@ -194,7 +200,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               Fetch
             </Button>
           </div>
-          <ApiResultCard heading="Pairings" value={pairingsList.value} error={pairingsList.error} />
+          <ApiResultSection heading="Pairings" state={pairingsList.state} />
         </div>
 
         <Card>
@@ -266,11 +272,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               </Button>
             </div>
 
-            <ApiResultCard
-              heading="Mutation result"
-              value={pairingsMutate.value}
-              error={pairingsMutate.error}
-            />
+            <ApiResultSection heading="Mutation result" state={pairingsMutate.state} />
           </CardContent>
         </Card>
 
@@ -286,7 +288,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
           }.`}
           confirmLabel="Run mutation"
           onConfirm={submitPairingsAction}
-          isLoading={pairingsMutate.isLoading}
+          isLoading={pairingsMutate.state.status === "loading"}
         />
       </section>
     </div>
@@ -294,11 +296,11 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
 }
 
 function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
-  const status = useApiAction<unknown>();
-  const refresh = useApiAction<unknown>();
-  const listProviders = useApiAction<unknown>();
-  const getProvider = useApiAction<unknown>();
-  const listProviderModels = useApiAction<unknown>();
+  const status = useApiCallState();
+  const refresh = useApiCallState();
+  const listProviders = useApiCallState();
+  const getProvider = useApiCallState();
+  const listProviderModels = useApiCallState();
 
   const [providerId, setProviderId] = React.useState("");
   const trimmedProviderId = providerId.trim();
@@ -315,7 +317,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               data-testid="admin-http-models-status"
               size="sm"
               variant="secondary"
-              isLoading={status.isLoading}
+              isLoading={status.state.status === "loading"}
               onClick={() => {
                 void status.run(() => core.http.models.status());
               }}
@@ -323,7 +325,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               Fetch
             </Button>
           </div>
-          <ApiResultCard heading="Models status" value={status.value} error={status.error} />
+          <ApiResultSection heading="Models status" state={status.state} />
         </div>
 
         <div className="grid gap-3">
@@ -340,7 +342,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               Refresh (confirm)
             </Button>
           </div>
-          <ApiResultCard heading="Refresh result" value={refresh.value} error={refresh.error} />
+          <ApiResultSection heading="Refresh result" state={refresh.state} />
         </div>
 
         <ConfirmDangerDialog
@@ -352,7 +354,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
           onConfirm={async () => {
             await refresh.runAndThrow(() => core.http.models.refresh());
           }}
-          isLoading={refresh.isLoading}
+          isLoading={refresh.state.status === "loading"}
         />
       </section>
 
@@ -364,7 +366,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               data-testid="admin-http-models-providers-list"
               size="sm"
               variant="secondary"
-              isLoading={listProviders.isLoading}
+              isLoading={listProviders.state.status === "loading"}
               onClick={() => {
                 void listProviders.run(() => core.http.models.listProviders());
               }}
@@ -372,11 +374,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               Fetch
             </Button>
           </div>
-          <ApiResultCard
-            heading="Providers"
-            value={listProviders.value}
-            error={listProviders.error}
-          />
+          <ApiResultSection heading="Providers" state={listProviders.state} />
         </div>
 
         <Card>
@@ -401,7 +399,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
                 size="sm"
                 variant="secondary"
                 disabled={!trimmedProviderId}
-                isLoading={getProvider.isLoading}
+                isLoading={getProvider.state.status === "loading"}
                 onClick={() => {
                   void getProvider.run(() => core.http.models.getProvider(trimmedProviderId));
                 }}
@@ -413,7 +411,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
                 size="sm"
                 variant="secondary"
                 disabled={!trimmedProviderId}
-                isLoading={listProviderModels.isLoading}
+                isLoading={listProviderModels.state.status === "loading"}
                 onClick={() => {
                   void listProviderModels.run(() =>
                     core.http.models.listProviderModels(trimmedProviderId),
@@ -424,12 +422,8 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               </Button>
             </div>
 
-            <ApiResultCard heading="Provider" value={getProvider.value} error={getProvider.error} />
-            <ApiResultCard
-              heading="Provider models"
-              value={listProviderModels.value}
-              error={listProviderModels.error}
-            />
+            <ApiResultSection heading="Provider" state={getProvider.state} />
+            <ApiResultSection heading="Provider models" state={listProviderModels.state} />
           </CardContent>
         </Card>
       </section>
