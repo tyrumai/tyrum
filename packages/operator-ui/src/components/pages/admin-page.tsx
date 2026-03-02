@@ -48,18 +48,6 @@ type WorkflowRunPayload = Parameters<OperatorCore["ws"]["workflowRun"]>[0];
 type WorkflowResumePayload = Parameters<OperatorCore["ws"]["workflowResume"]>[0];
 type WorkflowCancelPayload = Parameters<OperatorCore["ws"]["workflowCancel"]>[0];
 
-function ApiResultSection({
-  heading,
-  value,
-  error,
-}: {
-  heading: string;
-  value: unknown | undefined;
-  error: unknown | undefined;
-}) {
-  return <ApiResultCard heading={heading} value={value} error={error} />;
-}
-
 function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactElement {
   const status = useApiAction<unknown>();
   const usage = useApiAction<unknown>();
@@ -136,7 +124,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               Fetch
             </Button>
           </div>
-          <ApiResultSection heading="Status" value={status.value} error={status.error} />
+          <ApiResultCard heading="Status" value={status.value} error={status.error} />
         </div>
 
         <div className="grid gap-3">
@@ -168,7 +156,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               setUsageQueryRaw(event.currentTarget.value);
             }}
           />
-          <ApiResultSection heading="Usage" value={usage.value} error={usage.error} />
+          <ApiResultCard heading="Usage" value={usage.value} error={usage.error} />
         </div>
 
         <div className="grid gap-3">
@@ -186,7 +174,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               Fetch
             </Button>
           </div>
-          <ApiResultSection heading="Presence" value={presence.value} error={presence.error} />
+          <ApiResultCard heading="Presence" value={presence.value} error={presence.error} />
         </div>
       </section>
 
@@ -206,11 +194,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               Fetch
             </Button>
           </div>
-          <ApiResultSection
-            heading="Pairings"
-            value={pairingsList.value}
-            error={pairingsList.error}
-          />
+          <ApiResultCard heading="Pairings" value={pairingsList.value} error={pairingsList.error} />
         </div>
 
         <Card>
@@ -282,7 +266,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               </Button>
             </div>
 
-            <ApiResultSection
+            <ApiResultCard
               heading="Mutation result"
               value={pairingsMutate.value}
               error={pairingsMutate.error}
@@ -339,7 +323,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               Fetch
             </Button>
           </div>
-          <ApiResultSection heading="Models status" value={status.value} error={status.error} />
+          <ApiResultCard heading="Models status" value={status.value} error={status.error} />
         </div>
 
         <div className="grid gap-3">
@@ -356,7 +340,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               Refresh (confirm)
             </Button>
           </div>
-          <ApiResultSection heading="Refresh result" value={refresh.value} error={refresh.error} />
+          <ApiResultCard heading="Refresh result" value={refresh.value} error={refresh.error} />
         </div>
 
         <ConfirmDangerDialog
@@ -388,7 +372,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               Fetch
             </Button>
           </div>
-          <ApiResultSection
+          <ApiResultCard
             heading="Providers"
             value={listProviders.value}
             error={listProviders.error}
@@ -440,12 +424,8 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               </Button>
             </div>
 
-            <ApiResultSection
-              heading="Provider"
-              value={getProvider.value}
-              error={getProvider.error}
-            />
-            <ApiResultSection
+            <ApiResultCard heading="Provider" value={getProvider.value} error={getProvider.error} />
+            <ApiResultCard
               heading="Provider models"
               value={listProviderModels.value}
               error={listProviderModels.error}
