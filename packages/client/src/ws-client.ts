@@ -214,9 +214,18 @@ export interface TyrumClientOptions {
    *
    * The value is the server certificate's SHA-256 fingerprint, as hex (with or
    * without `:`), case-insensitive. When set, the client will refuse to
-   * connect if the remote certificate does not match.
+   * connect if the remote certificate does not match. Standard TLS verification
+   * (CA trust + hostname) still applies.
    */
   tlsCertFingerprint256?: string;
+  /**
+   * Optional PEM-encoded CA certificate(s) used for Node.js `wss://` TLS
+   * verification when `tlsCertFingerprint256` is enabled.
+   *
+   * Use this for private PKI / self-signed deployments, or configure your OS /
+   * Node trust store instead.
+   */
+  tlsCaCertPem?: string;
   /** Capabilities to advertise in the hello handshake. */
   capabilities: ClientCapability[];
   /** Peer role for vNext handshake. Defaults to `client`. */
@@ -795,11 +804,16 @@ export class TyrumClient {
           callback(err, socket);
         };
 
+        const caCertPemRaw =
+          typeof this.opts.tlsCaCertPem === "string" ? this.opts.tlsCaCertPem : "";
+        const caCertPemTrimmed = caCertPemRaw.trim();
+        const caCertPem = caCertPemTrimmed.length ? caCertPemTrimmed : undefined;
+
         const socket = tls.connect({
           host: hostname,
           port,
           servername,
-          rejectUnauthorized: false,
+          ca: caCertPem,
         }) as import("node:tls").TLSSocket;
 
         socket.once("error", (err: Error) => {
