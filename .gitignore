@@ -84,3 +84,5 @@ apps/docs/build/
 
 # Desktop build artifacts
 apps/desktop/release/
+
+packages/gateway/*.db*

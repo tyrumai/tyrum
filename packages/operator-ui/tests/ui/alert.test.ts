@@ -45,4 +45,24 @@ describe("Alert", () => {
 
     cleanupTestRoot({ container, root });
   });
+
+  it("uses conservative word wrapping for description text", () => {
+    const Alert = (operatorUi as Record<string, unknown>)["Alert"];
+    expect(Alert).toBeDefined();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(Alert as React.ComponentType, {
+        variant: "warning",
+        title: "Warning",
+        description: "A regular sentence should not break between letters.",
+      }),
+    );
+
+    const description = container.querySelector('[role="alert"] .text-sm');
+    expect(description).not.toBeNull();
+    expect(description?.className).toContain("break-words");
+    expect(description?.className).not.toContain("break-all");
+
+    cleanupTestRoot({ container, root });
+  });
 });

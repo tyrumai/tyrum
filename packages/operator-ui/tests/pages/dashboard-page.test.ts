@@ -2,12 +2,23 @@
 
 import { describe, expect, it } from "vitest";
 import React, { act } from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import { DashboardPage } from "../../src/components/pages/dashboard-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 describe("DashboardPage", () => {
+  it("uses the precomputed tokens text value without a duplicate type guard in JSX", () => {
+    const source = readFileSync(
+      join(process.cwd(), "packages/operator-ui/src/components/pages/dashboard-page.tsx"),
+      "utf8",
+    );
+
+    expect(source).not.toContain('value={typeof tokensUsed === "number" ? tokensUsedText : "-"}');
+  });
+
   it("pulses the connection dot only while connecting", () => {
     const { store: connectionStore, setState: setConnectionState } = createStore({
       status: "disconnected",
@@ -60,12 +71,9 @@ describe("DashboardPage", () => {
     const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
 
     const getConnectionDot = (): HTMLSpanElement => {
-      const label = Array.from(container.querySelectorAll("span")).find(
-        (span) => span.textContent === "Connection Status",
+      const card = container.querySelector<HTMLDivElement>(
+        '[data-testid="dashboard-card-connection"]',
       );
-      expect(label).toBeDefined();
-
-      const card = label?.closest<HTMLDivElement>("div.rounded-lg");
       expect(card).not.toBeNull();
 
       const dot = card?.querySelector<HTMLSpanElement>("span.rounded-full");

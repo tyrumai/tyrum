@@ -228,7 +228,7 @@ function ArtifactInlinePreviewJson({
     <div className="grid gap-2" data-testid={`artifact-preview-json-${artifactId}`}>
       <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">{badge}</div>
       {parsed === null ? (
-        <pre className="max-h-[420px] overflow-auto rounded-md border border-border bg-bg px-3 py-2 text-xs text-fg">
+        <pre className="max-h-[420px] overflow-auto rounded-md border border-border bg-bg-card/40 px-3 py-2 text-xs text-fg">
           {text}
         </pre>
       ) : (

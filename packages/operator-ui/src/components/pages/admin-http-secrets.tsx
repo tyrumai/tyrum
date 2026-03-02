@@ -265,7 +265,7 @@ function SecretsRotateCard({
 
   return (
     <>
-      <Card>
+      <Card data-testid="secrets-rotate-card">
         <CardHeader>
           <div className="text-sm font-medium text-fg">Rotate</div>
         </CardHeader>

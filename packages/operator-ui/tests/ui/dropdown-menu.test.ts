@@ -47,4 +47,37 @@ describe("DropdownMenu", () => {
 
     cleanupTestRoot({ root, container });
   });
+
+  it("applies backdrop blur to dropdown content for translucent card backgrounds", () => {
+    const DropdownMenu = (operatorUi as Record<string, unknown>)["DropdownMenu"];
+    const DropdownMenuTrigger = (operatorUi as Record<string, unknown>)["DropdownMenuTrigger"];
+    const DropdownMenuContent = (operatorUi as Record<string, unknown>)["DropdownMenuContent"];
+
+    expect(DropdownMenu).toBeDefined();
+    expect(DropdownMenuTrigger).toBeDefined();
+    expect(DropdownMenuContent).toBeDefined();
+
+    const { root, container } = renderIntoDocument(
+      React.createElement(
+        DropdownMenu as React.ComponentType,
+        { open: true, onOpenChange: () => {} },
+        React.createElement(
+          DropdownMenuTrigger as React.ComponentType,
+          { asChild: true },
+          React.createElement("button", null, "Menu"),
+        ),
+        React.createElement(
+          DropdownMenuContent as React.ComponentType,
+          { className: "test-menu-blur" },
+          React.createElement("div", null, "Item"),
+        ),
+      ),
+    );
+
+    const content = document.body.querySelector<HTMLElement>(".test-menu-blur");
+    expect(content).not.toBeNull();
+    expect(content?.className).toContain("backdrop-blur-2xl");
+
+    cleanupTestRoot({ root, container });
+  });
 });

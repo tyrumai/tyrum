@@ -18,7 +18,7 @@ export const DialogOverlay = React.forwardRef<
       ref={ref}
       data-dialog-overlay=""
       className={cn(
-        "fixed inset-0 z-50 bg-black/60",
+        "fixed inset-0 z-50 bg-black/40 backdrop-blur-sm",
         "data-[state=open]:tyrum-animate-fade-in data-[state=closed]:tyrum-animate-fade-out",
         className,
       )}
@@ -39,7 +39,7 @@ export const DialogContent = React.forwardRef<
         ref={ref}
         className={cn(
           "fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2",
-          "rounded-lg border border-border bg-bg-card p-6 text-fg shadow-lg",
+          "rounded-2xl border border-border/60 bg-bg-card/70 backdrop-blur-3xl p-6 text-fg shadow-2xl",
           "data-[state=open]:tyrum-animate-dialog-in data-[state=closed]:tyrum-animate-dialog-out",
           className,
         )}

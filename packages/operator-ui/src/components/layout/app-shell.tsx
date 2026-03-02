@@ -31,6 +31,7 @@ export function AppShell({
         mode === "desktop" ? "h-screen" : "min-h-screen",
         className,
       )}
+      style={{ backgroundImage: "var(--tyrum-app-bg-image)" }}
       {...props}
     >
       <div className={cn("flex", mode === "desktop" ? "h-full" : "min-h-screen")}>

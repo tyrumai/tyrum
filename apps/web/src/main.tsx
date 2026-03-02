@@ -19,6 +19,10 @@ function scrubAuthTokenFromUrl(): void {
 }
 
 function resolveGatewayHttpBaseUrl(): string {
+  try {
+    const stored = localStorage.getItem("tyrum-gateway-http");
+    if (stored) return stored;
+  } catch {}
   const override = import.meta.env.VITE_GATEWAY_HTTP_BASE_URL?.trim();
   if (override) return override;
   return window.location.origin;
@@ -37,6 +41,10 @@ function resolveAuthFromLocation(
 }
 
 function resolveGatewayWsUrl(): string {
+  try {
+    const stored = localStorage.getItem("tyrum-gateway-ws");
+    if (stored) return stored;
+  } catch {}
   const override = import.meta.env.VITE_GATEWAY_WS_URL?.trim();
   if (override) return override;
 
@@ -66,6 +74,13 @@ const render = (): void => {
         core={manager.getCore()}
         mode="web"
         onReloadPage={() => window.location.reload()}
+        onReconfigureGateway={(httpUrl, wsUrl) => {
+          try {
+            localStorage.setItem("tyrum-gateway-http", httpUrl);
+            localStorage.setItem("tyrum-gateway-ws", wsUrl);
+          } catch {}
+          window.location.reload();
+        }}
       />
     </React.StrictMode>,
   );
