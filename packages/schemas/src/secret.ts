@@ -25,7 +25,10 @@ export type SecretStoreRequest = z.infer<typeof SecretStoreRequest>;
 
 export const SecretRotateRequest = z
   .object({
-    value: z.string().trim().min(1),
+    value: z
+      .string()
+      .min(1)
+      .refine((value) => value.trim().length > 0, { message: "value is required" }),
   })
   .strict();
 export type SecretRotateRequest = z.infer<typeof SecretRotateRequest>;

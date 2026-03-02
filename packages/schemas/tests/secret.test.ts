@@ -12,14 +12,14 @@ import {
 } from "../src/index.js";
 import { expectRejects } from "./test-helpers.js";
 
-describe("Secret contracts", () => {
-  const baseHandle = {
-    handle_id: "h-1",
-    provider: "env",
-    scope: "MY_API_KEY",
-    created_at: "2026-02-19T12:00:00Z",
-  } as const;
+const baseHandle = {
+  handle_id: "h-1",
+  provider: "env",
+  scope: "MY_API_KEY",
+  created_at: "2026-02-19T12:00:00Z",
+} as const;
 
+describe("SecretHandle", () => {
   it("parses secret handle", () => {
     const handle = SecretHandle.parse(baseHandle);
     expect(handle.provider).toBe("env");
@@ -34,7 +34,9 @@ describe("Secret contracts", () => {
   it("rejects secret handle with invalid provider", () => {
     expectRejects(SecretHandle, { ...baseHandle, provider: "unknown" });
   });
+});
 
+describe("SecretStoreRequest", () => {
   it("parses store request", () => {
     const req = SecretStoreRequest.parse({
       scope: "  MY_API_KEY  ",
@@ -51,10 +53,12 @@ describe("Secret contracts", () => {
   it("rejects store request with wrong provider type", () => {
     expectRejects(SecretStoreRequest, { scope: "MY_API_KEY", value: "secret", provider: 1 });
   });
+});
 
+describe("SecretRotateRequest/Response", () => {
   it("parses rotate request/response", () => {
     const req = SecretRotateRequest.parse({ value: "  new-secret  " });
-    expect(req.value).toBe("new-secret");
+    expect(req.value).toBe("  new-secret  ");
 
     const res = SecretRotateResponse.parse({
       revoked: true,
@@ -76,7 +80,9 @@ describe("Secret contracts", () => {
   it("rejects rotate response with wrong revoked type", () => {
     expectRejects(SecretRotateResponse, { revoked: "true", handle: baseHandle });
   });
+});
 
+describe("SecretResolveRequest/Response", () => {
   it("parses resolve request/response", () => {
     const req = SecretResolveRequest.parse({ handle_id: "h-1" });
     expect(req.handle_id).toBe("h-1");
@@ -92,7 +98,9 @@ describe("Secret contracts", () => {
   it("rejects resolve response with non-string value", () => {
     expectRejects(SecretResolveResponse, { value: 42 });
   });
+});
 
+describe("SecretListResponse", () => {
   it("parses list response", () => {
     const res = SecretListResponse.parse({
       handles: [
@@ -114,7 +122,9 @@ describe("Secret contracts", () => {
   it("rejects list response with malformed handle entries", () => {
     expectRejects(SecretListResponse, { handles: [{ handle_id: "h-1" }] });
   });
+});
 
+describe("SecretRevokeRequest/Response", () => {
   it("parses revoke request/response", () => {
     const req = SecretRevokeRequest.parse({ handle_id: "h-1" });
     expect(req.handle_id).toBe("h-1");
