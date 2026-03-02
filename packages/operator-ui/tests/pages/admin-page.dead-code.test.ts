@@ -21,6 +21,7 @@ describe("Admin page dead code", () => {
       "packages/operator-ui/src/components/admin-workboard/admin-workboard-ws-hub.tsx",
       "packages/operator-ui/src/components/admin-workboard/work-items-table.tsx",
       "packages/operator-ui/src/components/admin-workboard/work-scope-selector.tsx",
+      "packages/operator-ui/src/components/admin-workboard/ws-json-panel.tsx",
     ];
 
     for (const path of removed) {
