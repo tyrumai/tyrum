@@ -60,7 +60,6 @@ const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon 
   settings: { label: "Settings", icon: SlidersHorizontal },
   desktop: { label: "Desktop", icon: Monitor },
 };
-
 const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
   "dashboard",
   "memory",
