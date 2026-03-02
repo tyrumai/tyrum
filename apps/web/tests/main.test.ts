@@ -12,6 +12,7 @@ vi.mock("@tyrum/operator-core", () => ({
 
 vi.mock("@tyrum/operator-ui", () => ({
   OperatorUiApp: () => null,
+  OperatorUiHostProvider: ({ children }: { children: unknown }) => children ?? null,
   ThemeProvider: ({ children }: { children: unknown }) => children ?? null,
 }));
 

@@ -32,8 +32,17 @@ export type DesktopApi = {
     disconnect: () => Promise<{ status: string }>;
   };
   onStatusChange: (cb: (status: unknown) => void) => () => void;
+  onLog?: (cb: (entry: unknown) => void) => () => void;
   checkMacPermissions?: () => Promise<unknown>;
   requestMacPermission?: (permission: DesktopMacPermission) => Promise<unknown>;
+  updates?: {
+    getState: () => Promise<unknown>;
+    check: () => Promise<unknown>;
+    download: () => Promise<unknown>;
+    install: () => Promise<unknown>;
+    openReleaseFile: () => Promise<unknown>;
+  };
+  onUpdateStateChange?: (cb: (state: unknown) => void) => () => void;
 };
 
 export function getDesktopApi(): DesktopApi | null {

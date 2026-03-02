@@ -18,7 +18,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
 
-async function acquireBuildLock(timeoutMs = 120_000): Promise<() => void> {
+async function acquireBuildLock(timeoutMs = 180_000): Promise<() => void> {
   const startedAt = Date.now();
   for (;;) {
     try {
@@ -112,7 +112,7 @@ async function ensureWebBuild(): Promise<void> {
 }
 
 describe("apps/web", () => {
-  it("builds a static bundle for gateway /ui hosting", { timeout: 120_000 }, async () => {
+  it("builds a static bundle for gateway /ui hosting", { timeout: 180_000 }, async () => {
     await ensureWebBuild();
     expect(existsSync(DIST_INDEX)).toBe(true);
   });

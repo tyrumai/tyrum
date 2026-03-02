@@ -75,6 +75,14 @@ function handleDeepLink(rawUrl: string): void {
 
 setWindowsAppUserModelId(app);
 
+if (process.env["NODE_ENV"] === "test") {
+  const tyrumHome = process.env["TYRUM_HOME"];
+  if (tyrumHome) {
+    // Avoid cross-test single-instance lock collisions by isolating userData.
+    app.setPath?.("userData", join(tyrumHome, "electron-user-data"));
+  }
+}
+
 const didAcquireSingleInstanceLock = setupSingleInstance({
   app,
   getMainWindow: () => {

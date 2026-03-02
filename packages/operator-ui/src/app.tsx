@@ -1,14 +1,19 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useState, type ComponentType } from "react";
+import { useState, type ComponentType, type ReactNode } from "react";
 import {
+  Cable,
   Database,
+  Globe,
   LayoutGrid,
   Link2,
+  Lock,
   Monitor,
   Play,
+  SquareKanban,
   Shield,
   ShieldCheck,
   SlidersHorizontal,
+  Wrench,
 } from "lucide-react";
 import { AdminModeProvider } from "./admin-mode.js";
 import { ErrorBoundary } from "./components/error/error-boundary.js";
@@ -24,9 +29,16 @@ import { MemoryPage } from "./components/pages/memory-page.js";
 import { PairingPage } from "./components/pages/pairing-page.js";
 import { RunsPage } from "./components/pages/runs-page.js";
 import { SettingsPage } from "./components/pages/settings-page.js";
+import { WorkBoardPage } from "./components/pages/workboard-page.js";
+import { BrowserCapabilitiesPage } from "./components/pages/platform/browser-capabilities-page.js";
+import { PlatformConnectionPage } from "./components/pages/platform/connection-page.js";
+import { PlatformDebugPage } from "./components/pages/platform/debug-page.js";
+import { PlatformPermissionsPage } from "./components/pages/platform/permissions-page.js";
 import { ToastProvider } from "./components/toast/toast-provider.js";
 import { ThemeProvider, useThemeOptional } from "./hooks/use-theme.js";
 import { useKeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
+import { getDesktopApi } from "./desktop-api.js";
+import { OperatorUiHostProvider, useHostApiOptional, type HostKind } from "./host/host-api.js";
 import { useOperatorStore } from "./use-operator-store.js";
 
 export type OperatorUiMode = "web" | "desktop";
@@ -43,10 +55,15 @@ type OperatorUiRouteId =
   | "memory"
   | "approvals"
   | "runs"
+  | "workboard"
   | "pairing"
   | "admin"
   | "settings"
-  | "desktop";
+  | "desktop"
+  | "connection"
+  | "permissions"
+  | "debug"
+  | "browser";
 
 type NavIcon = ComponentType<{ className?: string }>;
 
@@ -55,30 +72,43 @@ const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon 
   memory: { label: "Memory", icon: Database },
   approvals: { label: "Approvals", icon: ShieldCheck },
   runs: { label: "Runs", icon: Play },
+  workboard: { label: "Work", icon: SquareKanban },
   pairing: { label: "Pairing", icon: Link2 },
   admin: { label: "Admin", icon: Shield },
   settings: { label: "Settings", icon: SlidersHorizontal },
   desktop: { label: "Desktop", icon: Monitor },
+  connection: { label: "Connection", icon: Cable },
+  permissions: { label: "Permissions", icon: Lock },
+  debug: { label: "Debug", icon: Wrench },
+  browser: { label: "Browser", icon: Globe },
 };
 const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
   "dashboard",
   "memory",
   "approvals",
   "runs",
+  "workboard",
   "pairing",
   "admin",
   "settings",
 ];
 
 const MOBILE_NAV_ORDER: OperatorUiRouteId[] = ["dashboard", "approvals", "runs", "settings"];
-const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["memory", "pairing", "admin"];
-const DESKTOP_NAV_ORDER: OperatorUiRouteId[] = ["desktop"];
+const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["memory", "workboard", "pairing", "admin"];
+const PLATFORM_DESKTOP_NAV_ORDER: OperatorUiRouteId[] = [
+  "desktop",
+  "connection",
+  "permissions",
+  "debug",
+];
+const PLATFORM_WEB_NAV_ORDER: OperatorUiRouteId[] = ["browser"];
 
 const KEYBOARD_NAV_ORDER: OperatorUiRouteId[] = [
   "dashboard",
   "memory",
   "approvals",
   "runs",
+  "workboard",
   "pairing",
   "settings",
 ];
@@ -95,9 +125,27 @@ export function OperatorUiApp({
 }: OperatorUiAppProps) {
   return (
     <ErrorBoundary onReloadPage={onReloadPage}>
-      <OperatorUiAppRoot core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />
+      <OperatorUiAppHostBoundary mode={mode}>
+        <OperatorUiAppRoot core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />
+      </OperatorUiAppHostBoundary>
     </ErrorBoundary>
   );
+}
+
+function OperatorUiAppHostBoundary({
+  mode,
+  children,
+}: {
+  mode: OperatorUiMode;
+  children: ReactNode;
+}) {
+  const existing = useHostApiOptional();
+  if (existing) return children;
+  const value =
+    mode === "desktop"
+      ? { kind: "desktop" as const, api: getDesktopApi() }
+      : { kind: "web" as const };
+  return <OperatorUiHostProvider value={value}>{children}</OperatorUiHostProvider>;
 }
 
 function OperatorUiAppRoot({
@@ -107,10 +155,13 @@ function OperatorUiAppRoot({
 }: Pick<OperatorUiAppProps, "core" | "mode" | "onReconfigureGateway">) {
   const [route, setRoute] = useState<OperatorUiRouteId>("dashboard");
   const connection = useOperatorStore(core.connectionStore);
-  const showShell =
+  const showOperatorRoutes =
     connection.status === "connected" ||
     (connection.status === "connecting" && connection.recovering);
+  const showShell = mode === "desktop" || showOperatorRoutes;
   const existingTheme = useThemeOptional();
+  const host = useHostApiOptional();
+  const hostKind: HostKind = host?.kind ?? (mode === "desktop" ? "desktop" : "web");
 
   const toNavItem = (id: OperatorUiRouteId) => ({
     id,
@@ -119,8 +170,11 @@ function OperatorUiAppRoot({
     testId: `nav-${id}`,
   });
 
-  const sidebarItems = SIDEBAR_NAV_ORDER.map(toNavItem);
-  const desktopItems = mode === "desktop" ? DESKTOP_NAV_ORDER.map(toNavItem) : [];
+  const platformOrder =
+    hostKind === "desktop" ? PLATFORM_DESKTOP_NAV_ORDER : PLATFORM_WEB_NAV_ORDER;
+  const platformItems = platformOrder.map(toNavItem);
+  const sidebarItems =
+    mode === "desktop" && !showOperatorRoutes ? [] : SIDEBAR_NAV_ORDER.map(toNavItem);
   const mobileItems = MOBILE_NAV_ORDER.map(toNavItem);
   const mobileOverflowItems = MOBILE_OVERFLOW_NAV_ORDER.map(toNavItem);
 
@@ -137,7 +191,7 @@ function OperatorUiAppRoot({
   };
 
   useKeyboardShortcut(
-    showShell
+    showOperatorRoutes
       ? KEYBOARD_NAV_ORDER.map((id, index) => ({
           key: String(index + 1),
           requireCmdOrCtrl: true,
@@ -148,6 +202,10 @@ function OperatorUiAppRoot({
       : [],
   );
 
+  const isPlatformRoute = platformOrder.includes(route);
+  const showConnectPage =
+    mode === "web" ? !showOperatorRoutes : !showOperatorRoutes && !isPlatformRoute;
+
   const app = (
     <ToastProvider>
       <AppShell
@@ -156,7 +214,8 @@ function OperatorUiAppRoot({
           showShell ? (
             <Sidebar
               items={sidebarItems}
-              secondaryItems={desktopItems}
+              secondaryItems={platformItems}
+              secondaryLabel="Platform"
               activeItemId={route}
               onNavigate={navigate}
               connectionStatus={connection.status}
@@ -175,7 +234,7 @@ function OperatorUiAppRoot({
         }
       >
         <AdminModeProvider core={core} mode={mode}>
-          {!showShell ? (
+          {showConnectPage ? (
             <div className="mx-auto mt-20 max-w-md w-full px-4">
               <ConnectPage core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />
             </div>
@@ -185,10 +244,15 @@ function OperatorUiAppRoot({
               {route === "memory" && <MemoryPage core={core} />}
               {route === "approvals" && <ApprovalsPage core={core} />}
               {route === "runs" && <RunsPage core={core} />}
+              {route === "workboard" && <WorkBoardPage core={core} />}
               {route === "pairing" && <PairingPage core={core} />}
               {route === "admin" && <AdminPage core={core} />}
               {route === "settings" && <SettingsPage core={core} mode={mode} />}
               {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
+              {route === "connection" && <PlatformConnectionPage core={core} />}
+              {route === "permissions" && <PlatformPermissionsPage />}
+              {route === "debug" && <PlatformDebugPage />}
+              {route === "browser" && <BrowserCapabilitiesPage />}
             </>
           )}
         </AdminModeProvider>

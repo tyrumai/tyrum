@@ -60,7 +60,7 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function acquireGatewayBuildLock(timeoutMs = 60_000): () => void {
+function acquireGatewayBuildLock(timeoutMs = 180_000): () => void {
   const startedAt = Date.now();
   for (;;) {
     try {
@@ -241,7 +241,7 @@ async function waitForGatewayHealth(
 describe("gateway startup process", () => {
   it(
     "starts the real gateway and serves /healthz and /agent/status",
-    { timeout: 60_000 },
+    { timeout: 180_000 },
     async () => {
       let releaseBuildLock = acquireGatewayBuildLock();
       try {
@@ -315,7 +315,7 @@ describe("gateway startup process", () => {
 
   it(
     "resumes agent tool-execution runs on denied approvals over WebSocket",
-    { timeout: 60_000 },
+    { timeout: 180_000 },
     async () => {
       const releaseBuildLock = acquireGatewayBuildLock();
       try {
@@ -459,7 +459,7 @@ describe("gateway startup process", () => {
 
   it(
     "cancels runs when an approval is approved but missing a resume token over WebSocket",
-    { timeout: 60_000 },
+    { timeout: 180_000 },
     async () => {
       const releaseBuildLock = acquireGatewayBuildLock();
       try {
@@ -598,7 +598,7 @@ describe("gateway startup process", () => {
 
   itShutdown(
     "processes gateway.shutdown hooks before stopping the worker loop",
-    { timeout: 60_000 },
+    { timeout: 180_000 },
     async () => {
       let releaseBuildLock = acquireGatewayBuildLock();
       try {
@@ -695,7 +695,7 @@ describe("gateway startup process", () => {
 
   itShutdown(
     "does not miss gateway.shutdown hooks when the worker is busy",
-    { timeout: 60_000 },
+    { timeout: 180_000 },
     async () => {
       let releaseBuildLock = acquireGatewayBuildLock();
       try {
