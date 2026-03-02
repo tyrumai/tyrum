@@ -16,12 +16,14 @@ export interface ApiResultCardProps extends React.HTMLAttributes<HTMLDivElement>
   heading?: React.ReactNode;
   value?: unknown;
   error?: unknown;
+  jsonViewerProps?: Omit<React.ComponentProps<typeof JsonViewer>, "value">;
 }
 
 export function ApiResultCard({
   heading = "Result",
   value,
   error,
+  jsonViewerProps,
   className,
   ...props
 }: ApiResultCardProps): React.ReactElement | null {
@@ -43,7 +45,7 @@ export function ApiResultCard({
       </CardHeader>
       <CardContent className="grid gap-3">
         {alert}
-        <JsonViewer value={jsonValue} />
+        <JsonViewer value={jsonValue} {...jsonViewerProps} />
       </CardContent>
     </Card>
   );
