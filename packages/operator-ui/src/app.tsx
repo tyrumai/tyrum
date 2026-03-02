@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useState, type ComponentType, type ReactNode } from "react";
+import { useState, type ComponentType } from "react";
 import {
   Database,
   KeyRound,
@@ -55,10 +55,7 @@ type NavIcon = ComponentType<{ className?: string }>;
 const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon }> = {
   connect: { label: "Connect", icon: KeyRound },
   dashboard: { label: "Dashboard", icon: LayoutGrid },
-  memory: {
-    label: "Memory",
-    icon: Database,
-  } /* NOTE: replacing with Database since the other icons aren't standard yet, will revisit if needed */,
+  memory: { label: "Memory", icon: Database },
   approvals: { label: "Approvals", icon: ShieldCheck },
   runs: { label: "Runs", icon: Play },
   pairing: { label: "Pairing", icon: Link2 },
@@ -68,6 +65,7 @@ const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon 
 };
 
 const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
+  "connect",
   "dashboard",
   "memory",
   "approvals",
@@ -78,7 +76,7 @@ const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
 ];
 
 const MOBILE_NAV_ORDER: OperatorUiRouteId[] = ["dashboard", "approvals", "runs", "settings"];
-const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["memory", "pairing", "admin"];
+const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["memory", "pairing", "admin", "connect"];
 const DESKTOP_NAV_ORDER: OperatorUiRouteId[] = ["desktop"];
 
 const KEYBOARD_NAV_ORDER: OperatorUiRouteId[] = [
@@ -92,14 +90,6 @@ const KEYBOARD_NAV_ORDER: OperatorUiRouteId[] = [
 
 function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {
   return Object.prototype.hasOwnProperty.call(NAV_ITEM_CONFIG, value);
-}
-
-function MaybeThemeProvider({ children }: { children: ReactNode }) {
-  const existing = useThemeOptional();
-  if (existing) {
-    return <>{children}</>;
-  }
-  return <ThemeProvider>{children}</ThemeProvider>;
 }
 
 export function OperatorUiApp({
@@ -120,9 +110,9 @@ function OperatorUiAppRoot({
   mode,
   onReconfigureGateway,
 }: Pick<OperatorUiAppProps, "core" | "mode" | "onReconfigureGateway">) {
-  const [route, setRoute] = useState<OperatorUiRouteId>("dashboard");
+  const [route, setRoute] = useState<OperatorUiRouteId>("connect");
   const connection = useOperatorStore(core.connectionStore);
-  const isConnected = connection.status === "connected";
+  const existingTheme = useThemeOptional();
 
   const resolveLabel = (id: OperatorUiRouteId): string => {
     if (mode === "web" && id === "connect") return "Login";
@@ -143,6 +133,13 @@ function OperatorUiAppRoot({
 
   const navigate = (id: string): void => {
     if (!isOperatorUiRouteId(id)) return;
+    const doc = document as Document & { startViewTransition?: (callback: () => void) => unknown };
+    if (typeof doc.startViewTransition === "function") {
+      doc.startViewTransition(() => {
+        setRoute(id);
+      });
+      return;
+    }
     setRoute(id);
   };
 
@@ -156,53 +153,43 @@ function OperatorUiAppRoot({
     })),
   );
 
-  return (
-    <MaybeThemeProvider>
-      <ToastProvider>
-        <AppShell
-          mode={mode}
-          sidebar={
-            isConnected ? (
-              <Sidebar
-                items={sidebarItems}
-                secondaryItems={desktopItems}
-                activeItemId={route}
-                onNavigate={navigate}
-                connectionStatus={connection.status}
-              />
-            ) : null
-          }
-          mobileNav={
-            isConnected ? (
-              <MobileNav
-                items={mobileItems}
-                overflowItems={mobileOverflowItems}
-                activeItemId={route}
-                onNavigate={navigate}
-              />
-            ) : null
-          }
-        >
-          <AdminModeProvider core={core} mode={mode}>
-            {!isConnected ? (
-              <div className="mx-auto mt-20 max-w-md w-full px-4">
-                <ConnectPage core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />
-              </div>
-            ) : (
-              <>
-                {route === "dashboard" && <DashboardPage core={core} onNavigate={navigate} />}
-                {route === "memory" && <MemoryPage core={core} />}
-                {route === "approvals" && <ApprovalsPage core={core} />}
-                {route === "runs" && <RunsPage core={core} />}
-                {route === "pairing" && <PairingPage core={core} />}
-                {route === "admin" && <AdminPage core={core} onNavigate={navigate} />}
-                {route === "settings" && <SettingsPage core={core} mode={mode} />}
-                {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
-              </>
-            )}
-          </AdminModeProvider>
-        </AppShell>
-      </ToastProvider>
-    </MaybeThemeProvider>
+  const app = (
+    <ToastProvider>
+      <AppShell
+        mode={mode}
+        sidebar={
+          <Sidebar
+            items={sidebarItems}
+            secondaryItems={desktopItems}
+            activeItemId={route}
+            onNavigate={navigate}
+            connectionStatus={connection.status}
+          />
+        }
+        mobileNav={
+          <MobileNav
+            items={mobileItems}
+            overflowItems={mobileOverflowItems}
+            activeItemId={route}
+            onNavigate={navigate}
+          />
+        }
+      >
+        <AdminModeProvider core={core} mode={mode}>
+          {route === "connect" && (
+            <ConnectPage core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />
+          )}
+          {route === "dashboard" && <DashboardPage core={core} onNavigate={navigate} />}
+          {route === "memory" && <MemoryPage core={core} />}
+          {route === "approvals" && <ApprovalsPage core={core} />}
+          {route === "runs" && <RunsPage core={core} />}
+          {route === "pairing" && <PairingPage core={core} />}
+          {route === "admin" && <AdminPage core={core} onNavigate={navigate} />}
+          {route === "settings" && <SettingsPage core={core} mode={mode} />}
+          {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
+        </AdminModeProvider>
+      </AppShell>
+    </ToastProvider>
   );
+  return existingTheme ? app : <ThemeProvider>{app}</ThemeProvider>;
 }

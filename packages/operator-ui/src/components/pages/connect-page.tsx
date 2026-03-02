@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import type { OperatorUiMode } from "../../app.js";
 import { Button } from "../ui/button.js";
-import { Card, CardContent, CardHeader } from "../ui/card.js";
+import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 import { Alert } from "../ui/alert.js";
 import { readGatewayError } from "../../utils/gateway-error.js";
@@ -135,20 +135,53 @@ export function ConnectPage({
 
           {loginError ? (
             <Alert variant="error" title="Login failed" description={loginError} />
-          ) : connection.transportError ? (
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
+            <span>Connection status:</span>
+            <span className="font-medium text-fg">{connection.status}</span>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {connection.transportError ? (
             <Alert
               variant="error"
-              title="Connection error"
+              title="Transport error"
               description={connection.transportError}
             />
-          ) : connection.status === "disconnected" && connection.lastDisconnect ? (
+          ) : null}
+          {connection.lastDisconnect ? (
             <Alert
               variant="error"
-              title="Disconnected"
+              title="Last disconnect"
               description={`${connection.lastDisconnect.code} ${connection.lastDisconnect.reason}`}
             />
           ) : null}
         </CardContent>
+        <CardFooter className="gap-2">
+          <Button
+            variant="secondary"
+            data-testid="connect-button"
+            onClick={() => {
+              core.connect();
+            }}
+          >
+            Connect
+          </Button>
+          <Button
+            variant="outline"
+            data-testid="disconnect-button"
+            onClick={() => {
+              core.disconnect();
+            }}
+          >
+            Disconnect
+          </Button>
+        </CardFooter>
       </Card>
     </div>
   );

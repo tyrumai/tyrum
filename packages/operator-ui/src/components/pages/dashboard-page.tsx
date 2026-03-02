@@ -149,6 +149,7 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
         <StatCard
           label="Connection Status"
           icon={Activity}
+          testId="dashboard-card-connection"
           value={
             <div className="flex items-center gap-2">
               <StatusDot variant={connectionVariant} pulse={connectionPulse} aria-hidden="true" />
@@ -161,22 +162,14 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
           label="Instance ID"
           icon={Hash}
           loading={status.loading.status}
-          value={
-            connection.status === "connected" && status.status?.instance_id
-              ? status.status.instance_id
-              : "-"
-          }
+          value={status.status?.instance_id ?? "-"}
         />
 
         <StatCard
           label="Tokens Used"
           icon={Wallet}
           loading={status.loading.usage}
-          value={
-            connection.status === "connected" && typeof tokensUsed === "number"
-              ? tokensUsedText
-              : "-"
-          }
+          value={typeof tokensUsed === "number" ? tokensUsedText : "-"}
         />
 
         <StatCard label="Active Runs" icon={Play} value={String(activeRunsCount)} />

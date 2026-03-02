@@ -173,7 +173,9 @@ describe("AdminPage (HTTP) secrets", () => {
     );
     expect(rotateButton).not.toBeNull();
 
-    const rotateCard = rotateButton?.closest<HTMLDivElement>("div.rounded-lg");
+    const rotateCard = container.querySelector<HTMLDivElement>(
+      `[data-testid="secrets-rotate-card"]`,
+    );
     expect(rotateCard).not.toBeNull();
 
     const labels = Array.from(rotateCard?.querySelectorAll<HTMLLabelElement>("label") ?? []);

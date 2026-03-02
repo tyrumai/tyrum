@@ -60,12 +60,9 @@ describe("DashboardPage", () => {
     const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
 
     const getConnectionDot = (): HTMLSpanElement => {
-      const label = Array.from(container.querySelectorAll("span")).find(
-        (span) => span.textContent === "Connection Status",
+      const card = container.querySelector<HTMLDivElement>(
+        '[data-testid="dashboard-card-connection"]',
       );
-      expect(label).toBeDefined();
-
-      const card = label?.closest<HTMLDivElement>("div.rounded-lg");
       expect(card).not.toBeNull();
 
       const dot = card?.querySelector<HTMLSpanElement>("span.rounded-full");
