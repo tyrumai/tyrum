@@ -46,4 +46,42 @@ describe("useApiAction", () => {
     });
     container.remove();
   });
+
+  it("allows runAndThrow() actions to resolve undefined", async () => {
+    const { container, root } = createTestRoot();
+
+    let api: ReturnType<typeof useApiAction<void>> | null = null;
+    const Probe = () => {
+      api = useApiAction<void>();
+      return null;
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe, null));
+      await Promise.resolve();
+    });
+
+    expect(api).not.toBeNull();
+
+    const action = vi.fn(async () => undefined);
+
+    let error: unknown = null;
+    let value: void | null = null;
+    await act(async () => {
+      try {
+        value = await api!.runAndThrow(action);
+      } catch (err) {
+        error = err;
+      }
+    });
+
+    expect(error).toBeNull();
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(value).toBeUndefined();
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
 });

@@ -58,8 +58,7 @@ export function useApiAction<T>() {
   const runAndThrow = React.useCallback(
     async (action: () => Promise<T>): Promise<T> => {
       const value = await runInternal(action, { throwOnError: true, throwOnInFlight: true });
-      if (typeof value === "undefined") throw new Error("Unreachable");
-      return value;
+      return value as T;
     },
     [runInternal],
   );
