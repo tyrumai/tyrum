@@ -23,6 +23,6 @@
     "@tyrum/client": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^25.3.2"
+    "@types/node": "^25.3.3"
   }
 }
