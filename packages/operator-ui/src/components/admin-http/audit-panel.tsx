@@ -10,6 +10,7 @@ import { Label } from "../ui/label.js";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { optionalString, useApiAction } from "./admin-http-shared.js";
+import { useAdminMutationAccess } from "../pages/admin-http-shared.js";
 
 const DEFAULT_RESULT_VIEWER_PROPS = {
   defaultExpandedDepth: 1,
@@ -213,7 +214,15 @@ function AuditForgetConfirmDialog({
   );
 }
 
-function AuditForgetTab({ core }: { core: OperatorCore }) {
+function AuditForgetTab({
+  core,
+  canMutate,
+  requestEnter,
+}: {
+  core: OperatorCore;
+  canMutate: boolean;
+  requestEnter: () => void;
+}) {
   const auditApi = core.http.audit;
 
   const [entityType, setEntityType] = React.useState("");
@@ -251,13 +260,23 @@ function AuditForgetTab({ core }: { core: OperatorCore }) {
       <div className="flex flex-wrap gap-2">
         <Button
           variant="danger"
-          disabled={!resolvedEntityType || !resolvedEntityId}
+          disabled={!canMutate || !resolvedEntityType || !resolvedEntityId}
           onClick={() => {
             setDialogOpen(true);
           }}
         >
           Forget…
         </Button>
+        {!canMutate ? (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              requestEnter();
+            }}
+          >
+            Enter Admin Mode
+          </Button>
+        ) : null}
         <Button
           variant="secondary"
           disabled={action.isLoading}
@@ -281,6 +300,10 @@ function AuditForgetTab({ core }: { core: OperatorCore }) {
         onOpenChange={setDialogOpen}
         isLoading={action.isLoading}
         onConfirm={async () => {
+          if (!canMutate) {
+            requestEnter();
+            throw new Error("Enter Admin Mode to forget audit receipts.");
+          }
           if (!resolvedEntityType || !resolvedEntityId) return;
           await action.run(
             () =>
@@ -302,6 +325,7 @@ function AuditForgetTab({ core }: { core: OperatorCore }) {
 }
 
 export function AuditPanel({ core }: { core: OperatorCore }) {
+  const { canMutate, requestEnter } = useAdminMutationAccess(core);
   return (
     <Card data-testid="admin-http-audit-panel">
       <CardHeader>
@@ -324,7 +348,7 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
           </TabsContent>
 
           <TabsContent value="forget" forceMount className="grid gap-3">
-            <AuditForgetTab core={core} />
+            <AuditForgetTab core={core} canMutate={canMutate} requestEnter={requestEnter} />
           </TabsContent>
         </Tabs>
       </CardContent>

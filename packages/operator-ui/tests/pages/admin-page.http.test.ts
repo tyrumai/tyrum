@@ -41,6 +41,7 @@ function createTestCore(): {
   core: OperatorCore;
   routingConfigUpdate: ReturnType<typeof vi.fn>;
   secretsRotate: ReturnType<typeof vi.fn>;
+  policyCreateOverride: ReturnType<typeof vi.fn>;
 } {
   const adminModeStore = createAdminModeStore({
     tickIntervalMs: 0,
@@ -53,11 +54,29 @@ function createTestCore(): {
 
   const routingConfigUpdate = vi.fn(async () => ({ revision: 1, config: { v: 1 } }) as unknown);
   const secretsRotate = vi.fn(async () => ({ revoked: true, handle: {} }) as unknown);
+  const policyCreateOverride = vi.fn(async () => ({ status: "ok" }) as unknown);
 
   const core = {
     httpBaseUrl: "http://example.test",
     adminModeStore,
     http: {
+      policy: {
+        getBundle: vi.fn(async () => ({ status: "ok" }) as unknown),
+        listOverrides: vi.fn(async () => ({ status: "ok", overrides: [] }) as unknown),
+        createOverride: policyCreateOverride,
+        revokeOverride: vi.fn(async () => ({ status: "ok" }) as unknown),
+      },
+      authProfiles: {
+        list: vi.fn(async () => ({ status: "ok", profiles: [] }) as unknown),
+        create: vi.fn(async () => ({ status: "ok" }) as unknown),
+        update: vi.fn(async () => ({ status: "ok" }) as unknown),
+        disable: vi.fn(async () => ({ status: "ok" }) as unknown),
+        enable: vi.fn(async () => ({ status: "ok" }) as unknown),
+      },
+      authPins: {
+        list: vi.fn(async () => ({ status: "ok", pins: [] }) as unknown),
+        set: vi.fn(async () => ({ status: "ok" }) as unknown),
+      },
       routingConfig: {
         get: vi.fn(async () => ({ revision: 0, config: { v: 1 } }) as unknown),
         update: routingConfigUpdate,
@@ -72,7 +91,7 @@ function createTestCore(): {
     },
   } as unknown as OperatorCore;
 
-  return { core, routingConfigUpdate, secretsRotate };
+  return { core, routingConfigUpdate, secretsRotate, policyCreateOverride };
 }
 
 describe("AdminPage (HTTP)", () => {
@@ -325,38 +344,7 @@ describe("AdminPage (HTTP) policy + auth", () => {
   });
 
   it("requires confirmation before creating policy overrides", async () => {
-    const { core } = createTestCore();
-
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url =
-        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-
-      if (url !== "http://example.test/policy/overrides" || init?.method !== "POST") {
-        throw new Error(`Unexpected fetch call: ${init?.method ?? "GET"} ${url}`);
-      }
-
-      const headers = init?.headers as Headers | undefined;
-      expect(headers?.get("authorization")).toBe("Bearer test-elevated-token");
-
-      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
-      expect(body).toEqual({ agent_id: "agent-1", tool_id: "tool-1", pattern: ".*" });
-
-      return new Response(
-        JSON.stringify({
-          override: {
-            policy_override_id: "00000000-0000-0000-0000-000000000000",
-            status: "active",
-            created_at: new Date().toISOString(),
-            agent_id: "agent-1",
-            tool_id: "tool-1",
-            pattern: ".*",
-          },
-        }),
-        { status: 201, headers: { "content-type": "application/json" } },
-      );
-    });
-
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const { core, policyCreateOverride } = createTestCore();
 
     const { container, root } = renderIntoDocument(
       React.createElement(AdminModeProvider, { core, mode: "web" }, [
@@ -396,7 +384,7 @@ describe("AdminPage (HTTP) policy + auth", () => {
       createButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expect(policyCreateOverride).toHaveBeenCalledTimes(0);
 
     const confirmButton = document.body.querySelector<HTMLButtonElement>(
       "[data-testid='confirm-danger-confirm']",
@@ -418,7 +406,12 @@ describe("AdminPage (HTTP) policy + auth", () => {
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(policyCreateOverride).toHaveBeenCalledTimes(1);
+    expect(policyCreateOverride).toHaveBeenCalledWith({
+      agent_id: "agent-1",
+      tool_id: "tool-1",
+      pattern: ".*",
+    });
 
     cleanupTestRoot({ container, root });
   });

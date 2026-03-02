@@ -1,18 +1,13 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from "vitest";
-import React, { act } from "react";
+import React from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import { AdminModeProvider } from "../../src/admin-mode.js";
 import { AdminPage } from "../../src/components/pages/admin-page.js";
 import { SubagentsPanels } from "../../src/components/admin-ws/subagents-panels.js";
-import {
-  cleanupTestRoot,
-  clickRadix as click,
-  renderIntoDocument,
-  setNativeValue,
-} from "../test-utils.js";
+import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 function createAdminModeStoreActive() {
   const { store } = createStore({
@@ -32,12 +27,6 @@ function createAdminModeStoreActive() {
 }
 
 type WsMock = ReturnType<typeof createWsMock>;
-type SubagentWsMethod =
-  | "subagentSpawn"
-  | "subagentList"
-  | "subagentGet"
-  | "subagentSend"
-  | "subagentClose";
 
 function createWsMock() {
   return {
@@ -49,39 +38,8 @@ function createWsMock() {
     subagentGet: vi.fn(async () => ({})),
     subagentSend: vi.fn(async () => ({})),
     subagentClose: vi.fn(async () => ({})),
+    commandExecute: vi.fn(async () => ({ output: "ok" })),
   };
-}
-
-function getByTestId<T extends Element>(container: HTMLElement, testId: string): T {
-  const element = container.querySelector<T>(`[data-testid="${testId}"]`);
-  expect(element).not.toBeNull();
-  return element as T;
-}
-
-async function openWsTab(container: HTMLElement): Promise<void> {
-  const wsTab = getByTestId<HTMLButtonElement>(container, "admin-tab-ws");
-  await act(async () => {
-    click(wsTab);
-  });
-}
-
-async function writePayload(
-  container: HTMLElement,
-  testId: string,
-  payload: unknown,
-): Promise<void> {
-  const textarea = getByTestId<HTMLTextAreaElement>(container, testId);
-  await act(async () => {
-    setNativeValue(textarea, JSON.stringify(payload, null, 2));
-  });
-}
-
-async function submit(container: HTMLElement, testId: string): Promise<void> {
-  const button = getByTestId<HTMLButtonElement>(container, testId);
-  await act(async () => {
-    click(button);
-  });
-  await act(async () => {});
 }
 
 function createCore(ws: WsMock): OperatorCore {
@@ -94,10 +52,7 @@ function createCore(ws: WsMock): OperatorCore {
 }
 
 describe("AdminPage (WS Subagents)", () => {
-  it("wires WebSocket requests for subagent operations", async () => {
-    const scope = { tenant_id: "tenant-1", agent_id: "agent-1", workspace_id: "default" } as const;
-    const subagentId = "123e4567-e89b-12d3-a456-426614174222";
-
+  it("does not render subagent operations in the Admin page", () => {
     const ws = createWsMock();
     const core = createCore(ws);
 
@@ -109,54 +64,17 @@ describe("AdminPage (WS Subagents)", () => {
       ),
     );
 
-    await openWsTab(testRoot.container);
-    expect(testRoot.container.querySelector('[data-testid="admin-ws-subagents"]')).not.toBeNull();
-
-    const cases = [
-      {
-        payloadTestId: "admin-ws-subagent-spawn-payload",
-        submitTestId: "admin-ws-subagent-spawn-submit",
-        method: "subagentSpawn",
-        payload: { ...scope, execution_profile: "default" },
-      },
-      {
-        payloadTestId: "admin-ws-subagent-list-payload",
-        submitTestId: "admin-ws-subagent-list-submit",
-        method: "subagentList",
-        payload: { ...scope, statuses: ["running"], limit: 20 },
-      },
-      {
-        payloadTestId: "admin-ws-subagent-get-payload",
-        submitTestId: "admin-ws-subagent-get-submit",
-        method: "subagentGet",
-        payload: { ...scope, subagent_id: subagentId },
-      },
-      {
-        payloadTestId: "admin-ws-subagent-send-payload",
-        submitTestId: "admin-ws-subagent-send-submit",
-        method: "subagentSend",
-        payload: { ...scope, subagent_id: subagentId, content: "Hello" },
-      },
-      {
-        payloadTestId: "admin-ws-subagent-close-payload",
-        submitTestId: "admin-ws-subagent-close-submit",
-        method: "subagentClose",
-        payload: { ...scope, subagent_id: subagentId, reason: "done" },
-      },
-    ] as const satisfies ReadonlyArray<{
-      method: SubagentWsMethod;
-      payloadTestId: string;
-      submitTestId: string;
-      payload: unknown;
-    }>;
-
-    for (const c of cases) {
-      await writePayload(testRoot.container, c.payloadTestId, c.payload);
-      await submit(testRoot.container, c.submitTestId);
-      expect(ws[c.method]).toHaveBeenCalledWith(c.payload as never);
+    try {
+      expect(testRoot.container.querySelector('[data-testid="admin-ws-subagents"]')).toBeNull();
+      expect(
+        testRoot.container.querySelector('[data-testid="admin-ws-subagent-spawn-payload"]'),
+      ).toBeNull();
+      expect(
+        testRoot.container.querySelector('[data-testid="admin-ws-tab-commands"]'),
+      ).not.toBeNull();
+    } finally {
+      cleanupTestRoot(testRoot);
     }
-
-    cleanupTestRoot(testRoot);
   });
 });
 

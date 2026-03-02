@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 
 import type { OperatorCore } from "@tyrum/operator-core";
+import { createAdminModeStore } from "../../operator-core/src/index.js";
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
+import { AdminModeProvider } from "../src/admin-mode.js";
 import { AdminHttpPanels } from "../src/components/admin-http/admin-http-panels.js";
 import { cleanupTestRoot, renderIntoDocument } from "./test-utils.js";
 
@@ -19,8 +21,18 @@ function setInputValue(input: HTMLInputElement, value: string): void {
 }
 
 function createStubCore(partialHttp: Partial<OperatorCore["http"]>): OperatorCore {
+  const adminModeStore = createAdminModeStore({
+    tickIntervalMs: 0,
+    now: () => Date.parse("2026-03-02T00:00:00.000Z"),
+  });
+  adminModeStore.enter({
+    elevatedToken: "elevated-test-token",
+    expiresAt: "2026-03-02T00:10:00.000Z",
+  });
+
   return {
     httpBaseUrl: "http://example.test",
+    adminModeStore,
     http: {
       audit: { exportReceiptBundle: vi.fn(), verify: vi.fn(), forget: vi.fn() },
       context: { get: vi.fn(), list: vi.fn(), detail: vi.fn() },
@@ -29,6 +41,16 @@ function createStubCore(partialHttp: Partial<OperatorCore["http"]>): OperatorCor
       ...partialHttp,
     },
   } as unknown as OperatorCore;
+}
+
+function renderPanels(core: OperatorCore) {
+  return renderIntoDocument(
+    React.createElement(
+      AdminModeProvider,
+      { core, mode: "web" },
+      React.createElement(AdminHttpPanels, { core }),
+    ),
+  );
 }
 
 function expectElement<T extends Element>(el: T | null): T {
@@ -49,7 +71,7 @@ it("sanitizes redirect URLs in the Artifacts download flow", async () => {
     artifacts: { getMetadata: vi.fn(), getBytes },
   });
 
-  const testRoot = renderIntoDocument(React.createElement(AdminHttpPanels, { core }));
+  const testRoot = renderPanels(core);
   try {
     const artifactsPanel = expectElement(
       testRoot.container.querySelector<HTMLElement>("[data-testid='admin-http-artifacts-panel']"),
@@ -92,7 +114,7 @@ it("hides the bytes result card while artifact bytes are loading", async () => {
     artifacts: { getMetadata: vi.fn(), getBytes },
   });
 
-  const testRoot = renderIntoDocument(React.createElement(AdminHttpPanels, { core }));
+  const testRoot = renderPanels(core);
   try {
     const artifactsPanel = expectElement(
       testRoot.container.querySelector<HTMLElement>("[data-testid='admin-http-artifacts-panel']"),
@@ -144,7 +166,7 @@ it("trims Audit inputs before calling HTTP APIs", async () => {
     audit: { exportReceiptBundle, verify: vi.fn(), forget },
   });
 
-  const testRoot = renderIntoDocument(React.createElement(AdminHttpPanels, { core }));
+  const testRoot = renderPanels(core);
   try {
     const auditPanel = expectElement(
       testRoot.container.querySelector<HTMLElement>("[data-testid='admin-http-audit-panel']"),
@@ -208,7 +230,7 @@ it("fetches /healthz unauthenticated from the Health panel", async () => {
   globalThis.fetch = fetchSpy as unknown as typeof fetch;
 
   const core = createStubCore({});
-  const testRoot = renderIntoDocument(React.createElement(AdminHttpPanels, { core }));
+  const testRoot = renderPanels(core);
   try {
     const fetchButton = expectElement(
       testRoot.container.querySelector<HTMLButtonElement>(

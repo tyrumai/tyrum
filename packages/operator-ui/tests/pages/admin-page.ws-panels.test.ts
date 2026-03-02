@@ -2,287 +2,203 @@
 
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createAdminModeStore } from "../../../operator-core/src/index.js";
 import { AdminModeProvider } from "../../src/admin-mode.js";
 import { AdminPage } from "../../src/components/pages/admin-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
-function setReactTextValue(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+function setReactTextValue(el: HTMLInputElement, value: string): void {
   const proto = Object.getPrototypeOf(el);
   const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
   descriptor?.set?.call(el, value);
   el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+async function switchAdminTab(container: HTMLElement, testId: string): Promise<void> {
+  const tab = container.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
+  expect(tab).not.toBeNull();
+  await act(async () => {
+    tab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    await Promise.resolve();
+  });
+}
+
+function createCore(activeAdminMode: boolean): {
+  core: OperatorCore;
+  commandExecute: ReturnType<typeof vi.fn>;
+} {
+  const nowMs = Date.parse("2026-03-01T00:00:00.000Z");
+  const adminModeStore = createAdminModeStore({ tickIntervalMs: 0, now: () => nowMs });
+  if (activeAdminMode) {
+    adminModeStore.enter({
+      elevatedToken: "test-elevated-token",
+      expiresAt: "2026-03-01T00:10:00.000Z",
+    });
+  }
+
+  const commandExecute = vi.fn(async (command: string) => ({ output: `ok:${command}` }));
+
+  const core = {
+    httpBaseUrl: "http://example.test",
+    adminModeStore,
+    ws: {
+      on: vi.fn(),
+      off: vi.fn(),
+      commandExecute,
+    },
+    http: {
+      policy: {
+        getBundle: vi.fn(async () => ({ status: "ok" })),
+        listOverrides: vi.fn(async () => ({ status: "ok", overrides: [] })),
+        createOverride: vi.fn(async () => ({ status: "ok" })),
+        revokeOverride: vi.fn(async () => ({ status: "ok" })),
+      },
+      authProfiles: {
+        list: vi.fn(async () => ({ status: "ok", profiles: [] })),
+        create: vi.fn(async () => ({ status: "ok" })),
+        update: vi.fn(async () => ({ status: "ok" })),
+        disable: vi.fn(async () => ({ status: "ok" })),
+        enable: vi.fn(async () => ({ status: "ok" })),
+      },
+      authPins: {
+        list: vi.fn(async () => ({ status: "ok", pins: [] })),
+        set: vi.fn(async () => ({ status: "ok" })),
+      },
+      audit: {
+        exportReceiptBundle: vi.fn(async () => ({ status: "ok" })),
+        verify: vi.fn(async () => ({ status: "ok" })),
+        forget: vi.fn(async () => ({ status: "ok" })),
+      },
+      routingConfig: {
+        get: vi.fn(async () => ({ revision: 0, config: {} })),
+        update: vi.fn(async () => ({ revision: 1, config: {} })),
+        revert: vi.fn(async () => ({ revision: 0, config: {} })),
+      },
+      secrets: {
+        list: vi.fn(async () => ({ handles: [] })),
+        store: vi.fn(async () => ({ handle: {} })),
+        rotate: vi.fn(async () => ({ revoked: true })),
+        revoke: vi.fn(async () => ({ revoked: true })),
+      },
+      plugins: {
+        list: vi.fn(async () => ({ status: "ok", plugins: [] })),
+        get: vi.fn(async () => ({ status: "ok", plugin: {} })),
+      },
+      deviceTokens: {
+        issue: vi.fn(async () => ({ status: "ok" })),
+        revoke: vi.fn(async () => ({ status: "ok" })),
+      },
+      models: {
+        refresh: vi.fn(async () => ({ status: "ok" })),
+      },
+    },
+  } as unknown as OperatorCore;
+
+  return { core, commandExecute };
+}
+
 describe("AdminPage WebSocket panels", () => {
-  it("keeps WS payload typing consistent across panels", () => {
-    const source = readFileSync(
-      join(process.cwd(), "packages/operator-ui/src/components/admin/admin-ws-panels.tsx"),
-      "utf8",
+  it("renders command controls and omits removed WS diagnostics controls", async () => {
+    const { core } = createCore(true);
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        AdminModeProvider,
+        { core, mode: "web" },
+        React.createElement(AdminPage, { core }),
+      ),
     );
 
-    expect(source).toMatch(
-      /type PresenceBeaconPayload = Parameters<OperatorCore\["ws"\]\["presenceBeacon"\]>\[0\];/,
-    );
-    expect(source).toMatch(
-      /core\.ws\.presenceBeacon\(\s*payload as unknown as PresenceBeaconPayload\s*\)/,
-    );
+    try {
+      await switchAdminTab(testRoot.container, "admin-ws-tab-commands");
+
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-ws-command-panel']"),
+      ).not.toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-ws-ping-run']")).toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-ws-presence-beacon-send']"),
+      ).toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-ws-capability-ready-send']"),
+      ).toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-ws-attempt-evidence-send']"),
+      ).toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-ws-tab-sessions']")).toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-ws-tab-workflows']")).toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-ws-tab-workboard']")).toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-ws-subagents']")).toBeNull();
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
   });
 
-  it("uses shared parseJsonInput utility for JSON parsing", () => {
-    const source = readFileSync(
-      join(process.cwd(), "packages/operator-ui/src/components/admin/admin-ws-panels.tsx"),
-      "utf8",
+  it("runs command.execute with trimmed command text in Admin Mode", async () => {
+    const { core, commandExecute } = createCore(true);
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        AdminModeProvider,
+        { core, mode: "web" },
+        React.createElement(AdminPage, { core }),
+      ),
     );
 
-    expect(source).toContain('import { parseJsonInput } from "../../utils/parse-json-input.js";');
-    expect(source).not.toMatch(/function parseJsonPayload/);
-  });
+    try {
+      await switchAdminTab(testRoot.container, "admin-ws-tab-commands");
 
-  it("does not wrap WS panels with a redundant heading", () => {
-    const source = readFileSync(
-      join(process.cwd(), "packages/operator-ui/src/components/pages/admin-page.tsx"),
-      "utf8",
-    );
-
-    expect(source).not.toMatch(
-      /<div className="text-sm font-medium text-fg">Commands &amp; diagnostics<\/div>/,
-    );
-  });
-
-  it("shares async request state logic across admin panels", () => {
-    const adminPageSource = readFileSync(
-      join(process.cwd(), "packages/operator-ui/src/components/pages/admin-page.tsx"),
-      "utf8",
-    );
-    expect(adminPageSource).toContain('from "../../hooks/use-api-call-state.js"');
-    expect(adminPageSource).not.toMatch(/function useApiCallState/);
-
-    const wsPanelsSource = readFileSync(
-      join(process.cwd(), "packages/operator-ui/src/components/admin/admin-ws-panels.tsx"),
-      "utf8",
-    );
-    expect(wsPanelsSource).toContain('from "../../hooks/use-api-call-state.js"');
-    expect(wsPanelsSource).not.toMatch(/function useAsyncResult/);
-  });
-
-  it("prevents concurrent WS actions when double-clicking", async () => {
-    let resolvePing: (() => void) | undefined;
-    const pingPromise = new Promise<void>((resolve) => {
-      resolvePing = resolve;
-    });
-
-    const ws = {
-      on: vi.fn(),
-      off: vi.fn(),
-      ping: vi.fn(async () => pingPromise),
-    };
-
-    const nowMs = Date.parse("2026-01-01T00:00:00.000Z");
-    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0, now: () => nowMs });
-    adminModeStore.enter({
-      elevatedToken: "token",
-      expiresAt: "2026-01-01T00:10:00.000Z",
-    });
-
-    const core = {
-      ws,
-      adminModeStore,
-      httpBaseUrl: "http://example.test",
-    } as unknown as OperatorCore;
-
-    const { container, root } = renderIntoDocument(
-      React.createElement(AdminModeProvider, {
-        core,
-        mode: "web",
-        children: React.createElement(AdminPage, { core }),
-      }),
-    );
-
-    const wsTab = container.querySelector<HTMLButtonElement>(`[data-testid="admin-tab-ws"]`);
-    expect(wsTab).not.toBeNull();
-    act(() => {
-      wsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-    });
-
-    const commandsTab = container.querySelector<HTMLButtonElement>(
-      `[data-testid="admin-ws-tab-commands"]`,
-    );
-    expect(commandsTab).not.toBeNull();
-    act(() => {
-      commandsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-    });
-
-    const pingButton = container.querySelector<HTMLButtonElement>(
-      `[data-testid="admin-ws-ping-run"]`,
-    );
-    expect(pingButton).not.toBeNull();
-    act(() => {
-      pingButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      pingButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(ws.ping).toHaveBeenCalledTimes(1);
-
-    resolvePing?.();
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    cleanupTestRoot({ container, root });
-  });
-
-  it("renders WS panels and wires requests", async () => {
-    const ws = {
-      on: vi.fn(),
-      off: vi.fn(),
-      commandExecute: vi.fn(async (command: string) => ({ output: `ok:${command}` })),
-      ping: vi.fn(async () => {}),
-      presenceBeacon: vi.fn(async (payload: unknown) => ({
-        entry: {
-          instance_id: "client-1",
-          role: "client",
-          last_seen_at: "2026-01-01T00:00:00.000Z",
-          metadata: payload,
-        },
-      })),
-      capabilityReady: vi.fn(async (_payload: unknown) => {}),
-      attemptEvidence: vi.fn(async (_payload: unknown) => {}),
-    };
-
-    const nowMs = Date.parse("2026-01-01T00:00:00.000Z");
-    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0, now: () => nowMs });
-    adminModeStore.enter({
-      elevatedToken: "token",
-      expiresAt: "2026-01-01T00:10:00.000Z",
-    });
-
-    const core = {
-      ws,
-      adminModeStore,
-      httpBaseUrl: "http://example.test",
-    } as unknown as OperatorCore;
-
-    const { container, root } = renderIntoDocument(
-      React.createElement(AdminModeProvider, {
-        core,
-        mode: "web",
-        children: React.createElement(AdminPage, { core }),
-      }),
-    );
-
-    const wsTab = container.querySelector<HTMLButtonElement>(`[data-testid="admin-tab-ws"]`);
-    expect(wsTab).not.toBeNull();
-    act(() => {
-      wsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-    });
-
-    const commandsTab = container.querySelector<HTMLButtonElement>(
-      `[data-testid="admin-ws-tab-commands"]`,
-    );
-    expect(commandsTab).not.toBeNull();
-    act(() => {
-      commandsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-    });
-
-    const commandInput = container.querySelector<HTMLInputElement>(
-      `[data-testid="admin-ws-command-input"]`,
-    );
-    expect(commandInput).not.toBeNull();
-    act(() => {
-      setReactTextValue(commandInput!, "  /help  ");
-    });
-
-    const commandButton = container.querySelector<HTMLButtonElement>(
-      `[data-testid="admin-ws-command-run"]`,
-    );
-    expect(commandButton).not.toBeNull();
-    await act(async () => {
-      commandButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    expect(ws.commandExecute).toHaveBeenCalledWith("/help");
-
-    const pingButton = container.querySelector<HTMLButtonElement>(
-      `[data-testid="admin-ws-ping-run"]`,
-    );
-    expect(pingButton).not.toBeNull();
-    await act(async () => {
-      pingButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    expect(ws.ping).toHaveBeenCalledTimes(1);
-
-    const presencePayload = container.querySelector<HTMLTextAreaElement>(
-      `[data-testid="admin-ws-presence-beacon-payload"]`,
-    );
-    expect(presencePayload).not.toBeNull();
-    act(() => {
-      setReactTextValue(presencePayload!, JSON.stringify({ mode: "ui" }));
-    });
-
-    const presenceButton = container.querySelector<HTMLButtonElement>(
-      `[data-testid="admin-ws-presence-beacon-send"]`,
-    );
-    expect(presenceButton).not.toBeNull();
-    await act(async () => {
-      presenceButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    expect(ws.presenceBeacon).toHaveBeenCalledWith({ mode: "ui" });
-
-    const capabilityPayload = container.querySelector<HTMLTextAreaElement>(
-      `[data-testid="admin-ws-capability-ready-payload"]`,
-    );
-    expect(capabilityPayload).not.toBeNull();
-    act(() => {
-      setReactTextValue(capabilityPayload!, JSON.stringify({ capabilities: [] }));
-    });
-
-    const capabilityButton = container.querySelector<HTMLButtonElement>(
-      `[data-testid="admin-ws-capability-ready-send"]`,
-    );
-    expect(capabilityButton).not.toBeNull();
-    await act(async () => {
-      capabilityButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    expect(ws.capabilityReady).toHaveBeenCalledWith({ capabilities: [] });
-
-    const attemptPayload = container.querySelector<HTMLTextAreaElement>(
-      `[data-testid="admin-ws-attempt-evidence-payload"]`,
-    );
-    expect(attemptPayload).not.toBeNull();
-    act(() => {
-      setReactTextValue(
-        attemptPayload!,
-        JSON.stringify({
-          run_id: "run-1",
-          step_id: "step-1",
-          attempt_id: "attempt-1",
-          evidence: { ok: true },
-        }),
+      const commandInput = testRoot.container.querySelector<HTMLInputElement>(
+        "[data-testid='admin-ws-command-input']",
       );
-    });
+      expect(commandInput).not.toBeNull();
 
-    const attemptButton = container.querySelector<HTMLButtonElement>(
-      `[data-testid="admin-ws-attempt-evidence-send"]`,
+      act(() => {
+        setReactTextValue(commandInput!, "  /help  ");
+      });
+
+      const commandButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-ws-command-run']",
+      );
+      expect(commandButton).not.toBeNull();
+
+      await act(async () => {
+        commandButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      expect(commandExecute).toHaveBeenCalledTimes(1);
+      expect(commandExecute).toHaveBeenCalledWith("/help");
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("disables command.execute when Admin Mode is inactive", async () => {
+    const { core } = createCore(false);
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        AdminModeProvider,
+        { core, mode: "web" },
+        React.createElement(AdminPage, { core }),
+      ),
     );
-    expect(attemptButton).not.toBeNull();
-    await act(async () => {
-      attemptButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    expect(ws.attemptEvidence).toHaveBeenCalledWith({
-      run_id: "run-1",
-      step_id: "step-1",
-      attempt_id: "attempt-1",
-      evidence: { ok: true },
-    });
 
-    cleanupTestRoot({ container, root });
+    try {
+      await switchAdminTab(testRoot.container, "admin-ws-tab-commands");
+
+      const commandButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-ws-command-run']",
+      );
+      expect(commandButton).not.toBeNull();
+      expect(commandButton?.disabled).toBe(true);
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-read-only-notice']"),
+      ).not.toBeNull();
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
   });
 });

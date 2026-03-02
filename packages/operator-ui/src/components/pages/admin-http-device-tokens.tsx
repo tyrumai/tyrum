@@ -1,6 +1,6 @@
+import type { OperatorCore } from "@tyrum/operator-core";
 import { useState } from "react";
-import type { AdminHttpClient } from "./admin-http-shared.js";
-import { useAdminHttpClient } from "./admin-http-shared.js";
+import { useAdminMutationAccess } from "./admin-http-shared.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
@@ -143,10 +143,14 @@ function DeviceTokensRevokeFields({
 }
 
 function DeviceTokenIssueDialog({
-  http,
+  core,
+  canMutate,
+  requestEnter,
   issue,
 }: {
-  http: AdminHttpClient | null;
+  core: OperatorCore;
+  canMutate: boolean;
+  requestEnter: () => void;
   issue: ReturnType<typeof useDeviceTokensIssueState>;
 }) {
   return (
@@ -159,7 +163,10 @@ function DeviceTokenIssueDialog({
       onConfirm={async () => {
         issue.setResult(undefined);
         issue.setError(undefined);
-        if (!http) throw new Error("Admin Mode is required");
+        if (!canMutate) {
+          requestEnter();
+          throw new Error("Enter Admin Mode to issue device tokens.");
+        }
 
         const ttlSecondsRaw = issue.ttlSeconds.trim();
         const ttl_seconds = ttlSecondsRaw.length > 0 ? Number(ttlSecondsRaw) : undefined;
@@ -171,7 +178,7 @@ function DeviceTokenIssueDialog({
         }
 
         try {
-          const result = await http.deviceTokens.issue({
+          const result = await core.http.deviceTokens.issue({
             device_id: issue.deviceId.trim(),
             role: issue.role,
             scopes: parseScopesInput(issue.scopes),
@@ -188,10 +195,14 @@ function DeviceTokenIssueDialog({
 }
 
 function DeviceTokenRevokeDialog({
-  http,
+  core,
+  canMutate,
+  requestEnter,
   revoke,
 }: {
-  http: AdminHttpClient | null;
+  core: OperatorCore;
+  canMutate: boolean;
+  requestEnter: () => void;
   revoke: ReturnType<typeof useDeviceTokensRevokeState>;
 }) {
   return (
@@ -204,10 +215,13 @@ function DeviceTokenRevokeDialog({
       onConfirm={async () => {
         revoke.setResult(undefined);
         revoke.setError(undefined);
-        if (!http) throw new Error("Admin Mode is required");
+        if (!canMutate) {
+          requestEnter();
+          throw new Error("Enter Admin Mode to revoke device tokens.");
+        }
 
         try {
-          const result = await http.deviceTokens.revoke({
+          const result = await core.http.deviceTokens.revoke({
             token: revoke.token.trim(),
           });
           revoke.setResult(result);
@@ -220,13 +234,13 @@ function DeviceTokenRevokeDialog({
   );
 }
 
-export function DeviceTokensCard() {
-  const http = useAdminHttpClient();
+export function DeviceTokensCard({ core }: { core: OperatorCore }) {
+  const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const issue = useDeviceTokensIssueState();
   const revoke = useDeviceTokensRevokeState();
 
-  const canIssue = Boolean(http) && issue.deviceId.trim().length > 0;
-  const canRevoke = Boolean(http) && revoke.token.trim().length > 0;
+  const canIssue = canMutate && issue.deviceId.trim().length > 0;
+  const canRevoke = canMutate && revoke.token.trim().length > 0;
 
   return (
     <Card data-testid="admin-http-device-tokens">
@@ -262,9 +276,31 @@ export function DeviceTokensCard() {
         >
           Revoke token
         </Button>
+        {!canMutate ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              requestEnter();
+            }}
+          >
+            Enter Admin Mode
+          </Button>
+        ) : null}
       </CardFooter>
-      <DeviceTokenIssueDialog http={http} issue={issue} />
-      <DeviceTokenRevokeDialog http={http} revoke={revoke} />
+      <DeviceTokenIssueDialog
+        core={core}
+        canMutate={canMutate}
+        requestEnter={requestEnter}
+        issue={issue}
+      />
+      <DeviceTokenRevokeDialog
+        core={core}
+        canMutate={canMutate}
+        requestEnter={requestEnter}
+        revoke={revoke}
+      />
     </Card>
   );
 }

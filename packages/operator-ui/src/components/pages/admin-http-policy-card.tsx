@@ -18,9 +18,10 @@ import {
 export interface AdminHttpPolicyCardProps {
   http: AdminHttpClient;
   openMutation: OpenMutation;
+  canMutate: boolean;
 }
 
-export function AdminHttpPolicyCard({ http, openMutation }: AdminHttpPolicyCardProps) {
+export function AdminHttpPolicyCard({ http, openMutation, canMutate }: AdminHttpPolicyCardProps) {
   return (
     <Card data-testid="admin-http-policy">
       <CardHeader className="pb-4">
@@ -32,7 +33,7 @@ export function AdminHttpPolicyCard({ http, openMutation }: AdminHttpPolicyCardP
       <CardContent className="grid gap-6">
         <PolicyBundleSection http={http} />
         <Separator />
-        <PolicyOverridesSection http={http} openMutation={openMutation} />
+        <PolicyOverridesSection http={http} openMutation={openMutation} canMutate={canMutate} />
       </CardContent>
     </Card>
   );
@@ -74,9 +75,11 @@ function PolicyBundleSection({ http }: { http: AdminHttpClient }) {
 function PolicyOverridesSection({
   http,
   openMutation,
+  canMutate,
 }: {
   http: AdminHttpClient;
   openMutation: OpenMutation;
+  canMutate: boolean;
 }) {
   const overrides = useApiResultState("Policy overrides");
   const listOverridesQuery = useJsonInputState("{}");
@@ -118,6 +121,7 @@ function PolicyOverridesSection({
         run={overrides.run}
         body={createOverrideBody}
         openMutation={openMutation}
+        canMutate={canMutate}
       />
 
       <PolicyOverrideRevokeRow
@@ -125,6 +129,7 @@ function PolicyOverridesSection({
         run={overrides.run}
         body={revokeOverrideBody}
         openMutation={openMutation}
+        canMutate={canMutate}
       />
 
       <ApiResultCard
@@ -182,11 +187,13 @@ function PolicyOverrideCreateRow({
   run,
   body,
   openMutation,
+  canMutate,
 }: {
   http: AdminHttpClient;
   run: ApiRunner;
   body: JsonInputState;
   openMutation: OpenMutation;
+  canMutate: boolean;
 }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
@@ -200,7 +207,7 @@ function PolicyOverrideCreateRow({
         <Button
           data-testid="admin-policy-override-create"
           variant="danger"
-          disabled={body.errorMessage !== null || typeof body.value === "undefined"}
+          disabled={!canMutate || body.errorMessage !== null || typeof body.value === "undefined"}
           onClick={() => {
             const input = resolveJsonValue(body, undefined);
             openMutation({
@@ -229,11 +236,13 @@ function PolicyOverrideRevokeRow({
   run,
   body,
   openMutation,
+  canMutate,
 }: {
   http: AdminHttpClient;
   run: ApiRunner;
   body: JsonInputState;
   openMutation: OpenMutation;
+  canMutate: boolean;
 }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
@@ -247,7 +256,7 @@ function PolicyOverrideRevokeRow({
         <Button
           data-testid="admin-policy-override-revoke"
           variant="danger"
-          disabled={body.errorMessage !== null || typeof body.value === "undefined"}
+          disabled={!canMutate || body.errorMessage !== null || typeof body.value === "undefined"}
           onClick={() => {
             const input = resolveJsonValue(body, undefined);
             openMutation({

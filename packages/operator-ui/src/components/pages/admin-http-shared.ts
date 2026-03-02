@@ -1,3 +1,4 @@
+import { isAdminModeActive, type OperatorCore } from "@tyrum/operator-core";
 import { createTyrumHttpClient } from "@tyrum/client";
 import { useMemo } from "react";
 import { useOperatorStore } from "../../use-operator-store.js";
@@ -32,4 +33,13 @@ export function useAdminHttpClient(): AdminHttpClient | null {
       fetch: resolveTyrumHttpFetch(mode),
     });
   }, [adminMode.elevatedToken, adminMode.status, core.httpBaseUrl, mode]);
+}
+
+export function useAdminMutationAccess(core: OperatorCore): {
+  canMutate: boolean;
+  requestEnter: () => void;
+} {
+  const { requestEnter } = useAdminModeUiContext();
+  const adminMode = useOperatorStore(core.adminModeStore);
+  return { canMutate: isAdminModeActive(adminMode), requestEnter };
 }

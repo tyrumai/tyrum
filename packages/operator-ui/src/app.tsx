@@ -185,7 +185,7 @@ function OperatorUiAppRoot({
               {route === "approvals" && <ApprovalsPage core={core} />}
               {route === "runs" && <RunsPage core={core} />}
               {route === "pairing" && <PairingPage core={core} />}
-              {route === "admin" && <AdminPage core={core} onNavigate={navigate} />}
+              {route === "admin" && <AdminPage core={core} />}
               {route === "settings" && <SettingsPage core={core} mode={mode} />}
               {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
             </>

@@ -8,52 +8,90 @@ import { AdminModeProvider } from "../../src/admin-mode.js";
 import { AdminPage } from "../../src/components/pages/admin-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
-function setNativeValue(element: HTMLInputElement | HTMLTextAreaElement, value: string): void {
-  const proto =
-    element instanceof HTMLTextAreaElement
-      ? HTMLTextAreaElement.prototype
-      : HTMLInputElement.prototype;
-  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-  if (setter) {
-    setter.call(element, value);
-  }
-  element.dispatchEvent(new Event("input", { bubbles: true }));
-  element.dispatchEvent(new Event("change", { bubbles: true }));
+async function switchAdminTab(container: HTMLElement, testId: string): Promise<void> {
+  const tab = container.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
+  expect(tab).not.toBeNull();
+  await act(async () => {
+    tab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    await Promise.resolve();
+  });
 }
 
-describe("AdminPage (HTTP panels)", () => {
-  it("renders HTTP Observability + Models panels and wires actions", async () => {
-    const nowMs = Date.parse("2026-01-01T00:00:00.000Z");
-    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0, now: () => nowMs });
+function createCore(activeAdminMode: boolean): {
+  core: OperatorCore;
+  pluginsList: ReturnType<typeof vi.fn>;
+} {
+  const nowMs = Date.parse("2026-03-01T00:00:00.000Z");
+  const adminModeStore = createAdminModeStore({ tickIntervalMs: 0, now: () => nowMs });
+  if (activeAdminMode) {
     adminModeStore.enter({
       elevatedToken: "test-elevated-token",
-      expiresAt: "2026-01-01T00:10:00.000Z",
+      expiresAt: "2026-03-01T00:10:00.000Z",
     });
+  }
 
-    const http = {
-      status: { get: vi.fn(async () => ({ status: "ok" })) },
-      usage: { get: vi.fn(async () => ({ status: "ok" })) },
-      presence: { list: vi.fn(async () => ({ status: "ok", entries: [] })) },
-      pairings: {
-        list: vi.fn(async () => ({ status: "ok", pairings: [] })),
-        approve: vi.fn(async () => ({ status: "ok", pairing: { pairing_id: 123 } })),
-        deny: vi.fn(async () => ({ status: "ok", pairing: { pairing_id: 123 } })),
-        revoke: vi.fn(async () => ({ status: "ok", pairing: { pairing_id: 123 } })),
+  const pluginsList = vi.fn(async () => ({ status: "ok", plugins: [] }) as unknown);
+
+  const core = {
+    httpBaseUrl: "http://example.test",
+    adminModeStore,
+    ws: {
+      commandExecute: vi.fn(async () => ({ output: "ok" })),
+    },
+    http: {
+      policy: {
+        getBundle: vi.fn(async () => ({ status: "ok" })),
+        listOverrides: vi.fn(async () => ({ status: "ok", overrides: [] })),
+        createOverride: vi.fn(async () => ({ status: "ok" })),
+        revokeOverride: vi.fn(async () => ({ status: "ok" })),
+      },
+      authProfiles: {
+        list: vi.fn(async () => ({ status: "ok", profiles: [] })),
+        create: vi.fn(async () => ({ status: "ok" })),
+        update: vi.fn(async () => ({ status: "ok" })),
+        disable: vi.fn(async () => ({ status: "ok" })),
+        enable: vi.fn(async () => ({ status: "ok" })),
+      },
+      authPins: {
+        list: vi.fn(async () => ({ status: "ok", pins: [] })),
+        set: vi.fn(async () => ({ status: "ok" })),
+      },
+      audit: {
+        exportReceiptBundle: vi.fn(async () => ({ status: "ok" })),
+        verify: vi.fn(async () => ({ status: "ok" })),
+        forget: vi.fn(async () => ({ status: "ok" })),
+      },
+      routingConfig: {
+        get: vi.fn(async () => ({ revision: 0, config: {} })),
+        update: vi.fn(async () => ({ revision: 1, config: {} })),
+        revert: vi.fn(async () => ({ revision: 0, config: {} })),
+      },
+      secrets: {
+        list: vi.fn(async () => ({ handles: [] })),
+        store: vi.fn(async () => ({ handle: {} })),
+        rotate: vi.fn(async () => ({ revoked: true })),
+        revoke: vi.fn(async () => ({ revoked: true })),
+      },
+      plugins: {
+        list: pluginsList,
+        get: vi.fn(async () => ({ status: "ok", plugin: {} })),
+      },
+      deviceTokens: {
+        issue: vi.fn(async () => ({ status: "ok" })),
+        revoke: vi.fn(async () => ({ status: "ok" })),
       },
       models: {
-        status: vi.fn(async () => ({ status: "ok" })),
         refresh: vi.fn(async () => ({ status: "ok" })),
-        listProviders: vi.fn(async () => ({ status: "ok", providers: [] })),
-        getProvider: vi.fn(async () => ({ status: "ok" })),
-        listProviderModels: vi.fn(async () => ({ status: "ok" })),
       },
-    };
+    },
+  } as unknown as OperatorCore;
 
-    const core = {
-      httpBaseUrl: "http://example.test",
-      adminModeStore,
-      http,
-    } as unknown as OperatorCore;
+  return { core, pluginsList };
+}
+
+describe("AdminPage (strict admin tabs)", () => {
+  it("renders admin domain tabs and removes transport tabs", () => {
+    const { core } = createCore(false);
 
     const testRoot = renderIntoDocument(
       React.createElement(
@@ -64,138 +102,116 @@ describe("AdminPage (HTTP panels)", () => {
     );
 
     try {
-      expect(testRoot.container.querySelector("[data-testid='admin-tab-http']")).not.toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-tab-http']")).toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-tab-ws']")).toBeNull();
 
       expect(
-        testRoot.container.querySelector("[data-testid='admin-http-tab-observability']"),
+        testRoot.container.querySelector("[data-testid='admin-http-tab-policy-auth']"),
       ).not.toBeNull();
       expect(
-        testRoot.container.querySelector("[data-testid='admin-http-tab-models']"),
+        testRoot.container.querySelector("[data-testid='admin-http-tab-audit']"),
+      ).not.toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-http-tab-routing-config']"),
+      ).not.toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-http-tab-secrets']"),
+      ).not.toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-http-tab-plugins']"),
+      ).not.toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-http-tab-gateway']"),
+      ).not.toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-http-tab-models-refresh']"),
+      ).not.toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-ws-tab-commands']"),
+      ).not.toBeNull();
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("keeps admin mutations disabled outside Admin Mode while allowing read actions", async () => {
+    const { core, pluginsList } = createCore(false);
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        AdminModeProvider,
+        { core, mode: "web" },
+        React.createElement(AdminPage, { core }),
+      ),
+    );
+
+    try {
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-read-only-notice']"),
       ).not.toBeNull();
 
-      const statusButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-http-status-get']",
+      await switchAdminTab(testRoot.container, "admin-http-tab-plugins");
+      const listPluginsButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-http-plugins-list']",
       );
-      expect(statusButton).not.toBeNull();
+      expect(listPluginsButton).not.toBeNull();
       await act(async () => {
-        statusButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        listPluginsButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
         await Promise.resolve();
       });
-      expect(http.status.get).toHaveBeenCalledTimes(1);
+      expect(pluginsList).toHaveBeenCalledTimes(1);
 
-      const modelsTab = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-http-tab-models']",
+      await switchAdminTab(testRoot.container, "admin-http-tab-gateway");
+      const issueButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-http-device-tokens-issue']",
       );
-      expect(modelsTab).not.toBeNull();
-      await act(async () => {
-        modelsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-        await Promise.resolve();
-      });
+      expect(issueButton).not.toBeNull();
+      expect(issueButton?.disabled).toBe(true);
 
-      const listProvidersButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-http-models-providers-list']",
-      );
-      expect(listProvidersButton).not.toBeNull();
-      await act(async () => {
-        listProvidersButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await Promise.resolve();
-      });
-      expect(http.models.listProviders).toHaveBeenCalledTimes(1);
-
+      await switchAdminTab(testRoot.container, "admin-http-tab-models-refresh");
       const refreshButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-http-models-refresh']",
+        "[data-testid='admin-http-models-refresh-open']",
       );
       expect(refreshButton).not.toBeNull();
+      expect(refreshButton?.disabled).toBe(true);
 
-      act(() => {
-        refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-      expect(document.querySelector("[data-testid='confirm-danger-dialog']")).not.toBeNull();
-      expect(http.models.refresh).toHaveBeenCalledTimes(0);
-
-      const checkbox = document.querySelector<HTMLInputElement>(
-        "[data-testid='confirm-danger-checkbox']",
+      await switchAdminTab(testRoot.container, "admin-http-tab-policy-auth");
+      const createOverrideButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-policy-override-create']",
       );
-      expect(checkbox).not.toBeNull();
-      act(() => {
-        checkbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
-      const confirmButton = document.querySelector<HTMLButtonElement>(
-        "[data-testid='confirm-danger-confirm']",
-      );
-      expect(confirmButton).not.toBeNull();
-      await act(async () => {
-        confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await Promise.resolve();
-      });
-      expect(http.models.refresh).toHaveBeenCalledTimes(1);
-
-      const obsTab = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-http-tab-observability']",
-      );
-      expect(obsTab).not.toBeNull();
-      await act(async () => {
-        obsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-        await Promise.resolve();
-      });
-
-      const pairingId = testRoot.container.querySelector<HTMLInputElement>(
-        "[data-testid='admin-http-pairings-mutate-id']",
-      );
-      expect(pairingId).not.toBeNull();
-      act(() => {
-        if (!pairingId) return;
-        setNativeValue(pairingId, "123");
-      });
-
-      const pairingBody = testRoot.container.querySelector<HTMLTextAreaElement>(
-        "[data-testid='admin-http-pairings-mutate-body']",
-      );
-      expect(pairingBody).not.toBeNull();
-      act(() => {
-        if (!pairingBody) return;
-        setNativeValue(
-          pairingBody,
-          JSON.stringify({ trust_level: "local", capability_allowlist: [] }),
-        );
-      });
-
-      const approveButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-http-pairings-approve']",
-      );
-      expect(approveButton).not.toBeNull();
-      act(() => {
-        approveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
-      expect(document.querySelector("[data-testid='confirm-danger-dialog']")).not.toBeNull();
-      expect(http.pairings.approve).toHaveBeenCalledTimes(0);
-
-      const approveCheckbox = document.querySelector<HTMLInputElement>(
-        "[data-testid='confirm-danger-checkbox']",
-      );
-      expect(approveCheckbox).not.toBeNull();
-      act(() => {
-        approveCheckbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
-      const approveConfirm = document.querySelector<HTMLButtonElement>(
-        "[data-testid='confirm-danger-confirm']",
-      );
-      expect(approveConfirm).not.toBeNull();
-      await act(async () => {
-        approveConfirm?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await Promise.resolve();
-      });
-
-      expect(http.pairings.approve).toHaveBeenCalledTimes(1);
-      expect(http.pairings.approve).toHaveBeenCalledWith(123, {
-        trust_level: "local",
-        capability_allowlist: [],
-      });
+      expect(createOverrideButton).not.toBeNull();
+      expect(createOverrideButton?.disabled).toBe(true);
     } finally {
-      adminModeStore.dispose();
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("enables admin mutations when Admin Mode is active", async () => {
+    const { core } = createCore(true);
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        AdminModeProvider,
+        { core, mode: "web" },
+        React.createElement(AdminPage, { core }),
+      ),
+    );
+
+    try {
+      await switchAdminTab(testRoot.container, "admin-http-tab-gateway");
+      const issueButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-http-device-tokens-issue']",
+      );
+      expect(issueButton).not.toBeNull();
+      expect(issueButton?.disabled).toBe(false);
+
+      await switchAdminTab(testRoot.container, "admin-http-tab-models-refresh");
+      const refreshButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-http-models-refresh-open']",
+      );
+      expect(refreshButton).not.toBeNull();
+      expect(refreshButton?.disabled).toBe(false);
+    } finally {
       cleanupTestRoot(testRoot);
     }
   });
