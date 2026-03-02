@@ -1,5 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useState } from "react";
+import type { DesktopApi } from "../../../desktop-api.js";
 import { useHostApi } from "../../../host/host-api.js";
 import { formatErrorMessage } from "../../../utils/format-error-message.js";
 import { Alert } from "../../ui/alert.js";
@@ -39,6 +40,11 @@ export function PlatformConnectionPage({ core }: PlatformConnectionPageProps) {
       </div>
     );
   }
+
+  return <DesktopConnectionPage core={core} api={api} />;
+}
+
+function DesktopConnectionPage({ core, api }: { core: OperatorCore; api: DesktopApi }) {
   const [tab, setTab] = useState<Tab>("embedded");
   const [mode, setMode] = useState<string>("embedded");
   const [port, setPort] = useState(8788);
@@ -106,7 +112,7 @@ export function PlatformConnectionPage({ core }: PlatformConnectionPageProps) {
     };
   }, [api]);
 
-  const startGateway = async () => {
+  const startGateway = async (): Promise<void> => {
     if (busy) return;
     setBusy(true);
     setGatewayError(null);
@@ -123,7 +129,7 @@ export function PlatformConnectionPage({ core }: PlatformConnectionPageProps) {
     }
   };
 
-  const stopGateway = async () => {
+  const stopGateway = async (): Promise<void> => {
     if (busy) return;
     setBusy(true);
     try {
@@ -135,7 +141,7 @@ export function PlatformConnectionPage({ core }: PlatformConnectionPageProps) {
     }
   };
 
-  const connectNode = async () => {
+  const connectNode = async (): Promise<void> => {
     if (busy) return;
     setBusy(true);
     try {
@@ -156,7 +162,7 @@ export function PlatformConnectionPage({ core }: PlatformConnectionPageProps) {
     }
   };
 
-  const disconnectNode = async () => {
+  const disconnectNode = async (): Promise<void> => {
     if (busy) return;
     setBusy(true);
     try {
@@ -179,92 +185,32 @@ export function PlatformConnectionPage({ core }: PlatformConnectionPageProps) {
         </TabsList>
 
         <TabsContent value="embedded">
-          <Card>
-            <CardContent className="grid gap-4 pt-6">
-              <Input
-                label="Port"
-                type="number"
-                value={port}
-                onChange={(e) => setPort(Number(e.target.value))}
-                min={1024}
-                max={65535}
-              />
-
-              <div className="flex gap-2">
-                {gatewayStatus === "stopped" || gatewayStatus === "error" ? (
-                  <Button onClick={startGateway} disabled={busy} isLoading={busy}>
-                    {busy ? "Starting..." : "Start Gateway"}
-                  </Button>
-                ) : (
-                  <Button variant="danger" onClick={stopGateway} disabled={busy} isLoading={busy}>
-                    {busy ? "Stopping..." : "Stop Gateway"}
-                  </Button>
-                )}
-              </div>
-
-              <div className="text-sm text-fg-muted">
-                Status: {gatewayStatus} {mode === "embedded" ? "(active mode)" : ""}
-              </div>
-
-              {gatewayError ? (
-                <Alert variant="error" title="Gateway error" description={gatewayError} />
-              ) : null}
-            </CardContent>
-          </Card>
+          <EmbeddedGatewayTab
+            busy={busy}
+            gatewayError={gatewayError}
+            gatewayStatus={gatewayStatus}
+            mode={mode}
+            port={port}
+            setPort={setPort}
+            startGateway={startGateway}
+            stopGateway={stopGateway}
+          />
         </TabsContent>
 
         <TabsContent value="remote">
-          <Card>
-            <CardContent className="grid gap-4 pt-6">
-              <Input
-                label="Gateway WebSocket URL"
-                type="text"
-                value={remoteUrl}
-                onChange={(e) => setRemoteUrl(e.target.value)}
-                placeholder="ws://host:port/ws"
-              />
-
-              <Input
-                label="Token"
-                type="password"
-                value={remoteToken}
-                onChange={(e) => setRemoteToken(e.target.value)}
-                placeholder="Bearer token"
-                helperText={
-                  hasSavedRemoteToken && remoteToken.trim() === ""
-                    ? "A token is already saved. Leave blank to reuse it, or enter a new token to replace it."
-                    : undefined
-                }
-              />
-
-              <Input
-                label="TLS certificate fingerprint (SHA-256, optional)"
-                type="text"
-                value={remoteTlsCertFingerprint256}
-                onChange={(e) => setRemoteTlsCertFingerprint256(e.target.value)}
-                placeholder="AA:BB:CC:…"
-              />
-
-              <div className="flex gap-2">
-                {nodeStatus === "disconnected" || nodeStatus === "error" ? (
-                  <Button onClick={connectNode} disabled={busy} isLoading={busy}>
-                    {busy ? "Connecting..." : "Connect"}
-                  </Button>
-                ) : (
-                  <Button
-                    variant="danger"
-                    onClick={disconnectNode}
-                    disabled={busy}
-                    isLoading={busy}
-                  >
-                    {busy ? "Disconnecting..." : "Disconnect"}
-                  </Button>
-                )}
-              </div>
-
-              <div className="text-sm text-fg-muted">Node status: {nodeStatus}</div>
-            </CardContent>
-          </Card>
+          <RemoteNodeTab
+            busy={busy}
+            connectNode={connectNode}
+            disconnectNode={disconnectNode}
+            hasSavedRemoteToken={hasSavedRemoteToken}
+            nodeStatus={nodeStatus}
+            remoteTlsCertFingerprint256={remoteTlsCertFingerprint256}
+            remoteToken={remoteToken}
+            remoteUrl={remoteUrl}
+            setRemoteTlsCertFingerprint256={setRemoteTlsCertFingerprint256}
+            setRemoteToken={setRemoteToken}
+            setRemoteUrl={setRemoteUrl}
+          />
         </TabsContent>
 
         <TabsContent value="operator">
@@ -272,5 +218,131 @@ export function PlatformConnectionPage({ core }: PlatformConnectionPageProps) {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function EmbeddedGatewayTab(props: {
+  busy: boolean;
+  gatewayError: string | null;
+  gatewayStatus: string;
+  mode: string;
+  port: number;
+  setPort: (next: number) => void;
+  startGateway: () => Promise<void>;
+  stopGateway: () => Promise<void>;
+}) {
+  const { busy, gatewayError, gatewayStatus, mode, port, setPort, startGateway, stopGateway } =
+    props;
+
+  return (
+    <Card>
+      <CardContent className="grid gap-4 pt-6">
+        <Input
+          label="Port"
+          type="number"
+          value={port}
+          onChange={(e) => setPort(Number(e.target.value))}
+          min={1024}
+          max={65535}
+        />
+
+        <div className="flex gap-2">
+          {gatewayStatus === "stopped" || gatewayStatus === "error" ? (
+            <Button onClick={startGateway} disabled={busy} isLoading={busy}>
+              {busy ? "Starting..." : "Start Gateway"}
+            </Button>
+          ) : (
+            <Button variant="danger" onClick={stopGateway} disabled={busy} isLoading={busy}>
+              {busy ? "Stopping..." : "Stop Gateway"}
+            </Button>
+          )}
+        </div>
+
+        <div className="text-sm text-fg-muted">
+          Status: {gatewayStatus} {mode === "embedded" ? "(active mode)" : ""}
+        </div>
+
+        {gatewayError ? (
+          <Alert variant="error" title="Gateway error" description={gatewayError} />
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RemoteNodeTab(props: {
+  busy: boolean;
+  connectNode: () => Promise<void>;
+  disconnectNode: () => Promise<void>;
+  hasSavedRemoteToken: boolean;
+  nodeStatus: string;
+  remoteTlsCertFingerprint256: string;
+  remoteToken: string;
+  remoteUrl: string;
+  setRemoteTlsCertFingerprint256: (next: string) => void;
+  setRemoteToken: (next: string) => void;
+  setRemoteUrl: (next: string) => void;
+}) {
+  const {
+    busy,
+    connectNode,
+    disconnectNode,
+    hasSavedRemoteToken,
+    nodeStatus,
+    remoteTlsCertFingerprint256,
+    remoteToken,
+    remoteUrl,
+    setRemoteTlsCertFingerprint256,
+    setRemoteToken,
+    setRemoteUrl,
+  } = props;
+
+  return (
+    <Card>
+      <CardContent className="grid gap-4 pt-6">
+        <Input
+          label="Gateway WebSocket URL"
+          type="text"
+          value={remoteUrl}
+          onChange={(e) => setRemoteUrl(e.target.value)}
+          placeholder="ws://host:port/ws"
+        />
+
+        <Input
+          label="Token"
+          type="password"
+          value={remoteToken}
+          onChange={(e) => setRemoteToken(e.target.value)}
+          placeholder="Bearer token"
+          helperText={
+            hasSavedRemoteToken && remoteToken.trim() === ""
+              ? "A token is already saved. Leave blank to reuse it, or enter a new token to replace it."
+              : undefined
+          }
+        />
+
+        <Input
+          label="TLS certificate fingerprint (SHA-256, optional)"
+          type="text"
+          value={remoteTlsCertFingerprint256}
+          onChange={(e) => setRemoteTlsCertFingerprint256(e.target.value)}
+          placeholder="AA:BB:CC:…"
+        />
+
+        <div className="flex gap-2">
+          {nodeStatus === "disconnected" || nodeStatus === "error" ? (
+            <Button onClick={connectNode} disabled={busy} isLoading={busy}>
+              {busy ? "Connecting..." : "Connect"}
+            </Button>
+          ) : (
+            <Button variant="danger" onClick={disconnectNode} disabled={busy} isLoading={busy}>
+              {busy ? "Disconnecting..." : "Disconnect"}
+            </Button>
+          )}
+        </div>
+
+        <div className="text-sm text-fg-muted">Node status: {nodeStatus}</div>
+      </CardContent>
+    </Card>
   );
 }
