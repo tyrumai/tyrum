@@ -205,4 +205,3 @@ describe("admin-page", () => {
   it("shows session.send result and clears it on invalid payload", wiresSessionSendPanel);
   it("wires workflow.run/resume/cancel panels", wiresWorkflowPanels);
 });
-

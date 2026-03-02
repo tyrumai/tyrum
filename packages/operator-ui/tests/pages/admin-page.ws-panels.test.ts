@@ -286,4 +286,3 @@ describe("AdminPage WebSocket panels", () => {
     cleanupTestRoot({ container, root });
   });
 });
-
