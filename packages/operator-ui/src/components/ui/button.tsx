@@ -3,7 +3,14 @@ import * as React from "react";
 import { cn } from "../../lib/cn.js";
 import { Spinner } from "./spinner.js";
 
-export type ButtonVariant = "primary" | "success" | "secondary" | "danger" | "ghost" | "outline";
+export type ButtonVariant =
+  | "primary"
+  | "success"
+  | "warning"
+  | "secondary"
+  | "danger"
+  | "ghost"
+  | "outline";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -16,6 +23,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: "bg-primary text-white hover:bg-primary/90",
   success: "bg-success text-white hover:bg-success/90",
+  warning: "bg-warning text-fg hover:bg-warning/90",
   secondary: "bg-bg-card text-fg border border-border hover:bg-bg-subtle",
   danger: "bg-error text-white hover:bg-error/90",
   ghost: "bg-transparent text-fg hover:bg-primary-dim",
@@ -84,6 +92,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             : "",
           variant === "success"
             ? "shadow-md shadow-success/20 hover:shadow-lg hover:shadow-success/40 hover:-translate-y-0.5"
+            : "",
+          variant === "warning"
+            ? "shadow-md shadow-warning/20 hover:shadow-lg hover:shadow-warning/40 hover:-translate-y-0.5"
             : "",
           variant === "danger"
             ? "shadow-md shadow-error/20 hover:shadow-lg hover:shadow-error/40 hover:-translate-y-0.5"

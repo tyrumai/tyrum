@@ -16,7 +16,7 @@ export const TooltipContent = React.forwardRef<
         ref={ref}
         sideOffset={sideOffset}
         className={cn(
-          "z-50 overflow-hidden rounded-md border border-border bg-bg-card px-3 py-1.5 text-xs text-fg shadow-md",
+          "z-50 overflow-hidden rounded-md border border-border bg-bg-card px-3 py-1.5 text-xs font-sans text-fg shadow-md",
           "data-[state=delayed-open]:tyrum-animate-fade-in data-[state=closed]:tyrum-animate-fade-out",
           className,
         )}

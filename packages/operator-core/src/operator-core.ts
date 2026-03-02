@@ -79,6 +79,14 @@ function readTransportMessage(data: unknown): string | null {
   return typeof raw === "string" ? raw : null;
 }
 
+function readReconnectSchedule(data: unknown): number | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const raw = (data as Record<string, unknown>)["nextRetryAtMs"];
+  if (typeof raw !== "number") return null;
+  if (!Number.isFinite(raw)) return null;
+  return raw;
+}
+
 function readPayload(data: unknown): Record<string, unknown> | null {
   if (!data || typeof data !== "object" || Array.isArray(data)) return null;
   const payload = (data as Record<string, unknown>)["payload"];
@@ -148,6 +156,13 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     const message = readTransportMessage(data);
     if (message) {
       connection.handleTransportError(message);
+    }
+  });
+
+  on("reconnect_scheduled", (data) => {
+    const nextRetryAtMs = readReconnectSchedule(data);
+    if (nextRetryAtMs !== null) {
+      connection.handleReconnectScheduled(nextRetryAtMs);
     }
   });
 

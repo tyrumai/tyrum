@@ -2371,6 +2371,35 @@ describe("TyrumClient", () => {
     );
   });
 
+  it("schedules reconnect attempts every 5 seconds by default", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: true,
+    });
+
+    const reconnectScheduledP = new Promise<{
+      delayMs: number;
+      nextRetryAtMs: number;
+      attempt: number;
+    }>((resolve) => {
+      client!.on("reconnect_scheduled", resolve);
+    });
+
+    client.connect();
+    const ws1 = await server.waitForClient();
+    await acceptConnect(ws1);
+
+    ws1.close(1001, "gone");
+
+    const reconnectSchedule = await withTimeout(reconnectScheduledP, 2_000, "reconnect_scheduled");
+    expect(reconnectSchedule.delayMs).toBe(5_000);
+    expect(reconnectSchedule.attempt).toBe(1);
+    expect(reconnectSchedule.nextRetryAtMs).toBeGreaterThan(Date.now());
+  });
+
   it("reconnects when socket closes mid device-proof handshake", async () => {
     server = createTestServer();
 

@@ -10,7 +10,7 @@ describe("getConnectionDisplay", () => {
     });
 
     expect(getConnectionDisplay("connecting")).toEqual({
-      variant: "primary",
+      variant: "warning",
       pulse: true,
       label: "Connecting",
     });

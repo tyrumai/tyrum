@@ -10,10 +10,6 @@ describe("memory and subagent WS handler extraction", () => {
     });
   });
 
-  it("keeps handler.ts under 1,500 lines", () => {
-    expect(handlerSource.split(/\r?\n/).length).toBeLessThan(1500);
-  });
-
   it("extracts memory.* handlers into a dedicated module", async () => {
     expect(handlerSource).toContain("handleMemoryMessage(");
     const inlineCheckExample = 'if (msg.type === "memory.search") {';

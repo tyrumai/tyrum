@@ -3,7 +3,7 @@
  *
  * Connects via the standard WebSocket API (available natively in Node 24+
  * and all modern browsers), sends/receives typed protocol messages, and
- * optionally auto-reconnects with exponential backoff.
+ * optionally auto-reconnects with fixed-interval retry.
  */
 
 import type { Emitter } from "mitt";
@@ -194,6 +194,7 @@ type TyrumProtocolEvents = {
 export type TyrumClientEvents = TyrumProtocolEvents & {
   connected: { clientId: string };
   disconnected: { code: number; reason: string };
+  reconnect_scheduled: { delayMs: number; nextRetryAtMs: number; attempt: number };
   transport_error: { message: string };
   task_execute: WsTaskExecuteRequest;
   approval_request: WsApprovalRequest;
@@ -240,7 +241,7 @@ export interface TyrumClientOptions {
   };
   /** Whether to auto-reconnect on unexpected close. Defaults to `true`. */
   reconnect?: boolean;
-  /** Upper bound for reconnect backoff delay in milliseconds. Defaults to 30 000. */
+  /** Upper bound for reconnect retry delay in milliseconds. Defaults to 30 000. */
   maxReconnectDelay?: number;
   /**
    * Maximum number of recent event ids to keep for deduplication.
@@ -274,7 +275,7 @@ type ResolvedConnectDevice = GeneratedDevice & {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_MAX_RECONNECT_DELAY = 30_000;
-const BASE_RECONNECT_DELAY = 1_000;
+const DEFAULT_RECONNECT_DELAY = 5_000;
 const DEFAULT_MAX_SEEN_EVENT_IDS = 1_000;
 const DEFAULT_MAX_SEEN_REQUEST_IDS = 1_000;
 const WS_BASE_PROTOCOL = "tyrum-v1";
@@ -1291,11 +1292,15 @@ export class TyrumClient {
   }
 
   private scheduleReconnect(): void {
-    const delay = Math.min(
-      BASE_RECONNECT_DELAY * 2 ** this.reconnectAttempt,
-      this.opts.maxReconnectDelay,
-    );
+    const delay = Math.min(DEFAULT_RECONNECT_DELAY, this.opts.maxReconnectDelay);
+    const attempt = this.reconnectAttempt + 1;
+    const nextRetryAtMs = Date.now() + delay;
     this.reconnectAttempt++;
+    this.emitter.emit("reconnect_scheduled", {
+      delayMs: delay,
+      nextRetryAtMs,
+      attempt,
+    });
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.openSocket();
