@@ -6,7 +6,6 @@ import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import { AdminModeProvider } from "../../src/admin-mode.js";
 import { AdminPage } from "../../src/components/pages/admin-page.js";
-import { SubagentsPanels } from "../../src/components/admin-ws/subagents-panels.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 function createAdminModeStoreActive() {
@@ -75,25 +74,5 @@ describe("AdminPage (WS Subagents)", () => {
     } finally {
       cleanupTestRoot(testRoot);
     }
-  });
-});
-
-describe("SubagentsPanels", () => {
-  it("avoids double-parsing JSON payloads on render", () => {
-    const parseSpy = vi.spyOn(JSON, "parse");
-
-    const ws = createWsMock();
-    const core = { ws } as unknown as OperatorCore;
-
-    const testRoot = renderIntoDocument(React.createElement(SubagentsPanels, { core }));
-
-    const payloadTextareas = testRoot.container.querySelectorAll(
-      'textarea[data-testid$="-payload"]',
-    );
-    expect(payloadTextareas.length).toBeGreaterThan(0);
-    expect(parseSpy).toHaveBeenCalledTimes(payloadTextareas.length);
-
-    parseSpy.mockRestore();
-    cleanupTestRoot(testRoot);
   });
 });

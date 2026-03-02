@@ -4,7 +4,14 @@ import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { JsonTextarea } from "../ui/json-textarea.js";
-import type { WorkScopeDraft, WorkScopeErrors } from "./work-scope-selector.js";
+
+export type WorkScopeDraft = {
+  tenant_id: string;
+  agent_id: string;
+  workspace_id: string;
+};
+
+export type WorkScopeErrors = Partial<Record<keyof WorkScopeDraft, string>>;
 
 function normalizeScope(scope: WorkScopeDraft): {
   scope: WorkScopeDraft | null;
