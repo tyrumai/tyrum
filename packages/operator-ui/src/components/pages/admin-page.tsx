@@ -1,7 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { AdminModeGate } from "../../admin-mode.js";
-import { type ApiCallState, useApiCallState } from "../../hooks/use-api-call-state.js";
+import { useApiAction } from "../../hooks/use-api-action.js";
 import { parseJsonInput } from "../../utils/parse-json-input.js";
 import { AdminWsPanels } from "../admin/admin-ws-panels.js";
 import { AdminWorkBoardWsHub } from "../admin-workboard/admin-workboard-ws-hub.js";
@@ -48,18 +48,24 @@ type WorkflowRunPayload = Parameters<OperatorCore["ws"]["workflowRun"]>[0];
 type WorkflowResumePayload = Parameters<OperatorCore["ws"]["workflowResume"]>[0];
 type WorkflowCancelPayload = Parameters<OperatorCore["ws"]["workflowCancel"]>[0];
 
-function ApiResultSection({ state, heading }: { state: ApiCallState; heading: string }) {
-  const value = state.status === "success" ? state.value : undefined;
-  const error = state.status === "error" ? state.error : undefined;
+function ApiResultSection({
+  heading,
+  value,
+  error,
+}: {
+  heading: string;
+  value: unknown | undefined;
+  error: unknown | undefined;
+}) {
   return <ApiResultCard heading={heading} value={value} error={error} />;
 }
 
 function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactElement {
-  const status = useApiCallState();
-  const usage = useApiCallState();
-  const presence = useApiCallState();
-  const pairingsList = useApiCallState();
-  const pairingsMutate = useApiCallState();
+  const status = useApiAction<unknown>();
+  const usage = useApiAction<unknown>();
+  const presence = useApiAction<unknown>();
+  const pairingsList = useApiAction<unknown>();
+  const pairingsMutate = useApiAction<unknown>();
 
   const [usageQueryRaw, setUsageQueryRaw] = React.useState("");
   const usageQuery = React.useMemo(() => parseJsonInput(usageQueryRaw), [usageQueryRaw]);
@@ -122,7 +128,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               data-testid="admin-http-status-get"
               size="sm"
               variant="secondary"
-              isLoading={status.state.status === "loading"}
+              isLoading={status.isLoading}
               onClick={() => {
                 void status.run(() => core.http.status.get());
               }}
@@ -130,7 +136,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               Fetch
             </Button>
           </div>
-          <ApiResultSection state={status.state} heading="Status" />
+          <ApiResultSection heading="Status" value={status.value} error={status.error} />
         </div>
 
         <div className="grid gap-3">
@@ -140,7 +146,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               data-testid="admin-http-usage-get"
               size="sm"
               variant="secondary"
-              isLoading={usage.state.status === "loading"}
+              isLoading={usage.isLoading}
               disabled={usageQuery.errorMessage !== null}
               onClick={() => {
                 const query: UsageGetQuery =
@@ -162,7 +168,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               setUsageQueryRaw(event.currentTarget.value);
             }}
           />
-          <ApiResultSection state={usage.state} heading="Usage" />
+          <ApiResultSection heading="Usage" value={usage.value} error={usage.error} />
         </div>
 
         <div className="grid gap-3">
@@ -172,7 +178,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               data-testid="admin-http-presence-list"
               size="sm"
               variant="secondary"
-              isLoading={presence.state.status === "loading"}
+              isLoading={presence.isLoading}
               onClick={() => {
                 void presence.run(() => core.http.presence.list());
               }}
@@ -180,7 +186,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               Fetch
             </Button>
           </div>
-          <ApiResultSection state={presence.state} heading="Presence" />
+          <ApiResultSection heading="Presence" value={presence.value} error={presence.error} />
         </div>
       </section>
 
@@ -192,7 +198,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               data-testid="admin-http-pairings-list"
               size="sm"
               variant="secondary"
-              isLoading={pairingsList.state.status === "loading"}
+              isLoading={pairingsList.isLoading}
               onClick={() => {
                 void pairingsList.run(() => core.http.pairings.list());
               }}
@@ -200,7 +206,11 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               Fetch
             </Button>
           </div>
-          <ApiResultSection state={pairingsList.state} heading="Pairings" />
+          <ApiResultSection
+            heading="Pairings"
+            value={pairingsList.value}
+            error={pairingsList.error}
+          />
         </div>
 
         <Card>
@@ -272,7 +282,11 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               </Button>
             </div>
 
-            <ApiResultSection state={pairingsMutate.state} heading="Mutation result" />
+            <ApiResultSection
+              heading="Mutation result"
+              value={pairingsMutate.value}
+              error={pairingsMutate.error}
+            />
           </CardContent>
         </Card>
 
@@ -288,7 +302,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
           }.`}
           confirmLabel="Run mutation"
           onConfirm={submitPairingsAction}
-          isLoading={pairingsMutate.state.status === "loading"}
+          isLoading={pairingsMutate.isLoading}
         />
       </section>
     </div>
@@ -296,11 +310,11 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
 }
 
 function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
-  const status = useApiCallState();
-  const refresh = useApiCallState();
-  const listProviders = useApiCallState();
-  const getProvider = useApiCallState();
-  const listProviderModels = useApiCallState();
+  const status = useApiAction<unknown>();
+  const refresh = useApiAction<unknown>();
+  const listProviders = useApiAction<unknown>();
+  const getProvider = useApiAction<unknown>();
+  const listProviderModels = useApiAction<unknown>();
 
   const [providerId, setProviderId] = React.useState("");
   const trimmedProviderId = providerId.trim();
@@ -317,7 +331,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               data-testid="admin-http-models-status"
               size="sm"
               variant="secondary"
-              isLoading={status.state.status === "loading"}
+              isLoading={status.isLoading}
               onClick={() => {
                 void status.run(() => core.http.models.status());
               }}
@@ -325,7 +339,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               Fetch
             </Button>
           </div>
-          <ApiResultSection state={status.state} heading="Models status" />
+          <ApiResultSection heading="Models status" value={status.value} error={status.error} />
         </div>
 
         <div className="grid gap-3">
@@ -342,7 +356,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               Refresh (confirm)
             </Button>
           </div>
-          <ApiResultSection state={refresh.state} heading="Refresh result" />
+          <ApiResultSection heading="Refresh result" value={refresh.value} error={refresh.error} />
         </div>
 
         <ConfirmDangerDialog
@@ -354,7 +368,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
           onConfirm={async () => {
             await refresh.runAndThrow(() => core.http.models.refresh());
           }}
-          isLoading={refresh.state.status === "loading"}
+          isLoading={refresh.isLoading}
         />
       </section>
 
@@ -366,7 +380,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               data-testid="admin-http-models-providers-list"
               size="sm"
               variant="secondary"
-              isLoading={listProviders.state.status === "loading"}
+              isLoading={listProviders.isLoading}
               onClick={() => {
                 void listProviders.run(() => core.http.models.listProviders());
               }}
@@ -374,7 +388,11 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               Fetch
             </Button>
           </div>
-          <ApiResultSection state={listProviders.state} heading="Providers" />
+          <ApiResultSection
+            heading="Providers"
+            value={listProviders.value}
+            error={listProviders.error}
+          />
         </div>
 
         <Card>
@@ -399,7 +417,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
                 size="sm"
                 variant="secondary"
                 disabled={!trimmedProviderId}
-                isLoading={getProvider.state.status === "loading"}
+                isLoading={getProvider.isLoading}
                 onClick={() => {
                   void getProvider.run(() => core.http.models.getProvider(trimmedProviderId));
                 }}
@@ -411,7 +429,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
                 size="sm"
                 variant="secondary"
                 disabled={!trimmedProviderId}
-                isLoading={listProviderModels.state.status === "loading"}
+                isLoading={listProviderModels.isLoading}
                 onClick={() => {
                   void listProviderModels.run(() =>
                     core.http.models.listProviderModels(trimmedProviderId),
@@ -422,8 +440,16 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               </Button>
             </div>
 
-            <ApiResultSection state={getProvider.state} heading="Provider" />
-            <ApiResultSection state={listProviderModels.state} heading="Provider models" />
+            <ApiResultSection
+              heading="Provider"
+              value={getProvider.value}
+              error={getProvider.error}
+            />
+            <ApiResultSection
+              heading="Provider models"
+              value={listProviderModels.value}
+              error={listProviderModels.error}
+            />
           </CardContent>
         </Card>
       </section>
