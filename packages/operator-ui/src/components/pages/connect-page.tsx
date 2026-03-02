@@ -40,8 +40,9 @@ export function ConnectPage({
 
   const loginOrConnect = async (): Promise<void> => {
     const trimmedUrl = gatewayUrl.trim();
-    if (onReconfigureGateway && trimmedUrl !== core.httpBaseUrl) {
-      const normalizedHttpUrl = trimTrailingSlashes(trimmedUrl);
+    const normalizedHttpUrl = trimTrailingSlashes(trimmedUrl);
+    const normalizedCoreHttpUrl = trimTrailingSlashes(core.httpBaseUrl.trim());
+    if (onReconfigureGateway && normalizedHttpUrl !== normalizedCoreHttpUrl) {
       const wsUrl = normalizedHttpUrl.replace(/^http/, "ws") + "/ws";
       onReconfigureGateway(normalizedHttpUrl, wsUrl);
       return;
