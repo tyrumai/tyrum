@@ -10,14 +10,16 @@ import { Label } from "../ui/label.js";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { optionalString, useApiAction } from "./admin-http-shared.js";
+import { useAdminHttpClient, useAdminMutationAccess } from "../pages/admin-http-shared.js";
 
 const DEFAULT_RESULT_VIEWER_PROPS = {
   defaultExpandedDepth: 1,
   contentClassName: "max-h-[420px]",
 } as const;
 
-function AuditExportTab({ core }: { core: OperatorCore }) {
-  const auditApi = core.http.audit;
+type AuditApi = OperatorCore["http"]["audit"];
+
+function AuditExportTab({ auditApi }: { auditApi: AuditApi }) {
   const [planId, setPlanId] = React.useState("");
   const action = useApiAction<unknown>();
   const resolvedPlanId = optionalString(planId);
@@ -64,8 +66,7 @@ function AuditExportTab({ core }: { core: OperatorCore }) {
   );
 }
 
-function AuditVerifyTab({ core }: { core: OperatorCore }) {
-  const auditApi = core.http.audit;
+function AuditVerifyTab({ auditApi }: { auditApi: AuditApi }) {
   const [raw, setRaw] = React.useState("");
   const [value, setValue] = React.useState<unknown | undefined>(undefined);
   const [error, setError] = React.useState<string | null>(null);
@@ -213,9 +214,15 @@ function AuditForgetConfirmDialog({
   );
 }
 
-function AuditForgetTab({ core }: { core: OperatorCore }) {
-  const auditApi = core.http.audit;
-
+function AuditForgetTab({
+  auditApi,
+  canMutate,
+  requestEnter,
+}: {
+  auditApi: AuditApi;
+  canMutate: boolean;
+  requestEnter: () => void;
+}) {
   const [entityType, setEntityType] = React.useState("");
   const [entityId, setEntityId] = React.useState("");
   const [decision, setDecision] = React.useState<"delete" | "anonymize" | "retain">("delete");
@@ -251,13 +258,23 @@ function AuditForgetTab({ core }: { core: OperatorCore }) {
       <div className="flex flex-wrap gap-2">
         <Button
           variant="danger"
-          disabled={!resolvedEntityType || !resolvedEntityId}
+          disabled={!canMutate || !resolvedEntityType || !resolvedEntityId}
           onClick={() => {
             setDialogOpen(true);
           }}
         >
           Forget…
         </Button>
+        {!canMutate ? (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              requestEnter();
+            }}
+          >
+            Enter Admin Mode
+          </Button>
+        ) : null}
         <Button
           variant="secondary"
           disabled={action.isLoading}
@@ -281,6 +298,10 @@ function AuditForgetTab({ core }: { core: OperatorCore }) {
         onOpenChange={setDialogOpen}
         isLoading={action.isLoading}
         onConfirm={async () => {
+          if (!canMutate) {
+            requestEnter();
+            throw new Error("Enter Admin Mode to forget audit receipts.");
+          }
           if (!resolvedEntityType || !resolvedEntityId) return;
           await action.run(
             () =>
@@ -302,6 +323,8 @@ function AuditForgetTab({ core }: { core: OperatorCore }) {
 }
 
 export function AuditPanel({ core }: { core: OperatorCore }) {
+  const { canMutate, requestEnter } = useAdminMutationAccess(core);
+  const http = useAdminHttpClient() ?? core.http;
   return (
     <Card data-testid="admin-http-audit-panel">
       <CardHeader>
@@ -316,15 +339,19 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
           </TabsList>
 
           <TabsContent value="export" forceMount className="grid gap-3">
-            <AuditExportTab core={core} />
+            <AuditExportTab auditApi={http.audit} />
           </TabsContent>
 
           <TabsContent value="verify" forceMount className="grid gap-3">
-            <AuditVerifyTab core={core} />
+            <AuditVerifyTab auditApi={http.audit} />
           </TabsContent>
 
           <TabsContent value="forget" forceMount className="grid gap-3">
-            <AuditForgetTab core={core} />
+            <AuditForgetTab
+              auditApi={http.audit}
+              canMutate={canMutate}
+              requestEnter={requestEnter}
+            />
           </TabsContent>
         </Tabs>
       </CardContent>

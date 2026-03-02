@@ -20,9 +20,14 @@ import {
 export interface AdminHttpAuthProfilesCardProps {
   http: AdminHttpClient;
   openMutation: OpenMutation;
+  canMutate: boolean;
 }
 
-export function AdminHttpAuthProfilesCard({ http, openMutation }: AdminHttpAuthProfilesCardProps) {
+export function AdminHttpAuthProfilesCard({
+  http,
+  openMutation,
+  canMutate,
+}: AdminHttpAuthProfilesCardProps) {
   const profiles = useApiResultState("Auth profiles");
   const listProfilesQuery = useJsonInputState("{}");
   const createProfileBody = useJsonInputState(
@@ -61,6 +66,7 @@ export function AdminHttpAuthProfilesCard({ http, openMutation }: AdminHttpAuthP
           run={profiles.run}
           body={createProfileBody}
           openMutation={openMutation}
+          canMutate={canMutate}
         />
 
         <Separator />
@@ -72,6 +78,7 @@ export function AdminHttpAuthProfilesCard({ http, openMutation }: AdminHttpAuthP
           profileId={profileIdForUpdate}
           setProfileId={setProfileIdForUpdate}
           body={updateProfileBody}
+          canMutate={canMutate}
         />
 
         <Separator />
@@ -84,6 +91,7 @@ export function AdminHttpAuthProfilesCard({ http, openMutation }: AdminHttpAuthP
             profileId={profileIdForEnable}
             setProfileId={setProfileIdForEnable}
             body={enableProfileBody}
+            canMutate={canMutate}
           />
           <AuthProfilesDisableSection
             http={http}
@@ -92,6 +100,7 @@ export function AdminHttpAuthProfilesCard({ http, openMutation }: AdminHttpAuthP
             profileId={profileIdForDisable}
             setProfileId={setProfileIdForDisable}
             body={disableProfileBody}
+            canMutate={canMutate}
           />
         </div>
 
@@ -190,11 +199,13 @@ function AuthProfilesCreateRow({
   run,
   body,
   openMutation,
+  canMutate,
 }: {
   http: AdminHttpClient;
   run: ApiRunner;
   body: JsonInputState;
   openMutation: OpenMutation;
+  canMutate: boolean;
 }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
@@ -208,7 +219,7 @@ function AuthProfilesCreateRow({
         <Button
           data-testid="admin-auth-profiles-create"
           variant="danger"
-          disabled={body.errorMessage !== null || typeof body.value === "undefined"}
+          disabled={!canMutate || body.errorMessage !== null || typeof body.value === "undefined"}
           onClick={() => {
             const input = resolveJsonValue(body, undefined);
             openMutation({
@@ -240,6 +251,7 @@ function AuthProfilesUpdateSection({
   profileId,
   setProfileId,
   body,
+  canMutate,
 }: {
   http: AdminHttpClient;
   run: ApiRunner;
@@ -247,6 +259,7 @@ function AuthProfilesUpdateSection({
   profileId: string;
   setProfileId: (next: string) => void;
   body: JsonInputState;
+  canMutate: boolean;
 }) {
   const trimmed = profileId.trim();
 
@@ -272,7 +285,7 @@ function AuthProfilesUpdateSection({
         <Button
           data-testid="admin-auth-profiles-update"
           variant="danger"
-          disabled={trimmed.length === 0 || body.errorMessage !== null}
+          disabled={!canMutate || trimmed.length === 0 || body.errorMessage !== null}
           onClick={() => {
             const input = resolveJsonValue(body, {});
             openMutation({
@@ -303,6 +316,7 @@ function AuthProfilesEnableSection({
   profileId,
   setProfileId,
   body,
+  canMutate,
 }: {
   http: AdminHttpClient;
   run: ApiRunner;
@@ -310,6 +324,7 @@ function AuthProfilesEnableSection({
   profileId: string;
   setProfileId: (next: string) => void;
   body: JsonInputState;
+  canMutate: boolean;
 }) {
   const trimmed = profileId.trim();
 
@@ -332,7 +347,7 @@ function AuthProfilesEnableSection({
       <Button
         data-testid="admin-auth-profiles-enable"
         variant="danger"
-        disabled={trimmed.length === 0 || body.errorMessage !== null}
+        disabled={!canMutate || trimmed.length === 0 || body.errorMessage !== null}
         onClick={() => {
           const input = resolveJsonValue(body, {});
           openMutation({
@@ -362,6 +377,7 @@ function AuthProfilesDisableSection({
   profileId,
   setProfileId,
   body,
+  canMutate,
 }: {
   http: AdminHttpClient;
   run: ApiRunner;
@@ -369,6 +385,7 @@ function AuthProfilesDisableSection({
   profileId: string;
   setProfileId: (next: string) => void;
   body: JsonInputState;
+  canMutate: boolean;
 }) {
   const trimmed = profileId.trim();
 
@@ -391,7 +408,7 @@ function AuthProfilesDisableSection({
       <Button
         data-testid="admin-auth-profiles-disable"
         variant="danger"
-        disabled={trimmed.length === 0 || body.errorMessage !== null}
+        disabled={!canMutate || trimmed.length === 0 || body.errorMessage !== null}
         onClick={() => {
           const input = resolveJsonValue(body, {});
           openMutation({

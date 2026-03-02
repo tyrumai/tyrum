@@ -31,7 +31,10 @@ function openSettings(container: HTMLElement): void {
   });
 }
 
-async function openAdminGatewayTab(container: HTMLElement): Promise<void> {
+async function openAdminTab(
+  container: HTMLElement,
+  tabTestId = "admin-http-tab-gateway",
+): Promise<void> {
   const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
   expect(adminLink).not.toBeNull();
 
@@ -40,13 +43,11 @@ async function openAdminGatewayTab(container: HTMLElement): Promise<void> {
     await Promise.resolve();
   });
 
-  const gatewayTab = container.querySelector<HTMLButtonElement>(
-    '[data-testid="admin-http-tab-gateway"]',
-  );
-  expect(gatewayTab).not.toBeNull();
+  const tab = container.querySelector<HTMLButtonElement>(`[data-testid="${tabTestId}"]`);
+  expect(tab).not.toBeNull();
 
   await act(async () => {
-    gatewayTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    tab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     await Promise.resolve();
   });
 }
@@ -706,7 +707,7 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("renders an Admin nav item and an Admin hub skeleton", () => {
+  it("renders an Admin nav item and strict admin section tabs", () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -734,9 +735,21 @@ describe("operator-ui", () => {
       });
 
       expect(container.querySelector("[data-testid='admin-page']")).not.toBeNull();
-      expect(container.querySelector("[data-testid='admin-tab-http']")).not.toBeNull();
-      expect(container.querySelector("[data-testid='admin-tab-ws']")).not.toBeNull();
-      expect(container.querySelector("[data-testid='admin-mode-gate']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-tab-http']")).toBeNull();
+      expect(container.querySelector("[data-testid='admin-tab-ws']")).toBeNull();
+      expect(container.querySelector("[data-testid='admin-http-tab-policy-auth']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-http-tab-audit']")).not.toBeNull();
+      expect(
+        container.querySelector("[data-testid='admin-http-tab-routing-config']"),
+      ).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-http-tab-secrets']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-http-tab-plugins']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-http-tab-gateway']")).not.toBeNull();
+      expect(
+        container.querySelector("[data-testid='admin-http-tab-models-refresh']"),
+      ).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-ws-tab-commands']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-read-only-notice']")).not.toBeNull();
     } finally {
       act(() => {
         root?.unmount();
@@ -745,7 +758,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("renders Admin HTTP panels when Admin Mode is active", async () => {
+  it("renders Admin section panels when Admin Mode is active", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -769,10 +782,14 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminGatewayTab(container);
+      await openAdminTab(container, "admin-http-tab-gateway");
       expect(container.querySelector("[data-testid='admin-http-device-tokens']")).not.toBeNull();
+
+      await openAdminTab(container, "admin-http-tab-plugins");
       expect(container.querySelector("[data-testid='admin-http-plugins']")).not.toBeNull();
-      expect(container.querySelector("[data-testid='admin-http-contracts']")).not.toBeNull();
+
+      await openAdminTab(container, "admin-http-tab-models-refresh");
+      expect(container.querySelector("[data-testid='admin-http-models-refresh']")).not.toBeNull();
     } finally {
       act(() => {
         root?.unmount();
@@ -805,7 +822,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminGatewayTab(container);
+      await openAdminTab(container, "admin-http-tab-gateway");
       const issueButton = container.querySelector<HTMLButtonElement>(
         '[data-testid="admin-http-device-tokens-issue"]',
       );
@@ -861,7 +878,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminGatewayTab(container);
+      await openAdminTab(container, "admin-http-tab-gateway");
       const deviceTokensCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-device-tokens"]',
       );
@@ -930,7 +947,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminGatewayTab(container);
+      await openAdminTab(container, "admin-http-tab-plugins");
       const pluginsCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-plugins"]',
       );
@@ -969,7 +986,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("disables Admin hub Contracts.getSchema until a schema file is provided", async () => {
+  it("does not render the deprecated Contracts panel in the Admin hub", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -993,37 +1010,8 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminGatewayTab(container);
-      const contractsCard = container.querySelector<HTMLElement>(
-        '[data-testid="admin-http-contracts"]',
-      );
-      expect(contractsCard).not.toBeNull();
-
-      const buttons = Array.from(
-        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-      );
-      const getSchemaButton = buttons.find((button) => button.textContent?.trim() === "Get schema");
-      expect(getSchemaButton).not.toBeUndefined();
-      expect(getSchemaButton?.disabled).toBe(true);
-
-      const schemaFileInput = contractsCard?.querySelector<HTMLInputElement>("input");
-      expect(schemaFileInput).not.toBeNull();
-
-      await act(async () => {
-        setControlledInputValue(schemaFileInput!, "some-contract.json");
-        await Promise.resolve();
-      });
-
-      expect(schemaFileInput?.value).toBe("some-contract.json");
-
-      const nextButtons = Array.from(
-        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-      );
-      const nextGetSchemaButton = nextButtons.find(
-        (button) => button.textContent?.trim() === "Get schema",
-      );
-      expect(nextGetSchemaButton).not.toBeUndefined();
-      expect(nextGetSchemaButton?.disabled).toBe(false);
+      await openAdminTab(container, "admin-http-tab-gateway");
+      expect(container.querySelector('[data-testid="admin-http-contracts"]')).toBeNull();
     } finally {
       act(() => {
         root?.unmount();
@@ -1076,7 +1064,7 @@ describe("operator-ui", () => {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
 
-      await openAdminGatewayTab(container);
+      await openAdminTab(container, "admin-http-tab-plugins");
       const pluginsCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-plugins"]',
       );
@@ -1174,25 +1162,8 @@ describe("operator-ui", () => {
     }
   });
 
-  it("disables Admin hub Contracts actions while a request is in flight", async () => {
-    const catalogDeferred = createDeferred<Response>();
-    const schemaDeferred = createDeferred<Response>();
-
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url =
-        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-
-      if (url === "http://example.test/contracts/jsonschema/catalog.json") {
-        return await catalogDeferred.promise;
-      }
-
-      if (url === "http://example.test/contracts/jsonschema/schema-a.json") {
-        return await schemaDeferred.promise;
-      }
-
-      throw new Error(`Unexpected fetch request: ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+  it("disables Admin hub models refresh action while a request is in flight", async () => {
+    const refreshDeferred = createDeferred<Response>();
 
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -1208,6 +1179,9 @@ describe("operator-ui", () => {
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
 
+    const fetchMock = vi.fn(async () => await refreshDeferred.promise);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
     const container = document.createElement("div");
     document.body.appendChild(container);
 
@@ -1218,93 +1192,60 @@ describe("operator-ui", () => {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
 
-      await openAdminGatewayTab(container);
-      const contractsCard = container.querySelector<HTMLElement>(
-        '[data-testid="admin-http-contracts"]',
+      await openAdminTab(container, "admin-http-tab-models-refresh");
+      const openButton = container.querySelector<HTMLButtonElement>(
+        '[data-testid="admin-http-models-refresh-open"]',
       );
-      expect(contractsCard).not.toBeNull();
+      expect(openButton).not.toBeNull();
+      expect(openButton?.disabled).toBe(false);
 
-      const schemaFileInput = contractsCard?.querySelector<HTMLInputElement>("input");
-      expect(schemaFileInput).not.toBeNull();
+      act(() => {
+        openButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      const checkbox = document.body.querySelector('[data-testid="confirm-danger-checkbox"]');
+      expect(checkbox).not.toBeNull();
+      act(() => {
+        checkbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      const confirmButton = document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="confirm-danger-confirm"]',
+      );
+      expect(confirmButton).not.toBeNull();
 
       await act(async () => {
-        setControlledInputValue(schemaFileInput!, "schema-a.json");
+        confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
         await Promise.resolve();
       });
 
-      const getCatalogButton = Array.from(
-        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-      ).find((button) => button.textContent?.trim() === "Get catalog");
-      expect(getCatalogButton).not.toBeUndefined();
-      expect(getCatalogButton?.disabled).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [input, init] = fetchMock.mock.calls[0] ?? [];
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      expect(url).toBe("http://example.test/models/refresh");
+      expect(init?.method).toBe("POST");
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer elevated-test-token");
 
-      const getSchemaButton = Array.from(
-        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-      ).find((button) => button.textContent?.trim() === "Get schema");
-      expect(getSchemaButton).not.toBeUndefined();
-      expect(getSchemaButton?.disabled).toBe(false);
-
-      await act(async () => {
-        getCatalogButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await Promise.resolve();
-      });
-
-      const buttonsDuringCatalog = Array.from(
-        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      const confirmButtonDuringRequest = document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="confirm-danger-confirm"]',
       );
-      const schemaDuringCatalog = buttonsDuringCatalog.find(
-        (button) => button.textContent?.trim() === "Get schema",
-      );
-      expect(schemaDuringCatalog).not.toBeUndefined();
-      expect(schemaDuringCatalog?.disabled).toBe(true);
+      expect(confirmButtonDuringRequest).not.toBeNull();
+      expect(confirmButtonDuringRequest?.disabled).toBe(true);
+      expect(openButton?.disabled).toBe(false);
 
-      catalogDeferred.resolve(
-        new Response(
-          JSON.stringify({ format: "jsonschema", schemas: [{ file: "schema-a.json" }] }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        ),
-      );
-
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      });
-
-      const schemaAfterCatalog = Array.from(
-        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-      ).find((button) => button.textContent?.trim() === "Get schema");
-      expect(schemaAfterCatalog).not.toBeUndefined();
-      expect(schemaAfterCatalog?.disabled).toBe(false);
-
-      await act(async () => {
-        schemaAfterCatalog?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await Promise.resolve();
-      });
-
-      const buttonsDuringSchema = Array.from(
-        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-      );
-      const catalogDuringSchema = buttonsDuringSchema.find(
-        (button) => button.textContent?.trim() === "Get catalog",
-      );
-      expect(catalogDuringSchema).not.toBeUndefined();
-      expect(catalogDuringSchema?.disabled).toBe(true);
-
-      schemaDeferred.resolve(
-        new Response(JSON.stringify({ title: "schema-a" }), {
+      refreshDeferred.resolve(
+        new Response(JSON.stringify({ status: "ok", models_dev: {} }), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
       );
-
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await Promise.resolve();
       });
 
-      const catalogAfterSchema = Array.from(
-        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-      ).find((button) => button.textContent?.trim() === "Get catalog");
-      expect(catalogAfterSchema).not.toBeUndefined();
-      expect(catalogAfterSchema?.disabled).toBe(false);
+      expect(openButton?.disabled).toBe(false);
     } finally {
       act(() => {
         root?.unmount();
@@ -1375,7 +1316,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminGatewayTab(container);
+      await openAdminTab(container, "admin-http-tab-plugins");
       const pluginsCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-plugins"]',
       );
@@ -1423,42 +1364,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("keeps Admin hub Contracts.getSchema download filename stable after input changes", async () => {
-    const { restore } = stubUrlObjectUrls();
-
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url =
-        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-
-      if (url === "http://example.test/contracts/jsonschema/schema-a.json") {
-        return new Response(JSON.stringify({ title: "schema-a" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-
-      throw new Error(`Unexpected fetch request: ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-
-    const clickedDownloads: string[] = [];
-    const originalCreateElement = document.createElement.bind(document);
-    const createElement = vi
-      .spyOn(document, "createElement")
-      .mockImplementation((tagName: string) => {
-        const element = originalCreateElement(tagName);
-        if (tagName === "a") {
-          const anchor = element as HTMLAnchorElement;
-          Object.defineProperty(anchor, "click", {
-            value: () => {
-              clickedDownloads.push(anchor.download);
-            },
-            configurable: true,
-          });
-        }
-        return element;
-      });
-
+  it("requires confirmation before refreshing models from the Admin hub", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -1473,6 +1379,14 @@ describe("operator-ui", () => {
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
 
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ status: "ok", models_dev: {} }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
     const container = document.createElement("div");
     document.body.appendChild(container);
 
@@ -1482,47 +1396,47 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminGatewayTab(container);
-      const contractsCard = container.querySelector<HTMLElement>(
-        '[data-testid="admin-http-contracts"]',
-      );
-      expect(contractsCard).not.toBeNull();
+      await openAdminTab(container, "admin-http-tab-models-refresh");
 
-      const schemaInput = contractsCard?.querySelector<HTMLInputElement>("input");
-      expect(schemaInput).not.toBeNull();
+      const refreshButton = container.querySelector<HTMLButtonElement>(
+        '[data-testid="admin-http-models-refresh-open"]',
+      );
+      expect(refreshButton).not.toBeNull();
+
+      act(() => {
+        refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(fetchMock).toHaveBeenCalledTimes(0);
+
+      const confirmButton = document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="confirm-danger-confirm"]',
+      );
+      expect(confirmButton).not.toBeNull();
+      expect(confirmButton?.disabled).toBe(true);
+
+      const checkbox = document.body.querySelector('[data-testid="confirm-danger-checkbox"]');
+      expect(checkbox).not.toBeNull();
+      act(() => {
+        checkbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(confirmButton?.disabled).toBe(false);
 
       await act(async () => {
-        setControlledInputValue(schemaInput!, "schema-a.json");
+        confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
         await Promise.resolve();
       });
 
-      const getSchemaButton = Array.from(
-        contractsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-      ).find((button) => button.textContent?.trim() === "Get schema");
-      expect(getSchemaButton).not.toBeUndefined();
-
-      await act(async () => {
-        getSchemaButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      });
-
-      const downloadButton = contractsCard?.querySelector<HTMLButtonElement>(
-        "button[aria-label='Download JSON']",
-      );
-      expect(downloadButton).not.toBeNull();
-
-      await act(async () => {
-        setControlledInputValue(schemaInput!, "schema-b.json");
-        await Promise.resolve();
-      });
-
-      clickedDownloads.length = 0;
-      downloadButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-
-      expect(clickedDownloads).toEqual(["schema-a.json"]);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [input, init] = fetchMock.mock.calls[0] ?? [];
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      expect(url).toBe("http://example.test/models/refresh");
+      expect(init?.method).toBe("POST");
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer elevated-test-token");
     } finally {
-      restore();
-      createElement.mockRestore();
       act(() => {
         root?.unmount();
       });
@@ -1554,7 +1468,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminGatewayTab(container);
+      await openAdminTab(container, "admin-http-tab-gateway");
       const deviceTokensCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-device-tokens"]',
       );

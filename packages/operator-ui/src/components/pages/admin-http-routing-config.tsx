@@ -7,19 +7,21 @@ import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { Input } from "../ui/input.js";
 import { JsonTextarea } from "../ui/json-textarea.js";
+import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
 
 type RoutingConfigApi = OperatorCore["http"]["routingConfig"];
 
 export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): React.ReactElement {
-  const api = core.http.routingConfig;
+  const api = (useAdminHttpClient() ?? core.http).routingConfig;
+  const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
   return (
     <section className="grid gap-3" data-testid="admin-http-routing-config">
       <div className="text-sm font-medium text-fg">Routing config</div>
 
       <RoutingConfigGetCard api={api} />
-      <RoutingConfigUpdateCard api={api} />
-      <RoutingConfigRevertCard api={api} />
+      <RoutingConfigUpdateCard api={api} canMutate={canMutate} requestEnter={requestEnter} />
+      <RoutingConfigRevertCard api={api} canMutate={canMutate} requestEnter={requestEnter} />
     </section>
   );
 }
@@ -65,7 +67,15 @@ function RoutingConfigGetCard({ api }: { api: RoutingConfigApi }): React.ReactEl
   );
 }
 
-function RoutingConfigUpdateCard({ api }: { api: RoutingConfigApi }): React.ReactElement {
+function RoutingConfigUpdateCard({
+  api,
+  canMutate,
+  requestEnter,
+}: {
+  api: RoutingConfigApi;
+  canMutate: boolean;
+  requestEnter: () => void;
+}): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const [configRaw, setConfigRaw] = React.useState("");
   const [configValue, setConfigValue] = React.useState<unknown | undefined>(undefined);
@@ -79,6 +89,10 @@ function RoutingConfigUpdateCard({ api }: { api: RoutingConfigApi }): React.Reac
   const runUpdate = async (): Promise<void> => {
     setResult(undefined);
     setError(undefined);
+    if (!canMutate) {
+      requestEnter();
+      throw new Error("Enter Admin Mode to update routing config.");
+    }
     if (!api) return void setError(new Error("Routing config API unavailable."));
     if (!canUpdate) return void setError(new Error("A valid config JSON object is required."));
 
@@ -124,11 +138,23 @@ function RoutingConfigUpdateCard({ api }: { api: RoutingConfigApi }): React.Reac
             type="button"
             variant="danger"
             data-testid="routing-config-update-open"
-            disabled={!canUpdate}
+            disabled={!canMutate || !canUpdate}
             onClick={() => setOpen(true)}
           >
             Update routing config
           </Button>
+          {!canMutate ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                requestEnter();
+              }}
+            >
+              Enter Admin Mode
+            </Button>
+          ) : null}
         </CardFooter>
       </Card>
 
@@ -144,7 +170,15 @@ function RoutingConfigUpdateCard({ api }: { api: RoutingConfigApi }): React.Reac
   );
 }
 
-function RoutingConfigRevertCard({ api }: { api: RoutingConfigApi }): React.ReactElement {
+function RoutingConfigRevertCard({
+  api,
+  canMutate,
+  requestEnter,
+}: {
+  api: RoutingConfigApi;
+  canMutate: boolean;
+  requestEnter: () => void;
+}): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const [revisionRaw, setRevisionRaw] = React.useState("");
   const [reasonRaw, setReasonRaw] = React.useState("");
@@ -157,6 +191,10 @@ function RoutingConfigRevertCard({ api }: { api: RoutingConfigApi }): React.Reac
   const runRevert = async (): Promise<void> => {
     setResult(undefined);
     setError(undefined);
+    if (!canMutate) {
+      requestEnter();
+      throw new Error("Enter Admin Mode to revert routing config.");
+    }
     if (!api) return void setError(new Error("Routing config API unavailable."));
     if (!canRevert) return void setError(new Error("A positive revision number is required."));
 
@@ -196,11 +234,23 @@ function RoutingConfigRevertCard({ api }: { api: RoutingConfigApi }): React.Reac
             type="button"
             variant="danger"
             data-testid="routing-config-revert-open"
-            disabled={!canRevert}
+            disabled={!canMutate || !canRevert}
             onClick={() => setOpen(true)}
           >
             Revert routing config
           </Button>
+          {!canMutate ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                requestEnter();
+              }}
+            >
+              Enter Admin Mode
+            </Button>
+          ) : null}
         </CardFooter>
       </Card>
 

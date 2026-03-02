@@ -7,6 +7,7 @@ import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { Input } from "../ui/input.js";
 import { Label } from "../ui/label.js";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
+import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
 
 type SecretProviderKind = "env" | "file" | "keychain";
 type SecretsApi = OperatorCore["http"]["secrets"];
@@ -19,8 +20,9 @@ function normalizeAgentId(agentIdRaw: string): { agent_id?: string } | undefined
 
 export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.ReactElement {
   const [agentIdRaw, setAgentIdRaw] = React.useState("");
+  const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
-  const api = core.http.secrets;
+  const api = (useAdminHttpClient() ?? core.http).secrets;
   const agentQuery = normalizeAgentId(agentIdRaw);
 
   return (
@@ -29,9 +31,24 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
 
       <AgentScopeCard agentIdRaw={agentIdRaw} onAgentIdRawChange={setAgentIdRaw} />
       <SecretsListCard api={api} agentQuery={agentQuery} />
-      <SecretsStoreCard api={api} agentQuery={agentQuery} />
-      <SecretsRotateCard api={api} agentQuery={agentQuery} />
-      <SecretsRevokeCard api={api} agentQuery={agentQuery} />
+      <SecretsStoreCard
+        api={api}
+        agentQuery={agentQuery}
+        canMutate={canMutate}
+        requestEnter={requestEnter}
+      />
+      <SecretsRotateCard
+        api={api}
+        agentQuery={agentQuery}
+        canMutate={canMutate}
+        requestEnter={requestEnter}
+      />
+      <SecretsRevokeCard
+        api={api}
+        agentQuery={agentQuery}
+        canMutate={canMutate}
+        requestEnter={requestEnter}
+      />
     </section>
   );
 }
@@ -109,9 +126,13 @@ function SecretsListCard({
 function SecretsStoreCard({
   api,
   agentQuery,
+  canMutate,
+  requestEnter,
 }: {
   api: SecretsApi;
   agentQuery: ReturnType<typeof normalizeAgentId>;
+  canMutate: boolean;
+  requestEnter: () => void;
 }): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const [scopeRaw, setScopeRaw] = React.useState("");
@@ -125,6 +146,10 @@ function SecretsStoreCard({
   const runStore = async (): Promise<void> => {
     setResult(undefined);
     setError(undefined);
+    if (!canMutate) {
+      requestEnter();
+      throw new Error("Enter Admin Mode to store secrets.");
+    }
 
     const scope = scopeRaw.trim();
     if (!scope) return void setError(new Error("scope is required"));
@@ -176,11 +201,23 @@ function SecretsStoreCard({
             type="button"
             variant="danger"
             data-testid="secrets-store-open"
-            disabled={!canStore}
+            disabled={!canMutate || !canStore}
             onClick={() => setOpen(true)}
           >
             Store secret
           </Button>
+          {!canMutate ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                requestEnter();
+              }}
+            >
+              Enter Admin Mode
+            </Button>
+          ) : null}
         </CardFooter>
       </Card>
 
@@ -232,9 +269,13 @@ function SecretProviderFieldset({
 function SecretsRotateCard({
   api,
   agentQuery,
+  canMutate,
+  requestEnter,
 }: {
   api: SecretsApi;
   agentQuery: ReturnType<typeof normalizeAgentId>;
+  canMutate: boolean;
+  requestEnter: () => void;
 }): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const [handleIdRaw, setHandleIdRaw] = React.useState("");
@@ -247,6 +288,10 @@ function SecretsRotateCard({
   const runRotate = async (): Promise<void> => {
     setResult(undefined);
     setError(undefined);
+    if (!canMutate) {
+      requestEnter();
+      throw new Error("Enter Admin Mode to rotate secrets.");
+    }
 
     const handleId = handleIdRaw.trim();
     if (!handleId) return void setError(new Error("handle_id is required"));
@@ -295,11 +340,23 @@ function SecretsRotateCard({
             type="button"
             variant="danger"
             data-testid="secrets-rotate-open"
-            disabled={!canRotate}
+            disabled={!canMutate || !canRotate}
             onClick={() => setOpen(true)}
           >
             Rotate secret
           </Button>
+          {!canMutate ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                requestEnter();
+              }}
+            >
+              Enter Admin Mode
+            </Button>
+          ) : null}
         </CardFooter>
       </Card>
 
@@ -318,9 +375,13 @@ function SecretsRotateCard({
 function SecretsRevokeCard({
   api,
   agentQuery,
+  canMutate,
+  requestEnter,
 }: {
   api: SecretsApi;
   agentQuery: ReturnType<typeof normalizeAgentId>;
+  canMutate: boolean;
+  requestEnter: () => void;
 }): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const [handleIdRaw, setHandleIdRaw] = React.useState("");
@@ -332,6 +393,10 @@ function SecretsRevokeCard({
   const runRevoke = async (): Promise<void> => {
     setResult(undefined);
     setError(undefined);
+    if (!canMutate) {
+      requestEnter();
+      throw new Error("Enter Admin Mode to revoke secrets.");
+    }
 
     const handleId = handleIdRaw.trim();
     if (!handleId) return void setError(new Error("handle_id is required"));
@@ -364,11 +429,23 @@ function SecretsRevokeCard({
             type="button"
             variant="danger"
             data-testid="secrets-revoke-open"
-            disabled={!canRevoke}
+            disabled={!canMutate || !canRevoke}
             onClick={() => setOpen(true)}
           >
             Revoke secret
           </Button>
+          {!canMutate ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                requestEnter();
+              }}
+            >
+              Enter Admin Mode
+            </Button>
+          ) : null}
         </CardFooter>
       </Card>
 

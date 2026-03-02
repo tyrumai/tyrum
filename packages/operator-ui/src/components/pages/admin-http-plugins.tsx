@@ -1,5 +1,6 @@
+import type { OperatorCore } from "@tyrum/operator-core";
 import { useState } from "react";
-import { toSafeJsonDownloadFileName, useAdminHttpClient } from "./admin-http-shared.js";
+import { toSafeJsonDownloadFileName } from "./admin-http-shared.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -28,6 +29,7 @@ function PluginsActions({
       <div className="flex flex-wrap items-end gap-2">
         <Button
           type="button"
+          data-testid="admin-http-plugins-list"
           isLoading={busy === "list"}
           disabled={!canList || isBusy}
           onClick={() => {
@@ -51,6 +53,7 @@ function PluginsActions({
         </div>
         <Button
           type="button"
+          data-testid="admin-http-plugins-get"
           isLoading={busy === "get"}
           disabled={!canGet || isBusy}
           onClick={() => {
@@ -95,8 +98,8 @@ function PluginsResults({
   );
 }
 
-export function PluginsCard() {
-  const http = useAdminHttpClient();
+export function PluginsCard({ core }: { core: OperatorCore }) {
+  const http = core.http;
   const [busy, setBusy] = useState<"list" | "get" | null>(null);
   const [pluginId, setPluginId] = useState("");
   const [pluginIdForGetResult, setPluginIdForGetResult] = useState<string | null>(null);
@@ -106,8 +109,8 @@ export function PluginsCard() {
   const [getError, setGetError] = useState<unknown | undefined>(undefined);
 
   const trimmedPluginId = pluginId.trim();
-  const canList = Boolean(http);
-  const canGet = Boolean(http) && trimmedPluginId.length > 0;
+  const canList = true;
+  const canGet = trimmedPluginId.length > 0;
 
   const getDownloadFileName = toSafeJsonDownloadFileName(
     pluginIdForGetResult ?? trimmedPluginId,
@@ -116,7 +119,6 @@ export function PluginsCard() {
 
   const list = (): void => {
     if (busy) return;
-    if (!http) return;
     setBusy("list");
     setListError(undefined);
     setListResult(undefined);
@@ -131,7 +133,6 @@ export function PluginsCard() {
 
   const get = (): void => {
     if (busy) return;
-    if (!http) return;
     setPluginIdForGetResult(trimmedPluginId);
     setBusy("get");
     setGetError(undefined);

@@ -41,6 +41,7 @@ function createTestCore(): {
   core: OperatorCore;
   routingConfigUpdate: ReturnType<typeof vi.fn>;
   secretsRotate: ReturnType<typeof vi.fn>;
+  policyCreateOverride: ReturnType<typeof vi.fn>;
 } {
   const adminModeStore = createAdminModeStore({
     tickIntervalMs: 0,
@@ -53,11 +54,29 @@ function createTestCore(): {
 
   const routingConfigUpdate = vi.fn(async () => ({ revision: 1, config: { v: 1 } }) as unknown);
   const secretsRotate = vi.fn(async () => ({ revoked: true, handle: {} }) as unknown);
+  const policyCreateOverride = vi.fn(async () => ({ status: "ok" }) as unknown);
 
   const core = {
     httpBaseUrl: "http://example.test",
     adminModeStore,
     http: {
+      policy: {
+        getBundle: vi.fn(async () => ({ status: "ok" }) as unknown),
+        listOverrides: vi.fn(async () => ({ status: "ok", overrides: [] }) as unknown),
+        createOverride: policyCreateOverride,
+        revokeOverride: vi.fn(async () => ({ status: "ok" }) as unknown),
+      },
+      authProfiles: {
+        list: vi.fn(async () => ({ status: "ok", profiles: [] }) as unknown),
+        create: vi.fn(async () => ({ status: "ok" }) as unknown),
+        update: vi.fn(async () => ({ status: "ok" }) as unknown),
+        disable: vi.fn(async () => ({ status: "ok" }) as unknown),
+        enable: vi.fn(async () => ({ status: "ok" }) as unknown),
+      },
+      authPins: {
+        list: vi.fn(async () => ({ status: "ok", pins: [] }) as unknown),
+        set: vi.fn(async () => ({ status: "ok" }) as unknown),
+      },
       routingConfig: {
         get: vi.fn(async () => ({ revision: 0, config: { v: 1 } }) as unknown),
         update: routingConfigUpdate,
@@ -72,7 +91,7 @@ function createTestCore(): {
     },
   } as unknown as OperatorCore;
 
-  return { core, routingConfigUpdate, secretsRotate };
+  return { core, routingConfigUpdate, secretsRotate, policyCreateOverride };
 }
 
 describe("AdminPage (HTTP)", () => {
@@ -98,6 +117,21 @@ describe("AdminPage (HTTP)", () => {
 describe("AdminPage (HTTP) routing config", () => {
   it("requires confirmation before updating routing config", async () => {
     const { core, routingConfigUpdate } = createTestCore();
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      expect(url).toBe("http://example.test/routing/config");
+      expect(init?.method).toBe("PUT");
+
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
+
+      const bodyRaw = String(init?.body ?? "");
+      expect(JSON.parse(bodyRaw)).toEqual({ config: { v: 1 } });
+
+      return new Response(JSON.stringify({ revision: 1, config: { v: 1 } }), { status: 201 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     const { container, root } = renderIntoDocument(
       React.createElement(AdminModeProvider, { core, mode: "web" }, [
@@ -150,7 +184,8 @@ describe("AdminPage (HTTP) routing config", () => {
       await Promise.resolve();
     });
 
-    expect(routingConfigUpdate).toHaveBeenCalledTimes(1);
+    expect(routingConfigUpdate).toHaveBeenCalledTimes(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
     cleanupTestRoot({ container, root });
   });
@@ -159,6 +194,32 @@ describe("AdminPage (HTTP) routing config", () => {
 describe("AdminPage (HTTP) secrets", () => {
   it("preserves whitespace when rotating secrets", async () => {
     const { core, secretsRotate } = createTestCore();
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      expect(url).toBe("http://example.test/secrets/h-1/rotate");
+      expect(init?.method).toBe("POST");
+
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
+
+      const bodyRaw = String(init?.body ?? "");
+      expect(JSON.parse(bodyRaw)).toEqual({ value: "  new-secret  " });
+
+      return new Response(
+        JSON.stringify({
+          revoked: true,
+          handle: {
+            handle_id: "h-1",
+            provider: "env",
+            scope: "scope-1",
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+        }),
+        { status: 201 },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     const { container, root } = renderIntoDocument(
       React.createElement(AdminModeProvider, { core, mode: "web" }, [
@@ -225,7 +286,8 @@ describe("AdminPage (HTTP) secrets", () => {
       await Promise.resolve();
     });
 
-    expect(secretsRotate).toHaveBeenCalledWith("h-1", { value: "  new-secret  " }, undefined);
+    expect(secretsRotate).toHaveBeenCalledTimes(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
     cleanupTestRoot({ container, root });
   });
@@ -325,38 +387,38 @@ describe("AdminPage (HTTP) policy + auth", () => {
   });
 
   it("requires confirmation before creating policy overrides", async () => {
-    const { core } = createTestCore();
+    const { core, policyCreateOverride } = createTestCore();
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url =
-        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      expect(url).toBe("http://example.test/policy/overrides");
+      expect(init?.method).toBe("POST");
 
-      if (url !== "http://example.test/policy/overrides" || init?.method !== "POST") {
-        throw new Error(`Unexpected fetch call: ${init?.method ?? "GET"} ${url}`);
-      }
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
 
-      const headers = init?.headers as Headers | undefined;
-      expect(headers?.get("authorization")).toBe("Bearer test-elevated-token");
-
-      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
-      expect(body).toEqual({ agent_id: "agent-1", tool_id: "tool-1", pattern: ".*" });
+      const bodyRaw = String(init?.body ?? "");
+      expect(JSON.parse(bodyRaw)).toEqual({
+        agent_id: "agent-1",
+        tool_id: "tool-1",
+        pattern: ".*",
+      });
 
       return new Response(
         JSON.stringify({
           override: {
-            policy_override_id: "00000000-0000-0000-0000-000000000000",
+            policy_override_id: "00000000-0000-0000-0000-000000000001",
             status: "active",
-            created_at: new Date().toISOString(),
+            created_at: "2026-03-01T00:00:00.000Z",
             agent_id: "agent-1",
             tool_id: "tool-1",
             pattern: ".*",
           },
         }),
-        { status: 201, headers: { "content-type": "application/json" } },
+        { status: 201 },
       );
     });
-
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock);
 
     const { container, root } = renderIntoDocument(
       React.createElement(AdminModeProvider, { core, mode: "web" }, [
@@ -396,6 +458,7 @@ describe("AdminPage (HTTP) policy + auth", () => {
       createButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
+    expect(policyCreateOverride).toHaveBeenCalledTimes(0);
     expect(fetchMock).toHaveBeenCalledTimes(0);
 
     const confirmButton = document.body.querySelector<HTMLButtonElement>(
@@ -418,6 +481,7 @@ describe("AdminPage (HTTP) policy + auth", () => {
       await Promise.resolve();
     });
 
+    expect(policyCreateOverride).toHaveBeenCalledTimes(0);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     cleanupTestRoot({ container, root });

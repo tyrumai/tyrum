@@ -18,9 +18,14 @@ import {
 export interface AdminHttpAuthPinsCardProps {
   http: AdminHttpClient;
   openMutation: OpenMutation;
+  canMutate: boolean;
 }
 
-export function AdminHttpAuthPinsCard({ http, openMutation }: AdminHttpAuthPinsCardProps) {
+export function AdminHttpAuthPinsCard({
+  http,
+  openMutation,
+  canMutate,
+}: AdminHttpAuthPinsCardProps) {
   const pins = useApiResultState("Auth pins");
   const listPinsQuery = useJsonInputState("{}");
   const setPinBody = useJsonInputState(
@@ -54,7 +59,13 @@ export function AdminHttpAuthPinsCard({ http, openMutation }: AdminHttpAuthPinsC
 
         <Separator />
 
-        <AuthPinsSetRow http={http} run={pins.run} body={setPinBody} openMutation={openMutation} />
+        <AuthPinsSetRow
+          http={http}
+          run={pins.run}
+          body={setPinBody}
+          openMutation={openMutation}
+          canMutate={canMutate}
+        />
 
         <ApiResultCard
           heading={pins.state.heading}
@@ -109,11 +120,13 @@ function AuthPinsSetRow({
   run,
   body,
   openMutation,
+  canMutate,
 }: {
   http: AdminHttpClient;
   run: ApiRunner;
   body: JsonInputState;
   openMutation: OpenMutation;
+  canMutate: boolean;
 }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
@@ -128,7 +141,7 @@ function AuthPinsSetRow({
         <Button
           data-testid="admin-auth-pins-set"
           variant="danger"
-          disabled={body.errorMessage !== null || typeof body.value === "undefined"}
+          disabled={!canMutate || body.errorMessage !== null || typeof body.value === "undefined"}
           onClick={() => {
             const input = resolveJsonValue(body, undefined);
             openMutation({
