@@ -10,7 +10,13 @@ import type {
 } from "../../../operator-core/src/stores/admin-mode-store.js";
 import { AdminModeProvider } from "../../src/admin-mode.js";
 import { AdminPage } from "../../src/components/pages/admin-page.js";
-import { cleanupTestRoot, click, renderIntoDocument, setNativeValue } from "../test-utils.js";
+import {
+  cleanupTestRoot,
+  click,
+  renderIntoDocument,
+  setNativeValue,
+  type TestRoot,
+} from "../test-utils.js";
 
 function createActiveAdminModeStore(): AdminModeStore {
   const activeState: AdminModeState = {
@@ -28,6 +34,46 @@ function createActiveAdminModeStore(): AdminModeStore {
     exit: vi.fn(),
     dispose: vi.fn(),
   };
+}
+
+async function openWorkBoardWsPanels(testRoot: TestRoot): Promise<void> {
+  const wsTab = testRoot.container.querySelector<HTMLButtonElement>('[data-testid="admin-tab-ws"]');
+  expect(wsTab).not.toBeNull();
+  await act(async () => {
+    click(wsTab!);
+  });
+
+  const workboardTab = testRoot.container.querySelector<HTMLButtonElement>(
+    '[data-testid="admin-ws-tab-workboard"]',
+  );
+  expect(workboardTab).not.toBeNull();
+  await act(async () => {
+    click(workboardTab!);
+  });
+}
+
+async function setWorkBoardScope(
+  testRoot: TestRoot,
+  scope: { tenant_id: string; agent_id: string; workspace_id: string },
+): Promise<void> {
+  const tenant = testRoot.container.querySelector<HTMLInputElement>(
+    '[data-testid="work-scope-tenant-id"]',
+  );
+  const agent = testRoot.container.querySelector<HTMLInputElement>(
+    '[data-testid="work-scope-agent-id"]',
+  );
+  const workspace = testRoot.container.querySelector<HTMLInputElement>(
+    '[data-testid="work-scope-workspace-id"]',
+  );
+  expect(tenant).not.toBeNull();
+  expect(agent).not.toBeNull();
+  expect(workspace).not.toBeNull();
+
+  await act(async () => {
+    setNativeValue(tenant!, scope.tenant_id);
+    setNativeValue(agent!, scope.agent_id);
+    setNativeValue(workspace!, scope.workspace_id);
+  });
 }
 
 describe("AdminPage WorkBoard WS panels", () => {
@@ -93,39 +139,11 @@ describe("AdminPage WorkBoard WS panels", () => {
       }),
     );
 
-    const wsTab = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="admin-tab-ws"]',
-    );
-    expect(wsTab).not.toBeNull();
-    await act(async () => {
-      click(wsTab!);
-    });
-
-    const workboardTab = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="admin-ws-tab-workboard"]',
-    );
-    expect(workboardTab).not.toBeNull();
-    await act(async () => {
-      click(workboardTab!);
-    });
-
-    const tenant = testRoot.container.querySelector<HTMLInputElement>(
-      '[data-testid="work-scope-tenant-id"]',
-    );
-    const agent = testRoot.container.querySelector<HTMLInputElement>(
-      '[data-testid="work-scope-agent-id"]',
-    );
-    const workspace = testRoot.container.querySelector<HTMLInputElement>(
-      '[data-testid="work-scope-workspace-id"]',
-    );
-    expect(tenant).not.toBeNull();
-    expect(agent).not.toBeNull();
-    expect(workspace).not.toBeNull();
-
-    await act(async () => {
-      setNativeValue(tenant!, "tenant-1");
-      setNativeValue(agent!, "agent-1");
-      setNativeValue(workspace!, "ws-1");
+    await openWorkBoardWsPanels(testRoot);
+    await setWorkBoardScope(testRoot, {
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
     });
 
     const listPayload = testRoot.container.querySelector<HTMLTextAreaElement>(
@@ -445,6 +463,300 @@ describe("AdminPage WorkBoard WS panels", () => {
       scope: { kind: "agent", tenant_id: "tenant-1", agent_id: "agent-1", workspace_id: "ws-1" },
       key: "key-1",
       value_json: { ready: true },
+    });
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("wires WorkScope + payload JSON to core WorkBoard drilldown operations", async () => {
+    const workLinkCreate = vi.fn(async () => ({
+      link: { work_item_id: "work-1", linked_work_item_id: "work-2", kind: "depends_on" },
+    }));
+    const workLinkList = vi.fn(async () => ({
+      links: [{ work_item_id: "work-1", linked_work_item_id: "work-2", kind: "depends_on" }],
+    }));
+
+    const workArtifactList = vi.fn(async () => ({
+      artifacts: [
+        {
+          artifact_id: "artifact-1",
+          tenant_id: "tenant-1",
+          agent_id: "agent-1",
+          workspace_id: "ws-1",
+          work_item_id: "work-1",
+          kind: "other",
+          title: "First artifact",
+          refs: [],
+          created_at: "2026-03-01T00:00:00Z",
+        },
+      ],
+    }));
+    const workArtifactGet = vi.fn(async () => ({
+      artifact: { artifact_id: "artifact-1", kind: "other", title: "First artifact" },
+    }));
+    const workArtifactCreate = vi.fn(async () => ({
+      artifact: { artifact_id: "artifact-2", kind: "other", title: "New artifact" },
+    }));
+
+    const workDecisionList = vi.fn(async () => ({
+      decisions: [
+        {
+          decision_id: "decision-1",
+          tenant_id: "tenant-1",
+          agent_id: "agent-1",
+          workspace_id: "ws-1",
+          work_item_id: "work-1",
+          question: "Should we ship?",
+          chosen: "Yes",
+          alternatives: [],
+          rationale_md: "Because.",
+          input_artifact_ids: [],
+          created_at: "2026-03-01T00:00:00Z",
+        },
+      ],
+    }));
+    const workDecisionGet = vi.fn(async () => ({
+      decision: { decision_id: "decision-1", question: "Should we ship?" },
+    }));
+    const workDecisionCreate = vi.fn(async () => ({
+      decision: { decision_id: "decision-2", question: "New decision?" },
+    }));
+
+    const adminModeStore = createActiveAdminModeStore();
+
+    const core = {
+      httpBaseUrl: "http://example.test",
+      adminModeStore,
+      ws: {
+        on: vi.fn(),
+        off: vi.fn(),
+        workLinkCreate,
+        workLinkList,
+        workArtifactList,
+        workArtifactGet,
+        workArtifactCreate,
+        workDecisionList,
+        workDecisionGet,
+        workDecisionCreate,
+      },
+    } as unknown as OperatorCore;
+
+    const testRoot = renderIntoDocument(
+      React.createElement(AdminModeProvider, {
+        core,
+        mode: "web",
+        children: React.createElement(AdminPage, { core }),
+      }),
+    );
+
+    await openWorkBoardWsPanels(testRoot);
+    await setWorkBoardScope(testRoot, {
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
+    });
+
+    const workboard = testRoot.container.querySelector<HTMLDivElement>(
+      '[data-testid="admin-ws-workboard"]',
+    );
+    expect(workboard).not.toBeNull();
+
+    const linkListPanel = workboard!.querySelector<HTMLDivElement>(
+      '[data-testid="admin-ws-panel-work.link.list"]',
+    );
+    const linkCreatePanel = workboard!.querySelector<HTMLDivElement>(
+      '[data-testid="admin-ws-panel-work.link.create"]',
+    );
+    expect(linkListPanel).not.toBeNull();
+    expect(linkCreatePanel).not.toBeNull();
+
+    const allPanels = Array.from(
+      workboard!.querySelectorAll<HTMLDivElement>('[data-testid^="admin-ws-panel-"]'),
+    );
+    expect(allPanels.indexOf(linkListPanel!)).toBeLessThan(allPanels.indexOf(linkCreatePanel!));
+
+    const linkCreatePayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-link-create-payload"]',
+    );
+    const linkCreateRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-link-create-run"]',
+    );
+    expect(linkCreatePayload).not.toBeNull();
+    expect(linkCreateRun).not.toBeNull();
+    await act(async () => {
+      setNativeValue(
+        linkCreatePayload!,
+        JSON.stringify({
+          tenant_id: "bad",
+          work_item_id: "work-1",
+          linked_work_item_id: "work-2",
+          kind: "depends_on",
+        }),
+      );
+      click(linkCreateRun!);
+      await Promise.resolve();
+    });
+    expect(workLinkCreate).toHaveBeenCalledWith({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
+      work_item_id: "work-1",
+      linked_work_item_id: "work-2",
+      kind: "depends_on",
+    });
+
+    const linkListPayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-link-list-payload"]',
+    );
+    const linkListRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-link-list-run"]',
+    );
+    expect(linkListPayload).not.toBeNull();
+    expect(linkListRun).not.toBeNull();
+    await act(async () => {
+      setNativeValue(linkListPayload!, JSON.stringify({ work_item_id: "work-1", limit: 2 }));
+      click(linkListRun!);
+      await Promise.resolve();
+    });
+    expect(workLinkList).toHaveBeenCalledWith({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
+      work_item_id: "work-1",
+      limit: 2,
+    });
+    expect(testRoot.container.textContent).toContain("depends_on");
+
+    const artifactListPayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-artifact-list-payload"]',
+    );
+    const artifactListRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-artifact-list-run"]',
+    );
+    expect(artifactListPayload).not.toBeNull();
+    expect(artifactListRun).not.toBeNull();
+    await act(async () => {
+      setNativeValue(artifactListPayload!, JSON.stringify({ work_item_id: "work-1", limit: 1 }));
+      click(artifactListRun!);
+      await Promise.resolve();
+    });
+    expect(workArtifactList).toHaveBeenCalledWith({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
+      work_item_id: "work-1",
+      limit: 1,
+    });
+    expect(testRoot.container.textContent).toContain("First artifact");
+
+    const artifactGetPayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-artifact-get-payload"]',
+    );
+    const artifactGetRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-artifact-get-run"]',
+    );
+    expect(artifactGetPayload).not.toBeNull();
+    expect(artifactGetRun).not.toBeNull();
+    await act(async () => {
+      setNativeValue(artifactGetPayload!, JSON.stringify({ artifact_id: "artifact-1" }));
+      click(artifactGetRun!);
+      await Promise.resolve();
+    });
+    expect(workArtifactGet).toHaveBeenCalledWith({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
+      artifact_id: "artifact-1",
+    });
+
+    const artifactCreatePayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-artifact-create-payload"]',
+    );
+    const artifactCreateRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-artifact-create-run"]',
+    );
+    expect(artifactCreatePayload).not.toBeNull();
+    expect(artifactCreateRun).not.toBeNull();
+    await act(async () => {
+      setNativeValue(
+        artifactCreatePayload!,
+        JSON.stringify({ artifact: { kind: "other", title: "New artifact" } }),
+      );
+      click(artifactCreateRun!);
+      await Promise.resolve();
+    });
+    expect(workArtifactCreate).toHaveBeenCalledWith({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
+      artifact: { kind: "other", title: "New artifact" },
+    });
+
+    const decisionListPayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-decision-list-payload"]',
+    );
+    const decisionListRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-decision-list-run"]',
+    );
+    expect(decisionListPayload).not.toBeNull();
+    expect(decisionListRun).not.toBeNull();
+    await act(async () => {
+      setNativeValue(decisionListPayload!, JSON.stringify({ work_item_id: "work-1", limit: 1 }));
+      click(decisionListRun!);
+      await Promise.resolve();
+    });
+    expect(workDecisionList).toHaveBeenCalledWith({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
+      work_item_id: "work-1",
+      limit: 1,
+    });
+    expect(testRoot.container.textContent).toContain("Should we ship?");
+
+    const decisionGetPayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-decision-get-payload"]',
+    );
+    const decisionGetRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-decision-get-run"]',
+    );
+    expect(decisionGetPayload).not.toBeNull();
+    expect(decisionGetRun).not.toBeNull();
+    await act(async () => {
+      setNativeValue(decisionGetPayload!, JSON.stringify({ decision_id: "decision-1" }));
+      click(decisionGetRun!);
+      await Promise.resolve();
+    });
+    expect(workDecisionGet).toHaveBeenCalledWith({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
+      decision_id: "decision-1",
+    });
+
+    const decisionCreatePayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-decision-create-payload"]',
+    );
+    const decisionCreateRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-decision-create-run"]',
+    );
+    expect(decisionCreatePayload).not.toBeNull();
+    expect(decisionCreateRun).not.toBeNull();
+    await act(async () => {
+      setNativeValue(
+        decisionCreatePayload!,
+        JSON.stringify({
+          decision: { question: "New decision?", chosen: "Yes", rationale_md: "Because." },
+        }),
+      );
+      click(decisionCreateRun!);
+      await Promise.resolve();
+    });
+    expect(workDecisionCreate).toHaveBeenCalledWith({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
+      decision: { question: "New decision?", chosen: "Yes", rationale_md: "Because." },
     });
 
     cleanupTestRoot(testRoot);

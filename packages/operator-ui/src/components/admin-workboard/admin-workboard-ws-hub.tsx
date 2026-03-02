@@ -19,6 +19,14 @@ type WorkGetPayload = Parameters<OperatorCore["ws"]["workGet"]>[0];
 type WorkCreatePayload = Parameters<OperatorCore["ws"]["workCreate"]>[0];
 type WorkUpdatePayload = Parameters<OperatorCore["ws"]["workUpdate"]>[0];
 type WorkTransitionPayload = Parameters<OperatorCore["ws"]["workTransition"]>[0];
+type WorkLinkCreatePayload = Parameters<OperatorCore["ws"]["workLinkCreate"]>[0];
+type WorkLinkListPayload = Parameters<OperatorCore["ws"]["workLinkList"]>[0];
+type WorkArtifactListPayload = Parameters<OperatorCore["ws"]["workArtifactList"]>[0];
+type WorkArtifactGetPayload = Parameters<OperatorCore["ws"]["workArtifactGet"]>[0];
+type WorkArtifactCreatePayload = Parameters<OperatorCore["ws"]["workArtifactCreate"]>[0];
+type WorkDecisionListPayload = Parameters<OperatorCore["ws"]["workDecisionList"]>[0];
+type WorkDecisionGetPayload = Parameters<OperatorCore["ws"]["workDecisionGet"]>[0];
+type WorkDecisionCreatePayload = Parameters<OperatorCore["ws"]["workDecisionCreate"]>[0];
 type WorkListResult = Awaited<ReturnType<OperatorCore["ws"]["workList"]>>;
 type WorkSignalListPayload = Parameters<OperatorCore["ws"]["workSignalList"]>[0];
 type WorkSignalGetPayload = Parameters<OperatorCore["ws"]["workSignalGet"]>[0];
@@ -41,6 +49,275 @@ function renderWorkListResult(result: WorkListResult): React.ReactNode {
         </div>
       ) : null}
     </div>
+  );
+}
+
+type WorkBoardPanelProps = {
+  core: OperatorCore;
+  scope: WorkScopeDraft;
+  onScopeErrors: (errors: WorkScopeErrors) => void;
+};
+
+function WorkBoardCorePanels({
+  core,
+  scope,
+  onScopeErrors,
+}: WorkBoardPanelProps): React.ReactElement {
+  return (
+    <>
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.list"
+        payloadTestId="admin-ws-work-list-payload"
+        runTestId="admin-ws-work-list-run"
+        defaultPayload={{ limit: 50 }}
+        run={(payload) => core.ws.workList(payload as WorkListPayload)}
+        renderResult={renderWorkListResult}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.get"
+        payloadTestId="admin-ws-work-get-payload"
+        runTestId="admin-ws-work-get-run"
+        defaultPayload={{ work_item_id: "" }}
+        run={(payload) => core.ws.workGet(payload as WorkGetPayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.create"
+        payloadTestId="admin-ws-work-create-payload"
+        runTestId="admin-ws-work-create-run"
+        defaultPayload={{ item: { kind: "action", title: "" } }}
+        run={(payload) => core.ws.workCreate(payload as WorkCreatePayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.update"
+        payloadTestId="admin-ws-work-update-payload"
+        runTestId="admin-ws-work-update-run"
+        defaultPayload={{ work_item_id: "", patch: { title: "" } }}
+        run={(payload) => core.ws.workUpdate(payload as WorkUpdatePayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.transition"
+        payloadTestId="admin-ws-work-transition-payload"
+        runTestId="admin-ws-work-transition-run"
+        defaultPayload={{ work_item_id: "", status: "ready", reason: "" }}
+        run={(payload) => core.ws.workTransition(payload as WorkTransitionPayload)}
+      />
+    </>
+  );
+}
+
+function WorkBoardLinkPanels({
+  core,
+  scope,
+  onScopeErrors,
+}: WorkBoardPanelProps): React.ReactElement {
+  return (
+    <>
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.link.list"
+        payloadTestId="admin-ws-work-link-list-payload"
+        runTestId="admin-ws-work-link-list-run"
+        defaultPayload={{ work_item_id: "", limit: 50 }}
+        run={(payload) => core.ws.workLinkList(payload as WorkLinkListPayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.link.create"
+        payloadTestId="admin-ws-work-link-create-payload"
+        runTestId="admin-ws-work-link-create-run"
+        defaultPayload={{ work_item_id: "", linked_work_item_id: "", kind: "depends_on" }}
+        run={(payload) => core.ws.workLinkCreate(payload as WorkLinkCreatePayload)}
+      />
+    </>
+  );
+}
+
+function WorkBoardArtifactPanels({
+  core,
+  scope,
+  onScopeErrors,
+}: WorkBoardPanelProps): React.ReactElement {
+  return (
+    <>
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.artifact.list"
+        payloadTestId="admin-ws-work-artifact-list-payload"
+        runTestId="admin-ws-work-artifact-list-run"
+        defaultPayload={{ limit: 50 }}
+        run={(payload) => core.ws.workArtifactList(payload as WorkArtifactListPayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.artifact.get"
+        payloadTestId="admin-ws-work-artifact-get-payload"
+        runTestId="admin-ws-work-artifact-get-run"
+        defaultPayload={{ artifact_id: "" }}
+        run={(payload) => core.ws.workArtifactGet(payload as WorkArtifactGetPayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.artifact.create"
+        payloadTestId="admin-ws-work-artifact-create-payload"
+        runTestId="admin-ws-work-artifact-create-run"
+        defaultPayload={{ artifact: { kind: "other", title: "" } }}
+        run={(payload) => core.ws.workArtifactCreate(payload as WorkArtifactCreatePayload)}
+      />
+    </>
+  );
+}
+
+function WorkBoardDecisionPanels({
+  core,
+  scope,
+  onScopeErrors,
+}: WorkBoardPanelProps): React.ReactElement {
+  return (
+    <>
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.decision.list"
+        payloadTestId="admin-ws-work-decision-list-payload"
+        runTestId="admin-ws-work-decision-list-run"
+        defaultPayload={{ limit: 50 }}
+        run={(payload) => core.ws.workDecisionList(payload as WorkDecisionListPayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.decision.get"
+        payloadTestId="admin-ws-work-decision-get-payload"
+        runTestId="admin-ws-work-decision-get-run"
+        defaultPayload={{ decision_id: "" }}
+        run={(payload) => core.ws.workDecisionGet(payload as WorkDecisionGetPayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.decision.create"
+        payloadTestId="admin-ws-work-decision-create-payload"
+        runTestId="admin-ws-work-decision-create-run"
+        defaultPayload={{ decision: { question: "", chosen: "", rationale_md: "" } }}
+        run={(payload) => core.ws.workDecisionCreate(payload as WorkDecisionCreatePayload)}
+      />
+    </>
+  );
+}
+
+function WorkBoardSignalPanels({
+  core,
+  scope,
+  onScopeErrors,
+}: WorkBoardPanelProps): React.ReactElement {
+  return (
+    <>
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.signal.list"
+        payloadTestId="admin-ws-work-signal-list-payload"
+        runTestId="admin-ws-work-signal-list-run"
+        defaultPayload={{ limit: 50 }}
+        run={(payload) => core.ws.workSignalList(payload as WorkSignalListPayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.signal.get"
+        payloadTestId="admin-ws-work-signal-get-payload"
+        runTestId="admin-ws-work-signal-get-run"
+        defaultPayload={{ signal_id: "" }}
+        run={(payload) => core.ws.workSignalGet(payload as WorkSignalGetPayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.signal.create"
+        payloadTestId="admin-ws-work-signal-create-payload"
+        runTestId="admin-ws-work-signal-create-run"
+        defaultPayload={{
+          signal: {
+            trigger_kind: "time",
+            trigger_spec_json: {},
+            payload_json: {},
+            status: "active",
+          },
+        }}
+        run={(payload) => core.ws.workSignalCreate(payload as WorkSignalCreatePayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.signal.update"
+        payloadTestId="admin-ws-work-signal-update-payload"
+        runTestId="admin-ws-work-signal-update-run"
+        defaultPayload={{ signal_id: "", patch: { status: "paused" } }}
+        run={(payload) => core.ws.workSignalUpdate(payload as WorkSignalUpdatePayload)}
+      />
+    </>
+  );
+}
+
+function WorkBoardStateKvPanels({
+  core,
+  scope,
+  onScopeErrors,
+  buildStateKvPayload,
+}: WorkBoardPanelProps & {
+  buildStateKvPayload: (args: {
+    payload: Record<string, unknown>;
+    scope: WorkScopeDraft;
+  }) => Record<string, unknown>;
+}): React.ReactElement {
+  return (
+    <>
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.state_kv.get"
+        payloadTestId="admin-ws-work-state-kv-get-payload"
+        runTestId="admin-ws-work-state-kv-get-run"
+        defaultPayload={{ scope: { kind: "agent" }, key: "" }}
+        buildPayload={buildStateKvPayload}
+        run={(payload) => core.ws.workStateKvGet(payload as WorkStateKvGetPayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.state_kv.list"
+        payloadTestId="admin-ws-work-state-kv-list-payload"
+        runTestId="admin-ws-work-state-kv-list-run"
+        defaultPayload={{ scope: { kind: "agent" } }}
+        buildPayload={buildStateKvPayload}
+        run={(payload) => core.ws.workStateKvList(payload as WorkStateKvListPayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.state_kv.set"
+        payloadTestId="admin-ws-work-state-kv-set-payload"
+        runTestId="admin-ws-work-state-kv-set-run"
+        defaultPayload={{ scope: { kind: "agent" }, key: "", value_json: {} }}
+        buildPayload={buildStateKvPayload}
+        run={(payload) => core.ws.workStateKvSet(payload as WorkStateKvSetPayload)}
+      />
+    </>
   );
 }
 
@@ -99,124 +376,16 @@ export function AdminWorkBoardWsHub({ core }: AdminWorkBoardWsHubProps): React.R
       </Card>
 
       <div className="grid gap-4">
-        <WsJsonPanel
+        <WorkBoardCorePanels core={core} scope={scope} onScopeErrors={setScopeErrors} />
+        <WorkBoardLinkPanels core={core} scope={scope} onScopeErrors={setScopeErrors} />
+        <WorkBoardArtifactPanels core={core} scope={scope} onScopeErrors={setScopeErrors} />
+        <WorkBoardDecisionPanels core={core} scope={scope} onScopeErrors={setScopeErrors} />
+        <WorkBoardSignalPanels core={core} scope={scope} onScopeErrors={setScopeErrors} />
+        <WorkBoardStateKvPanels
+          core={core}
           scope={scope}
           onScopeErrors={setScopeErrors}
-          title="work.list"
-          payloadTestId="admin-ws-work-list-payload"
-          runTestId="admin-ws-work-list-run"
-          defaultPayload={{ limit: 50 }}
-          run={(payload) => core.ws.workList(payload as WorkListPayload)}
-          renderResult={renderWorkListResult}
-        />
-        <WsJsonPanel
-          scope={scope}
-          onScopeErrors={setScopeErrors}
-          title="work.get"
-          payloadTestId="admin-ws-work-get-payload"
-          runTestId="admin-ws-work-get-run"
-          defaultPayload={{ work_item_id: "" }}
-          run={(payload) => core.ws.workGet(payload as WorkGetPayload)}
-        />
-        <WsJsonPanel
-          scope={scope}
-          onScopeErrors={setScopeErrors}
-          title="work.create"
-          payloadTestId="admin-ws-work-create-payload"
-          runTestId="admin-ws-work-create-run"
-          defaultPayload={{ item: { kind: "action", title: "" } }}
-          run={(payload) => core.ws.workCreate(payload as WorkCreatePayload)}
-        />
-        <WsJsonPanel
-          scope={scope}
-          onScopeErrors={setScopeErrors}
-          title="work.update"
-          payloadTestId="admin-ws-work-update-payload"
-          runTestId="admin-ws-work-update-run"
-          defaultPayload={{ work_item_id: "", patch: { title: "" } }}
-          run={(payload) => core.ws.workUpdate(payload as WorkUpdatePayload)}
-        />
-        <WsJsonPanel
-          scope={scope}
-          onScopeErrors={setScopeErrors}
-          title="work.transition"
-          payloadTestId="admin-ws-work-transition-payload"
-          runTestId="admin-ws-work-transition-run"
-          defaultPayload={{ work_item_id: "", status: "ready", reason: "" }}
-          run={(payload) => core.ws.workTransition(payload as WorkTransitionPayload)}
-        />
-        <WsJsonPanel
-          scope={scope}
-          onScopeErrors={setScopeErrors}
-          title="work.signal.list"
-          payloadTestId="admin-ws-work-signal-list-payload"
-          runTestId="admin-ws-work-signal-list-run"
-          defaultPayload={{ limit: 50 }}
-          run={(payload) => core.ws.workSignalList(payload as WorkSignalListPayload)}
-        />
-        <WsJsonPanel
-          scope={scope}
-          onScopeErrors={setScopeErrors}
-          title="work.signal.get"
-          payloadTestId="admin-ws-work-signal-get-payload"
-          runTestId="admin-ws-work-signal-get-run"
-          defaultPayload={{ signal_id: "" }}
-          run={(payload) => core.ws.workSignalGet(payload as WorkSignalGetPayload)}
-        />
-        <WsJsonPanel
-          scope={scope}
-          onScopeErrors={setScopeErrors}
-          title="work.signal.create"
-          payloadTestId="admin-ws-work-signal-create-payload"
-          runTestId="admin-ws-work-signal-create-run"
-          defaultPayload={{
-            signal: {
-              trigger_kind: "time",
-              trigger_spec_json: {},
-              payload_json: {},
-              status: "active",
-            },
-          }}
-          run={(payload) => core.ws.workSignalCreate(payload as WorkSignalCreatePayload)}
-        />
-        <WsJsonPanel
-          scope={scope}
-          onScopeErrors={setScopeErrors}
-          title="work.signal.update"
-          payloadTestId="admin-ws-work-signal-update-payload"
-          runTestId="admin-ws-work-signal-update-run"
-          defaultPayload={{ signal_id: "", patch: { status: "paused" } }}
-          run={(payload) => core.ws.workSignalUpdate(payload as WorkSignalUpdatePayload)}
-        />
-        <WsJsonPanel
-          scope={scope}
-          onScopeErrors={setScopeErrors}
-          title="work.state_kv.get"
-          payloadTestId="admin-ws-work-state-kv-get-payload"
-          runTestId="admin-ws-work-state-kv-get-run"
-          defaultPayload={{ scope: { kind: "agent" }, key: "" }}
-          buildPayload={buildStateKvPayload}
-          run={(payload) => core.ws.workStateKvGet(payload as WorkStateKvGetPayload)}
-        />
-        <WsJsonPanel
-          scope={scope}
-          onScopeErrors={setScopeErrors}
-          title="work.state_kv.list"
-          payloadTestId="admin-ws-work-state-kv-list-payload"
-          runTestId="admin-ws-work-state-kv-list-run"
-          defaultPayload={{ scope: { kind: "agent" } }}
-          buildPayload={buildStateKvPayload}
-          run={(payload) => core.ws.workStateKvList(payload as WorkStateKvListPayload)}
-        />
-        <WsJsonPanel
-          scope={scope}
-          onScopeErrors={setScopeErrors}
-          title="work.state_kv.set"
-          payloadTestId="admin-ws-work-state-kv-set-payload"
-          runTestId="admin-ws-work-state-kv-set-run"
-          defaultPayload={{ scope: { kind: "agent" }, key: "", value_json: {} }}
-          buildPayload={buildStateKvPayload}
-          run={(payload) => core.ws.workStateKvSet(payload as WorkStateKvSetPayload)}
+          buildStateKvPayload={buildStateKvPayload}
         />
       </div>
     </div>
