@@ -46,6 +46,7 @@ async function runWsJsonPanelRequest<TResult>({
   scope,
   rawPayload,
   onScopeErrors,
+  buildPayload,
   run,
   setBusy,
   setValue,
@@ -55,6 +56,10 @@ async function runWsJsonPanelRequest<TResult>({
   scope: WorkScopeDraft;
   rawPayload: string;
   onScopeErrors: (errors: WorkScopeErrors) => void;
+  buildPayload?: (args: {
+    payload: Record<string, unknown>;
+    scope: WorkScopeDraft;
+  }) => Record<string, unknown>;
   run: (payload: Record<string, unknown>) => Promise<TResult>;
   setBusy: (busy: boolean) => void;
   setValue: (value: TResult | undefined) => void;
@@ -73,7 +78,9 @@ async function runWsJsonPanelRequest<TResult>({
     return;
   }
 
-  const payload: Record<string, unknown> = { ...parsedPayload.value, ...normalized.scope };
+  const payload: Record<string, unknown> = buildPayload
+    ? buildPayload({ payload: parsedPayload.value, scope: normalized.scope })
+    : { ...parsedPayload.value, ...normalized.scope };
 
   busyRef.current = true;
   setBusy(true);
@@ -97,6 +104,10 @@ export interface WsJsonPanelProps<TResult> {
   payloadTestId: string;
   runTestId: string;
   defaultPayload: unknown;
+  buildPayload?: (args: {
+    payload: Record<string, unknown>;
+    scope: WorkScopeDraft;
+  }) => Record<string, unknown>;
   run: (payload: Record<string, unknown>) => Promise<TResult>;
   renderResult?: (result: TResult) => React.ReactNode;
 }
@@ -108,6 +119,7 @@ export function WsJsonPanel<TResult>({
   payloadTestId,
   runTestId,
   defaultPayload,
+  buildPayload,
   run,
   renderResult,
 }: WsJsonPanelProps<TResult>): React.ReactElement {
@@ -127,12 +139,13 @@ export function WsJsonPanel<TResult>({
         scope,
         rawPayload,
         onScopeErrors,
+        buildPayload,
         run,
         setBusy,
         setValue,
         setError,
       }),
-    [onScopeErrors, rawPayload, run, scope],
+    [buildPayload, onScopeErrors, rawPayload, run, scope],
   );
 
   return (

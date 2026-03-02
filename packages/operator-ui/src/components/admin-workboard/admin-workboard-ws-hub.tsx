@@ -1,5 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
+import { isRecord } from "../../utils/is-record.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import {
   WorkScopeSelector,
@@ -19,6 +20,13 @@ type WorkCreatePayload = Parameters<OperatorCore["ws"]["workCreate"]>[0];
 type WorkUpdatePayload = Parameters<OperatorCore["ws"]["workUpdate"]>[0];
 type WorkTransitionPayload = Parameters<OperatorCore["ws"]["workTransition"]>[0];
 type WorkListResult = Awaited<ReturnType<OperatorCore["ws"]["workList"]>>;
+type WorkSignalListPayload = Parameters<OperatorCore["ws"]["workSignalList"]>[0];
+type WorkSignalGetPayload = Parameters<OperatorCore["ws"]["workSignalGet"]>[0];
+type WorkSignalCreatePayload = Parameters<OperatorCore["ws"]["workSignalCreate"]>[0];
+type WorkSignalUpdatePayload = Parameters<OperatorCore["ws"]["workSignalUpdate"]>[0];
+type WorkStateKvGetPayload = Parameters<OperatorCore["ws"]["workStateKvGet"]>[0];
+type WorkStateKvListPayload = Parameters<OperatorCore["ws"]["workStateKvList"]>[0];
+type WorkStateKvSetPayload = Parameters<OperatorCore["ws"]["workStateKvSet"]>[0];
 
 function renderWorkListResult(result: WorkListResult): React.ReactNode {
   return (
@@ -43,6 +51,29 @@ export function AdminWorkBoardWsHub({ core }: AdminWorkBoardWsHubProps): React.R
     workspace_id: "",
   });
   const [scopeErrors, setScopeErrors] = React.useState<WorkScopeErrors>({});
+
+  const buildStateKvPayload = React.useCallback(
+    ({
+      payload,
+      scope: normalizedScope,
+    }: {
+      payload: Record<string, unknown>;
+      scope: WorkScopeDraft;
+    }) => {
+      const rawScope = payload["scope"];
+      const scopePayload = isRecord(rawScope) ? rawScope : {};
+
+      const nextPayload: Record<string, unknown> = {
+        ...payload,
+        scope: { ...scopePayload, ...normalizedScope },
+      };
+      delete nextPayload["tenant_id"];
+      delete nextPayload["agent_id"];
+      delete nextPayload["workspace_id"];
+      return nextPayload;
+    },
+    [],
+  );
 
   return (
     <div className="grid gap-4" data-testid="admin-ws-workboard">
@@ -113,6 +144,79 @@ export function AdminWorkBoardWsHub({ core }: AdminWorkBoardWsHubProps): React.R
           runTestId="admin-ws-work-transition-run"
           defaultPayload={{ work_item_id: "", status: "ready", reason: "" }}
           run={(payload) => core.ws.workTransition(payload as WorkTransitionPayload)}
+        />
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.signal.list"
+          payloadTestId="admin-ws-work-signal-list-payload"
+          runTestId="admin-ws-work-signal-list-run"
+          defaultPayload={{ limit: 50 }}
+          run={(payload) => core.ws.workSignalList(payload as WorkSignalListPayload)}
+        />
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.signal.get"
+          payloadTestId="admin-ws-work-signal-get-payload"
+          runTestId="admin-ws-work-signal-get-run"
+          defaultPayload={{ signal_id: "" }}
+          run={(payload) => core.ws.workSignalGet(payload as WorkSignalGetPayload)}
+        />
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.signal.create"
+          payloadTestId="admin-ws-work-signal-create-payload"
+          runTestId="admin-ws-work-signal-create-run"
+          defaultPayload={{
+            signal: {
+              trigger_kind: "time",
+              trigger_spec_json: {},
+              payload_json: {},
+              status: "active",
+            },
+          }}
+          run={(payload) => core.ws.workSignalCreate(payload as WorkSignalCreatePayload)}
+        />
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.signal.update"
+          payloadTestId="admin-ws-work-signal-update-payload"
+          runTestId="admin-ws-work-signal-update-run"
+          defaultPayload={{ signal_id: "", patch: { status: "paused" } }}
+          run={(payload) => core.ws.workSignalUpdate(payload as WorkSignalUpdatePayload)}
+        />
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.state_kv.get"
+          payloadTestId="admin-ws-work-state-kv-get-payload"
+          runTestId="admin-ws-work-state-kv-get-run"
+          defaultPayload={{ scope: { kind: "agent" }, key: "" }}
+          buildPayload={buildStateKvPayload}
+          run={(payload) => core.ws.workStateKvGet(payload as WorkStateKvGetPayload)}
+        />
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.state_kv.list"
+          payloadTestId="admin-ws-work-state-kv-list-payload"
+          runTestId="admin-ws-work-state-kv-list-run"
+          defaultPayload={{ scope: { kind: "agent" } }}
+          buildPayload={buildStateKvPayload}
+          run={(payload) => core.ws.workStateKvList(payload as WorkStateKvListPayload)}
+        />
+        <WsJsonPanel
+          scope={scope}
+          onScopeErrors={setScopeErrors}
+          title="work.state_kv.set"
+          payloadTestId="admin-ws-work-state-kv-set-payload"
+          runTestId="admin-ws-work-state-kv-set-run"
+          defaultPayload={{ scope: { kind: "agent" }, key: "", value_json: {} }}
+          buildPayload={buildStateKvPayload}
+          run={(payload) => core.ws.workStateKvSet(payload as WorkStateKvSetPayload)}
         />
       </div>
     </div>

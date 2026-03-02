@@ -54,6 +54,13 @@ describe("AdminPage WorkBoard WS panels", () => {
     const workCreate = vi.fn(async () => ({ item: { work_item_id: "work-2" } as unknown }));
     const workUpdate = vi.fn(async () => ({ item: { work_item_id: "work-1" } as unknown }));
     const workTransition = vi.fn(async () => ({ item: { work_item_id: "work-1" } as unknown }));
+    const workSignalList = vi.fn(async () => ({ signals: [] }));
+    const workSignalGet = vi.fn(async () => ({ signal: { signal_id: "signal-1" } as unknown }));
+    const workSignalCreate = vi.fn(async () => ({ signal: { signal_id: "signal-1" } as unknown }));
+    const workSignalUpdate = vi.fn(async () => ({ signal: { signal_id: "signal-1" } as unknown }));
+    const workStateKvGet = vi.fn(async () => ({ entry: { key: "key-1" } as unknown }));
+    const workStateKvList = vi.fn(async () => ({ entries: [] }));
+    const workStateKvSet = vi.fn(async () => ({ entry: { key: "key-1" } as unknown }));
 
     const adminModeStore = createActiveAdminModeStore();
 
@@ -68,6 +75,13 @@ describe("AdminPage WorkBoard WS panels", () => {
         workCreate,
         workUpdate,
         workTransition,
+        workSignalList,
+        workSignalGet,
+        workSignalCreate,
+        workSignalUpdate,
+        workStateKvGet,
+        workStateKvList,
+        workStateKvSet,
       },
     } as unknown as OperatorCore;
 
@@ -235,6 +249,202 @@ describe("AdminPage WorkBoard WS panels", () => {
       work_item_id: "work-1",
       status: "done",
       reason: "ok",
+    });
+
+    const signalListPayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-signal-list-payload"]',
+    );
+    const signalListRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-signal-list-run"]',
+    );
+    expect(signalListPayload).not.toBeNull();
+    expect(signalListRun).not.toBeNull();
+
+    const signalListDefault = JSON.parse(signalListPayload!.value) as Record<string, unknown>;
+    expect(signalListDefault).not.toHaveProperty("work_item_id");
+    expect(signalListDefault).toHaveProperty("limit", 50);
+
+    await act(async () => {
+      setNativeValue(
+        signalListPayload!,
+        JSON.stringify({ tenant_id: "bad", work_item_id: "work-1", limit: 1 }),
+      );
+      click(signalListRun!);
+      await Promise.resolve();
+    });
+
+    expect(workSignalList).toHaveBeenCalledWith({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
+      work_item_id: "work-1",
+      limit: 1,
+    });
+
+    const signalGetPayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-signal-get-payload"]',
+    );
+    const signalGetRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-signal-get-run"]',
+    );
+    expect(signalGetPayload).not.toBeNull();
+    expect(signalGetRun).not.toBeNull();
+
+    await act(async () => {
+      setNativeValue(
+        signalGetPayload!,
+        JSON.stringify({ signal_id: "signal-1", tenant_id: "bad" }),
+      );
+      click(signalGetRun!);
+      await Promise.resolve();
+    });
+
+    expect(workSignalGet).toHaveBeenCalledWith({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
+      signal_id: "signal-1",
+    });
+
+    const signalCreatePayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-signal-create-payload"]',
+    );
+    const signalCreateRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-signal-create-run"]',
+    );
+    expect(signalCreatePayload).not.toBeNull();
+    expect(signalCreateRun).not.toBeNull();
+
+    await act(async () => {
+      setNativeValue(
+        signalCreatePayload!,
+        JSON.stringify({
+          signal: {
+            trigger_kind: "time",
+            trigger_spec_json: { after_seconds: 60 },
+            payload_json: { hello: "world" },
+            status: "active",
+          },
+        }),
+      );
+      click(signalCreateRun!);
+      await Promise.resolve();
+    });
+
+    expect(workSignalCreate).toHaveBeenCalledWith({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
+      signal: {
+        trigger_kind: "time",
+        trigger_spec_json: { after_seconds: 60 },
+        payload_json: { hello: "world" },
+        status: "active",
+      },
+    });
+
+    const signalUpdatePayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-signal-update-payload"]',
+    );
+    const signalUpdateRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-signal-update-run"]',
+    );
+    expect(signalUpdatePayload).not.toBeNull();
+    expect(signalUpdateRun).not.toBeNull();
+
+    await act(async () => {
+      setNativeValue(
+        signalUpdatePayload!,
+        JSON.stringify({ signal_id: "signal-1", patch: { status: "paused" }, tenant_id: "bad" }),
+      );
+      click(signalUpdateRun!);
+      await Promise.resolve();
+    });
+
+    expect(workSignalUpdate).toHaveBeenCalledWith({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "ws-1",
+      signal_id: "signal-1",
+      patch: { status: "paused" },
+    });
+
+    const stateKvGetPayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-state-kv-get-payload"]',
+    );
+    const stateKvGetRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-state-kv-get-run"]',
+    );
+    expect(stateKvGetPayload).not.toBeNull();
+    expect(stateKvGetRun).not.toBeNull();
+
+    await act(async () => {
+      setNativeValue(
+        stateKvGetPayload!,
+        JSON.stringify({ scope: { kind: "agent", tenant_id: "bad" }, key: "key-1" }),
+      );
+      click(stateKvGetRun!);
+      await Promise.resolve();
+    });
+
+    expect(workStateKvGet).toHaveBeenCalledWith({
+      scope: { kind: "agent", tenant_id: "tenant-1", agent_id: "agent-1", workspace_id: "ws-1" },
+      key: "key-1",
+    });
+
+    const stateKvListPayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-state-kv-list-payload"]',
+    );
+    const stateKvListRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-state-kv-list-run"]',
+    );
+    expect(stateKvListPayload).not.toBeNull();
+    expect(stateKvListRun).not.toBeNull();
+
+    const stateKvListDefault = JSON.parse(stateKvListPayload!.value) as Record<string, unknown>;
+    expect(stateKvListDefault).not.toHaveProperty("prefix");
+    expect(stateKvListDefault).toHaveProperty("scope", { kind: "agent" });
+
+    await act(async () => {
+      setNativeValue(
+        stateKvListPayload!,
+        JSON.stringify({ scope: { kind: "agent", workspace_id: "bad" }, prefix: "work." }),
+      );
+      click(stateKvListRun!);
+      await Promise.resolve();
+    });
+
+    expect(workStateKvList).toHaveBeenCalledWith({
+      scope: { kind: "agent", tenant_id: "tenant-1", agent_id: "agent-1", workspace_id: "ws-1" },
+      prefix: "work.",
+    });
+
+    const stateKvSetPayload = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="admin-ws-work-state-kv-set-payload"]',
+    );
+    const stateKvSetRun = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-work-state-kv-set-run"]',
+    );
+    expect(stateKvSetPayload).not.toBeNull();
+    expect(stateKvSetRun).not.toBeNull();
+
+    await act(async () => {
+      setNativeValue(
+        stateKvSetPayload!,
+        JSON.stringify({
+          scope: { kind: "agent" },
+          key: "key-1",
+          value_json: { ready: true },
+        }),
+      );
+      click(stateKvSetRun!);
+      await Promise.resolve();
+    });
+
+    expect(workStateKvSet).toHaveBeenCalledWith({
+      scope: { kind: "agent", tenant_id: "tenant-1", agent_id: "agent-1", workspace_id: "ws-1" },
+      key: "key-1",
+      value_json: { ready: true },
     });
 
     cleanupTestRoot(testRoot);
