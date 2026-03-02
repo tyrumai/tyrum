@@ -139,6 +139,37 @@ describe("connection recovery grace", () => {
     }
   });
 
+  it("does not record reconnect schedule after terminal disconnect", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+      const ws = new FakeWsClient();
+      const http = createFakeHttpClient();
+      const core = createOperatorCore({
+        wsUrl: "ws://example.test/ws",
+        httpBaseUrl: "http://example.test",
+        auth: createBearerTokenAuth("test-token"),
+        deps: { ws: ws as any, http },
+      });
+
+      core.connect();
+      ws.emit("connected", { clientId: "client-123" });
+
+      ws.emit("disconnected", { code: 4001, reason: "unauthorized" });
+      const nextRetryAtMs = Date.now() + 12_000;
+      ws.emit("reconnect_scheduled", { delayMs: 12_000, nextRetryAtMs, attempt: 1 });
+
+      expect(core.connectionStore.getSnapshot()).toMatchObject({
+        status: "disconnected",
+        recovering: false,
+        nextRetryAtMs: null,
+        lastDisconnect: { code: 4001, reason: "unauthorized" },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not re-enter recovering after grace has finalized to disconnected", () => {
     vi.useFakeTimers();
     try {
