@@ -109,7 +109,8 @@ function OperatorUiAppRoot({
   const [route, setRoute] = useState<OperatorUiRouteId>("dashboard");
   const connection = useOperatorStore(core.connectionStore);
   const showShell =
-    connection.status === "connected" || (connection.status === "connecting" && connection.recovering);
+    connection.status === "connected" ||
+    (connection.status === "connecting" && connection.recovering);
   const existingTheme = useThemeOptional();
 
   const toNavItem = (id: OperatorUiRouteId) => ({

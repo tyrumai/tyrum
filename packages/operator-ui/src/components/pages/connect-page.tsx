@@ -197,7 +197,11 @@ export function ConnectPage({
           {disconnectDescription ? (
             <Alert variant="error" title="Disconnected" description={disconnectDescription} />
           ) : connection.transportError ? (
-            <Alert variant="error" title="Transport error" description={connection.transportError} />
+            <Alert
+              variant="error"
+              title="Transport error"
+              description={connection.transportError}
+            />
           ) : null}
         </CardContent>
       </Card>

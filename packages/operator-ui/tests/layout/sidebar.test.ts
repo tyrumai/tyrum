@@ -50,7 +50,9 @@ describe("Sidebar", () => {
     expect(statusControls?.className).toContain("justify-start");
 
     const dot = container.querySelector<HTMLSpanElement>("[data-testid='connection-status-dot']");
-    const statusLabel = container.querySelector<HTMLSpanElement>("[data-testid='connection-status-label']");
+    const statusLabel = container.querySelector<HTMLSpanElement>(
+      "[data-testid='connection-status-label']",
+    );
     expect(dot).not.toBeNull();
     expect(statusLabel).not.toBeNull();
     expect(statusLabel?.textContent).toBe("Connected");
@@ -71,7 +73,9 @@ describe("Sidebar", () => {
         ThemeProvider as React.ComponentType,
         null,
         React.createElement(Sidebar as React.ComponentType, {
-          items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" }],
+          items: [
+            { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
+          ],
           activeItemId: "dashboard",
           onNavigate: vi.fn(),
           connectionStatus: "disconnected",
@@ -95,7 +99,9 @@ describe("Sidebar", () => {
         ThemeProvider as React.ComponentType,
         null,
         React.createElement(Sidebar as React.ComponentType, {
-          items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" }],
+          items: [
+            { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
+          ],
           activeItemId: "dashboard",
           onNavigate: vi.fn(),
           connectionStatus: "connecting",
@@ -120,7 +126,9 @@ describe("Sidebar", () => {
         ThemeProvider as React.ComponentType,
         null,
         React.createElement(Sidebar as React.ComponentType, {
-          items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" }],
+          items: [
+            { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
+          ],
           activeItemId: "dashboard",
           onNavigate: vi.fn(),
           collapsible: true,

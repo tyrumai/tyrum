@@ -1628,7 +1628,9 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    const connectButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
+    const connectButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="login-button"]',
+    );
     expect(connectButton).not.toBeNull();
 
     act(() => {
@@ -1636,7 +1638,9 @@ describe("operator-ui", () => {
     });
 
     expect(ws.connect).toHaveBeenCalledTimes(1);
-    const connectingButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
+    const connectingButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="login-button"]',
+    );
     expect(connectingButton).not.toBeNull();
     expect(connectingButton?.textContent).toContain("Connecting");
     expect(connectingButton?.className).toContain("bg-primary");
