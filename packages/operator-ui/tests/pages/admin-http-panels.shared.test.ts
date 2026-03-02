@@ -71,9 +71,8 @@ describe("useApiResultState", () => {
     );
 
     try {
-      const trigger = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='trigger']",
-      );
+      const trigger =
+        testRoot.container.querySelector<HTMLButtonElement>("[data-testid='trigger']");
       expect(trigger).not.toBeNull();
 
       act(() => {
