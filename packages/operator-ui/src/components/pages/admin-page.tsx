@@ -1,11 +1,10 @@
-import { isAdminModeActive, type OperatorCore } from "@tyrum/operator-core";
-import { useOperatorStore } from "../../use-operator-store.js";
-import { useAdminModeUiContext } from "../admin-mode/admin-mode-provider.js";
+import type { OperatorCore } from "@tyrum/operator-core";
 import { AuditPanel } from "../admin-http/audit-panel.js";
 import { PageHeader } from "../layout/page-header.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
+import { useAdminMutationAccess } from "./admin-http-shared.js";
 import { DeviceTokensCard } from "./admin-http-device-tokens.js";
 import { AdminHttpModelsRefreshPanel } from "./admin-http-models-refresh.js";
 import { PluginsCard } from "./admin-http-plugins.js";
@@ -44,15 +43,13 @@ function ReadOnlyNotice({ onEnterAdminMode }: { onEnterAdminMode: () => void }) 
 }
 
 export function AdminPage({ core }: AdminPageProps) {
-  const { requestEnter } = useAdminModeUiContext();
-  const adminMode = useOperatorStore(core.adminModeStore);
-  const isElevated = isAdminModeActive(adminMode);
+  const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
   return (
     <div className="grid gap-6" data-testid="admin-page">
       <PageHeader title="Admin" />
 
-      {!isElevated ? (
+      {!canMutate ? (
         <ReadOnlyNotice
           onEnterAdminMode={() => {
             requestEnter();
