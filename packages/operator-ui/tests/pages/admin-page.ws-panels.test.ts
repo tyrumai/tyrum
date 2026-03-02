@@ -32,6 +32,82 @@ describe("AdminPage WebSocket panels", () => {
     );
   });
 
+  it("uses shared parseJsonInput utility for JSON parsing", () => {
+    const source = readFileSync(
+      join(process.cwd(), "packages/operator-ui/src/components/admin/admin-ws-panels.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain('import { parseJsonInput } from "../../utils/parse-json-input.js";');
+    expect(source).not.toMatch(/function parseJsonPayload/);
+  });
+
+  it("prevents concurrent WS actions when double-clicking", async () => {
+    let resolvePing: (() => void) | undefined;
+    const pingPromise = new Promise<void>((resolve) => {
+      resolvePing = resolve;
+    });
+
+    const ws = {
+      on: vi.fn(),
+      off: vi.fn(),
+      ping: vi.fn(async () => pingPromise),
+    };
+
+    const nowMs = Date.parse("2026-01-01T00:00:00.000Z");
+    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0, now: () => nowMs });
+    adminModeStore.enter({
+      elevatedToken: "token",
+      expiresAt: "2026-01-01T00:10:00.000Z",
+    });
+
+    const core = {
+      ws,
+      adminModeStore,
+      httpBaseUrl: "http://example.test",
+    } as unknown as OperatorCore;
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(AdminModeProvider, {
+        core,
+        mode: "web",
+        children: React.createElement(AdminPage, { core }),
+      }),
+    );
+
+    const wsTab = container.querySelector<HTMLButtonElement>(`[data-testid="admin-tab-ws"]`);
+    expect(wsTab).not.toBeNull();
+    act(() => {
+      wsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    });
+
+    const commandsTab = container.querySelector<HTMLButtonElement>(
+      `[data-testid="admin-ws-tab-commands"]`,
+    );
+    expect(commandsTab).not.toBeNull();
+    act(() => {
+      commandsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    });
+
+    const pingButton = container.querySelector<HTMLButtonElement>(
+      `[data-testid="admin-ws-ping-run"]`,
+    );
+    expect(pingButton).not.toBeNull();
+    act(() => {
+      pingButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      pingButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(ws.ping).toHaveBeenCalledTimes(1);
+
+    resolvePing?.();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    cleanupTestRoot({ container, root });
+  });
+
   it("renders WS panels and wires requests", async () => {
     const ws = {
       on: vi.fn(),
@@ -75,6 +151,14 @@ describe("AdminPage WebSocket panels", () => {
     expect(wsTab).not.toBeNull();
     act(() => {
       wsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    });
+
+    const commandsTab = container.querySelector<HTMLButtonElement>(
+      `[data-testid="admin-ws-tab-commands"]`,
+    );
+    expect(commandsTab).not.toBeNull();
+    act(() => {
+      commandsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
     });
 
     const commandInput = container.querySelector<HTMLInputElement>(

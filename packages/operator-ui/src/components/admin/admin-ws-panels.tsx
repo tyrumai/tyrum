@@ -1,5 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { parseJsonInput } from "../../utils/parse-json-input.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -19,12 +20,14 @@ type AsyncResult<T> = {
 };
 
 function useAsyncResult<T>(): AsyncResult<T> {
+  const inFlightRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [value, setValue] = useState<T | undefined>(undefined);
   const [error, setError] = useState<unknown | undefined>(undefined);
 
   const run = async (handler: () => Promise<T>): Promise<void> => {
-    if (busy) return;
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setBusy(true);
     setError(undefined);
 
@@ -36,6 +39,7 @@ function useAsyncResult<T>(): AsyncResult<T> {
       setError(err);
     } finally {
       setBusy(false);
+      inFlightRef.current = false;
     }
   };
 
@@ -47,33 +51,22 @@ function useAsyncResult<T>(): AsyncResult<T> {
   return { busy, value, error, run, fail };
 }
 
-function parseJsonPayload(raw: string): { value: unknown; errorMessage: string | null } {
-  const trimmed = raw.trim();
-  if (!trimmed) return { value: {}, errorMessage: null };
-
-  try {
-    return { value: JSON.parse(trimmed) as unknown, errorMessage: null };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { value: undefined, errorMessage: message };
-  }
-}
-
 type JsonObjectPayloadParseResult =
   | { value: Record<string, unknown>; errorMessage: null }
   | { value: undefined; errorMessage: string };
 
 function parseJsonObjectPayload(raw: string): JsonObjectPayloadParseResult {
-  const parsed = parseJsonPayload(raw);
+  const parsed = parseJsonInput(raw);
   if (parsed.errorMessage) {
     return { value: undefined, errorMessage: `Invalid JSON: ${parsed.errorMessage}` };
   }
 
-  if (!parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
+  const value = parsed.value === undefined ? {} : parsed.value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { value: undefined, errorMessage: "Payload must be a JSON object." };
   }
 
-  return { value: parsed.value as Record<string, unknown>, errorMessage: null };
+  return { value: value as Record<string, unknown>, errorMessage: null };
 }
 
 function CommandExecutePanel({ core }: { core: OperatorCore }): React.ReactElement {
