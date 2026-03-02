@@ -63,7 +63,8 @@ Notes:
 
 - Pinning is enforced only for `wss://` URLs.
 - Browser-based clients cannot enforce certificate pinning.
-- When pinning is configured, clients use **trust-by-fingerprint** (the pinned cert is accepted even if it is not CA-trusted); hostname validation still applies.
+- When pinning is configured, Node clients still perform standard TLS verification (CA trust + hostname validation) and **also** verify the configured fingerprint.
+- For private PKI / self-signed deployments, add your CA to the OS/Node trust store, or pass `tlsCaCertPem` when constructing `TyrumClient`.
 
 ## Troubleshooting
 
