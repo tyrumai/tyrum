@@ -32,7 +32,7 @@ export function createConnectionStore(ws: OperatorWsClient): {
   const TERMINAL_CLOSE_CODES = new Set([4001, 4003, 4004, 4005, 4006, 4007, 4008]);
 
   let reconnectGraceTimer: ReturnType<typeof setTimeout> | null = null;
-  let ignoreNextDisconnectedEvent = false;
+  let disconnectRequested = false;
   const clearReconnectGraceTimer = (): void => {
     if (reconnectGraceTimer !== null) {
       clearTimeout(reconnectGraceTimer);
@@ -50,7 +50,7 @@ export function createConnectionStore(ws: OperatorWsClient): {
   });
 
   function connect(): void {
-    ignoreNextDisconnectedEvent = false;
+    disconnectRequested = false;
     clearReconnectGraceTimer();
     setState((prev) => ({
       ...prev,
@@ -65,7 +65,7 @@ export function createConnectionStore(ws: OperatorWsClient): {
   }
 
   function disconnect(): void {
-    ignoreNextDisconnectedEvent = true;
+    disconnectRequested = true;
     ws.disconnect();
     clearReconnectGraceTimer();
     setState((prev) => ({
@@ -78,7 +78,7 @@ export function createConnectionStore(ws: OperatorWsClient): {
   }
 
   function handleConnected(clientId: string | null): void {
-    ignoreNextDisconnectedEvent = false;
+    disconnectRequested = false;
     clearReconnectGraceTimer();
     setState((prev) => ({
       ...prev,
@@ -92,8 +92,17 @@ export function createConnectionStore(ws: OperatorWsClient): {
   }
 
   function handleDisconnected(code: number, reason: string): void {
-    if (ignoreNextDisconnectedEvent) {
-      ignoreNextDisconnectedEvent = false;
+    if (disconnectRequested) {
+      disconnectRequested = false;
+      clearReconnectGraceTimer();
+      setState((prev) => ({
+        ...prev,
+        status: "disconnected",
+        recovering: false,
+        nextRetryAtMs: null,
+        clientId: null,
+        lastDisconnect: { code, reason },
+      }));
       return;
     }
 
