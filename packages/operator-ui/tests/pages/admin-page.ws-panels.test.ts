@@ -6,7 +6,7 @@ import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createAdminModeStore } from "../../../operator-core/src/index.js";
 import { AdminModeProvider } from "../../src/index.js";
 import { AdminPage } from "../../src/components/pages/admin-page.js";
-import { cleanupTestRoot, createTestRoot, type TestRoot } from "../test-utils.js";
+import { cleanupTestRoot, createTestRoot, setNativeValue, type TestRoot } from "../test-utils.js";
 
 type WsStub = {
   on: ReturnType<typeof vi.fn>;
@@ -32,8 +32,7 @@ function queryByTestId<T extends Element>(container: HTMLElement, testId: string
 
 function setTextareaValue(textarea: HTMLTextAreaElement, value: string): void {
   act(() => {
-    textarea.value = value;
-    textarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    setNativeValue(textarea, value);
   });
 }
 
@@ -48,6 +47,14 @@ async function switchToWsTab(container: HTMLElement): Promise<void> {
   const wsTab = queryByTestId<HTMLButtonElement>(container, "admin-tab-ws");
   await act(async () => {
     wsTab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    await Promise.resolve();
+  });
+}
+
+async function switchToWsSectionTab(container: HTMLElement, testId: string): Promise<void> {
+  const tab = queryByTestId<HTMLButtonElement>(container, testId);
+  await act(async () => {
+    tab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
     await Promise.resolve();
   });
 }
@@ -101,6 +108,8 @@ async function setupAdminWsTab(): Promise<AdminWsSetup> {
 async function wiresSessionSendPanel(): Promise<void> {
   const setup = await setupAdminWsTab();
   try {
+    await switchToWsSectionTab(setup.testRoot.container, "admin-ws-tab-sessions");
+
     const sessionPayload = queryByTestId<HTMLTextAreaElement>(
       setup.testRoot.container,
       "admin-ws-session-send-payload",
@@ -140,6 +149,8 @@ async function wiresSessionSendPanel(): Promise<void> {
 async function wiresWorkflowPanels(): Promise<void> {
   const setup = await setupAdminWsTab();
   try {
+    await switchToWsSectionTab(setup.testRoot.container, "admin-ws-tab-workflows");
+
     const workflowRunPayload = queryByTestId<HTMLTextAreaElement>(
       setup.testRoot.container,
       "admin-ws-workflow-run-payload",

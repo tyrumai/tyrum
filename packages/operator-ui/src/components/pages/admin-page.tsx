@@ -2,8 +2,8 @@ import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { AdminModeGate } from "../../admin-mode.js";
 import { parseJsonInput } from "../../utils/parse-json-input.js";
-import { AdminWsJsonOperationPanel } from "../admin/admin-ws-json-operation-panel.js";
 import { AdminWorkBoardWsHub } from "../admin-workboard/admin-workboard-ws-hub.js";
+import { JsonWsPanel } from "../admin-ws/json-ws-panel.js";
 import { SubagentsPanels } from "../admin-ws/subagents-panels.js";
 import { PageHeader } from "../layout/page-header.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
@@ -504,7 +504,7 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
         </div>
       </section>
 
-      <Tabs defaultValue="ws" className="grid gap-3">
+      <Tabs defaultValue="http" className="grid gap-3">
         <TabsList aria-label="Admin panel type">
           <TabsTrigger value="http" data-testid="admin-tab-http">
             HTTP
@@ -564,7 +564,7 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
               <TabsContent value="sessions">
                 <section className="grid gap-3" aria-label="Sessions">
                   <div className="text-sm font-medium text-fg">Sessions</div>
-                  <AdminWsJsonOperationPanel
+                  <JsonWsPanel
                     title="session.send"
                     description="Send a message into a session and receive assistant output."
                     initialPayload={{
@@ -572,11 +572,12 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
                       thread_id: "thread-1",
                       content: "Hello",
                     }}
-                    executeLabel="Send"
                     payloadTestId="admin-ws-session-send-payload"
-                    executeTestId="admin-ws-session-send-execute"
+                    submitLabel="Send"
+                    submitTestId="admin-ws-session-send-execute"
+                    resultHeading="session.send result"
                     resultTestId="admin-ws-session-send-result"
-                    onExecute={async (payload) => {
+                    onSubmit={async (payload) => {
                       return await core.ws.sessionSend(payload as SessionSendPayload);
                     }}
                   />
@@ -587,7 +588,7 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
                 <section className="grid gap-3" aria-label="Workflows">
                   <div className="text-sm font-medium text-fg">Workflows</div>
                   <div className="grid gap-3">
-                    <AdminWsJsonOperationPanel
+                    <JsonWsPanel
                       title="workflow.run"
                       description="Start a workflow run."
                       initialPayload={{
@@ -595,37 +596,40 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
                         lane: "main",
                         steps: [{ type: "Decide", args: {} }],
                       }}
-                      executeLabel="Run"
                       payloadTestId="admin-ws-workflow-run-payload"
-                      executeTestId="admin-ws-workflow-run-execute"
+                      submitLabel="Run"
+                      submitTestId="admin-ws-workflow-run-execute"
+                      resultHeading="workflow.run result"
                       resultTestId="admin-ws-workflow-run-result"
-                      onExecute={async (payload) => {
+                      onSubmit={async (payload) => {
                         return await core.ws.workflowRun(payload as WorkflowRunPayload);
                       }}
                     />
 
-                    <AdminWsJsonOperationPanel
+                    <JsonWsPanel
                       title="workflow.resume"
                       description="Resume a paused workflow run."
                       initialPayload={{ token: "resume-token" }}
-                      executeLabel="Resume"
                       payloadTestId="admin-ws-workflow-resume-payload"
-                      executeTestId="admin-ws-workflow-resume-execute"
+                      submitLabel="Resume"
+                      submitTestId="admin-ws-workflow-resume-execute"
+                      resultHeading="workflow.resume result"
                       resultTestId="admin-ws-workflow-resume-result"
-                      onExecute={async (payload) => {
+                      onSubmit={async (payload) => {
                         return await core.ws.workflowResume(payload as WorkflowResumePayload);
                       }}
                     />
 
-                    <AdminWsJsonOperationPanel
+                    <JsonWsPanel
                       title="workflow.cancel"
                       description="Cancel a workflow run."
                       initialPayload={{ run_id: "run-1", reason: "stop" }}
-                      executeLabel="Cancel"
                       payloadTestId="admin-ws-workflow-cancel-payload"
-                      executeTestId="admin-ws-workflow-cancel-execute"
+                      submitLabel="Cancel"
+                      submitTestId="admin-ws-workflow-cancel-execute"
+                      resultHeading="workflow.cancel result"
                       resultTestId="admin-ws-workflow-cancel-result"
-                      onExecute={async (payload) => {
+                      onSubmit={async (payload) => {
                         return await core.ws.workflowCancel(payload as WorkflowCancelPayload);
                       }}
                     />
