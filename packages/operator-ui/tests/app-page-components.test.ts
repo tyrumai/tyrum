@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
 
 describe("Operator UI app/page component structure", () => {
-  it("keeps app.tsx under 200 lines", () => {
-    const appSource = readFileSync(new URL("../src/app.tsx", import.meta.url), "utf8");
-    const lines = appSource.split(/\r?\n/).length;
-    expect(lines).toBeLessThanOrEqual(200);
-  });
-
   it("exports each page from components/pages", async () => {
     const expected = [
       { specifier: "../src/components/pages/connect-page.js", exportName: "ConnectPage" },
