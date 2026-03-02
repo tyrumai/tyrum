@@ -5,20 +5,7 @@ import React, { act } from "react";
 import { createAdminModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
 import { AdminModeProvider } from "../../src/admin-mode.js";
 import { AdminPage } from "../../src/components/pages/admin-page.js";
-import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
-
-function setNativeValue(element: HTMLInputElement | HTMLTextAreaElement, value: string): void {
-  const proto =
-    element instanceof HTMLTextAreaElement
-      ? HTMLTextAreaElement.prototype
-      : HTMLInputElement.prototype;
-  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-  if (setter) {
-    setter.call(element, value);
-  }
-  element.dispatchEvent(new Event("input", { bubbles: true }));
-  element.dispatchEvent(new Event("change", { bubbles: true }));
-}
+import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 async function switchHttpTab(
   container: HTMLElement,
