@@ -3,6 +3,7 @@ import * as React from "react";
 import { AdminModeGate } from "../../admin-mode.js";
 import { parseJsonInput } from "../../utils/parse-json-input.js";
 import { AdminWorkBoardWsHub } from "../admin-workboard/admin-workboard-ws-hub.js";
+import { JsonWsPanel } from "../admin-ws/json-ws-panel.js";
 import { SubagentsPanels } from "../admin-ws/subagents-panels.js";
 import { PageHeader } from "../layout/page-header.js";
 import { AdminHttpPanels } from "./admin-http-panels.js";
@@ -43,6 +44,11 @@ type PairingsDenyInput = Parameters<OperatorCore["http"]["pairings"]["deny"]>[1]
 type PairingsDenyBody = Exclude<PairingsDenyInput, undefined>;
 type PairingsRevokeInput = Parameters<OperatorCore["http"]["pairings"]["revoke"]>[1];
 type PairingsRevokeBody = Exclude<PairingsRevokeInput, undefined>;
+
+type SessionSendPayload = Parameters<OperatorCore["ws"]["sessionSend"]>[0];
+type WorkflowRunPayload = Parameters<OperatorCore["ws"]["workflowRun"]>[0];
+type WorkflowResumePayload = Parameters<OperatorCore["ws"]["workflowResume"]>[0];
+type WorkflowCancelPayload = Parameters<OperatorCore["ws"]["workflowCancel"]>[0];
 
 function useApiCallState(): {
   state: ApiCallState;
@@ -563,6 +569,12 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
                 <TabsTrigger value="workboard" data-testid="admin-ws-tab-workboard">
                   WorkBoard
                 </TabsTrigger>
+                <TabsTrigger value="sessions" data-testid="admin-ws-tab-sessions">
+                  Sessions
+                </TabsTrigger>
+                <TabsTrigger value="workflows" data-testid="admin-ws-tab-workflows">
+                  Workflows
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="subagents">
@@ -571,6 +583,82 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
 
               <TabsContent value="workboard">
                 <AdminWorkBoardWsHub core={core} />
+              </TabsContent>
+
+              <TabsContent value="sessions">
+                <section className="grid gap-3" aria-label="Sessions">
+                  <div className="text-sm font-medium text-fg">Sessions</div>
+                  <JsonWsPanel
+                    title="session.send"
+                    description="Send a message into a session and receive assistant output."
+                    initialPayload={{
+                      channel: "test",
+                      thread_id: "thread-1",
+                      content: "Hello",
+                    }}
+                    payloadTestId="admin-ws-session-send-payload"
+                    submitLabel="Send"
+                    submitTestId="admin-ws-session-send-execute"
+                    resultHeading="session.send result"
+                    resultTestId="admin-ws-session-send-result"
+                    onSubmit={async (payload) => {
+                      return await core.ws.sessionSend(payload as SessionSendPayload);
+                    }}
+                  />
+                </section>
+              </TabsContent>
+
+              <TabsContent value="workflows">
+                <section className="grid gap-3" aria-label="Workflows">
+                  <div className="text-sm font-medium text-fg">Workflows</div>
+                  <div className="grid gap-3">
+                    <JsonWsPanel
+                      title="workflow.run"
+                      description="Start a workflow run."
+                      initialPayload={{
+                        key: "node:node-1",
+                        lane: "main",
+                        steps: [{ type: "Decide", args: {} }],
+                      }}
+                      payloadTestId="admin-ws-workflow-run-payload"
+                      submitLabel="Run"
+                      submitTestId="admin-ws-workflow-run-execute"
+                      resultHeading="workflow.run result"
+                      resultTestId="admin-ws-workflow-run-result"
+                      onSubmit={async (payload) => {
+                        return await core.ws.workflowRun(payload as WorkflowRunPayload);
+                      }}
+                    />
+
+                    <JsonWsPanel
+                      title="workflow.resume"
+                      description="Resume a paused workflow run."
+                      initialPayload={{ token: "resume-token" }}
+                      payloadTestId="admin-ws-workflow-resume-payload"
+                      submitLabel="Resume"
+                      submitTestId="admin-ws-workflow-resume-execute"
+                      resultHeading="workflow.resume result"
+                      resultTestId="admin-ws-workflow-resume-result"
+                      onSubmit={async (payload) => {
+                        return await core.ws.workflowResume(payload as WorkflowResumePayload);
+                      }}
+                    />
+
+                    <JsonWsPanel
+                      title="workflow.cancel"
+                      description="Cancel a workflow run."
+                      initialPayload={{ run_id: "run-1", reason: "stop" }}
+                      payloadTestId="admin-ws-workflow-cancel-payload"
+                      submitLabel="Cancel"
+                      submitTestId="admin-ws-workflow-cancel-execute"
+                      resultHeading="workflow.cancel result"
+                      resultTestId="admin-ws-workflow-cancel-result"
+                      onSubmit={async (payload) => {
+                        return await core.ws.workflowCancel(payload as WorkflowCancelPayload);
+                      }}
+                    />
+                  </div>
+                </section>
               </TabsContent>
             </Tabs>
           </TabsContent>
