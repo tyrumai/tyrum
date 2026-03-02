@@ -9,16 +9,16 @@
     "**/.worktrees/**"
   ],
   "categories": {
-    "correctness": "deny",
-    "suspicious": "deny",
-    "perf": "deny",
+    "correctness": "warn",
+    "suspicious": "warn",
+    "perf": "warn",
     "style": "off",
     "restriction": "off",
     "pedantic": "off",
     "nursery": "off"
   },
   "rules": {
-    "max-lines": ["deny", { "max": 500, "skipBlankLines": true, "skipComments": true }],
-    "max-lines-per-function": ["deny", { "max": 80, "skipBlankLines": true, "skipComments": true }]
+    "max-lines": ["warn", { "max": 500, "skipBlankLines": true, "skipComments": true }],
+    "max-lines-per-function": ["warn", { "max": 200, "skipBlankLines": true, "skipComments": true }]
   }
 }

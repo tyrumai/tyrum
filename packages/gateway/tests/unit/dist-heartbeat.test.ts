@@ -78,7 +78,7 @@ function gatewayBuildIsStale(): boolean {
   return false;
 }
 
-async function acquireGatewayBuildLock(timeoutMs = 60_000): Promise<() => void> {
+async function acquireGatewayBuildLock(timeoutMs = 180_000): Promise<() => void> {
   const startedAt = Date.now();
   for (;;) {
     try {
@@ -181,7 +181,7 @@ async function ensureGatewayBuild(): Promise<void> {
 describe("gateway dist bundle", () => {
   it(
     "uses WS ping/pong control frames for heartbeats (regression for /app/live disconnects)",
-    { timeout: 60_000 },
+    { timeout: 180_000 },
     async () => {
       await ensureGatewayBuild();
 

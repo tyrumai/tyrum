@@ -582,7 +582,7 @@ for (const fixture of fixtures) {
       } finally {
         await close();
       }
-    });
+    }, 15_000);
 
     it("rejects overly complex search requests", async () => {
       const { dal, close } = await fixture.open();

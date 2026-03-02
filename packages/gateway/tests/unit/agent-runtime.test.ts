@@ -1356,7 +1356,11 @@ describe("AgentRuntime", () => {
             });
           }, 100);
 
-          options.abortSignal?.addEventListener(
+          const anyOptions = options as unknown as LanguageModelV3CallOptions & {
+            signal?: AbortSignal;
+          };
+          const abortSignal = anyOptions.abortSignal ?? anyOptions.signal;
+          abortSignal?.addEventListener(
             "abort",
             () => {
               aborted = true;
@@ -1433,7 +1437,11 @@ describe("AgentRuntime", () => {
       async doGenerate(
         options: LanguageModelV3CallOptions,
       ): Promise<LanguageModelV3GenerateResult> {
-        if (options.abortSignal?.aborted) {
+        const anyOptions = options as unknown as LanguageModelV3CallOptions & {
+          signal?: AbortSignal;
+        };
+        const abortSignal = anyOptions.abortSignal ?? anyOptions.signal;
+        if (abortSignal?.aborted) {
           aborted = true;
           throw new Error("timed out");
         }

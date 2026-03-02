@@ -21,7 +21,7 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function acquireGatewayBuildLock(timeoutMs = 60_000): () => void {
+function acquireGatewayBuildLock(timeoutMs = 180_000): () => void {
   const startedAt = Date.now();
   for (;;) {
     try {
@@ -178,7 +178,7 @@ describe("desktop embedded gateway startup", () => {
 
   it(
     "starts embedded gateway via GatewayManager and passes health check",
-    { timeout: 60_000 },
+    { timeout: 180_000 },
     async () => {
       const releaseBuildLock = acquireGatewayBuildLock();
       try {

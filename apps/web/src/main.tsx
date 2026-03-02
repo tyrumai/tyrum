@@ -7,7 +7,7 @@ import {
   createGatewayAuthSession,
   createOperatorCoreManager,
 } from "@tyrum/operator-core";
-import { OperatorUiApp } from "@tyrum/operator-ui";
+import { OperatorUiApp, OperatorUiHostProvider } from "@tyrum/operator-ui";
 import "@tyrum/operator-ui/globals.css";
 import { readAuthTokenFromUrl, stripAuthTokenFromUrl } from "./url-auth.js";
 
@@ -70,18 +70,20 @@ const root = createRoot(container);
 const render = (): void => {
   root.render(
     <React.StrictMode>
-      <OperatorUiApp
-        core={manager.getCore()}
-        mode="web"
-        onReloadPage={() => window.location.reload()}
-        onReconfigureGateway={(httpUrl, wsUrl) => {
-          try {
-            localStorage.setItem("tyrum-gateway-http", httpUrl);
-            localStorage.setItem("tyrum-gateway-ws", wsUrl);
-          } catch {}
-          window.location.reload();
-        }}
-      />
+      <OperatorUiHostProvider value={{ kind: "web" }}>
+        <OperatorUiApp
+          core={manager.getCore()}
+          mode="web"
+          onReloadPage={() => window.location.reload()}
+          onReconfigureGateway={(httpUrl, wsUrl) => {
+            try {
+              localStorage.setItem("tyrum-gateway-http", httpUrl);
+              localStorage.setItem("tyrum-gateway-ws", wsUrl);
+            } catch {}
+            window.location.reload();
+          }}
+        />
+      </OperatorUiHostProvider>
     </React.StrictMode>,
   );
 };

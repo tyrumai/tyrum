@@ -1,6 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useRef, useState } from "react";
-import { getDesktopApi } from "../../desktop-api.js";
+import { useHostApiOptional } from "../../host/host-api.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
@@ -9,7 +9,8 @@ import { Checkbox } from "../ui/checkbox.js";
 import { Label } from "../ui/label.js";
 
 export function DesktopPage({ core }: { core: OperatorCore }) {
-  const api = getDesktopApi();
+  const host = useHostApiOptional();
+  const api = host?.kind === "desktop" ? host.api : null;
   const [port, setPort] = useState(8788);
   const [mode, setMode] = useState<"embedded" | "remote">("embedded");
   const [gatewayStatus, setGatewayStatus] = useState("unknown");

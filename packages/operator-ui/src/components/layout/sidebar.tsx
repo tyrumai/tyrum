@@ -155,11 +155,12 @@ export function Sidebar({
         {items.map(renderItem)}
         {showSecondaryItems ? (
           <>
+            <div className="mt-4 border-t border-border" />
             {secondaryCollapsible && !collapsed ? (
               <button
                 type="button"
                 data-testid="sidebar-secondary-toggle"
-                className="mt-4 flex w-full items-center gap-1 rounded-md px-3 py-1 text-xs font-medium uppercase tracking-wide text-fg-muted hover:text-fg"
+                className="mt-3 flex w-full items-center gap-1 rounded-md px-3 py-1 text-xs font-medium uppercase tracking-wide text-fg-muted hover:text-fg"
                 onClick={toggleSecondary}
               >
                 <ChevronDown
@@ -171,12 +172,10 @@ export function Sidebar({
                 <span>{secondaryLabel}</span>
               </button>
             ) : !collapsed ? (
-              <div className="mt-4 px-3 text-xs font-medium uppercase tracking-wide text-fg-muted">
+              <div className="mt-3 px-3 text-xs font-medium uppercase tracking-wide text-fg-muted">
                 {secondaryLabel}
               </div>
-            ) : (
-              <div className="mt-4 border-t border-border" />
-            )}
+            ) : null}
             {collapsed
               ? secondaryItems.map(renderItem)
               : secondaryVisible

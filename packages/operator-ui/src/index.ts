@@ -3,6 +3,12 @@ export type { OperatorCore } from "@tyrum/operator-core";
 export type { OperatorUiAppProps, OperatorUiMode } from "./app.js";
 export { OperatorUiApp } from "./app.js";
 
+export type { HostKind, OperatorUiHostApi, OperatorUiHostProviderProps } from "./host/host-api.js";
+export { OperatorUiHostProvider, useHostApi, useHostApiOptional } from "./host/host-api.js";
+
+export type { DesktopApi } from "./desktop-api.js";
+export { getDesktopApi } from "./desktop-api.js";
+
 export type { AdminModeProviderProps } from "./admin-mode.js";
 export { AdminModeGate, AdminModeProvider } from "./admin-mode.js";
 
@@ -139,6 +145,8 @@ export type { DashboardPageProps } from "./components/pages/dashboard-page.js";
 export { DashboardPage } from "./components/pages/dashboard-page.js";
 export { ApprovalsPage } from "./components/pages/approvals-page.js";
 export { RunsPage } from "./components/pages/runs-page.js";
+export type { WorkBoardPageProps } from "./components/pages/workboard-page.js";
+export { WorkBoardPage } from "./components/pages/workboard-page.js";
 export { ConnectPage } from "./components/pages/connect-page.js";
 export { PairingPage } from "./components/pages/pairing-page.js";
 export { MemoryPage } from "./components/pages/memory-page.js";

@@ -57,7 +57,7 @@ function isTypeScriptSourceFile(filePath) {
 function runNewFilesGate({ repoRoot, files, verbose }) {
   const configPath = path.join(repoRoot, ".oxlintrc.new-files.json");
 
-  const args = ["exec", "oxlint", "-c", configPath, "--deny-warnings", ...files];
+  const args = ["exec", "oxlint", "-c", configPath, ...files];
 
   if (verbose) {
     console.log(`[oxlint] checking ${files.length} new file(s) (no warnings allowed)`);

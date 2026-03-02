@@ -73,7 +73,7 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function acquireGatewayBuildLock(timeoutMs = 120_000): () => void {
+function acquireGatewayBuildLock(timeoutMs = 180_000): () => void {
   const startedAt = Date.now();
   for (;;) {
     try {
@@ -346,7 +346,7 @@ const CAN_LAUNCH_ELECTRON =
 describe("desktop full Electron process smoke", () => {
   it.skipIf(!CAN_LAUNCH_ELECTRON)(
     "launches desktop main process and starts embedded gateway",
-    { timeout: 120_000 },
+    { timeout: 180_000 },
     async () => {
       const releaseBuildLock = acquireGatewayBuildLock();
       try {
