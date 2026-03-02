@@ -43,7 +43,10 @@ export function ConnectPage({
     const normalizedHttpUrl = trimTrailingSlashes(trimmedUrl);
     const normalizedCoreHttpUrl = trimTrailingSlashes(core.httpBaseUrl.trim());
     if (onReconfigureGateway && normalizedHttpUrl !== normalizedCoreHttpUrl) {
-      const wsUrl = normalizedHttpUrl.replace(/^http/, "ws") + "/ws";
+      const wsUrl =
+        normalizedHttpUrl.replace(/^https?/i, (protocol) =>
+          protocol.toLowerCase() === "https" ? "wss" : "ws",
+        ) + "/ws";
       onReconfigureGateway(normalizedHttpUrl, wsUrl);
       return;
     }

@@ -70,6 +70,59 @@ describe("ConnectPage", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("derives a valid ws URL when the gateway protocol casing is uppercase", async () => {
+    const { store: connectionStore } = createStore({
+      status: "disconnected",
+      clientId: null,
+      lastDisconnect: null,
+      transportError: null,
+    });
+
+    const core = {
+      connectionStore,
+      httpBaseUrl: "https://gateway.example",
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    } as unknown as OperatorCore;
+
+    const onReconfigureGateway = vi.fn();
+
+    const testRoot = renderIntoDocument(
+      React.createElement(ConnectPage, {
+        core,
+        mode: "desktop",
+        onReconfigureGateway,
+      }),
+    );
+
+    const gatewayInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="gateway-url"]',
+    );
+    expect(gatewayInput).not.toBeNull();
+
+    act(() => {
+      setNativeValue(gatewayInput as HTMLInputElement, "HTTPS://Uppercase.example///");
+    });
+
+    const loginButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="login-button"]',
+    );
+    expect(loginButton).not.toBeNull();
+
+    await act(async () => {
+      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(onReconfigureGateway).toHaveBeenCalledTimes(1);
+    expect(onReconfigureGateway).toHaveBeenCalledWith(
+      "HTTPS://Uppercase.example",
+      "wss://Uppercase.example/ws",
+    );
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("does not reconfigure when only trailing slashes differ", async () => {
     const { store: connectionStore } = createStore({
       status: "disconnected",
