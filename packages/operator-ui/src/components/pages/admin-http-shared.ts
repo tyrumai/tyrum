@@ -33,4 +33,3 @@ export function useAdminHttpClient(): AdminHttpClient | null {
     });
   }, [adminMode.elevatedToken, adminMode.status, core.httpBaseUrl, mode]);
 }
-
