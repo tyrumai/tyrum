@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { DesktopApi } from "../../../desktop-api.js";
 import { useHostApi } from "../../../host/host-api.js";
 import { Alert } from "../../ui/alert.js";
 import { Button } from "../../ui/button.js";
@@ -16,7 +17,6 @@ interface LogEntry {
 }
 
 const MAX_ENTRIES = 500;
-let nextId = 0;
 
 const LEVEL_CLASS_NAMES: Record<string, string> = {
   info: "text-primary",
@@ -51,16 +51,21 @@ export function PlatformLogsPanel() {
     );
   }
 
+  return <DesktopLogsPanel api={api} />;
+}
+
+function DesktopLogsPanel({ api }: { api: DesktopApi }) {
   const [tab, setTab] = useState<LogTab>("gateway");
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const scrollRootRef = useRef<HTMLDivElement>(null);
   const autoScroll = useRef(true);
+  const nextIdRef = useRef(0);
 
   useEffect(() => {
     const unsubscribe = api.onLog?.((raw) => {
       const e = raw as { timestamp?: string; level?: string; source?: string; message?: string };
       const entry: LogEntry = {
-        id: nextId++,
+        id: nextIdRef.current++,
         timestamp: e.timestamp ?? new Date().toISOString(),
         level: e.level ?? "info",
         source: e.source ?? "gateway",

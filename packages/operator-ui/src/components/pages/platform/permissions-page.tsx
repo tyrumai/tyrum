@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { DesktopApi } from "../../../desktop-api.js";
 import { useHostApi } from "../../../host/host-api.js";
 import { formatErrorMessage } from "../../../utils/format-error-message.js";
 import {
@@ -72,6 +73,10 @@ export function PlatformPermissionsPage() {
     );
   }
 
+  return <DesktopPermissionsPage api={api} />;
+}
+
+function DesktopPermissionsPage({ api }: { api: DesktopApi }) {
   const [profile, setProfile] = useState<Profile>("balanced");
   const [capabilities, setCapabilities] = useState<CapFlags>({
     desktop: true,

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import type { DesktopApi } from "../../../desktop-api.js";
 import { useHostApi } from "../../../host/host-api.js";
 import { formatErrorMessage } from "../../../utils/format-error-message.js";
 import { Alert } from "../../ui/alert.js";
@@ -88,6 +89,10 @@ export function PlatformDiagnosticsPanel() {
     return <Alert variant="error" title="Desktop API not available." />;
   }
 
+  return <DesktopDiagnosticsPanel api={api} />;
+}
+
+function DesktopDiagnosticsPanel({ api }: { api: DesktopApi }) {
   const [checks, setChecks] = useState<CheckItem[]>([
     { label: "Gateway process", status: "pending", detail: "Checking..." },
     { label: "Node runtime", status: "pending", detail: "Checking..." },
