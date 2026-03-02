@@ -46,4 +46,19 @@ describe("Card", () => {
 
     cleanupTestRoot({ container, root });
   });
+
+  it("does not apply hover affordance by default", () => {
+    const Card = (operatorUi as Record<string, unknown>)["Card"];
+    expect(Card).toBeDefined();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(Card as React.ComponentType, { className: "test-card" }, "Body"),
+    );
+
+    const className = container.querySelector(".test-card")?.className ?? "";
+    expect(className).not.toContain("hover:shadow-2xl");
+    expect(className).not.toContain("hover:bg-bg-card/90");
+
+    cleanupTestRoot({ container, root });
+  });
 });
