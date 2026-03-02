@@ -177,7 +177,7 @@ export function JsonViewer({
       ) : null}
       <div
         className={cn(
-          "overflow-auto rounded-md border border-border bg-bg px-3 py-2",
+          "overflow-auto rounded-md border border-border bg-bg-card/40 px-3 py-2",
           contentClassName,
         )}
       >
