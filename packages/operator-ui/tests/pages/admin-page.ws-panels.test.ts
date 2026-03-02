@@ -175,6 +175,49 @@ describe("AdminPage WebSocket panels", () => {
     }
   });
 
+  it("does not run command.execute when Admin Mode expires before the click handler runs", async () => {
+    const { core, commandExecute } = createCore(true);
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        AdminModeProvider,
+        { core, mode: "web" },
+        React.createElement(AdminPage, { core }),
+      ),
+    );
+
+    try {
+      await switchAdminTab(testRoot.container, "admin-ws-tab-commands");
+
+      const commandButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-ws-command-run']",
+      );
+      expect(commandButton).not.toBeNull();
+      expect(commandButton?.disabled).toBe(false);
+
+      const activeSnapshot = core.adminModeStore.getSnapshot();
+      const inactiveSnapshot = {
+        ...activeSnapshot,
+        status: "inactive",
+        elevatedToken: null,
+        enteredAt: null,
+        expiresAt: null,
+        remainingMs: null,
+      };
+      core.adminModeStore.getSnapshot = () => inactiveSnapshot;
+
+      await act(async () => {
+        commandButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      expect(commandExecute).not.toHaveBeenCalled();
+      expect(document.body.querySelector("[data-testid='admin-mode-dialog']")).not.toBeNull();
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
   it("disables command.execute when Admin Mode is inactive", async () => {
     const { core } = createCore(false);
 

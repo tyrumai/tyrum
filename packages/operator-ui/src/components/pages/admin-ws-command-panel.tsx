@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import { isAdminModeActive, type OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { useApiCallState } from "../../hooks/use-api-call-state.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
@@ -48,7 +48,13 @@ export function AdminWsCommandPanel({ core }: { core: OperatorCore }): React.Rea
               action.fail("Command is required.");
               return;
             }
-            void action.run(() => core.ws.commandExecute(trimmed));
+            void action.run(async () => {
+              if (!isAdminModeActive(core.adminModeStore.getSnapshot())) {
+                requestEnter();
+                throw new Error("Enter Admin Mode to run commands.");
+              }
+              return await core.ws.commandExecute(trimmed);
+            });
           }}
         >
           Run command
