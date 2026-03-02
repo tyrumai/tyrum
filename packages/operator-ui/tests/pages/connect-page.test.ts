@@ -17,7 +17,7 @@ describe("ConnectPage", () => {
     expect(source).not.toContain('replace(/\\/+$/, "")');
   });
 
-  it("builds the websocket URL without a double slash when gateway URL ends with /", async () => {
+  it("normalizes gateway URLs before reconfiguring http and ws endpoints", async () => {
     const { store: connectionStore } = createStore({
       status: "disconnected",
       clientId: null,
@@ -48,7 +48,7 @@ describe("ConnectPage", () => {
     expect(gatewayInput).not.toBeNull();
 
     act(() => {
-      setNativeValue(gatewayInput as HTMLInputElement, "https://gateway.example/");
+      setNativeValue(gatewayInput as HTMLInputElement, "https://gateway.example///");
     });
 
     const loginButton = testRoot.container.querySelector<HTMLButtonElement>(
@@ -63,7 +63,7 @@ describe("ConnectPage", () => {
 
     expect(onReconfigureGateway).toHaveBeenCalledTimes(1);
     expect(onReconfigureGateway).toHaveBeenCalledWith(
-      "https://gateway.example/",
+      "https://gateway.example",
       "wss://gateway.example/ws",
     );
 
