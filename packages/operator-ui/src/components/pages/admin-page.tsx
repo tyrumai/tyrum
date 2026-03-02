@@ -7,6 +7,7 @@ import { AdminWsPanels } from "../admin/admin-ws-panels.js";
 import { AdminWorkBoardWsHub } from "../admin-workboard/admin-workboard-ws-hub.js";
 import { JsonWsPanel } from "../admin-ws/json-ws-panel.js";
 import { SubagentsPanels } from "../admin-ws/subagents-panels.js";
+import { AdminHttpPanels as AdminHubHttpPanels } from "../admin-http/admin-http-panels.js";
 import { PageHeader } from "../layout/page-header.js";
 import { AdminHttpPanels } from "./admin-http-panels.js";
 import { AdminHttpPolicyAuthPanels } from "./admin-http-policy-auth-panels.js";
@@ -129,7 +130,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               Fetch
             </Button>
           </div>
-          <ApiResultSection state={status.state} heading="Status" />
+          <ApiResultSection heading="Status" state={status.state} />
         </div>
 
         <div className="grid gap-3">
@@ -161,7 +162,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               setUsageQueryRaw(event.currentTarget.value);
             }}
           />
-          <ApiResultSection state={usage.state} heading="Usage" />
+          <ApiResultSection heading="Usage" state={usage.state} />
         </div>
 
         <div className="grid gap-3">
@@ -179,7 +180,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               Fetch
             </Button>
           </div>
-          <ApiResultSection state={presence.state} heading="Presence" />
+          <ApiResultSection heading="Presence" state={presence.state} />
         </div>
       </section>
 
@@ -199,7 +200,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               Fetch
             </Button>
           </div>
-          <ApiResultSection state={pairingsList.state} heading="Pairings" />
+          <ApiResultSection heading="Pairings" state={pairingsList.state} />
         </div>
 
         <Card>
@@ -271,7 +272,7 @@ function ObservabilityPanels({ core }: { core: OperatorCore }): React.ReactEleme
               </Button>
             </div>
 
-            <ApiResultSection state={pairingsMutate.state} heading="Mutation result" />
+            <ApiResultSection heading="Mutation result" state={pairingsMutate.state} />
           </CardContent>
         </Card>
 
@@ -324,7 +325,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               Fetch
             </Button>
           </div>
-          <ApiResultSection state={status.state} heading="Models status" />
+          <ApiResultSection heading="Models status" state={status.state} />
         </div>
 
         <div className="grid gap-3">
@@ -341,7 +342,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               Refresh (confirm)
             </Button>
           </div>
-          <ApiResultSection state={refresh.state} heading="Refresh result" />
+          <ApiResultSection heading="Refresh result" state={refresh.state} />
         </div>
 
         <ConfirmDangerDialog
@@ -373,7 +374,7 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               Fetch
             </Button>
           </div>
-          <ApiResultSection state={listProviders.state} heading="Providers" />
+          <ApiResultSection heading="Providers" state={listProviders.state} />
         </div>
 
         <Card>
@@ -421,15 +422,14 @@ function ModelsPanels({ core }: { core: OperatorCore }): React.ReactElement {
               </Button>
             </div>
 
-            <ApiResultSection state={getProvider.state} heading="Provider" />
-            <ApiResultSection state={listProviderModels.state} heading="Provider models" />
+            <ApiResultSection heading="Provider" state={getProvider.state} />
+            <ApiResultSection heading="Provider models" state={listProviderModels.state} />
           </CardContent>
         </Card>
       </section>
     </div>
   );
 }
-
 export function AdminPage({ core, onNavigate }: AdminPageProps) {
   return (
     <div className="grid gap-6" data-testid="admin-page">
@@ -470,6 +470,9 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
                 <TabsTrigger value="observability" data-testid="admin-http-tab-observability">
                   Observability
                 </TabsTrigger>
+                <TabsTrigger value="hub" data-testid="admin-http-tab-hub">
+                  Hub
+                </TabsTrigger>
                 <TabsTrigger value="models" data-testid="admin-http-tab-models">
                   Models
                 </TabsTrigger>
@@ -489,6 +492,10 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
 
               <TabsContent value="observability">
                 <ObservabilityPanels core={core} />
+              </TabsContent>
+
+              <TabsContent value="hub">
+                <AdminHubHttpPanels core={core} />
               </TabsContent>
 
               <TabsContent value="models">
