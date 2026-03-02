@@ -1,7 +1,9 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { AdminModeGate } from "../../admin-mode.js";
+import { type ApiCallState, useApiCallState } from "../../hooks/use-api-call-state.js";
 import { parseJsonInput } from "../../utils/parse-json-input.js";
+import { AdminWsPanels } from "../admin/admin-ws-panels.js";
 import { AdminWorkBoardWsHub } from "../admin-workboard/admin-workboard-ws-hub.js";
 import { JsonWsPanel } from "../admin-ws/json-ws-panel.js";
 import { SubagentsPanels } from "../admin-ws/subagents-panels.js";
@@ -30,12 +32,6 @@ const QUICK_LINKS: ReadonlyArray<{ id: string; label: string }> = [
   { id: "settings", label: "Settings" },
 ] as const;
 
-type ApiCallState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "success"; value: unknown }
-  | { status: "error"; error: unknown };
-
 type UsageGetQuery = Parameters<OperatorCore["http"]["usage"]["get"]>[0];
 type UsageGetQueryValue = Exclude<UsageGetQuery, undefined>;
 
@@ -49,57 +45,6 @@ type SessionSendPayload = Parameters<OperatorCore["ws"]["sessionSend"]>[0];
 type WorkflowRunPayload = Parameters<OperatorCore["ws"]["workflowRun"]>[0];
 type WorkflowResumePayload = Parameters<OperatorCore["ws"]["workflowResume"]>[0];
 type WorkflowCancelPayload = Parameters<OperatorCore["ws"]["workflowCancel"]>[0];
-
-function useApiCallState(): {
-  state: ApiCallState;
-  run: (request: () => Promise<unknown>) => Promise<void>;
-  runAndThrow: <T>(request: () => Promise<T>) => Promise<T>;
-} {
-  const mountedRef = React.useRef(true);
-  const inFlightRef = React.useRef(false);
-  React.useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  const [state, setState] = React.useState<ApiCallState>({ status: "idle" });
-
-  const run = React.useCallback(async (request: () => Promise<unknown>): Promise<void> => {
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
-    setState({ status: "loading" });
-    try {
-      const value = await request();
-      if (!mountedRef.current) return;
-      setState({ status: "success", value });
-    } catch (error) {
-      if (!mountedRef.current) return;
-      setState({ status: "error", error });
-    } finally {
-      inFlightRef.current = false;
-    }
-  }, []);
-
-  const runAndThrow = React.useCallback(async <T,>(request: () => Promise<T>): Promise<T> => {
-    if (inFlightRef.current) throw new Error("Request already in progress");
-    inFlightRef.current = true;
-    setState({ status: "loading" });
-    try {
-      const value = await request();
-      if (mountedRef.current) setState({ status: "success", value });
-      return value;
-    } catch (error) {
-      if (mountedRef.current) setState({ status: "error", error });
-      throw error;
-    } finally {
-      inFlightRef.current = false;
-    }
-  }, []);
-
-  return { state, run, runAndThrow };
-}
 
 function ApiResultSection({ state, heading }: { state: ApiCallState; heading: string }) {
   const value = state.status === "success" ? state.value : undefined;
@@ -575,6 +520,9 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
                 <TabsTrigger value="workflows" data-testid="admin-ws-tab-workflows">
                   Workflows
                 </TabsTrigger>
+                <TabsTrigger value="commands" data-testid="admin-ws-tab-commands">
+                  Commands &amp; diagnostics
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="subagents">
@@ -659,6 +607,10 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
                     />
                   </div>
                 </section>
+              </TabsContent>
+
+              <TabsContent value="commands">
+                <AdminWsPanels core={core} />
               </TabsContent>
             </Tabs>
           </TabsContent>
