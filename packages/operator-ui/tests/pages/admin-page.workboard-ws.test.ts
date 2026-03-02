@@ -556,6 +556,25 @@ describe("AdminPage WorkBoard WS panels", () => {
       workspace_id: "ws-1",
     });
 
+    const workboard = testRoot.container.querySelector<HTMLDivElement>(
+      '[data-testid="admin-ws-workboard"]',
+    );
+    expect(workboard).not.toBeNull();
+
+    const linkListPanel = workboard!.querySelector<HTMLDivElement>(
+      '[data-testid="admin-ws-panel-work.link.list"]',
+    );
+    const linkCreatePanel = workboard!.querySelector<HTMLDivElement>(
+      '[data-testid="admin-ws-panel-work.link.create"]',
+    );
+    expect(linkListPanel).not.toBeNull();
+    expect(linkCreatePanel).not.toBeNull();
+
+    const allPanels = Array.from(
+      workboard!.querySelectorAll<HTMLDivElement>('[data-testid^="admin-ws-panel-"]'),
+    );
+    expect(allPanels.indexOf(linkListPanel!)).toBeLessThan(allPanels.indexOf(linkCreatePanel!));
+
     const linkCreatePayload = testRoot.container.querySelector<HTMLTextAreaElement>(
       '[data-testid="admin-ws-work-link-create-payload"]',
     );

@@ -125,20 +125,20 @@ function WorkBoardLinkPanels({
       <WsJsonPanel
         scope={scope}
         onScopeErrors={onScopeErrors}
-        title="work.link.create"
-        payloadTestId="admin-ws-work-link-create-payload"
-        runTestId="admin-ws-work-link-create-run"
-        defaultPayload={{ work_item_id: "", linked_work_item_id: "", kind: "depends_on" }}
-        run={(payload) => core.ws.workLinkCreate(payload as WorkLinkCreatePayload)}
-      />
-      <WsJsonPanel
-        scope={scope}
-        onScopeErrors={onScopeErrors}
         title="work.link.list"
         payloadTestId="admin-ws-work-link-list-payload"
         runTestId="admin-ws-work-link-list-run"
         defaultPayload={{ work_item_id: "", limit: 50 }}
         run={(payload) => core.ws.workLinkList(payload as WorkLinkListPayload)}
+      />
+      <WsJsonPanel
+        scope={scope}
+        onScopeErrors={onScopeErrors}
+        title="work.link.create"
+        payloadTestId="admin-ws-work-link-create-payload"
+        runTestId="admin-ws-work-link-create-run"
+        defaultPayload={{ work_item_id: "", linked_work_item_id: "", kind: "depends_on" }}
+        run={(payload) => core.ws.workLinkCreate(payload as WorkLinkCreatePayload)}
       />
     </>
   );
