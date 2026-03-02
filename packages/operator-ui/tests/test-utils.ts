@@ -88,6 +88,8 @@ export function clickRadix(element: HTMLElement): void {
   element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
 }
 
+export const click = clickRadix;
+
 export function stubMatchMedia(
   query: string,
   initialMatches: boolean,

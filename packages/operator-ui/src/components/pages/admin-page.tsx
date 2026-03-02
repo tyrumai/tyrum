@@ -2,6 +2,7 @@ import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { AdminModeGate } from "../../admin-mode.js";
 import { parseJsonInput } from "../../utils/parse-json-input.js";
+import { AdminWorkBoardWsHub } from "../admin-workboard/admin-workboard-ws-hub.js";
 import { SubagentsPanels } from "../admin-ws/subagents-panels.js";
 import { PageHeader } from "../layout/page-header.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
@@ -530,7 +531,24 @@ export function AdminPage({ core, onNavigate }: AdminPageProps) {
           </TabsContent>
 
           <TabsContent value="ws">
-            <SubagentsPanels core={core} />
+            <Tabs defaultValue="subagents" className="grid gap-3">
+              <TabsList aria-label="Admin WebSocket API sections">
+                <TabsTrigger value="subagents" data-testid="admin-ws-tab-subagents">
+                  Subagents
+                </TabsTrigger>
+                <TabsTrigger value="workboard" data-testid="admin-ws-tab-workboard">
+                  WorkBoard
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="subagents">
+                <SubagentsPanels core={core} />
+              </TabsContent>
+
+              <TabsContent value="workboard">
+                <AdminWorkBoardWsHub core={core} />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         </AdminModeGate>
       </Tabs>
