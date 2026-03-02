@@ -173,7 +173,16 @@ export function createConnectionStore(ws: OperatorWsClient): {
   }
 
   function handleReconnectScheduled(nextRetryAtMs: number): void {
-    setState((prev) => ({ ...prev, nextRetryAtMs }));
+    setState((prev) => {
+      if (
+        prev.status === "disconnected" &&
+        prev.lastDisconnect !== null &&
+        TERMINAL_CLOSE_CODES.has(prev.lastDisconnect.code)
+      ) {
+        return prev.nextRetryAtMs === null ? prev : { ...prev, nextRetryAtMs: null };
+      }
+      return { ...prev, nextRetryAtMs };
+    });
   }
 
   function handleTransportError(message: string): void {
