@@ -260,6 +260,10 @@ describe("AdminPage WorkBoard WS panels", () => {
     expect(signalListPayload).not.toBeNull();
     expect(signalListRun).not.toBeNull();
 
+    const signalListDefault = JSON.parse(signalListPayload!.value) as Record<string, unknown>;
+    expect(signalListDefault).not.toHaveProperty("work_item_id");
+    expect(signalListDefault).toHaveProperty("limit", 50);
+
     await act(async () => {
       setNativeValue(
         signalListPayload!,
@@ -396,6 +400,10 @@ describe("AdminPage WorkBoard WS panels", () => {
     );
     expect(stateKvListPayload).not.toBeNull();
     expect(stateKvListRun).not.toBeNull();
+
+    const stateKvListDefault = JSON.parse(stateKvListPayload!.value) as Record<string, unknown>;
+    expect(stateKvListDefault).not.toHaveProperty("prefix");
+    expect(stateKvListDefault).toHaveProperty("scope", { kind: "agent" });
 
     await act(async () => {
       setNativeValue(

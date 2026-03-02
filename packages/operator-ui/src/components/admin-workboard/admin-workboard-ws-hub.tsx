@@ -151,7 +151,7 @@ export function AdminWorkBoardWsHub({ core }: AdminWorkBoardWsHubProps): React.R
           title="work.signal.list"
           payloadTestId="admin-ws-work-signal-list-payload"
           runTestId="admin-ws-work-signal-list-run"
-          defaultPayload={{ work_item_id: "", limit: 50 }}
+          defaultPayload={{ limit: 50 }}
           run={(payload) => core.ws.workSignalList(payload as WorkSignalListPayload)}
         />
         <WsJsonPanel
@@ -204,7 +204,7 @@ export function AdminWorkBoardWsHub({ core }: AdminWorkBoardWsHubProps): React.R
           title="work.state_kv.list"
           payloadTestId="admin-ws-work-state-kv-list-payload"
           runTestId="admin-ws-work-state-kv-list-run"
-          defaultPayload={{ scope: { kind: "agent" }, prefix: "" }}
+          defaultPayload={{ scope: { kind: "agent" } }}
           buildPayload={buildStateKvPayload}
           run={(payload) => core.ws.workStateKvList(payload as WorkStateKvListPayload)}
         />
