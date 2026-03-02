@@ -9,6 +9,14 @@ import { Alert } from "../ui/alert.js";
 import { readGatewayError } from "../../utils/gateway-error.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end--;
+  }
+  return value.slice(0, end);
+}
+
 export function ConnectPage({
   core,
   mode,
@@ -33,7 +41,7 @@ export function ConnectPage({
   const loginOrConnect = async (): Promise<void> => {
     const trimmedUrl = gatewayUrl.trim();
     if (onReconfigureGateway && trimmedUrl !== core.httpBaseUrl) {
-      const wsBaseUrl = trimmedUrl.replace(/\/+$/, "");
+      const wsBaseUrl = trimTrailingSlashes(trimmedUrl);
       const wsUrl = wsBaseUrl.replace(/^http/, "ws") + "/ws";
       onReconfigureGateway(trimmedUrl, wsUrl);
       return;

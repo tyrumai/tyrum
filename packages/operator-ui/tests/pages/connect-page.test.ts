@@ -2,12 +2,21 @@
 
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
+import { readFileSync } from "node:fs";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import { ConnectPage } from "../../src/components/pages/connect-page.js";
 import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 describe("ConnectPage", () => {
+  it("avoids regex-based trailing slash trimming for ws URL derivation", () => {
+    const source = readFileSync(
+      "packages/operator-ui/src/components/pages/connect-page.tsx",
+      "utf8",
+    );
+    expect(source).not.toContain('replace(/\\/+$/, "")');
+  });
+
   it("builds the websocket URL without a double slash when gateway URL ends with /", async () => {
     const { store: connectionStore } = createStore({
       status: "disconnected",
