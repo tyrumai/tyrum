@@ -1,9 +1,6 @@
-import { createTyrumHttpClient } from "@tyrum/client";
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
-import { Input } from "../ui/input.js";
-import { Label } from "../ui/label.js";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +11,6 @@ import {
 } from "../ui/dialog.js";
 import { useAdminModeUiContext } from "./admin-mode-provider.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
-import { resolveTyrumHttpFetch } from "../../utils/tyrum-http-fetch.js";
 
 export function AdminModeEnterDialog() {
   const { core, mode, isEnterOpen, requestEnter, closeEnter } = useAdminModeUiContext();
@@ -22,16 +18,10 @@ export function AdminModeEnterDialog() {
   const busyRef = useRef(busy);
   busyRef.current = busy;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [revealToken, setRevealToken] = useState(false);
   const confirmRef = useRef<HTMLInputElement | null>(null);
-  const tokenRef = useRef<HTMLInputElement | null>(null);
 
   const resetForm = (): void => {
     setErrorMessage(null);
-    setRevealToken(false);
-    if (tokenRef.current) {
-      tokenRef.current.value = "";
-    }
     if (confirmRef.current) {
       confirmRef.current.checked = false;
     }
@@ -42,16 +32,10 @@ export function AdminModeEnterDialog() {
     resetForm();
   }, [isEnterOpen]);
 
-  const issueDeviceToken = async (adminToken: string): Promise<void> => {
-    const http = createTyrumHttpClient({
-      baseUrl: core.httpBaseUrl,
-      auth: { type: "bearer", token: adminToken },
-      fetch: resolveTyrumHttpFetch(mode),
-    });
-
-    const issued = await http.deviceTokens.issue({
+  const issueDeviceToken = async (): Promise<void> => {
+    const requestBody = {
       device_id: "operator-ui",
-      role: "client",
+      role: "client" as const,
       scopes: [
         "operator.read",
         "operator.write",
@@ -60,12 +44,15 @@ export function AdminModeEnterDialog() {
         "operator.admin",
       ],
       ttl_seconds: 60 * 10,
-    });
-
-    core.adminModeStore.enter({
-      elevatedToken: issued.token,
-      expiresAt: issued.expires_at,
-    });
+    };
+    const applyIssuedToken = (issued: { token: string; expires_at: string }): void => {
+      core.adminModeStore.enter({
+        elevatedToken: issued.token,
+        expiresAt: issued.expires_at,
+      });
+    };
+    const issued = await core.http.deviceTokens.issue(requestBody);
+    applyIssuedToken(issued);
   };
 
   const submit = async (): Promise<void> => {
@@ -77,16 +64,10 @@ export function AdminModeEnterDialog() {
       return;
     }
 
-    const adminToken = tokenRef.current?.value.trim() ?? "";
-    if (!adminToken) {
-      setErrorMessage("Admin token is required");
-      return;
-    }
-
     setBusy(true);
     setErrorMessage(null);
     try {
-      await issueDeviceToken(adminToken);
+      await issueDeviceToken();
       resetForm();
       closeEnter();
     } catch (error) {
@@ -128,7 +109,7 @@ export function AdminModeEnterDialog() {
         }}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
-          tokenRef.current?.focus();
+          confirmRef.current?.focus();
         }}
       >
         <DialogHeader>
@@ -145,36 +126,15 @@ export function AdminModeEnterDialog() {
             <span>I understand and want to proceed.</span>
           </label>
 
-          <div className="grid gap-2">
-            <Label htmlFor="admin-mode-token">Admin token</Label>
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <Input
-                  id="admin-mode-token"
-                  data-testid="admin-mode-token"
-                  ref={tokenRef}
-                  type={revealToken ? "text" : "password"}
-                  spellCheck={false}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  autoComplete="off"
-                />
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                data-testid="admin-mode-token-toggle"
-                disabled={busy}
-                aria-pressed={revealToken}
-                onClick={() => {
-                  setRevealToken((prev) => !prev);
-                }}
-              >
-                {revealToken ? "Hide" : "Show"}
-              </Button>
-            </div>
-          </div>
+          {mode === "desktop" ? (
+            <p className="text-sm text-fg-muted">
+              Desktop connection auth is used automatically for Admin Mode.
+            </p>
+          ) : (
+            <p className="text-sm text-fg-muted">
+              Your authenticated web session is used automatically for Admin Mode.
+            </p>
+          )}
 
           {errorMessage ? (
             <Alert variant="error" title="Admin Mode error" description={errorMessage} />
