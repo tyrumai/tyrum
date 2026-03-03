@@ -5,15 +5,7 @@ import {
   persistExecutionArtifactBytes,
   type ExecutionArtifactSensitivity,
 } from "../artifact/execution-artifacts.js";
-
-function parseEvidenceSensitivity(
-  raw: string | undefined,
-  fallback: ExecutionArtifactSensitivity,
-): ExecutionArtifactSensitivity {
-  const normalized = raw?.trim().toLowerCase();
-  if (normalized === "normal" || normalized === "sensitive") return normalized;
-  return fallback;
-}
+import { parseEvidenceSensitivity } from "../artifact/evidence-sensitivity.js";
 
 function resolveDesktopSandboxEvidenceSensitivity(): ExecutionArtifactSensitivity {
   return parseEvidenceSensitivity(

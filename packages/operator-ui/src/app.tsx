@@ -252,7 +252,7 @@ function OperatorUiAppRoot({
             {route === "connection" && <PlatformConnectionPage core={core} />}
             {route === "permissions" && <PlatformPermissionsPage />}
             {route === "debug" && <PlatformDebugPage />}
-            {route === "browser" && <BrowserCapabilitiesPage />}
+            {route === "browser" && hostKind === "web" && <BrowserCapabilitiesPage />}
           </>
         )}
       </AdminModeProvider>

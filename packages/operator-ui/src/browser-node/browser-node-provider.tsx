@@ -278,6 +278,7 @@ export function BrowserNodeProvider({
 
     return () => {
       disposed = true;
+      clearConsentQueue();
       if (clientRef.current) {
         clientRef.current.disconnect();
         clientRef.current = null;
