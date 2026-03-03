@@ -63,8 +63,6 @@ export class Logger {
       ...this.base,
       ...fields,
     };
-    // Structured logs by default (JSON lines).
-    // eslint-disable-next-line no-console
-    console.log(JSON.stringify(record));
+    process.stdout.write(`${JSON.stringify(record)}\n`);
   }
 }
