@@ -8,6 +8,7 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
   type ActionPrimitive,
+  WsSessionDeleteResult,
 } from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import {
@@ -1661,6 +1662,46 @@ describe("handleClientMessage", () => {
     }
   });
 
+  it("returns an error response when session.list response schema parsing fails", async () => {
+    const db = openTestSqliteDb();
+    try {
+      await db.run(
+        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
+        [
+          "default",
+          "ui:thread-bad-datetime",
+          "ui",
+          "thread-bad-datetime",
+          "not-a-date",
+          "not-a-date",
+        ],
+      );
+
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const deps = makeDeps(cm, { db });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-session-list-parse-fail-1",
+          type: "session.list",
+          payload: {},
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(false);
+      expect((result as unknown as { type: string }).type).toBe("session.list");
+      expect((result as unknown as { error: { code: string } }).error.code).toBe("internal_error");
+    } finally {
+      await db.close();
+    }
+  });
+
   it("returns transcripts via session.get", async () => {
     const db = openTestSqliteDb();
     try {
@@ -2329,6 +2370,58 @@ describe("handleClientMessage", () => {
       expect((result as unknown as { ok: boolean }).ok).toBe(false);
       expect((result as unknown as { type: string }).type).toBe("session.delete");
       expect((result as unknown as { error: { code: string } }).error.code).toBe("internal_error");
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("returns an error response when session.delete response schema parsing fails", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const nowIso = new Date().toISOString();
+
+      await db.run(
+        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
+        [
+          "default",
+          "ui:thread-delete-parse-fail",
+          "ui",
+          "thread-delete-parse-fail",
+          nowIso,
+          nowIso,
+        ],
+      );
+
+      const parseSpy = vi.spyOn(WsSessionDeleteResult, "parse").mockImplementation(() => {
+        throw new Error("parse boom");
+      });
+
+      try {
+        const cm = new ConnectionManager();
+        const { id } = makeClient(cm, ["cli"]);
+        const client = cm.getClient(id)!;
+        const deps = makeDeps(cm, { db });
+
+        const result = await handleClientMessage(
+          client,
+          JSON.stringify({
+            request_id: "r-session-delete-parse-fail-1",
+            type: "session.delete",
+            payload: { session_id: "ui:thread-delete-parse-fail" },
+          }),
+          deps,
+        );
+
+        expect(result).toBeDefined();
+        expect((result as unknown as { ok: boolean }).ok).toBe(false);
+        expect((result as unknown as { type: string }).type).toBe("session.delete");
+        expect((result as unknown as { error: { code: string } }).error.code).toBe(
+          "internal_error",
+        );
+      } finally {
+        parseSpy.mockRestore();
+      }
     } finally {
       await db.close();
     }

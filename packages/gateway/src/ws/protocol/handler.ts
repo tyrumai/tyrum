@@ -934,11 +934,23 @@ export async function handleClientMessage(
       };
     });
 
-    const result = WsSessionListResult.parse({
-      sessions,
-      next_cursor: listed.nextCursor ?? null,
-    });
-    return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    try {
+      const result = WsSessionListResult.parse({
+        sessions,
+        next_cursor: listed.nextCursor ?? null,
+      });
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_list_parse_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
   }
 
   if (msg.type === "session.get") {
@@ -1279,8 +1291,21 @@ export async function handleClientMessage(
       return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
     }
 
-    const result = WsSessionDeleteResult.parse({ session_id: session.session_id });
-    return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    try {
+      const result = WsSessionDeleteResult.parse({ session_id: session.session_id });
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_delete_parse_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        session_id: session.session_id,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
   }
 
   if (msg.type === "session.send") {
