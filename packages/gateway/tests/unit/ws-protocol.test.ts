@@ -1919,6 +1919,43 @@ describe("handleClientMessage", () => {
       await db.close();
     }
   });
+
+  it("returns an error response when session.delete transaction fails", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const nowIso = new Date().toISOString();
+
+      await db.run(
+        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
+        ["default", "ui:thread-delete-fail", "ui", "thread-delete-fail", nowIso, nowIso],
+      );
+
+      await db.exec("DROP TABLE session_provider_pins");
+
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const deps = makeDeps(cm, { db });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-session-delete-fail-1",
+          type: "session.delete",
+          payload: { session_id: "ui:thread-delete-fail" },
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(false);
+      expect((result as unknown as { type: string }).type).toBe("session.delete");
+      expect((result as unknown as { error: { code: string } }).error.code).toBe("internal_error");
+    } finally {
+      await db.close();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

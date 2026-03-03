@@ -1160,30 +1160,43 @@ export async function handleClientMessage(
       });
     }
 
-    await deps.db.transaction(async (tx) => {
-      await tx.run(
-        `DELETE FROM session_model_overrides
-         WHERE agent_id = ? AND session_id = ?`,
-        [agentId, session.session_id],
-      );
-      await tx.run(
-        `DELETE FROM session_provider_pins
-         WHERE agent_id = ? AND session_id = ?`,
-        [agentId, session.session_id],
-      );
+    try {
+      await deps.db.transaction(async (tx) => {
+        await tx.run(
+          `DELETE FROM session_model_overrides
+           WHERE agent_id = ? AND session_id = ?`,
+          [agentId, session.session_id],
+        );
+        await tx.run(
+          `DELETE FROM session_provider_pins
+           WHERE agent_id = ? AND session_id = ?`,
+          [agentId, session.session_id],
+        );
 
-      const queueOverrideDal = new LaneQueueModeOverrideDal(tx);
-      await queueOverrideDal.clear({ key, lane });
+        const queueOverrideDal = new LaneQueueModeOverrideDal(tx);
+        await queueOverrideDal.clear({ key, lane });
 
-      const sendOverrideDal = new SessionSendPolicyOverrideDal(tx);
-      await sendOverrideDal.clear({ key });
+        const sendOverrideDal = new SessionSendPolicyOverrideDal(tx);
+        await sendOverrideDal.clear({ key });
 
-      await tx.run(
-        `DELETE FROM sessions
-         WHERE agent_id = ? AND session_id = ?`,
-        [agentId, session.session_id],
-      );
-    });
+        await tx.run(
+          `DELETE FROM sessions
+           WHERE agent_id = ? AND session_id = ?`,
+          [agentId, session.session_id],
+        );
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_delete_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        session_id: session.session_id,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
 
     const result = WsSessionDeleteResult.parse({ session_id: session.session_id });
     return { request_id: msg.request_id, type: msg.type, ok: true, result };
