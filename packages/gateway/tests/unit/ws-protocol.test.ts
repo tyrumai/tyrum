@@ -2008,6 +2008,121 @@ describe("handleClientMessage", () => {
     }
   });
 
+  it("deletes sessions via session.delete and cancels work for non-UI sessions with account/container-scoped keys", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const nowIso = new Date().toISOString();
+      const agentId = "agent-1";
+
+      const sessionId = "agent:agent-1:telegram:thread-1";
+      await db.run(
+        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [agentId, sessionId, "telegram", "thread-1", "to-delete", "[]", nowIso, nowIso],
+      );
+
+      const key = `agent:${agentId}:telegram:${agentId}~default:group:thread-1`;
+      const lane = "main";
+
+      await db.run(
+        `INSERT INTO lane_queue_mode_overrides (key, lane, queue_mode, updated_at_ms)
+         VALUES (?, ?, 'interrupt', ?)`,
+        [key, lane, Date.now()],
+      );
+      await db.run(
+        `INSERT INTO session_send_policy_overrides (key, send_policy, updated_at_ms)
+         VALUES (?, 'off', ?)`,
+        [key, Date.now()],
+      );
+
+      await db.run(
+        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+         VALUES (?, ?, ?, 'running', '{}')`,
+        ["job-delete-telegram-1", key, lane],
+      );
+      await db.run(
+        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+         VALUES (?, ?, ?, ?, 'running', 1)`,
+        ["run-delete-telegram-1", "job-delete-telegram-1", key, lane],
+      );
+      await db.run(
+        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+         VALUES (?, ?, 0, 'running', '{}')`,
+        ["step-delete-telegram-1", "run-delete-telegram-1"],
+      );
+
+      await db.run(
+        `INSERT INTO channel_inbox (
+           source,
+           thread_id,
+           message_id,
+           key,
+           lane,
+           received_at_ms,
+           payload_json,
+           status
+         ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'queued')`,
+        ["telegram", "thread-1", "msg-delete-telegram-queued", key, lane, 1_000],
+      );
+
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const deps = makeDeps(cm, { db });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-session-delete-telegram-1",
+          type: "session.delete",
+          payload: { agent_id: agentId, session_id: sessionId },
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(true);
+      expect((result as unknown as { type: string }).type).toBe("session.delete");
+
+      expect(
+        await db.get(`SELECT 1 FROM sessions WHERE agent_id = ? AND session_id = ?`, [
+          agentId,
+          sessionId,
+        ]),
+      ).toBeUndefined();
+
+      expect(
+        await db.get(`SELECT 1 FROM lane_queue_mode_overrides WHERE key = ? AND lane = ?`, [
+          key,
+          lane,
+        ]),
+      ).toBeUndefined();
+
+      expect(
+        await db.get(`SELECT 1 FROM session_send_policy_overrides WHERE key = ?`, [key]),
+      ).toBeUndefined();
+
+      const run = await db.get<{ status: string }>(
+        `SELECT status
+         FROM execution_runs
+         WHERE run_id = ?`,
+        ["run-delete-telegram-1"],
+      );
+      expect(run?.status).toBe("cancelled");
+
+      const queued = await db.get<{ status: string; error: string | null }>(
+        `SELECT status, error
+         FROM channel_inbox
+         WHERE message_id = ?`,
+        ["msg-delete-telegram-queued"],
+      );
+      expect(queued?.status).toBe("failed");
+      expect(queued?.error).toContain("delete");
+    } finally {
+      await db.close();
+    }
+  });
+
   it("returns an error response when session.delete transaction fails", async () => {
     const db = openTestSqliteDb();
     try {

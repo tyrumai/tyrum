@@ -277,9 +277,21 @@ export class SessionDal {
              jsonb_array_length(turns) AS turns_count,
              (turns -> -1 ->> 'role') AS last_turn_role,
              (turns -> -1 ->> 'content') AS last_turn_content
-           FROM sessions s
-             CROSS JOIN LATERAL (SELECT s.turns_json::jsonb AS turns) turns_cast
-           WHERE ${where.join(" AND ")}
+           FROM (
+             SELECT agent_id,
+               session_id,
+               channel,
+               thread_id,
+               summary,
+               created_at,
+               updated_at,
+               CASE
+                 WHEN pg_input_is_valid(turns_json, 'jsonb') THEN turns_json::jsonb
+                 ELSE '[]'::jsonb
+               END AS turns
+             FROM sessions
+             WHERE ${where.join(" AND ")}
+           ) sessions_with_turns
            ORDER BY updated_at DESC, session_id DESC
            LIMIT ?`;
 

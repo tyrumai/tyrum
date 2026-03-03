@@ -62,7 +62,7 @@ import { hasAnyRequiredScope } from "../../modules/auth/scopes.js";
 import { resolveWsRequestRequiredScopes } from "../../modules/authz/ws-scope-matrix.js";
 import { isSafeSuggestedOverridePattern } from "../../modules/policy/override-guardrails.js";
 import { SessionDal } from "../../modules/agent/session-dal.js";
-import { buildAgentTurnKey } from "../../modules/agent/turn-key.js";
+import { buildAgentTurnKey, encodeTurnKeyPart } from "../../modules/agent/turn-key.js";
 import { LaneQueueModeOverrideDal } from "../../modules/lanes/queue-mode-override-dal.js";
 import { SessionSendPolicyOverrideDal } from "../../modules/channels/send-policy-override-dal.js";
 import { ExecutionEngine } from "../../modules/execution/engine.js";
@@ -71,6 +71,7 @@ import { broadcastEvent, errorResponse } from "./helpers.js";
 import { handleWorkboardMessage } from "./workboard-handlers.js";
 import { handleSubagentMessage } from "./subagent-handlers.js";
 import { handleMemoryMessage } from "./memory-handlers.js";
+import type { SqlDb } from "../../statestore/types.js";
 
 // ---------------------------------------------------------------------------
 // Client message handling
@@ -1160,15 +1161,21 @@ export async function handleClientMessage(
       return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
     }
 
-    const workspaceId = agentId;
-    const key = buildAgentTurnKey({
+    const fallbackKey = buildAgentTurnKey({
       agentId,
-      workspaceId,
+      workspaceId: agentId,
       channel: session.channel,
       containerKind: "channel",
       threadId: session.thread_id,
     });
-    const lane = "main";
+    const keyLane = (await resolveStoredKeyLaneByChannelThread(deps.db, {
+      agentId,
+      channel: session.channel,
+      threadId: session.thread_id,
+    })) ?? { key: fallbackKey, lane: "main" };
+
+    const key = keyLane.key;
+    const lane = keyLane.lane;
 
     // Best-effort: stop active execution + clear queued followups (if present).
     try {
@@ -1700,4 +1707,50 @@ function evidenceFromErrorDetails(details: unknown): unknown {
     return undefined;
   }
   return (details as { evidence?: unknown }).evidence;
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
+async function resolveStoredKeyLaneByChannelThread(
+  db: SqlDb,
+  input: { agentId: string; channel: string; threadId: string },
+): Promise<{ key: string; lane: string } | undefined> {
+  const safeAgentId = escapeLikePattern(encodeTurnKeyPart(input.agentId.trim()));
+  const safeChannel = escapeLikePattern(encodeTurnKeyPart(input.channel.trim()));
+  const safeThread = escapeLikePattern(encodeTurnKeyPart(input.threadId.trim()));
+  const keyPattern = `agent:${safeAgentId}:${safeChannel}:%:%:${safeThread}`;
+
+  const runRow = await db.get<{ key: string; lane: string }>(
+    `SELECT key, lane
+     FROM execution_runs
+     WHERE key LIKE ? ESCAPE '\\'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [keyPattern],
+  );
+  if (runRow?.key) return runRow;
+
+  const queueRow = await db.get<{ key: string; lane: string }>(
+    `SELECT key, lane
+     FROM lane_queue_mode_overrides
+     WHERE key LIKE ? ESCAPE '\\'
+     ORDER BY updated_at_ms DESC
+     LIMIT 1`,
+    [keyPattern],
+  );
+  if (queueRow?.key) return queueRow;
+
+  const sendRow = await db.get<{ key: string }>(
+    `SELECT key
+     FROM session_send_policy_overrides
+     WHERE key LIKE ? ESCAPE '\\'
+     ORDER BY updated_at_ms DESC
+     LIMIT 1`,
+    [keyPattern],
+  );
+  if (sendRow?.key) return { key: sendRow.key, lane: "main" };
+
+  return undefined;
 }
