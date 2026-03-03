@@ -7,16 +7,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Mocks — operator-core
 // ---------------------------------------------------------------------------
 
-const { createOperatorCoreManagerMock, testState } = vi.hoisted(() => {
+const { createOperatorCoreManagerMock, testState, notifyConnectionChange } = vi.hoisted(() => {
   const testState = {
     coreStatus: "connected" as CoreStatus,
   };
 
+  const subscribers = new Set<() => void>();
   const connectionStore = {
     getSnapshot: () => ({ status: testState.coreStatus }),
-    subscribe: vi.fn(() => () => {}),
+    subscribe: vi.fn((onStoreChange: () => void) => {
+      subscribers.add(onStoreChange);
+      return () => {
+        subscribers.delete(onStoreChange);
+      };
+    }),
   };
   const coreInstance = { connect: vi.fn(), connectionStore };
+
+  const notifyConnectionChange = (): void => {
+    for (const cb of subscribers) {
+      cb();
+    }
+  };
 
   const createOperatorCoreManagerMock = vi.fn(
     (input: {
@@ -40,7 +52,7 @@ const { createOperatorCoreManagerMock, testState } = vi.hoisted(() => {
     },
   );
 
-  return { createOperatorCoreManagerMock, testState };
+  return { createOperatorCoreManagerMock, testState, notifyConnectionChange };
 });
 
 vi.mock("@tyrum/client", () => ({
@@ -106,10 +118,14 @@ vi.mock("../src/renderer/components/ConsentModal.js", () => ({
 describe("App page routing", () => {
   let root: Root;
   let navCallback: ((req: unknown) => void) | null = null;
+  let deepLinkCallback: ((url: string) => void) | null = null;
+  let pendingDeepLinkUrl: string | null = null;
 
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     navCallback = null;
+    deepLinkCallback = null;
+    pendingDeepLinkUrl = null;
     vi.clearAllMocks();
     testState.coreStatus = "connected";
 
@@ -134,6 +150,15 @@ describe("App page routing", () => {
       onStatusChange: vi.fn(() => () => {}),
       onNavigationRequest: vi.fn((cb: (req: unknown) => void) => {
         navCallback = cb;
+        return () => {};
+      }),
+      consumeDeepLink: vi.fn(async () => {
+        const url = pendingDeepLinkUrl;
+        pendingDeepLinkUrl = null;
+        return url;
+      }),
+      onDeepLinkOpen: vi.fn((cb: (url: string) => void) => {
+        deepLinkCallback = cb;
         return () => {};
       }),
     };
@@ -219,5 +244,28 @@ describe("App page routing", () => {
 
     await navigateTo("runs");
     expect(document.querySelector('[data-testid="page-connection"]')).not.toBeNull();
+  });
+
+  it("queues deep links while setup gate is active and replays after connection succeeds", async () => {
+    testState.coreStatus = "disconnected";
+    await renderApp();
+
+    expect(document.querySelector('[data-testid="page-connection"]')).not.toBeNull();
+
+    pendingDeepLinkUrl = "tyrum://work?work_item_id=w-1";
+    await act(async () => {
+      deepLinkCallback?.("tyrum://work?work_item_id=w-1");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(document.querySelector('[data-testid="page-work"]')).toBeNull();
+
+    await act(async () => {
+      testState.coreStatus = "connected";
+      notifyConnectionChange();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(document.querySelector('[data-testid="page-work"]')).not.toBeNull();
   });
 });

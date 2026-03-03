@@ -122,4 +122,25 @@ describe("Connection page", () => {
     expect(refreshConfigState).toHaveBeenCalled();
     expect(retry).toHaveBeenCalled();
   });
+
+  it("does not show a connection error while operator core is still booting", async () => {
+    const { ConnectionPage } = await import("../src/renderer/pages/ConnectionPage.js");
+
+    await act(async () => {
+      testRoot.root.render(
+        createElement(ConnectionPage, {
+          core: null,
+          busy: true,
+          errorMessage: null,
+          retry,
+          configExists: true,
+          refreshConfigState,
+          setupGateActive: true,
+        }),
+      );
+    });
+
+    expect(document.body.textContent).toContain("Connecting");
+    expect(document.body.textContent).not.toContain("Unable to connect to the configured gateway");
+  });
 });

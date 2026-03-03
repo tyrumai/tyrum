@@ -29,12 +29,10 @@ export interface ConnectionPageProps {
 function summarizeOperatorConnection(core: OperatorCore | null): string | null {
   if (!core) return null;
   const snapshot = core.connectionStore.getSnapshot() as {
-    status?: unknown;
     transportError?: unknown;
     lastDisconnect?: unknown;
   };
 
-  const status = snapshot.status;
   const transportError = snapshot.transportError;
   const lastDisconnect = snapshot.lastDisconnect;
 
@@ -47,10 +45,6 @@ function summarizeOperatorConnection(core: OperatorCore | null): string | null {
     if (typeof reason === "string" && reason.trim().length > 0) {
       return reason;
     }
-  }
-
-  if (typeof status === "string" && status !== "connected") {
-    return `Operator connection is ${status}.`;
   }
 
   return null;
@@ -87,6 +81,68 @@ export function ConnectionPage({
 
   const busy = operatorBusy || actionBusy;
   const operatorConnectionSummary = summarizeOperatorConnection(core);
+  const operatorConnectionStatus: "connected" | "connecting" | "disconnected" = (() => {
+    if (core) {
+      const snapshot = core.connectionStore.getSnapshot() as { status?: unknown };
+      if (
+        snapshot.status === "connected" ||
+        snapshot.status === "connecting" ||
+        snapshot.status === "disconnected"
+      ) {
+        return snapshot.status;
+      }
+    }
+    return operatorBusy ? "connecting" : "disconnected";
+  })();
+
+  const setupAlert = (() => {
+    if (!setupGateActive) return null;
+
+    if (!configExists) {
+      return {
+        variant: "warning" as const,
+        title: "Setup required",
+        description:
+          "Choose whether to run an embedded gateway inside the Desktop app, or connect to an existing remote gateway.",
+        showRetry: false,
+      };
+    }
+
+    if (errorMessage) {
+      return {
+        variant: "error" as const,
+        title: "Unable to connect",
+        description: formatSetupError(errorMessage),
+        showRetry: true,
+      };
+    }
+
+    if (operatorConnectionSummary) {
+      return {
+        variant: "error" as const,
+        title: "Unable to connect",
+        description: operatorConnectionSummary,
+        showRetry: true,
+      };
+    }
+
+    if (operatorBusy || operatorConnectionStatus === "connecting") {
+      return {
+        variant: "info" as const,
+        title: "Connecting...",
+        description: "Connecting to the configured gateway. This may take a moment.",
+        showRetry: false,
+      };
+    }
+
+    return {
+      variant: "error" as const,
+      title: "Connection required",
+      description:
+        "Unable to connect to the configured gateway. Check your settings and try again.",
+      showRetry: true,
+    };
+  })();
 
   useEffect(() => {
     const api = window.tyrumDesktop;
@@ -210,21 +266,14 @@ export function ConnectionPage({
     <div className="grid gap-6">
       <h1 className="text-2xl font-semibold tracking-tight text-fg">Connection</h1>
 
-      {setupGateActive ? (
+      {setupAlert ? (
         <Alert
-          variant={configExists ? "error" : "warning"}
-          title={configExists ? "Connection required" : "Setup required"}
-          description={
-            !configExists
-              ? "Choose whether to run an embedded gateway inside the Desktop app, or connect to an existing remote gateway."
-              : errorMessage
-                ? formatSetupError(errorMessage)
-                : (operatorConnectionSummary ??
-                  "Unable to connect to the configured gateway. Check your settings and try again.")
-          }
+          variant={setupAlert.variant}
+          title={setupAlert.title}
+          description={setupAlert.description}
         />
       ) : null}
-      {setupGateActive && configExists ? (
+      {setupAlert?.showRetry && !operatorBusy ? (
         <div className="flex">
           <Button size="sm" onClick={retry} disabled={busy} isLoading={operatorBusy}>
             Retry

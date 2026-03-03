@@ -87,6 +87,7 @@ function useConnectionStatus(
 export function App() {
   const [page, setPage] = useState<PageId>("dashboard");
   const [workItemToOpen, setWorkItemToOpen] = useState<string | null>(null);
+  const [pendingDeepLinkUrl, setPendingDeepLinkUrl] = useState<string | null>(null);
   const [hasSavedConfig, setHasSavedConfig] = useState<boolean | null>(null);
   const [gatewayMode, setGatewayMode] = useState<DesktopGatewayMode>("embedded");
 
@@ -149,7 +150,10 @@ export function App() {
     if (!api?.consumeDeepLink || !api.onDeepLinkOpen) return;
 
     const handleDeepLink = (url: string): void => {
-      if (setupGateActive) return;
+      if (setupGateActive) {
+        setPendingDeepLinkUrl(url);
+        return;
+      }
       const route = getDeepLinkRoute(url);
       handleNavigate(route.pageId);
       if (route.pageId === "work" && route.workItemId) {
@@ -170,6 +174,19 @@ export function App() {
 
     return unsubscribe;
   }, [handleNavigate, setupGateActive]);
+
+  useEffect(() => {
+    if (setupGateActive) return;
+    if (!pendingDeepLinkUrl) return;
+
+    const url = pendingDeepLinkUrl;
+    setPendingDeepLinkUrl(null);
+    const route = getDeepLinkRoute(url);
+    handleNavigate(route.pageId);
+    if (route.pageId === "work" && route.workItemId) {
+      setWorkItemToOpen(route.workItemId);
+    }
+  }, [handleNavigate, pendingDeepLinkUrl, setupGateActive]);
 
   const renderPage = () => {
     switch (effectivePage) {
