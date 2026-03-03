@@ -11,15 +11,15 @@ type NutImage = { width: number; height: number; data: Buffer; channels: number 
 
 interface NutJsApi {
   mouse: {
-    setPosition(target: NutPoint): Promise<void>;
-    click(btn: number): Promise<void>;
-    doubleClick(btn: number): Promise<void>;
-    drag(path: NutMousePath): Promise<void>;
+    setPosition(target: NutPoint): Promise<unknown>;
+    click(btn: number): Promise<unknown>;
+    doubleClick(btn: number): Promise<unknown>;
+    drag(path: NutMousePath): Promise<unknown>;
   };
   keyboard: {
-    type(...input: unknown[]): Promise<void>;
-    pressKey(...keys: number[]): Promise<void>;
-    releaseKey(...keys: number[]): Promise<void>;
+    type(...input: unknown[]): Promise<unknown>;
+    pressKey(...keys: number[]): Promise<unknown>;
+    releaseKey(...keys: number[]): Promise<unknown>;
   };
   screen: {
     grab(): Promise<NutImage>;
@@ -40,7 +40,7 @@ export class NutJsDesktopBackend implements DesktopBackend {
 
     try {
       const nutjs = await import("@nut-tree-fork/nut-js");
-      this.api = {
+      const api: NutJsApi = {
         mouse: nutjs.mouse,
         keyboard: nutjs.keyboard,
         screen: nutjs.screen,
@@ -50,7 +50,8 @@ export class NutJsDesktopBackend implements DesktopBackend {
         Key: nutjs.Key as unknown as Record<string, number>,
         imageToJimp: nutjs.imageToJimp,
       };
-      return this.api;
+      this.api = api;
+      return api;
     } catch (err) {
       throw new Error(
         `Desktop automation unavailable: failed to load @nut-tree-fork/nut-js. ` +
@@ -118,7 +119,7 @@ export class NutJsDesktopBackend implements DesktopBackend {
 
     try {
       await mouse.setPosition(new Point(x, y));
-      await mouse.click(btn);
+      await mouse.click(btn ?? Button["LEFT"]!);
     } catch (err) {
       throw new Error(`Mouse click at (${x}, ${y}) failed: ${(err as Error).message}`);
     }
@@ -140,7 +141,7 @@ export class NutJsDesktopBackend implements DesktopBackend {
 
     try {
       await mouse.setPosition(new Point(x, y));
-      await mouse.doubleClick(btn);
+      await mouse.doubleClick(btn ?? Button["LEFT"]!);
     } catch (err) {
       throw new Error(`Mouse double click at (${x}, ${y}) failed: ${(err as Error).message}`);
     }
