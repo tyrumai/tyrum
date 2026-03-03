@@ -862,6 +862,16 @@ Additional plugin-defined routers may be mounted under:
 
 ### Agent runtime (feature-gated)
 
+#### GET /agent/list
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.read`
+- Availability: Only when `TYRUM_AGENT_ENABLED=1`
+- Request: Optional query param `include_default` (default: `true`)
+- Response:
+  - `200` JSON `{ agents: [{ agent_id, home?, has_config? }] }`
+  - `401`, `403`
+
 #### GET /agent/status
 
 - Auth: Required (unless gateway auth is disabled)
@@ -1099,6 +1109,45 @@ Client-sent events are rejected.
 - Scope (device tokens): `operator.write`
 - Schema: `WsSessionSendRequest`
 - Result: `WsSessionSendResult`
+
+#### `session.list`
+
+- Direction: client → gateway (request)
+- Scope (device tokens): `operator.read`
+- Schema: `WsSessionListRequest`
+- Result: `WsSessionListResult`
+- Notes: Defaults `agent_id=default`, `channel=ui`, `limit=50`. Cursor is opaque.
+
+#### `session.get`
+
+- Direction: client → gateway (request)
+- Scope (device tokens): `operator.read`
+- Schema: `WsSessionGetRequest`
+- Result: `WsSessionGetResult`
+
+#### `session.create`
+
+- Direction: client → gateway (request)
+- Scope (device tokens): `operator.write`
+- Schema: `WsSessionCreateRequest`
+- Result: `WsSessionCreateResult`
+- Notes: Defaults `agent_id=default`, `channel=ui`. Server generates `thread_id`.
+
+#### `session.compact`
+
+- Direction: client → gateway (request)
+- Scope (device tokens): `operator.write`
+- Schema: `WsSessionCompactRequest`
+- Result: `WsSessionCompactResult`
+- Notes: Defaults `keep_last_messages=8`.
+
+#### `session.delete`
+
+- Direction: client → gateway (request)
+- Scope (device tokens): `operator.write`
+- Schema: `WsSessionDeleteRequest`
+- Result: `WsSessionDeleteResult`
+- Notes: Best-effort cleanup mirrors `/reset` for the deleted session.
 
 #### `command.execute`
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DateTimeSchema } from "../common.js";
 import { AgentId, Lane, TyrumKey } from "../keys.js";
 import {
   WsError,
@@ -11,6 +12,9 @@ import {
 // ---------------------------------------------------------------------------
 // Operation payloads (typed) — session + commands
 // ---------------------------------------------------------------------------
+
+export const WsMessageRole = z.enum(["assistant", "user", "system"]);
+export type WsMessageRole = z.infer<typeof WsMessageRole>;
 
 export const WsSessionSendPayload = z
   .object({
@@ -35,6 +39,87 @@ export const WsSessionSendResult = z
   })
   .strict();
 export type WsSessionSendResult = z.infer<typeof WsSessionSendResult>;
+
+export const WsSessionTurn = z
+  .object({
+    role: WsMessageRole,
+    content: z.string(),
+  })
+  .strict();
+export type WsSessionTurn = z.infer<typeof WsSessionTurn>;
+
+export const WsSessionListPayload = z
+  .object({
+    agent_id: AgentId.optional(),
+    channel: z.string().trim().min(1).optional(),
+    limit: z.number().int().positive().max(200).optional(),
+    cursor: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type WsSessionListPayload = z.infer<typeof WsSessionListPayload>;
+
+export const WsSessionListRequest = WsRequestEnvelope.extend({
+  type: z.literal("session.list"),
+  payload: WsSessionListPayload,
+});
+export type WsSessionListRequest = z.infer<typeof WsSessionListRequest>;
+
+export const WsSessionGetPayload = z
+  .object({
+    agent_id: AgentId.optional(),
+    session_id: z.string().trim().min(1),
+  })
+  .strict();
+export type WsSessionGetPayload = z.infer<typeof WsSessionGetPayload>;
+
+export const WsSessionGetRequest = WsRequestEnvelope.extend({
+  type: z.literal("session.get"),
+  payload: WsSessionGetPayload,
+});
+export type WsSessionGetRequest = z.infer<typeof WsSessionGetRequest>;
+
+export const WsSessionCreatePayload = z
+  .object({
+    agent_id: AgentId.optional(),
+    channel: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type WsSessionCreatePayload = z.infer<typeof WsSessionCreatePayload>;
+
+export const WsSessionCreateRequest = WsRequestEnvelope.extend({
+  type: z.literal("session.create"),
+  payload: WsSessionCreatePayload,
+});
+export type WsSessionCreateRequest = z.infer<typeof WsSessionCreateRequest>;
+
+export const WsSessionCompactPayload = z
+  .object({
+    agent_id: AgentId.optional(),
+    session_id: z.string().trim().min(1),
+    keep_last_messages: z.number().int().positive().max(200).optional(),
+  })
+  .strict();
+export type WsSessionCompactPayload = z.infer<typeof WsSessionCompactPayload>;
+
+export const WsSessionCompactRequest = WsRequestEnvelope.extend({
+  type: z.literal("session.compact"),
+  payload: WsSessionCompactPayload,
+});
+export type WsSessionCompactRequest = z.infer<typeof WsSessionCompactRequest>;
+
+export const WsSessionDeletePayload = z
+  .object({
+    agent_id: AgentId.optional(),
+    session_id: z.string().trim().min(1),
+  })
+  .strict();
+export type WsSessionDeletePayload = z.infer<typeof WsSessionDeletePayload>;
+
+export const WsSessionDeleteRequest = WsRequestEnvelope.extend({
+  type: z.literal("session.delete"),
+  payload: WsSessionDeletePayload,
+});
+export type WsSessionDeleteRequest = z.infer<typeof WsSessionDeleteRequest>;
 
 export const WsCommandExecutePayload = z
   .object({
@@ -83,6 +168,133 @@ export const WsSessionSendResponseEnvelope = z.union([
 ]);
 export type WsSessionSendResponseEnvelope = z.infer<typeof WsSessionSendResponseEnvelope>;
 
+export const WsSessionListItem = z
+  .object({
+    session_id: z.string().trim().min(1),
+    agent_id: AgentId,
+    channel: z.string().trim().min(1),
+    thread_id: z.string().trim().min(1),
+    summary: z.string().default(""),
+    turns_count: z.number().int().nonnegative(),
+    updated_at: DateTimeSchema,
+    created_at: DateTimeSchema,
+    last_turn: WsSessionTurn.optional(),
+  })
+  .strict();
+export type WsSessionListItem = z.infer<typeof WsSessionListItem>;
+
+export const WsSessionListResult = z
+  .object({
+    sessions: z.array(WsSessionListItem),
+    next_cursor: z.string().trim().min(1).nullable().optional(),
+  })
+  .strict();
+export type WsSessionListResult = z.infer<typeof WsSessionListResult>;
+
+export const WsSessionListResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("session.list"),
+  result: WsSessionListResult,
+});
+export type WsSessionListResponseOkEnvelope = z.infer<typeof WsSessionListResponseOkEnvelope>;
+
+export const WsSessionListResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("session.list"),
+});
+export type WsSessionListResponseErrEnvelope = z.infer<typeof WsSessionListResponseErrEnvelope>;
+
+export const WsSessionGetSession = z
+  .object({
+    session_id: z.string().trim().min(1),
+    agent_id: AgentId,
+    channel: z.string().trim().min(1),
+    thread_id: z.string().trim().min(1),
+    summary: z.string().default(""),
+    turns: z.array(WsSessionTurn),
+    updated_at: DateTimeSchema,
+    created_at: DateTimeSchema,
+  })
+  .strict();
+export type WsSessionGetSession = z.infer<typeof WsSessionGetSession>;
+
+export const WsSessionGetResult = z
+  .object({
+    session: WsSessionGetSession,
+  })
+  .strict();
+export type WsSessionGetResult = z.infer<typeof WsSessionGetResult>;
+
+export const WsSessionGetResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("session.get"),
+  result: WsSessionGetResult,
+});
+export type WsSessionGetResponseOkEnvelope = z.infer<typeof WsSessionGetResponseOkEnvelope>;
+
+export const WsSessionGetResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("session.get"),
+});
+export type WsSessionGetResponseErrEnvelope = z.infer<typeof WsSessionGetResponseErrEnvelope>;
+
+export const WsSessionCreateResult = z
+  .object({
+    session_id: z.string().trim().min(1),
+    agent_id: AgentId,
+    channel: z.string().trim().min(1),
+    thread_id: z.string().trim().min(1),
+  })
+  .strict();
+export type WsSessionCreateResult = z.infer<typeof WsSessionCreateResult>;
+
+export const WsSessionCreateResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("session.create"),
+  result: WsSessionCreateResult,
+});
+export type WsSessionCreateResponseOkEnvelope = z.infer<typeof WsSessionCreateResponseOkEnvelope>;
+
+export const WsSessionCreateResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("session.create"),
+});
+export type WsSessionCreateResponseErrEnvelope = z.infer<typeof WsSessionCreateResponseErrEnvelope>;
+
+export const WsSessionCompactResult = z
+  .object({
+    session_id: z.string().trim().min(1),
+    dropped_messages: z.number().int().nonnegative(),
+    kept_messages: z.number().int().nonnegative(),
+  })
+  .strict();
+export type WsSessionCompactResult = z.infer<typeof WsSessionCompactResult>;
+
+export const WsSessionCompactResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("session.compact"),
+  result: WsSessionCompactResult,
+});
+export type WsSessionCompactResponseOkEnvelope = z.infer<typeof WsSessionCompactResponseOkEnvelope>;
+
+export const WsSessionCompactResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("session.compact"),
+});
+export type WsSessionCompactResponseErrEnvelope = z.infer<
+  typeof WsSessionCompactResponseErrEnvelope
+>;
+
+export const WsSessionDeleteResult = z
+  .object({
+    session_id: z.string().trim().min(1),
+  })
+  .strict();
+export type WsSessionDeleteResult = z.infer<typeof WsSessionDeleteResult>;
+
+export const WsSessionDeleteResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("session.delete"),
+  result: WsSessionDeleteResult,
+});
+export type WsSessionDeleteResponseOkEnvelope = z.infer<typeof WsSessionDeleteResponseOkEnvelope>;
+
+export const WsSessionDeleteResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("session.delete"),
+});
+export type WsSessionDeleteResponseErrEnvelope = z.infer<typeof WsSessionDeleteResponseErrEnvelope>;
+
 // ---------------------------------------------------------------------------
 // Events (typed) — messaging/session
 // ---------------------------------------------------------------------------
@@ -106,9 +318,6 @@ export const WsTypingStoppedEvent = WsEventEnvelope.extend({
   payload: WsTypingEventPayload,
 });
 export type WsTypingStoppedEvent = z.infer<typeof WsTypingStoppedEvent>;
-
-export const WsMessageRole = z.enum(["assistant", "user", "system"]);
-export type WsMessageRole = z.infer<typeof WsMessageRole>;
 
 export const WsMessageDeltaEventPayload = z
   .object({

@@ -99,6 +99,7 @@ describe("createTyrumHttpClient", () => {
     expect(typeof client.pairings.deny).toBe("function");
     expect(typeof client.pairings.revoke).toBe("function");
 
+    expect(typeof admin.agentList?.get).toBe("function");
     expect(typeof admin.agentStatus?.get).toBe("function");
     expect(typeof admin.routingConfig?.get).toBe("function");
     expect(typeof admin.routingConfig?.update).toBe("function");
@@ -112,6 +113,32 @@ describe("createTyrumHttpClient", () => {
     expect(typeof admin.artifacts?.getMetadata).toBe("function");
     expect(typeof admin.artifacts?.getBytes).toBe("function");
     expect(typeof admin.health?.get).toBe("function");
+  });
+
+  it("requests agent list and validates response", async () => {
+    const fetch = makeFetchMock(async () =>
+      jsonResponse({
+        agents: [{ agent_id: "default" }, { agent_id: "agent-1", home: "/tmp/agent-1" }],
+      }),
+    );
+
+    const client = createTyrumHttpClient({
+      baseUrl: "https://gateway.example",
+      auth: { type: "bearer", token: "root-token" },
+      fetch,
+    });
+
+    const res = await client.agentList.get({ include_default: false });
+
+    expect(res.agents.map((a) => a.agent_id)).toEqual(["default", "agent-1"]);
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://gateway.example/agent/list?include_default=false");
+    expect(init.method).toBe("GET");
+    expect(getHeader(init, "authorization")).toBe("Bearer root-token");
   });
 
   it("sends bearer auth, normalizes baseUrl, and validates issue token responses", async () => {

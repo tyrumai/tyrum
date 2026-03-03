@@ -55,6 +55,16 @@ import type {
   WsPresenceBeaconResult as WsPresenceBeaconResultT,
   WsRequestEnvelope,
   WsResponseEnvelope,
+  WsSessionCompactPayload,
+  WsSessionCompactResult as WsSessionCompactResultT,
+  WsSessionCreatePayload,
+  WsSessionCreateResult as WsSessionCreateResultT,
+  WsSessionDeletePayload,
+  WsSessionDeleteResult as WsSessionDeleteResultT,
+  WsSessionGetPayload,
+  WsSessionGetResult as WsSessionGetResultT,
+  WsSessionListPayload,
+  WsSessionListResult as WsSessionListResultT,
   WsSessionSendPayload,
   WsSessionSendResult as WsSessionSendResultT,
   WsSubagentClosePayload,
@@ -124,6 +134,11 @@ import {
   WsEvent,
   WsPairingResolveResult,
   WsPresenceBeaconResult,
+  WsSessionCompactResult,
+  WsSessionCreateResult,
+  WsSessionDeleteResult,
+  WsSessionGetResult,
+  WsSessionListResult,
   WsSessionSendResult,
   WsSubagentClosePayload as WsSubagentClosePayloadSchema,
   WsSubagentCloseResult,
@@ -511,6 +526,31 @@ export class TyrumClient {
   /** Send a message into a session and receive assistant output. */
   sessionSend(payload: WsSessionSendPayload): Promise<WsSessionSendResultT> {
     return this.request("session.send", payload, WsSessionSendResult);
+  }
+
+  /** List chat sessions (threads) for an agent/channel. */
+  sessionList(payload: WsSessionListPayload = {}): Promise<WsSessionListResultT> {
+    return this.request("session.list", payload, WsSessionListResult);
+  }
+
+  /** Fetch a single session transcript by id. */
+  sessionGet(payload: WsSessionGetPayload): Promise<WsSessionGetResultT> {
+    return this.request("session.get", payload, WsSessionGetResult);
+  }
+
+  /** Create a new session (thread). */
+  sessionCreate(payload: WsSessionCreatePayload = {}): Promise<WsSessionCreateResultT> {
+    return this.request("session.create", payload, WsSessionCreateResult);
+  }
+
+  /** Compact a session transcript, folding dropped turns into summary. */
+  sessionCompact(payload: WsSessionCompactPayload): Promise<WsSessionCompactResultT> {
+    return this.request("session.compact", payload, WsSessionCompactResult);
+  }
+
+  /** Delete a session and associated overrides/best-effort runtime cleanup. */
+  sessionDelete(payload: WsSessionDeletePayload): Promise<WsSessionDeleteResultT> {
+    return this.request("session.delete", payload, WsSessionDeleteResult);
   }
 
   /** Start a workflow run. */

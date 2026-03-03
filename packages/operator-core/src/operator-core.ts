@@ -25,6 +25,7 @@ import {
   type StatusStore,
 } from "./stores/status-store.js";
 import { createMemoryStore, type MemoryStore } from "./stores/memory-store.js";
+import { createChatStore, type ChatStore } from "./stores/chat-store.js";
 
 export interface OperatorCoreOptions {
   wsUrl: string;
@@ -50,6 +51,7 @@ export interface OperatorCore {
   pairingStore: PairingStore;
   statusStore: StatusStore;
   memoryStore: MemoryStore;
+  chatStore: ChatStore;
   connect(): void;
   disconnect(): void;
   dispose(): void;
@@ -120,6 +122,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const status = createStatusStore(http);
   const runs = createRunsStore();
   const memory = createMemoryStore(ws);
+  const chat = createChatStore(ws, http);
 
   const unsubscribes: Unsubscribe[] = [];
   const on = (event: keyof TyrumClientEvents, handler: (data: unknown) => void): void => {
@@ -322,6 +325,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     statusStore: status.store,
     runsStore: runs.store,
     memoryStore: memory.store,
+    chatStore: chat,
     connect() {
       connection.store.connect();
     },
