@@ -5,58 +5,40 @@ import type { DesktopDisplayTarget } from "@tyrum/schemas";
 
 import type { DesktopBackend, ScreenCapture } from "./desktop-backend.js";
 
-// ---------------------------------------------------------------------------
-// Internal types — kept opaque to avoid importing CJS-only @nut-tree-fork/*
-// packages at the type level, which would break Node16 module resolution.
-// ---------------------------------------------------------------------------
+type NutPoint = { x: number; y: number };
+type NutMousePath = unknown;
+type NutImage = { width: number; height: number; data: Buffer; channels: number };
 
-/** Minimal shape of the lazily-loaded nut-js API surface we depend on. */
 interface NutJsApi {
-  /* eslint-disable @typescript-eslint/no-explicit-any */
   mouse: {
-    setPosition(target: any): Promise<any>;
-    click(btn: any): Promise<any>;
-    doubleClick(btn: any): Promise<any>;
-    drag(path: any): Promise<any>;
+    setPosition(target: NutPoint): Promise<void>;
+    click(btn: number): Promise<void>;
+    doubleClick(btn: number): Promise<void>;
+    drag(path: NutMousePath): Promise<void>;
   };
   keyboard: {
-    type(...input: any[]): Promise<any>;
-    pressKey(...keys: any[]): Promise<any>;
-    releaseKey(...keys: any[]): Promise<any>;
+    type(...input: unknown[]): Promise<void>;
+    pressKey(...keys: number[]): Promise<void>;
+    releaseKey(...keys: number[]): Promise<void>;
   };
   screen: {
-    grab(): Promise<{
-      width: number;
-      height: number;
-      data: Buffer;
-      channels: number;
-    }>;
-    capture(fileName: string, fileFormat?: any, filePath?: string): Promise<string>;
+    grab(): Promise<NutImage>;
+    capture(fileName: string, fileFormat?: unknown, filePath?: string): Promise<string>;
   };
-  straightTo(target: any): Promise<any[]>;
-  Point: new (x: number, y: number) => { x: number; y: number };
+  straightTo(target: NutPoint): NutMousePath;
+  Point: new (x: number, y: number) => NutPoint;
   Button: Record<string, number>;
   Key: Record<string, number>;
-  imageToJimp(image: any): { getBufferAsync(mime: string): Promise<Buffer> };
-  /* eslint-enable @typescript-eslint/no-explicit-any */
+  imageToJimp(image: NutImage): { getBufferAsync(mime: string): Promise<Buffer> };
 }
 
-/**
- * Real desktop automation backend powered by @nut-tree-fork/nut-js.
- *
- * The native module is loaded lazily on first use so the application does not
- * crash at startup when the required system libraries (X11 dev headers on
- * Linux, etc.) are missing.
- */
 export class NutJsDesktopBackend implements DesktopBackend {
   private api: NutJsApi | null = null;
 
-  /** Lazy-load the native module. Throws a descriptive error if unavailable. */
   private async load(): Promise<NutJsApi> {
     if (this.api) return this.api;
 
     try {
-      // Dynamic import of a CJS package — Node resolves this fine at runtime.
       const nutjs = await import("@nut-tree-fork/nut-js");
       this.api = {
         mouse: nutjs.mouse,
@@ -78,33 +60,22 @@ export class NutJsDesktopBackend implements DesktopBackend {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Screen capture
-  // ---------------------------------------------------------------------------
-
   async captureScreen(_display: DesktopDisplayTarget): Promise<ScreenCapture> {
     const { screen, imageToJimp } = await this.load();
 
     try {
-      // grab() returns an Image with raw BGR pixel data
       const image = await screen.grab();
       const { width, height } = image;
 
-      // Convert raw pixel data to PNG via Jimp
       const jimp = imageToJimp(image);
       const buffer = await jimp.getBufferAsync("image/png");
 
       return { width, height, buffer: Buffer.from(buffer) };
     } catch {
-      // Fallback: use capture() which writes a PNG to disk
       return this.captureScreenViaFile();
     }
   }
 
-  /**
-   * Fallback capture path: write a temporary PNG via `screen.capture()`,
-   * read it back into memory, and delete the temp file.
-   */
   private async captureScreenViaFile(): Promise<ScreenCapture> {
     const { screen } = await this.load();
     const fileName = `tyrum-screenshot-${Date.now()}`;
@@ -114,11 +85,9 @@ export class NutJsDesktopBackend implements DesktopBackend {
       const outputPath = await screen.capture(fileName, undefined, filePath);
       const buffer = await readFile(outputPath);
 
-      // PNG header encodes dimensions at bytes 16-23 (big-endian uint32)
       const width = buffer.readUInt32BE(16);
       const height = buffer.readUInt32BE(20);
 
-      // Best-effort cleanup of temp file
       await unlink(outputPath).catch(() => {});
 
       return { width, height, buffer };
@@ -126,10 +95,6 @@ export class NutJsDesktopBackend implements DesktopBackend {
       throw new Error(`Screen capture failed: ${(err as Error).message}`);
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Mouse
-  // ---------------------------------------------------------------------------
 
   async moveMouse(x: number, y: number): Promise<void> {
     const { mouse, Point } = await this.load();
@@ -190,10 +155,6 @@ export class NutJsDesktopBackend implements DesktopBackend {
       throw new Error(`Mouse drag to (${x}, ${y}) failed: ${(err as Error).message}`);
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Keyboard
-  // ---------------------------------------------------------------------------
 
   async typeText(text: string): Promise<void> {
     const { keyboard } = await this.load();
