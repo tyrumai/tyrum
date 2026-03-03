@@ -237,6 +237,66 @@ describe("chatStore", () => {
     expect(chat.getSnapshot().send.error).toBeNull();
   });
 
+  it("does not reopen the old session after switching agents mid-send", async () => {
+    const send = deferred<{ session_id: string; assistant_message: string }>();
+    const ws = createFakeWs();
+    ws.sessionSend = vi.fn(async () => await send.promise);
+    ws.sessionGet.mockResolvedValue({ session: sampleGetSession("session-1") });
+    ws.sessionList.mockResolvedValue({ sessions: [], next_cursor: null });
+
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    await chat.openSession("session-1");
+    expect(ws.sessionGet).toHaveBeenCalledTimes(1);
+
+    const sendP = chat.sendMessage("hello");
+    expect(chat.getSnapshot().send.sending).toBe(true);
+
+    chat.setAgentId("agent-2");
+    expect(chat.getSnapshot().agentId).toBe("agent-2");
+    expect(chat.getSnapshot().active.sessionId).toBeNull();
+    expect(chat.getSnapshot().send.sending).toBe(false);
+
+    send.resolve({ session_id: "session-1", assistant_message: "" });
+    await sendP;
+
+    expect(chat.getSnapshot().agentId).toBe("agent-2");
+    expect(chat.getSnapshot().active.sessionId).toBeNull();
+    expect(ws.sessionGet).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not open a new session after switching agents mid-newChat", async () => {
+    const create = deferred<{
+      session_id: string;
+      agent_id: string;
+      channel: string;
+      thread_id: string;
+    }>();
+
+    const ws = createFakeWs();
+    ws.sessionCreate = vi.fn(async () => await create.promise);
+
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    const newChatP = chat.newChat();
+    chat.setAgentId("agent-2");
+
+    create.resolve({
+      session_id: "session-9",
+      agent_id: "default",
+      channel: "ui",
+      thread_id: "ui-session-9",
+    });
+    await newChatP;
+
+    expect(chat.getSnapshot().agentId).toBe("agent-2");
+    expect(chat.getSnapshot().active.sessionId).toBeNull();
+    expect(ws.sessionGet).not.toHaveBeenCalled();
+    expect(ws.sessionList).not.toHaveBeenCalled();
+  });
+
   it("compactActive compacts then reloads the transcript", async () => {
     const ws = createFakeWs();
     ws.sessionGet.mockResolvedValue({ session: sampleGetSession("session-1") });

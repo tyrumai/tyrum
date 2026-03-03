@@ -81,6 +81,7 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
   let agentsRunId = 0;
   let sessionsRunId = 0;
   let openRunId = 0;
+  let sendRunId = 0;
 
   function setAgentId(agentId: string): void {
     const nextAgentId = agentId.trim().length > 0 ? agentId.trim() : "default";
@@ -89,6 +90,7 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
     // Invalidate any in-flight session loads for the previous agent selection.
     sessionsRunId += 1;
     openRunId += 1;
+    sendRunId += 1;
     setState((prev) => {
       return {
         ...prev,
@@ -234,10 +236,12 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
 
   async function newChat(): Promise<void> {
     setState((prev) => ({ ...prev, sessions: { ...prev.sessions, error: null } }));
+    const expectedAgentId = store.getSnapshot().agentId;
     try {
-      const agentId = store.getSnapshot().agentId;
-      const created = await ws.sessionCreate({ agent_id: agentId, channel: "ui" });
+      const created = await ws.sessionCreate({ agent_id: expectedAgentId, channel: "ui" });
+      if (store.getSnapshot().agentId !== expectedAgentId) return;
       await refreshSessions();
+      if (store.getSnapshot().agentId !== expectedAgentId) return;
       await openSession(created.session_id);
     } catch (err) {
       setState((prev) => ({
@@ -255,27 +259,47 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
     const session = snapshot.active.session;
     if (!session) return;
 
+    const runId = ++sendRunId;
+    const expectedAgentId = snapshot.agentId;
+    const expectedSessionId = session.session_id;
+
     setState((prev) => ({ ...prev, send: { sending: true, error: null } }));
     try {
-      const agentId = snapshot.agentId;
       const reply = await ws.sessionSend({
-        agent_id: agentId,
+        agent_id: expectedAgentId,
         channel: session.channel,
         thread_id: session.thread_id,
         content: text,
       });
       void reply;
-      await openSession(session.session_id);
-      await refreshSessions();
+
+      if (runId !== sendRunId) return;
+
+      const afterSend = store.getSnapshot();
+      if (
+        afterSend.agentId === expectedAgentId &&
+        afterSend.active.sessionId === expectedSessionId
+      ) {
+        await openSession(expectedSessionId);
+        if (runId !== sendRunId) return;
+      }
+
+      if (store.getSnapshot().agentId === expectedAgentId) {
+        await refreshSessions();
+      }
     } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        send: { sending: false, error: toOperatorCoreError("ws", "session.send", err) },
-      }));
+      if (runId === sendRunId) {
+        setState((prev) => ({
+          ...prev,
+          send: { sending: false, error: toOperatorCoreError("ws", "session.send", err) },
+        }));
+      }
       return;
     }
 
-    setState((prev) => ({ ...prev, send: { sending: false, error: null } }));
+    if (runId === sendRunId) {
+      setState((prev) => ({ ...prev, send: { sending: false, error: null } }));
+    }
   }
 
   async function compactActive(input?: { keepLastMessages?: number }): Promise<void> {
@@ -285,12 +309,18 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
 
     setState((prev) => ({ ...prev, active: { ...prev.active, error: null } }));
     try {
+      const expectedAgentId = snapshot.agentId;
       await ws.sessionCompact({
-        agent_id: snapshot.agentId,
+        agent_id: expectedAgentId,
         session_id: sessionId,
         keep_last_messages: input?.keepLastMessages,
       });
-      await openSession(sessionId);
+      const afterCompact = store.getSnapshot();
+      if (afterCompact.agentId !== expectedAgentId) return;
+
+      if (afterCompact.active.sessionId === sessionId) {
+        await openSession(sessionId);
+      }
       await refreshSessions();
     } catch (err) {
       setState((prev) => ({
@@ -307,11 +337,17 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
 
     setState((prev) => ({ ...prev, active: { ...prev.active, error: null } }));
     try {
-      await ws.sessionDelete({ agent_id: snapshot.agentId, session_id: sessionId });
-      setState((prev) => ({
-        ...prev,
-        active: { sessionId: null, session: null, loading: false, error: null },
-      }));
+      const expectedAgentId = snapshot.agentId;
+      await ws.sessionDelete({ agent_id: expectedAgentId, session_id: sessionId });
+
+      if (store.getSnapshot().agentId !== expectedAgentId) return;
+
+      if (store.getSnapshot().active.sessionId === sessionId) {
+        setState((prev) => ({
+          ...prev,
+          active: { sessionId: null, session: null, loading: false, error: null },
+        }));
+      }
       await refreshSessions();
     } catch (err) {
       setState((prev) => ({
