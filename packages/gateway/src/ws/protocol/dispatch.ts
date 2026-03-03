@@ -30,7 +30,8 @@ export function dispatchTask(
   }
 
   const descriptorId = descriptorIdForClientCapability(capability);
-  const requiresPairedNode = action.type === "Desktop";
+  const requiresNodeRole = action.type === "Browser";
+  const requiresPairedNode = action.type === "Desktop" || requiresNodeRole;
   const toolMatchTarget = canonicalizeNodeDispatchMatchTarget(action.type, action.args);
   const policyEnabled = deps.policyService?.isEnabled() ?? false;
   const policyEvalPromise = policyEnabled
@@ -115,7 +116,9 @@ export function dispatchTask(
             ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
           : [];
 
-      const eligibleClients = candidates.filter((c) => c.protocol_rev >= 2 && c.role === "client");
+      const eligibleClients = requiresNodeRole
+        ? []
+        : candidates.filter((c) => c.protocol_rev >= 2 && c.role === "client");
       const eligible = [...eligibleNodes, ...eligibleClients];
 
       const target = eligible.find((c) => c.edge_id !== cluster.edgeId) ?? eligible[0];
@@ -202,7 +205,7 @@ export function dispatchTask(
       eligibleNodes.push(c);
     }
 
-    const selected = eligibleNodes[0] ?? eligibleClients[0];
+    const selected = eligibleNodes[0] ?? (requiresNodeRole ? undefined : eligibleClients[0]);
     if (!selected) {
       const cluster = deps.cluster;
       if (!cluster) {
@@ -240,7 +243,9 @@ export function dispatchTask(
             ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
           : [];
 
-      const eligibleClients2 = candidates.filter((c) => c.protocol_rev >= 2 && c.role === "client");
+      const eligibleClients2 = requiresNodeRole
+        ? []
+        : candidates.filter((c) => c.protocol_rev >= 2 && c.role === "client");
       const eligible2 = [...eligibleNodes2, ...eligibleClients2];
 
       const target = eligible2.find((c) => c.edge_id !== cluster.edgeId) ?? eligible2[0];

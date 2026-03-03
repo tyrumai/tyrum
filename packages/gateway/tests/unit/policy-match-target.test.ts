@@ -198,4 +198,22 @@ describe("canonicalizeToolMatchTarget", () => {
     expect(actTarget).toBe("capability:tyrum.desktop;action:Desktop;op:act;act:ui");
     expect(actTarget).not.toContain("pixel:");
   });
+
+  it("canonicalizes browser node dispatch by capability + action + browser op", () => {
+    const geoTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.browser",
+      action: "Browser",
+      args: { op: "geolocation.get", enable_high_accuracy: true },
+    });
+    expect(geoTarget).toBe("capability:tyrum.browser;action:Browser;op:geolocation.get");
+    expect(geoTarget).not.toContain("enable_high_accuracy");
+
+    const unknownTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.browser",
+      action: "Browser",
+      args: { op: "not-a-real-op", secret: "should-not-appear" },
+    });
+    expect(unknownTarget).toBe("capability:tyrum.browser;action:Browser;op:unknown");
+    expect(unknownTarget).not.toContain("secret");
+  });
 });

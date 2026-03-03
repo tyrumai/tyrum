@@ -27,6 +27,10 @@ import {
   resolveDesktopEvidenceSensitivity,
   shapeDesktopEvidenceForArtifacts,
 } from "../desktop/shape-desktop-evidence.js";
+import {
+  resolveBrowserEvidenceSensitivity,
+  shapeBrowserEvidenceForArtifacts,
+} from "../browser/shape-browser-evidence.js";
 
 const MAX_RESPONSE_BYTES = 32_768;
 const TRUNCATION_MARKER = "...(truncated)";
@@ -633,12 +637,28 @@ export class ToolExecutor {
     result: unknown,
     scope: { runId: string; stepId: string },
   ): Promise<unknown> {
-    if (actionKind !== "Desktop") return evidence;
+    if (actionKind !== "Desktop" && actionKind !== "Browser") return evidence;
     if (!this.artifactStore) return evidence;
     const db = this.workspaceLease?.db;
     if (!db) return evidence;
-    const sensitivity = await resolveDesktopEvidenceSensitivity(db, scope);
-    const shaped = await shapeDesktopEvidenceForArtifacts({
+
+    if (actionKind === "Desktop") {
+      const sensitivity = await resolveDesktopEvidenceSensitivity(db, scope);
+      const shaped = await shapeDesktopEvidenceForArtifacts({
+        db,
+        artifactStore: this.artifactStore,
+        runId: scope.runId,
+        stepId: scope.stepId,
+        workspaceId: this.workspaceLease?.workspaceId,
+        evidence,
+        result,
+        sensitivity,
+      });
+      return shaped.evidence;
+    }
+
+    const sensitivity = resolveBrowserEvidenceSensitivity();
+    const shaped = await shapeBrowserEvidenceForArtifacts({
       db,
       artifactStore: this.artifactStore,
       runId: scope.runId,

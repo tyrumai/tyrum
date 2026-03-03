@@ -658,6 +658,20 @@ export {
 } from "./desktop.js";
 
 export {
+  BrowserGeolocationGetArgs,
+  BrowserCameraFacingMode,
+  BrowserCameraCapturePhotoFormat,
+  BrowserCameraCapturePhotoArgs,
+  BrowserMicrophoneRecordArgs,
+  BrowserActionArgs,
+  BrowserGeolocationCoords,
+  BrowserGeolocationGetResult,
+  BrowserCameraCapturePhotoResult,
+  BrowserMicrophoneRecordResult,
+  BrowserActionResult,
+} from "./browser.js";
+
+export {
   AgentModelConfig,
   AgentSkillConfig,
   AgentMcpConfig,

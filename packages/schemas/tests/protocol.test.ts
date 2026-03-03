@@ -293,6 +293,10 @@ describe("requiredCapability", () => {
     expect(requiredCapability("Web")).toBe("playwright");
   });
 
+  it("maps Browser to browser", () => {
+    expect(requiredCapability("Browser")).toBe("browser");
+  });
+
   it("maps Http to http", () => {
     expect(requiredCapability("Http")).toBe("http");
   });
