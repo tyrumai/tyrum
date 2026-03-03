@@ -4,11 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import React from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
-import { AdminModeProvider } from "../../src/admin-mode.js";
-import { AdminPage } from "../../src/components/pages/admin-page.js";
+import { ElevatedModeProvider } from "../../src/elevated-mode.js";
+import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
-function createAdminModeStoreActive() {
+function createElevatedModeStoreActive() {
   const { store } = createStore({
     status: "active",
     elevatedToken: "token-1",
@@ -46,20 +46,20 @@ function createCore(ws: WsMock): OperatorCore {
     wsUrl: "ws://example.test/ws",
     httpBaseUrl: "http://example.test",
     ws,
-    adminModeStore: createAdminModeStoreActive(),
+    elevatedModeStore: createElevatedModeStoreActive(),
   } as unknown as OperatorCore;
 }
 
-describe("AdminPage (WS Subagents)", () => {
-  it("does not render subagent operations in the Admin page", () => {
+describe("ConfigurePage (WS Subagents)", () => {
+  it("does not render subagent operations in Configure", () => {
     const ws = createWsMock();
     const core = createCore(ws);
 
     const testRoot = renderIntoDocument(
       React.createElement(
-        AdminModeProvider,
+        ElevatedModeProvider,
         { core, mode: "desktop" },
-        React.createElement(AdminPage, { core }),
+        React.createElement(ConfigurePage, { core }),
       ),
     );
 

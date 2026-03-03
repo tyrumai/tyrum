@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
-import { AdminModeProvider, Alert, Button, Spinner, type OperatorCore } from "@tyrum/operator-ui";
+import {
+  ElevatedModeProvider,
+  Alert,
+  Button,
+  Spinner,
+  type OperatorCore,
+} from "@tyrum/operator-ui";
 import type { DesktopOperatorCoreState } from "../lib/desktop-operator-core.js";
 
 interface OperatorPageGuardProps extends DesktopOperatorCoreState {
@@ -42,8 +48,8 @@ export function OperatorPageGuard({
   }
 
   return (
-    <AdminModeProvider core={core} mode="desktop">
+    <ElevatedModeProvider core={core} mode="desktop">
       {render(core)}
-    </AdminModeProvider>
+    </ElevatedModeProvider>
   );
 }

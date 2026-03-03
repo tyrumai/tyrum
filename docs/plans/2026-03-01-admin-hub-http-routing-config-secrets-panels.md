@@ -2,15 +2,15 @@
 
 > **For agent execution:** follow strict TDD (RED → GREEN → REFACTOR) for new UI behavior and tests.
 
-**Goal:** Add Operator UI Admin HTTP panels for routing config + secrets endpoints with Admin Mode gating and explicit mutation confirmation, without leaking secret values.
+**Goal:** Add Operator UI Admin HTTP panels for routing config + secrets endpoints with Elevated Mode gating and explicit mutation confirmation, without leaking secret values.
 
-**Architecture:** Extend `packages/operator-ui` `AdminPage` HTTP tab to render two section components (Routing config + Secrets). Each action stores its latest result/error and renders via `ApiResultCard`. Mutations are wrapped in `ConfirmDangerDialog`.
+**Architecture:** Extend `packages/operator-ui` `ConfigurePage` tabs to render two section components (Routing config + Secrets). Each action stores its latest result/error and renders via `ApiResultCard`. Mutations are wrapped in `ConfirmDangerDialog`.
 
 **Tech Stack:** React, `@tyrum/operator-ui` UI primitives, Vitest (jsdom).
 
 ---
 
-### Task 1: Add failing tests for Admin HTTP panels (RED)
+### Task 1: Add failing tests for Configure HTTP panels (RED)
 
 **Files:**
 
@@ -18,7 +18,7 @@
 
 **Step 1: Write failing tests**
 
-- Render `AdminPage` with Admin Mode active and assert the new panels appear.
+- Render `ConfigurePage` with Elevated Mode active and assert the new panels appear.
 - Click a mutation action (e.g. “Update routing config”) and assert:
   - a confirmation dialog opens
   - confirm button is disabled until checkbox is checked
@@ -34,8 +34,10 @@ Expected: FAIL because panels/testids don’t exist yet.
 
 **Files:**
 
-- Modify: `packages/operator-ui/src/components/pages/admin-page.tsx`
+- Modify: `packages/operator-ui/src/components/pages/configure-page.tsx`
 - Create: `packages/operator-ui/src/components/pages/admin-http-routing-config.tsx`
+
+**Note:** `AdminPage` was renamed to `ConfigurePage`; the implementation file is now `packages/operator-ui/src/components/pages/configure-page.tsx`.
 
 **Step 1: Minimal implementation**
 
@@ -43,7 +45,7 @@ Expected: FAIL because panels/testids don’t exist yet.
   - `Get` button calls `core.http.routingConfig.get()`
   - `Update` uses `JsonTextarea` for config + `ConfirmDangerDialog`
   - `Revert` uses a number input + `ConfirmDangerDialog`
-- Render it under the Admin HTTP tab.
+- Render it under the Configure sections tabs.
 
 **Step 2: Run tests**
 
@@ -55,8 +57,10 @@ Expected: tests still fail until Secrets panel is added / testids match.
 
 **Files:**
 
-- Modify: `packages/operator-ui/src/components/pages/admin-page.tsx`
+- Modify: `packages/operator-ui/src/components/pages/configure-page.tsx`
 - Create: `packages/operator-ui/src/components/pages/admin-http-secrets.tsx`
+
+**Note:** `AdminPage` was renamed to `ConfigurePage`; the implementation file is now `packages/operator-ui/src/components/pages/configure-page.tsx`.
 
 **Step 1: Minimal implementation**
 
@@ -64,7 +68,7 @@ Expected: tests still fail until Secrets panel is added / testids match.
   - `List` calls `core.http.secrets.list({ agent_id })`
   - `Store`, `Rotate`, `Revoke` are wrapped in `ConfirmDangerDialog`
   - Secret `value` inputs use password fields and are cleared on success
-- Render it under the Admin HTTP tab.
+- Render it under the Configure sections tabs.
 
 **Step 2: Run tests**
 

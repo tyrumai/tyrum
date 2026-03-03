@@ -1,37 +1,37 @@
-import { isAdminModeActive } from "@tyrum/operator-core";
+import { isElevatedModeActive } from "@tyrum/operator-core";
 import type { ReactNode } from "react";
 import { Button } from "../ui/button.js";
 import { Alert } from "../ui/alert.js";
 import { Card, CardContent, CardFooter } from "../ui/card.js";
 import { useOperatorStore } from "../../use-operator-store.js";
-import { useAdminModeUiContext } from "./admin-mode-provider.js";
+import { useElevatedModeUiContext } from "./elevated-mode-provider.js";
 
-export function AdminModeGate({ children }: { children: ReactNode }) {
-  const { core, requestEnter } = useAdminModeUiContext();
-  const adminMode = useOperatorStore(core.adminModeStore);
+export function ElevatedModeGate({ children }: { children: ReactNode }) {
+  const { core, requestEnter } = useElevatedModeUiContext();
+  const elevatedMode = useOperatorStore(core.elevatedModeStore);
 
-  if (isAdminModeActive(adminMode)) {
+  if (isElevatedModeActive(elevatedMode)) {
     return <>{children}</>;
   }
 
   return (
-    <div data-testid="admin-mode-gate">
+    <div data-testid="elevated-mode-gate">
       <Card>
         <CardContent className="grid gap-4 pt-6">
           <Alert
             variant="warning"
-            title="Enter Admin Mode to continue"
-            description="Admin Mode is required for this action."
+            title="Enter Elevated Mode to continue"
+            description="Elevated Mode is required for this action."
           />
         </CardContent>
         <CardFooter>
           <Button
-            data-testid="admin-mode-enter"
+            data-testid="elevated-mode-enter"
             onClick={() => {
               requestEnter();
             }}
           >
-            Enter Admin Mode
+            Enter Elevated Mode
           </Button>
         </CardFooter>
       </Card>

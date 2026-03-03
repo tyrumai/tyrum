@@ -148,7 +148,7 @@ function SecretsStoreCard({
     setError(undefined);
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Admin Mode to store secrets.");
+      throw new Error("Enter Elevated Mode to store secrets.");
     }
 
     const scope = scopeRaw.trim();
@@ -215,7 +215,7 @@ function SecretsStoreCard({
                 requestEnter();
               }}
             >
-              Enter Admin Mode
+              Enter Elevated Mode
             </Button>
           ) : null}
         </CardFooter>
@@ -290,7 +290,7 @@ function SecretsRotateCard({
     setError(undefined);
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Admin Mode to rotate secrets.");
+      throw new Error("Enter Elevated Mode to rotate secrets.");
     }
 
     const handleId = handleIdRaw.trim();
@@ -354,7 +354,7 @@ function SecretsRotateCard({
                 requestEnter();
               }}
             >
-              Enter Admin Mode
+              Enter Elevated Mode
             </Button>
           ) : null}
         </CardFooter>
@@ -395,7 +395,7 @@ function SecretsRevokeCard({
     setError(undefined);
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Admin Mode to revoke secrets.");
+      throw new Error("Enter Elevated Mode to revoke secrets.");
     }
 
     const handleId = handleIdRaw.trim();
@@ -443,7 +443,7 @@ function SecretsRevokeCard({
                 requestEnter();
               }}
             >
-              Enter Admin Mode
+              Enter Elevated Mode
             </Button>
           ) : null}
         </CardFooter>

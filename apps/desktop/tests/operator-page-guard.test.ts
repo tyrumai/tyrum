@@ -11,7 +11,7 @@ vi.mock("@tyrum/operator-ui", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tyrum/operator-ui")>();
   return {
     ...actual,
-    AdminModeProvider: ({ children }: { children: unknown }) => children,
+    ElevatedModeProvider: ({ children }: { children: unknown }) => children,
   };
 });
 

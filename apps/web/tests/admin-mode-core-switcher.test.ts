@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AdminModeStore, OperatorAuthStrategy, OperatorCore } from "@tyrum/operator-core";
+import type { ElevatedModeStore, OperatorAuthStrategy, OperatorCore } from "@tyrum/operator-core";
 import {
-  createAdminModeStore,
   createBearerTokenAuth,
+  createElevatedModeStore,
   createOperatorCoreManager,
 } from "../../../packages/operator-core/src/index.js";
 
@@ -10,14 +10,14 @@ type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
 function createFakeCore(options: {
   status: ConnectionStatus;
-  adminModeStore: AdminModeStore;
+  elevatedModeStore: ElevatedModeStore;
 }): OperatorCore {
   return {
     wsUrl: "ws://example.test/ws",
     httpBaseUrl: "http://example.test",
     ws: { connected: options.status === "connected" } as unknown as OperatorCore["ws"],
     http: {} as unknown as OperatorCore["http"],
-    adminModeStore: options.adminModeStore,
+    elevatedModeStore: options.elevatedModeStore,
     connectionStore: {
       getSnapshot() {
         return {
@@ -32,6 +32,7 @@ function createFakeCore(options: {
     runsStore: {} as unknown as OperatorCore["runsStore"],
     pairingStore: {} as unknown as OperatorCore["pairingStore"],
     statusStore: {} as unknown as OperatorCore["statusStore"],
+    memoryStore: {} as unknown as OperatorCore["memoryStore"],
     connect: vi.fn(() => {}),
     disconnect: vi.fn(() => {}),
     dispose: vi.fn(() => {}),
@@ -39,15 +40,15 @@ function createFakeCore(options: {
 }
 
 describe("apps/web operator-core-manager", () => {
-  it("switches auth and reconnects when Admin Mode toggles while connected", () => {
+  it("switches auth and reconnects when Elevated Mode toggles while connected", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
 
-    let adminModeStore: AdminModeStore | null = null;
+    let elevatedModeStore: ElevatedModeStore | null = null;
     let manager: ReturnType<typeof createOperatorCoreManager> | null = null;
     try {
-      adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
-      const store = adminModeStore;
+      elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
+      const store = elevatedModeStore;
       const baselineAuth = createBearerTokenAuth("baseline-token");
 
       const created: Array<{ auth: OperatorAuthStrategy; core: OperatorCore }> = [];
@@ -58,10 +59,10 @@ describe("apps/web operator-core-manager", () => {
           wsUrl: string;
           httpBaseUrl: string;
           auth: OperatorAuthStrategy;
-          adminModeStore: AdminModeStore;
+          elevatedModeStore: ElevatedModeStore;
         }): OperatorCore => {
           const status = statuses[created.length] ?? "disconnected";
-          const core = createFakeCore({ status, adminModeStore: options.adminModeStore });
+          const core = createFakeCore({ status, elevatedModeStore: options.elevatedModeStore });
           created.push({ auth: options.auth, core });
           return core;
         },
@@ -71,7 +72,7 @@ describe("apps/web operator-core-manager", () => {
         wsUrl: "ws://example.test/ws",
         httpBaseUrl: "http://example.test",
         baselineAuth,
-        adminModeStore: store,
+        elevatedModeStore: store,
         createCore,
       });
 
@@ -96,7 +97,7 @@ describe("apps/web operator-core-manager", () => {
       expect(created[2]?.core.connect).toHaveBeenCalledTimes(1);
     } finally {
       manager?.dispose();
-      adminModeStore?.dispose();
+      elevatedModeStore?.dispose();
       vi.useRealTimers();
     }
   });
@@ -105,11 +106,11 @@ describe("apps/web operator-core-manager", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
 
-    let adminModeStore: AdminModeStore | null = null;
+    let elevatedModeStore: ElevatedModeStore | null = null;
     let manager: ReturnType<typeof createOperatorCoreManager> | null = null;
     try {
-      adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
-      const store = adminModeStore;
+      elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
+      const store = elevatedModeStore;
       const baselineAuth = createBearerTokenAuth("baseline-token");
 
       const createCore = vi.fn(
@@ -117,16 +118,16 @@ describe("apps/web operator-core-manager", () => {
           wsUrl: string;
           httpBaseUrl: string;
           auth: OperatorAuthStrategy;
-          adminModeStore: AdminModeStore;
+          elevatedModeStore: ElevatedModeStore;
         }): OperatorCore =>
-          createFakeCore({ status: "disconnected", adminModeStore: options.adminModeStore }),
+          createFakeCore({ status: "disconnected", elevatedModeStore: options.elevatedModeStore }),
       );
 
       manager = createOperatorCoreManager({
         wsUrl: "ws://example.test/ws",
         httpBaseUrl: "http://example.test",
         baselineAuth,
-        adminModeStore: store,
+        elevatedModeStore: store,
         createCore,
       });
 
@@ -145,7 +146,7 @@ describe("apps/web operator-core-manager", () => {
       expect(createCore).toHaveBeenCalledTimes(2);
     } finally {
       manager?.dispose();
-      adminModeStore?.dispose();
+      elevatedModeStore?.dispose();
       vi.useRealTimers();
     }
   });

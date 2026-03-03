@@ -3,9 +3,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createAdminModeStore } from "../../../operator-core/src/stores/admin-mode-store.js";
-import { AdminModeProvider } from "../../src/admin-mode.js";
-import { AdminPage } from "../../src/components/pages/admin-page.js";
+import { createElevatedModeStore } from "../../../operator-core/src/stores/elevated-mode-store.js";
+import { ElevatedModeProvider } from "../../src/elevated-mode.js";
+import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 afterEach(() => {
@@ -27,9 +27,9 @@ function createCore(activeAdminMode: boolean): {
   pluginsList: ReturnType<typeof vi.fn>;
 } {
   const nowMs = Date.parse("2026-03-01T00:00:00.000Z");
-  const adminModeStore = createAdminModeStore({ tickIntervalMs: 0, now: () => nowMs });
+  const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0, now: () => nowMs });
   if (activeAdminMode) {
-    adminModeStore.enter({
+    elevatedModeStore.enter({
       elevatedToken: "test-elevated-token",
       expiresAt: "2026-03-01T00:10:00.000Z",
     });
@@ -39,7 +39,7 @@ function createCore(activeAdminMode: boolean): {
 
   const core = {
     httpBaseUrl: "http://example.test",
-    adminModeStore,
+    elevatedModeStore,
     ws: {
       commandExecute: vi.fn(async () => ({ output: "ok" })),
     },
@@ -94,15 +94,15 @@ function createCore(activeAdminMode: boolean): {
   return { core, pluginsList };
 }
 
-describe("AdminPage (strict admin tabs)", () => {
+describe("ConfigurePage (strict admin tabs)", () => {
   it("renders admin domain tabs and removes transport tabs", () => {
     const { core } = createCore(false);
 
     const testRoot = renderIntoDocument(
       React.createElement(
-        AdminModeProvider,
+        ElevatedModeProvider,
         { core, mode: "web" },
-        React.createElement(AdminPage, { core }),
+        React.createElement(ConfigurePage, { core }),
       ),
     );
 
@@ -139,20 +139,20 @@ describe("AdminPage (strict admin tabs)", () => {
     }
   });
 
-  it("keeps admin mutations disabled outside Admin Mode while allowing read actions", async () => {
+  it("keeps admin mutations disabled outside Elevated Mode while allowing read actions", async () => {
     const { core, pluginsList } = createCore(false);
 
     const testRoot = renderIntoDocument(
       React.createElement(
-        AdminModeProvider,
+        ElevatedModeProvider,
         { core, mode: "web" },
-        React.createElement(AdminPage, { core }),
+        React.createElement(ConfigurePage, { core }),
       ),
     );
 
     try {
       expect(
-        testRoot.container.querySelector("[data-testid='admin-read-only-notice']"),
+        testRoot.container.querySelector("[data-testid='configure-read-only-notice']"),
       ).not.toBeNull();
 
       await switchAdminTab(testRoot.container, "admin-http-tab-plugins");
@@ -191,14 +191,14 @@ describe("AdminPage (strict admin tabs)", () => {
     }
   });
 
-  it("enables admin mutations when Admin Mode is active", async () => {
+  it("enables admin mutations when Elevated Mode is active", async () => {
     const { core } = createCore(true);
 
     const testRoot = renderIntoDocument(
       React.createElement(
-        AdminModeProvider,
+        ElevatedModeProvider,
         { core, mode: "web" },
-        React.createElement(AdminPage, { core }),
+        React.createElement(ConfigurePage, { core }),
       ),
     );
 
@@ -243,9 +243,9 @@ describe("AdminPage (strict admin tabs)", () => {
 
     const testRoot = renderIntoDocument(
       React.createElement(
-        AdminModeProvider,
+        ElevatedModeProvider,
         { core, mode: "web" },
-        React.createElement(AdminPage, { core }),
+        React.createElement(ConfigurePage, { core }),
       ),
     );
 

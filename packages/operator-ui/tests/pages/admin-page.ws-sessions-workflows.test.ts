@@ -3,9 +3,9 @@
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createAdminModeStore } from "../../../operator-core/src/index.js";
-import { AdminModeProvider } from "../../src/index.js";
-import { AdminPage } from "../../src/components/pages/admin-page.js";
+import { createElevatedModeStore } from "../../../operator-core/src/index.js";
+import { ElevatedModeProvider } from "../../src/index.js";
+import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 async function switchAdminTab(container: HTMLElement, testId: string): Promise<void> {
@@ -22,8 +22,8 @@ function createCore(): {
   commandExecute: ReturnType<typeof vi.fn>;
 } {
   const nowMs = Date.parse("2026-03-01T00:00:00.000Z");
-  const adminModeStore = createAdminModeStore({ tickIntervalMs: 0, now: () => nowMs });
-  adminModeStore.enter({
+  const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0, now: () => nowMs });
+  elevatedModeStore.enter({
     elevatedToken: "elevated-1",
     expiresAt: "2026-03-01T00:10:00.000Z",
   });
@@ -37,7 +37,7 @@ function createCore(): {
       off: vi.fn(),
       commandExecute,
     },
-    adminModeStore,
+    elevatedModeStore,
     http: {
       policy: {
         getBundle: vi.fn(async () => ({ status: "ok" })),
@@ -89,15 +89,15 @@ function createCore(): {
   return { core, commandExecute };
 }
 
-describe("admin-page WS sections", () => {
+describe("configure-page WS sections", () => {
   it("does not render sessions/workflows tabs", () => {
     const { core } = createCore();
 
     const testRoot = renderIntoDocument(
-      React.createElement(AdminModeProvider, {
+      React.createElement(ElevatedModeProvider, {
         core,
         mode: "desktop",
-        children: React.createElement(AdminPage, { core }),
+        children: React.createElement(ConfigurePage, { core }),
       }),
     );
 
@@ -116,10 +116,10 @@ describe("admin-page WS sections", () => {
     const { core, commandExecute } = createCore();
 
     const testRoot = renderIntoDocument(
-      React.createElement(AdminModeProvider, {
+      React.createElement(ElevatedModeProvider, {
         core,
         mode: "desktop",
-        children: React.createElement(AdminPage, { core }),
+        children: React.createElement(ConfigurePage, { core }),
       }),
     );
 

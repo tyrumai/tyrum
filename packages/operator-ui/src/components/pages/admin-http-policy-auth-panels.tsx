@@ -36,7 +36,7 @@ export function AdminHttpPolicyAuthPanels({ core }: { core: OperatorCore }) {
           <Alert
             variant="info"
             title="Read-only mode"
-            description="Mutation actions are disabled until Admin Mode is active."
+            description="Mutation actions are disabled until Elevated Mode is active."
           />
           <div>
             <Button
@@ -46,7 +46,7 @@ export function AdminHttpPolicyAuthPanels({ core }: { core: OperatorCore }) {
                 requestEnter();
               }}
             >
-              Enter Admin Mode
+              Enter Elevated Mode
             </Button>
           </div>
         </div>
@@ -69,7 +69,7 @@ export function AdminHttpPolicyAuthPanels({ core }: { core: OperatorCore }) {
         onConfirm={async () => {
           if (!canMutate) {
             requestEnter();
-            throw new Error("Enter Admin Mode to perform this action.");
+            throw new Error("Enter Elevated Mode to perform this action.");
           }
           if (!pendingMutation) return;
           await pendingMutation.onConfirm();

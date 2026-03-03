@@ -4,7 +4,7 @@
 
 Issue: #915
 
-The Operator UI already has an **Admin** page with an **HTTP** tab, gated behind Admin Mode, but it currently renders a placeholder. The HTTP client surfaces for routing config and secrets already exist in `@tyrum/client` and are available through `OperatorCore.http`.
+The Operator UI already has a **Configure** page with an **HTTP** tab, gated behind Elevated Mode, but it currently renders a placeholder. The HTTP client surfaces for routing config and secrets already exist in `@tyrum/client` and are available through `OperatorCore.http`.
 
 ## Goals
 
@@ -16,7 +16,7 @@ The Operator UI already has an **Admin** page with an **HTTP** tab, gated behind
   - `core.http.secrets.list()`
   - `core.http.secrets.rotate()`
   - `core.http.secrets.revoke()`
-- All **mutations** require explicit confirmation and are Admin Mode gated.
+- All **mutations** require explicit confirmation and are Elevated Mode gated.
 - Secret values are treated as **write-only**:
   - Never rendered back into UI after submission
   - Never included in “request preview”/confirmation text
@@ -28,7 +28,7 @@ The Operator UI already has an **Admin** page with an **HTTP** tab, gated behind
 
 ## UX / Information Architecture
 
-- Replace the HTTP placeholder in `AdminPage` with:
+- Replace the HTTP placeholder in `ConfigurePage` with:
   - A small “Routing config” section
   - A small “Secrets” section
 - Each section uses existing shared UI primitives (`Card`, `JsonTextarea`, `ApiResultCard`, `ConfirmDangerDialog`) to avoid new one-off UI patterns.
@@ -88,7 +88,7 @@ The Operator UI already has an **Admin** page with an **HTTP** tab, gated behind
 ## Testing
 
 - Add jsdom tests in `packages/operator-ui/tests/pages/` to cover:
-  - Basic render of Admin HTTP panels (with Admin Mode active)
+  - Basic render of Configure HTTP panels (with Elevated Mode active)
   - Mutation confirmation gating (confirm dialog appears; confirm button disabled until checkbox checked; API called only after confirm)
 
 ## Rollout / Risk

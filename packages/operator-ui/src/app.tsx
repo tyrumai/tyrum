@@ -1,6 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useState, type ComponentType, type ReactNode } from "react";
 import {
+  Bot,
   Cable,
   Database,
   Globe,
@@ -15,14 +16,15 @@ import {
   SlidersHorizontal,
   Wrench,
 } from "lucide-react";
-import { AdminModeProvider } from "./admin-mode.js";
+import { ElevatedModeProvider } from "./elevated-mode.js";
 import { ErrorBoundary } from "./components/error/error-boundary.js";
 import { AppShell } from "./components/layout/app-shell.js";
 import { MobileNav } from "./components/layout/mobile-nav.js";
-import { Sidebar } from "./components/layout/sidebar.js";
-import { AdminPage } from "./components/pages/admin-page.js";
+import { Sidebar, type SidebarNavItem } from "./components/layout/sidebar.js";
 import { ApprovalsPage } from "./components/pages/approvals-page.js";
+import { AgentsPage } from "./components/pages/agents-page.js";
 import { ConnectPage } from "./components/pages/connect-page.js";
+import { ConfigurePage } from "./components/pages/configure-page.js";
 import { DashboardPage } from "./components/pages/dashboard-page.js";
 import { DesktopPage } from "./components/pages/desktop-page.js";
 import { MemoryPage } from "./components/pages/memory-page.js";
@@ -56,9 +58,10 @@ type OperatorUiRouteId =
   | "memory"
   | "approvals"
   | "runs"
+  | "agents"
   | "workboard"
   | "pairing"
-  | "admin"
+  | "configure"
   | "settings"
   | "desktop"
   | "connection"
@@ -73,9 +76,10 @@ const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon 
   memory: { label: "Memory", icon: Database },
   approvals: { label: "Approvals", icon: ShieldCheck },
   runs: { label: "Runs", icon: Play },
+  agents: { label: "Agents", icon: Bot },
   workboard: { label: "Work", icon: SquareKanban },
-  pairing: { label: "Pairing", icon: Link2 },
-  admin: { label: "Admin", icon: Shield },
+  pairing: { label: "Pairings", icon: Link2 },
+  configure: { label: "Configure", icon: Shield },
   settings: { label: "Settings", icon: SlidersHorizontal },
   desktop: { label: "Desktop", icon: Monitor },
   connection: { label: "Connection", icon: Cable },
@@ -88,14 +92,21 @@ const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
   "memory",
   "approvals",
   "runs",
+  "agents",
   "workboard",
   "pairing",
-  "admin",
+  "configure",
   "settings",
 ];
 
 const MOBILE_NAV_ORDER: OperatorUiRouteId[] = ["dashboard", "approvals", "runs", "settings"];
-const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["memory", "workboard", "pairing", "admin"];
+const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = [
+  "memory",
+  "agents",
+  "workboard",
+  "pairing",
+  "configure",
+];
 const PLATFORM_DESKTOP_NAV_ORDER: OperatorUiRouteId[] = [
   "desktop",
   "connection",
@@ -156,6 +167,9 @@ function OperatorUiAppRoot({
 }: Pick<OperatorUiAppProps, "core" | "mode" | "onReconfigureGateway">) {
   const [route, setRoute] = useState<OperatorUiRouteId>("dashboard");
   const connection = useOperatorStore(core.connectionStore);
+  const approvals = useOperatorStore(core.approvalsStore);
+  const pairing = useOperatorStore(core.pairingStore);
+  const runs = useOperatorStore(core.runsStore);
   const showOperatorRoutes =
     connection.status === "connected" ||
     (connection.status === "connecting" && connection.recovering);
@@ -164,11 +178,36 @@ function OperatorUiAppRoot({
   const host = useHostApiOptional();
   const hostKind: HostKind = host?.kind ?? (mode === "desktop" ? "desktop" : "web");
 
-  const toNavItem = (id: OperatorUiRouteId) => ({
+  const activeAgentIds = new Set<string>();
+  for (const run of Object.values(runs.runsById)) {
+    if (run.status !== "queued" && run.status !== "running" && run.status !== "paused") continue;
+    if (!run.key.startsWith("agent:")) continue;
+    const rest = run.key.slice("agent:".length);
+    const sep = rest.indexOf(":");
+    if (sep <= 0) continue;
+    activeAgentIds.add(rest.slice(0, sep));
+  }
+  const activeAgentsCount = activeAgentIds.size;
+
+  const toNavItem = (id: OperatorUiRouteId): SidebarNavItem => ({
     id,
     label: NAV_ITEM_CONFIG[id].label,
     icon: NAV_ITEM_CONFIG[id].icon,
     testId: `nav-${id}`,
+    badgeCount:
+      id === "approvals" && approvals.pendingIds.length > 0
+        ? approvals.pendingIds.length
+        : id === "pairing" && pairing.pendingIds.length > 0
+          ? pairing.pendingIds.length
+          : id === "agents" && activeAgentsCount > 0
+            ? activeAgentsCount
+            : undefined,
+    badgeVariant:
+      id === "approvals" && approvals.pendingIds.length > 0
+        ? "danger"
+        : id === "pairing" && pairing.pendingIds.length > 0
+          ? "danger"
+          : undefined,
   });
 
   const platformOrder =
@@ -233,7 +272,7 @@ function OperatorUiAppRoot({
         ) : null
       }
     >
-      <AdminModeProvider core={core} mode={mode}>
+      <ElevatedModeProvider core={core} mode={mode}>
         {showConnectPage ? (
           <div className="mx-auto mt-20 max-w-md w-full px-4">
             <ConnectPage core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />
@@ -244,9 +283,10 @@ function OperatorUiAppRoot({
             {route === "memory" && <MemoryPage core={core} />}
             {route === "approvals" && <ApprovalsPage core={core} />}
             {route === "runs" && <RunsPage core={core} />}
+            {route === "agents" && <AgentsPage core={core} />}
             {route === "workboard" && <WorkBoardPage core={core} />}
             {route === "pairing" && <PairingPage core={core} />}
-            {route === "admin" && <AdminPage core={core} />}
+            {route === "configure" && <ConfigurePage core={core} />}
             {route === "settings" && <SettingsPage core={core} mode={mode} />}
             {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
             {route === "connection" && <PlatformConnectionPage core={core} />}
@@ -255,7 +295,7 @@ function OperatorUiAppRoot({
             {route === "browser" && hostKind === "web" && <BrowserCapabilitiesPage />}
           </>
         )}
-      </AdminModeProvider>
+      </ElevatedModeProvider>
     </AppShell>
   );
 

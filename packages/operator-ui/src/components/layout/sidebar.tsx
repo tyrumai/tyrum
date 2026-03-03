@@ -2,6 +2,7 @@ import * as React from "react";
 import { ChevronDown, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { getConnectionDisplay, type ConnectionStatus } from "../../lib/connection-display.js";
 import { cn } from "../../lib/cn.js";
+import { Badge, type BadgeVariant } from "../ui/badge.js";
 import { StatusDot } from "../ui/status-dot.js";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip.js";
 
@@ -12,6 +13,8 @@ export interface SidebarNavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   testId?: string;
+  badgeCount?: number;
+  badgeVariant?: BadgeVariant;
 }
 
 export interface SidebarProps extends React.HTMLAttributes<HTMLElement> {
@@ -106,6 +109,8 @@ export function Sidebar({
   const renderItem = (item: SidebarNavItem) => {
     const Icon = item.icon;
     const active = item.id === activeItemId;
+    const badgeCount = item.badgeCount ?? 0;
+    const badgeText = badgeCount > 99 ? "99+" : String(badgeCount);
     return (
       <button
         key={item.id}
@@ -128,7 +133,16 @@ export function Sidebar({
         }}
       >
         <Icon className="h-4 w-4 shrink-0" />
-        {!collapsed ? <span>{item.label}</span> : null}
+        {!collapsed ? (
+          <>
+            <span className="flex-1 truncate">{item.label}</span>
+            {badgeCount > 0 ? (
+              <Badge variant={item.badgeVariant ?? "default"} className="ml-auto">
+                {badgeText}
+              </Badge>
+            ) : null}
+          </>
+        ) : null}
       </button>
     );
   };

@@ -44,7 +44,7 @@ vi.mock("@tyrum/client", async () => {
   };
 });
 
-describe("@tyrum/cli admin-mode", () => {
+describe("@tyrum/cli elevated-mode", () => {
   const prevHome = process.env["TYRUM_HOME"];
 
   afterEach(() => {
@@ -56,7 +56,7 @@ describe("@tyrum/cli admin-mode", () => {
     else process.env["TYRUM_HOME"] = prevHome;
   });
 
-  it("prints inactive status when no admin mode state exists", async () => {
+  it("prints inactive status when no elevated mode state exists", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;
 
@@ -67,7 +67,7 @@ describe("@tyrum/cli admin-mode", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["admin-mode", "status"]);
+      const code = await runCli(["elevated-mode", "status"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
@@ -79,7 +79,7 @@ describe("@tyrum/cli admin-mode", () => {
     }
   });
 
-  it("mints an elevated device token and persists admin mode state", async () => {
+  it("mints an elevated device token and persists elevated mode state", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;
 
@@ -109,14 +109,19 @@ describe("@tyrum/cli admin-mode", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["admin-mode", "enter", "--admin-token", "admin-token"]);
+      const code = await runCli([
+        "elevated-mode",
+        "enter",
+        "--elevated-token",
+        "elevated-access-token",
+      ]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
       expect(httpCtorSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           baseUrl: "http://127.0.0.1:8788",
-          auth: { type: "bearer", token: "admin-token" },
+          auth: { type: "bearer", token: "elevated-access-token" },
         }),
       );
       expect(httpDeviceTokensIssueSpy).toHaveBeenCalledWith(
@@ -127,7 +132,7 @@ describe("@tyrum/cli admin-mode", () => {
         }),
       );
 
-      const raw = await readFile(join(operatorDir, "admin-mode.json"), "utf8");
+      const raw = await readFile(join(operatorDir, "elevated-mode.json"), "utf8");
       expect(JSON.parse(raw)).toMatchObject({
         elevatedToken: "elevated-token",
         expiresAt: "2099-01-01T00:00:00.000Z",
@@ -140,14 +145,14 @@ describe("@tyrum/cli admin-mode", () => {
     }
   });
 
-  it("auto-expires admin mode state when expired", async () => {
+  it("auto-expires elevated mode state when expired", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;
 
     const operatorDir = join(home, "operator");
     await mkdir(operatorDir, { recursive: true, mode: 0o700 });
     await writeFile(
-      join(operatorDir, "admin-mode.json"),
+      join(operatorDir, "elevated-mode.json"),
       JSON.stringify(
         {
           elevatedToken: "elevated-token",
@@ -166,14 +171,16 @@ describe("@tyrum/cli admin-mode", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["admin-mode", "status"]);
+      const code = await runCli(["elevated-mode", "status"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("inactive"));
-      await expect(readFile(join(operatorDir, "admin-mode.json"), "utf8")).rejects.toMatchObject({
-        code: "ENOENT",
-      });
+      await expect(readFile(join(operatorDir, "elevated-mode.json"), "utf8")).rejects.toMatchObject(
+        {
+          code: "ENOENT",
+        },
+      );
     } finally {
       logSpy.mockRestore();
       errSpy.mockRestore();
@@ -181,7 +188,7 @@ describe("@tyrum/cli admin-mode", () => {
     }
   });
 
-  it("prints active status with remaining time when admin mode is active", async () => {
+  it("prints active status with remaining time when elevated mode is active", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;
 
@@ -190,7 +197,7 @@ describe("@tyrum/cli admin-mode", () => {
 
     const expiresAt = new Date(Date.now() + 90_000).toISOString();
     await writeFile(
-      join(operatorDir, "admin-mode.json"),
+      join(operatorDir, "elevated-mode.json"),
       JSON.stringify(
         {
           elevatedToken: "elevated-token",
@@ -209,7 +216,7 @@ describe("@tyrum/cli admin-mode", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["admin-mode", "status"]);
+      const code = await runCli(["elevated-mode", "status"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
@@ -224,14 +231,14 @@ describe("@tyrum/cli admin-mode", () => {
     }
   });
 
-  it("removes admin mode state on exit", async () => {
+  it("removes elevated mode state on exit", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;
 
     const operatorDir = join(home, "operator");
     await mkdir(operatorDir, { recursive: true, mode: 0o700 });
     await writeFile(
-      join(operatorDir, "admin-mode.json"),
+      join(operatorDir, "elevated-mode.json"),
       JSON.stringify(
         {
           elevatedToken: "elevated-token",
@@ -250,13 +257,15 @@ describe("@tyrum/cli admin-mode", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["admin-mode", "exit"]);
+      const code = await runCli(["elevated-mode", "exit"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
-      await expect(readFile(join(operatorDir, "admin-mode.json"), "utf8")).rejects.toMatchObject({
-        code: "ENOENT",
-      });
+      await expect(readFile(join(operatorDir, "elevated-mode.json"), "utf8")).rejects.toMatchObject(
+        {
+          code: "ENOENT",
+        },
+      );
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();
@@ -265,7 +274,7 @@ describe("@tyrum/cli admin-mode", () => {
     }
   });
 
-  it("gates admin-only commands behind admin mode", async () => {
+  it("gates admin-only commands behind Elevated Mode", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;
 
@@ -288,7 +297,7 @@ describe("@tyrum/cli admin-mode", () => {
 
       expect(code).toBe(1);
       expect(logSpy).not.toHaveBeenCalled();
-      expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("Admin Mode"));
+      expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("Elevated Mode"));
       expect(httpCtorSpy).not.toHaveBeenCalled();
       expect(httpSecretsListSpy).not.toHaveBeenCalled();
     } finally {
@@ -298,7 +307,7 @@ describe("@tyrum/cli admin-mode", () => {
     }
   });
 
-  it("uses elevated token for admin-only commands when admin mode is active", async () => {
+  it("uses elevated token for admin-only commands when Elevated Mode is active", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;
 
@@ -310,7 +319,7 @@ describe("@tyrum/cli admin-mode", () => {
       { mode: 0o600 },
     );
     await writeFile(
-      join(operatorDir, "admin-mode.json"),
+      join(operatorDir, "elevated-mode.json"),
       JSON.stringify(
         {
           elevatedToken: "elevated-token",
@@ -349,7 +358,7 @@ describe("@tyrum/cli admin-mode", () => {
     }
   });
 
-  it("supports an explicit --admin-token escape hatch for admin-only commands", async () => {
+  it("supports an explicit --elevated-token escape hatch for admin-only commands", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;
 
@@ -370,13 +379,13 @@ describe("@tyrum/cli admin-mode", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["secrets", "list", "--admin-token", "admin-token"]);
+      const code = await runCli(["secrets", "list", "--elevated-token", "override-token"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
       expect(httpCtorSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          auth: { type: "bearer", token: "admin-token" },
+          auth: { type: "bearer", token: "override-token" },
         }),
       );
       expect(httpSecretsListSpy).toHaveBeenCalled();

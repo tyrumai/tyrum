@@ -1,11 +1,11 @@
 import { createTyrumHttpClient } from "@tyrum/operator-core";
 import {
-  createAdminModeStore,
   createBearerTokenAuth,
+  createElevatedModeStore,
   createOperatorCore,
   createOperatorCoreManager,
   httpAuthForAuth,
-  type AdminModeStore,
+  type ElevatedModeStore,
   type OperatorCore,
   type OperatorCoreManager,
 } from "@tyrum/operator-core";
@@ -53,7 +53,7 @@ export function useDesktopOperatorCore(
   const [retryCount, setRetryCount] = useState(0);
   const managerRef = useRef<OperatorCoreManager | null>(null);
   const unsubManagerRef = useRef<(() => void) | null>(null);
-  const adminModeStoreRef = useRef<AdminModeStore | null>(null);
+  const elevatedModeStoreRef = useRef<ElevatedModeStore | null>(null);
 
   const retry = useCallback(() => {
     setRetryCount((c) => c + 1);
@@ -96,14 +96,14 @@ export function useDesktopOperatorCore(
           });
         };
 
-        const adminModeStore = createAdminModeStore();
+        const elevatedModeStore = createElevatedModeStore();
         const baselineAuth = createBearerTokenAuth(connection.token);
 
         const manager = createOperatorCoreManager({
           wsUrl: connection.wsUrl,
           httpBaseUrl: connection.httpBaseUrl,
           baselineAuth,
-          adminModeStore,
+          elevatedModeStore,
           createCore(coreOptions) {
             const http = createTyrumHttpClient({
               baseUrl: coreOptions.httpBaseUrl,
@@ -114,7 +114,7 @@ export function useDesktopOperatorCore(
               wsUrl: coreOptions.wsUrl,
               httpBaseUrl: coreOptions.httpBaseUrl,
               auth: coreOptions.auth,
-              adminModeStore: coreOptions.adminModeStore,
+              elevatedModeStore: coreOptions.elevatedModeStore,
               deps: { http },
             });
           },
@@ -122,15 +122,15 @@ export function useDesktopOperatorCore(
 
         if (disposed) {
           manager.dispose();
-          adminModeStore.dispose();
+          elevatedModeStore.dispose();
           return;
         }
 
         unsubManagerRef.current?.();
         managerRef.current?.dispose();
-        adminModeStoreRef.current?.dispose();
+        elevatedModeStoreRef.current?.dispose();
         managerRef.current = manager;
-        adminModeStoreRef.current = adminModeStore;
+        elevatedModeStoreRef.current = elevatedModeStore;
         setCore(manager.getCore());
 
         unsubManagerRef.current = manager.subscribe(() => {
@@ -158,8 +158,8 @@ export function useDesktopOperatorCore(
       unsubManagerRef.current = null;
       managerRef.current?.dispose();
       managerRef.current = null;
-      adminModeStoreRef.current?.dispose();
-      adminModeStoreRef.current = null;
+      elevatedModeStoreRef.current?.dispose();
+      elevatedModeStoreRef.current = null;
     };
   }, [api, enabled, retryCount]);
 

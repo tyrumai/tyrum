@@ -13,52 +13,52 @@ import { AdminHttpRoutingConfigPanel } from "./admin-http-routing-config.js";
 import { AdminHttpSecretsPanel } from "./admin-http-secrets.js";
 import { AdminWsCommandPanel } from "./admin-ws-command-panel.js";
 
-export interface AdminPageProps {
+export interface ConfigurePageProps {
   core: OperatorCore;
 }
 
-function ReadOnlyNotice({ onEnterAdminMode }: { onEnterAdminMode: () => void }) {
+function ReadOnlyNotice({ onEnterElevatedMode }: { onEnterElevatedMode: () => void }) {
   return (
-    <div className="grid gap-3" data-testid="admin-read-only-notice">
+    <div className="grid gap-3" data-testid="configure-read-only-notice">
       <Alert
         variant="info"
         title="Read-only mode"
-        description="All admin settings are visible. Enter Admin Mode to enable mutation actions."
+        description="All admin settings are visible. Enter Elevated Mode to enable mutation actions."
       />
       <div>
         <Button
           type="button"
           variant="secondary"
           size="sm"
-          data-testid="admin-read-only-enter"
+          data-testid="configure-read-only-enter"
           onClick={() => {
-            onEnterAdminMode();
+            onEnterElevatedMode();
           }}
         >
-          Enter Admin Mode
+          Enter Elevated Mode
         </Button>
       </div>
     </div>
   );
 }
 
-export function AdminPage({ core }: AdminPageProps) {
+export function ConfigurePage({ core }: ConfigurePageProps) {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
   return (
-    <div className="grid gap-6" data-testid="admin-page">
-      <PageHeader title="Admin" />
+    <div className="grid gap-6" data-testid="configure-page">
+      <PageHeader title="Configure" />
 
       {!canMutate ? (
         <ReadOnlyNotice
-          onEnterAdminMode={() => {
+          onEnterElevatedMode={() => {
             requestEnter();
           }}
         />
       ) : null}
 
       <Tabs defaultValue="policy-auth" className="grid gap-3">
-        <TabsList aria-label="Admin sections">
+        <TabsList aria-label="Configure sections">
           <TabsTrigger value="policy-auth" data-testid="admin-http-tab-policy-auth">
             Policy + Auth
           </TabsTrigger>
@@ -66,7 +66,7 @@ export function AdminPage({ core }: AdminPageProps) {
             Audit
           </TabsTrigger>
           <TabsTrigger value="routing-config" data-testid="admin-http-tab-routing-config">
-            Routing config
+            Channels
           </TabsTrigger>
           <TabsTrigger value="secrets" data-testid="admin-http-tab-secrets">
             Secrets

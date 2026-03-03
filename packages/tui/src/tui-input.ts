@@ -22,8 +22,8 @@ export type TuiCommand =
   | { type: "exit" }
   | { type: "connect" }
   | { type: "disconnect" }
-  | { type: "openAdminMode" }
-  | { type: "exitAdminMode" }
+  | { type: "openElevatedMode" }
+  | { type: "exitElevatedMode" }
   | { type: "refreshMemory" }
   | { type: "openMemorySearch" }
   | { type: "openMemoryForget"; memoryItemId: string }
@@ -74,7 +74,7 @@ export function reduceTuiInput(_params: {
   state: TuiUiState;
   input: string;
   key: TuiKey;
-  adminModeActive: boolean;
+  elevatedModeActive: boolean;
   approvalsPendingIds: number[];
   pairingIds: number[];
   runIds: string[];
@@ -127,10 +127,10 @@ export function reduceTuiInput(_params: {
       commands.push({ type: "disconnect" });
       return { state: _params.state, commands };
     case "m":
-      commands.push({ type: "openAdminMode" });
+      commands.push({ type: "openElevatedMode" });
       return { state: _params.state, commands };
     case "e":
-      commands.push({ type: "exitAdminMode" });
+      commands.push({ type: "exitElevatedMode" });
       return { state: _params.state, commands };
     default:
       break;
@@ -175,8 +175,8 @@ export function reduceTuiInput(_params: {
     if (input === "a" || input === "x") {
       const approvalId = _params.approvalsPendingIds[cursor];
       if (typeof approvalId === "number") {
-        if (!_params.adminModeActive) {
-          commands.push({ type: "openAdminMode" });
+        if (!_params.elevatedModeActive) {
+          commands.push({ type: "openElevatedMode" });
         } else {
           commands.push({
             type: "resolveApproval",
@@ -235,8 +235,8 @@ export function reduceTuiInput(_params: {
     const pairingId = _params.pairingIds[cursor];
     if (typeof pairingId === "number") {
       if (input === "a") {
-        if (!_params.adminModeActive) {
-          commands.push({ type: "openAdminMode" });
+        if (!_params.elevatedModeActive) {
+          commands.push({ type: "openElevatedMode" });
         } else {
           commands.push({ type: "approvePairing", pairingId });
         }
@@ -246,8 +246,8 @@ export function reduceTuiInput(_params: {
         };
       }
       if (input === "x") {
-        if (!_params.adminModeActive) {
-          commands.push({ type: "openAdminMode" });
+        if (!_params.elevatedModeActive) {
+          commands.push({ type: "openElevatedMode" });
         } else {
           commands.push({ type: "denyPairing", pairingId });
         }
@@ -257,8 +257,8 @@ export function reduceTuiInput(_params: {
         };
       }
       if (input === "v") {
-        if (!_params.adminModeActive) {
-          commands.push({ type: "openAdminMode" });
+        if (!_params.elevatedModeActive) {
+          commands.push({ type: "openElevatedMode" });
         } else {
           commands.push({ type: "revokePairing", pairingId });
         }
@@ -344,8 +344,8 @@ export function reduceTuiInput(_params: {
     }
 
     if (input === "p") {
-      if (!_params.adminModeActive) {
-        commands.push({ type: "openAdminMode" });
+      if (!_params.elevatedModeActive) {
+        commands.push({ type: "openElevatedMode" });
       } else {
         commands.push({ type: "exportMemory" });
       }
@@ -355,8 +355,8 @@ export function reduceTuiInput(_params: {
     if (input === "f") {
       const memoryItemId = _params.memoryItemIds[cursor];
       if (typeof memoryItemId === "string") {
-        if (!_params.adminModeActive) {
-          commands.push({ type: "openAdminMode" });
+        if (!_params.elevatedModeActive) {
+          commands.push({ type: "openElevatedMode" });
         } else {
           commands.push({ type: "openMemoryForget", memoryItemId });
         }

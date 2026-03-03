@@ -1,16 +1,16 @@
 import { createStore, type ExternalStore } from "../store.js";
 
-export type AdminModeStatus = "inactive" | "active";
+export type ElevatedModeStatus = "inactive" | "active";
 
-export interface AdminModeState {
-  status: AdminModeStatus;
+export interface ElevatedModeState {
+  status: ElevatedModeStatus;
   elevatedToken: string | null;
   enteredAt: string | null;
   expiresAt: string | null;
   remainingMs: number | null;
 }
 
-export interface AdminModeStore extends ExternalStore<AdminModeState> {
+export interface ElevatedModeStore extends ExternalStore<ElevatedModeState> {
   enter(input: { elevatedToken: string; expiresAt: string }): void;
   exit(): void;
   dispose(): void;
@@ -30,14 +30,14 @@ function toRemainingMs(expiresAtMs: number, nowMs: number): number {
 
 const MAX_SET_TIMEOUT_MS = 2_147_483_647;
 
-export function createAdminModeStore(options?: {
+export function createElevatedModeStore(options?: {
   tickIntervalMs?: number;
   now?: () => number;
-}): AdminModeStore {
+}): ElevatedModeStore {
   const tickIntervalMs = options?.tickIntervalMs ?? 1_000;
   const now = options?.now ?? (() => Date.now());
 
-  const { store, setState } = createStore<AdminModeState>({
+  const { store, setState } = createStore<ElevatedModeState>({
     status: "inactive",
     elevatedToken: null,
     enteredAt: null,

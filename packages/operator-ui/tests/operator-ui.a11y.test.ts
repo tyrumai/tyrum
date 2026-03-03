@@ -136,7 +136,7 @@ type OperatorUiA11yRouteId =
   | "approvals"
   | "runs"
   | "pairing"
-  | "admin"
+  | "configure"
   | "settings"
   | "desktop"
   | "browser";
@@ -223,7 +223,7 @@ describe("operator-ui a11y", () => {
     { mode: "desktop", route: "pairing" },
     { mode: "desktop", route: "settings" },
     { mode: "desktop", route: "desktop" },
-    { mode: "desktop", route: "admin" },
+    { mode: "desktop", route: "configure" },
     { mode: "web", route: "connect" },
     { mode: "web", route: "dashboard" },
     { mode: "web", route: "memory" },
@@ -231,7 +231,7 @@ describe("operator-ui a11y", () => {
     { mode: "web", route: "runs" },
     { mode: "web", route: "pairing" },
     { mode: "web", route: "settings" },
-    { mode: "web", route: "admin" },
+    { mode: "web", route: "configure" },
     { mode: "web", route: "browser" },
   ];
 

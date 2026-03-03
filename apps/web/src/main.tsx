@@ -1,7 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import {
-  createAdminModeStore,
+  createElevatedModeStore,
   createBearerTokenAuth,
   createBrowserCookieAuth,
   createGatewayAuthSession,
@@ -57,13 +57,13 @@ if (!container) {
   throw new Error("Missing root element (#root).");
 }
 
-const adminModeStore = createAdminModeStore();
+const elevatedModeStore = createElevatedModeStore();
 const httpBaseUrl = resolveGatewayHttpBaseUrl();
 const manager = createOperatorCoreManager({
   wsUrl: resolveGatewayWsUrl(),
   httpBaseUrl,
   baselineAuth: resolveAuthFromLocation(httpBaseUrl),
-  adminModeStore,
+  elevatedModeStore,
 });
 
 const root = createRoot(container);
@@ -95,7 +95,7 @@ const unsubscribe = manager.subscribe(() => {
 window.addEventListener("beforeunload", () => {
   unsubscribe();
   manager.dispose();
-  adminModeStore.dispose();
+  elevatedModeStore.dispose();
 });
 
 render();

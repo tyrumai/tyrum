@@ -28,7 +28,7 @@ describe("OperatorUiApp error boundary wiring", () => {
     >;
 
     const connectionSnapshot = { status: "disconnected" } as const;
-    const adminModeSnapshot = {
+    const elevatedModeSnapshot = {
       status: "inactive",
       elevatedToken: null,
       enteredAt: null,
@@ -36,14 +36,50 @@ describe("OperatorUiApp error boundary wiring", () => {
       remainingMs: null,
     } as const;
 
+    const approvalsSnapshot = {
+      byId: {},
+      pendingIds: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    } as const;
+
+    const pairingSnapshot = {
+      byId: {},
+      pendingIds: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    } as const;
+
+    const runsSnapshot = {
+      runsById: {},
+      stepsById: {},
+      attemptsById: {},
+      stepIdsByRunId: {},
+      attemptIdsByStepId: {},
+    } as const;
+
     const core = {
       connectionStore: {
         subscribe: (_listener: () => void) => () => {},
         getSnapshot: () => connectionSnapshot,
       },
-      adminModeStore: {
+      approvalsStore: {
         subscribe: (_listener: () => void) => () => {},
-        getSnapshot: () => adminModeSnapshot,
+        getSnapshot: () => approvalsSnapshot,
+      },
+      pairingStore: {
+        subscribe: (_listener: () => void) => () => {},
+        getSnapshot: () => pairingSnapshot,
+      },
+      runsStore: {
+        subscribe: (_listener: () => void) => () => {},
+        getSnapshot: () => runsSnapshot,
+      },
+      elevatedModeStore: {
+        subscribe: (_listener: () => void) => () => {},
+        getSnapshot: () => elevatedModeSnapshot,
         enter: () => {},
         exit: () => {},
         dispose: () => {},

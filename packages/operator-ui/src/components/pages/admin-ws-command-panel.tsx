@@ -1,4 +1,4 @@
-import { isAdminModeActive, type OperatorCore } from "@tyrum/operator-core";
+import { isElevatedModeActive, type OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { useApiCallState } from "../../hooks/use-api-call-state.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
@@ -49,9 +49,9 @@ export function AdminWsCommandPanel({ core }: { core: OperatorCore }): React.Rea
               return;
             }
             void action.run(async () => {
-              if (!isAdminModeActive(core.adminModeStore.getSnapshot())) {
+              if (!isElevatedModeActive(core.elevatedModeStore.getSnapshot())) {
                 requestEnter();
-                throw new Error("Enter Admin Mode to run commands.");
+                throw new Error("Enter Elevated Mode to run commands.");
               }
               return await core.ws.commandExecute(trimmed);
             });
@@ -68,7 +68,7 @@ export function AdminWsCommandPanel({ core }: { core: OperatorCore }): React.Rea
               requestEnter();
             }}
           >
-            Enter Admin Mode
+            Enter Elevated Mode
           </Button>
         ) : null}
       </CardFooter>

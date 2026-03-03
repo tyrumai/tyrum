@@ -9,7 +9,7 @@ describe("tui input reducer", () => {
       state: initial,
       input: "3",
       key: {},
-      adminModeActive: false,
+      elevatedModeActive: false,
       approvalsPendingIds: [],
       pairingIds: [],
       runIds: [],
@@ -27,7 +27,7 @@ describe("tui input reducer", () => {
       state: initial,
       input: "6",
       key: {},
-      adminModeActive: false,
+      elevatedModeActive: false,
       approvalsPendingIds: [],
       pairingIds: [],
       runIds: [],
@@ -45,7 +45,7 @@ describe("tui input reducer", () => {
       state: initial,
       input: "r",
       key: {},
-      adminModeActive: false,
+      elevatedModeActive: false,
       approvalsPendingIds: [],
       pairingIds: [],
       runIds: [],
@@ -58,7 +58,7 @@ describe("tui input reducer", () => {
       state: initial,
       input: "/",
       key: {},
-      adminModeActive: false,
+      elevatedModeActive: false,
       approvalsPendingIds: [],
       pairingIds: [],
       runIds: [],
@@ -71,7 +71,7 @@ describe("tui input reducer", () => {
       state: initial,
       input: "f",
       key: {},
-      adminModeActive: true,
+      elevatedModeActive: true,
       approvalsPendingIds: [],
       pairingIds: [],
       runIds: [],
@@ -84,7 +84,7 @@ describe("tui input reducer", () => {
       state: initial,
       input: "p",
       key: {},
-      adminModeActive: true,
+      elevatedModeActive: true,
       approvalsPendingIds: [],
       pairingIds: [],
       runIds: [],
@@ -101,7 +101,7 @@ describe("tui input reducer", () => {
       state: initial,
       input: "",
       key: { downArrow: true },
-      adminModeActive: true,
+      elevatedModeActive: true,
       approvalsPendingIds: [10, 11],
       pairingIds: [],
       runIds: [],
@@ -117,7 +117,7 @@ describe("tui input reducer", () => {
       state: moved.state,
       input: "a",
       key: {},
-      adminModeActive: true,
+      elevatedModeActive: true,
       approvalsPendingIds: [10, 11],
       pairingIds: [],
       runIds: [],
@@ -136,7 +136,7 @@ describe("tui input reducer", () => {
       state: initial,
       input: "",
       key: { downArrow: true },
-      adminModeActive: true,
+      elevatedModeActive: true,
       approvalsPendingIds: [10, 11],
       pairingIds: [],
       runIds: [],
@@ -147,7 +147,7 @@ describe("tui input reducer", () => {
       state: moved.state,
       input: "a",
       key: {},
-      adminModeActive: true,
+      elevatedModeActive: true,
       approvalsPendingIds: [11, 10],
       pairingIds: [],
       runIds: [],
@@ -159,21 +159,21 @@ describe("tui input reducer", () => {
     ]);
   });
 
-  it("requests Admin Mode when attempting to resolve approvals while inactive", () => {
+  it("requests Elevated Mode when attempting to resolve approvals while inactive", () => {
     const initial = { ...createInitialTuiUiState(), route: "approvals" as const };
 
     const approved = reduceTuiInput({
       state: initial,
       input: "a",
       key: {},
-      adminModeActive: false,
+      elevatedModeActive: false,
       approvalsPendingIds: [10],
       pairingIds: [],
       runIds: [],
       memoryItemIds: [],
     });
 
-    expect(approved.commands).toEqual([{ type: "openAdminMode" }]);
+    expect(approved.commands).toEqual([{ type: "openElevatedMode" }]);
   });
 
   it("emits pairing commands in pairing route", () => {
@@ -183,7 +183,7 @@ describe("tui input reducer", () => {
       state: initial,
       input: "a",
       key: {},
-      adminModeActive: true,
+      elevatedModeActive: true,
       approvalsPendingIds: [],
       pairingIds: [5],
       runIds: [],
@@ -196,7 +196,7 @@ describe("tui input reducer", () => {
       state: initial,
       input: "v",
       key: {},
-      adminModeActive: true,
+      elevatedModeActive: true,
       approvalsPendingIds: [],
       pairingIds: [5],
       runIds: [],
@@ -213,7 +213,7 @@ describe("tui input reducer", () => {
       state: initial,
       input: "",
       key: { downArrow: true },
-      adminModeActive: true,
+      elevatedModeActive: true,
       approvalsPendingIds: [],
       pairingIds: [5, 6],
       runIds: [],
@@ -228,7 +228,7 @@ describe("tui input reducer", () => {
       state: moved.state,
       input: "a",
       key: {},
-      adminModeActive: true,
+      elevatedModeActive: true,
       approvalsPendingIds: [],
       pairingIds: [6, 5],
       runIds: [],
@@ -238,34 +238,34 @@ describe("tui input reducer", () => {
     expect(approved.commands).toEqual([{ type: "approvePairing", pairingId: 6 }]);
   });
 
-  it("opens Admin Mode on 'm' and exits Admin Mode on 'e'", () => {
+  it("opens Elevated Mode on 'm' and exits Elevated Mode on 'e'", () => {
     const initial = createInitialTuiUiState();
 
     const enter = reduceTuiInput({
       state: initial,
       input: "m",
       key: {},
-      adminModeActive: false,
+      elevatedModeActive: false,
       approvalsPendingIds: [],
       pairingIds: [],
       runIds: [],
       memoryItemIds: [],
     });
 
-    expect(enter.commands).toEqual([{ type: "openAdminMode" }]);
+    expect(enter.commands).toEqual([{ type: "openElevatedMode" }]);
 
     const exit = reduceTuiInput({
       state: initial,
       input: "e",
       key: {},
-      adminModeActive: true,
+      elevatedModeActive: true,
       approvalsPendingIds: [],
       pairingIds: [],
       runIds: [],
       memoryItemIds: [],
     });
 
-    expect(exit.commands).toEqual([{ type: "exitAdminMode" }]);
+    expect(exit.commands).toEqual([{ type: "exitElevatedMode" }]);
   });
 
   it("exits on ctrl+c", () => {
@@ -275,7 +275,7 @@ describe("tui input reducer", () => {
       state: initial,
       input: "c",
       key: { ctrl: true },
-      adminModeActive: false,
+      elevatedModeActive: false,
       approvalsPendingIds: [],
       pairingIds: [],
       runIds: [],

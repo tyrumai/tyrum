@@ -3,8 +3,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import type { OperatorCore } from "../../operator-core/src/index.js";
-import { createAdminModeStore } from "../../operator-core/src/stores/admin-mode-store.js";
-import { AdminModeProvider } from "../src/admin-mode.js";
+import { createElevatedModeStore } from "../../operator-core/src/stores/elevated-mode-store.js";
+import { ElevatedModeProvider } from "../src/elevated-mode.js";
 import { AuditPanel } from "../src/components/admin-http/audit-panel.js";
 import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "./test-utils.js";
 
@@ -14,18 +14,18 @@ afterEach(() => {
 });
 
 function createCore(): OperatorCore {
-  const adminModeStore = createAdminModeStore({
+  const elevatedModeStore = createElevatedModeStore({
     tickIntervalMs: 0,
     now: () => Date.parse("2026-03-01T00:00:00.000Z"),
   });
-  adminModeStore.enter({
+  elevatedModeStore.enter({
     elevatedToken: "elevated-test-token",
     expiresAt: "2026-03-01T00:10:00.000Z",
   });
 
   return {
     httpBaseUrl: "http://example.test",
-    adminModeStore,
+    elevatedModeStore,
   } as unknown as OperatorCore;
 }
 
@@ -66,7 +66,7 @@ describe("AuditPanel", () => {
     const core = createCore();
     const testRoot = renderIntoDocument(
       React.createElement(
-        AdminModeProvider,
+        ElevatedModeProvider,
         { core, mode: "web" },
         React.createElement(AuditPanel, { core }),
       ),

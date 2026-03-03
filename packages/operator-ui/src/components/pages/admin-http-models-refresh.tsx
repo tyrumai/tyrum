@@ -18,7 +18,7 @@ export function AdminHttpModelsRefreshPanel({ core }: { core: OperatorCore }): R
     if (busy) return;
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Admin Mode to refresh models.");
+      throw new Error("Enter Elevated Mode to refresh models.");
     }
     setBusy(true);
     setValue(undefined);
@@ -64,7 +64,7 @@ export function AdminHttpModelsRefreshPanel({ core }: { core: OperatorCore }): R
                 requestEnter();
               }}
             >
-              Enter Admin Mode
+              Enter Elevated Mode
             </Button>
           ) : null}
         </CardFooter>

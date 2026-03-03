@@ -9,8 +9,8 @@ export { OperatorUiHostProvider, useHostApi, useHostApiOptional } from "./host/h
 export type { DesktopApi } from "./desktop-api.js";
 export { getDesktopApi } from "./desktop-api.js";
 
-export type { AdminModeProviderProps } from "./admin-mode.js";
-export { AdminModeGate, AdminModeProvider } from "./admin-mode.js";
+export type { ElevatedModeProviderProps } from "./elevated-mode.js";
+export { ElevatedModeGate, ElevatedModeProvider } from "./elevated-mode.js";
 
 export { cn } from "./lib/cn.js";
 
@@ -150,8 +150,8 @@ export { WorkBoardPage } from "./components/pages/workboard-page.js";
 export { ConnectPage } from "./components/pages/connect-page.js";
 export { PairingPage } from "./components/pages/pairing-page.js";
 export { MemoryPage } from "./components/pages/memory-page.js";
-export type { AdminPageProps } from "./components/pages/admin-page.js";
-export { AdminPage } from "./components/pages/admin-page.js";
+export type { ConfigurePageProps } from "./components/pages/configure-page.js";
+export { ConfigurePage } from "./components/pages/configure-page.js";
 export { SettingsPage } from "./components/pages/settings-page.js";
 
 // ── Hooks ───────────────────────────────────────────────────────────────────
