@@ -19,14 +19,14 @@ const { createOperatorCoreManagerMock } = vi.hoisted(() => {
       wsUrl: string;
       httpBaseUrl: string;
       baselineAuth: unknown;
-      adminModeStore: unknown;
+      elevatedModeStore: unknown;
       createCore: (opts: unknown) => unknown;
     }) => {
       input.createCore({
         wsUrl: input.wsUrl,
         httpBaseUrl: input.httpBaseUrl,
         auth: input.baselineAuth,
-        adminModeStore: input.adminModeStore,
+        elevatedModeStore: input.elevatedModeStore,
       });
       return {
         getCore: () => coreInstance,
@@ -44,8 +44,8 @@ vi.mock("@tyrum/client", () => ({
 }));
 
 vi.mock("@tyrum/operator-core", () => ({
-  createAdminModeStore: vi.fn(() => ({ dispose: vi.fn() })),
   createBearerTokenAuth: vi.fn((token: string) => ({ type: "bearer-token", token })),
+  createElevatedModeStore: vi.fn(() => ({ dispose: vi.fn() })),
   createOperatorCore: vi.fn((opts: unknown) => opts),
   createOperatorCoreManager: createOperatorCoreManagerMock,
   httpAuthForAuth: vi.fn((auth: unknown) => auth),
@@ -67,7 +67,7 @@ vi.mock("@tyrum/operator-ui", async (importOriginal) => {
     MemoryPage: () => createElement("div", { "data-testid": "page-memory" }),
     SettingsPage: () => createElement("div", { "data-testid": "page-settings" }),
     ConnectPage: () => createElement("div", { "data-testid": "operator-connect" }),
-    AdminModeProvider: ({ children }: { children: unknown }) => children,
+    ElevatedModeProvider: ({ children }: { children: unknown }) => children,
     ToastProvider: ({ children }: { children: unknown }) => children,
   };
 });

@@ -3,9 +3,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tyrum/operator-core", () => ({
-  createAdminModeStore: vi.fn(),
   createBearerTokenAuth: vi.fn(),
   createBrowserCookieAuth: vi.fn(),
+  createElevatedModeStore: vi.fn(),
   createGatewayAuthSession: vi.fn(),
   createOperatorCoreManager: vi.fn(),
 }));
@@ -54,13 +54,13 @@ describe("apps/web main bootstrap", () => {
   const expectDisposedOnUnload = (params: {
     unsubscribe: ReturnType<typeof vi.fn>;
     manager: { dispose: ReturnType<typeof vi.fn> };
-    adminModeStore: { dispose: ReturnType<typeof vi.fn> };
+    elevatedModeStore: { dispose: ReturnType<typeof vi.fn> };
   }): void => {
     window.dispatchEvent(new Event("beforeunload"));
 
     expect(params.unsubscribe).toHaveBeenCalledTimes(1);
     expect(params.manager.dispose).toHaveBeenCalledTimes(1);
-    expect(params.adminModeStore.dispose).toHaveBeenCalledTimes(1);
+    expect(params.elevatedModeStore.dispose).toHaveBeenCalledTimes(1);
   };
 
   const arrangeBootstrap = async (initialUrl: string) => {
@@ -70,9 +70,9 @@ describe("apps/web main bootstrap", () => {
     const urlAuth = await import("../src/url-auth.js");
     const reactDomClient = await import("react-dom/client");
 
-    const adminModeStore = { dispose: vi.fn() };
-    vi.mocked(operatorCore.createAdminModeStore).mockReturnValue(
-      adminModeStore as unknown as ReturnType<typeof operatorCore.createAdminModeStore>,
+    const elevatedModeStore = { dispose: vi.fn() };
+    vi.mocked(operatorCore.createElevatedModeStore).mockReturnValue(
+      elevatedModeStore as unknown as ReturnType<typeof operatorCore.createElevatedModeStore>,
     );
 
     const { manager, unsubscribe } = makeManagerMock();
@@ -84,7 +84,7 @@ describe("apps/web main bootstrap", () => {
     vi.mocked(reactDomClient.createRoot).mockReturnValue(root as never);
 
     return {
-      adminModeStore,
+      elevatedModeStore,
       manager,
       operatorCore,
       replaceStateSpy,
@@ -102,8 +102,15 @@ describe("apps/web main bootstrap", () => {
   });
 
   it("creates the operator core manager and scrubs auth token from the URL", async () => {
-    const { adminModeStore, manager, operatorCore, replaceStateSpy, root, unsubscribe, urlAuth } =
-      await arrangeBootstrap("/ui?token=test#hash");
+    const {
+      elevatedModeStore,
+      manager,
+      operatorCore,
+      replaceStateSpy,
+      root,
+      unsubscribe,
+      urlAuth,
+    } = await arrangeBootstrap("/ui?token=test#hash");
 
     const bearerAuth = { type: "bearer-token", token: "test-token" } as const;
     vi.mocked(operatorCore.createBearerTokenAuth).mockReturnValue(
@@ -134,18 +141,25 @@ describe("apps/web main bootstrap", () => {
         wsUrl: expectedWsUrl,
         httpBaseUrl: expectedHttpBaseUrl,
         baselineAuth: bearerAuth,
-        adminModeStore,
+        elevatedModeStore,
       }),
     );
     expect(replaceStateSpy).toHaveBeenCalledWith(expect.anything(), "", "/ui#hash");
     expect(root.render).toHaveBeenCalled();
 
-    expectDisposedOnUnload({ unsubscribe, manager, adminModeStore });
+    expectDisposedOnUnload({ unsubscribe, manager, elevatedModeStore });
   });
 
   it("uses browser cookie auth when no token is present and does not rewrite the URL", async () => {
-    const { adminModeStore, manager, operatorCore, replaceStateSpy, root, unsubscribe, urlAuth } =
-      await arrangeBootstrap("/ui");
+    const {
+      elevatedModeStore,
+      manager,
+      operatorCore,
+      replaceStateSpy,
+      root,
+      unsubscribe,
+      urlAuth,
+    } = await arrangeBootstrap("/ui");
 
     const cookieAuth = { type: "browser-cookie" } as const;
     vi.mocked(operatorCore.createBrowserCookieAuth).mockReturnValue(
@@ -163,13 +177,13 @@ describe("apps/web main bootstrap", () => {
     expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
       expect.objectContaining({
         baselineAuth: cookieAuth,
-        adminModeStore,
+        elevatedModeStore,
       }),
     );
     expect(replaceStateSpy).not.toHaveBeenCalled();
     expect(root.render).toHaveBeenCalled();
 
-    expectDisposedOnUnload({ unsubscribe, manager, adminModeStore });
+    expectDisposedOnUnload({ unsubscribe, manager, elevatedModeStore });
   });
 
   it("throws when the root element is missing", async () => {

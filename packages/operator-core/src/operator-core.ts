@@ -18,7 +18,7 @@ import { createApprovalsStore, type ApprovalsStore } from "./stores/approvals-st
 import { createConnectionStore, type ConnectionStore } from "./stores/connection-store.js";
 import { createPairingStore, type Pairing, type PairingStore } from "./stores/pairing-store.js";
 import { createRunsStore, type RunsStore } from "./stores/runs-store.js";
-import { createAdminModeStore, type AdminModeStore } from "./stores/admin-mode-store.js";
+import { createElevatedModeStore, type ElevatedModeStore } from "./stores/elevated-mode-store.js";
 import {
   createStatusStore,
   type OperatorPresenceEntry,
@@ -31,7 +31,7 @@ export interface OperatorCoreOptions {
   httpBaseUrl: string;
   auth: OperatorAuthStrategy;
   capabilities?: ClientCapability[];
-  adminModeStore?: AdminModeStore;
+  elevatedModeStore?: ElevatedModeStore;
   deps?: {
     ws?: OperatorWsClient;
     http?: Partial<OperatorHttpClient>;
@@ -43,7 +43,7 @@ export interface OperatorCore {
   httpBaseUrl: string;
   ws: OperatorWsClient;
   http: OperatorHttpClient;
-  adminModeStore: AdminModeStore;
+  elevatedModeStore: ElevatedModeStore;
   connectionStore: ConnectionStore;
   approvalsStore: ApprovalsStore;
   runsStore: RunsStore;
@@ -95,8 +95,8 @@ function readPayload(data: unknown): Record<string, unknown> | null {
 }
 
 export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
-  const adminModeStore = options.adminModeStore ?? createAdminModeStore();
-  const adminModeStoreOwned = options.adminModeStore === undefined;
+  const elevatedModeStore = options.elevatedModeStore ?? createElevatedModeStore();
+  const elevatedModeStoreOwned = options.elevatedModeStore === undefined;
 
   const ws: OperatorWsClient =
     options.deps?.ws ??
@@ -301,8 +301,8 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
 
   const dispose = (): void => {
     connection.store.disconnect();
-    if (adminModeStoreOwned) {
-      adminModeStore.dispose();
+    if (elevatedModeStoreOwned) {
+      elevatedModeStore.dispose();
     }
     for (const unsub of unsubscribes) {
       unsub();
@@ -315,7 +315,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     httpBaseUrl: options.httpBaseUrl,
     ws,
     http,
-    adminModeStore,
+    elevatedModeStore,
     connectionStore: connection.store,
     approvalsStore: approvals.store,
     pairingStore: pairing.store,

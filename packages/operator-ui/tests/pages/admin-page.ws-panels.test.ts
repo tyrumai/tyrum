@@ -3,9 +3,9 @@
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createAdminModeStore } from "../../../operator-core/src/index.js";
-import { AdminModeProvider } from "../../src/admin-mode.js";
-import { AdminPage } from "../../src/components/pages/admin-page.js";
+import { createElevatedModeStore } from "../../../operator-core/src/index.js";
+import { ElevatedModeProvider } from "../../src/elevated-mode.js";
+import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 function setReactTextValue(el: HTMLInputElement, value: string): void {
@@ -29,9 +29,9 @@ function createCore(activeAdminMode: boolean): {
   commandExecute: ReturnType<typeof vi.fn>;
 } {
   const nowMs = Date.parse("2026-03-01T00:00:00.000Z");
-  const adminModeStore = createAdminModeStore({ tickIntervalMs: 0, now: () => nowMs });
+  const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0, now: () => nowMs });
   if (activeAdminMode) {
-    adminModeStore.enter({
+    elevatedModeStore.enter({
       elevatedToken: "test-elevated-token",
       expiresAt: "2026-03-01T00:10:00.000Z",
     });
@@ -41,7 +41,7 @@ function createCore(activeAdminMode: boolean): {
 
   const core = {
     httpBaseUrl: "http://example.test",
-    adminModeStore,
+    elevatedModeStore,
     ws: {
       on: vi.fn(),
       off: vi.fn(),
@@ -98,15 +98,15 @@ function createCore(activeAdminMode: boolean): {
   return { core, commandExecute };
 }
 
-describe("AdminPage WebSocket panels", () => {
+describe("ConfigurePage WebSocket panels", () => {
   it("renders command controls and omits removed WS diagnostics controls", async () => {
     const { core } = createCore(true);
 
     const testRoot = renderIntoDocument(
       React.createElement(
-        AdminModeProvider,
+        ElevatedModeProvider,
         { core, mode: "web" },
-        React.createElement(AdminPage, { core }),
+        React.createElement(ConfigurePage, { core }),
       ),
     );
 
@@ -135,14 +135,14 @@ describe("AdminPage WebSocket panels", () => {
     }
   });
 
-  it("runs command.execute with trimmed command text in Admin Mode", async () => {
+  it("runs command.execute with trimmed command text in Elevated Mode", async () => {
     const { core, commandExecute } = createCore(true);
 
     const testRoot = renderIntoDocument(
       React.createElement(
-        AdminModeProvider,
+        ElevatedModeProvider,
         { core, mode: "web" },
-        React.createElement(AdminPage, { core }),
+        React.createElement(ConfigurePage, { core }),
       ),
     );
 
@@ -175,14 +175,14 @@ describe("AdminPage WebSocket panels", () => {
     }
   });
 
-  it("does not run command.execute when Admin Mode expires before the click handler runs", async () => {
+  it("does not run command.execute when Elevated Mode expires before the click handler runs", async () => {
     const { core, commandExecute } = createCore(true);
 
     const testRoot = renderIntoDocument(
       React.createElement(
-        AdminModeProvider,
+        ElevatedModeProvider,
         { core, mode: "web" },
-        React.createElement(AdminPage, { core }),
+        React.createElement(ConfigurePage, { core }),
       ),
     );
 
@@ -195,7 +195,7 @@ describe("AdminPage WebSocket panels", () => {
       expect(commandButton).not.toBeNull();
       expect(commandButton?.disabled).toBe(false);
 
-      const activeSnapshot = core.adminModeStore.getSnapshot();
+      const activeSnapshot = core.elevatedModeStore.getSnapshot();
       const inactiveSnapshot = {
         ...activeSnapshot,
         status: "inactive",
@@ -204,7 +204,7 @@ describe("AdminPage WebSocket panels", () => {
         expiresAt: null,
         remainingMs: null,
       };
-      core.adminModeStore.getSnapshot = () => inactiveSnapshot;
+      core.elevatedModeStore.getSnapshot = () => inactiveSnapshot;
 
       await act(async () => {
         commandButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -212,20 +212,20 @@ describe("AdminPage WebSocket panels", () => {
       });
 
       expect(commandExecute).not.toHaveBeenCalled();
-      expect(document.body.querySelector("[data-testid='admin-mode-dialog']")).not.toBeNull();
+      expect(document.body.querySelector("[data-testid='elevated-mode-dialog']")).not.toBeNull();
     } finally {
       cleanupTestRoot(testRoot);
     }
   });
 
-  it("disables command.execute when Admin Mode is inactive", async () => {
+  it("disables command.execute when Elevated Mode is inactive", async () => {
     const { core } = createCore(false);
 
     const testRoot = renderIntoDocument(
       React.createElement(
-        AdminModeProvider,
+        ElevatedModeProvider,
         { core, mode: "web" },
-        React.createElement(AdminPage, { core }),
+        React.createElement(ConfigurePage, { core }),
       ),
     );
 
@@ -238,7 +238,7 @@ describe("AdminPage WebSocket panels", () => {
       expect(commandButton).not.toBeNull();
       expect(commandButton?.disabled).toBe(true);
       expect(
-        testRoot.container.querySelector("[data-testid='admin-read-only-notice']"),
+        testRoot.container.querySelector("[data-testid='configure-read-only-notice']"),
       ).not.toBeNull();
     } finally {
       cleanupTestRoot(testRoot);

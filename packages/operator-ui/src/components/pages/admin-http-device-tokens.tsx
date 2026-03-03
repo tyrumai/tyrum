@@ -169,7 +169,7 @@ function DeviceTokenIssueDialog({
         issue.setError(undefined);
         if (!canMutate) {
           requestEnter();
-          throw new Error("Enter Admin Mode to issue device tokens.");
+          throw new Error("Enter Elevated Mode to issue device tokens.");
         }
 
         const ttlSecondsRaw = issue.ttlSeconds.trim();
@@ -221,7 +221,7 @@ function DeviceTokenRevokeDialog({
         revoke.setError(undefined);
         if (!canMutate) {
           requestEnter();
-          throw new Error("Enter Admin Mode to revoke device tokens.");
+          throw new Error("Enter Elevated Mode to revoke device tokens.");
         }
 
         try {
@@ -290,7 +290,7 @@ export function DeviceTokensCard({ core }: { core: OperatorCore }) {
               requestEnter();
             }}
           >
-            Enter Admin Mode
+            Enter Elevated Mode
           </Button>
         ) : null}
       </CardFooter>

@@ -2,13 +2,15 @@ import type { OperatorCore } from "@tyrum/operator-core";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useState } from "react";
 import type { OperatorUiMode } from "../../app.js";
-import { AdminModeGate } from "../../admin-mode.js";
+import { ElevatedModeGate } from "../../elevated-mode.js";
+import { useHostApiOptional } from "../../host/host-api.js";
 import { PageHeader } from "../layout/page-header.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 import { Label } from "../ui/label.js";
+import { DesktopUpdatesCard } from "../updates/desktop-updates-card.js";
 import { useTheme, type ThemeMode } from "../../hooks/use-theme.js";
 import { cn } from "../../lib/cn.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
@@ -49,6 +51,8 @@ const THEME_OPTIONS: ThemeOption[] = [
 export function SettingsPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
   const statusState = useOperatorStore(core.statusStore);
   const theme = useTheme();
+  const host = useHostApiOptional();
+  const desktopApi = host?.kind === "desktop" ? host.api : null;
 
   const totalTokens = statusState.usage?.local.totals.total_tokens;
   const formattedTokens =
@@ -174,20 +178,43 @@ export function SettingsPage({ core, mode }: { core: OperatorCore; mode: Operato
         </CardContent>
       </Card>
 
+      {desktopApi ? (
+        <DesktopUpdatesCard
+          api={desktopApi}
+          title="Update"
+          testId="settings-update"
+          id="settings-update"
+        />
+      ) : (
+        <Card data-testid="settings-update" id="settings-update">
+          <CardHeader className="pb-4">
+            <div className="text-sm font-medium text-fg">Update</div>
+            <div className="text-sm text-fg-muted">Desktop updates are not available here.</div>
+          </CardHeader>
+          <CardContent>
+            <Alert
+              variant="info"
+              title="Updates unavailable"
+              description="Updates are only available in the desktop app."
+            />
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-3">
-        <h2 className="text-lg font-semibold text-fg">Admin</h2>
-        <AdminModeGate>
+        <h2 className="text-lg font-semibold text-fg">Elevated Mode</h2>
+        <ElevatedModeGate>
           <Card className="border-error/30 bg-error/5" data-testid="settings-admin">
             <CardHeader className="pb-4">
-              <div className="text-sm font-medium text-fg">Admin actions</div>
+              <div className="text-sm font-medium text-fg">Dangerous actions</div>
               <div className="text-sm text-fg-muted">
-                Admin Mode enables dangerous operator actions. It is time-limited (10 minutes) and
-                can be exited at any time.
+                Elevated Mode enables dangerous operator actions. It is time-limited (10 minutes)
+                and can be exited at any time.
               </div>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="admin-command">Admin command</Label>
+                <Label htmlFor="admin-command">Command</Label>
                 <Input
                   id="admin-command"
                   data-testid="settings-admin-command-input"
@@ -215,15 +242,11 @@ export function SettingsPage({ core, mode }: { core: OperatorCore; mode: Operato
               </div>
 
               {adminCommandError ? (
-                <Alert
-                  variant="error"
-                  title="Admin command failed"
-                  description={adminCommandError}
-                />
+                <Alert variant="error" title="Command failed" description={adminCommandError} />
               ) : null}
             </CardContent>
           </Card>
-        </AdminModeGate>
+        </ElevatedModeGate>
       </div>
     </div>
   );

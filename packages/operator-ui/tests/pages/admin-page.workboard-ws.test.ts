@@ -5,15 +5,15 @@ import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import type {
-  AdminModeState,
-  AdminModeStore,
-} from "../../../operator-core/src/stores/admin-mode-store.js";
-import { AdminModeProvider } from "../../src/admin-mode.js";
-import { AdminPage } from "../../src/components/pages/admin-page.js";
+  ElevatedModeState,
+  ElevatedModeStore,
+} from "../../../operator-core/src/stores/elevated-mode-store.js";
+import { ElevatedModeProvider } from "../../src/elevated-mode.js";
+import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
-function createActiveAdminModeStore(): AdminModeStore {
-  const activeState: AdminModeState = {
+function createActiveElevatedModeStore(): ElevatedModeStore {
+  const activeState: ElevatedModeState = {
     status: "active",
     elevatedToken: "token",
     enteredAt: "2026-03-01T00:00:00.000Z",
@@ -39,13 +39,13 @@ async function switchAdminTab(container: HTMLElement, testId: string): Promise<v
   });
 }
 
-describe("AdminPage WorkBoard WS panels", () => {
-  it("does not render workboard controls in Admin page", () => {
-    const adminModeStore = createActiveAdminModeStore();
+describe("ConfigurePage WorkBoard WS panels", () => {
+  it("does not render workboard controls in Configure", () => {
+    const elevatedModeStore = createActiveElevatedModeStore();
 
     const core = {
       httpBaseUrl: "http://example.test",
-      adminModeStore,
+      elevatedModeStore,
       ws: {
         on: vi.fn(),
         off: vi.fn(),
@@ -54,10 +54,10 @@ describe("AdminPage WorkBoard WS panels", () => {
     } as unknown as OperatorCore;
 
     const testRoot = renderIntoDocument(
-      React.createElement(AdminModeProvider, {
+      React.createElement(ElevatedModeProvider, {
         core,
         mode: "web",
-        children: React.createElement(AdminPage, { core }),
+        children: React.createElement(ConfigurePage, { core }),
       }),
     );
 
@@ -72,11 +72,11 @@ describe("AdminPage WorkBoard WS panels", () => {
 
   it("keeps command.execute available as the WS admin action", async () => {
     const commandExecute = vi.fn(async () => ({ output: "ok" }));
-    const adminModeStore = createActiveAdminModeStore();
+    const elevatedModeStore = createActiveElevatedModeStore();
 
     const core = {
       httpBaseUrl: "http://example.test",
-      adminModeStore,
+      elevatedModeStore,
       ws: {
         on: vi.fn(),
         off: vi.fn(),
@@ -85,10 +85,10 @@ describe("AdminPage WorkBoard WS panels", () => {
     } as unknown as OperatorCore;
 
     const testRoot = renderIntoDocument(
-      React.createElement(AdminModeProvider, {
+      React.createElement(ElevatedModeProvider, {
         core,
         mode: "web",
-        children: React.createElement(AdminPage, { core }),
+        children: React.createElement(ConfigurePage, { core }),
       }),
     );
 

@@ -1,6 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
+import { useEffect, useState } from "react";
 import type * as React from "react";
-import { Activity, Hash, Link2, Play, ShieldCheck, Wallet } from "lucide-react";
+import { Activity, Bot, Hash, Link2, Play, ShieldCheck, Tag, Wallet } from "lucide-react";
 import { PageHeader } from "../layout/page-header.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -10,12 +11,32 @@ import { Skeleton } from "../ui/skeleton.js";
 import { StatusDot } from "../ui/status-dot.js";
 import { cn } from "../../lib/cn.js";
 import { getConnectionDisplay } from "../../lib/connection-display.js";
+import { useHostApiOptional } from "../../host/host-api.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 
 export interface DashboardPageProps {
   core: OperatorCore;
   onNavigate?: (id: string) => void;
   hideHeader?: boolean;
+}
+
+type DesktopUpdateSnapshot = {
+  stage: string;
+  currentVersion: string;
+  availableVersion: string | null;
+};
+
+function readDesktopUpdateSnapshot(value: unknown): DesktopUpdateSnapshot | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const rec = value as Record<string, unknown>;
+  const stage = typeof rec["stage"] === "string" ? (rec["stage"] as string) : null;
+  const currentVersion =
+    typeof rec["currentVersion"] === "string" ? (rec["currentVersion"] as string) : null;
+  const availableRaw = rec["availableVersion"];
+  const availableVersion =
+    availableRaw === null || typeof availableRaw === "string" ? availableRaw : null;
+  if (!stage || !currentVersion) return null;
+  return { stage, currentVersion, availableVersion };
 }
 
 function StatCard({
@@ -85,10 +106,60 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
   const approvals = useOperatorStore(core.approvalsStore);
   const pairing = useOperatorStore(core.pairingStore);
   const runs = useOperatorStore(core.runsStore);
+  const host = useHostApiOptional();
+  const desktopApi = host?.kind === "desktop" ? host.api : null;
+  const [desktopUpdate, setDesktopUpdate] = useState<DesktopUpdateSnapshot | null>(null);
+
+  useEffect(() => {
+    if (!desktopApi?.updates) {
+      setDesktopUpdate(null);
+      return;
+    }
+    let disposed = false;
+
+    void desktopApi.updates
+      .getState()
+      .then((snapshot) => {
+        if (disposed) return;
+        setDesktopUpdate(readDesktopUpdateSnapshot(snapshot));
+      })
+      .catch(() => {
+        // Ignore snapshot failures; event updates can still refresh the state.
+      });
+
+    const unsubscribe = desktopApi.onUpdateStateChange
+      ? desktopApi.onUpdateStateChange((next) => {
+          if (disposed) return;
+          setDesktopUpdate(readDesktopUpdateSnapshot(next));
+        })
+      : null;
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, [desktopApi]);
 
   const activeRunsCount = Object.values(runs.runsById).filter(
     (run) => run.status === "queued" || run.status === "running" || run.status === "paused",
   ).length;
+
+  const agentIds = new Set<string>();
+  const activeAgentIds = new Set<string>();
+  for (const run of Object.values(runs.runsById)) {
+    if (!run.key.startsWith("agent:")) continue;
+    const rest = run.key.slice("agent:".length);
+    const sep = rest.indexOf(":");
+    if (sep <= 0) continue;
+    const agentId = rest.slice(0, sep);
+    agentIds.add(agentId);
+    if (run.status === "queued" || run.status === "running" || run.status === "paused") {
+      activeAgentIds.add(agentId);
+    }
+  }
+  const activeAgentsCount = activeAgentIds.size;
+  const totalAgentsCount = agentIds.size;
+  const activeAgentsText =
+    totalAgentsCount > 0 ? `${activeAgentsCount}/${totalAgentsCount}` : `${activeAgentsCount}/-`;
 
   const tokensUsed = status.usage?.local.totals.total_tokens;
   const tokensUsedText =
@@ -98,6 +169,8 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
   const connectionVariant = connectionDisplay.variant;
   const connectionPulse = connectionDisplay.pulse;
   const connectionLabel = connectionDisplay.label;
+
+  const updateAvailable = desktopUpdate?.stage === "available";
 
   const refreshDashboard = (): void => {
     void Promise.allSettled([
@@ -159,6 +232,30 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
         />
 
         <StatCard
+          label="Version"
+          icon={Tag}
+          loading={status.loading.status}
+          value={status.status?.version ?? "-"}
+          badge={
+            updateAvailable ? (
+              <Badge variant="warning" data-testid="dashboard-version-update-badge">
+                Update
+              </Badge>
+            ) : null
+          }
+          onClick={() => {
+            onNavigate?.("settings");
+            setTimeout(() => {
+              const el = document.getElementById("settings-update");
+              if (!el) return;
+              if (typeof (el as HTMLElement).scrollIntoView !== "function") return;
+              (el as HTMLElement).scrollIntoView({ block: "start" });
+            }, 0);
+          }}
+          testId="dashboard-card-version"
+        />
+
+        <StatCard
           label="Instance ID"
           icon={Hash}
           loading={status.loading.status}
@@ -173,6 +270,23 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
         />
 
         <StatCard label="Active Runs" icon={Play} value={String(activeRunsCount)} />
+
+        <StatCard
+          label="Active Agents"
+          icon={Bot}
+          value={activeAgentsText}
+          badge={
+            activeAgentsCount > 0 ? (
+              <Badge variant="default" data-testid="dashboard-agents-badge">
+                {activeAgentsCount}
+              </Badge>
+            ) : null
+          }
+          onClick={() => {
+            onNavigate?.("agents");
+          }}
+          testId="dashboard-card-agents"
+        />
 
         <StatCard
           label="Pending Approvals"
@@ -193,10 +307,21 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
         />
 
         <StatCard
-          label="Pending Pairing"
+          label="Pending Pairings"
           icon={Link2}
           loading={pairing.loading}
           value={String(pairing.pendingIds.length)}
+          badge={
+            pairing.pendingIds.length > 0 ? (
+              <Badge data-testid="dashboard-pairing-badge" variant="danger">
+                {pairing.pendingIds.length}
+              </Badge>
+            ) : null
+          }
+          onClick={() => {
+            onNavigate?.("pairing");
+          }}
+          testId="dashboard-card-pairing"
         />
       </div>
     </div>

@@ -1,7 +1,7 @@
 import {
-  formatAdminModeRemaining,
-  isAdminModeActive,
-  type AdminModeState,
+  formatElevatedModeRemaining,
+  isElevatedModeActive,
+  type ElevatedModeState,
   type OperatorCore,
   type OperatorCoreManager,
 } from "@tyrum/operator-core";
@@ -51,18 +51,18 @@ function truncateText(text: string, limit: number): string {
   return `${text.slice(0, Math.max(0, limit - 1))}…`;
 }
 
-function AppHeader({ title, adminMode }: { title: string; adminMode: AdminModeState }) {
-  const adminModeActive = isAdminModeActive(adminMode);
+function AppHeader({ title, elevatedMode }: { title: string; elevatedMode: ElevatedModeState }) {
+  const elevatedModeActive = isElevatedModeActive(elevatedMode);
   return (
     <Box flexDirection="column" paddingBottom={1}>
       <Text bold>{title}</Text>
       <Text dimColor>
         Keys: c=connect d=disconnect 1=connect 2=status 3=approvals 4=runs 5=pairing 6=memory
-        m=admin q=quit
+        m=elevated q=quit
       </Text>
-      {adminModeActive ? (
+      {elevatedModeActive ? (
         <Text color="yellow">
-          Admin Mode active · {formatAdminModeRemaining(adminMode)} remaining (e=exit)
+          Elevated Mode active · {formatElevatedModeRemaining(elevatedMode)} remaining (e=exit)
         </Text>
       ) : null}
     </Box>
@@ -592,7 +592,7 @@ function MemoryScreen({
   );
 }
 
-function AdminModeDialog(props: { token: string; busy: boolean; error: string | null }) {
+function ElevatedModeDialog(props: { token: string; busy: boolean; error: string | null }) {
   return (
     <Box
       flexDirection="column"
@@ -601,10 +601,10 @@ function AdminModeDialog(props: { token: string; busy: boolean; error: string | 
       padding={1}
       marginBottom={1}
     >
-      <Text bold>Enter Admin Mode</Text>
-      <Text dimColor>Paste admin token and press Enter. Esc cancels.</Text>
+      <Text bold>Enter Elevated Mode</Text>
+      <Text dimColor>Paste elevated access token and press Enter. Esc cancels.</Text>
       <Text>
-        Admin token: <Text color="yellow">{maskToken(props.token)}</Text>
+        Access token: <Text color="yellow">{maskToken(props.token)}</Text>
       </Text>
       {props.busy ? <Text dimColor>Entering...</Text> : null}
       {props.error ? <Text color="red">Error: {props.error}</Text> : null}
@@ -653,7 +653,7 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
   const core = useOperatorCoreManager(runtime.manager);
   const coreRef = useRef(core);
   coreRef.current = core;
-  const adminMode = useOperatorStore(core.adminModeStore);
+  const elevatedMode = useOperatorStore(core.elevatedModeStore);
   const [uiState, setUiState] = useState(() => createInitialTuiUiState());
   const uiStateRef = useRef(uiState);
   uiStateRef.current = uiState;
@@ -665,34 +665,34 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
     };
   }, [runtime.manager]);
 
-  const [adminDialog, setAdminDialog] = useState<{
+  const [elevatedDialog, setElevatedDialog] = useState<{
     open: boolean;
     token: string;
     busy: boolean;
     error: string | null;
   }>({ open: false, token: "", busy: false, error: null });
-  const adminDialogRef = useRef(adminDialog);
-  adminDialogRef.current = adminDialog;
+  const elevatedDialogRef = useRef(elevatedDialog);
+  elevatedDialogRef.current = elevatedDialog;
 
-  const openAdminDialog = (): void => {
-    setAdminDialog({ open: true, token: "", busy: false, error: null });
+  const openElevatedDialog = (): void => {
+    setElevatedDialog({ open: true, token: "", busy: false, error: null });
   };
 
-  const closeAdminDialog = (): void => {
-    if (adminDialogRef.current.busy) return;
-    setAdminDialog({ open: false, token: "", busy: false, error: null });
+  const closeElevatedDialog = (): void => {
+    if (elevatedDialogRef.current.busy) return;
+    setElevatedDialog({ open: false, token: "", busy: false, error: null });
   };
 
-  const submitAdminDialog = async (): Promise<void> => {
-    const snapshot = adminDialogRef.current;
+  const submitElevatedDialog = async (): Promise<void> => {
+    const snapshot = elevatedDialogRef.current;
     if (!snapshot.open || snapshot.busy) return;
 
-    setAdminDialog((prev) => ({ ...prev, busy: true, error: null }));
+    setElevatedDialog((prev) => ({ ...prev, busy: true, error: null }));
     try {
-      await runtime.enterAdminMode(snapshot.token);
-      setAdminDialog({ open: false, token: "", busy: false, error: null });
+      await runtime.enterElevatedMode(snapshot.token);
+      setElevatedDialog({ open: false, token: "", busy: false, error: null });
     } catch (error) {
-      setAdminDialog((prev) => ({ ...prev, busy: false, error: toErrorMessage(error) }));
+      setElevatedDialog((prev) => ({ ...prev, busy: false, error: toErrorMessage(error) }));
     }
   };
 
@@ -814,17 +814,17 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       return;
     }
 
-    if (adminDialogRef.current.open) {
+    if (elevatedDialogRef.current.open) {
       if (rawKey["escape"] === true) {
-        closeAdminDialog();
+        closeElevatedDialog();
         return;
       }
       if (rawKey["return"] === true || rawKey["enter"] === true) {
-        void submitAdminDialog();
+        void submitElevatedDialog();
         return;
       }
       if (rawKey["backspace"] === true || rawKey["delete"] === true) {
-        setAdminDialog((prev) => ({
+        setElevatedDialog((prev) => ({
           ...prev,
           token: prev.token.length > 0 ? prev.token.slice(0, -1) : prev.token,
           error: null,
@@ -832,7 +832,7 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
         return;
       }
       if (input) {
-        setAdminDialog((prev) => ({ ...prev, token: prev.token + input, error: null }));
+        setElevatedDialog((prev) => ({ ...prev, token: prev.token + input, error: null }));
       }
       return;
     }
@@ -909,7 +909,7 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       state: uiStateRef.current,
       input,
       key: toTuiKey(key),
-      adminModeActive: isAdminModeActive(core.adminModeStore.getSnapshot()),
+      elevatedModeActive: isElevatedModeActive(core.elevatedModeStore.getSnapshot()),
       approvalsPendingIds: approvals.pendingIds,
       pairingIds,
       runIds,
@@ -930,11 +930,11 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
         case "disconnect":
           core.disconnect();
           return;
-        case "openAdminMode":
-          openAdminDialog();
+        case "openElevatedMode":
+          openElevatedDialog();
           return;
-        case "exitAdminMode":
-          runtime.exitAdminMode();
+        case "exitElevatedMode":
+          runtime.exitElevatedMode();
           return;
         case "refreshMemory":
           if (memory.browse.request?.kind === "search") {
@@ -1003,12 +1003,12 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
 
   return (
     <Box flexDirection="column" padding={1}>
-      <AppHeader title={`Tyrum TUI (${uiState.route})`} adminMode={adminMode} />
-      {adminDialog.open ? (
-        <AdminModeDialog
-          token={adminDialog.token}
-          busy={adminDialog.busy}
-          error={adminDialog.error}
+      <AppHeader title={`Tyrum TUI (${uiState.route})`} elevatedMode={elevatedMode} />
+      {elevatedDialog.open ? (
+        <ElevatedModeDialog
+          token={elevatedDialog.token}
+          busy={elevatedDialog.busy}
+          error={elevatedDialog.error}
         />
       ) : null}
       {memorySearchDialog.open ? (

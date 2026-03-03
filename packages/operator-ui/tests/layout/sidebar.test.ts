@@ -27,6 +27,10 @@ describe("Sidebar", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    if (typeof localStorage !== "undefined" && typeof localStorage.removeItem === "function") {
+      localStorage.removeItem("tyrum-sidebar-collapsed");
+      localStorage.removeItem("tyrum-sidebar-secondary-collapsed");
+    }
   });
 
   it("renders brand, nav items, and connection indicator", () => {

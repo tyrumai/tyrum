@@ -17,7 +17,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
 
   return (
     <section className="grid gap-3" data-testid="admin-http-routing-config">
-      <div className="text-sm font-medium text-fg">Routing config</div>
+      <div className="text-sm font-medium text-fg">Channels</div>
 
       <RoutingConfigGetCard api={api} />
       <RoutingConfigUpdateCard api={api} canMutate={canMutate} requestEnter={requestEnter} />
@@ -37,7 +37,7 @@ function RoutingConfigGetCard({ api }: { api: RoutingConfigApi }): React.ReactEl
     setResult(undefined);
     setError(undefined);
     try {
-      if (!api) throw new Error("Routing config API unavailable.");
+      if (!api) throw new Error("Channels config API unavailable.");
       setResult(await api.get());
     } catch (e) {
       setError(e);
@@ -59,9 +59,9 @@ function RoutingConfigGetCard({ api }: { api: RoutingConfigApi }): React.ReactEl
           isLoading={busy}
           onClick={() => void runGet()}
         >
-          Fetch routing config
+          Fetch channels config
         </Button>
-        <ApiResultCard heading="Routing config" value={result} error={error} />
+        <ApiResultCard heading="Channels config" value={result} error={error} />
       </CardContent>
     </Card>
   );
@@ -91,9 +91,9 @@ function RoutingConfigUpdateCard({
     setError(undefined);
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Admin Mode to update routing config.");
+      throw new Error("Enter Elevated Mode to update channels config.");
     }
-    if (!api) return void setError(new Error("Routing config API unavailable."));
+    if (!api) return void setError(new Error("Channels config API unavailable."));
     if (!canUpdate) return void setError(new Error("A valid config JSON object is required."));
 
     const reason = reasonRaw.trim();
@@ -141,7 +141,7 @@ function RoutingConfigUpdateCard({
             disabled={!canMutate || !canUpdate}
             onClick={() => setOpen(true)}
           >
-            Update routing config
+            Update channels config
           </Button>
           {!canMutate ? (
             <Button
@@ -152,7 +152,7 @@ function RoutingConfigUpdateCard({
                 requestEnter();
               }}
             >
-              Enter Admin Mode
+              Enter Elevated Mode
             </Button>
           ) : null}
         </CardFooter>
@@ -161,8 +161,8 @@ function RoutingConfigUpdateCard({
       <ConfirmDangerDialog
         open={open}
         onOpenChange={setOpen}
-        title="Update routing config"
-        description="This will create a new routing config revision."
+        title="Update channels config"
+        description="This will create a new channels config revision."
         confirmLabel="Update"
         onConfirm={runUpdate}
       />
@@ -193,9 +193,9 @@ function RoutingConfigRevertCard({
     setError(undefined);
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Admin Mode to revert routing config.");
+      throw new Error("Enter Elevated Mode to revert channels config.");
     }
-    if (!api) return void setError(new Error("Routing config API unavailable."));
+    if (!api) return void setError(new Error("Channels config API unavailable."));
     if (!canRevert) return void setError(new Error("A positive revision number is required."));
 
     const reason = reasonRaw.trim();
@@ -237,7 +237,7 @@ function RoutingConfigRevertCard({
             disabled={!canMutate || !canRevert}
             onClick={() => setOpen(true)}
           >
-            Revert routing config
+            Revert channels config
           </Button>
           {!canMutate ? (
             <Button
@@ -248,7 +248,7 @@ function RoutingConfigRevertCard({
                 requestEnter();
               }}
             >
-              Enter Admin Mode
+              Enter Elevated Mode
             </Button>
           ) : null}
         </CardFooter>
@@ -257,8 +257,8 @@ function RoutingConfigRevertCard({
       <ConfirmDangerDialog
         open={open}
         onOpenChange={setOpen}
-        title="Revert routing config"
-        description="This will create a new routing config revision from a previous revision."
+        title="Revert channels config"
+        description="This will create a new channels config revision from a previous revision."
         confirmLabel="Revert"
         onConfirm={runRevert}
       />

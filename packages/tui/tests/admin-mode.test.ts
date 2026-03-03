@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { delay, startGateway, withTimeout } from "../../client/tests/conformance/harness.js";
 import { createTuiCore } from "../src/core.js";
-import { isAdminModeActive } from "@tyrum/operator-core";
+import { isElevatedModeActive } from "@tyrum/operator-core";
 import {
   createNodeFileDeviceIdentityStorage,
   createTyrumHttpClient,
@@ -50,8 +50,8 @@ async function waitForStatusSettled(store: {
   }
 }
 
-describe("tui admin mode", () => {
-  it("mints an elevated device token and toggles admin mode state", async () => {
+describe("tui elevated mode", () => {
+  it("mints an elevated device token and toggles elevated mode state", async () => {
     const harness = await startGateway();
     const home = await mkdtemp(join(tmpdir(), "tyrum-tui-"));
     const identityPath = join(home, "tui", "device-identity.json");
@@ -66,38 +66,40 @@ describe("tui admin mode", () => {
         reconnect: false,
       });
 
-      expect(isAdminModeActive(runtime.manager.getCore().adminModeStore.getSnapshot())).toBe(false);
+      expect(isElevatedModeActive(runtime.manager.getCore().elevatedModeStore.getSnapshot())).toBe(
+        false,
+      );
 
       const baselineCore = runtime.manager.getCore();
       baselineCore.connect();
       await withTimeout(
         waitForConnectionStatus(baselineCore.connectionStore, "connected"),
         2_000,
-        "tui admin mode baseline connect",
+        "tui elevated mode baseline connect",
       );
 
-      await runtime.enterAdminMode(harness.adminToken, { ttlSeconds: 60 });
+      await runtime.enterElevatedMode(harness.adminToken, { ttlSeconds: 60 });
 
       await withTimeout(
         waitForCoreSwap(runtime.manager, baselineCore),
         2_000,
-        "tui admin mode core swap",
+        "tui elevated mode core swap",
       );
 
       const elevatedCore = runtime.manager.getCore();
       await withTimeout(
         waitForConnectionStatus(elevatedCore.connectionStore, "connected"),
         2_000,
-        "tui admin mode elevated connect",
+        "tui elevated mode elevated connect",
       );
       await withTimeout(
         waitForStatusSettled(elevatedCore.statusStore),
         2_000,
-        "tui admin mode status sync",
+        "tui elevated mode status sync",
       );
 
-      const entered = runtime.manager.getCore().adminModeStore.getSnapshot();
-      expect(isAdminModeActive(entered)).toBe(true);
+      const entered = runtime.manager.getCore().elevatedModeStore.getSnapshot();
+      expect(isElevatedModeActive(entered)).toBe(true);
       expect(entered.elevatedToken).toBeTruthy();
       expect(entered.expiresAt).toBeTruthy();
       expect(entered.remainingMs).not.toBeNull();
@@ -107,9 +109,11 @@ describe("tui admin mode", () => {
       expect(statusErrors.usage).toBeNull();
       expect(statusErrors.presence).toBeNull();
 
-      runtime.exitAdminMode();
+      runtime.exitElevatedMode();
 
-      expect(isAdminModeActive(runtime.manager.getCore().adminModeStore.getSnapshot())).toBe(false);
+      expect(isElevatedModeActive(runtime.manager.getCore().elevatedModeStore.getSnapshot())).toBe(
+        false,
+      );
     } finally {
       await Promise.allSettled([
         harness.stop(),
@@ -119,7 +123,7 @@ describe("tui admin mode", () => {
     }
   });
 
-  it("includes operator.write in admin mode for memory export", async () => {
+  it("includes operator.write in elevated mode for memory export", async () => {
     const harness = await startGateway(() => {
       return {
         memoryV1Dal: {
@@ -178,7 +182,7 @@ describe("tui admin mode", () => {
       await withTimeout(
         waitForConnectionStatus(baselineCore.connectionStore, "connected"),
         2_000,
-        "tui admin mode baseline connect (scoped token)",
+        "tui elevated mode baseline connect (scoped token)",
       );
 
       await baselineCore.memoryStore.export();
@@ -189,18 +193,18 @@ describe("tui admin mode", () => {
         /forbidden/i,
       );
 
-      await runtime.enterAdminMode(harness.adminToken, { ttlSeconds: 60 });
+      await runtime.enterElevatedMode(harness.adminToken, { ttlSeconds: 60 });
       await withTimeout(
         waitForCoreSwap(runtime.manager, baselineCore),
         2_000,
-        "tui admin mode core swap (scoped token)",
+        "tui elevated mode core swap (scoped token)",
       );
 
       const elevatedCore = runtime.manager.getCore();
       await withTimeout(
         waitForConnectionStatus(elevatedCore.connectionStore, "connected"),
         2_000,
-        "tui admin mode elevated connect (scoped token)",
+        "tui elevated mode elevated connect (scoped token)",
       );
 
       await elevatedCore.memoryStore.export();

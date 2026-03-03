@@ -1,6 +1,6 @@
 import type { TyrumHttpAuthStrategy } from "@tyrum/client";
-import { isAdminModeActive } from "./admin-mode.js";
-import type { AdminModeState } from "./stores/admin-mode-store.js";
+import { isElevatedModeActive } from "./elevated-mode.js";
+import type { ElevatedModeState } from "./stores/elevated-mode-store.js";
 
 export type OperatorAuthStrategy =
   | {
@@ -25,12 +25,12 @@ export function createBearerTokenAuth(token: string): OperatorAuthStrategy {
   return { type: "bearer-token", token };
 }
 
-export function selectAuthForAdminMode(options: {
+export function selectAuthForElevatedMode(options: {
   baseline: OperatorAuthStrategy;
-  adminMode: AdminModeState;
+  elevatedMode: ElevatedModeState;
 }): OperatorAuthStrategy {
-  if (!isAdminModeActive(options.adminMode)) return options.baseline;
-  return { type: "bearer-token", token: options.adminMode.elevatedToken! };
+  if (!isElevatedModeActive(options.elevatedMode)) return options.baseline;
+  return { type: "bearer-token", token: options.elevatedMode.elevatedToken! };
 }
 
 export function wsTokenForAuth(auth: OperatorAuthStrategy): string {

@@ -1277,7 +1277,7 @@ describe("@tyrum/cli operator commands", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["secrets", "list", "--admin-token", "admin"]);
+      const code = await runCli(["secrets", "list", "--elevated-token", "admin"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
@@ -1326,7 +1326,7 @@ describe("@tyrum/cli operator commands", () => {
         "env",
         "--value",
         "secret",
-        "--admin-token",
+        "--elevated-token",
         "admin",
       ]);
 
@@ -1377,7 +1377,7 @@ describe("@tyrum/cli operator commands", () => {
         "revoke",
         "--handle-id",
         "h1",
-        "--admin-token",
+        "--elevated-token",
         "admin",
       ]);
 
@@ -1466,7 +1466,7 @@ describe("@tyrum/cli operator commands", () => {
         "h1",
         "--value",
         "new",
-        "--admin-token",
+        "--elevated-token",
         "admin",
       ]);
 
@@ -1508,7 +1508,7 @@ describe("@tyrum/cli operator commands", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["policy", "bundle", "--admin-token", "admin"]);
+      const code = await runCli(["policy", "bundle", "--elevated-token", "admin"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
@@ -1548,7 +1548,7 @@ describe("@tyrum/cli operator commands", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["policy", "overrides", "list", "--admin-token", "admin"]);
+      const code = await runCli(["policy", "overrides", "list", "--elevated-token", "admin"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
@@ -1598,7 +1598,7 @@ describe("@tyrum/cli operator commands", () => {
         "system.shell.exec",
         "--pattern",
         "*",
-        "--admin-token",
+        "--elevated-token",
         "admin",
       ]);
 
@@ -1652,7 +1652,7 @@ describe("@tyrum/cli operator commands", () => {
         "p1",
         "--reason",
         "bad",
-        "--admin-token",
+        "--elevated-token",
         "admin",
       ]);
 

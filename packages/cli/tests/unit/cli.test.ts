@@ -20,7 +20,7 @@ describe("@tyrum/cli runCli", () => {
     errSpy.mockRestore();
   });
 
-  it("mentions Admin Mode requirements for admin-only commands", async () => {
+  it("mentions Elevated Mode requirements for admin-only commands", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -30,7 +30,7 @@ describe("@tyrum/cli runCli", () => {
     expect(errSpy).not.toHaveBeenCalled();
 
     const output = logSpy.mock.calls.map((call) => String(call[0])).join("\n");
-    expect(output).toContain("Admin Mode");
+    expect(output).toContain("Elevated Mode");
     expect(output).toContain("secrets");
     expect(output).toContain("policy");
 

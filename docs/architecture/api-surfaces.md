@@ -46,12 +46,12 @@ If you must duplicate a capability across transports:
 - keep authZ, validation, and audit/event emission consistent
 - ensure semantics match (idempotency, error shapes, side effects)
 
-## Admin Mode crosses both surfaces
+## Elevated Mode crosses both surfaces
 
-Admin Mode (step-up) is intentionally **transport-agnostic**:
+Elevated Mode (step-up) is intentionally **transport-agnostic**:
 
-- the client enters Admin Mode by obtaining a **short-lived elevated device token**
+- the client enters Elevated Mode by obtaining a **short-lived elevated device token**
 - the SDK uses that token for both **WS requests** and **HTTP calls** during the TTL window
-- exiting Admin Mode returns to the baseline scoped token
+- exiting Elevated Mode returns to the baseline scoped token
 
 Changes to API surfaces are contract changes: update the relevant contracts, enforcement (authZ/audit), and documentation together.

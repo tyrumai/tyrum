@@ -5,8 +5,8 @@ import {
   loadOrCreateDeviceIdentity,
 } from "@tyrum/operator-core";
 import {
-  createAdminModeStore,
   createBearerTokenAuth,
+  createElevatedModeStore,
   createOperatorCore,
   createOperatorCoreManager,
   wsTokenForAuth,
@@ -26,8 +26,8 @@ export type TuiCoreOptions = {
 
 export type TuiRuntime = {
   manager: OperatorCoreManager;
-  enterAdminMode(adminToken: string, opts?: { ttlSeconds?: number }): Promise<void>;
-  exitAdminMode(): void;
+  enterElevatedMode(accessToken: string, opts?: { ttlSeconds?: number }): Promise<void>;
+  exitElevatedMode(): void;
   dispose(): void;
 };
 
@@ -36,7 +36,7 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
     createNodeFileDeviceIdentityStorage(options.deviceIdentityPath),
   );
 
-  const adminModeStore = createAdminModeStore();
+  const elevatedModeStore = createElevatedModeStore();
 
   const createCore: OperatorCoreFactory = (coreOptions): OperatorCore => {
     const ws = new TyrumClient({
@@ -59,7 +59,7 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
       wsUrl: coreOptions.wsUrl,
       httpBaseUrl: coreOptions.httpBaseUrl,
       auth: coreOptions.auth,
-      adminModeStore: coreOptions.adminModeStore,
+      elevatedModeStore: coreOptions.elevatedModeStore,
       deps: { ws },
     });
   };
@@ -68,14 +68,14 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
     wsUrl: options.wsUrl,
     httpBaseUrl: options.httpBaseUrl,
     baselineAuth: createBearerTokenAuth(options.token),
-    adminModeStore,
+    elevatedModeStore,
     createCore,
   });
 
-  const enterAdminMode = async (adminToken: string, opts?: { ttlSeconds?: number }) => {
-    const token = adminToken.trim();
+  const enterElevatedMode = async (accessToken: string, opts?: { ttlSeconds?: number }) => {
+    const token = accessToken.trim();
     if (!token) {
-      throw new Error("Admin token is required");
+      throw new Error("Elevated access token is required");
     }
 
     const http = createTyrumHttpClient({
@@ -96,20 +96,20 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
       ttl_seconds: opts?.ttlSeconds ?? 60 * 10,
     });
 
-    adminModeStore.enter({
+    elevatedModeStore.enter({
       elevatedToken: issued.token,
       expiresAt: issued.expires_at,
     });
   };
 
-  const exitAdminMode = (): void => {
-    adminModeStore.exit();
+  const exitElevatedMode = (): void => {
+    elevatedModeStore.exit();
   };
 
   const dispose = (): void => {
     manager.dispose();
-    adminModeStore.dispose();
+    elevatedModeStore.dispose();
   };
 
-  return { manager, enterAdminMode, exitAdminMode, dispose };
+  return { manager, enterElevatedMode, exitElevatedMode, dispose };
 }

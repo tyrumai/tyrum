@@ -2,9 +2,9 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
-import { createAdminModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
-import { AdminModeProvider } from "../../src/admin-mode.js";
-import { AdminPage } from "../../src/components/pages/admin-page.js";
+import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
+import { ElevatedModeProvider } from "../../src/elevated-mode.js";
+import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 afterEach(() => {
@@ -43,11 +43,11 @@ function createTestCore(): {
   secretsRotate: ReturnType<typeof vi.fn>;
   policyCreateOverride: ReturnType<typeof vi.fn>;
 } {
-  const adminModeStore = createAdminModeStore({
+  const elevatedModeStore = createElevatedModeStore({
     tickIntervalMs: 0,
     now: () => Date.parse("2026-03-01T00:00:00.000Z"),
   });
-  adminModeStore.enter({
+  elevatedModeStore.enter({
     elevatedToken: "test-elevated-token",
     expiresAt: "2026-03-01T00:01:00.000Z",
   });
@@ -58,7 +58,7 @@ function createTestCore(): {
 
   const core = {
     httpBaseUrl: "http://example.test",
-    adminModeStore,
+    elevatedModeStore,
     http: {
       policy: {
         getBundle: vi.fn(async () => ({ status: "ok" }) as unknown),
@@ -94,13 +94,13 @@ function createTestCore(): {
   return { core, routingConfigUpdate, secretsRotate, policyCreateOverride };
 }
 
-describe("AdminPage (HTTP)", () => {
+describe("ConfigurePage (HTTP)", () => {
   it("renders Routing config and Secrets panels", async () => {
     const { core } = createTestCore();
 
     const { container, root } = renderIntoDocument(
-      React.createElement(AdminModeProvider, { core, mode: "web" }, [
-        React.createElement(AdminPage, { key: "page", core }),
+      React.createElement(ElevatedModeProvider, { core, mode: "web" }, [
+        React.createElement(ConfigurePage, { key: "page", core }),
       ]),
     );
 
@@ -114,7 +114,7 @@ describe("AdminPage (HTTP)", () => {
   });
 });
 
-describe("AdminPage (HTTP) routing config", () => {
+describe("ConfigurePage (HTTP) routing config", () => {
   it("requires confirmation before updating routing config", async () => {
     const { core, routingConfigUpdate } = createTestCore();
 
@@ -134,8 +134,8 @@ describe("AdminPage (HTTP) routing config", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { container, root } = renderIntoDocument(
-      React.createElement(AdminModeProvider, { core, mode: "web" }, [
-        React.createElement(AdminPage, { key: "page", core }),
+      React.createElement(ElevatedModeProvider, { core, mode: "web" }, [
+        React.createElement(ConfigurePage, { key: "page", core }),
       ]),
     );
 
@@ -191,7 +191,7 @@ describe("AdminPage (HTTP) routing config", () => {
   });
 });
 
-describe("AdminPage (HTTP) secrets", () => {
+describe("ConfigurePage (HTTP) secrets", () => {
   it("preserves whitespace when rotating secrets", async () => {
     const { core, secretsRotate } = createTestCore();
 
@@ -222,8 +222,8 @@ describe("AdminPage (HTTP) secrets", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { container, root } = renderIntoDocument(
-      React.createElement(AdminModeProvider, { core, mode: "web" }, [
-        React.createElement(AdminPage, { key: "page", core }),
+      React.createElement(ElevatedModeProvider, { core, mode: "web" }, [
+        React.createElement(ConfigurePage, { key: "page", core }),
       ]),
     );
 
@@ -293,13 +293,13 @@ describe("AdminPage (HTTP) secrets", () => {
   });
 });
 
-describe("AdminPage (HTTP) policy + auth", () => {
-  it("renders Policy + Auth panels when Admin Mode is active", async () => {
+describe("ConfigurePage (HTTP) policy + auth", () => {
+  it("renders Policy + Auth panels when Elevated Mode is active", async () => {
     const { core } = createTestCore();
 
     const { container, root } = renderIntoDocument(
-      React.createElement(AdminModeProvider, { core, mode: "web" }, [
-        React.createElement(AdminPage, { key: "page", core }),
+      React.createElement(ElevatedModeProvider, { core, mode: "web" }, [
+        React.createElement(ConfigurePage, { key: "page", core }),
       ]),
     );
 
@@ -313,22 +313,22 @@ describe("AdminPage (HTTP) policy + auth", () => {
   });
 
   it("disables policy override creation when JSON is invalid", async () => {
-    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
-    adminModeStore.enter({
+    const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
+    elevatedModeStore.enter({
       elevatedToken: "elevated",
       expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     });
 
     const core = {
       httpBaseUrl: "http://example.test",
-      adminModeStore,
+      elevatedModeStore,
     } as unknown as OperatorCore;
 
     const { container, root } = renderIntoDocument(
-      React.createElement(AdminModeProvider, {
+      React.createElement(ElevatedModeProvider, {
         core,
         mode: "web",
-        children: React.createElement(AdminPage, { core }),
+        children: React.createElement(ConfigurePage, { core }),
       }),
     );
 
@@ -351,26 +351,26 @@ describe("AdminPage (HTTP) policy + auth", () => {
     expect(createButton?.disabled).toBe(true);
 
     cleanupTestRoot({ container, root });
-    adminModeStore.dispose();
+    elevatedModeStore.dispose();
   });
 
   it("disables auth profile updates when profile id is missing", () => {
-    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
-    adminModeStore.enter({
+    const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
+    elevatedModeStore.enter({
       elevatedToken: "elevated",
       expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     });
 
     const core = {
       httpBaseUrl: "http://example.test",
-      adminModeStore,
+      elevatedModeStore,
     } as unknown as OperatorCore;
 
     const { container, root } = renderIntoDocument(
-      React.createElement(AdminModeProvider, {
+      React.createElement(ElevatedModeProvider, {
         core,
         mode: "web",
-        children: React.createElement(AdminPage, { core }),
+        children: React.createElement(ConfigurePage, { core }),
       }),
     );
 
@@ -383,7 +383,7 @@ describe("AdminPage (HTTP) policy + auth", () => {
     expect(updateButton?.disabled).toBe(true);
 
     cleanupTestRoot({ container, root });
-    adminModeStore.dispose();
+    elevatedModeStore.dispose();
   });
 
   it("requires confirmation before creating policy overrides", async () => {
@@ -421,8 +421,8 @@ describe("AdminPage (HTTP) policy + auth", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { container, root } = renderIntoDocument(
-      React.createElement(AdminModeProvider, { core, mode: "web" }, [
-        React.createElement(AdminPage, { key: "page", core }),
+      React.createElement(ElevatedModeProvider, { core, mode: "web" }, [
+        React.createElement(ConfigurePage, { key: "page", core }),
       ]),
     );
 

@@ -144,8 +144,8 @@ const DEFAULT_CONFIG = {
 
 function createRuntime(core: unknown): {
   manager: { getCore: () => unknown; subscribe: () => () => void; dispose: () => void };
-  enterAdminMode: (token: string) => Promise<void>;
-  exitAdminMode: () => void;
+  enterElevatedMode: (token: string) => Promise<void>;
+  exitElevatedMode: () => void;
   dispose: () => void;
 } {
   const manager = {
@@ -156,8 +156,8 @@ function createRuntime(core: unknown): {
 
   return {
     manager,
-    enterAdminMode: vi.fn(async () => {}),
-    exitAdminMode: vi.fn(() => {}),
+    enterElevatedMode: vi.fn(async () => {}),
+    exitElevatedMode: vi.fn(() => {}),
     dispose: vi.fn(() => {}),
   };
 }
@@ -167,13 +167,13 @@ describe("TuiApp", () => {
     vi.useRealTimers();
   });
 
-  it("renders routes and opens Admin Mode dialog", async () => {
+  it("renders routes and opens Elevated Mode dialog", async () => {
     const connect = vi.fn();
     const disconnect = vi.fn();
     const core = {
       connect,
       disconnect,
-      adminModeStore: createStore({
+      elevatedModeStore: createStore({
         status: "inactive",
         elevatedToken: null,
         enteredAt: null,
@@ -353,7 +353,7 @@ describe("TuiApp", () => {
     const core = {
       connect,
       disconnect,
-      adminModeStore: createStore({
+      elevatedModeStore: createStore({
         status: "active",
         elevatedToken: "elevated",
         enteredAt: "2026-02-26T00:00:00.000Z",
@@ -508,7 +508,7 @@ describe("TuiApp", () => {
     const core = {
       connect,
       disconnect,
-      adminModeStore: createStore({
+      elevatedModeStore: createStore({
         status: "active",
         elevatedToken: "elevated",
         enteredAt: "2026-02-26T00:00:00.000Z",
@@ -617,7 +617,7 @@ describe("TuiApp", () => {
     const core = {
       connect,
       disconnect,
-      adminModeStore: createStore({
+      elevatedModeStore: createStore({
         status: "inactive",
         elevatedToken: null,
         enteredAt: null,

@@ -22,7 +22,7 @@ Clients can take multiple forms, depending on deployment and operator preference
 - Resume or cancel paused workflow runs (via resume tokens) when approvals are resolved.
 - Initiate and manage node pairing (approve/deny, label devices, revoke access).
 - Provide onboarding and diagnostics surfaces so hardened configuration is easy to reach.
-- Support **Admin Mode** (time-bounded step-up) for administration actions.
+- Support **Elevated Mode** (time-bounded step-up) for administration actions.
 
 ## Transports and API surfaces
 
@@ -41,7 +41,7 @@ Operator clients can expose:
 - Runs view (queued/running/paused + drilldown)
 - Approvals queue
 - Pairing workflow for nodes/devices
-- Settings (including Admin Mode gating)
+- Settings (including Elevated Mode gating)
 - Memory inspection
 - Context/usage inspection (for example `/context` and `/usage` equivalents)
 

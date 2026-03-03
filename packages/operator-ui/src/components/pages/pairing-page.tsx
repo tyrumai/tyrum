@@ -297,7 +297,7 @@ export function PairingPage({ core }: { core: OperatorCore }) {
   return (
     <div className="grid gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Pairing</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-fg">Pairings</h1>
         <Button
           variant="outline"
           data-testid="pairing-refresh"

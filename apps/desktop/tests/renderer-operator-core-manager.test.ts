@@ -1,6 +1,6 @@
 import {
-  createAdminModeStore,
   createBearerTokenAuth,
+  createElevatedModeStore,
   createOperatorCoreManager,
   type OperatorAuthStrategy,
 } from "@tyrum/operator-core";
@@ -26,8 +26,8 @@ function createFakeCore(options: { status: CoreStatus }) {
 }
 
 describe("createOperatorCoreManager", () => {
-  it("recreates core + reconnects when Admin Mode enters and previous core was connected", () => {
-    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
+  it("recreates core + reconnects when Elevated Mode enters and previous core was connected", () => {
+    const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
     const baselineAuth = createBearerTokenAuth("baseline");
 
     const created: Array<{
@@ -53,7 +53,7 @@ describe("createOperatorCoreManager", () => {
       wsUrl: "ws://example",
       httpBaseUrl: "http://example",
       baselineAuth,
-      adminModeStore,
+      elevatedModeStore,
       createCore,
     });
 
@@ -61,7 +61,7 @@ describe("createOperatorCoreManager", () => {
     expect(created[0]?.auth).toEqual(baselineAuth);
     expect(manager.getCore()).toBe(created[0]?.core);
 
-    adminModeStore.enter({
+    elevatedModeStore.enter({
       elevatedToken: "elevated",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     });
@@ -73,11 +73,11 @@ describe("createOperatorCoreManager", () => {
     expect(manager.getCore()).toBe(created[1]?.core);
 
     manager.dispose();
-    adminModeStore.dispose();
+    elevatedModeStore.dispose();
   });
 
-  it("recreates core + reconnects when Admin Mode exits and previous core was connected", () => {
-    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
+  it("recreates core + reconnects when Elevated Mode exits and previous core was connected", () => {
+    const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
     const baselineAuth = createBearerTokenAuth("baseline");
 
     const created: Array<{
@@ -103,17 +103,17 @@ describe("createOperatorCoreManager", () => {
       wsUrl: "ws://example",
       httpBaseUrl: "http://example",
       baselineAuth,
-      adminModeStore,
+      elevatedModeStore,
       createCore,
     });
 
-    adminModeStore.enter({
+    elevatedModeStore.enter({
       elevatedToken: "elevated",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     });
     expect(createCore).toHaveBeenCalledTimes(2);
 
-    adminModeStore.exit();
+    elevatedModeStore.exit();
     expect(createCore).toHaveBeenCalledTimes(3);
 
     expect(created[0]?.auth).toEqual(baselineAuth);
@@ -124,11 +124,11 @@ describe("createOperatorCoreManager", () => {
     expect(created[2]?.connect).toHaveBeenCalledTimes(1);
 
     manager.dispose();
-    adminModeStore.dispose();
+    elevatedModeStore.dispose();
   });
 
-  it("does not reconnect when Admin Mode enters and previous core was disconnected", () => {
-    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
+  it("does not reconnect when Elevated Mode enters and previous core was disconnected", () => {
+    const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
     const baselineAuth = createBearerTokenAuth("baseline");
 
     const created: Array<{
@@ -147,11 +147,11 @@ describe("createOperatorCoreManager", () => {
       wsUrl: "ws://example",
       httpBaseUrl: "http://example",
       baselineAuth,
-      adminModeStore,
+      elevatedModeStore,
       createCore,
     });
 
-    adminModeStore.enter({
+    elevatedModeStore.enter({
       elevatedToken: "elevated",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     });
@@ -160,11 +160,11 @@ describe("createOperatorCoreManager", () => {
     expect(created[1]?.connect).toHaveBeenCalledTimes(0);
 
     manager.dispose();
-    adminModeStore.dispose();
+    elevatedModeStore.dispose();
   });
 
   it("does not recreate core when selected auth is unchanged", () => {
-    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
+    const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
     const baselineAuth = createBearerTokenAuth("baseline");
 
     const createCore = vi.fn(() => createFakeCore({ status: "connected" }).core as any);
@@ -173,24 +173,24 @@ describe("createOperatorCoreManager", () => {
       wsUrl: "ws://example",
       httpBaseUrl: "http://example",
       baselineAuth,
-      adminModeStore,
+      elevatedModeStore,
       createCore,
     });
 
     const expiresAt = new Date(Date.now() + 60_000).toISOString();
 
-    adminModeStore.enter({ elevatedToken: "elevated", expiresAt });
+    elevatedModeStore.enter({ elevatedToken: "elevated", expiresAt });
     expect(createCore).toHaveBeenCalledTimes(2);
 
-    adminModeStore.enter({ elevatedToken: "elevated", expiresAt });
+    elevatedModeStore.enter({ elevatedToken: "elevated", expiresAt });
     expect(createCore).toHaveBeenCalledTimes(2);
 
     manager.dispose();
-    adminModeStore.dispose();
+    elevatedModeStore.dispose();
   });
 
-  it("dispose stops reacting to admin mode changes", () => {
-    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
+  it("dispose stops reacting to elevated mode changes", () => {
+    const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
     const baselineAuth = createBearerTokenAuth("baseline");
 
     const createCore = vi.fn(() => createFakeCore({ status: "connected" }).core as any);
@@ -199,18 +199,18 @@ describe("createOperatorCoreManager", () => {
       wsUrl: "ws://example",
       httpBaseUrl: "http://example",
       baselineAuth,
-      adminModeStore,
+      elevatedModeStore,
       createCore,
     });
 
     manager.dispose();
 
-    adminModeStore.enter({
+    elevatedModeStore.enter({
       elevatedToken: "elevated",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     });
 
     expect(createCore).toHaveBeenCalledTimes(1);
-    adminModeStore.dispose();
+    elevatedModeStore.dispose();
   });
 });

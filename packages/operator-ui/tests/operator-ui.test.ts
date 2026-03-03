@@ -10,7 +10,7 @@ import {
   createOperatorCore,
 } from "../../operator-core/src/index.js";
 import type { OperatorWsClient, OperatorHttpClient } from "../../operator-core/src/deps.js";
-import { AdminModeGate, AdminModeProvider, OperatorUiApp } from "../src/index.js";
+import { ElevatedModeGate, ElevatedModeProvider, OperatorUiApp } from "../src/index.js";
 import * as operatorUi from "../src/index.js";
 import { PairingPage } from "../src/components/pages/pairing-page.js";
 import { stubMatchMedia } from "./test-utils.js";
@@ -28,15 +28,15 @@ function openSettings(container: HTMLElement): void {
   });
 }
 
-async function openAdminTab(
+async function openConfigureTab(
   container: HTMLElement,
   tabTestId = "admin-http-tab-gateway",
 ): Promise<void> {
-  const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
-  expect(adminLink).not.toBeNull();
+  const configureLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-configure"]');
+  expect(configureLink).not.toBeNull();
 
   await act(async () => {
-    adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    configureLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await Promise.resolve();
   });
 
@@ -413,8 +413,9 @@ describe("operator-ui", () => {
     vi.restoreAllMocks();
   });
 
-  it("does not export AdminModeBanner from the public API", () => {
+  it("does not export internal mode banners from the public API", () => {
     expect("AdminModeBanner" in operatorUi).toBe(false);
+    expect("ElevatedModeBanner" in operatorUi).toBe(false);
   });
 
   it("applies the stored theme mode when mounting OperatorUiApp", () => {
@@ -580,7 +581,7 @@ describe("operator-ui", () => {
 
     expect(container.querySelector('[data-testid="login-button"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="nav-dashboard"]')).toBeNull();
-    expect(container.querySelector('[data-testid="nav-admin"]')).toBeNull();
+    expect(container.querySelector('[data-testid="nav-configure"]')).toBeNull();
     expect(container.textContent).not.toContain("Connection status:");
 
     act(() => {
@@ -658,7 +659,7 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("renders an Admin nav item and strict admin section tabs", () => {
+  it("renders a Configure nav item and strict admin section tabs", () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -678,14 +679,16 @@ describe("operator-ui", () => {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
 
-      const adminLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-admin"]');
-      expect(adminLink).not.toBeNull();
+      const configureLink = container.querySelector<HTMLButtonElement>(
+        '[data-testid="nav-configure"]',
+      );
+      expect(configureLink).not.toBeNull();
 
       act(() => {
-        adminLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        configureLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
 
-      expect(container.querySelector("[data-testid='admin-page']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='configure-page']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-tab-http']")).toBeNull();
       expect(container.querySelector("[data-testid='admin-tab-ws']")).toBeNull();
       expect(container.querySelector("[data-testid='admin-http-tab-policy-auth']")).not.toBeNull();
@@ -700,7 +703,7 @@ describe("operator-ui", () => {
         container.querySelector("[data-testid='admin-http-tab-models-refresh']"),
       ).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-ws-tab-commands']")).not.toBeNull();
-      expect(container.querySelector("[data-testid='admin-read-only-notice']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='configure-read-only-notice']")).not.toBeNull();
     } finally {
       act(() => {
         root?.unmount();
@@ -709,7 +712,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("renders Admin section panels when Admin Mode is active", async () => {
+  it("renders Configure section panels when Elevated Mode is active", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -719,7 +722,7 @@ describe("operator-ui", () => {
       deps: { ws, http },
     });
 
-    core.adminModeStore.enter({
+    core.elevatedModeStore.enter({
       elevatedToken: "elevated-test-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
@@ -733,13 +736,13 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminTab(container, "admin-http-tab-gateway");
+      await openConfigureTab(container, "admin-http-tab-gateway");
       expect(container.querySelector("[data-testid='admin-http-device-tokens']")).not.toBeNull();
 
-      await openAdminTab(container, "admin-http-tab-plugins");
+      await openConfigureTab(container, "admin-http-tab-plugins");
       expect(container.querySelector("[data-testid='admin-http-plugins']")).not.toBeNull();
 
-      await openAdminTab(container, "admin-http-tab-models-refresh");
+      await openConfigureTab(container, "admin-http-tab-models-refresh");
       expect(container.querySelector("[data-testid='admin-http-models-refresh']")).not.toBeNull();
     } finally {
       act(() => {
@@ -749,7 +752,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("requires confirmation before issuing a device token from the Admin hub", async () => {
+  it("requires confirmation before issuing a device token from Configure", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -759,7 +762,7 @@ describe("operator-ui", () => {
       deps: { ws, http },
     });
 
-    core.adminModeStore.enter({
+    core.elevatedModeStore.enter({
       elevatedToken: "elevated-test-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
@@ -773,7 +776,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminTab(container, "admin-http-tab-gateway");
+      await openConfigureTab(container, "admin-http-tab-gateway");
       const issueButton = container.querySelector<HTMLButtonElement>(
         '[data-testid="admin-http-device-tokens-issue"]',
       );
@@ -805,7 +808,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("requires confirmation before revoking a device token from the Admin hub", async () => {
+  it("requires confirmation before revoking a device token from Configure", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -815,7 +818,7 @@ describe("operator-ui", () => {
       deps: { ws, http },
     });
 
-    core.adminModeStore.enter({
+    core.elevatedModeStore.enter({
       elevatedToken: "elevated-test-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
@@ -829,7 +832,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminTab(container, "admin-http-tab-gateway");
+      await openConfigureTab(container, "admin-http-tab-gateway");
       const deviceTokensCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-device-tokens"]',
       );
@@ -874,7 +877,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("disables Admin hub Plugins.get until a plugin id is provided", async () => {
+  it("disables Configure Plugins.get until a plugin id is provided", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -884,7 +887,7 @@ describe("operator-ui", () => {
       deps: { ws, http },
     });
 
-    core.adminModeStore.enter({
+    core.elevatedModeStore.enter({
       elevatedToken: "elevated-test-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
@@ -898,7 +901,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminTab(container, "admin-http-tab-plugins");
+      await openConfigureTab(container, "admin-http-tab-plugins");
       const pluginsCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-plugins"]',
       );
@@ -937,7 +940,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("does not render the deprecated Contracts panel in the Admin hub", async () => {
+  it("does not render the deprecated Contracts panel in Configure", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -947,7 +950,7 @@ describe("operator-ui", () => {
       deps: { ws, http },
     });
 
-    core.adminModeStore.enter({
+    core.elevatedModeStore.enter({
       elevatedToken: "elevated-test-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
@@ -961,7 +964,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminTab(container, "admin-http-tab-gateway");
+      await openConfigureTab(container, "admin-http-tab-gateway");
       expect(container.querySelector('[data-testid="admin-http-contracts"]')).toBeNull();
     } finally {
       act(() => {
@@ -971,7 +974,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("disables Admin hub Plugins actions while a request is in flight", async () => {
+  it("disables Configure Plugins actions while a request is in flight", async () => {
     const listDeferred = createDeferred<Response>();
     const getDeferred = createDeferred<Response>();
 
@@ -1000,7 +1003,7 @@ describe("operator-ui", () => {
       deps: { ws, http },
     });
 
-    core.adminModeStore.enter({
+    core.elevatedModeStore.enter({
       elevatedToken: "elevated-test-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
@@ -1015,7 +1018,7 @@ describe("operator-ui", () => {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
 
-      await openAdminTab(container, "admin-http-tab-plugins");
+      await openConfigureTab(container, "admin-http-tab-plugins");
       const pluginsCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-plugins"]',
       );
@@ -1113,7 +1116,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("disables Admin hub models refresh action while a request is in flight", async () => {
+  it("disables Configure models refresh action while a request is in flight", async () => {
     const refreshDeferred = createDeferred<Response>();
 
     const ws = new FakeWsClient();
@@ -1125,7 +1128,7 @@ describe("operator-ui", () => {
       deps: { ws, http },
     });
 
-    core.adminModeStore.enter({
+    core.elevatedModeStore.enter({
       elevatedToken: "elevated-test-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
@@ -1143,7 +1146,7 @@ describe("operator-ui", () => {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
 
-      await openAdminTab(container, "admin-http-tab-models-refresh");
+      await openConfigureTab(container, "admin-http-tab-models-refresh");
       const openButton = container.querySelector<HTMLButtonElement>(
         '[data-testid="admin-http-models-refresh-open"]',
       );
@@ -1205,7 +1208,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("keeps Admin hub Plugins.get download filename stable after input changes", async () => {
+  it("keeps Configure Plugins.get download filename stable after input changes", async () => {
     const { restore } = stubUrlObjectUrls();
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -1253,7 +1256,7 @@ describe("operator-ui", () => {
       deps: { ws, http },
     });
 
-    core.adminModeStore.enter({
+    core.elevatedModeStore.enter({
       elevatedToken: "elevated-test-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
@@ -1267,7 +1270,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminTab(container, "admin-http-tab-plugins");
+      await openConfigureTab(container, "admin-http-tab-plugins");
       const pluginsCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-plugins"]',
       );
@@ -1315,7 +1318,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("requires confirmation before refreshing models from the Admin hub", async () => {
+  it("requires confirmation before refreshing models from Configure", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -1325,7 +1328,7 @@ describe("operator-ui", () => {
       deps: { ws, http },
     });
 
-    core.adminModeStore.enter({
+    core.elevatedModeStore.enter({
       elevatedToken: "elevated-test-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
@@ -1347,7 +1350,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminTab(container, "admin-http-tab-models-refresh");
+      await openConfigureTab(container, "admin-http-tab-models-refresh");
 
       const refreshButton = container.querySelector<HTMLButtonElement>(
         '[data-testid="admin-http-models-refresh-open"]',
@@ -1405,7 +1408,7 @@ describe("operator-ui", () => {
       deps: { ws, http },
     });
 
-    core.adminModeStore.enter({
+    core.elevatedModeStore.enter({
       elevatedToken: "elevated-test-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
@@ -1419,7 +1422,7 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openAdminTab(container, "admin-http-tab-gateway");
+      await openConfigureTab(container, "admin-http-tab-gateway");
       const deviceTokensCard = container.querySelector<HTMLElement>(
         '[data-testid="admin-http-device-tokens"]',
       );
@@ -3566,7 +3569,7 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("shows an Admin Mode banner with TTL and allows exit", () => {
+  it("shows an Elevated Mode banner with TTL and allows exit", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
 
@@ -3588,20 +3591,20 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    expect(container.querySelector('[data-testid="admin-mode-banner"]')).toBeNull();
+    expect(container.querySelector('[data-testid="elevated-mode-banner"]')).toBeNull();
 
     act(() => {
       const expiresAt = new Date(Date.now() + 5_000).toISOString();
-      core.adminModeStore.enter({ elevatedToken: "elevated-token", expiresAt });
+      core.elevatedModeStore.enter({ elevatedToken: "elevated-token", expiresAt });
     });
 
-    const banner = container.querySelector('[data-testid="admin-mode-banner"]');
+    const banner = container.querySelector('[data-testid="elevated-mode-banner"]');
     expect(banner).not.toBeNull();
-    expect(banner?.textContent).toContain("Admin Mode");
+    expect(banner?.textContent).toContain("Elevated Mode");
     expect(banner?.textContent).toMatch(/\d+:\d{2}/);
 
     const exitButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="admin-mode-exit"]',
+      '[data-testid="elevated-mode-exit"]',
     );
     expect(exitButton).not.toBeNull();
 
@@ -3609,7 +3612,7 @@ describe("operator-ui", () => {
       exitButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(container.querySelector('[data-testid="admin-mode-banner"]')).toBeNull();
+    expect(container.querySelector('[data-testid="elevated-mode-banner"]')).toBeNull();
 
     act(() => {
       root?.unmount();
@@ -3617,7 +3620,7 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("gates an admin-only Settings action behind Admin Mode", async () => {
+  it("gates an admin-only Settings action behind Elevated Mode", async () => {
     const issuedAt = "2026-02-27T00:00:00.000Z";
     const expiresAt = "2026-02-27T00:10:00.000Z";
     vi.useFakeTimers();
@@ -3631,20 +3634,26 @@ describe("operator-ui", () => {
       "operator.admin",
     ];
 
-    const issueDeviceToken = vi.fn(async () => ({
-      token_kind: "device" as const,
-      token: "elevated-device-token",
-      token_id: "token-1",
-      device_id: "operator-ui",
-      role: "client" as const,
-      scopes: expectedScopes,
-      issued_at: issuedAt,
-      expires_at: expiresAt,
-    }));
-    const revokeDeviceToken = vi.fn(async () => ({
-      revoked: true,
-      token_id: "token-1",
-    }));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect(init?.method).toBe("POST");
+      expect(headers.get("authorization")).toBe("Bearer admin-token");
+
+      return new Response(
+        JSON.stringify({
+          token_kind: "device",
+          token: "elevated-device-token",
+          token_id: "token-1",
+          device_id: "operator-ui",
+          role: "client",
+          scopes: expectedScopes,
+          issued_at: issuedAt,
+          expires_at: expiresAt,
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -3652,16 +3661,7 @@ describe("operator-ui", () => {
       wsUrl: "ws://example.test/ws",
       httpBaseUrl: "http://example.test",
       auth: createBearerTokenAuth("baseline"),
-      deps: {
-        ws,
-        http: {
-          ...http,
-          deviceTokens: {
-            issue: issueDeviceToken,
-            revoke: revokeDeviceToken,
-          },
-        },
-      },
+      deps: { ws, http },
     });
 
     const container = document.createElement("div");
@@ -3676,10 +3676,10 @@ describe("operator-ui", () => {
     openSettings(container);
 
     expect(container.querySelector('[data-testid="settings-admin-command-execute"]')).toBeNull();
-    expect(container.textContent).toContain("Enter Admin Mode to continue");
+    expect(container.textContent).toContain("Enter Elevated Mode to continue");
 
     const enterButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="admin-mode-enter"]',
+      '[data-testid="elevated-mode-enter"]',
     );
     expect(enterButton).not.toBeNull();
 
@@ -3687,11 +3687,16 @@ describe("operator-ui", () => {
       enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(document.querySelector('[data-testid="admin-mode-token"]')).toBeNull();
-    expect(document.querySelector('[data-testid="admin-mode-token-toggle"]')).toBeNull();
+    const tokenField = document.querySelector<HTMLInputElement>(
+      '[data-testid="elevated-mode-token"]',
+    );
+    expect(tokenField).not.toBeNull();
+    act(() => {
+      tokenField!.value = "admin-token";
+    });
 
     const confirmCheckbox = document.querySelector<HTMLInputElement>(
-      '[data-testid="admin-mode-confirm"]',
+      '[data-testid="elevated-mode-confirm"]',
     );
     expect(confirmCheckbox).not.toBeNull();
     act(() => {
@@ -3700,7 +3705,7 @@ describe("operator-ui", () => {
     });
 
     const submitButton = document.querySelector<HTMLButtonElement>(
-      '[data-testid="admin-mode-submit"]',
+      '[data-testid="elevated-mode-submit"]',
     );
     expect(submitButton).not.toBeNull();
 
@@ -3709,19 +3714,21 @@ describe("operator-ui", () => {
       await Promise.resolve();
     });
 
-    expect(issueDeviceToken).toHaveBeenCalledTimes(1);
-    expect(issueDeviceToken).toHaveBeenCalledWith(
-      expect.objectContaining({
-        ttl_seconds: 60 * 10,
-        scopes: expect.arrayContaining(expectedScopes),
-      }),
-    );
-    expect(core.adminModeStore.getSnapshot()).toMatchObject({
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, callInit] = fetchMock.mock.calls[0] ?? [];
+    const bodyText = typeof callInit?.body === "string" ? callInit.body : "";
+    const body = JSON.parse(bodyText) as { scopes?: unknown; ttl_seconds?: unknown };
+    expect(body).toMatchObject({
+      ttl_seconds: 60 * 10,
+    });
+    expect(body.scopes).toEqual(expect.arrayContaining(expectedScopes));
+    expect(body.scopes).toHaveLength(expectedScopes.length);
+    expect(core.elevatedModeStore.getSnapshot()).toMatchObject({
       status: "active",
       elevatedToken: "elevated-device-token",
       expiresAt,
     });
-    expect(container.querySelector('[data-testid="admin-mode-banner"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="elevated-mode-banner"]')).not.toBeNull();
     expect(
       container.querySelector('[data-testid="settings-admin-command-execute"]'),
     ).not.toBeNull();
@@ -3753,234 +3760,33 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("uses desktop-managed auth without requiring token entry in desktop mode", async () => {
-    const issuedAt = new Date().toISOString();
-    const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
-
-    const ws = new FakeWsClient();
-    const { http } = createFakeHttpClient();
-    const fallbackIssue = vi.fn(async () => ({
-      token_kind: "device" as const,
-      token: "desktop-elevated-token",
-      token_id: "token-1",
-      device_id: "operator-ui",
-      role: "client" as const,
-      scopes: ["operator.admin"],
-      issued_at: issuedAt,
-      expires_at: expiresAt,
-    }));
-    const fallbackRevoke = vi.fn(async () => ({ revoked: true, token_id: "token-1" }));
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("desktop-baseline-token"),
-      deps: {
-        ws,
-        http: {
-          ...http,
-          deviceTokens: {
-            issue: fallbackIssue,
-            revoke: fallbackRevoke,
-          },
-        },
-      },
-    });
-
-    const desktopHttpFetch = vi.fn(async () => ({
-      status: 200,
-      headers: { "content-type": "application/json" },
-      bodyText: JSON.stringify({ status: "ok" }),
-    }));
-    (window as unknown as Record<string, unknown>)["tyrumDesktop"] = {
-      gateway: {
-        httpFetch: desktopHttpFetch,
-      },
-    };
-
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
-    act(() => {
-      root = createRoot(container);
-      root.render(
-        React.createElement(AdminModeProvider, {
-          core,
-          mode: "desktop",
-          children: React.createElement(
-            AdminModeGate,
-            null,
-            React.createElement(
-              "button",
-              { type: "button", "data-testid": "danger-action" },
-              "Danger action",
-            ),
-          ),
-        }),
-      );
-    });
-
-    const enterButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="admin-mode-enter"]',
-    );
-    expect(enterButton).not.toBeNull();
-    act(() => {
-      enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(document.querySelector('[data-testid="admin-mode-token"]')).toBeNull();
-    expect(document.querySelector('[data-testid="admin-mode-token-toggle"]')).toBeNull();
-
-    const confirmCheckbox = document.querySelector<HTMLInputElement>(
-      '[data-testid="admin-mode-confirm"]',
-    );
-    expect(confirmCheckbox).not.toBeNull();
-    act(() => {
-      confirmCheckbox!.checked = true;
-      confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    const submitButton = document.querySelector<HTMLButtonElement>(
-      '[data-testid="admin-mode-submit"]',
-    );
-    expect(submitButton).not.toBeNull();
-    await act(async () => {
-      submitButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(desktopHttpFetch).toHaveBeenCalledTimes(0);
-    expect(fallbackIssue).toHaveBeenCalledTimes(1);
-    expect(core.adminModeStore.getSnapshot()).toMatchObject({
-      status: "active",
-      elevatedToken: "desktop-elevated-token",
-      expiresAt,
-    });
-    expect(container.querySelector('[data-testid="danger-action"]')).not.toBeNull();
-
-    act(() => {
-      root?.unmount();
-    });
-    container.remove();
-    delete (window as unknown as Record<string, unknown>)["tyrumDesktop"];
-  });
-
-  it("gates admin-only actions behind a shared Admin Mode flow", async () => {
+  it("gates admin-only actions behind a shared Elevated Mode flow", async () => {
     const issuedAt = "2026-02-27T00:00:00.000Z";
     const expiresAt = "2026-02-27T00:10:00.000Z";
     vi.useFakeTimers();
     vi.setSystemTime(new Date(issuedAt));
 
-    const issueDeviceToken = vi.fn(async () => ({
-      token_kind: "device" as const,
-      token: "elevated-device-token",
-      token_id: "token-1",
-      device_id: "operator-ui",
-      role: "client" as const,
-      scopes: ["operator.admin"],
-      issued_at: issuedAt,
-      expires_at: expiresAt,
-    }));
-    const revokeDeviceToken = vi.fn(async () => ({
-      revoked: true,
-      token_id: "token-1",
-    }));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect(init?.method).toBe("POST");
+      expect(headers.get("authorization")).toBe("Bearer admin-token");
 
-    const ws = new FakeWsClient();
-    const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("baseline"),
-      deps: {
-        ws,
-        http: {
-          ...http,
-          deviceTokens: {
-            issue: issueDeviceToken,
-            revoke: revokeDeviceToken,
-          },
-        },
-      },
-    });
-
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
-    act(() => {
-      root = createRoot(container);
-      root.render(
-        React.createElement(AdminModeProvider, {
-          core,
-          mode: "web",
-          children: React.createElement(
-            AdminModeGate,
-            null,
-            React.createElement(
-              "button",
-              { type: "button", "data-testid": "danger-action" },
-              "Danger action",
-            ),
-          ),
+      return new Response(
+        JSON.stringify({
+          token_kind: "device",
+          token: "elevated-device-token",
+          token_id: "token-1",
+          device_id: "operator-ui",
+          role: "client",
+          scopes: ["operator.admin"],
+          issued_at: issuedAt,
+          expires_at: expiresAt,
         }),
+        { status: 201, headers: { "content-type": "application/json" } },
       );
     });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
-    expect(container.querySelector('[data-testid="danger-action"]')).toBeNull();
-    expect(container.textContent).toContain("Enter Admin Mode to continue");
-
-    const enterButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="admin-mode-enter"]',
-    );
-    expect(enterButton).not.toBeNull();
-
-    act(() => {
-      enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const dialog = document.querySelector('[data-testid="admin-mode-dialog"]');
-    expect(dialog).not.toBeNull();
-
-    expect(document.querySelector('[data-testid="admin-mode-token"]')).toBeNull();
-    expect(document.querySelector('[data-testid="admin-mode-token-toggle"]')).toBeNull();
-
-    const confirmCheckbox = document.querySelector<HTMLInputElement>(
-      '[data-testid="admin-mode-confirm"]',
-    );
-    expect(confirmCheckbox).not.toBeNull();
-    act(() => {
-      confirmCheckbox!.checked = true;
-      confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    const submitButton = document.querySelector<HTMLButtonElement>(
-      '[data-testid="admin-mode-submit"]',
-    );
-    expect(submitButton).not.toBeNull();
-
-    await act(async () => {
-      submitButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(issueDeviceToken).toHaveBeenCalledTimes(1);
-    expect(core.adminModeStore.getSnapshot()).toMatchObject({
-      status: "active",
-      elevatedToken: "elevated-device-token",
-      expiresAt,
-    });
-
-    expect(container.querySelector('[data-testid="admin-mode-banner"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="danger-action"]')).not.toBeNull();
-
-    act(() => {
-      root?.unmount();
-    });
-    container.remove();
-  });
-
-  it("renders an accessible Admin Mode dialog and closes on Escape", () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -3997,11 +3803,118 @@ describe("operator-ui", () => {
     act(() => {
       root = createRoot(container);
       root.render(
-        React.createElement(AdminModeProvider, {
+        React.createElement(ElevatedModeProvider, {
           core,
           mode: "web",
           children: React.createElement(
-            AdminModeGate,
+            ElevatedModeGate,
+            null,
+            React.createElement(
+              "button",
+              { type: "button", "data-testid": "danger-action" },
+              "Danger action",
+            ),
+          ),
+        }),
+      );
+    });
+
+    expect(container.querySelector('[data-testid="danger-action"]')).toBeNull();
+    expect(container.textContent).toContain("Enter Elevated Mode to continue");
+
+    const enterButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="elevated-mode-enter"]',
+    );
+    expect(enterButton).not.toBeNull();
+
+    act(() => {
+      enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = document.querySelector('[data-testid="elevated-mode-dialog"]');
+    expect(dialog).not.toBeNull();
+
+    const tokenField = document.querySelector<HTMLInputElement>(
+      '[data-testid="elevated-mode-token"]',
+    );
+    expect(tokenField).not.toBeNull();
+    expect(tokenField!.type).toBe("password");
+    expect(tokenField!.getAttribute("autocomplete")).toBe("off");
+
+    const toggleTokenButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="elevated-mode-token-toggle"]',
+    );
+    expect(toggleTokenButton).not.toBeNull();
+    act(() => {
+      toggleTokenButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(tokenField!.type).toBe("text");
+    act(() => {
+      toggleTokenButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(tokenField!.type).toBe("password");
+
+    act(() => {
+      tokenField!.value = "  admin-token  ";
+    });
+
+    const confirmCheckbox = document.querySelector<HTMLInputElement>(
+      '[data-testid="elevated-mode-confirm"]',
+    );
+    expect(confirmCheckbox).not.toBeNull();
+    act(() => {
+      confirmCheckbox!.checked = true;
+      confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const submitButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="elevated-mode-submit"]',
+    );
+    expect(submitButton).not.toBeNull();
+
+    await act(async () => {
+      submitButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(core.elevatedModeStore.getSnapshot()).toMatchObject({
+      status: "active",
+      elevatedToken: "elevated-device-token",
+      expiresAt,
+    });
+
+    expect(container.querySelector('[data-testid="elevated-mode-banner"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="danger-action"]')).not.toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("renders an accessible Elevated Mode dialog and closes on Escape", () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(ElevatedModeProvider, {
+          core,
+          mode: "web",
+          children: React.createElement(
+            ElevatedModeGate,
             null,
             React.createElement(
               "button",
@@ -4014,7 +3927,7 @@ describe("operator-ui", () => {
     });
 
     const enterButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="admin-mode-enter"]',
+      '[data-testid="elevated-mode-enter"]',
     );
     expect(enterButton).not.toBeNull();
 
@@ -4022,26 +3935,24 @@ describe("operator-ui", () => {
       enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const dialog = document.querySelector('[data-testid="admin-mode-dialog"]');
+    const dialog = document.querySelector('[data-testid="elevated-mode-dialog"]');
     expect(dialog).not.toBeNull();
 
     expect(dialog?.getAttribute("role")).toBe("dialog");
     expect(dialog?.getAttribute("aria-modal")).toBe("true");
     expect(dialog?.getAttribute("aria-labelledby")).toBeTruthy();
 
-    const confirmCheckbox = document.querySelector<HTMLInputElement>(
-      '[data-testid="admin-mode-confirm"]',
+    const tokenField = document.querySelector<HTMLInputElement>(
+      '[data-testid="elevated-mode-token"]',
     );
-    expect(confirmCheckbox).not.toBeNull();
-    expect(document.activeElement).toBe(confirmCheckbox);
+    expect(tokenField).not.toBeNull();
+    expect(tokenField!.type).toBe("password");
 
     act(() => {
-      confirmCheckbox?.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-      );
+      tokenField?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
 
-    expect(document.querySelector('[data-testid="admin-mode-dialog"]')).toBeNull();
+    expect(document.querySelector('[data-testid="elevated-mode-dialog"]')).toBeNull();
 
     act(() => {
       root?.unmount();

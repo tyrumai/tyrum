@@ -272,7 +272,7 @@ function AuditForgetTab({
               requestEnter();
             }}
           >
-            Enter Admin Mode
+            Enter Elevated Mode
           </Button>
         ) : null}
         <Button
@@ -300,7 +300,7 @@ function AuditForgetTab({
         onConfirm={async () => {
           if (!canMutate) {
             requestEnter();
-            throw new Error("Enter Admin Mode to forget audit receipts.");
+            throw new Error("Enter Elevated Mode to forget audit receipts.");
           }
           if (!resolvedEntityType || !resolvedEntityId) return;
           await action.run(

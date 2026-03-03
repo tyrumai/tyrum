@@ -1,19 +1,19 @@
-import { selectAuthForAdminMode, type OperatorAuthStrategy } from "./auth.js";
+import { selectAuthForElevatedMode, type OperatorAuthStrategy } from "./auth.js";
 import { createOperatorCore, type OperatorCore } from "./operator-core.js";
-import type { AdminModeStore } from "./stores/admin-mode-store.js";
+import type { ElevatedModeStore } from "./stores/elevated-mode-store.js";
 
 export type OperatorCoreFactory = (options: {
   wsUrl: string;
   httpBaseUrl: string;
   auth: OperatorAuthStrategy;
-  adminModeStore: AdminModeStore;
+  elevatedModeStore: ElevatedModeStore;
 }) => OperatorCore;
 
 export type OperatorCoreManagerOptions = {
   wsUrl: string;
   httpBaseUrl: string;
   baselineAuth: OperatorAuthStrategy;
-  adminModeStore: AdminModeStore;
+  elevatedModeStore: ElevatedModeStore;
   createCore?: OperatorCoreFactory;
 };
 
@@ -49,19 +49,19 @@ export function createOperatorCoreManager(
         wsUrl: coreOptions.wsUrl,
         httpBaseUrl: coreOptions.httpBaseUrl,
         auth: coreOptions.auth,
-        adminModeStore: coreOptions.adminModeStore,
+        elevatedModeStore: coreOptions.elevatedModeStore,
       }));
 
-  let auth = selectAuthForAdminMode({
+  let auth = selectAuthForElevatedMode({
     baseline: options.baselineAuth,
-    adminMode: options.adminModeStore.getSnapshot(),
+    elevatedMode: options.elevatedModeStore.getSnapshot(),
   });
 
   let core = createCore({
     wsUrl: options.wsUrl,
     httpBaseUrl: options.httpBaseUrl,
     auth,
-    adminModeStore: options.adminModeStore,
+    elevatedModeStore: options.elevatedModeStore,
   });
 
   const listeners = new Set<() => void>();
@@ -81,10 +81,10 @@ export function createOperatorCoreManager(
     }
   };
 
-  const unsubAdminMode = options.adminModeStore.subscribe(() => {
-    const nextAuth = selectAuthForAdminMode({
+  const unsubElevatedMode = options.elevatedModeStore.subscribe(() => {
+    const nextAuth = selectAuthForElevatedMode({
       baseline: options.baselineAuth,
-      adminMode: options.adminModeStore.getSnapshot(),
+      elevatedMode: options.elevatedModeStore.getSnapshot(),
     });
     if (isSameAuth(auth, nextAuth)) return;
 
@@ -95,7 +95,7 @@ export function createOperatorCoreManager(
       wsUrl: options.wsUrl,
       httpBaseUrl: options.httpBaseUrl,
       auth: nextAuth,
-      adminModeStore: options.adminModeStore,
+      elevatedModeStore: options.elevatedModeStore,
     });
     auth = nextAuth;
 
@@ -119,7 +119,7 @@ export function createOperatorCoreManager(
       };
     },
     dispose() {
-      unsubAdminMode();
+      unsubElevatedMode();
       core.dispose();
       listeners.clear();
     },

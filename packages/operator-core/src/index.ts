@@ -2,7 +2,7 @@ export {
   createBearerTokenAuth,
   createBrowserCookieAuth,
   httpAuthForAuth,
-  selectAuthForAdminMode,
+  selectAuthForElevatedMode,
   wsTokenForAuth,
 } from "./auth.js";
 export type { OperatorAuthStrategy } from "./auth.js";
@@ -10,12 +10,12 @@ export type { OperatorAuthStrategy } from "./auth.js";
 export { createGatewayAuthSession } from "./auth-session.js";
 
 export {
-  AdminModeRequiredError,
-  gateAdminMode,
-  formatAdminModeRemaining,
-  isAdminModeActive,
-  requireAdminMode,
-} from "./admin-mode.js";
+  ElevatedModeRequiredError,
+  gateElevatedMode,
+  formatElevatedModeRemaining,
+  isElevatedModeActive,
+  requireElevatedMode,
+} from "./elevated-mode.js";
 
 export { createOperatorCore } from "./operator-core.js";
 export type { OperatorCore, OperatorCoreOptions } from "./operator-core.js";
@@ -34,11 +34,11 @@ export type { ExternalStore, Unsubscribe } from "./store.js";
 export type { OperatorCoreError, OperatorCoreErrorKind } from "./operator-error.js";
 
 export {
-  createAdminModeStore,
-  type AdminModeState,
-  type AdminModeStatus,
-  type AdminModeStore,
-} from "./stores/admin-mode-store.js";
+  createElevatedModeStore,
+  type ElevatedModeState,
+  type ElevatedModeStatus,
+  type ElevatedModeStore,
+} from "./stores/elevated-mode-store.js";
 
 export type { ApprovalsState, ApprovalsStore } from "./stores/approvals-store.js";
 export type { ConnectionState, ConnectionStore } from "./stores/connection-store.js";

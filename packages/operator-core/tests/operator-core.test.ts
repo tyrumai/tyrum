@@ -14,7 +14,11 @@ import type {
   TyrumHttpClient,
   UsageResponse,
 } from "@tyrum/client";
-import { createAdminModeStore, createBearerTokenAuth, createOperatorCore } from "../src/index.js";
+import {
+  createElevatedModeStore,
+  createBearerTokenAuth,
+  createOperatorCore,
+} from "../src/index.js";
 
 type Handler = (data: unknown) => void;
 
@@ -351,7 +355,7 @@ describe("operator-core wiring", () => {
     ).toBeDefined();
   });
 
-  it("exposes adminModeStore as a single source of truth", () => {
+  it("exposes elevatedModeStore as a single source of truth", () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();
 
@@ -362,7 +366,7 @@ describe("operator-core wiring", () => {
       deps: { ws, http },
     });
 
-    expect(core.adminModeStore.getSnapshot()).toMatchObject({
+    expect(core.elevatedModeStore.getSnapshot()).toMatchObject({
       status: "inactive",
       elevatedToken: null,
       expiresAt: null,
@@ -705,16 +709,16 @@ describe("operator-core wiring", () => {
     expect(ws.disconnect).toHaveBeenCalledTimes(1);
   });
 
-  it("does not dispose an injected adminModeStore", () => {
+  it("does not dispose an injected elevatedModeStore", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
 
     try {
       const ws = new FakeWsClient();
       const http = createFakeHttpClient();
-      const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
+      const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
 
-      adminModeStore.enter({
+      elevatedModeStore.enter({
         elevatedToken: "elevated-token",
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
       });
@@ -724,15 +728,15 @@ describe("operator-core wiring", () => {
         httpBaseUrl: "http://127.0.0.1:8788",
         auth: createBearerTokenAuth("baseline-token"),
         deps: { ws, http },
-        adminModeStore,
+        elevatedModeStore,
       });
 
-      expect(core.adminModeStore).toBe(adminModeStore);
+      expect(core.elevatedModeStore).toBe(elevatedModeStore);
 
       core.dispose();
 
-      expect(adminModeStore.getSnapshot().status).toBe("active");
-      adminModeStore.dispose();
+      expect(elevatedModeStore.getSnapshot().status).toBe("active");
+      elevatedModeStore.dispose();
     } finally {
       vi.useRealTimers();
     }
