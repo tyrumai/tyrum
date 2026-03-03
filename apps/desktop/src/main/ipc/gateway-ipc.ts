@@ -1,6 +1,6 @@
 import { ipcMain, type BrowserWindow } from "electron";
 import { GatewayManager } from "../gateway-manager.js";
-import { loadConfig, saveConfig } from "../config/store.js";
+import { configExists, loadConfig, saveConfig } from "../config/store.js";
 import { decryptToken, generateToken, encryptToken } from "../config/token-store.js";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -23,6 +23,55 @@ export interface OperatorConnectionInfo {
 }
 
 let startPromise: Promise<void> | null = null;
+let embeddedGatewayAccessToken: string | null = null;
+
+type EmbeddedGatewayTokenRecoveryContext = "running" | "started";
+
+const EMBEDDED_GATEWAY_TOKEN_RECOVERY_MESSAGES: Record<
+  EmbeddedGatewayTokenRecoveryContext,
+  {
+    missingTokenRefError: string;
+    decryptWarn: string;
+    decryptFailError: string;
+  }
+> = {
+  running: {
+    missingTokenRefError:
+      "Embedded gateway is running but the stored token is missing. Restart the embedded gateway from the Desktop app.",
+    decryptWarn:
+      "Failed to decrypt embedded gateway token while the gateway is running; refusing to rotate token.",
+    decryptFailError:
+      "Embedded gateway token could not be decrypted while the gateway is running. Restart the embedded gateway from the Desktop app.",
+  },
+  started: {
+    missingTokenRefError:
+      "Embedded gateway started but the stored token is missing. Restart the embedded gateway from the Desktop app.",
+    decryptWarn: "Failed to decrypt embedded gateway token after start; refusing to rotate token.",
+    decryptFailError:
+      "Embedded gateway token could not be decrypted after starting. Restart the embedded gateway from the Desktop app.",
+  },
+};
+
+function recoverEmbeddedGatewayAccessToken(
+  config: DesktopNodeConfig,
+  context: EmbeddedGatewayTokenRecoveryContext,
+): string {
+  if (embeddedGatewayAccessToken) return embeddedGatewayAccessToken;
+
+  const messages = EMBEDDED_GATEWAY_TOKEN_RECOVERY_MESSAGES[context];
+  const tokenRef = config.embedded.tokenRef;
+  if (!tokenRef) {
+    throw new Error(messages.missingTokenRefError);
+  }
+
+  try {
+    embeddedGatewayAccessToken = decryptToken(tokenRef);
+    return embeddedGatewayAccessToken;
+  } catch (error) {
+    console.warn(messages.decryptWarn, error);
+    throw new Error(messages.decryptFailError);
+  }
+}
 
 function createAndStoreEmbeddedGatewayToken(config: DesktopNodeConfig): string {
   const token = generateToken();
@@ -79,7 +128,20 @@ function resolveOperatorHttpBaseUrl(config: DesktopNodeConfig): string {
 
 export function resolveOperatorConnection(config: DesktopNodeConfig): OperatorConnectionInfo {
   if (config.mode === "embedded") {
-    const token = ensureEmbeddedGatewayToken(config);
+    const token = (() => {
+      if (embeddedGatewayAccessToken) return embeddedGatewayAccessToken;
+      const mgr = manager;
+      if (mgr?.status === "running") {
+        return recoverEmbeddedGatewayAccessToken(config, "running");
+      }
+      if (startPromise) {
+        return recoverEmbeddedGatewayAccessToken(config, "started");
+      }
+
+      const ensured = ensureEmbeddedGatewayToken(config);
+      embeddedGatewayAccessToken = ensured;
+      return ensured;
+    })();
     const port = config.embedded.port;
     return {
       mode: "embedded",
@@ -107,17 +169,18 @@ export function resolveOperatorConnection(config: DesktopNodeConfig): OperatorCo
 async function startEmbeddedGatewayWithConfig(
   mgr: GatewayManager,
   config: DesktopNodeConfig,
-): Promise<void> {
+): Promise<string> {
   if (mgr.status === "running") {
-    return;
+    return recoverEmbeddedGatewayAccessToken(config, "running");
   }
   if (startPromise) {
     await startPromise;
-    return;
+    return recoverEmbeddedGatewayAccessToken(config, "started");
   }
 
-  const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
   const accessToken = ensureEmbeddedGatewayToken(config);
+  embeddedGatewayAccessToken = accessToken;
+  const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
   const dbPath = config.embedded.dbPath || join(tyrumHome, "gateway", "gateway.db");
   const gatewayBin = resolveGatewayBinPath();
 
@@ -136,6 +199,8 @@ async function startEmbeddedGatewayWithConfig(
       startPromise = null;
     }
   }
+
+  return accessToken;
 }
 
 export async function startEmbeddedGatewayFromConfig(): Promise<{
@@ -179,6 +244,7 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
       const mgr = manager;
       if (!mgr) return { status: "stopped" };
       await mgr.stop();
+      embeddedGatewayAccessToken = null;
       return { status: "stopped" };
     });
 
@@ -189,7 +255,26 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
     });
 
     ipcMain.handle("gateway:operator-connection", async () => {
+      if (!configExists()) {
+        throw new Error("Desktop is not configured yet. Choose Embedded or Remote mode first.");
+      }
+
       const config = loadConfig();
+      if (config.mode === "embedded") {
+        const mgr = manager;
+        if (!mgr) {
+          throw new Error("Gateway IPC is not initialized");
+        }
+        const token = await startEmbeddedGatewayWithConfig(mgr, config);
+        const port = config.embedded.port;
+        return {
+          mode: "embedded",
+          wsUrl: `ws://127.0.0.1:${port}/ws`,
+          httpBaseUrl: resolveOperatorHttpBaseUrl(config),
+          token,
+          tlsCertFingerprint256: "",
+        } satisfies OperatorConnectionInfo;
+      }
       return resolveOperatorConnection(config);
     });
 

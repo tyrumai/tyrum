@@ -3,6 +3,7 @@ import type { DesktopThemeState } from "../shared/theme.js";
 export type { DesktopThemeState };
 
 export interface TyrumDesktopApi {
+  configExists: () => Promise<boolean>;
   getConfig: () => Promise<unknown>;
   setConfig: (partial: unknown) => Promise<void>;
   theme: {

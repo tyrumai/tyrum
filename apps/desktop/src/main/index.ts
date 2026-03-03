@@ -141,7 +141,7 @@ async function shutdownAppResources(): Promise<void> {
 export async function maybeAutoStartEmbeddedGatewayOnLaunch(): Promise<void> {
   const hadConfig = configExists();
   const config = loadConfig();
-  const shouldStartEmbedded = !hadConfig || config.mode === "embedded";
+  const shouldStartEmbedded = hadConfig && config.mode === "embedded";
   if (!shouldStartEmbedded) {
     return;
   }

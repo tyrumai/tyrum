@@ -240,14 +240,14 @@ describe("main process lifecycle", () => {
     expect(startEmbeddedGatewayFromConfigMock).toHaveBeenCalledTimes(1);
   });
 
-  it("auto-starts embedded gateway on first launch regardless of saved mode", async () => {
+  it("does not auto-start embedded gateway on first launch", async () => {
     const mainModule = await importMainModule();
     configExistsMock.mockReturnValue(false);
     loadConfigMock.mockReturnValue({ mode: "remote" });
 
     await mainModule.maybeAutoStartEmbeddedGatewayOnLaunch();
 
-    expect(startEmbeddedGatewayFromConfigMock).toHaveBeenCalledTimes(1);
+    expect(startEmbeddedGatewayFromConfigMock).not.toHaveBeenCalled();
   });
 
   it("does not auto-start embedded gateway when config exists and mode is remote", async () => {

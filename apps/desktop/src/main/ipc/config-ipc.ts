@@ -1,5 +1,5 @@
 import { ipcMain, nativeTheme, shell } from "electron";
-import { loadConfig, saveConfig } from "../config/store.js";
+import { configExists, loadConfig, saveConfig } from "../config/store.js";
 import { DesktopNodeConfig } from "../config/schema.js";
 import {
   checkMacPermissions,
@@ -107,6 +107,10 @@ export function registerConfigIpc(): void {
 
   ipcMain.handle("config:get", () => {
     return sanitizeConfigForRenderer(loadConfig());
+  });
+
+  ipcMain.handle("config:exists", () => {
+    return configExists();
   });
 
   ipcMain.handle("config:set", (_event, partial: unknown) => {

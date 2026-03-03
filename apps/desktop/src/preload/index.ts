@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("tyrumDesktop", {
+  configExists: () => ipcRenderer.invoke("config:exists"),
   getConfig: () => ipcRenderer.invoke("config:get"),
   setConfig: (partial: unknown) => ipcRenderer.invoke("config:set", partial),
   theme: {
