@@ -267,6 +267,36 @@ describe("registerGatewayIpc handlers", () => {
     expect(saveConfigMock).not.toHaveBeenCalled();
   });
 
+  it("does not rotate embedded token when resolving operator connection after embedded gateway start", async () => {
+    const { registerGatewayIpc, resolveOperatorConnection, startEmbeddedGatewayFromConfig } =
+      await import("../src/main/ipc/gateway-ipc.js");
+    const { loadConfig } = await import("../src/main/config/store.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    await startEmbeddedGatewayFromConfig();
+
+    decryptTokenMock.mockImplementationOnce(() => {
+      throw new Error(
+        "Error while decrypting the ciphertext provided to safeStorage.decryptString.",
+      );
+    });
+
+    const connection = resolveOperatorConnection(loadConfig());
+    expect(connection.token).toBe("token");
+
+    expect(generateTokenMock).not.toHaveBeenCalled();
+    expect(saveConfigMock).not.toHaveBeenCalled();
+  });
+
   it("converts remote websocket URL to HTTPS base URL", async () => {
     testState.mode = "remote";
     testState.remoteWsUrl = "wss://remote.example/ws";

@@ -128,7 +128,20 @@ function resolveOperatorHttpBaseUrl(config: DesktopNodeConfig): string {
 
 export function resolveOperatorConnection(config: DesktopNodeConfig): OperatorConnectionInfo {
   if (config.mode === "embedded") {
-    const token = ensureEmbeddedGatewayToken(config);
+    const token = (() => {
+      if (embeddedGatewayAccessToken) return embeddedGatewayAccessToken;
+      const mgr = manager;
+      if (mgr?.status === "running") {
+        return recoverEmbeddedGatewayAccessToken(config, "running");
+      }
+      if (startPromise) {
+        return recoverEmbeddedGatewayAccessToken(config, "started");
+      }
+
+      const ensured = ensureEmbeddedGatewayToken(config);
+      embeddedGatewayAccessToken = ensured;
+      return ensured;
+    })();
     const port = config.embedded.port;
     return {
       mode: "embedded",
