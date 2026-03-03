@@ -24,9 +24,9 @@ describe("elevated mode", () => {
     const baseline = createBearerTokenAuth("baseline-token");
 
     expect(isElevatedModeActive(store.getSnapshot())).toBe(false);
-    expect(
-      selectAuthForElevatedMode({ baseline, elevatedMode: store.getSnapshot() }),
-    ).toEqual(baseline);
+    expect(selectAuthForElevatedMode({ baseline, elevatedMode: store.getSnapshot() })).toEqual(
+      baseline,
+    );
 
     const expiresAt = new Date(Date.now() + 5_000).toISOString();
     store.enter({ elevatedToken: "elevated-token", expiresAt });
@@ -56,9 +56,9 @@ describe("elevated mode", () => {
       elevatedToken: null,
       expiresAt: null,
     });
-    expect(
-      selectAuthForElevatedMode({ baseline, elevatedMode: store.getSnapshot() }),
-    ).toEqual(baseline);
+    expect(selectAuthForElevatedMode({ baseline, elevatedMode: store.getSnapshot() })).toEqual(
+      baseline,
+    );
   });
 
   it("does not select elevated auth when elevated mode is expired", () => {
@@ -78,7 +78,7 @@ describe("elevated mode", () => {
   it("does not emit a transient active state with zero remainingMs", () => {
     vi.useFakeTimers();
 
-      const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
     try {
       let nowMs = Date.parse("2026-02-26T00:00:00.000Z");
       const store = createElevatedModeStore({ tickIntervalMs: 1_000, now: () => nowMs });
