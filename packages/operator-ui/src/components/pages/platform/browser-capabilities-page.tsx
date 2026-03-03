@@ -67,6 +67,7 @@ export function BrowserCapabilitiesPage() {
               </div>
             </div>
             <Switch
+              aria-label="Enable browser node executor"
               checked={browserNode.enabled}
               onCheckedChange={(checked) => {
                 browserNode.setEnabled(checked);

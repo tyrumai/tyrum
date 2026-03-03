@@ -137,7 +137,7 @@ type BrowserDispatchOp =
   | "microphone.record"
   | "unknown";
 
-function normalizeDesktopDispatchOpRaw(parsed: Record<string, unknown> | null): string | undefined {
+function normalizeNodeDispatchOpRaw(parsed: Record<string, unknown> | null): string | undefined {
   let current = parsed;
   for (let depth = 0; depth < 3 && current; depth += 1) {
     const op = normalizeToken(current["op"]);
@@ -151,7 +151,7 @@ function canonicalizeDesktopDispatchOp(parsed: Record<string, unknown> | null): 
   op: DesktopDispatchOp;
   actSubtype?: DesktopActSubtype;
 } {
-  const opRaw = normalizeDesktopDispatchOpRaw(parsed);
+  const opRaw = normalizeNodeDispatchOpRaw(parsed);
   if (!opRaw) return { op: "unknown" };
 
   switch (opRaw) {
@@ -172,18 +172,8 @@ function canonicalizeDesktopDispatchOp(parsed: Record<string, unknown> | null): 
   }
 }
 
-function normalizeBrowserDispatchOpRaw(parsed: Record<string, unknown> | null): string | undefined {
-  let current = parsed;
-  for (let depth = 0; depth < 3 && current; depth += 1) {
-    const op = normalizeToken(current["op"]);
-    if (op) return op;
-    current = asRecord(current["args"]);
-  }
-  return undefined;
-}
-
 function canonicalizeBrowserDispatchOp(parsed: Record<string, unknown> | null): BrowserDispatchOp {
-  const opRaw = normalizeBrowserDispatchOpRaw(parsed);
+  const opRaw = normalizeNodeDispatchOpRaw(parsed);
   if (!opRaw) return "unknown";
 
   switch (opRaw) {

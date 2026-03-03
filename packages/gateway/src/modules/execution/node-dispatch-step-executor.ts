@@ -97,7 +97,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
       };
 
       if (!result.ok) {
-        stepResult.error = result.error ?? "Desktop task failed";
+        stepResult.error = result.error ?? `${action.type} task failed`;
       }
 
       return stepResult;
