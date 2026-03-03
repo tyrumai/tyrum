@@ -23,6 +23,7 @@ export interface OperatorConnectionInfo {
 }
 
 let startPromise: Promise<void> | null = null;
+let embeddedGatewayAccessToken: string | null = null;
 
 function createAndStoreEmbeddedGatewayToken(config: DesktopNodeConfig): string {
   const token = generateToken();
@@ -108,15 +109,52 @@ async function startEmbeddedGatewayWithConfig(
   mgr: GatewayManager,
   config: DesktopNodeConfig,
 ): Promise<string> {
-  const accessToken = ensureEmbeddedGatewayToken(config);
   if (mgr.status === "running") {
-    return accessToken;
+    if (embeddedGatewayAccessToken) return embeddedGatewayAccessToken;
+    const tokenRef = config.embedded.tokenRef;
+    if (!tokenRef) {
+      throw new Error(
+        "Embedded gateway is running but the stored token is missing. Restart the embedded gateway from the Desktop app.",
+      );
+    }
+    try {
+      embeddedGatewayAccessToken = decryptToken(tokenRef);
+      return embeddedGatewayAccessToken;
+    } catch (error) {
+      console.warn(
+        "Failed to decrypt embedded gateway token while the gateway is running; refusing to rotate token.",
+        error,
+      );
+      throw new Error(
+        "Embedded gateway token could not be decrypted while the gateway is running. Restart the embedded gateway from the Desktop app.",
+      );
+    }
   }
   if (startPromise) {
     await startPromise;
-    return accessToken;
+    if (embeddedGatewayAccessToken) return embeddedGatewayAccessToken;
+    const tokenRef = config.embedded.tokenRef;
+    if (!tokenRef) {
+      throw new Error(
+        "Embedded gateway started but the stored token is missing. Restart the embedded gateway from the Desktop app.",
+      );
+    }
+    try {
+      embeddedGatewayAccessToken = decryptToken(tokenRef);
+      return embeddedGatewayAccessToken;
+    } catch (error) {
+      console.warn(
+        "Failed to decrypt embedded gateway token after start; refusing to rotate token.",
+        error,
+      );
+      throw new Error(
+        "Embedded gateway token could not be decrypted after starting. Restart the embedded gateway from the Desktop app.",
+      );
+    }
   }
 
+  const accessToken = ensureEmbeddedGatewayToken(config);
+  embeddedGatewayAccessToken = accessToken;
   const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
   const dbPath = config.embedded.dbPath || join(tyrumHome, "gateway", "gateway.db");
   const gatewayBin = resolveGatewayBinPath();
@@ -181,6 +219,7 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
       const mgr = manager;
       if (!mgr) return { status: "stopped" };
       await mgr.stop();
+      embeddedGatewayAccessToken = null;
       return { status: "stopped" };
     });
 

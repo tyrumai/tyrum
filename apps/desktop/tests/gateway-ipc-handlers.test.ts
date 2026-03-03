@@ -229,6 +229,44 @@ describe("registerGatewayIpc handlers", () => {
     );
   });
 
+  it("does not rotate embedded token when the gateway is already running", async () => {
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
+    expect(operatorConnectionHandler).toBeDefined();
+
+    const first = await operatorConnectionHandler!({} as never);
+    expect(first).toEqual({
+      mode: "embedded",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788/",
+      token: "token",
+      tlsCertFingerprint256: "",
+    });
+
+    decryptTokenMock.mockImplementationOnce(() => {
+      throw new Error(
+        "Error while decrypting the ciphertext provided to safeStorage.decryptString.",
+      );
+    });
+
+    const second = await operatorConnectionHandler!({} as never);
+    expect(second).toEqual(first);
+
+    expect(generateTokenMock).not.toHaveBeenCalled();
+    expect(saveConfigMock).not.toHaveBeenCalled();
+  });
+
   it("converts remote websocket URL to HTTPS base URL", async () => {
     testState.mode = "remote";
     testState.remoteWsUrl = "wss://remote.example/ws";
