@@ -25,6 +25,21 @@ function deriveThreadTitle(session: {
   return session.thread_id;
 }
 
+function deriveThreadPreview(session: {
+  summary: string;
+  last_turn?: { role: string; content: string } | undefined;
+}): string {
+  const summary = firstLine(session.summary);
+  if (summary) return summary;
+
+  const lines = (session.last_turn?.content ?? "").split(/\r?\n/);
+  for (const line of lines.slice(1)) {
+    const trimmed = line.trim();
+    if (trimmed) return trimmed;
+  }
+  return "";
+}
+
 export function ChatPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);
   const isConnected = connection.status === "connected";
@@ -37,7 +52,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
     return chat.sessions.sessions.map((session) => ({
       ...session,
       title: deriveThreadTitle(session),
-      preview: session.last_turn ? firstLine(session.last_turn.content) : session.summary,
+      preview: deriveThreadPreview(session),
     }));
   }, [chat.sessions.sessions]);
 
