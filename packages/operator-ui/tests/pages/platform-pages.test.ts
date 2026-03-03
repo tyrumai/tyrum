@@ -5,6 +5,7 @@ import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import type { DesktopApi } from "../../src/desktop-api.js";
 import { OperatorUiHostProvider } from "../../src/host/host-api.js";
+import { BrowserNodeProvider } from "../../src/browser-node/browser-node-provider.js";
 import { BrowserCapabilitiesPage } from "../../src/components/pages/platform/browser-capabilities-page.js";
 import { PlatformConnectionPage } from "../../src/components/pages/platform/connection-page.js";
 import { PlatformDebugPage } from "../../src/components/pages/platform/debug-page.js";
@@ -66,11 +67,21 @@ afterEach(() => {
 });
 
 describe("Platform pages", () => {
-  it("renders the browser capabilities placeholder", () => {
-    const testRoot = renderIntoDocument(React.createElement(BrowserCapabilitiesPage));
+  it("renders the browser capabilities page", () => {
+    const storage = globalThis.localStorage;
+    if (storage && typeof storage.removeItem === "function") {
+      storage.removeItem("tyrum.operator-ui.browserNode.enabled");
+    }
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        BrowserNodeProvider,
+        { wsUrl: "ws://example.test/ws" },
+        React.createElement(BrowserCapabilitiesPage),
+      ),
+    );
     try {
       expect(testRoot.container.textContent).toContain("Browser Capabilities");
-      expect(testRoot.container.textContent).toContain("Coming soon");
+      expect(testRoot.container.textContent).toContain("Browser node executor");
     } finally {
       cleanupTestRoot(testRoot);
     }

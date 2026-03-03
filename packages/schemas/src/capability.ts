@@ -1,7 +1,14 @@
 import { z } from "zod";
 
 /** Client capability kinds. */
-export const ClientCapability = z.enum(["playwright", "android", "desktop", "cli", "http"]);
+export const ClientCapability = z.enum([
+  "playwright",
+  "android",
+  "desktop",
+  "cli",
+  "http",
+  "browser",
+]);
 export type ClientCapability = z.infer<typeof ClientCapability>;
 
 const CAPABILITY_ID_SEGMENT = "[a-z][a-z0-9-]*";
@@ -33,6 +40,7 @@ const LEGACY_TO_DESCRIPTOR_ID = {
   desktop: "tyrum.desktop",
   cli: "tyrum.cli",
   http: "tyrum.http",
+  browser: "tyrum.browser",
 } as const;
 
 type LegacyCapabilityDescriptorId = (typeof LEGACY_TO_DESCRIPTOR_ID)[ClientCapability];

@@ -40,6 +40,7 @@ describe("requiresPostcondition", () => {
   it("returns true for mutating primitive kinds", () => {
     const mutating: ActionPrimitiveKind[] = [
       "Web",
+      "Browser",
       "Android",
       "CLI",
       "Http",

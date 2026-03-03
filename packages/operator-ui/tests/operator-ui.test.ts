@@ -234,6 +234,17 @@ function samplePairingRequestPending() {
   } as const;
 }
 
+function samplePairingRequestPendingWithNodeCapabilities() {
+  return {
+    ...samplePairingRequestPending(),
+    node: {
+      ...samplePairingRequestPending().node,
+      capabilities: ["cli", "http"],
+    },
+    capability_allowlist: [],
+  } as const;
+}
+
 function samplePairingRequestApproved() {
   return {
     ...samplePairingRequestPending(),
@@ -2873,6 +2884,79 @@ describe("operator-ui", () => {
       '[data-testid="pairing-approve-1"]',
     );
     expect(approveButtonAfter).toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("derives pairing capability allowlist options from node capabilities", async () => {
+    const ws = new FakeWsClient();
+    const { http, pairingsList, pairingsApprove } = createFakeHttpClient();
+    pairingsList.mockResolvedValueOnce({
+      status: "ok",
+      pairings: [samplePairingRequestPendingWithNodeCapabilities()],
+    });
+    pairingsApprove.mockResolvedValueOnce({
+      status: "ok",
+      pairing: samplePairingRequestApproved(),
+    });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    const pairingLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-pairing"]');
+    expect(pairingLink).not.toBeNull();
+    act(() => {
+      pairingLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const refreshButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="pairing-refresh"]',
+    );
+    expect(refreshButton).not.toBeNull();
+
+    await act(async () => {
+      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const capability0 = container.querySelector<HTMLButtonElement>(
+      '[data-testid="pairing-capability-1-0"]',
+    );
+    expect(capability0).not.toBeNull();
+    act(() => {
+      capability0?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const approveButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="pairing-approve-1"]',
+    );
+    expect(approveButton).not.toBeNull();
+
+    await act(async () => {
+      approveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(pairingsApprove).toHaveBeenCalledWith(1, {
+      trust_level: "local",
+      capability_allowlist: [{ id: "tyrum.http", version: "1.0.0" }],
+    });
 
     act(() => {
       root?.unmount();

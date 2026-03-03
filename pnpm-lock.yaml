@@ -439,6 +439,9 @@ importers:
       '@tyrum/operator-core':
         specifier: workspace:*
         version: link:../operator-core
+      '@tyrum/schemas':
+        specifier: workspace:*
+        version: link:../schemas
       clsx:
         specifier: ^2.1.1
         version: 2.1.1

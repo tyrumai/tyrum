@@ -131,8 +131,13 @@ function canonicalizeMessagingTarget(
 
 type DesktopDispatchOp = "snapshot" | "query" | "act" | "wait_for" | "unknown";
 type DesktopActSubtype = "ui" | "mouse" | "keyboard" | "unknown";
+type BrowserDispatchOp =
+  | "geolocation.get"
+  | "camera.capture_photo"
+  | "microphone.record"
+  | "unknown";
 
-function normalizeDesktopDispatchOpRaw(parsed: Record<string, unknown> | null): string | undefined {
+function normalizeNodeDispatchOpRaw(parsed: Record<string, unknown> | null): string | undefined {
   let current = parsed;
   for (let depth = 0; depth < 3 && current; depth += 1) {
     const op = normalizeToken(current["op"]);
@@ -146,7 +151,7 @@ function canonicalizeDesktopDispatchOp(parsed: Record<string, unknown> | null): 
   op: DesktopDispatchOp;
   actSubtype?: DesktopActSubtype;
 } {
-  const opRaw = normalizeDesktopDispatchOpRaw(parsed);
+  const opRaw = normalizeNodeDispatchOpRaw(parsed);
   if (!opRaw) return { op: "unknown" };
 
   switch (opRaw) {
@@ -167,6 +172,20 @@ function canonicalizeDesktopDispatchOp(parsed: Record<string, unknown> | null): 
   }
 }
 
+function canonicalizeBrowserDispatchOp(parsed: Record<string, unknown> | null): BrowserDispatchOp {
+  const opRaw = normalizeNodeDispatchOpRaw(parsed);
+  if (!opRaw) return "unknown";
+
+  switch (opRaw) {
+    case "geolocation.get":
+    case "camera.capture_photo":
+    case "microphone.record":
+      return opRaw;
+    default:
+      return "unknown";
+  }
+}
+
 export function canonicalizeNodeDispatchMatchTarget(
   actionKind: ActionPrimitiveKind,
   actionArgs: unknown,
@@ -183,6 +202,12 @@ export function canonicalizeNodeDispatchMatchTarget(
     if (op === "act") {
       target += `;act:${actSubtype ?? "unknown"}`;
     }
+  }
+
+  if (required === "browser") {
+    const parsed = asRecord(actionArgs);
+    const op = canonicalizeBrowserDispatchOp(parsed);
+    target += `;op:${op}`;
   }
 
   return target;

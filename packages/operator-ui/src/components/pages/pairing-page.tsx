@@ -1,4 +1,8 @@
 import type { OperatorCore, Pairing } from "@tyrum/operator-core";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdForClientCapability,
+} from "@tyrum/schemas";
 import { Link2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -32,8 +36,20 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
   const initialTrustLevel = (pairing.trust_level ?? "local") satisfies PairingTrustLevel;
   const [trustLevel, setTrustLevel] = useState<PairingTrustLevel>(initialTrustLevel);
   const [busy, setBusy] = useState<"approve" | "deny" | null>(null);
+
+  const capabilityOptions = useMemo(() => {
+    if (pairing.capability_allowlist.length > 0) {
+      return pairing.capability_allowlist;
+    }
+
+    return pairing.node.capabilities.map((capability) => ({
+      id: descriptorIdForClientCapability(capability),
+      version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+    }));
+  }, [pairing.capability_allowlist, pairing.node.capabilities]);
+
   const [selectedCapabilityIds, setSelectedCapabilityIds] = useState<Set<string>>(
-    () => new Set(pairing.capability_allowlist.map((capability) => capability.id)),
+    () => new Set(capabilityOptions.map((capability) => capability.id)),
   );
   const reasonRef = useRef<HTMLTextAreaElement | null>(null);
   const isBusy = busy !== null;
@@ -44,7 +60,7 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
     setBusy("approve");
     try {
       const trimmedReason = reasonRef.current?.value.trim() ?? "";
-      const capability_allowlist = pairing.capability_allowlist.filter((capability) =>
+      const capability_allowlist = capabilityOptions.filter((capability) =>
         selectedCapabilityIds.has(capability.id),
       );
       await core.pairingStore.approve(pairing.pairing_id, {
@@ -142,11 +158,11 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
 
         <fieldset className="grid gap-3">
           <legend className="text-sm font-medium leading-none text-fg">Capabilities</legend>
-          {pairing.capability_allowlist.length === 0 ? (
-            <div className="text-sm text-fg-muted">No capabilities requested.</div>
+          {capabilityOptions.length === 0 ? (
+            <div className="text-sm text-fg-muted">No capabilities available.</div>
           ) : (
             <div className="grid gap-2">
-              {pairing.capability_allowlist.map((capability, index) => {
+              {capabilityOptions.map((capability, index) => {
                 const checkboxId = `pairing-${pairing.pairing_id}-cap-${capability.id}`;
                 const checked = selectedCapabilityIds.has(capability.id);
                 return (

@@ -6,6 +6,10 @@ import {
   resolveDesktopEvidenceSensitivity,
   shapeDesktopEvidenceForArtifacts,
 } from "../desktop/shape-desktop-evidence.js";
+import {
+  resolveBrowserEvidenceSensitivity,
+  shapeBrowserEvidenceForArtifacts,
+} from "../browser/shape-browser-evidence.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
 
 export interface NodeDispatchStepExecutorOptions {
@@ -31,7 +35,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
     timeoutMs: number,
     context: StepExecutionContext,
   ): Promise<StepResult> {
-    if (action.type !== "Desktop") {
+    if (action.type !== "Desktop" && action.type !== "Browser") {
       return await this.opts.fallback.execute(action, planId, stepIndex, timeoutMs, context);
     }
 
@@ -48,21 +52,35 @@ class NodeDispatchStepExecutor implements StepExecutor {
         { timeoutMs },
       );
 
-      const sensitivity = await resolveDesktopEvidenceSensitivity(this.opts.db, {
-        runId: context.runId,
-        stepId: context.stepId,
-      });
+      const shaped =
+        action.type === "Desktop"
+          ? await (async () => {
+              const sensitivity = await resolveDesktopEvidenceSensitivity(this.opts.db, {
+                runId: context.runId,
+                stepId: context.stepId,
+              });
 
-      const shaped = await shapeDesktopEvidenceForArtifacts({
-        db: this.opts.db,
-        artifactStore: this.opts.artifactStore,
-        runId: context.runId,
-        stepId: context.stepId,
-        workspaceId: context.workspaceId,
-        evidence: result.evidence,
-        result: result.result,
-        sensitivity,
-      });
+              return await shapeDesktopEvidenceForArtifacts({
+                db: this.opts.db,
+                artifactStore: this.opts.artifactStore,
+                runId: context.runId,
+                stepId: context.stepId,
+                workspaceId: context.workspaceId,
+                evidence: result.evidence,
+                result: result.result,
+                sensitivity,
+              });
+            })()
+          : await shapeBrowserEvidenceForArtifacts({
+              db: this.opts.db,
+              artifactStore: this.opts.artifactStore,
+              runId: context.runId,
+              stepId: context.stepId,
+              workspaceId: context.workspaceId,
+              evidence: result.evidence,
+              result: result.result,
+              sensitivity: resolveBrowserEvidenceSensitivity(),
+            });
 
       const cost = { duration_ms: Math.max(0, Date.now() - startedAtMs) };
       const evidence =
@@ -79,7 +97,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
       };
 
       if (!result.ok) {
-        stepResult.error = result.error ?? "Desktop task failed";
+        stepResult.error = result.error ?? `${action.type} task failed`;
       }
 
       return stepResult;

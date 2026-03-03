@@ -48,8 +48,16 @@ describe("descriptor legacy mappings", () => {
     expect(descriptorIdForClientCapability("cli")).toBe("tyrum.cli");
   });
 
+  it("maps browser capability to namespaced ID", () => {
+    expect(descriptorIdForClientCapability("browser")).toBe("tyrum.browser");
+  });
+
   it("maps namespaced core descriptor ID back to client capability", () => {
     expect(clientCapabilityFromDescriptorId("tyrum.http")).toBe("http");
+  });
+
+  it("maps namespaced browser descriptor ID back to client capability", () => {
+    expect(clientCapabilityFromDescriptorId("tyrum.browser")).toBe("browser");
   });
 
   it("returns undefined for unknown namespaced descriptor IDs", () => {

@@ -37,6 +37,7 @@ import { PlatformPermissionsPage } from "./components/pages/platform/permissions
 import { ToastProvider } from "./components/toast/toast-provider.js";
 import { ThemeProvider, useThemeOptional } from "./hooks/use-theme.js";
 import { useKeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
+import { BrowserNodeProvider } from "./browser-node/browser-node-provider.js";
 import { getDesktopApi } from "./desktop-api.js";
 import { OperatorUiHostProvider, useHostApiOptional, type HostKind } from "./host/host-api.js";
 import { useOperatorStore } from "./use-operator-store.js";
@@ -206,58 +207,67 @@ function OperatorUiAppRoot({
   const showConnectPage =
     mode === "web" ? !showOperatorRoutes : !showOperatorRoutes && !isPlatformRoute;
 
+  const shell = (
+    <AppShell
+      mode={mode}
+      sidebar={
+        showShell ? (
+          <Sidebar
+            items={sidebarItems}
+            secondaryItems={platformItems}
+            secondaryLabel="Platform"
+            activeItemId={route}
+            onNavigate={navigate}
+            connectionStatus={connection.status}
+          />
+        ) : null
+      }
+      mobileNav={
+        showShell ? (
+          <MobileNav
+            items={mobileItems}
+            overflowItems={mobileOverflowItems}
+            activeItemId={route}
+            onNavigate={navigate}
+          />
+        ) : null
+      }
+    >
+      <AdminModeProvider core={core} mode={mode}>
+        {showConnectPage ? (
+          <div className="mx-auto mt-20 max-w-md w-full px-4">
+            <ConnectPage core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />
+          </div>
+        ) : (
+          <>
+            {route === "dashboard" && <DashboardPage core={core} onNavigate={navigate} />}
+            {route === "memory" && <MemoryPage core={core} />}
+            {route === "approvals" && <ApprovalsPage core={core} />}
+            {route === "runs" && <RunsPage core={core} />}
+            {route === "workboard" && <WorkBoardPage core={core} />}
+            {route === "pairing" && <PairingPage core={core} />}
+            {route === "admin" && <AdminPage core={core} />}
+            {route === "settings" && <SettingsPage core={core} mode={mode} />}
+            {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
+            {route === "connection" && <PlatformConnectionPage core={core} />}
+            {route === "permissions" && <PlatformPermissionsPage />}
+            {route === "debug" && <PlatformDebugPage />}
+            {route === "browser" && hostKind === "web" && <BrowserCapabilitiesPage />}
+          </>
+        )}
+      </AdminModeProvider>
+    </AppShell>
+  );
+
   const app = (
     <ToastProvider>
-      <AppShell
-        mode={mode}
-        sidebar={
-          showShell ? (
-            <Sidebar
-              items={sidebarItems}
-              secondaryItems={platformItems}
-              secondaryLabel="Platform"
-              activeItemId={route}
-              onNavigate={navigate}
-              connectionStatus={connection.status}
-            />
-          ) : null
-        }
-        mobileNav={
-          showShell ? (
-            <MobileNav
-              items={mobileItems}
-              overflowItems={mobileOverflowItems}
-              activeItemId={route}
-              onNavigate={navigate}
-            />
-          ) : null
-        }
-      >
-        <AdminModeProvider core={core} mode={mode}>
-          {showConnectPage ? (
-            <div className="mx-auto mt-20 max-w-md w-full px-4">
-              <ConnectPage core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />
-            </div>
-          ) : (
-            <>
-              {route === "dashboard" && <DashboardPage core={core} onNavigate={navigate} />}
-              {route === "memory" && <MemoryPage core={core} />}
-              {route === "approvals" && <ApprovalsPage core={core} />}
-              {route === "runs" && <RunsPage core={core} />}
-              {route === "workboard" && <WorkBoardPage core={core} />}
-              {route === "pairing" && <PairingPage core={core} />}
-              {route === "admin" && <AdminPage core={core} />}
-              {route === "settings" && <SettingsPage core={core} mode={mode} />}
-              {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
-              {route === "connection" && <PlatformConnectionPage core={core} />}
-              {route === "permissions" && <PlatformPermissionsPage />}
-              {route === "debug" && <PlatformDebugPage />}
-              {route === "browser" && <BrowserCapabilitiesPage />}
-            </>
-          )}
-        </AdminModeProvider>
-      </AppShell>
+      {hostKind === "web" ? (
+        <BrowserNodeProvider wsUrl={core.wsUrl}>{shell}</BrowserNodeProvider>
+      ) : (
+        shell
+      )}
     </ToastProvider>
   );
+
   return existingTheme ? app : <ThemeProvider>{app}</ThemeProvider>;
 }

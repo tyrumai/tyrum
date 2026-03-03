@@ -27,12 +27,20 @@ describe("Desktop schema regression", () => {
     expect(ClientCapability.parse("desktop")).toBe("desktop");
   });
 
+  it("ClientCapability includes browser", () => {
+    expect(ClientCapability.parse("browser")).toBe("browser");
+  });
+
   it("ClientCapability rejects unknown values", () => {
     expectRejects(ClientCapability, "camera");
   });
 
   it("Desktop maps to desktop capability", () => {
     expect(requiredCapability("Desktop")).toBe("desktop");
+  });
+
+  it("Browser maps to browser capability", () => {
+    expect(requiredCapability("Browser")).toBe("browser");
   });
 
   it("Desktop requires postcondition", () => {
@@ -55,11 +63,12 @@ describe("Desktop schema regression", () => {
     expectRejects(DesktopActionArgs, { display: "primary", format: "png" });
   });
 
-  it("all 12 ActionPrimitiveKind values parse", () => {
+  it("all 13 ActionPrimitiveKind values parse", () => {
     const kinds = [
       "Research",
       "Decide",
       "Web",
+      "Browser",
       "Android",
       "CLI",
       "Http",
@@ -75,8 +84,8 @@ describe("Desktop schema regression", () => {
     }
   });
 
-  it("all 5 ClientCapability values parse", () => {
-    const caps = ["playwright", "android", "cli", "http", "desktop"];
+  it("all 6 ClientCapability values parse", () => {
+    const caps = ["playwright", "android", "cli", "http", "desktop", "browser"];
     for (const cap of caps) {
       expect(ClientCapability.parse(cap)).toBe(cap);
     }
@@ -97,8 +106,8 @@ describe("Desktop schema regression", () => {
   it("Desktop capability mapping is consistent with requiredCapability", () => {
     // Verify that Desktop -> desktop mapping matches the pattern of other
     // capability-mapped kinds
-    const mappedKinds = ["Web", "Android", "CLI", "Http", "Desktop"] as const;
-    const expectedCaps = ["playwright", "android", "cli", "http", "desktop"];
+    const mappedKinds = ["Web", "Browser", "Android", "CLI", "Http", "Desktop"] as const;
+    const expectedCaps = ["playwright", "browser", "android", "cli", "http", "desktop"];
     for (let i = 0; i < mappedKinds.length; i++) {
       expect(requiredCapability(mappedKinds[i]!)).toBe(expectedCaps[i]);
     }
