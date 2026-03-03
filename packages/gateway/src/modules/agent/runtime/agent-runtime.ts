@@ -149,6 +149,11 @@ type ResolvedExecutionProfile = {
   source: "interaction_default" | "subagent_record" | "subagent_fallback";
 };
 
+type EmbeddingModelProviderSdk = {
+  textEmbeddingModel?: (modelId: string) => unknown;
+  embeddingModel?: (modelId: string) => unknown;
+};
+
 const NOOP_APPROVAL_NOTIFIER: ApprovalNotifier = {
   notify(_approval) {
     // no-op
@@ -1097,7 +1102,7 @@ export class AgentRuntime {
           fetchImpl: this.fetchImpl,
         });
 
-        const sdkAny = sdk as any;
+        const sdkAny = sdk as EmbeddingModelProviderSdk;
         const embeddingModel =
           typeof sdkAny.textEmbeddingModel === "function"
             ? sdkAny.textEmbeddingModel(candidate.modelId)
