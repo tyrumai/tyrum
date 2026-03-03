@@ -25,6 +25,54 @@ export interface OperatorConnectionInfo {
 let startPromise: Promise<void> | null = null;
 let embeddedGatewayAccessToken: string | null = null;
 
+type EmbeddedGatewayTokenRecoveryContext = "running" | "started";
+
+const EMBEDDED_GATEWAY_TOKEN_RECOVERY_MESSAGES: Record<
+  EmbeddedGatewayTokenRecoveryContext,
+  {
+    missingTokenRefError: string;
+    decryptWarn: string;
+    decryptFailError: string;
+  }
+> = {
+  running: {
+    missingTokenRefError:
+      "Embedded gateway is running but the stored token is missing. Restart the embedded gateway from the Desktop app.",
+    decryptWarn:
+      "Failed to decrypt embedded gateway token while the gateway is running; refusing to rotate token.",
+    decryptFailError:
+      "Embedded gateway token could not be decrypted while the gateway is running. Restart the embedded gateway from the Desktop app.",
+  },
+  started: {
+    missingTokenRefError:
+      "Embedded gateway started but the stored token is missing. Restart the embedded gateway from the Desktop app.",
+    decryptWarn: "Failed to decrypt embedded gateway token after start; refusing to rotate token.",
+    decryptFailError:
+      "Embedded gateway token could not be decrypted after starting. Restart the embedded gateway from the Desktop app.",
+  },
+};
+
+function recoverEmbeddedGatewayAccessToken(
+  config: DesktopNodeConfig,
+  context: EmbeddedGatewayTokenRecoveryContext,
+): string {
+  if (embeddedGatewayAccessToken) return embeddedGatewayAccessToken;
+
+  const messages = EMBEDDED_GATEWAY_TOKEN_RECOVERY_MESSAGES[context];
+  const tokenRef = config.embedded.tokenRef;
+  if (!tokenRef) {
+    throw new Error(messages.missingTokenRefError);
+  }
+
+  try {
+    embeddedGatewayAccessToken = decryptToken(tokenRef);
+    return embeddedGatewayAccessToken;
+  } catch (error) {
+    console.warn(messages.decryptWarn, error);
+    throw new Error(messages.decryptFailError);
+  }
+}
+
 function createAndStoreEmbeddedGatewayToken(config: DesktopNodeConfig): string {
   const token = generateToken();
   config.embedded.tokenRef = encryptToken(token);
@@ -110,47 +158,11 @@ async function startEmbeddedGatewayWithConfig(
   config: DesktopNodeConfig,
 ): Promise<string> {
   if (mgr.status === "running") {
-    if (embeddedGatewayAccessToken) return embeddedGatewayAccessToken;
-    const tokenRef = config.embedded.tokenRef;
-    if (!tokenRef) {
-      throw new Error(
-        "Embedded gateway is running but the stored token is missing. Restart the embedded gateway from the Desktop app.",
-      );
-    }
-    try {
-      embeddedGatewayAccessToken = decryptToken(tokenRef);
-      return embeddedGatewayAccessToken;
-    } catch (error) {
-      console.warn(
-        "Failed to decrypt embedded gateway token while the gateway is running; refusing to rotate token.",
-        error,
-      );
-      throw new Error(
-        "Embedded gateway token could not be decrypted while the gateway is running. Restart the embedded gateway from the Desktop app.",
-      );
-    }
+    return recoverEmbeddedGatewayAccessToken(config, "running");
   }
   if (startPromise) {
     await startPromise;
-    if (embeddedGatewayAccessToken) return embeddedGatewayAccessToken;
-    const tokenRef = config.embedded.tokenRef;
-    if (!tokenRef) {
-      throw new Error(
-        "Embedded gateway started but the stored token is missing. Restart the embedded gateway from the Desktop app.",
-      );
-    }
-    try {
-      embeddedGatewayAccessToken = decryptToken(tokenRef);
-      return embeddedGatewayAccessToken;
-    } catch (error) {
-      console.warn(
-        "Failed to decrypt embedded gateway token after start; refusing to rotate token.",
-        error,
-      );
-      throw new Error(
-        "Embedded gateway token could not be decrypted after starting. Restart the embedded gateway from the Desktop app.",
-      );
-    }
+    return recoverEmbeddedGatewayAccessToken(config, "started");
   }
 
   const accessToken = ensureEmbeddedGatewayToken(config);
