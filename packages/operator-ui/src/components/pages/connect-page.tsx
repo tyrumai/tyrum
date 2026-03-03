@@ -161,7 +161,7 @@ export function ConnectPage({
                   type="button"
                   data-testid="toggle-token-visibility"
                   className="hover:text-fg"
-                  aria-label={showToken ? "Hide token" : "Show token"}
+                  aria-label="Toggle token visibility"
                   aria-pressed={showToken}
                   onClick={() => setShowToken(!showToken)}
                 >
