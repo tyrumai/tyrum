@@ -65,8 +65,8 @@ Key directories:
   gateway/node management, updates, deep links).
 - `apps/desktop/src/preload/` — preload scripts; exposes the `window.tyrumDesktop` bridge via
   `contextBridge`.
-- `apps/desktop/src/renderer/` — Vite + React renderer; uses `@tyrum/operator-ui` components and
-  desktop-only pages.
+- `apps/desktop/src/renderer/` — Vite + React renderer; bootstraps `@tyrum/operator-ui`’s
+  `OperatorUiApp` and wires desktop operator-core boot via `window.tyrumDesktop`.
 
 IPC:
 
