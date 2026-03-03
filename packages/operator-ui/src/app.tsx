@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   Link2,
   Lock,
+  MessageSquare,
   Monitor,
   Play,
   SquareKanban,
@@ -23,6 +24,7 @@ import { MobileNav } from "./components/layout/mobile-nav.js";
 import { Sidebar, type SidebarNavItem } from "./components/layout/sidebar.js";
 import { ApprovalsPage } from "./components/pages/approvals-page.js";
 import { AgentsPage } from "./components/pages/agents-page.js";
+import { ChatPage } from "./components/pages/chat-page.js";
 import { ConnectPage } from "./components/pages/connect-page.js";
 import { ConfigurePage } from "./components/pages/configure-page.js";
 import { DashboardPage } from "./components/pages/dashboard-page.js";
@@ -55,6 +57,7 @@ export interface OperatorUiAppProps {
 
 type OperatorUiRouteId =
   | "dashboard"
+  | "chat"
   | "memory"
   | "approvals"
   | "runs"
@@ -73,6 +76,7 @@ type NavIcon = ComponentType<{ className?: string }>;
 
 const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon }> = {
   dashboard: { label: "Dashboard", icon: LayoutGrid },
+  chat: { label: "Chat", icon: MessageSquare },
   memory: { label: "Memory", icon: Database },
   approvals: { label: "Approvals", icon: ShieldCheck },
   runs: { label: "Runs", icon: Play },
@@ -89,6 +93,7 @@ const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon 
 };
 const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
   "dashboard",
+  "chat",
   "memory",
   "approvals",
   "runs",
@@ -101,6 +106,7 @@ const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
 
 const MOBILE_NAV_ORDER: OperatorUiRouteId[] = ["dashboard", "approvals", "runs", "settings"];
 const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = [
+  "chat",
   "memory",
   "agents",
   "workboard",
@@ -117,6 +123,7 @@ const PLATFORM_WEB_NAV_ORDER: OperatorUiRouteId[] = ["browser"];
 
 const KEYBOARD_NAV_ORDER: OperatorUiRouteId[] = [
   "dashboard",
+  "chat",
   "memory",
   "approvals",
   "runs",
@@ -280,6 +287,7 @@ function OperatorUiAppRoot({
         ) : (
           <>
             {route === "dashboard" && <DashboardPage core={core} onNavigate={navigate} />}
+            {route === "chat" && <ChatPage core={core} />}
             {route === "memory" && <MemoryPage core={core} />}
             {route === "approvals" && <ApprovalsPage core={core} />}
             {route === "runs" && <RunsPage core={core} />}

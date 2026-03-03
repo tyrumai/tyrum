@@ -1519,6 +1519,376 @@ describe("handleClientMessage", () => {
     expect((result as unknown as { ok: boolean }).ok).toBe(true);
     expect((result as unknown as { type: string }).type).toBe("ping");
   });
+
+  it("creates ui sessions via session.create", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const deps = makeDeps(cm, { db });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({ request_id: "r-session-create-1", type: "session.create", payload: {} }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(true);
+      expect((result as unknown as { type: string }).type).toBe("session.create");
+
+      const created = (result as unknown as { result: { session_id: string; thread_id: string } })
+        .result;
+      expect(created.session_id).toMatch(/^ui:/);
+      expect(created.thread_id).toMatch(/^ui-/);
+
+      const row = await db.get<{ channel: string; thread_id: string }>(
+        `SELECT channel, thread_id
+         FROM sessions
+         WHERE agent_id = ? AND session_id = ?`,
+        ["default", created.session_id],
+      );
+      expect(row).toEqual({ channel: "ui", thread_id: created.thread_id });
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("lists ui sessions via session.list ordered by updated_at desc", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const nowIso = new Date().toISOString();
+      const pastIso = new Date(Date.now() - 60_000).toISOString();
+
+      await db.run(
+        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
+        ["default", "ui:thread-old", "ui", "thread-old", pastIso, pastIso],
+      );
+      await db.run(
+        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
+        ["default", "ui:thread-new", "ui", "thread-new", nowIso, nowIso],
+      );
+      await db.run(
+        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
+        ["default", "telegram:dm-1", "telegram", "dm-1", nowIso, nowIso],
+      );
+
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const deps = makeDeps(cm, { db });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({ request_id: "r-session-list-1", type: "session.list", payload: {} }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(true);
+      const sessions = (
+        result as unknown as { result: { sessions: Array<{ session_id: string }> } }
+      ).result.sessions;
+      expect(sessions.map((s) => s.session_id)).toEqual(["ui:thread-new", "ui:thread-old"]);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("returns transcripts via session.get", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const nowIso = new Date().toISOString();
+      await db.run(
+        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, '', ?, ?, ?)`,
+        [
+          "default",
+          "ui:thread-1",
+          "ui",
+          "thread-1",
+          JSON.stringify([
+            { role: "user", content: "hi", timestamp: nowIso },
+            { role: "assistant", content: "hello", timestamp: nowIso },
+          ]),
+          nowIso,
+          nowIso,
+        ],
+      );
+
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const deps = makeDeps(cm, { db });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-session-get-1",
+          type: "session.get",
+          payload: { session_id: "ui:thread-1" },
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(true);
+      expect((result as unknown as { type: string }).type).toBe("session.get");
+
+      const turns = (
+        result as unknown as {
+          result: { session: { turns: Array<{ role: string; content: string }> } };
+        }
+      ).result.session.turns;
+      expect(turns).toEqual([
+        { role: "user", content: "hi" },
+        { role: "assistant", content: "hello" },
+      ]);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("compacts sessions via session.compact", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const nowIso = new Date().toISOString();
+      const turns = Array.from({ length: 12 }, (_, idx) => ({
+        role: idx % 2 === 0 ? "user" : "assistant",
+        content: `msg-${idx}`,
+        timestamp: nowIso,
+      }));
+      await db.run(
+        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'prev', ?, ?, ?)`,
+        [
+          "default",
+          "ui:thread-compact",
+          "ui",
+          "thread-compact",
+          JSON.stringify(turns),
+          nowIso,
+          nowIso,
+        ],
+      );
+
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const deps = makeDeps(cm, { db });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-session-compact-1",
+          type: "session.compact",
+          payload: { session_id: "ui:thread-compact", keep_last_messages: 4 },
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(true);
+      expect((result as unknown as { type: string }).type).toBe("session.compact");
+      expect(
+        (result as unknown as { result: { dropped_messages: number; kept_messages: number } })
+          .result,
+      ).toMatchObject({ dropped_messages: 8, kept_messages: 4 });
+
+      const updated = await db.get<{ turns_json: string; summary: string }>(
+        `SELECT turns_json, summary
+         FROM sessions
+         WHERE agent_id = ? AND session_id = ?`,
+        ["default", "ui:thread-compact"],
+      );
+      expect(updated?.summary).toContain("prev");
+      expect(updated?.summary).toContain("msg-0");
+      expect(JSON.parse(updated?.turns_json ?? "[]")).toHaveLength(4);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("deletes sessions via session.delete and clears overrides + cancels active work", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const nowIso = new Date().toISOString();
+
+      await db.run(
+        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          "default",
+          "ui:thread-1",
+          "ui",
+          "thread-1",
+          "to-delete",
+          JSON.stringify([{ role: "user", content: "hi", timestamp: "t-1" }]),
+          nowIso,
+          nowIso,
+        ],
+      );
+
+      await db.run(
+        `INSERT INTO session_model_overrides (agent_id, session_id, model_id, updated_at)
+         VALUES (?, ?, ?, ?)`,
+        ["default", "ui:thread-1", "openai/gpt-4.1", nowIso],
+      );
+
+      await db.run(
+        `INSERT INTO auth_profiles (
+           profile_id,
+           agent_id,
+           provider,
+           type,
+           secret_handles_json,
+           status,
+           created_at,
+           updated_at
+         ) VALUES (?, ?, ?, 'api_key', ?, 'active', ?, ?)`,
+        [
+          "profile-openai-1",
+          "default",
+          "openai",
+          JSON.stringify({ api_key_handle: "handle-openai-1" }),
+          nowIso,
+          nowIso,
+        ],
+      );
+
+      await db.run(
+        `INSERT INTO session_provider_pins (agent_id, session_id, provider, profile_id, pinned_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        ["default", "ui:thread-1", "openai", "profile-openai-1", nowIso, nowIso],
+      );
+
+      const key = "agent:default:ui:default:channel:thread-1";
+      const lane = "main";
+
+      await db.run(
+        `INSERT INTO lane_queue_mode_overrides (key, lane, queue_mode, updated_at_ms)
+         VALUES (?, ?, 'interrupt', ?)`,
+        [key, lane, Date.now()],
+      );
+      await db.run(
+        `INSERT INTO session_send_policy_overrides (key, send_policy, updated_at_ms)
+         VALUES (?, 'off', ?)`,
+        [key, Date.now()],
+      );
+
+      await db.run(
+        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+         VALUES (?, ?, ?, 'running', '{}')`,
+        ["job-delete-1", key, lane],
+      );
+      await db.run(
+        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+         VALUES (?, ?, ?, ?, 'running', 1)`,
+        ["run-delete-1", "job-delete-1", key, lane],
+      );
+      await db.run(
+        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+         VALUES (?, ?, 0, 'running', '{}')`,
+        ["step-delete-1", "run-delete-1"],
+      );
+
+      await db.run(
+        `INSERT INTO channel_inbox (
+           source,
+           thread_id,
+           message_id,
+           key,
+           lane,
+           received_at_ms,
+           payload_json,
+           status
+         ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'queued')`,
+        ["ui", "thread-1", "msg-delete-queued", key, lane, 1_000],
+      );
+
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const deps = makeDeps(cm, { db });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-session-delete-1",
+          type: "session.delete",
+          payload: { session_id: "ui:thread-1" },
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(true);
+      expect((result as unknown as { type: string }).type).toBe("session.delete");
+
+      const session = await db.get<{ session_id: string }>(
+        `SELECT session_id
+         FROM sessions
+         WHERE agent_id = ? AND session_id = ?`,
+        ["default", "ui:thread-1"],
+      );
+      expect(session).toBeUndefined();
+
+      const modelOverride = await db.get<{ model_id: string }>(
+        `SELECT model_id
+         FROM session_model_overrides
+         WHERE agent_id = ? AND session_id = ?`,
+        ["default", "ui:thread-1"],
+      );
+      expect(modelOverride).toBeUndefined();
+
+      const pin = await db.get<{ profile_id: string }>(
+        `SELECT profile_id
+         FROM session_provider_pins
+         WHERE agent_id = ? AND session_id = ?`,
+        ["default", "ui:thread-1"],
+      );
+      expect(pin).toBeUndefined();
+
+      const queueOverride = await db.get<{ queue_mode: string }>(
+        `SELECT queue_mode
+         FROM lane_queue_mode_overrides
+         WHERE key = ? AND lane = ?`,
+        [key, lane],
+      );
+      expect(queueOverride).toBeUndefined();
+
+      const sendOverride = await db.get<{ send_policy: string }>(
+        `SELECT send_policy
+         FROM session_send_policy_overrides
+         WHERE key = ?`,
+        [key],
+      );
+      expect(sendOverride).toBeUndefined();
+
+      const run = await db.get<{ status: string }>(
+        `SELECT status
+         FROM execution_runs
+         WHERE run_id = ?`,
+        ["run-delete-1"],
+      );
+      expect(run?.status).toBe("cancelled");
+
+      const queued = await db.get<{ status: string; error: string | null }>(
+        `SELECT status, error
+         FROM channel_inbox
+         WHERE message_id = ?`,
+        ["msg-delete-queued"],
+      );
+      expect(queued?.status).toBe("failed");
+      expect(queued?.error).toContain("delete");
+    } finally {
+      await db.close();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

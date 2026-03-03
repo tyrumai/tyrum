@@ -39,6 +39,32 @@ class FakeWsClient implements OperatorWsClient {
   memoryUpdate = vi.fn(async () => ({ v: 1, item: {} }) as unknown);
   memoryForget = vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] }) as unknown);
   memoryExport = vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" }) as unknown);
+  sessionList = vi.fn(async () => ({ sessions: [], next_cursor: null }));
+  sessionGet = vi.fn(async () => ({
+    session: {
+      session_id: "session-1",
+      agent_id: "default",
+      channel: "ui",
+      thread_id: "ui-session-1",
+      summary: "",
+      turns: [],
+      updated_at: "2026-01-01T00:00:00.000Z",
+      created_at: "2026-01-01T00:00:00.000Z",
+    },
+  }));
+  sessionCreate = vi.fn(async () => ({
+    session_id: "session-1",
+    agent_id: "default",
+    channel: "ui",
+    thread_id: "ui-session-1",
+  }));
+  sessionCompact = vi.fn(async () => ({
+    session_id: "session-1",
+    dropped_messages: 0,
+    kept_messages: 0,
+  }));
+  sessionDelete = vi.fn(async () => ({ session_id: "session-1" }));
+  sessionSend = vi.fn(async () => ({ session_id: "session-1", assistant_message: "" }));
   commandExecute = vi.fn(async () => ({}));
 
   private readonly handlers = new Map<string, Set<Handler>>();
@@ -119,6 +145,7 @@ function createFakeHttpClient(): { http: OperatorHttpClient } {
     status: { get: vi.fn(async () => sampleStatusResponse()) },
     usage: { get: vi.fn(async () => sampleUsageResponse()) },
     presence: { list: vi.fn(async () => samplePresenceResponse()) },
+    agentList: { get: vi.fn(async () => ({ agents: [{ agent_id: "default" }] }) as const) },
     pairings: {
       list: vi.fn(async () => ({ status: "ok", pairings: [] }) as const),
       approve: vi.fn(async () => ({ status: "ok", pairing: null }) as const),
@@ -132,6 +159,7 @@ function createFakeHttpClient(): { http: OperatorHttpClient } {
 type OperatorUiA11yRouteId =
   | "connect"
   | "dashboard"
+  | "chat"
   | "memory"
   | "approvals"
   | "runs"
@@ -217,6 +245,7 @@ describe("operator-ui a11y", () => {
   const cases: Array<{ mode: "web" | "desktop"; route: OperatorUiA11yRouteId }> = [
     { mode: "desktop", route: "connect" },
     { mode: "desktop", route: "dashboard" },
+    { mode: "desktop", route: "chat" },
     { mode: "desktop", route: "memory" },
     { mode: "desktop", route: "approvals" },
     { mode: "desktop", route: "runs" },
@@ -226,6 +255,7 @@ describe("operator-ui a11y", () => {
     { mode: "desktop", route: "configure" },
     { mode: "web", route: "connect" },
     { mode: "web", route: "dashboard" },
+    { mode: "web", route: "chat" },
     { mode: "web", route: "memory" },
     { mode: "web", route: "approvals" },
     { mode: "web", route: "runs" },

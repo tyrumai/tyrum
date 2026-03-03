@@ -138,6 +138,75 @@ export function formatLegacySessionId(channel: string, threadId: string): string
 export class SessionDal {
   constructor(private readonly db: SqlDb) {}
 
+  private static encodeCursor(input: { updated_at: string; session_id: string }): string {
+    return Buffer.from(JSON.stringify(input), "utf-8").toString("base64url");
+  }
+
+  private static decodeCursor(
+    cursor: string,
+  ): { updated_at: string; session_id: string } | undefined {
+    const trimmed = cursor.trim();
+    if (!trimmed) return undefined;
+    try {
+      const parsed = JSON.parse(Buffer.from(trimmed, "base64url").toString("utf-8")) as unknown;
+      if (!parsed || typeof parsed !== "object") return undefined;
+      const updatedAt = (parsed as Record<string, unknown>)["updated_at"];
+      const sessionId = (parsed as Record<string, unknown>)["session_id"];
+      if (typeof updatedAt !== "string" || updatedAt.trim().length === 0) return undefined;
+      if (typeof sessionId !== "string" || sessionId.trim().length === 0) return undefined;
+      return { updated_at: updatedAt, session_id: sessionId };
+    } catch {
+      // Intentional: treat any cursor decode failures as an invalid cursor.
+      return undefined;
+    }
+  }
+
+  async list(input: {
+    agentId?: string;
+    channel?: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ sessions: SessionRow[]; nextCursor: string | null }> {
+    const normalizedAgentId = normalizeAgentId(input.agentId);
+    const channel = input.channel?.trim();
+    const limit = Math.min(200, Math.max(1, Math.floor(input.limit ?? 50)));
+    const cursor = input.cursor ? SessionDal.decodeCursor(input.cursor) : undefined;
+    if (input.cursor && !cursor) {
+      throw new Error("invalid cursor");
+    }
+
+    const where: string[] = ["agent_id = ?"];
+    const params: unknown[] = [normalizedAgentId];
+
+    if (channel && channel.length > 0) {
+      where.push("channel = ?");
+      params.push(channel);
+    }
+
+    if (cursor) {
+      where.push("(updated_at < ? OR (updated_at = ? AND session_id < ?))");
+      params.push(cursor.updated_at, cursor.updated_at, cursor.session_id);
+    }
+
+    const rows = await this.db.all<RawSessionRow>(
+      `SELECT *
+       FROM sessions
+       WHERE ${where.join(" AND ")}
+       ORDER BY updated_at DESC, session_id DESC
+       LIMIT ?`,
+      [...params, limit + 1],
+    );
+
+    const selected = rows.slice(0, limit).map(toSessionRow);
+    const hasMore = rows.length > limit;
+    const last = selected.at(-1);
+
+    return {
+      sessions: selected,
+      nextCursor: hasMore && last ? SessionDal.encodeCursor(last) : null,
+    };
+  }
+
   async getOrCreate(channel: string, threadId: string, agentId?: string): Promise<SessionRow> {
     const normalizedAgentId = normalizeAgentId(agentId);
     const sessionId = formatSessionId(channel, threadId, normalizedAgentId);

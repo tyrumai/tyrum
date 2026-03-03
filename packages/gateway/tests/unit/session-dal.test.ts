@@ -182,6 +182,72 @@ describe("SessionDal", () => {
       vi.useRealTimers();
     }
   });
+
+  it("lists sessions by agent/channel ordered by updated_at desc with cursor pagination", async () => {
+    const dal = createDal();
+
+    const nowIso = new Date().toISOString();
+    const t1 = "2026-02-17T00:00:00.000Z";
+    const t2 = "2026-02-17T00:01:00.000Z";
+    const t3 = "2026-02-17T00:02:00.000Z";
+
+    const s1 = await dal.getOrCreate("ui", "thread-1");
+    const s2 = await dal.getOrCreate("ui", "thread-2");
+    const s3 = await dal.getOrCreate("ui", "thread-3");
+
+    // Ensure deterministic ordering independent of creation time.
+    await db!.run("UPDATE sessions SET updated_at = ? WHERE agent_id = ? AND session_id = ?", [
+      t1,
+      "default",
+      s1.session_id,
+    ]);
+    await db!.run("UPDATE sessions SET updated_at = ? WHERE agent_id = ? AND session_id = ?", [
+      t2,
+      "default",
+      s2.session_id,
+    ]);
+    await db!.run("UPDATE sessions SET updated_at = ? WHERE agent_id = ? AND session_id = ?", [
+      t3,
+      "default",
+      s3.session_id,
+    ]);
+
+    // Different channel should be excluded.
+    await dal.getOrCreate("telegram", "dm-1");
+
+    // Same updated_at: uses session_id tie-breaker.
+    await db!.run("UPDATE sessions SET updated_at = ? WHERE agent_id = ? AND session_id = ?", [
+      nowIso,
+      "default",
+      s2.session_id,
+    ]);
+    await db!.run("UPDATE sessions SET updated_at = ? WHERE agent_id = ? AND session_id = ?", [
+      nowIso,
+      "default",
+      s3.session_id,
+    ]);
+
+    const page1 = await dal.list({ agentId: "default", channel: "ui", limit: 2 });
+    expect(page1.sessions).toHaveLength(2);
+    expect(page1.nextCursor).toBeTypeOf("string");
+    expect(page1.sessions.map((s) => s.session_id)).toEqual([s3.session_id, s2.session_id]);
+
+    const page2 = await dal.list({
+      agentId: "default",
+      channel: "ui",
+      limit: 2,
+      cursor: page1.nextCursor,
+    });
+    expect(page2.sessions.map((s) => s.session_id)).toEqual([s1.session_id]);
+    expect(page2.nextCursor).toBeNull();
+  });
+
+  it("rejects invalid list cursors", async () => {
+    const dal = createDal();
+    await expect(
+      dal.list({ agentId: "default", channel: "ui", cursor: "not-a-cursor" }),
+    ).rejects.toThrow("invalid cursor");
+  });
 });
 
 describe("formatSessionId", () => {

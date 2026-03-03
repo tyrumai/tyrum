@@ -5,11 +5,43 @@
  */
 
 import { Hono } from "hono";
-import { AgentTurnRequest } from "@tyrum/schemas";
+import { AgentTurnRequest, WorkspaceId } from "@tyrum/schemas";
 import type { AgentRegistry } from "../modules/agent/registry.js";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 
 export function createAgentRoutes(agents: AgentRegistry): Hono {
   const agent = new Hono();
+
+  agent.get("/agent/list", async (c) => {
+    const includeDefaultRaw = c.req.query("include_default")?.trim().toLowerCase();
+    const includeDefault =
+      includeDefaultRaw === undefined ? true : !["0", "false", "no"].includes(includeDefaultRaw);
+
+    const baseHome = agents.resolveAgentHome("default");
+    const agentsDir = join(baseHome, "agents");
+
+    let discovered: string[] = [];
+    try {
+      const entries = await readdir(agentsDir, { withFileTypes: true });
+      discovered = entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .filter((name) => name !== "default")
+        .filter((name) => WorkspaceId.safeParse(name).success)
+        .sort((a, b) => a.localeCompare(b));
+    } catch (err) {
+      const code =
+        err && typeof err === "object" && "code" in err
+          ? (err as { code?: unknown }).code
+          : undefined;
+      if (code !== "ENOENT") throw err;
+    }
+
+    const agentIds = includeDefault ? ["default", ...discovered] : discovered;
+
+    return c.json({ agents: agentIds.map((agent_id) => ({ agent_id })) }, 200);
+  });
 
   agent.get("/agent/status", async (c) => {
     const agentId = c.req.query("agent_id")?.trim() || "default";
