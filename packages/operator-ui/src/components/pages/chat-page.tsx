@@ -20,10 +20,8 @@ function deriveThreadTitle(session: {
   last_turn?: { role: string; content: string } | undefined;
 }): string {
   const last = session.last_turn;
-  if (last?.role === "user") {
-    const line = firstLine(last.content);
-    if (line) return line;
-  }
+  const line = last ? firstLine(last.content) : "";
+  if (line) return line;
   return session.thread_id;
 }
 
