@@ -967,24 +967,38 @@ export async function handleClientMessage(
 
     const agentId = parsedReq.data.payload.agent_id ?? "default";
     const sessionDal = new SessionDal(deps.db);
-    const session = await sessionDal.getById(parsedReq.data.payload.session_id, agentId);
-    if (!session) {
-      return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
-    }
+    const sessionId = parsedReq.data.payload.session_id;
+    try {
+      const session = await sessionDal.getById(sessionId, agentId);
+      if (!session) {
+        return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
+      }
 
-    const result = WsSessionGetResult.parse({
-      session: {
-        session_id: session.session_id,
-        agent_id: session.agent_id,
-        channel: session.channel,
-        thread_id: session.thread_id,
-        summary: session.summary ?? "",
-        turns: session.turns.map((turn) => ({ role: turn.role, content: turn.content })),
-        updated_at: session.updated_at,
-        created_at: session.created_at,
-      },
-    });
-    return { request_id: msg.request_id, type: msg.type, ok: true, result };
+      const result = WsSessionGetResult.parse({
+        session: {
+          session_id: session.session_id,
+          agent_id: session.agent_id,
+          channel: session.channel,
+          thread_id: session.thread_id,
+          summary: session.summary ?? "",
+          turns: session.turns.map((turn) => ({ role: turn.role, content: turn.content })),
+          updated_at: session.updated_at,
+          created_at: session.created_at,
+        },
+      });
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_get_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        session_id: sessionId,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
   }
 
   if (msg.type === "session.create") {
@@ -1017,15 +1031,28 @@ export async function handleClientMessage(
     const threadId = `${channel}-${crypto.randomUUID()}`;
 
     const sessionDal = new SessionDal(deps.db);
-    const session = await sessionDal.getOrCreate(channel, threadId, agentId);
+    try {
+      const session = await sessionDal.getOrCreate(channel, threadId, agentId);
 
-    const result = WsSessionCreateResult.parse({
-      session_id: session.session_id,
-      agent_id: session.agent_id,
-      channel: session.channel,
-      thread_id: session.thread_id,
-    });
-    return { request_id: msg.request_id, type: msg.type, ok: true, result };
+      const result = WsSessionCreateResult.parse({
+        session_id: session.session_id,
+        agent_id: session.agent_id,
+        channel: session.channel,
+        thread_id: session.thread_id,
+      });
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_create_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        agent_id: agentId,
+        channel,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
   }
 
   if (msg.type === "session.compact") {
@@ -1055,23 +1082,37 @@ export async function handleClientMessage(
 
     const agentId = parsedReq.data.payload.agent_id ?? "default";
     const sessionDal = new SessionDal(deps.db);
-    const existing = await sessionDal.getById(parsedReq.data.payload.session_id, agentId);
-    if (!existing) {
-      return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
+    const sessionId = parsedReq.data.payload.session_id;
+    try {
+      const existing = await sessionDal.getById(sessionId, agentId);
+      if (!existing) {
+        return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
+      }
+
+      const compacted = await sessionDal.compact({
+        sessionId,
+        agentId,
+        keepLastMessages: parsedReq.data.payload.keep_last_messages,
+      });
+
+      const result = WsSessionCompactResult.parse({
+        session_id: sessionId,
+        dropped_messages: compacted.droppedMessages,
+        kept_messages: compacted.keptMessages,
+      });
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_compact_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        session_id: sessionId,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
     }
-
-    const compacted = await sessionDal.compact({
-      sessionId: parsedReq.data.payload.session_id,
-      agentId,
-      keepLastMessages: parsedReq.data.payload.keep_last_messages,
-    });
-
-    const result = WsSessionCompactResult.parse({
-      session_id: parsedReq.data.payload.session_id,
-      dropped_messages: compacted.droppedMessages,
-      kept_messages: compacted.keptMessages,
-    });
-    return { request_id: msg.request_id, type: msg.type, ok: true, result };
   }
 
   if (msg.type === "session.delete") {
@@ -1101,7 +1142,21 @@ export async function handleClientMessage(
 
     const agentId = parsedReq.data.payload.agent_id ?? "default";
     const sessionDal = new SessionDal(deps.db);
-    const session = await sessionDal.getById(parsedReq.data.payload.session_id, agentId);
+    let session: Awaited<ReturnType<typeof sessionDal.getById>>;
+    try {
+      session = await sessionDal.getById(parsedReq.data.payload.session_id, agentId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_delete_lookup_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        session_id: parsedReq.data.payload.session_id,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
     if (!session) {
       return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
     }

@@ -1555,6 +1555,35 @@ describe("handleClientMessage", () => {
     }
   });
 
+  it("returns an error response when session.create hits a db error", async () => {
+    const db = openTestSqliteDb();
+    try {
+      await db.exec("DROP TABLE sessions");
+
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const deps = makeDeps(cm, { db });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-session-create-db-error-1",
+          type: "session.create",
+          payload: {},
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(false);
+      expect((result as unknown as { type: string }).type).toBe("session.create");
+      expect((result as unknown as { error: { code: string } }).error.code).toBe("internal_error");
+    } finally {
+      await db.close();
+    }
+  });
+
   it("lists ui sessions via session.list ordered by updated_at desc", async () => {
     const db = openTestSqliteDb();
     try {
@@ -1683,6 +1712,35 @@ describe("handleClientMessage", () => {
     }
   });
 
+  it("returns an error response when session.get hits a db error", async () => {
+    const db = openTestSqliteDb();
+    try {
+      await db.exec("DROP TABLE sessions");
+
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const deps = makeDeps(cm, { db });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-session-get-db-error-1",
+          type: "session.get",
+          payload: { session_id: "ui:thread-1" },
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(false);
+      expect((result as unknown as { type: string }).type).toBe("session.get");
+      expect((result as unknown as { error: { code: string } }).error.code).toBe("internal_error");
+    } finally {
+      await db.close();
+    }
+  });
+
   it("compacts sessions via session.compact", async () => {
     const db = openTestSqliteDb();
     try {
@@ -1738,6 +1796,35 @@ describe("handleClientMessage", () => {
       expect(updated?.summary).toContain("prev");
       expect(updated?.summary).toContain("msg-0");
       expect(JSON.parse(updated?.turns_json ?? "[]")).toHaveLength(4);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("returns an error response when session.compact hits a db error", async () => {
+    const db = openTestSqliteDb();
+    try {
+      await db.exec("DROP TABLE sessions");
+
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const deps = makeDeps(cm, { db });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-session-compact-db-error-1",
+          type: "session.compact",
+          payload: { session_id: "ui:thread-compact", keep_last_messages: 4 },
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(false);
+      expect((result as unknown as { type: string }).type).toBe("session.compact");
+      expect((result as unknown as { error: { code: string } }).error.code).toBe("internal_error");
     } finally {
       await db.close();
     }
