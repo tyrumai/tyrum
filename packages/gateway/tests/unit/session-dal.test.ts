@@ -230,6 +230,10 @@ describe("SessionDal", () => {
     const page1 = await dal.list({ agentId: "default", channel: "ui", limit: 2 });
     expect(page1.sessions).toHaveLength(2);
     expect(page1.nextCursor).toBeTypeOf("string");
+    const decodedCursor = JSON.parse(
+      Buffer.from(page1.nextCursor as string, "base64url").toString("utf-8"),
+    ) as Record<string, unknown>;
+    expect(Object.keys(decodedCursor).sort()).toEqual(["session_id", "updated_at"]);
     expect(page1.sessions.map((s) => s.session_id)).toEqual([s3.session_id, s2.session_id]);
 
     const page2 = await dal.list({

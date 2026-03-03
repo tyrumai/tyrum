@@ -139,7 +139,8 @@ export class SessionDal {
   constructor(private readonly db: SqlDb) {}
 
   private static encodeCursor(input: { updated_at: string; session_id: string }): string {
-    return Buffer.from(JSON.stringify(input), "utf-8").toString("base64url");
+    const payload = { updated_at: input.updated_at, session_id: input.session_id };
+    return Buffer.from(JSON.stringify(payload), "utf-8").toString("base64url");
   }
 
   private static decodeCursor(
@@ -203,7 +204,10 @@ export class SessionDal {
 
     return {
       sessions: selected,
-      nextCursor: hasMore && last ? SessionDal.encodeCursor(last) : null,
+      nextCursor:
+        hasMore && last
+          ? SessionDal.encodeCursor({ updated_at: last.updated_at, session_id: last.session_id })
+          : null,
     };
   }
 

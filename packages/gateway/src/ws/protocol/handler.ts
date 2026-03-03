@@ -896,12 +896,28 @@ export async function handleClientMessage(
     const limit = parsedReq.data.payload.limit ?? 50;
 
     const sessionDal = new SessionDal(deps.db);
-    const listed = await sessionDal.list({
-      agentId,
-      channel,
-      limit,
-      cursor: parsedReq.data.payload.cursor,
-    });
+    let listed: Awaited<ReturnType<typeof sessionDal.list>>;
+    try {
+      listed = await sessionDal.list({
+        agentId,
+        channel,
+        limit,
+        cursor: parsedReq.data.payload.cursor,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === "invalid cursor") {
+        return errorResponse(msg.request_id, msg.type, "invalid_request", "invalid cursor");
+      }
+      deps.logger?.error("ws.session_list_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
 
     const sessions = listed.sessions.map((session) => {
       const last = session.turns.at(-1);
@@ -1146,9 +1162,6 @@ export async function handleClientMessage(
     }
 
     await deps.db.transaction(async (tx) => {
-      const nowIso = new Date().toISOString();
-      void nowIso;
-
       await tx.run(
         `DELETE FROM session_model_overrides
          WHERE agent_id = ? AND session_id = ?`,

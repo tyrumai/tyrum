@@ -1,6 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { createChatStore } from "../src/stores/chat-store.js";
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function sampleListItem(sessionId: string, updatedAt = "2026-01-01T00:00:00.000Z") {
   return {
     session_id: sessionId,
@@ -126,5 +140,134 @@ describe("chatStore", () => {
     expect(snapshot.sessions.sessions).toEqual([]);
     expect(snapshot.active.sessionId).toBeNull();
     expect(snapshot.active.session).toBeNull();
+  });
+
+  it("ignores stale refreshSessions results after switching agents", async () => {
+    const ws = createFakeWs();
+    const page = deferred<{ sessions: unknown[]; next_cursor: string | null }>();
+    ws.sessionList = vi.fn(async () => await page.promise);
+
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    const loadP = chat.refreshSessions();
+    expect(chat.getSnapshot().sessions.loading).toBe(true);
+
+    chat.setAgentId("agent-2");
+    expect(chat.getSnapshot().agentId).toBe("agent-2");
+    expect(chat.getSnapshot().sessions.loading).toBe(false);
+
+    page.resolve({ sessions: [sampleListItem("session-1")], next_cursor: null });
+    await loadP;
+
+    expect(chat.getSnapshot().sessions.sessions).toEqual([]);
+  });
+
+  it("loadMoreSessions appends results and advances the cursor", async () => {
+    const ws = createFakeWs();
+    const itemA = sampleListItem("session-a");
+    const itemB = sampleListItem("session-b");
+    ws.sessionList
+      .mockResolvedValueOnce({ sessions: [itemA], next_cursor: "c1" })
+      .mockResolvedValueOnce({ sessions: [itemB], next_cursor: null });
+
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    await chat.refreshSessions();
+    expect(chat.getSnapshot().sessions.nextCursor).toBe("c1");
+
+    await chat.loadMoreSessions();
+
+    expect(ws.sessionList).toHaveBeenLastCalledWith({
+      agent_id: "default",
+      channel: "ui",
+      limit: 50,
+      cursor: "c1",
+    });
+    expect(chat.getSnapshot().sessions.sessions.map((s) => s.session_id)).toEqual([
+      "session-a",
+      "session-b",
+    ]);
+    expect(chat.getSnapshot().sessions.nextCursor).toBeNull();
+  });
+
+  it("newChat creates a session then refreshes and opens it", async () => {
+    const ws = createFakeWs();
+    ws.sessionCreate.mockResolvedValueOnce({
+      session_id: "session-9",
+      agent_id: "default",
+      channel: "ui",
+      thread_id: "ui-session-9",
+    });
+    ws.sessionList.mockResolvedValueOnce({
+      sessions: [sampleListItem("session-9")],
+      next_cursor: null,
+    });
+    ws.sessionGet.mockResolvedValueOnce({ session: sampleGetSession("session-9") });
+
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    await chat.newChat();
+
+    expect(ws.sessionCreate).toHaveBeenCalledWith({ agent_id: "default", channel: "ui" });
+    expect(chat.getSnapshot().active.sessionId).toBe("session-9");
+    expect(chat.getSnapshot().active.session?.thread_id).toBe("ui-session-9");
+  });
+
+  it("sendMessage sends into the active session", async () => {
+    const ws = createFakeWs();
+    ws.sessionGet.mockResolvedValue({ session: sampleGetSession("session-1") });
+    ws.sessionList.mockResolvedValue({ sessions: [], next_cursor: null });
+
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    await chat.openSession("session-1");
+    await chat.sendMessage("hello");
+
+    expect(ws.sessionSend).toHaveBeenCalledWith({
+      agent_id: "default",
+      channel: "ui",
+      thread_id: "ui-session-1",
+      content: "hello",
+    });
+    expect(chat.getSnapshot().send.sending).toBe(false);
+    expect(chat.getSnapshot().send.error).toBeNull();
+  });
+
+  it("compactActive compacts then reloads the transcript", async () => {
+    const ws = createFakeWs();
+    ws.sessionGet.mockResolvedValue({ session: sampleGetSession("session-1") });
+    ws.sessionList.mockResolvedValue({ sessions: [], next_cursor: null });
+
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    await chat.openSession("session-1");
+    await chat.compactActive({ keepLastMessages: 5 });
+
+    expect(ws.sessionCompact).toHaveBeenCalledWith({
+      agent_id: "default",
+      session_id: "session-1",
+      keep_last_messages: 5,
+    });
+  });
+
+  it("deleteActive deletes the session and clears selection", async () => {
+    const ws = createFakeWs();
+    ws.sessionGet.mockResolvedValue({ session: sampleGetSession("session-1") });
+    ws.sessionList.mockResolvedValue({ sessions: [], next_cursor: null });
+
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    await chat.openSession("session-1");
+    await chat.deleteActive();
+
+    expect(ws.sessionDelete).toHaveBeenCalledWith({ agent_id: "default", session_id: "session-1" });
+    expect(chat.getSnapshot().active.sessionId).toBeNull();
+    expect(chat.getSnapshot().active.session).toBeNull();
   });
 });

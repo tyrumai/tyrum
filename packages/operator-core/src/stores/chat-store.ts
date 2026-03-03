@@ -84,13 +84,18 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
 
   function setAgentId(agentId: string): void {
     const nextAgentId = agentId.trim().length > 0 ? agentId.trim() : "default";
+    if (store.getSnapshot().agentId === nextAgentId) return;
+
+    // Invalidate any in-flight session loads for the previous agent selection.
+    sessionsRunId += 1;
+    openRunId += 1;
     setState((prev) => {
-      if (prev.agentId === nextAgentId) return prev;
       return {
         ...prev,
         agentId: nextAgentId,
-        sessions: { ...prev.sessions, sessions: [], nextCursor: null, error: null },
-        active: { ...prev.active, sessionId: null, session: null, error: null },
+        sessions: { sessions: [], nextCursor: null, loading: false, error: null },
+        active: { sessionId: null, session: null, loading: false, error: null },
+        send: { sending: false, error: null },
       };
     });
   }

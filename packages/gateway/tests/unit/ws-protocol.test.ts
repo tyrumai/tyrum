@@ -1599,6 +1599,36 @@ describe("handleClientMessage", () => {
     }
   });
 
+  it("rejects invalid session.list cursors", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const deps = makeDeps(cm, { db });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-session-list-invalid-cursor-1",
+          type: "session.list",
+          payload: { cursor: "not-a-cursor" },
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(false);
+      expect((result as unknown as { type: string }).type).toBe("session.list");
+      expect((result as unknown as { error: { code: string } }).error.code).toBe("invalid_request");
+      expect((result as unknown as { error: { message: string } }).error.message).toBe(
+        "invalid cursor",
+      );
+    } finally {
+      await db.close();
+    }
+  });
+
   it("returns transcripts via session.get", async () => {
     const db = openTestSqliteDb();
     try {
