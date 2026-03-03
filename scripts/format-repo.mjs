@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 
 const mode = process.argv[2];
 const prettierFlag = mode === "--check" ? "--check" : mode === "--write" ? "--write" : null;
@@ -36,7 +37,8 @@ function listTrackedFiles() {
   return result.stdout
     .split("\0")
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((file) => existsSync(file));
 }
 
 function chunk(items, size) {
