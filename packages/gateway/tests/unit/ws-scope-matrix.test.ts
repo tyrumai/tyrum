@@ -19,9 +19,17 @@ describe("WS scope authorization matrix", () => {
 
   it("maps workflow + session operations to operator.write", () => {
     expect(resolveWsRequestRequiredScopes("session.send")).toEqual(["operator.write"]);
+    expect(resolveWsRequestRequiredScopes("session.create")).toEqual(["operator.write"]);
+    expect(resolveWsRequestRequiredScopes("session.compact")).toEqual(["operator.write"]);
+    expect(resolveWsRequestRequiredScopes("session.delete")).toEqual(["operator.write"]);
     expect(resolveWsRequestRequiredScopes("workflow.run")).toEqual(["operator.write"]);
     expect(resolveWsRequestRequiredScopes("workflow.resume")).toEqual(["operator.write"]);
     expect(resolveWsRequestRequiredScopes("workflow.cancel")).toEqual(["operator.write"]);
+  });
+
+  it("maps session list/get operations to operator.read", () => {
+    expect(resolveWsRequestRequiredScopes("session.list")).toEqual(["operator.read"]);
+    expect(resolveWsRequestRequiredScopes("session.get")).toEqual(["operator.read"]);
   });
 
   it("maps memory v1 operations to operator.read/operator.write", () => {

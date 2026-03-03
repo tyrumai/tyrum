@@ -15,6 +15,16 @@ import {
   WsApprovalResolveRequest,
   WsSessionSendRequest,
   WsSessionSendResult,
+  WsSessionListRequest,
+  WsSessionListResult,
+  WsSessionGetRequest,
+  WsSessionGetResult,
+  WsSessionCreateRequest,
+  WsSessionCreateResult,
+  WsSessionCompactRequest,
+  WsSessionCompactResult,
+  WsSessionDeleteRequest,
+  WsSessionDeleteResult,
   WsCommandExecuteRequest,
   WsCommandExecuteResult,
   WsWorkflowRunRequest,
@@ -51,6 +61,13 @@ import { executeCommand } from "../../modules/commands/dispatcher.js";
 import { hasAnyRequiredScope } from "../../modules/auth/scopes.js";
 import { resolveWsRequestRequiredScopes } from "../../modules/authz/ws-scope-matrix.js";
 import { isSafeSuggestedOverridePattern } from "../../modules/policy/override-guardrails.js";
+import { SessionDal } from "../../modules/agent/session-dal.js";
+import { buildAgentTurnKey } from "../../modules/agent/turn-key.js";
+import { resolveStoredKeyLaneByChannelThread } from "../../modules/agent/stored-key-lane-resolution.js";
+import { resolveWorkspaceId } from "../../modules/workspace/id.js";
+import { LaneQueueModeOverrideDal } from "../../modules/lanes/queue-mode-override-dal.js";
+import { SessionSendPolicyOverrideDal } from "../../modules/channels/send-policy-override-dal.js";
+import { ExecutionEngine } from "../../modules/execution/engine.js";
 import type { ProtocolDeps } from "./types.js";
 import { broadcastEvent, errorResponse } from "./helpers.js";
 import { handleWorkboardMessage } from "./workboard-handlers.js";
@@ -848,6 +865,447 @@ export async function handleClientMessage(
     );
 
     return { request_id: msg.request_id, type: msg.type, ok: true };
+  }
+
+  if (msg.type === "session.list") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may list sessions",
+      );
+    }
+    if (!deps.db) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "sessions are not available on this gateway instance",
+      );
+    }
+
+    const parsedReq = WsSessionListRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
+        issues: parsedReq.error.issues,
+      });
+    }
+
+    const agentId = parsedReq.data.payload.agent_id ?? "default";
+    const channel = parsedReq.data.payload.channel ?? "ui";
+    const limit = parsedReq.data.payload.limit ?? 50;
+
+    const sessionDal = new SessionDal(deps.db);
+    let listed: Awaited<ReturnType<typeof sessionDal.list>>;
+    try {
+      listed = await sessionDal.list({
+        agentId,
+        channel,
+        limit,
+        cursor: parsedReq.data.payload.cursor,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === "invalid cursor") {
+        return errorResponse(msg.request_id, msg.type, "invalid_request", "invalid cursor");
+      }
+      deps.logger?.error("ws.session_list_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
+
+    const sessions = listed.sessions.map((session) => {
+      return {
+        session_id: session.session_id,
+        agent_id: session.agent_id,
+        channel: session.channel,
+        thread_id: session.thread_id,
+        summary: session.summary ?? "",
+        turns_count: session.turns_count,
+        updated_at: session.updated_at,
+        created_at: session.created_at,
+        last_turn: session.last_turn ?? undefined,
+      };
+    });
+
+    try {
+      const result = WsSessionListResult.parse({
+        sessions,
+        next_cursor: listed.nextCursor ?? null,
+      });
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_list_parse_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
+  }
+
+  if (msg.type === "session.get") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may get sessions",
+      );
+    }
+    if (!deps.db) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "sessions are not available on this gateway instance",
+      );
+    }
+
+    const parsedReq = WsSessionGetRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
+        issues: parsedReq.error.issues,
+      });
+    }
+
+    const agentId = parsedReq.data.payload.agent_id ?? "default";
+    const sessionDal = new SessionDal(deps.db);
+    const sessionId = parsedReq.data.payload.session_id;
+    try {
+      const session = await sessionDal.getById(sessionId, agentId);
+      if (!session) {
+        return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
+      }
+
+      const result = WsSessionGetResult.parse({
+        session: {
+          session_id: session.session_id,
+          agent_id: session.agent_id,
+          channel: session.channel,
+          thread_id: session.thread_id,
+          summary: session.summary ?? "",
+          turns: session.turns.map((turn) => ({ role: turn.role, content: turn.content })),
+          updated_at: session.updated_at,
+          created_at: session.created_at,
+        },
+      });
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_get_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        session_id: sessionId,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
+  }
+
+  if (msg.type === "session.create") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may create sessions",
+      );
+    }
+    if (!deps.db) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "sessions are not available on this gateway instance",
+      );
+    }
+
+    const parsedReq = WsSessionCreateRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
+        issues: parsedReq.error.issues,
+      });
+    }
+
+    const agentId = parsedReq.data.payload.agent_id ?? "default";
+    const channel = parsedReq.data.payload.channel ?? "ui";
+    const threadId = `${channel}-${crypto.randomUUID()}`;
+
+    const sessionDal = new SessionDal(deps.db);
+    try {
+      const session = await sessionDal.getOrCreate(channel, threadId, agentId);
+
+      const result = WsSessionCreateResult.parse({
+        session_id: session.session_id,
+        agent_id: session.agent_id,
+        channel: session.channel,
+        thread_id: session.thread_id,
+      });
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_create_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        agent_id: agentId,
+        channel,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
+  }
+
+  if (msg.type === "session.compact") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may compact sessions",
+      );
+    }
+    if (!deps.db) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "sessions are not available on this gateway instance",
+      );
+    }
+
+    const parsedReq = WsSessionCompactRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
+        issues: parsedReq.error.issues,
+      });
+    }
+
+    const agentId = parsedReq.data.payload.agent_id ?? "default";
+    const sessionDal = new SessionDal(deps.db);
+    const sessionId = parsedReq.data.payload.session_id;
+    try {
+      const existing = await sessionDal.getById(sessionId, agentId);
+      if (!existing) {
+        return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
+      }
+
+      const compacted = await sessionDal.compact({
+        sessionId,
+        agentId,
+        keepLastMessages: parsedReq.data.payload.keep_last_messages,
+      });
+
+      const result = WsSessionCompactResult.parse({
+        session_id: sessionId,
+        dropped_messages: compacted.droppedMessages,
+        kept_messages: compacted.keptMessages,
+      });
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_compact_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        session_id: sessionId,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
+  }
+
+  if (msg.type === "session.delete") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may delete sessions",
+      );
+    }
+    if (!deps.db) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "sessions are not available on this gateway instance",
+      );
+    }
+
+    const parsedReq = WsSessionDeleteRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
+        issues: parsedReq.error.issues,
+      });
+    }
+
+    const agentId = parsedReq.data.payload.agent_id ?? "default";
+    const sessionDal = new SessionDal(deps.db);
+    let session: Awaited<ReturnType<typeof sessionDal.getById>>;
+    try {
+      session = await sessionDal.getById(parsedReq.data.payload.session_id, agentId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_delete_lookup_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        session_id: parsedReq.data.payload.session_id,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
+    if (!session) {
+      return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
+    }
+
+    let key: string;
+    let lane: string;
+    try {
+      const fallbackKey = buildAgentTurnKey({
+        agentId,
+        workspaceId: resolveWorkspaceId(),
+        channel: session.channel,
+        containerKind: "channel",
+        threadId: session.thread_id,
+      });
+      const keyLane = (await resolveStoredKeyLaneByChannelThread(deps.db, {
+        agentId,
+        channel: session.channel,
+        threadId: session.thread_id,
+      })) ?? { key: fallbackKey, lane: "main" };
+
+      key = keyLane.key;
+      lane = keyLane.lane;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_delete_key_resolution_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        session_id: session.session_id,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
+
+    // Best-effort: stop active execution + clear queued followups (if present).
+    try {
+      const engine =
+        deps.engine ??
+        new ExecutionEngine({
+          db: deps.db,
+          policyService: deps.policyService,
+          redactionEngine: deps.redactionEngine,
+          logger: deps.logger,
+          eventsEnabled: true,
+        });
+
+      const activeRuns = await deps.db.all<{ run_id: string }>(
+        `SELECT run_id
+         FROM execution_runs
+         WHERE key = ? AND lane = ? AND status IN ('queued', 'running', 'paused')
+         ORDER BY created_at DESC`,
+        [key, lane],
+      );
+
+      for (const row of activeRuns) {
+        await engine.cancelRun(row.run_id, "deleted by session.delete");
+      }
+
+      const nowIso = new Date().toISOString();
+      await deps.db.run(
+        `UPDATE channel_inbox
+         SET status = 'failed',
+             lease_owner = NULL,
+             lease_expires_at_ms = NULL,
+             processed_at = COALESCE(processed_at, ?),
+             error = COALESCE(error, ?),
+             reply_text = COALESCE(reply_text, '')
+         WHERE status = 'queued' AND key = ? AND lane = ?`,
+        [nowIso, "cancelled by session.delete", key, lane],
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.warn("ws.session_delete.cleanup_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        session_id: session.session_id,
+        agent_id: agentId,
+        error: message,
+      });
+    }
+
+    try {
+      await deps.db.transaction(async (tx) => {
+        await tx.run(
+          `DELETE FROM session_model_overrides
+           WHERE agent_id = ? AND session_id = ?`,
+          [agentId, session.session_id],
+        );
+        await tx.run(
+          `DELETE FROM session_provider_pins
+           WHERE agent_id = ? AND session_id = ?`,
+          [agentId, session.session_id],
+        );
+
+        const queueOverrideDal = new LaneQueueModeOverrideDal(tx);
+        await queueOverrideDal.clear({ key, lane });
+
+        const sendOverrideDal = new SessionSendPolicyOverrideDal(tx);
+        await sendOverrideDal.clear({ key });
+
+        await tx.run(
+          `DELETE FROM sessions
+           WHERE agent_id = ? AND session_id = ?`,
+          [agentId, session.session_id],
+        );
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_delete_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        session_id: session.session_id,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
+
+    try {
+      const result = WsSessionDeleteResult.parse({ session_id: session.session_id });
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_delete_parse_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        session_id: session.session_id,
+        agent_id: agentId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
+    }
   }
 
   if (msg.type === "session.send") {

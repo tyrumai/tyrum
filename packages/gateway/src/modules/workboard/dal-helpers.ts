@@ -109,9 +109,7 @@ function parseJsonMaybe(raw: string | null): unknown | undefined {
   }
 }
 
-export function escapeLikePattern(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
-}
+export { escapeLikePattern } from "../../utils/sql-like.js";
 
 type Cursor = { sort: string; id: string };
 

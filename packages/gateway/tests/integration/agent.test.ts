@@ -137,6 +137,26 @@ describe("agent routes", () => {
     await container.db.close();
   });
 
+  it("lists available agents via /agent/list", async () => {
+    await mkdir(join(homeDir!, "agents/agent-1"), { recursive: true });
+    await writeWorkspace(join(homeDir!, "agents/agent-1"));
+
+    const { app, agents, container } = await createTestApp();
+
+    const res = await app.request("/agent/list");
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as { agents: Array<{ agent_id: string }> };
+    expect(payload.agents.map((a) => a.agent_id)).toEqual(["default", "agent-1"]);
+
+    const resNoDefault = await app.request("/agent/list?include_default=false");
+    expect(resNoDefault.status).toBe(200);
+    const payloadNoDefault = (await resNoDefault.json()) as { agents: Array<{ agent_id: string }> };
+    expect(payloadNoDefault.agents.map((a) => a.agent_id)).toEqual(["agent-1"]);
+
+    await agents?.shutdown();
+    await container.db.close();
+  });
+
   it("does not expose agent routes without an AgentRuntime", async () => {
     const container = await createTestContainer();
     const app = createApp(container);

@@ -55,6 +55,15 @@ export type {
   MemoryStore,
   MemoryTombstonesState,
 } from "./stores/memory-store.js";
+export type {
+  ChatActiveSessionState,
+  ChatAgent,
+  ChatAgentsState,
+  ChatSendState,
+  ChatSessionsState,
+  ChatState,
+  ChatStore,
+} from "./stores/chat-store.js";
 
 // Re-exports for consumers (apps/desktop, packages/tui)
 export type {

@@ -25,6 +25,15 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     case "workflow.cancel": {
       return ["operator.write"];
     }
+    case "session.list":
+    case "session.get": {
+      return ["operator.read"];
+    }
+    case "session.create":
+    case "session.compact":
+    case "session.delete": {
+      return ["operator.write"];
+    }
     case "work.list":
     case "work.get":
     case "subagent.list":

@@ -1,3 +1,7 @@
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+
 export interface MacPermissions {
   accessibility: boolean | null; // null = unknown
   screenRecording: boolean | null;
@@ -9,6 +13,10 @@ export type MacPermissionKind = "accessibility" | "screenRecording";
 export interface MacPermissionRequestResult {
   granted: boolean;
   instructions?: string;
+}
+
+function loadElectron(): typeof import("electron") {
+  return require("electron") as typeof import("electron");
 }
 
 /**
@@ -26,9 +34,7 @@ export function checkMacPermissions(): MacPermissions {
   const instructions: string[] = [];
 
   try {
-    // Dynamic require to avoid crashes outside Electron
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { systemPreferences } = require("electron") as typeof import("electron");
+    const { systemPreferences } = loadElectron();
 
     // prompt=false checks status without showing the system prompt.
     accessibility = systemPreferences.isTrustedAccessibilityClient(false);
@@ -83,9 +89,7 @@ export async function requestMacPermission(
   }
 
   try {
-    // Dynamic require to avoid crashes outside Electron
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { systemPreferences, shell } = require("electron") as typeof import("electron");
+    const { systemPreferences, shell } = loadElectron();
 
     if (permission === "accessibility") {
       const granted = systemPreferences.isTrustedAccessibilityClient(true);

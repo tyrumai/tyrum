@@ -21,6 +21,18 @@ export interface SessionRow {
   updated_at: string;
 }
 
+export interface SessionListRow {
+  agent_id: string;
+  session_id: string;
+  channel: string;
+  thread_id: string;
+  summary: string;
+  turns_count: number;
+  last_turn: { role: "user" | "assistant"; content: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface RawSessionRow {
   agent_id: string;
   session_id: string;
@@ -28,6 +40,19 @@ interface RawSessionRow {
   thread_id: string;
   summary: string;
   turns_json: string;
+  created_at: string | Date;
+  updated_at: string | Date;
+}
+
+interface RawSessionListRow {
+  agent_id: string;
+  session_id: string;
+  channel: string;
+  thread_id: string;
+  summary: string;
+  turns_count: number;
+  last_turn_role: "user" | "assistant" | null;
+  last_turn_content: string | null;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -76,6 +101,31 @@ function toSessionRow(raw: RawSessionRow): SessionRow {
     thread_id: raw.thread_id,
     summary: raw.summary,
     turns: parseTurns(raw.turns_json),
+    created_at: createdAt,
+    updated_at: updatedAt,
+  };
+}
+
+function toSessionListRow(raw: RawSessionListRow): SessionListRow {
+  const createdAt = raw.created_at instanceof Date ? raw.created_at.toISOString() : raw.created_at;
+  const updatedAt = raw.updated_at instanceof Date ? raw.updated_at.toISOString() : raw.updated_at;
+
+  const turnsCount = Number.isFinite(raw.turns_count) ? raw.turns_count : 0;
+  const role = raw.last_turn_role;
+  const content = raw.last_turn_content;
+  const lastTurn =
+    (role === "user" || role === "assistant") && typeof content === "string"
+      ? { role, content }
+      : null;
+
+  return {
+    agent_id: raw.agent_id,
+    session_id: raw.session_id,
+    channel: raw.channel,
+    thread_id: raw.thread_id,
+    summary: raw.summary,
+    turns_count: turnsCount,
+    last_turn: lastTurn,
     created_at: createdAt,
     updated_at: updatedAt,
   };
@@ -137,6 +187,131 @@ export function formatLegacySessionId(channel: string, threadId: string): string
 
 export class SessionDal {
   constructor(private readonly db: SqlDb) {}
+
+  private static encodeCursor(input: { updated_at: string; session_id: string }): string {
+    const payload = { updated_at: input.updated_at, session_id: input.session_id };
+    return Buffer.from(JSON.stringify(payload), "utf-8").toString("base64url");
+  }
+
+  private static decodeCursor(
+    cursor: string,
+  ): { updated_at: string; session_id: string } | undefined {
+    const trimmed = cursor.trim();
+    if (!trimmed) return undefined;
+    try {
+      const parsed = JSON.parse(Buffer.from(trimmed, "base64url").toString("utf-8")) as unknown;
+      if (!parsed || typeof parsed !== "object") return undefined;
+      const updatedAt = (parsed as Record<string, unknown>)["updated_at"];
+      const sessionId = (parsed as Record<string, unknown>)["session_id"];
+      if (typeof updatedAt !== "string" || updatedAt.trim().length === 0) return undefined;
+      if (typeof sessionId !== "string" || sessionId.trim().length === 0) return undefined;
+      return { updated_at: updatedAt, session_id: sessionId };
+    } catch {
+      // Intentional: treat any cursor decode failures as an invalid cursor.
+      return undefined;
+    }
+  }
+
+  async list(input: {
+    agentId?: string;
+    channel?: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ sessions: SessionListRow[]; nextCursor: string | null }> {
+    const normalizedAgentId = normalizeAgentId(input.agentId);
+    const channel = input.channel?.trim();
+    const limit = Math.min(200, Math.max(1, Math.floor(input.limit ?? 50)));
+    const cursor = input.cursor ? SessionDal.decodeCursor(input.cursor) : undefined;
+    if (input.cursor && !cursor) {
+      throw new Error("invalid cursor");
+    }
+
+    const where: string[] = ["agent_id = ?"];
+    const params: unknown[] = [normalizedAgentId];
+
+    if (channel && channel.length > 0) {
+      where.push("channel = ?");
+      params.push(channel);
+    }
+
+    if (cursor) {
+      where.push("(updated_at < ? OR (updated_at = ? AND session_id < ?))");
+      params.push(cursor.updated_at, cursor.updated_at, cursor.session_id);
+    }
+
+    const listSql =
+      this.db.kind === "sqlite"
+        ? `SELECT agent_id,
+	             session_id,
+	             channel,
+             thread_id,
+             summary,
+             created_at,
+             updated_at,
+             CASE
+               WHEN json_valid(turns_json)
+                 THEN json_array_length(turns_json)
+               ELSE 0
+             END AS turns_count,
+             CASE
+               WHEN json_valid(turns_json)
+                 THEN json_extract(turns_json, '$[#-1].role')
+               ELSE NULL
+             END AS last_turn_role,
+             CASE
+               WHEN json_valid(turns_json)
+                 THEN json_extract(turns_json, '$[#-1].content')
+               ELSE NULL
+             END AS last_turn_content
+	           FROM sessions
+	           WHERE ${where.join(" AND ")}
+	           ORDER BY updated_at DESC, session_id DESC
+	           LIMIT ?`
+        : `SELECT agent_id,
+	             session_id,
+	             channel,
+	             thread_id,
+	             summary,
+	             created_at,
+	             updated_at,
+	             CASE
+	               WHEN jsonb_typeof(turns) = 'array' THEN jsonb_array_length(turns)
+	               ELSE 0
+	             END AS turns_count,
+	             (turns -> -1 ->> 'role') AS last_turn_role,
+	             (turns -> -1 ->> 'content') AS last_turn_content
+	           FROM (
+	             SELECT agent_id,
+               session_id,
+               channel,
+               thread_id,
+               summary,
+               created_at,
+               updated_at,
+               CASE
+                 WHEN pg_input_is_valid(turns_json, 'jsonb') THEN turns_json::jsonb
+                 ELSE '[]'::jsonb
+               END AS turns
+             FROM sessions
+             WHERE ${where.join(" AND ")}
+           ) sessions_with_turns
+           ORDER BY updated_at DESC, session_id DESC
+           LIMIT ?`;
+
+    const rows = await this.db.all<RawSessionListRow>(listSql, [...params, limit + 1]);
+
+    const selected = rows.slice(0, limit).map(toSessionListRow);
+    const hasMore = rows.length > limit;
+    const last = selected.at(-1);
+
+    return {
+      sessions: selected,
+      nextCursor:
+        hasMore && last
+          ? SessionDal.encodeCursor({ updated_at: last.updated_at, session_id: last.session_id })
+          : null,
+    };
+  }
 
   async getOrCreate(channel: string, threadId: string, agentId?: string): Promise<SessionRow> {
     const normalizedAgentId = normalizeAgentId(agentId);

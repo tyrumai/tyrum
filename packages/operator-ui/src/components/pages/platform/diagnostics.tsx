@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { DesktopApi } from "../../../desktop-api.js";
 import { useHostApi } from "../../../host/host-api.js";
 import { formatErrorMessage } from "../../../utils/format-error-message.js";
@@ -60,7 +60,7 @@ function DesktopDiagnosticsPanel({ api }: { api: DesktopApi }) {
   >(null);
   const [permissionActionNote, setPermissionActionNote] = useState<string | null>(null);
 
-  const runChecks = () => {
+  const runChecks = useCallback(() => {
     setRunning(true);
 
     const update = (index: number, patch: Partial<CheckItem>) => {
@@ -130,7 +130,7 @@ function DesktopDiagnosticsPanel({ api }: { api: DesktopApi }) {
         update(3, { status: "ok", detail: "Not applicable" });
       })
       .finally(() => setRunning(false));
-  };
+  }, [api]);
 
   const requestPermission = (permission: "accessibility" | "screenRecording") => {
     if (!api.requestMacPermission) {
@@ -161,8 +161,7 @@ function DesktopDiagnosticsPanel({ api }: { api: DesktopApi }) {
 
   useEffect(() => {
     runChecks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [runChecks]);
 
   return (
     <div className="grid gap-6">

@@ -11,33 +11,13 @@ import { EmptyState } from "../ui/empty-state.js";
 import { StatusDot, type StatusDotVariant } from "../ui/status-dot.js";
 import { cn } from "../../lib/cn.js";
 import { useOperatorStore } from "../../use-operator-store.js";
+import { formatRelativeTime } from "../../utils/format-relative-time.js";
 
 const TRUNCATED_ID_CHARS = 8;
 
 function truncateId(id: string): string {
   if (id.length <= TRUNCATED_ID_CHARS) return id;
   return id.slice(-TRUNCATED_ID_CHARS);
-}
-
-function formatRelativeTime(iso: string, nowMs = Date.now()): string {
-  const timestampMs = Date.parse(iso);
-  if (!Number.isFinite(timestampMs)) return "";
-
-  const deltaSeconds = Math.floor((nowMs - timestampMs) / 1000);
-  const absSeconds = Math.abs(deltaSeconds);
-
-  if (absSeconds < 10) return "just now";
-
-  const format = (value: number, unit: string) =>
-    deltaSeconds < 0 ? `in ${value}${unit}` : `${value}${unit} ago`;
-
-  if (absSeconds < 60) return format(absSeconds, "s");
-  const absMinutes = Math.floor(absSeconds / 60);
-  if (absMinutes < 60) return format(absMinutes, "m");
-  const absHours = Math.floor(absMinutes / 60);
-  if (absHours < 24) return format(absHours, "h");
-  const absDays = Math.floor(absHours / 24);
-  return format(absDays, "d");
 }
 
 function formatDurationMs(durationMs: number): string {

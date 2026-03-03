@@ -35,6 +35,32 @@ class FakeWsClient {
   memoryGet = vi.fn(async () => ({ v: 1, item: {} }) as unknown);
   memoryForget = vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] }) as unknown);
   memoryExport = vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" }) as unknown);
+  sessionList = vi.fn(async () => ({ sessions: [], next_cursor: null }));
+  sessionGet = vi.fn(async () => ({
+    session: {
+      session_id: "session-1",
+      agent_id: "default",
+      channel: "ui",
+      thread_id: "ui-1",
+      summary: "",
+      turns: [],
+      updated_at: "2026-01-01T00:00:00.000Z",
+      created_at: "2026-01-01T00:00:00.000Z",
+    },
+  }));
+  sessionCreate = vi.fn(async () => ({
+    session_id: "session-1",
+    agent_id: "default",
+    channel: "ui",
+    thread_id: "ui-1",
+  }));
+  sessionCompact = vi.fn(async () => ({
+    session_id: "session-1",
+    dropped_messages: 0,
+    kept_messages: 0,
+  }));
+  sessionDelete = vi.fn(async () => ({ session_id: "session-1" }));
+  sessionSend = vi.fn(async () => ({ session_id: "session-1", assistant_message: "" }));
 
   on(event: string, handler: Handler): void {
     const existing = this.handlers.get(event);
@@ -352,6 +378,22 @@ describe("operator-core wiring", () => {
 
     expect(
       (core as unknown as { memoryStore?: { getSnapshot: () => unknown } }).memoryStore,
+    ).toBeDefined();
+  });
+
+  it("exposes chatStore on the core", () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    expect(
+      (core as unknown as { chatStore?: { getSnapshot: () => unknown } }).chatStore,
     ).toBeDefined();
   });
 

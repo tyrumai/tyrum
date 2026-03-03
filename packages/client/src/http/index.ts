@@ -27,6 +27,7 @@ export type { AuthPinSetResult } from "./auth.js";
 export type { ContractCatalog, ContractJsonSchema } from "./contracts.js";
 export type { PolicyBundleResponse } from "./policy.js";
 
+export type { AgentListResult } from "./agent-list.js";
 export type { AgentStatusResult } from "./agent-status.js";
 export type {
   RoutingConfigGetResult,

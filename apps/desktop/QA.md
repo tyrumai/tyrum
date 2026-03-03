@@ -13,7 +13,7 @@ This checklist is for manual QA of “native feel” behaviors across macOS, Win
 ### Menus + shortcuts
 
 - [ ] App menu includes **About**, **Preferences…** (`CmdOrCtrl+,`), **Hide/Hide Others/Show All**, **Quit**
-- [ ] **Preferences…** navigates to the Settings/Connection page
+- [ ] Invoking **Preferences…** (`CmdOrCtrl+,`) does not crash (renderer does not currently handle navigation requests)
 - [ ] Standard shortcuts work (at least): `Cmd+Q`, `Cmd+W`, `Cmd+M`, `CmdOrCtrl+,`
 
 ### Window lifecycle
@@ -36,7 +36,7 @@ This checklist is for manual QA of “native feel” behaviors across macOS, Win
 
 ### Deep links
 
-- [ ] Starting the app via `tyrum://…` opens and routes correctly
+- [ ] Starting the app via `tyrum://…` opens and focuses the app (renderer does not currently route deep links)
 - [ ] While running, opening `tyrum://…` forwards to the existing instance (no second window)
 
 ### Update UX (packaged builds)
@@ -49,7 +49,7 @@ This checklist is for manual QA of “native feel” behaviors across macOS, Win
 ### Menus + shortcuts
 
 - [ ] Menu bar includes **File/Edit/View/Help**
-- [ ] **Settings…** uses `CmdOrCtrl+,` and navigates to the Settings/Connection page
+- [ ] Invoking **Settings…** (`CmdOrCtrl+,`) does not crash (renderer does not currently handle navigation requests)
 - [ ] Dev tools menu items only appear in dev builds
 
 ### Window lifecycle
@@ -72,7 +72,7 @@ This checklist is for manual QA of “native feel” behaviors across macOS, Win
 
 ### Deep links
 
-- [ ] Starting the app via `tyrum://…` opens and routes correctly
+- [ ] Starting the app via `tyrum://…` opens and focuses the app (renderer does not currently route deep links)
 - [ ] While running, opening `tyrum://…` forwards to the existing instance (no second window)
 
 ### Update UX (packaged builds)
@@ -85,7 +85,7 @@ This checklist is for manual QA of “native feel” behaviors across macOS, Win
 ### Menus + shortcuts
 
 - [ ] Menu bar includes **File/Edit/View/Help** (or the platform equivalent)
-- [ ] **Settings…** uses `CmdOrCtrl+,` and navigates to the Settings/Connection page
+- [ ] Invoking **Settings…** (`CmdOrCtrl+,`) does not crash (renderer does not currently handle navigation requests)
 - [ ] Dev tools menu items only appear in dev builds
 
 ### Window lifecycle
@@ -108,7 +108,7 @@ This checklist is for manual QA of “native feel” behaviors across macOS, Win
 
 ### Deep links
 
-- [ ] Starting the app via `tyrum://…` opens and routes correctly
+- [ ] Starting the app via `tyrum://…` opens and focuses the app (renderer does not currently route deep links)
 - [ ] While running, opening `tyrum://…` forwards to the existing instance (no second window)
 
 ### Update UX (packaged builds)

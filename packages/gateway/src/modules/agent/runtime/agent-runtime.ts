@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
 import { generateText, stepCountIs, streamText } from "ai";
-import type { LanguageModel, ModelMessage, ToolSet } from "ai";
+import type { EmbeddingModel, LanguageModel, ModelMessage, ToolSet } from "ai";
 import type {
   AgentStatusResponse as AgentStatusResponseT,
   AgentTurnRequest as AgentTurnRequestT,
@@ -147,6 +147,11 @@ type ResolvedExecutionProfile = {
   id: ExecutionProfileId;
   profile: ExecutionProfile;
   source: "interaction_default" | "subagent_record" | "subagent_fallback";
+};
+
+type EmbeddingModelProviderSdk = {
+  textEmbeddingModel?: (modelId: string) => EmbeddingModel;
+  embeddingModel?: (modelId: string) => EmbeddingModel;
 };
 
 const NOOP_APPROVAL_NOTIFIER: ApprovalNotifier = {
@@ -1097,7 +1102,7 @@ export class AgentRuntime {
           fetchImpl: this.fetchImpl,
         });
 
-        const sdkAny = sdk as any;
+        const sdkAny = sdk as EmbeddingModelProviderSdk;
         const embeddingModel =
           typeof sdkAny.textEmbeddingModel === "function"
             ? sdkAny.textEmbeddingModel(candidate.modelId)

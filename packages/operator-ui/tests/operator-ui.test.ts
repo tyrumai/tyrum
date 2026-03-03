@@ -139,6 +139,32 @@ class FakeWsClient implements OperatorWsClient {
   memoryUpdate = vi.fn(async () => ({ v: 1, item: {} }) as unknown);
   memoryForget = vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] }) as unknown);
   memoryExport = vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" }) as unknown);
+  sessionList = vi.fn(async () => ({ sessions: [], next_cursor: null }));
+  sessionGet = vi.fn(async () => ({
+    session: {
+      session_id: "session-1",
+      agent_id: "default",
+      channel: "ui",
+      thread_id: "ui-session-1",
+      summary: "",
+      turns: [],
+      updated_at: "2026-01-01T00:00:00.000Z",
+      created_at: "2026-01-01T00:00:00.000Z",
+    },
+  }));
+  sessionCreate = vi.fn(async () => ({
+    session_id: "session-1",
+    agent_id: "default",
+    channel: "ui",
+    thread_id: "ui-session-1",
+  }));
+  sessionCompact = vi.fn(async () => ({
+    session_id: "session-1",
+    dropped_messages: 0,
+    kept_messages: 0,
+  }));
+  sessionDelete = vi.fn(async () => ({ session_id: "session-1" }));
+  sessionSend = vi.fn(async () => ({ session_id: "session-1", assistant_message: "" }));
   commandExecute = vi.fn(async () => ({}));
 
   private readonly handlers = new Map<string, Set<Handler>>();
@@ -365,6 +391,7 @@ function createFakeHttpClient(): {
   pairingsApprove: ReturnType<typeof vi.fn>;
   pairingsDeny: ReturnType<typeof vi.fn>;
   pairingsRevoke: ReturnType<typeof vi.fn>;
+  agentListGet: ReturnType<typeof vi.fn>;
 } {
   const statusGet = vi.fn(async () => sampleStatusResponse());
   const usageGet = vi.fn(async () => sampleUsageResponse());
@@ -381,11 +408,13 @@ function createFakeHttpClient(): {
   const pairingsRevoke = vi.fn(
     async () => ({ status: "ok", pairing: samplePairingRequestPending() }) as const,
   );
+  const agentListGet = vi.fn(async () => ({ agents: [{ agent_id: "default" }] }) as const);
 
   const http: OperatorHttpClient = {
     status: { get: statusGet },
     usage: { get: usageGet },
     presence: { list: presenceList },
+    agentList: { get: agentListGet },
     pairings: {
       list: pairingsList,
       approve: pairingsApprove,
@@ -403,6 +432,7 @@ function createFakeHttpClient(): {
     pairingsApprove,
     pairingsDeny,
     pairingsRevoke,
+    agentListGet,
   };
 }
 

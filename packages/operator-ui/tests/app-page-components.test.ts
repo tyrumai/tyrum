@@ -5,6 +5,7 @@ describe("Operator UI app/page component structure", () => {
     const expected = [
       { specifier: "../src/components/pages/connect-page.js", exportName: "ConnectPage" },
       { specifier: "../src/components/pages/dashboard-page.js", exportName: "DashboardPage" },
+      { specifier: "../src/components/pages/chat-page.js", exportName: "ChatPage" },
       { specifier: "../src/components/pages/memory-page.js", exportName: "MemoryPage" },
       { specifier: "../src/components/pages/approvals-page.js", exportName: "ApprovalsPage" },
       { specifier: "../src/components/pages/runs-page.js", exportName: "RunsPage" },
