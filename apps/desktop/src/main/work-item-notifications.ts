@@ -1,6 +1,6 @@
 import { TyrumClient } from "@tyrum/operator-core";
 import { Notification } from "electron";
-import { loadConfig } from "./config/store.js";
+import { configExists, loadConfig } from "./config/store.js";
 import { resolveOperatorConnection, startEmbeddedGatewayFromConfig } from "./ipc/gateway-ipc.js";
 import {
   registerWorkItemNotificationHandlers,
@@ -29,6 +29,7 @@ export class WorkItemNotificationService {
 
   async start(): Promise<void> {
     if (this.started) return;
+    if (!configExists()) return;
 
     try {
       let config = loadConfig();

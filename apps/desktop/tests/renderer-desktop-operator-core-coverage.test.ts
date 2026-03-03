@@ -136,6 +136,7 @@ describe("desktop operator-core diff line coverage", () => {
     }));
 
     (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = {
+      configExists: vi.fn(async () => true),
       getConfig: vi.fn(async () => ({ mode: "remote" })),
       gateway: {
         getOperatorConnection,

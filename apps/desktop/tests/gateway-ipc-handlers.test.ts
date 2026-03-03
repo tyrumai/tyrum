@@ -7,6 +7,7 @@ const {
   registeredHandlers,
   testState,
   saveConfigMock,
+  configExistsMock,
   decryptTokenMock,
   generateTokenMock,
   encryptTokenMock,
@@ -14,6 +15,7 @@ const {
   ipcMainHandleMock: vi.fn(),
   registeredHandlers: new Map<string, (...args: unknown[]) => unknown>(),
   saveConfigMock: vi.fn(),
+  configExistsMock: vi.fn(() => true),
   decryptTokenMock: vi.fn(() => "token"),
   generateTokenMock: vi.fn(() => "generated-token"),
   encryptTokenMock: vi.fn((token: string) => `enc:${token}`),
@@ -49,6 +51,7 @@ vi.mock("../src/main/gateway-manager.js", () => ({
 }));
 
 vi.mock("../src/main/config/store.js", () => ({
+  configExists: configExistsMock,
   loadConfig: vi.fn(() => ({
     mode: testState.mode,
     embedded: {
@@ -81,6 +84,8 @@ describe("registerGatewayIpc handlers", () => {
     testState.mode = "embedded";
     testState.remoteWsUrl = "ws://127.0.0.1:8788/ws";
     saveConfigMock.mockReset();
+    configExistsMock.mockReset();
+    configExistsMock.mockReturnValue(true);
     decryptTokenMock.mockReset();
     decryptTokenMock.mockImplementation(() => "token");
     generateTokenMock.mockReset();
@@ -161,6 +166,26 @@ describe("registerGatewayIpc handlers", () => {
       token: "token",
       tlsCertFingerprint256: "",
     });
+  });
+
+  it("rejects operator connection when the desktop is not configured yet", async () => {
+    configExistsMock.mockReturnValue(false);
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
+    expect(operatorConnectionHandler).toBeDefined();
+
+    await expect(operatorConnectionHandler!({} as never)).rejects.toThrow("not configured");
   });
 
   it("rotates embedded token when persisted token cannot be decrypted", async () => {

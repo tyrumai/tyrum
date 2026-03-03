@@ -10,10 +10,14 @@ import { getButtonByText, getControlByLabelText, press, setInputValue } from "./
 
 describe("Connection page", () => {
   let testRoot: TestRoot;
+  let refreshConfigState: ReturnType<typeof vi.fn>;
+  let retry: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     document.body.innerHTML = "";
     testRoot = createTestRoot();
+    refreshConfigState = vi.fn(async () => {});
+    retry = vi.fn();
 
     (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = {
       getConfig: vi.fn(async () => ({ mode: "embedded", embedded: { port: 8788 } })),
@@ -41,7 +45,15 @@ describe("Connection page", () => {
 
     await act(async () => {
       testRoot.root.render(
-        createElement(ConnectionPage, { core: null, busy: false, errorMessage: null }),
+        createElement(ConnectionPage, {
+          core: null,
+          busy: false,
+          errorMessage: null,
+          retry,
+          configExists: false,
+          refreshConfigState,
+          setupGateActive: true,
+        }),
       );
     });
 
@@ -84,6 +96,8 @@ describe("Connection page", () => {
         tlsCertFingerprint256: "AA:BB:CC",
       },
     });
+    expect(refreshConfigState).toHaveBeenCalled();
+    expect(retry).toHaveBeenCalled();
 
     await act(async () => {
       press(getButtonByText("Embedded"));
@@ -105,5 +119,7 @@ describe("Connection page", () => {
       mode: "embedded",
       embedded: { port: 9999 },
     });
+    expect(refreshConfigState).toHaveBeenCalled();
+    expect(retry).toHaveBeenCalled();
   });
 });

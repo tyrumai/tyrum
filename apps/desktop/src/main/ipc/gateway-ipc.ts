@@ -1,6 +1,6 @@
 import { ipcMain, type BrowserWindow } from "electron";
 import { GatewayManager } from "../gateway-manager.js";
-import { loadConfig, saveConfig } from "../config/store.js";
+import { configExists, loadConfig, saveConfig } from "../config/store.js";
 import { decryptToken, generateToken, encryptToken } from "../config/token-store.js";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -107,17 +107,17 @@ export function resolveOperatorConnection(config: DesktopNodeConfig): OperatorCo
 async function startEmbeddedGatewayWithConfig(
   mgr: GatewayManager,
   config: DesktopNodeConfig,
-): Promise<void> {
+): Promise<string> {
+  const accessToken = ensureEmbeddedGatewayToken(config);
   if (mgr.status === "running") {
-    return;
+    return accessToken;
   }
   if (startPromise) {
     await startPromise;
-    return;
+    return accessToken;
   }
 
   const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
-  const accessToken = ensureEmbeddedGatewayToken(config);
   const dbPath = config.embedded.dbPath || join(tyrumHome, "gateway", "gateway.db");
   const gatewayBin = resolveGatewayBinPath();
 
@@ -136,6 +136,8 @@ async function startEmbeddedGatewayWithConfig(
       startPromise = null;
     }
   }
+
+  return accessToken;
 }
 
 export async function startEmbeddedGatewayFromConfig(): Promise<{
@@ -189,7 +191,26 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
     });
 
     ipcMain.handle("gateway:operator-connection", async () => {
+      if (!configExists()) {
+        throw new Error("Desktop is not configured yet. Choose Embedded or Remote mode first.");
+      }
+
       const config = loadConfig();
+      if (config.mode === "embedded") {
+        const mgr = manager;
+        if (!mgr) {
+          throw new Error("Gateway IPC is not initialized");
+        }
+        const token = await startEmbeddedGatewayWithConfig(mgr, config);
+        const port = config.embedded.port;
+        return {
+          mode: "embedded",
+          wsUrl: `ws://127.0.0.1:${port}/ws`,
+          httpBaseUrl: resolveOperatorHttpBaseUrl(config),
+          token,
+          tlsCertFingerprint256: "",
+        } satisfies OperatorConnectionInfo;
+      }
       return resolveOperatorConnection(config);
     });
 

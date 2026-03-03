@@ -7,9 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Mocks — operator-core
 // ---------------------------------------------------------------------------
 
-const { createOperatorCoreManagerMock } = vi.hoisted(() => {
+const { createOperatorCoreManagerMock, testState } = vi.hoisted(() => {
+  const testState = {
+    coreStatus: "connected" as CoreStatus,
+  };
+
   const connectionStore = {
-    getSnapshot: () => ({ status: "disconnected" }),
+    getSnapshot: () => ({ status: testState.coreStatus }),
     subscribe: vi.fn(() => () => {}),
   };
   const coreInstance = { connect: vi.fn(), connectionStore };
@@ -36,7 +40,7 @@ const { createOperatorCoreManagerMock } = vi.hoisted(() => {
     },
   );
 
-  return { createOperatorCoreManagerMock };
+  return { createOperatorCoreManagerMock, testState };
 });
 
 vi.mock("@tyrum/client", () => ({
@@ -107,8 +111,10 @@ describe("App page routing", () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     navCallback = null;
     vi.clearAllMocks();
+    testState.coreStatus = "connected";
 
     (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = {
+      configExists: vi.fn(async () => true),
       getConfig: vi.fn(async () => ({ mode: "remote" })),
       gateway: {
         getOperatorConnection: vi.fn(async () => ({
@@ -203,5 +209,15 @@ describe("App page routing", () => {
 
     await navigateTo("logs");
     expect(document.querySelector('[data-testid="page-debug"]')).not.toBeNull();
+  });
+
+  it("blocks navigation to non-connection pages when remote mode is not connected", async () => {
+    testState.coreStatus = "disconnected";
+    await renderApp();
+
+    expect(document.querySelector('[data-testid="page-connection"]')).not.toBeNull();
+
+    await navigateTo("runs");
+    expect(document.querySelector('[data-testid="page-connection"]')).not.toBeNull();
   });
 });

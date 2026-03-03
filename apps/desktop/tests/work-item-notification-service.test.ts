@@ -1,14 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 
-const { connectSpy, disconnectSpy, offSpy, ctorSpy, resolveOperatorConnectionMock } = vi.hoisted(
-  () => ({
-    connectSpy: vi.fn(),
-    disconnectSpy: vi.fn(),
-    offSpy: vi.fn(),
-    ctorSpy: vi.fn(),
-    resolveOperatorConnectionMock: vi.fn(),
-  }),
-);
+const {
+  connectSpy,
+  disconnectSpy,
+  offSpy,
+  ctorSpy,
+  resolveOperatorConnectionMock,
+  startEmbeddedGatewayFromConfigMock,
+  configExistsMock,
+} = vi.hoisted(() => ({
+  connectSpy: vi.fn(),
+  disconnectSpy: vi.fn(),
+  offSpy: vi.fn(),
+  ctorSpy: vi.fn(),
+  resolveOperatorConnectionMock: vi.fn(),
+  startEmbeddedGatewayFromConfigMock: vi.fn(async () => ({ status: "running", port: 8788 })),
+  configExistsMock: vi.fn(() => true),
+}));
 
 vi.mock("electron", () => ({
   Notification: class NotificationMock {
@@ -37,15 +45,38 @@ vi.mock("@tyrum/client", () => {
 });
 
 vi.mock("../src/main/config/store.js", () => ({
+  configExists: configExistsMock,
   loadConfig: vi.fn(() => ({ mode: "remote" })),
 }));
 
 vi.mock("../src/main/ipc/gateway-ipc.js", () => ({
-  startEmbeddedGatewayFromConfig: vi.fn(async () => ({ status: "running", port: 8788 })),
+  startEmbeddedGatewayFromConfig: startEmbeddedGatewayFromConfigMock,
   resolveOperatorConnection: resolveOperatorConnectionMock,
 }));
 
 describe("WorkItemNotificationService", () => {
+  it("does not start when the desktop is not configured yet", async () => {
+    vi.resetModules();
+    connectSpy.mockReset();
+    disconnectSpy.mockReset();
+    offSpy.mockReset();
+    ctorSpy.mockReset();
+    resolveOperatorConnectionMock.mockReset();
+    startEmbeddedGatewayFromConfigMock.mockReset();
+    configExistsMock.mockReset();
+    configExistsMock.mockReturnValue(false);
+
+    const { WorkItemNotificationService } = await import("../src/main/work-item-notifications.js");
+    const service = new WorkItemNotificationService(() => {});
+
+    await service.start();
+
+    expect(startEmbeddedGatewayFromConfigMock).not.toHaveBeenCalled();
+    expect(resolveOperatorConnectionMock).not.toHaveBeenCalled();
+    expect(ctorSpy).not.toHaveBeenCalled();
+    expect(connectSpy).not.toHaveBeenCalled();
+  });
+
   it("allows retrying start after an initial failure", async () => {
     vi.resetModules();
     connectSpy.mockReset();
@@ -53,6 +84,9 @@ describe("WorkItemNotificationService", () => {
     offSpy.mockReset();
     ctorSpy.mockReset();
     resolveOperatorConnectionMock.mockReset();
+    startEmbeddedGatewayFromConfigMock.mockReset();
+    configExistsMock.mockReset();
+    configExistsMock.mockReturnValue(true);
     resolveOperatorConnectionMock
       .mockImplementationOnce(() => {
         throw new Error("boom");
@@ -88,6 +122,9 @@ describe("WorkItemNotificationService", () => {
     offSpy.mockReset();
     ctorSpy.mockReset();
     resolveOperatorConnectionMock.mockReset();
+    startEmbeddedGatewayFromConfigMock.mockReset();
+    configExistsMock.mockReset();
+    configExistsMock.mockReturnValue(true);
 
     connectSpy.mockImplementationOnce(() => {
       throw new Error("boom");

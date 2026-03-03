@@ -57,6 +57,15 @@ function resolvePageId(raw: string): PageId | null {
   return PAGE_ALIASES[raw] ?? null;
 }
 
+type DesktopGatewayMode = "embedded" | "remote";
+
+function readGatewayMode(config: unknown): DesktopGatewayMode {
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    return "embedded";
+  }
+  return (config as Record<string, unknown>)["mode"] === "remote" ? "remote" : "embedded";
+}
+
 /** Subscribes to operator core connection status via useSyncExternalStore. */
 function useConnectionStatus(
   core: import("@tyrum/operator-core").OperatorCore | null,
@@ -78,16 +87,44 @@ function useConnectionStatus(
 export function App() {
   const [page, setPage] = useState<PageId>("dashboard");
   const [workItemToOpen, setWorkItemToOpen] = useState<string | null>(null);
+  const [hasSavedConfig, setHasSavedConfig] = useState<boolean | null>(null);
+  const [gatewayMode, setGatewayMode] = useState<DesktopGatewayMode>("embedded");
 
-  const operatorCore = useDesktopOperatorCore();
+  const refreshConfigState = useCallback(async (): Promise<void> => {
+    const api = window.tyrumDesktop;
+    if (!api?.configExists || !api.getConfig) return;
+
+    const [exists, config] = await Promise.all([api.configExists(), api.getConfig()]);
+    setHasSavedConfig(exists);
+    setGatewayMode(readGatewayMode(config));
+  }, []);
+
+  useEffect(() => {
+    void refreshConfigState();
+  }, [refreshConfigState]);
+
+  const operatorCore = useDesktopOperatorCore({ enabled: hasSavedConfig === true });
   const connectionStatus = useConnectionStatus(operatorCore.core);
 
-  const handleNavigate = useCallback((nextPage: string): void => {
-    const resolved = resolvePageId(nextPage);
-    if (resolved) {
-      setPage(resolved);
-    }
-  }, []);
+  const setupGateActive =
+    hasSavedConfig !== true ||
+    operatorCore.errorMessage !== null ||
+    (hasSavedConfig === true && gatewayMode === "remote" && connectionStatus !== "connected");
+
+  const effectivePage: PageId = setupGateActive ? "connection" : page;
+
+  const handleNavigate = useCallback(
+    (nextPage: string): void => {
+      const resolved = resolvePageId(nextPage);
+      if (resolved) {
+        if (setupGateActive && resolved !== "connection") {
+          return;
+        }
+        setPage(resolved);
+      }
+    },
+    [setupGateActive],
+  );
 
   useEffect(() => {
     const api = window.tyrumDesktop;
@@ -112,6 +149,7 @@ export function App() {
     if (!api?.consumeDeepLink || !api.onDeepLinkOpen) return;
 
     const handleDeepLink = (url: string): void => {
+      if (setupGateActive) return;
       const route = getDeepLinkRoute(url);
       handleNavigate(route.pageId);
       if (route.pageId === "work" && route.workItemId) {
@@ -131,10 +169,10 @@ export function App() {
     });
 
     return unsubscribe;
-  }, [handleNavigate]);
+  }, [handleNavigate, setupGateActive]);
 
   const renderPage = () => {
-    switch (page) {
+    switch (effectivePage) {
       case "dashboard":
         return <Dashboard core={operatorCore.core} onNavigate={handleNavigate} />;
       case "approvals":
@@ -155,7 +193,17 @@ export function App() {
           <OperatorPageGuard {...operatorCore} render={(core) => <MemoryPage core={core} />} />
         );
       case "connection":
-        return <ConnectionPage core={operatorCore.core} />;
+        return (
+          <ConnectionPage
+            core={operatorCore.core}
+            busy={operatorCore.busy}
+            errorMessage={operatorCore.errorMessage}
+            retry={operatorCore.retry}
+            configExists={hasSavedConfig === true}
+            refreshConfigState={refreshConfigState}
+            setupGateActive={setupGateActive}
+          />
+        );
       case "pairing":
         return (
           <OperatorPageGuard {...operatorCore} render={(core) => <PairingPage core={core} />} />
@@ -175,7 +223,11 @@ export function App() {
   };
 
   const content = (
-    <Layout currentPage={page} onNavigate={handleNavigate} connectionStatus={connectionStatus}>
+    <Layout
+      currentPage={effectivePage}
+      onNavigate={handleNavigate}
+      connectionStatus={connectionStatus}
+    >
       {renderPage()}
       <ConsentModal />
     </Layout>
