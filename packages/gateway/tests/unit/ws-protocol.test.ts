@@ -20,6 +20,9 @@ import {
 import { NodeNotPairedError } from "../../src/ws/protocol/errors.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
+import { resolveWorkspaceId } from "../../src/modules/workspace/id.js";
+import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 
 // ---------------------------------------------------------------------------
 // Mock WebSocket helper
@@ -2118,6 +2121,140 @@ describe("handleClientMessage", () => {
       );
       expect(queued?.status).toBe("failed");
       expect(queued?.error).toContain("delete");
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("clears queued channel_inbox items using resolveWorkspaceId() when no stored key exists", async () => {
+    const prevWorkspaceId = process.env.TYRUM_WORKSPACE_ID;
+    process.env.TYRUM_WORKSPACE_ID = "workspace-1";
+
+    const db = openTestSqliteDb();
+    try {
+      const nowIso = new Date().toISOString();
+      const agentId = "agent-1";
+      const sessionId = "ui:thread-fallback-1";
+      const threadId = "thread-fallback-1";
+
+      await db.run(
+        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [agentId, sessionId, "ui", threadId, "to-delete", "[]", nowIso, nowIso],
+      );
+
+      const key = buildAgentTurnKey({
+        agentId,
+        workspaceId: resolveWorkspaceId(),
+        channel: "ui",
+        containerKind: "channel",
+        threadId,
+      });
+      const lane = "main";
+      const messageId = "msg-delete-fallback-queued";
+
+      await db.run(
+        `INSERT INTO channel_inbox (
+           source,
+           thread_id,
+           message_id,
+           key,
+           lane,
+           received_at_ms,
+           payload_json,
+           status
+         ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'queued')`,
+        ["ui", threadId, messageId, key, lane, 1_000],
+      );
+
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const deps = makeDeps(cm, { db });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-session-delete-fallback-1",
+          type: "session.delete",
+          payload: { agent_id: agentId, session_id: sessionId },
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(true);
+
+      const queued = await db.get<{ status: string; error: string | null }>(
+        `SELECT status, error
+         FROM channel_inbox
+         WHERE message_id = ?`,
+        [messageId],
+      );
+      expect(queued?.status).toBe("failed");
+      expect(queued?.error).toContain("session.delete");
+    } finally {
+      if (typeof prevWorkspaceId === "string") {
+        process.env.TYRUM_WORKSPACE_ID = prevWorkspaceId;
+      } else {
+        delete process.env.TYRUM_WORKSPACE_ID;
+      }
+      await db.close();
+    }
+  });
+
+  it("uses deps.engine for session.delete cleanup when available", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const nowIso = new Date().toISOString();
+
+      await db.run(
+        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
+        ["default", "ui:thread-delete-engine-1", "ui", "thread-delete-engine-1", nowIso, nowIso],
+      );
+
+      const key = buildAgentTurnKey({
+        agentId: "default",
+        workspaceId: resolveWorkspaceId(),
+        channel: "ui",
+        containerKind: "channel",
+        threadId: "thread-delete-engine-1",
+      });
+      const lane = "main";
+
+      await db.run(
+        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+         VALUES (?, ?, ?, 'running', '{}')`,
+        ["job-delete-engine-1", key, lane],
+      );
+      await db.run(
+        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+         VALUES (?, ?, ?, ?, 'running', 1)`,
+        ["run-delete-engine-1", "job-delete-engine-1", key, lane],
+      );
+
+      const cm = new ConnectionManager();
+      const { id } = makeClient(cm, ["cli"]);
+      const client = cm.getClient(id)!;
+      const engine = new ExecutionEngine({ db, eventsEnabled: true });
+      const cancelSpy = vi.spyOn(engine, "cancelRun");
+      const deps = makeDeps(cm, { db, engine });
+
+      const result = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-session-delete-engine-1",
+          type: "session.delete",
+          payload: { session_id: "ui:thread-delete-engine-1" },
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(true);
+      expect(cancelSpy).toHaveBeenCalledTimes(1);
+      expect(cancelSpy).toHaveBeenCalledWith("run-delete-engine-1", "deleted by session.delete");
     } finally {
       await db.close();
     }

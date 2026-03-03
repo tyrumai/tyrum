@@ -64,6 +64,7 @@ import { isSafeSuggestedOverridePattern } from "../../modules/policy/override-gu
 import { SessionDal } from "../../modules/agent/session-dal.js";
 import { buildAgentTurnKey } from "../../modules/agent/turn-key.js";
 import { resolveStoredKeyLaneByChannelThread } from "../../modules/agent/stored-key-lane-resolution.js";
+import { resolveWorkspaceId } from "../../modules/workspace/id.js";
 import { LaneQueueModeOverrideDal } from "../../modules/lanes/queue-mode-override-dal.js";
 import { SessionSendPolicyOverrideDal } from "../../modules/channels/send-policy-override-dal.js";
 import { ExecutionEngine } from "../../modules/execution/engine.js";
@@ -1166,7 +1167,7 @@ export async function handleClientMessage(
     try {
       const fallbackKey = buildAgentTurnKey({
         agentId,
-        workspaceId: agentId,
+        workspaceId: resolveWorkspaceId(),
         channel: session.channel,
         containerKind: "channel",
         threadId: session.thread_id,
@@ -1194,11 +1195,15 @@ export async function handleClientMessage(
 
     // Best-effort: stop active execution + clear queued followups (if present).
     try {
-      const engine = new ExecutionEngine({
-        db: deps.db,
-        policyService: deps.policyService,
-        eventsEnabled: true,
-      });
+      const engine =
+        deps.engine ??
+        new ExecutionEngine({
+          db: deps.db,
+          policyService: deps.policyService,
+          redactionEngine: deps.redactionEngine,
+          logger: deps.logger,
+          eventsEnabled: true,
+        });
 
       const activeRuns = await deps.db.all<{ run_id: string }>(
         `SELECT run_id

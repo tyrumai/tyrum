@@ -242,8 +242,8 @@ export class SessionDal {
     const listSql =
       this.db.kind === "sqlite"
         ? `SELECT agent_id,
-             session_id,
-             channel,
+	             session_id,
+	             channel,
              thread_id,
              summary,
              created_at,
@@ -263,22 +263,25 @@ export class SessionDal {
                  THEN json_extract(turns_json, '$[#-1].content')
                ELSE NULL
              END AS last_turn_content
-           FROM sessions
-           WHERE ${where.join(" AND ")}
-           ORDER BY updated_at DESC, session_id DESC
-           LIMIT ?`
+	           FROM sessions
+	           WHERE ${where.join(" AND ")}
+	           ORDER BY updated_at DESC, session_id DESC
+	           LIMIT ?`
         : `SELECT agent_id,
-             session_id,
-             channel,
-             thread_id,
-             summary,
-             created_at,
-             updated_at,
-             jsonb_array_length(turns) AS turns_count,
-             (turns -> -1 ->> 'role') AS last_turn_role,
-             (turns -> -1 ->> 'content') AS last_turn_content
-           FROM (
-             SELECT agent_id,
+	             session_id,
+	             channel,
+	             thread_id,
+	             summary,
+	             created_at,
+	             updated_at,
+	             CASE
+	               WHEN jsonb_typeof(turns) = 'array' THEN jsonb_array_length(turns)
+	               ELSE 0
+	             END AS turns_count,
+	             (turns -> -1 ->> 'role') AS last_turn_role,
+	             (turns -> -1 ->> 'content') AS last_turn_content
+	           FROM (
+	             SELECT agent_id,
                session_id,
                channel,
                thread_id,

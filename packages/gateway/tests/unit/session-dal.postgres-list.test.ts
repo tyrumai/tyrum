@@ -47,7 +47,27 @@ async function openPgMemDb(): Promise<{ db: SqlDb; close: () => Promise<void> }>
     name: "jsonb_array_length",
     args: [DataType.jsonb],
     returns: DataType.integer,
-    implementation: (value: unknown) => (Array.isArray(value) ? value.length : 0),
+    implementation: (value: unknown) => {
+      if (!Array.isArray(value)) {
+        throw new Error("cannot get array length of a scalar/object");
+      }
+      return value.length;
+    },
+  });
+
+  mem.public.registerFunction({
+    name: "jsonb_typeof",
+    args: [DataType.jsonb],
+    returns: DataType.text,
+    implementation: (value: unknown) => {
+      if (value === null) return "null";
+      if (Array.isArray(value)) return "array";
+      if (typeof value === "object") return "object";
+      if (typeof value === "string") return "string";
+      if (typeof value === "number") return "number";
+      if (typeof value === "boolean") return "boolean";
+      return "unknown";
+    },
   });
 
   mem.public.registerFunction({
@@ -126,6 +146,30 @@ describe("SessionDal.list (postgres)", () => {
 
       await db.run("UPDATE sessions SET turns_json = ? WHERE agent_id = ? AND session_id = ?", [
         "{ not: json",
+        "default",
+        s1.session_id,
+      ]);
+
+      const page = await dal.list({ agentId: "default", channel: "ui", limit: 10 });
+      expect(page.sessions.map((s) => s.session_id).sort()).toEqual([s1.session_id, s2.session_id]);
+
+      const corrupted = page.sessions.find((s) => s.session_id === s1.session_id);
+      expect(corrupted?.turns_count).toBe(0);
+      expect(corrupted?.last_turn).toBeNull();
+    } finally {
+      await close();
+    }
+  });
+
+  it("treats non-array turns_json as empty instead of failing the whole query", async () => {
+    const { db, close } = await openPgMemDb();
+    try {
+      const dal = new SessionDal(db);
+      const s1 = await dal.getOrCreate("ui", "thread-1", "default");
+      const s2 = await dal.getOrCreate("ui", "thread-2", "default");
+
+      await db.run("UPDATE sessions SET turns_json = ? WHERE agent_id = ? AND session_id = ?", [
+        "{}",
         "default",
         s1.session_id,
       ]);
