@@ -21,6 +21,18 @@ export interface SessionRow {
   updated_at: string;
 }
 
+export interface SessionListRow {
+  agent_id: string;
+  session_id: string;
+  channel: string;
+  thread_id: string;
+  summary: string;
+  turns_count: number;
+  last_turn: { role: "user" | "assistant"; content: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface RawSessionRow {
   agent_id: string;
   session_id: string;
@@ -28,6 +40,19 @@ interface RawSessionRow {
   thread_id: string;
   summary: string;
   turns_json: string;
+  created_at: string | Date;
+  updated_at: string | Date;
+}
+
+interface RawSessionListRow {
+  agent_id: string;
+  session_id: string;
+  channel: string;
+  thread_id: string;
+  summary: string;
+  turns_count: number;
+  last_turn_role: "user" | "assistant" | null;
+  last_turn_content: string | null;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -76,6 +101,31 @@ function toSessionRow(raw: RawSessionRow): SessionRow {
     thread_id: raw.thread_id,
     summary: raw.summary,
     turns: parseTurns(raw.turns_json),
+    created_at: createdAt,
+    updated_at: updatedAt,
+  };
+}
+
+function toSessionListRow(raw: RawSessionListRow): SessionListRow {
+  const createdAt = raw.created_at instanceof Date ? raw.created_at.toISOString() : raw.created_at;
+  const updatedAt = raw.updated_at instanceof Date ? raw.updated_at.toISOString() : raw.updated_at;
+
+  const turnsCount = Number.isFinite(raw.turns_count) ? raw.turns_count : 0;
+  const role = raw.last_turn_role;
+  const content = raw.last_turn_content;
+  const lastTurn =
+    (role === "user" || role === "assistant") && typeof content === "string"
+      ? { role, content }
+      : null;
+
+  return {
+    agent_id: raw.agent_id,
+    session_id: raw.session_id,
+    channel: raw.channel,
+    thread_id: raw.thread_id,
+    summary: raw.summary,
+    turns_count: turnsCount,
+    last_turn: lastTurn,
     created_at: createdAt,
     updated_at: updatedAt,
   };
@@ -167,7 +217,7 @@ export class SessionDal {
     channel?: string;
     limit?: number;
     cursor?: string;
-  }): Promise<{ sessions: SessionRow[]; nextCursor: string | null }> {
+  }): Promise<{ sessions: SessionListRow[]; nextCursor: string | null }> {
     const normalizedAgentId = normalizeAgentId(input.agentId);
     const channel = input.channel?.trim();
     const limit = Math.min(200, Math.max(1, Math.floor(input.limit ?? 50)));
@@ -189,16 +239,53 @@ export class SessionDal {
       params.push(cursor.updated_at, cursor.updated_at, cursor.session_id);
     }
 
-    const rows = await this.db.all<RawSessionRow>(
-      `SELECT *
-       FROM sessions
-       WHERE ${where.join(" AND ")}
-       ORDER BY updated_at DESC, session_id DESC
-       LIMIT ?`,
-      [...params, limit + 1],
-    );
+    const listSql =
+      this.db.kind === "sqlite"
+        ? `SELECT agent_id,
+             session_id,
+             channel,
+             thread_id,
+             summary,
+             created_at,
+             updated_at,
+             CASE
+               WHEN json_valid(turns_json)
+                 THEN json_array_length(turns_json)
+               ELSE 0
+             END AS turns_count,
+             CASE
+               WHEN json_valid(turns_json)
+                 THEN json_extract(turns_json, '$[#-1].role')
+               ELSE NULL
+             END AS last_turn_role,
+             CASE
+               WHEN json_valid(turns_json)
+                 THEN json_extract(turns_json, '$[#-1].content')
+               ELSE NULL
+             END AS last_turn_content
+           FROM sessions
+           WHERE ${where.join(" AND ")}
+           ORDER BY updated_at DESC, session_id DESC
+           LIMIT ?`
+        : `SELECT agent_id,
+             session_id,
+             channel,
+             thread_id,
+             summary,
+             created_at,
+             updated_at,
+             jsonb_array_length(turns) AS turns_count,
+             (turns -> -1 ->> 'role') AS last_turn_role,
+             (turns -> -1 ->> 'content') AS last_turn_content
+           FROM sessions s
+             CROSS JOIN LATERAL (SELECT s.turns_json::jsonb AS turns) turns_cast
+           WHERE ${where.join(" AND ")}
+           ORDER BY updated_at DESC, session_id DESC
+           LIMIT ?`;
 
-    const selected = rows.slice(0, limit).map(toSessionRow);
+    const rows = await this.db.all<RawSessionListRow>(listSql, [...params, limit + 1]);
+
+    const selected = rows.slice(0, limit).map(toSessionListRow);
     const hasMore = rows.length > limit;
     const last = selected.at(-1);
 

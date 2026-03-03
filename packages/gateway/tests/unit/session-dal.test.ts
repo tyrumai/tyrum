@@ -195,6 +195,8 @@ describe("SessionDal", () => {
     const s2 = await dal.getOrCreate("ui", "thread-2");
     const s3 = await dal.getOrCreate("ui", "thread-3");
 
+    await dal.appendTurn(s3.session_id, "hello", "world", 20, "2026-02-17T00:00:30.000Z");
+
     // Ensure deterministic ordering independent of creation time.
     await db!.run("UPDATE sessions SET updated_at = ? WHERE agent_id = ? AND session_id = ?", [
       t1,
@@ -235,6 +237,10 @@ describe("SessionDal", () => {
     ) as Record<string, unknown>;
     expect(Object.keys(decodedCursor).sort()).toEqual(["session_id", "updated_at"]);
     expect(page1.sessions.map((s) => s.session_id)).toEqual([s3.session_id, s2.session_id]);
+    expect(page1.sessions[0]?.turns_count).toBe(2);
+    expect(page1.sessions[0]?.last_turn).toEqual({ role: "assistant", content: "world" });
+    expect(page1.sessions[1]?.turns_count).toBe(0);
+    expect(page1.sessions[1]?.last_turn).toBeNull();
 
     const page2 = await dal.list({
       agentId: "default",

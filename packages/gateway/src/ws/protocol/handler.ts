@@ -920,17 +920,16 @@ export async function handleClientMessage(
     }
 
     const sessions = listed.sessions.map((session) => {
-      const last = session.turns.at(-1);
       return {
         session_id: session.session_id,
         agent_id: session.agent_id,
         channel: session.channel,
         thread_id: session.thread_id,
         summary: session.summary ?? "",
-        turns_count: session.turns.length,
+        turns_count: session.turns_count,
         updated_at: session.updated_at,
         created_at: session.created_at,
-        last_turn: last ? { role: last.role, content: last.content } : undefined,
+        last_turn: session.last_turn ?? undefined,
       };
     });
 
