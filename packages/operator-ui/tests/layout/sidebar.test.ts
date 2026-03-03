@@ -1,16 +1,32 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { LayoutDashboard, ShieldCheck } from "lucide-react";
 import * as operatorUi from "../../src/index.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
+function stubLocalStorage(): void {
+  const store = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+  });
+}
+
 describe("Sidebar", () => {
+  beforeEach(() => {
+    stubLocalStorage();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
-    localStorage.removeItem("tyrum-sidebar-collapsed");
-    localStorage.removeItem("tyrum-sidebar-secondary-collapsed");
+    vi.unstubAllGlobals();
   });
 
   it("renders brand, nav items, and connection indicator", () => {

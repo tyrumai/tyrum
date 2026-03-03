@@ -161,6 +161,8 @@ export function ConnectPage({
                   type="button"
                   data-testid="toggle-token-visibility"
                   className="hover:text-fg"
+                  aria-label="Toggle token visibility"
+                  aria-pressed={showToken}
                   onClick={() => setShowToken(!showToken)}
                 >
                   {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

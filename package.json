@@ -13,6 +13,7 @@
     "build": "pnpm -r run build",
     "pretest": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build",
     "test": "vitest run",
+    "test:a11y:operator-ui": "vitest run packages/operator-ui/tests/operator-ui.a11y.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "docs:public-check": "bash scripts/check-public-docs.sh",

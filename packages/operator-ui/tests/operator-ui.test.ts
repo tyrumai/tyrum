@@ -4,8 +4,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
-import { axe } from "vitest-axe";
-import { toHaveNoViolations } from "vitest-axe/matchers.js";
 import {
   createBearerTokenAuth,
   createBrowserCookieAuth,
@@ -18,7 +16,6 @@ import { PairingPage } from "../src/components/pages/pairing-page.js";
 import { stubMatchMedia } from "./test-utils.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-expect.extend({ toHaveNoViolations });
 
 type Handler = (data: unknown) => void;
 
@@ -404,63 +401,6 @@ describe("operator-ui", () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
-
-  const expectNoAxeViolationsForRoute = async ({
-    mode,
-    navigateTo,
-  }: {
-    mode: "web" | "desktop";
-    navigateTo?: string;
-  }): Promise<void> => {
-    document.title = "Tyrum";
-    document.body.innerHTML = "";
-
-    if (typeof HTMLCanvasElement !== "undefined") {
-      HTMLCanvasElement.prototype.getContext = () => null;
-    }
-
-    const ws = new FakeWsClient(Boolean(navigateTo));
-    const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
-
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
-    try {
-      act(() => {
-        root = createRoot(container);
-        root.render(React.createElement(OperatorUiApp, { core, mode }));
-      });
-
-      if (navigateTo) {
-        const navButton = container.querySelector<HTMLButtonElement>(
-          `[data-testid="nav-${navigateTo}"]`,
-        );
-        expect(navButton).not.toBeNull();
-        act(() => {
-          navButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        });
-      }
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      const results = await axe(container);
-      expect(results).toHaveNoViolations();
-    } finally {
-      act(() => {
-        root?.unmount();
-      });
-      container.remove();
-    }
-  };
 
   it("does not export AdminModeBanner from the public API", () => {
     expect("AdminModeBanner" in operatorUi).toBe(false);
@@ -2625,38 +2565,6 @@ describe("operator-ui", () => {
       root?.unmount();
     });
     container.remove();
-  });
-
-  it("has no axe violations on the connect page", async () => {
-    await expectNoAxeViolationsForRoute({ mode: "desktop" });
-  });
-
-  it("has no axe violations on the dashboard page", async () => {
-    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "dashboard" });
-  });
-
-  it("has no axe violations on the memory page", async () => {
-    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "memory" });
-  });
-
-  it("has no axe violations on the approvals page", async () => {
-    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "approvals" });
-  });
-
-  it("has no axe violations on the runs page", async () => {
-    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "runs" });
-  });
-
-  it("has no axe violations on the pairing page", async () => {
-    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "pairing" });
-  });
-
-  it("has no axe violations on the settings page", async () => {
-    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "settings" });
-  });
-
-  it("has no axe violations on the desktop setup page", async () => {
-    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "desktop" });
   });
 
   it("lists and resolves pending approvals", async () => {
