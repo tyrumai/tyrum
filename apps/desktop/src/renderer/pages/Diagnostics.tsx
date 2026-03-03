@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toErrorMessage } from "../lib/errors.js";
 import {
   Alert,
@@ -102,7 +102,7 @@ export function DiagnosticsContent() {
   );
   const [updateActionNote, setUpdateActionNote] = useState<string | null>(null);
 
-  const runChecks = () => {
+  const runChecks = useCallback(() => {
     setRunning(true);
     const api = window.tyrumDesktop;
     if (!api) {
@@ -182,7 +182,7 @@ export function DiagnosticsContent() {
         update(3, { status: "ok", detail: "Not applicable" });
       })
       .finally(() => setRunning(false));
-  };
+  }, []);
 
   const requestPermission = (permission: "accessibility" | "screenRecording") => {
     const api = window.tyrumDesktop;
@@ -301,8 +301,7 @@ export function DiagnosticsContent() {
     });
 
     return unsubscribe;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [runChecks]);
 
   return (
     <div className="grid gap-6">

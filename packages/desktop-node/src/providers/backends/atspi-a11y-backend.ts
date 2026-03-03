@@ -328,6 +328,16 @@ async function loadDbus(): Promise<typeof import("dbus-next")> {
   return await import("dbus-next");
 }
 
+type AtSpiDynamicMethod = (...args: unknown[]) => unknown;
+
+function getAtSpiDynamicMethod(
+  iface: ClientInterface,
+  methodName: string,
+): AtSpiDynamicMethod | null {
+  const candidate = (iface as unknown as Record<string, unknown>)[methodName];
+  return typeof candidate === "function" ? (candidate as AtSpiDynamicMethod) : null;
+}
+
 export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
   private bus: MessageBus | null = null;
   private connectPromise: Promise<void> | null = null;
@@ -344,7 +354,8 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
       try {
         const busObj = await session.getProxyObject("org.a11y.Bus", "/org/a11y/bus");
         const busIface = busObj.getInterface("org.a11y.Bus") as ClientInterface;
-        const address = await (busIface as any)["GetAddress"]?.();
+        const getAddress = getAtSpiDynamicMethod(busIface, "GetAddress");
+        const address = await getAddress?.call(busIface);
         const busAddress = normalizeMaybe(address);
         if (!busAddress)
           throw new Error("AT-SPI bus address unavailable (org.a11y.Bus.GetAddress)");
@@ -379,9 +390,9 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
         "org.a11y.atspi.Accessible",
       );
       if (!accessible) return false;
-      const fn = (accessible as any)["GetRoleName"];
-      if (typeof fn !== "function") return false;
-      const role = normalizeMaybe(await fn.call(accessible));
+      const getRoleName = getAtSpiDynamicMethod(accessible, "GetRoleName");
+      if (!getRoleName) return false;
+      const role = normalizeMaybe(await getRoleName.call(accessible));
       return role !== undefined;
     } catch {
       return false;
@@ -413,9 +424,9 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     const iface = await this.getInterface(ref, "org.a11y.atspi.Accessible");
     if (!iface) return [];
 
-    const direct = (iface as any)["GetChildren"];
-    if (typeof direct === "function") {
-      const raw = await direct.call(iface);
+    const getChildren = getAtSpiDynamicMethod(iface, "GetChildren");
+    if (getChildren) {
+      const raw = await getChildren.call(iface);
       if (!Array.isArray(raw)) return [];
       return raw
         .map(parseAccessibleRef)
@@ -423,9 +434,9 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
         .slice(0, limit);
     }
 
-    const getChildCount = (iface as any)["GetChildCount"];
-    const getChildAtIndex = (iface as any)["GetChildAtIndex"];
-    if (typeof getChildCount !== "function" || typeof getChildAtIndex !== "function") return [];
+    const getChildCount = getAtSpiDynamicMethod(iface, "GetChildCount");
+    const getChildAtIndex = getAtSpiDynamicMethod(iface, "GetChildAtIndex");
+    if (!getChildCount || !getChildAtIndex) return [];
 
     const countRaw = await getChildCount.call(iface);
     const count = toNonNegativeInt(countRaw);
@@ -453,24 +464,28 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     const component = await this.getInterface(ref, "org.a11y.atspi.Component");
     const action = await this.getInterface(ref, "org.a11y.atspi.Action");
 
-    const roleRaw = accessible ? await (accessible as any)["GetRoleName"]?.() : undefined;
-    const nameRaw = accessible ? await (accessible as any)["GetName"]?.() : undefined;
+    const roleRaw = accessible
+      ? await getAtSpiDynamicMethod(accessible, "GetRoleName")?.call(accessible)
+      : undefined;
+    const nameRaw = accessible
+      ? await getAtSpiDynamicMethod(accessible, "GetName")?.call(accessible)
+      : undefined;
 
     const role = normalizeRole(normalizeMaybe(roleRaw));
     const name = normalizeName(normalizeMaybe(nameRaw));
 
-    const extentsFn = component ? (component as any)["GetExtents"] : undefined;
+    const extentsFn = component ? getAtSpiDynamicMethod(component, "GetExtents") : undefined;
     const extentsRaw =
       typeof extentsFn === "function" ? await extentsFn.call(component, 0) : undefined;
     const bounds = toRect(extentsRaw);
 
     const actions: string[] = [];
     if (action) {
-      const getNActions = (action as any)["GetNActions"];
+      const getNActions = getAtSpiDynamicMethod(action, "GetNActions");
       const countRaw = typeof getNActions === "function" ? await getNActions.call(action) : 0;
       const count = toNonNegativeInt(countRaw);
-      const getName = (action as any)["GetName"];
-      const getActionName = (action as any)["GetActionName"];
+      const getName = getAtSpiDynamicMethod(action, "GetName");
+      const getActionName = getAtSpiDynamicMethod(action, "GetActionName");
 
       for (let i = 0; i < count && actions.length < MAX_NODE_ACTIONS; i++) {
         const fn =
@@ -488,7 +503,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
 
     let states: string[] = [];
     if (accessible) {
-      const getState = (accessible as any)["GetState"];
+      const getState = getAtSpiDynamicMethod(accessible, "GetState");
       if (typeof getState === "function") {
         try {
           states = parseAtSpiStates(await getState.call(accessible))
@@ -672,7 +687,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
 
     if (args.action.kind === "focus") {
       const component = await this.getInterface(ref, "org.a11y.atspi.Component");
-      const grab = component ? (component as any)["GrabFocus"] : undefined;
+      const grab = component ? getAtSpiDynamicMethod(component, "GrabFocus") : undefined;
       if (typeof grab !== "function") throw new Error("AT-SPI focus unsupported");
       await grab.call(component);
       return { resolved_element_ref: toAtSpiElementRef(ref) };
@@ -681,13 +696,13 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     const action = await this.getInterface(ref, "org.a11y.atspi.Action");
     if (!action) throw new Error("AT-SPI action unsupported");
 
-    const getNActions = (action as any)["GetNActions"];
+    const getNActions = getAtSpiDynamicMethod(action, "GetNActions");
     const countRaw = typeof getNActions === "function" ? await getNActions.call(action) : 0;
     const count = toNonNegativeInt(countRaw);
 
-    const getName = (action as any)["GetName"];
-    const getActionName = (action as any)["GetActionName"];
-    const doAction = (action as any)["DoAction"];
+    const getName = getAtSpiDynamicMethod(action, "GetName");
+    const getActionName = getAtSpiDynamicMethod(action, "GetActionName");
+    const doAction = getAtSpiDynamicMethod(action, "DoAction");
     if (typeof doAction !== "function") throw new Error("AT-SPI action unsupported");
 
     const actionNameFn =

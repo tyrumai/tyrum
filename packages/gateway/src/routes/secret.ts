@@ -239,8 +239,9 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
         if (deps.logger) {
           deps.logger.warn("secret.revoke.auth_profiles_disable_failed", fields);
         } else {
-          // eslint-disable-next-line no-console
-          console.warn(`secret.revoke.auth_profiles_disable_failed ${JSON.stringify(fields)}`);
+          process.stderr.write(
+            `secret.revoke.auth_profiles_disable_failed ${JSON.stringify(fields)}\n`,
+          );
         }
       }
     }
