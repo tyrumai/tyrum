@@ -1834,12 +1834,13 @@ describe("handleClientMessage", () => {
     const db = openTestSqliteDb();
     try {
       const nowIso = new Date().toISOString();
+      const agentId = "agent-1";
 
       await db.run(
         `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          "default",
+          agentId,
           "ui:thread-1",
           "ui",
           "thread-1",
@@ -1853,7 +1854,7 @@ describe("handleClientMessage", () => {
       await db.run(
         `INSERT INTO session_model_overrides (agent_id, session_id, model_id, updated_at)
          VALUES (?, ?, ?, ?)`,
-        ["default", "ui:thread-1", "openai/gpt-4.1", nowIso],
+        [agentId, "ui:thread-1", "openai/gpt-4.1", nowIso],
       );
 
       await db.run(
@@ -1869,7 +1870,7 @@ describe("handleClientMessage", () => {
          ) VALUES (?, ?, ?, 'api_key', ?, 'active', ?, ?)`,
         [
           "profile-openai-1",
-          "default",
+          agentId,
           "openai",
           JSON.stringify({ api_key_handle: "handle-openai-1" }),
           nowIso,
@@ -1880,10 +1881,10 @@ describe("handleClientMessage", () => {
       await db.run(
         `INSERT INTO session_provider_pins (agent_id, session_id, provider, profile_id, pinned_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        ["default", "ui:thread-1", "openai", "profile-openai-1", nowIso, nowIso],
+        [agentId, "ui:thread-1", "openai", "profile-openai-1", nowIso, nowIso],
       );
 
-      const key = "agent:default:ui:default:channel:thread-1";
+      const key = `agent:${agentId}:ui:${agentId}:channel:thread-1`;
       const lane = "main";
 
       await db.run(
@@ -1937,7 +1938,7 @@ describe("handleClientMessage", () => {
         JSON.stringify({
           request_id: "r-session-delete-1",
           type: "session.delete",
-          payload: { session_id: "ui:thread-1" },
+          payload: { agent_id: agentId, session_id: "ui:thread-1" },
         }),
         deps,
       );
@@ -1950,7 +1951,7 @@ describe("handleClientMessage", () => {
         `SELECT session_id
          FROM sessions
          WHERE agent_id = ? AND session_id = ?`,
-        ["default", "ui:thread-1"],
+        [agentId, "ui:thread-1"],
       );
       expect(session).toBeUndefined();
 
@@ -1958,7 +1959,7 @@ describe("handleClientMessage", () => {
         `SELECT model_id
          FROM session_model_overrides
          WHERE agent_id = ? AND session_id = ?`,
-        ["default", "ui:thread-1"],
+        [agentId, "ui:thread-1"],
       );
       expect(modelOverride).toBeUndefined();
 
@@ -1966,7 +1967,7 @@ describe("handleClientMessage", () => {
         `SELECT profile_id
          FROM session_provider_pins
          WHERE agent_id = ? AND session_id = ?`,
-        ["default", "ui:thread-1"],
+        [agentId, "ui:thread-1"],
       );
       expect(pin).toBeUndefined();
 

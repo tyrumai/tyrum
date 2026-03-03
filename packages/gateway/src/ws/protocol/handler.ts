@@ -62,7 +62,6 @@ import { hasAnyRequiredScope } from "../../modules/auth/scopes.js";
 import { resolveWsRequestRequiredScopes } from "../../modules/authz/ws-scope-matrix.js";
 import { isSafeSuggestedOverridePattern } from "../../modules/policy/override-guardrails.js";
 import { SessionDal } from "../../modules/agent/session-dal.js";
-import { resolveWorkspaceId } from "../../modules/workspace/id.js";
 import { buildAgentTurnKey } from "../../modules/agent/turn-key.js";
 import { LaneQueueModeOverrideDal } from "../../modules/lanes/queue-mode-override-dal.js";
 import { SessionSendPolicyOverrideDal } from "../../modules/channels/send-policy-override-dal.js";
@@ -1161,7 +1160,7 @@ export async function handleClientMessage(
       return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
     }
 
-    const workspaceId = resolveWorkspaceId();
+    const workspaceId = agentId;
     const key = buildAgentTurnKey({
       agentId,
       workspaceId,
