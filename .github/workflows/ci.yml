@@ -172,6 +172,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: A11y (operator-ui)
+        run: pnpm test:a11y:operator-ui
+
   test-shards:
     name: Test shards (ubuntu-latest) (${{ matrix.shard }}/4)
     needs: [changes, validation]
