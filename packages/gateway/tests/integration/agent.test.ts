@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { createApp } from "../../src/app.js";
 import { createTestApp, createTestContainer } from "./helpers.js";
 import { createStubLanguageModel } from "../unit/stub-language-model.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
 
 async function writeWorkspace(home: string): Promise<void> {
   await mkdir(home, { recursive: true });
@@ -203,9 +205,29 @@ describe("agent routes", () => {
     });
     expect(third.status).toBe(200);
 
-    const telegram = await container.sessionDal.getById("telegram:dm-1");
+    const telegramSessionKey = buildAgentTurnKey({
+      agentId: "default",
+      workspaceId: "default",
+      channel: "telegram",
+      containerKind: "channel",
+      threadId: "dm-1",
+    });
+    const telegram = await container.sessionDal.getByKey({
+      tenantId: DEFAULT_TENANT_ID,
+      sessionKey: telegramSessionKey,
+    });
     expect(telegram).toBeTruthy();
-    const discord = await container.sessionDal.getById("discord:dm-1");
+    const discordSessionKey = buildAgentTurnKey({
+      agentId: "default",
+      workspaceId: "default",
+      channel: "discord",
+      containerKind: "channel",
+      threadId: "dm-1",
+    });
+    const discord = await container.sessionDal.getByKey({
+      tenantId: DEFAULT_TENANT_ID,
+      sessionKey: discordSessionKey,
+    });
     expect(discord).toBeTruthy();
 
     const telegramUserTurns = telegram!.turns

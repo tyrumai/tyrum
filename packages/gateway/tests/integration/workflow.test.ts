@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 import { createTestContainer } from "./helpers.js";
 
 describe("workflow routes", () => {
@@ -38,20 +43,20 @@ describe("workflow routes", () => {
     expect(payload.run_id).toBeTruthy();
 
     const job = await container.db.get<{ job_id: string }>(
-      "SELECT job_id FROM execution_jobs WHERE job_id = ?",
-      [payload.job_id],
+      "SELECT job_id FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+      [DEFAULT_TENANT_ID, payload.job_id],
     );
     expect(job?.job_id).toBe(payload.job_id);
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [payload.run_id],
+      "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      [DEFAULT_TENANT_ID, payload.run_id],
     );
     expect(run?.status).toBe("queued");
 
     const stepAgg = await container.db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_steps WHERE run_id = ?",
-      [payload.run_id],
+      "SELECT COUNT(*) AS n FROM execution_steps WHERE tenant_id = ? AND run_id = ?",
+      [DEFAULT_TENANT_ID, payload.run_id],
     );
     expect(stepAgg?.n).toBe(1);
 
@@ -87,24 +92,55 @@ describe("workflow routes", () => {
     const token = "resume-test-1";
 
     await container.db.run(
-      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json, input_json, latest_run_id)
-       VALUES (?, ?, ?, 'queued', ?, ?, ?)`,
-      [jobId, "key-1", "lane-1", "{}", "{}", runId],
+      `INSERT INTO execution_jobs (
+         tenant_id,
+         job_id,
+         agent_id,
+         workspace_id,
+         key,
+         lane,
+         status,
+         trigger_json,
+         input_json,
+         latest_run_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        jobId,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        "key-1",
+        "lane-1",
+        "{}",
+        "{}",
+        runId,
+      ],
     );
     await container.db.run(
-      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt, paused_reason, paused_detail)
-       VALUES (?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
-      [runId, jobId, "key-1", "lane-1"],
+      `INSERT INTO execution_runs (
+         tenant_id,
+         run_id,
+         job_id,
+         key,
+         lane,
+         status,
+         attempt,
+         paused_reason,
+         paused_detail
+       )
+       VALUES (?, ?, ?, ?, ?, 'paused', 1, 'test', 'paused')`,
+      [DEFAULT_TENANT_ID, runId, jobId, "key-1", "lane-1"],
     );
     await container.db.run(
-      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-       VALUES (?, ?, 0, 'paused', ?)`,
-      [stepId, runId, "{}"],
+      `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+       VALUES (?, ?, ?, 0, 'paused', ?)`,
+      [DEFAULT_TENANT_ID, stepId, runId, "{}"],
     );
     await container.db.run(
-      `INSERT INTO resume_tokens (token, run_id)
-       VALUES (?, ?)`,
-      [token, runId],
+      `INSERT INTO resume_tokens (tenant_id, token, run_id)
+       VALUES (?, ?, ?)`,
+      [DEFAULT_TENANT_ID, token, runId],
     );
 
     const res = await app.request("/workflow/resume", {
@@ -119,14 +155,14 @@ describe("workflow routes", () => {
     expect(payload.run_id).toBe(runId);
 
     const run = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
+      "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      [DEFAULT_TENANT_ID, runId],
     );
     expect(run?.status).toBe("queued");
 
     const step = await container.db.get<{ status: string }>(
-      "SELECT status FROM execution_steps WHERE step_id = ?",
-      [stepId],
+      "SELECT status FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
+      [DEFAULT_TENANT_ID, stepId],
     );
     expect(step?.status).toBe("queued");
 

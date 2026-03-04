@@ -2373,7 +2373,7 @@ describe("ExecutionEngine (normalized)", () => {
         workspaceId: "ws-1",
         steps: [action("CLI")],
       });
-      const { runId: run2 } = await engineA.enqueuePlan({
+      await engineA.enqueuePlan({
         key: "agent:default:ui:thread-2",
         lane: "main",
         planId: "plan-concurrency-2",

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { createApp } from "../../src/app.js";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ExecutionEngine, type StepExecutor } from "../../src/modules/execution/engine.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -91,19 +92,22 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
     expect(run?.status).toBe("paused");
     expect(run?.paused_reason).toBe("policy");
 
-    const step = await container.db.get<{ status: string; approval_id: number | null }>(
+    const step = await container.db.get<{ status: string; approval_id: string | null }>(
       "SELECT status, approval_id FROM execution_steps WHERE run_id = ? LIMIT 1",
       [payload.run_id],
     );
     expect(step?.status).toBe("paused");
     expect(step?.approval_id).toBeTruthy();
 
-    const approvalId = step?.approval_id ?? 0;
+    const approvalId = step?.approval_id ?? "";
     const approval = await container.db.get<{
       kind: string;
       status: string;
       resume_token: string | null;
-    }>("SELECT kind, status, resume_token FROM approvals WHERE id = ?", [approvalId]);
+    }>("SELECT kind, status, resume_token FROM approvals WHERE tenant_id = ? AND approval_id = ?", [
+      DEFAULT_TENANT_ID,
+      approvalId,
+    ]);
     expect(approval?.kind).toBe("policy");
     expect(approval?.status).toBe("pending");
     expect(approval?.resume_token).toBeTruthy();
@@ -168,16 +172,16 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
 
     await engine.workerTick({ workerId: "w1", executor, runId: payload.run_id });
 
-    const step = await container.db.get<{ approval_id: number | null }>(
+    const step = await container.db.get<{ approval_id: string | null }>(
       "SELECT approval_id FROM execution_steps WHERE run_id = ? LIMIT 1",
       [payload.run_id],
     );
-    const approvalId = step?.approval_id ?? 0;
+    const approvalId = step?.approval_id ?? "";
     expect(approvalId).toBeTruthy();
 
     const approval = await container.db.get<{ resume_token: string | null }>(
-      "SELECT resume_token FROM approvals WHERE id = ?",
-      [approvalId],
+      "SELECT resume_token FROM approvals WHERE tenant_id = ? AND approval_id = ?",
+      [DEFAULT_TENANT_ID, approvalId],
     );
     expect(approval?.resume_token).toBeTruthy();
 

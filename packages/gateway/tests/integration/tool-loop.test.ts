@@ -13,9 +13,19 @@ import { Hono } from "hono";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import { createStubLanguageModel } from "../unit/stub-language-model.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
+const defaultApprovalScope = {
+  tenantId: DEFAULT_TENANT_ID,
+  agentId: DEFAULT_AGENT_ID,
+  workspaceId: DEFAULT_WORKSPACE_ID,
+} as const;
 
 function usage() {
   return {
@@ -134,7 +144,7 @@ async function waitForPendingApproval(
 ): Promise<ApprovalRow> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const pending = await container.approvalDal.getPending();
+    const pending = await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
     if (pending.length > 0) {
       return pending[0]!;
     }
@@ -525,8 +535,12 @@ describe("Tool execution loop", () => {
     const pending = await waitForPendingApproval(container);
     expect(pending.prompt).toContain("tool.exec");
     expect(pending.kind).toBe("workflow_step");
-    expect(pending.agent_id).toBe("agent-test");
-    expect(pending.workspace_id).toBe("ws-test");
+    const ids = await container.identityScopeDal.resolveScopeIds({
+      agentKey: "agent-test",
+      workspaceKey: "ws-test",
+    });
+    expect(pending.agent_id).toBe(ids.agentId);
+    expect(pending.workspace_id).toBe(ids.workspaceId);
     expect(pending.run_id).not.toBeNull();
     expect(pending.resume_token).toMatch(/^resume-/);
     expect(pending.status).toBe("pending");
@@ -541,7 +555,7 @@ describe("Tool execution loop", () => {
       }),
     );
 
-    const res = await approvalApp.request(`/approvals/${String(pending.id)}/respond`, {
+    const res = await approvalApp.request(`/approvals/${String(pending.approval_id)}/respond`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ decision: "approved", reason: "approved in test" }),
@@ -582,8 +596,8 @@ describe("Tool execution loop", () => {
     const command = "echo approved";
 
     const approval = await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      ...defaultApprovalScope,
+      approvalKey: "tool-loop-already-approved",
       kind: "workflow_step",
       prompt: "Approve execution of 'tool.exec' (risk=high)",
       context: {
@@ -593,7 +607,12 @@ describe("Tool execution loop", () => {
         tool_match_target: command,
       },
     });
-    await container.approvalDal.respond(approval.id, true, "approved in test");
+    await container.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval.approval_id,
+      decision: "approved",
+      reason: "approved in test",
+    });
 
     const languageModel = createToolLoopLanguageModel({
       toolCalls: [
@@ -629,14 +648,14 @@ describe("Tool execution loop", () => {
           runId: "run-1",
           stepIndex: 0,
           stepId: "step-1",
-          stepApprovalId: approval.id,
+          stepApprovalId: approval.approval_id,
         },
       },
     );
 
     expect(result.reply).toBe("done");
     expect(result.used_tools).toContain("tool.exec");
-    expect(await container.approvalDal.getPending()).toHaveLength(0);
+    expect(await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID })).toHaveLength(0);
   }, 10_000);
 
   it("preserves multi-step tool messages when pausing for approval", async () => {
@@ -728,7 +747,7 @@ describe("Tool execution loop", () => {
       }),
     );
 
-    const res = await approvalApp.request(`/approvals/${String(pending.id)}/respond`, {
+    const res = await approvalApp.request(`/approvals/${String(pending.approval_id)}/respond`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ decision: "approved", reason: "approved in test" }),
@@ -870,7 +889,7 @@ describe("Tool execution loop", () => {
         }),
       );
 
-      const res = await approvalApp.request(`/approvals/${String(pending.id)}/respond`, {
+      const res = await approvalApp.request(`/approvals/${String(pending.approval_id)}/respond`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ decision: "approved", reason: "approved in test" }),
@@ -960,7 +979,7 @@ describe("Tool execution loop", () => {
       }),
     );
 
-    const res = await approvalApp.request(`/approvals/${String(pending.id)}/respond`, {
+    const res = await approvalApp.request(`/approvals/${String(pending.approval_id)}/respond`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ decision: "denied", reason: "denied in test" }),
@@ -1058,7 +1077,7 @@ describe("Tool execution loop", () => {
       }),
     );
 
-    const res = await approvalApp.request(`/approvals/${String(pending.id)}/respond`, {
+    const res = await approvalApp.request(`/approvals/${String(pending.approval_id)}/respond`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ decision: "approved", reason: "approved in test" }),
@@ -1149,14 +1168,28 @@ describe("Tool execution loop", () => {
     const suggested = (pending.context as { policy?: { suggested_overrides?: unknown[] } }).policy
       ?.suggested_overrides;
     expect(Array.isArray(suggested)).toBe(true);
+    const selectedOverride = (suggested ?? []).find(
+      (entry): entry is { tool_id: string; pattern: string; workspace_id?: string } =>
+        typeof entry === "object" &&
+        entry !== null &&
+        typeof (entry as { tool_id?: unknown }).tool_id === "string" &&
+        typeof (entry as { pattern?: unknown }).pattern === "string",
+    );
+    expect(selectedOverride).toBeTruthy();
 
-    const res = await approvalApp.request(`/approvals/${pending.id}/respond`, {
+    const res = await approvalApp.request(`/approvals/${pending.approval_id}/respond`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         decision: "approved",
         mode: "always",
-        overrides: [{ tool_id: "tool.exec", pattern: "echo hello", workspace_id: "default" }],
+        overrides: [
+          {
+            tool_id: selectedOverride!.tool_id,
+            pattern: selectedOverride!.pattern,
+            workspace_id: selectedOverride!.workspace_id,
+          },
+        ],
       }),
     });
     expect(res.status).toBe(200);
@@ -1166,7 +1199,7 @@ describe("Tool execution loop", () => {
     expect(result1.used_tools).toContain("tool.exec");
 
     const overrides = await container.policyOverrideDal.list({
-      agentId: "default",
+      agentId: pending.agent_id,
       toolId: "tool.exec",
     });
     expect(overrides.length).toBeGreaterThan(0);
@@ -1193,7 +1226,7 @@ describe("Tool execution loop", () => {
     });
 
     await new Promise((resolve) => setTimeout(resolve, 200));
-    const stillPending = await container.approvalDal.getPending();
+    const stillPending = await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
     expect(stillPending).toHaveLength(0);
 
     const result2 = await turn2Promise;
@@ -1303,9 +1336,14 @@ describe("Tool execution loop", () => {
         const c = container;
         if (!c) return;
         const approvalEngine = new ExecutionEngine({ db: c.db });
-        const pending = await c.approvalDal.getPending();
+        const pending = await c.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
         for (const approval of pending) {
-          const updated = await c.approvalDal.respond(approval.id, true, "approved in test");
+          const updated = await c.approvalDal.respond({
+            tenantId: DEFAULT_TENANT_ID,
+            approvalId: approval.approval_id,
+            decision: "approved",
+            reason: "approved in test",
+          });
           if (updated?.resume_token) {
             await approvalEngine.resumeRun(updated.resume_token);
           }
@@ -1407,7 +1445,7 @@ describe("Tool execution loop", () => {
       }),
     );
 
-    const res = await approvalApp.request(`/approvals/${String(pending.id)}/respond`, {
+    const res = await approvalApp.request(`/approvals/${String(pending.approval_id)}/respond`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ decision: "approved", reason: "approved in test" }),
@@ -1421,6 +1459,7 @@ describe("Tool execution loop", () => {
   it("respects maxSteps and stops looping", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
+    await writeFile(join(homeDir, "loop.txt"), "loop", "utf-8");
 
     await writeFile(
       join(homeDir, "agent.yml"),
@@ -1433,10 +1472,15 @@ describe("Tool execution loop", () => {
         "  enabled: []",
         "tools:",
         "  allow:",
-        "    - tool.exec",
+        "    - tool.fs.read",
         "sessions:",
         "  ttl_days: 30",
         "  max_turns: 20",
+        "  loop_detection:",
+        "    within_turn:",
+        "      enabled: false",
+        "    cross_turn:",
+        "      enabled: false",
         "memory:",
         "  markdown_enabled: false",
       ].join("\n"),
@@ -1447,8 +1491,8 @@ describe("Tool execution loop", () => {
       toolCalls: [
         {
           id: "tc-loop",
-          name: "tool.exec",
-          arguments: JSON.stringify({ command: "echo hi" }),
+          name: "tool.fs.read",
+          arguments: JSON.stringify({ path: "loop.txt" }),
         },
       ],
       finalReply: "ignored",
@@ -1469,42 +1513,16 @@ describe("Tool execution loop", () => {
         typeof AgentRuntime
       >[0]["mcpManager"],
       maxSteps: 3,
-      approvalWaitMs: 10_000,
-      approvalPollMs: 20,
     });
-
-    const autoApproveTimer = setInterval(() => {
-      void (async () => {
-        const c = container;
-        if (!c) return;
-        const approvalEngine = new ExecutionEngine({ db: c.db });
-        const pending = await c.approvalDal.getPending();
-        for (const approval of pending) {
-          const updated = await c.approvalDal.respond(approval.id, true, "approved in test");
-          if (updated?.resume_token) {
-            await approvalEngine.resumeRun(updated.resume_token);
-          }
-        }
-      })().catch(() => {
-        // ignore (tests may tear down while timer is running)
-      });
-    }, 20);
-    autoApproveTimer.unref();
-
-    let result: Awaited<ReturnType<AgentRuntime["turn"]>>;
-    try {
-      result = await runtime.turn({
-        channel: "test",
-        thread_id: "thread-4",
-        message: "run something",
-      });
-    } finally {
-      clearInterval(autoApproveTimer);
-    }
+    const result = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-4",
+      message: "run something",
+    });
 
     // Should stop after maxSteps and return the default "No assistant response"
     expect(result.reply).toBe("No assistant response returned.");
-    expect(result.used_tools).toContain("tool.exec");
+    expect(result.used_tools).toContain("tool.fs.read");
   });
 
   it("detects and stops a within-turn tool loop (consecutive)", async () => {

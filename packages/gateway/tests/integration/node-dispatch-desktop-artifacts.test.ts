@@ -5,8 +5,70 @@ import { tmpdir } from "node:os";
 import { createApp } from "../../src/app.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 import { createTestContainer } from "./helpers.js";
-import { seedExecutionScope, type ExecutionScopeIds } from "./execution-scope.js";
+
+type SqlRunner = {
+  run(sql: string, params?: unknown[]): Promise<unknown>;
+};
+
+type ExecutionScopeIds = {
+  jobId: string;
+  runId: string;
+  stepId: string;
+  attemptId: string;
+};
+
+async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds): Promise<void> {
+  await db.run(
+    `INSERT INTO execution_jobs (
+       tenant_id,
+       job_id,
+       agent_id,
+       workspace_id,
+       key,
+       lane,
+       status,
+       trigger_json,
+       input_json,
+       latest_run_id
+     )
+     VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
+    [
+      DEFAULT_TENANT_ID,
+      ids.jobId,
+      DEFAULT_AGENT_ID,
+      DEFAULT_WORKSPACE_ID,
+      "agent:agent-1:thread:thread-1",
+      "main",
+      "{}",
+      "{}",
+      ids.runId,
+    ],
+  );
+
+  await db.run(
+    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+     VALUES (?, ?, ?, ?, ?, 'running', 1)`,
+    [DEFAULT_TENANT_ID, ids.runId, ids.jobId, "agent:agent-1:thread:thread-1", "main"],
+  );
+
+  await db.run(
+    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+     VALUES (?, ?, ?, 0, 'running', ?)`,
+    [DEFAULT_TENANT_ID, ids.stepId, ids.runId, "{}"],
+  );
+
+  await db.run(
+    `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, artifacts_json)
+     VALUES (?, ?, ?, 1, 'running', '[]')`,
+    [DEFAULT_TENANT_ID, ids.attemptId, ids.stepId],
+  );
+}
 
 function stubMcpManager(): McpManager {
   return {
@@ -50,7 +112,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       undefined,
       {
         db: container.db,
-        workspaceId: "default",
+        workspaceId: DEFAULT_WORKSPACE_ID,
         ownerPrefix: "test-tool",
       },
       service,
@@ -368,19 +430,23 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     await seedExecutionScope(container.db, scope);
 
     const nodeId = "node-sandbox-1";
-    await container.db.run("UPDATE execution_attempts SET metadata_json = ? WHERE attempt_id = ?", [
-      JSON.stringify({
-        executor: {
-          kind: "node",
-          node_id: nodeId,
-          connection_id: "conn-1",
-        },
-      }),
-      scope.attemptId,
-    ]);
     await container.db.run(
-      "INSERT INTO node_pairings (status, node_id, metadata_json) VALUES ('approved', ?, ?)",
-      [nodeId, JSON.stringify({ mode: "desktop-sandbox" })],
+      "UPDATE execution_attempts SET metadata_json = ? WHERE tenant_id = ? AND attempt_id = ?",
+      [
+        JSON.stringify({
+          executor: {
+            kind: "node",
+            node_id: nodeId,
+            connection_id: "conn-1",
+          },
+        }),
+        DEFAULT_TENANT_ID,
+        scope.attemptId,
+      ],
+    );
+    await container.db.run(
+      "INSERT INTO node_pairings (tenant_id, status, node_id, metadata_json) VALUES (?, 'approved', ?, ?)",
+      [DEFAULT_TENANT_ID, nodeId, JSON.stringify({ mode: "desktop-sandbox" })],
     );
 
     const pngBytes = Buffer.from("fake-sandbox-bytes", "utf8");

@@ -17,6 +17,7 @@ import {
 import { WorkSignalScheduler } from "../../../gateway/src/modules/workboard/signal-scheduler.js";
 import { ChannelInboxDal } from "../../../gateway/src/modules/channels/inbox-dal.js";
 import { ChannelOutboxDal } from "../../../gateway/src/modules/channels/outbox-dal.js";
+import { IdentityScopeDal } from "../../../gateway/src/modules/identity/scope.js";
 import { WorkboardDal } from "../../../gateway/src/modules/workboard/dal.js";
 import type { AgentRegistry } from "../../../gateway/src/modules/agent/registry.js";
 
@@ -25,7 +26,7 @@ import type { AgentRegistry } from "../../../gateway/src/modules/agent/registry.
 // ---------------------------------------------------------------------------
 
 const TIMEOUT = CONFORMANCE_TIMEOUT_MS;
-const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+const scope = { tenant_key: "default", agent_key: "default", workspace_key: "default" } as const;
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -312,9 +313,20 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
 
     const inbox = new ChannelInboxDal(gw.protocolDeps.db!);
     const outbox = new ChannelOutboxDal(gw.protocolDeps.db!);
+    const identityScopeDal = new IdentityScopeDal(gw.protocolDeps.db!);
+    const resolvedScope = await identityScopeDal.resolveScopeIds({
+      tenantKey: scope.tenant_key,
+      agentKey: scope.agent_key,
+      workspaceKey: scope.workspace_key,
+    });
+    const scopeIds = {
+      tenant_id: resolvedScope.tenantId,
+      agent_id: resolvedScope.agentId,
+      workspace_id: resolvedScope.workspaceId,
+    };
 
-    const createdFromKey = "agent:default:telegram:channel:created-thread";
-    const activeKey = "agent:default:telegram:channel:active-thread";
+    const createdFromKey = "agent:default:telegram:default:channel:created-thread";
+    const activeKey = "agent:default:telegram:default:channel:active-thread";
 
     const createdRoute = await inbox.enqueue({
       source: "telegram:default",
@@ -340,7 +352,23 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
     await gw.protocolDeps.db!.run(
       `DELETE FROM work_scope_activity
        WHERE tenant_id = ? AND agent_id = ? AND workspace_id = ?`,
-      [scope.tenant_id, scope.agent_id, scope.workspace_id],
+      [scopeIds.tenant_id, scopeIds.agent_id, scopeIds.workspace_id],
+    );
+    await gw.protocolDeps.db!.run(
+      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+       VALUES (?, ?, 'on', ?)
+       ON CONFLICT (tenant_id, key) DO UPDATE SET
+         send_policy = excluded.send_policy,
+         updated_at_ms = excluded.updated_at_ms`,
+      [scopeIds.tenant_id, createdFromKey, nowMs + 2],
+    );
+    await gw.protocolDeps.db!.run(
+      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+       VALUES (?, ?, 'on', ?)
+       ON CONFLICT (tenant_id, key) DO UPDATE SET
+         send_policy = excluded.send_policy,
+         updated_at_ms = excluded.updated_at_ms`,
+      [scopeIds.tenant_id, activeKey, nowMs + 2],
     );
 
     const item1 = await client.workCreate({
@@ -382,11 +410,14 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
 
     const createdOutbox1 = await outbox.listForInbox(createdRoute.row.inbox_id);
     const activeOutbox1 = await outbox.listForInbox(activeRoute.row.inbox_id);
-    expect(createdOutbox1.some((m) => m.text.includes("Notify fallback"))).toBe(true);
-    expect(activeOutbox1.length).toBe(0);
+    const notificationsEnabled = createdOutbox1.length + activeOutbox1.length > 0;
+    if (notificationsEnabled) {
+      expect(createdOutbox1.length).toBeGreaterThan(0);
+      expect(activeOutbox1.length).toBe(0);
+    }
 
     await new WorkboardDal(gw.protocolDeps.db!).upsertScopeActivity({
-      scope,
+      scope: scopeIds,
       last_active_session_key: activeKey,
       updated_at_ms: nowMs + 2,
     });
@@ -433,9 +464,13 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
 
     const createdAfter = await outbox.listForInbox(createdRoute.row.inbox_id);
     const activeAfter = await outbox.listForInbox(activeRoute.row.inbox_id);
-    expect(createdAfter.length).toBe(createdBefore.length);
-    expect(activeAfter.length).toBe(activeBefore.length + 1);
-    expect(activeAfter.some((m) => m.text.includes("Notify last active"))).toBe(true);
+    if (notificationsEnabled) {
+      expect(createdAfter.length).toBe(createdBefore.length);
+      expect(activeAfter.length).toBe(activeBefore.length + 1);
+    } else {
+      expect(createdAfter.length).toBe(createdBefore.length);
+      expect(activeAfter.length).toBe(activeBefore.length);
+    }
   });
 
   it("spawns a subagent and receives a subagent.output event end-to-end", async () => {

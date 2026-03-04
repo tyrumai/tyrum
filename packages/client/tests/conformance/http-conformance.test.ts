@@ -157,6 +157,7 @@ describe("HTTP SDK conformance — read-only endpoints", () => {
 // ---------------------------------------------------------------------------
 
 describe("HTTP SDK conformance — stateful lifecycles", () => {
+  const defaultAgentId = "00000000-0000-4000-8000-000000000002";
   let gw: GatewayHarness | undefined;
 
   afterEach(async () => {
@@ -209,12 +210,12 @@ describe("HTTP SDK conformance — stateful lifecycles", () => {
 
     // Create an override
     const created = await client.policy.createOverride({
-      agent_id: "conformance-agent",
+      agent_id: defaultAgentId,
       tool_id: "bash",
       pattern: "*",
     });
     expect(created.override.status).toBe("active");
-    expect(created.override.agent_id).toBe("conformance-agent");
+    expect(created.override.agent_id).toBe(defaultAgentId);
     const overrideId = created.override.policy_override_id;
 
     // List overrides — should include the created one

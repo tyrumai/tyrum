@@ -31,8 +31,11 @@ const LEGACY_TABLES = new Set([
 ]);
 
 const DEFAULT_TABLES = [
-  // Audit + sessions
+  // Channels + audit + sessions
+  "channel_accounts",
+  "channel_threads",
   "sessions",
+  "plans",
   "planner_events",
   "context_reports",
   // Memory (v1 canonical)
@@ -71,7 +74,10 @@ const DEFAULT_TABLES = [
 ] as const;
 
 const IMPORT_ORDER = [
+  "channel_accounts",
+  "channel_threads",
   "sessions",
+  "plans",
   "planner_events",
   "context_reports",
   "memory_items",

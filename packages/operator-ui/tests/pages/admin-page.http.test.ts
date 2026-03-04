@@ -399,7 +399,7 @@ describe("ConfigurePage (HTTP) policy + auth", () => {
 
       const bodyRaw = String(init?.body ?? "");
       expect(JSON.parse(bodyRaw)).toEqual({
-        agent_id: "agent-1",
+        agent_id: "00000000-0000-4000-8000-000000000002",
         tool_id: "tool-1",
         pattern: ".*",
       });
@@ -410,7 +410,7 @@ describe("ConfigurePage (HTTP) policy + auth", () => {
             policy_override_id: "00000000-0000-0000-0000-000000000001",
             status: "active",
             created_at: "2026-03-01T00:00:00.000Z",
-            agent_id: "agent-1",
+            agent_id: "00000000-0000-4000-8000-000000000002",
             tool_id: "tool-1",
             pattern: ".*",
           },
@@ -438,7 +438,7 @@ describe("ConfigurePage (HTTP) policy + auth", () => {
         jsonTextarea as HTMLTextAreaElement,
         JSON.stringify(
           {
-            agent_id: "agent-1",
+            agent_id: "00000000-0000-4000-8000-000000000002",
             tool_id: "tool-1",
             pattern: ".*",
           },

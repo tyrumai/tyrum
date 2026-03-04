@@ -1,6 +1,17 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Hono } from "hono";
 import { createTestApp } from "./helpers.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
+
+const approvalScope = {
+  tenantId: DEFAULT_TENANT_ID,
+  agentId: DEFAULT_AGENT_ID,
+  workspaceId: DEFAULT_WORKSPACE_ID,
+} as const;
 
 describe("Approval routes", () => {
   let app: Hono;
@@ -18,7 +29,7 @@ describe("Approval routes", () => {
   });
 
   it("returns 404 for non-existent approval", async () => {
-    const res = await app.request("/approvals/999");
+    const res = await app.request("/approvals/00000000-0000-4000-8000-000000009999");
     expect(res.status).toBe(404);
   });
 
@@ -40,8 +51,8 @@ describe("Approval routes (with DAL access)", () => {
 
   it("creates an approval via DAL, lists it via route", async () => {
     await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      ...approvalScope,
+      approvalKey: "approval-test-list",
       prompt: "Allow web scrape?",
       context: { url: "https://example.com" },
     });
@@ -49,87 +60,86 @@ describe("Approval routes (with DAL access)", () => {
     const res = await app.request("/approvals");
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      approvals: Array<{ plan_id: string; prompt: string }>;
+      approvals: Array<{ prompt: string }>;
     };
     expect(body.approvals).toHaveLength(1);
-    expect(body.approvals[0]!.plan_id).toBe("plan-1");
     expect(body.approvals[0]!.prompt).toBe("Allow web scrape?");
   });
 
   it("gets a single approval by id", async () => {
     const created = await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      ...approvalScope,
+      approvalKey: "approval-test-get",
       prompt: "Approve?",
     });
 
-    const res = await app.request(`/approvals/${String(created.id)}`);
+    const res = await app.request(`/approvals/${String(created.approval_id)}`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      approval: { id: number; plan_id: string };
+      approval: { approval_id: string };
     };
-    expect(body.approval.id).toBe(created.id);
+    expect(body.approval.approval_id).toBe(created.approval_id);
   });
 
   it("responds to a pending approval (approve)", async () => {
     const created = await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      ...approvalScope,
+      approvalKey: "approval-test-approve",
       prompt: "Approve?",
     });
 
-    const res = await app.request(`/approvals/${String(created.id)}/respond`, {
+    const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ approved: true, reason: "looks safe" }),
+      body: JSON.stringify({ decision: "approved", reason: "looks safe" }),
     });
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      approval: { status: string; response_reason: string };
+      approval: { status: string; resolution: { reason?: string } | null };
     };
     expect(body.approval.status).toBe("approved");
-    expect(body.approval.response_reason).toBe("looks safe");
+    expect(body.approval.resolution?.reason).toBe("looks safe");
   });
 
   it("responds to a pending approval (deny)", async () => {
     const created = await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      ...approvalScope,
+      approvalKey: "approval-test-deny",
       prompt: "Approve?",
     });
 
-    const res = await app.request(`/approvals/${String(created.id)}/respond`, {
+    const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ approved: false, reason: "too risky" }),
+      body: JSON.stringify({ decision: "denied", reason: "too risky" }),
     });
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      approval: { status: string; response_reason: string };
+      approval: { status: string; resolution: { reason?: string } | null };
     };
     expect(body.approval.status).toBe("denied");
-    expect(body.approval.response_reason).toBe("too risky");
+    expect(body.approval.resolution?.reason).toBe("too risky");
   });
 
   it("is idempotent when responding to already-responded approval", async () => {
     const created = await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      ...approvalScope,
+      approvalKey: "approval-test-idempotent",
       prompt: "Approve?",
     });
 
-    await app.request(`/approvals/${String(created.id)}/respond`, {
+    await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ approved: true }),
+      body: JSON.stringify({ decision: "approved" }),
     });
 
-    const res = await app.request(`/approvals/${String(created.id)}/respond`, {
+    const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ approved: false }),
+      body: JSON.stringify({ decision: "denied" }),
     });
 
     expect(res.status).toBe(200);
@@ -139,12 +149,12 @@ describe("Approval routes (with DAL access)", () => {
 
   it("returns 400 when approved field is missing", async () => {
     const created = await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      ...approvalScope,
+      approvalKey: "approval-test-missing-decision",
       prompt: "Approve?",
     });
 
-    const res = await app.request(`/approvals/${String(created.id)}/respond`, {
+    const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason: "no approved field" }),
@@ -155,19 +165,21 @@ describe("Approval routes (with DAL access)", () => {
 
   it("previews an approval context", async () => {
     const created = await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 2,
+      ...approvalScope,
+      approvalKey: "approval-test-preview",
       prompt: "Approve payment?",
       context: { amount: 100, currency: "USD" },
     });
 
-    const res = await app.request(`/approvals/${String(created.id)}/preview`);
+    const res = await app.request(`/approvals/${String(created.approval_id)}/preview`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
+      approval_id: string;
       prompt: string;
       context: { amount: number; currency: string };
       status: string;
     };
+    expect(body.approval_id).toBe(created.approval_id);
     expect(body.prompt).toBe("Approve payment?");
     expect(body.context).toEqual({ amount: 100, currency: "USD" });
     expect(body.status).toBe("pending");
@@ -175,17 +187,21 @@ describe("Approval routes (with DAL access)", () => {
 
   it("approved approvals are excluded from pending list", async () => {
     const a1 = await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      ...approvalScope,
+      approvalKey: "approval-test-pending-a1",
       prompt: "First?",
     });
     await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 1,
+      ...approvalScope,
+      approvalKey: "approval-test-pending-a2",
       prompt: "Second?",
     });
 
-    await container.approvalDal.respond(a1.id, true);
+    await container.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: a1.approval_id,
+      decision: "approved",
+    });
 
     const res = await app.request("/approvals");
     expect(res.status).toBe(200);

@@ -14,6 +14,11 @@ import { createStubLanguageModel } from "../unit/stub-language-model.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { PolicyService } from "../../src/modules/policy/service.js";
 import { completeHandshake } from "./ws-handshake.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
@@ -197,10 +202,11 @@ describe("WS control-plane requests", () => {
     expect(sessionRes["ok"]).toBe(true);
     expect((sessionRes["result"] as Record<string, unknown>)["assistant_message"]).toBe("hello");
 
-    const scopeActivity = await container.db.get<{ last_active_session_key: string }>(
+    const scopeActivity = await container.db.get<{ last_active_session_key?: string }>(
       `SELECT last_active_session_key
        FROM work_scope_activity
-       WHERE tenant_id = 'default' AND agent_id = 'default' AND workspace_id = 'default'`,
+       WHERE tenant_id = ? AND agent_id = ? AND workspace_id = ?`,
+      [DEFAULT_TENANT_ID, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID],
     );
     expect(scopeActivity?.last_active_session_key).toBe(
       "agent:default:ui:default:channel:thread-1",
@@ -211,7 +217,7 @@ describe("WS control-plane requests", () => {
         request_id: "r-run",
         type: "workflow.run",
         payload: {
-          key: "agent:default:ui:main",
+          key: "agent:default:main",
           lane: "main",
           steps: [{ type: "CLI" }],
         },

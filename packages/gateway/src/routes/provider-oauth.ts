@@ -391,7 +391,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       }
 
       const labels = {
-        ...(existing?.labels ?? {}),
+        ...existing?.labels,
         scopes: consumed.scopes,
         token_type: token.token_type ?? null,
         oauth: true,

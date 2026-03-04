@@ -1402,6 +1402,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
       const pending = await approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
       expect(pending).toHaveLength(1);
+      const approvalAgentId = pending[0]!.agent_id;
 
       const matchTarget = "telegram:work:123";
 
@@ -1423,7 +1424,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       expect(respondRes.status).toBe(200);
 
       expect(
-        await policyOverrideDal.list({ agentId: "agent-1", toolId: "connector.send" }),
+        await policyOverrideDal.list({ agentId: approvalAgentId, toolId: "connector.send" }),
       ).toHaveLength(1);
 
       await processor.tick();

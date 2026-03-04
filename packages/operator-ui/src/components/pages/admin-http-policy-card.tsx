@@ -84,7 +84,15 @@ function PolicyOverridesSection({
   const overrides = useApiResultState("Policy overrides");
   const listOverridesQuery = useJsonInputState("{}");
   const createOverrideBody = useJsonInputState(
-    JSON.stringify({ agent_id: "agent-1", tool_id: "tool-1", pattern: ".*" }, null, 2),
+    JSON.stringify(
+      {
+        agent_id: "00000000-0000-4000-8000-000000000002",
+        tool_id: "tool-1",
+        pattern: ".*",
+      },
+      null,
+      2,
+    ),
   );
   const revokeOverrideBody = useJsonInputState(
     JSON.stringify(

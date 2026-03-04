@@ -9,15 +9,18 @@ describe("snapshot routes", () => {
 
     const { app, container } = await createTestApp();
 
-    await container.db.run(
-      `INSERT INTO sessions (session_id, channel, thread_id)
-       VALUES (?, ?, ?)`,
-      ["session-1", "telegram", "thread-1"],
-    );
+    const seededSession = await container.sessionDal.getOrCreate({
+      connectorKey: "telegram",
+      providerThreadId: "thread-1",
+      containerKind: "dm",
+    });
     const approval = await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      tenantId: seededSession.tenant_id,
+      agentId: seededSession.agent_id,
+      workspaceId: seededSession.workspace_id,
+      approvalKey: "plan-1:0",
       prompt: "approve test",
+      sessionId: seededSession.session_id,
     });
 
     const exportRes = await app.request("/snapshot/export");
@@ -34,23 +37,26 @@ describe("snapshot routes", () => {
 
     const importedSession = await container2.db.get<{ session_id: string }>(
       "SELECT session_id FROM sessions WHERE session_id = ?",
-      ["session-1"],
+      [seededSession.session_id],
     );
-    expect(importedSession?.session_id).toBe("session-1");
+    expect(importedSession?.session_id).toBe(seededSession.session_id);
 
-    const importedApproval = await container2.db.get<{ id: number; prompt: string }>(
-      "SELECT id, prompt FROM approvals WHERE id = ?",
-      [approval.id],
+    const importedApproval = await container2.db.get<{ approval_id: string; prompt: string }>(
+      "SELECT approval_id, prompt FROM approvals WHERE approval_id = ?",
+      [approval.approval_id],
     );
-    expect(importedApproval?.id).toBe(approval.id);
+    expect(importedApproval?.approval_id).toBe(approval.approval_id);
     expect(importedApproval?.prompt).toBe("approve test");
 
     const nextApproval = await container2.approvalDal.create({
-      planId: "plan-2",
-      stepIndex: 0,
+      tenantId: seededSession.tenant_id,
+      agentId: seededSession.agent_id,
+      workspaceId: seededSession.workspace_id,
+      approvalKey: "plan-2:0",
       prompt: "next",
+      sessionId: seededSession.session_id,
     });
-    expect(nextApproval.id).toBeGreaterThan(approval.id);
+    expect(nextApproval.approval_id).not.toBe(approval.approval_id);
 
     await container.db.close();
     await container2.db.close();
@@ -73,11 +79,11 @@ describe("snapshot routes", () => {
       const app1 = await createTestApp();
       container = app1.container;
 
-      await container.db.run(
-        `INSERT INTO sessions (session_id, channel, thread_id)
-         VALUES (?, ?, ?)`,
-        ["session-legacy", "telegram", "thread-legacy"],
-      );
+      const seededSession = await container.sessionDal.getOrCreate({
+        connectorKey: "telegram",
+        providerThreadId: "thread-legacy",
+        containerKind: "dm",
+      });
 
       const exportRes = await app1.app.request("/snapshot/export");
       expect(exportRes.status).toBe(200);
@@ -116,9 +122,9 @@ describe("snapshot routes", () => {
 
       const importedSession = await container2.db.get<{ session_id: string }>(
         "SELECT session_id FROM sessions WHERE session_id = ?",
-        ["session-legacy"],
+        [seededSession.session_id],
       );
-      expect(importedSession?.session_id).toBe("session-legacy");
+      expect(importedSession?.session_id).toBe(seededSession.session_id);
     } finally {
       await container?.db.close();
       await container2?.db.close();
@@ -137,11 +143,11 @@ describe("snapshot routes", () => {
 
     const { app, container } = await createTestApp();
 
-    await container.db.run(
-      `INSERT INTO sessions (session_id, channel, thread_id)
-       VALUES (?, ?, ?)`,
-      ["session-v1", "telegram", "thread-v1"],
-    );
+    const seededSession = await container.sessionDal.getOrCreate({
+      connectorKey: "telegram",
+      providerThreadId: "thread-v1",
+      containerKind: "dm",
+    });
 
     const exportRes = await app.request("/snapshot/export");
     expect(exportRes.status).toBe(200);
@@ -162,9 +168,9 @@ describe("snapshot routes", () => {
 
     const importedSession = await container2.db.get<{ session_id: string }>(
       "SELECT session_id FROM sessions WHERE session_id = ?",
-      ["session-v1"],
+      [seededSession.session_id],
     );
-    expect(importedSession?.session_id).toBe("session-v1");
+    expect(importedSession?.session_id).toBe(seededSession.session_id);
 
     await container.db.close();
     await container2.db.close();

@@ -2,46 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { randomUUID } from "node:crypto";
-import type { SecretHandle } from "@tyrum/schemas";
-import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { createApp } from "../../src/app.js";
 import { createTestContainer } from "./helpers.js";
 import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
-
-class MemorySecretProvider implements SecretProvider {
-  private byId = new Map<string, { handle: SecretHandle; value: string }>();
-
-  async resolve(handle: SecretHandle): Promise<string | null> {
-    return this.byId.get(handle.handle_id)?.value ?? null;
-  }
-
-  async store(scope: string, value: string): Promise<SecretHandle> {
-    const handle: SecretHandle = {
-      handle_id: randomUUID(),
-      provider: "file",
-      scope,
-      created_at: new Date().toISOString(),
-    };
-    this.byId.set(handle.handle_id, { handle, value });
-    return handle;
-  }
-
-  async revoke(handleId: string): Promise<boolean> {
-    return this.byId.delete(handleId);
-  }
-
-  async list(): Promise<SecretHandle[]> {
-    return [...this.byId.values()].map((x) => x.handle);
-  }
-}
+import { createDbSecretProvider } from "../../src/modules/secret/create-secret-provider.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("provider OAuth routes", () => {
   let tempDir: string;
   let tokenStore: TokenStore;
   let adminToken: string;
-  let secretProvider: MemorySecretProvider;
   let oauthConfigPath: string;
 
   const prevOauthConfigEnv = process.env["TYRUM_OAUTH_PROVIDERS_CONFIG"];
@@ -75,8 +46,6 @@ describe("provider OAuth routes", () => {
     process.env["TEST_CLIENT_ID"] = "client-1";
     process.env["TEST_CLIENT_SECRET"] = "secret-1";
     process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
-
-    secretProvider = new MemorySecretProvider();
 
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const resolved = typeof url === "string" ? url : url.toString();
@@ -117,8 +86,13 @@ describe("provider OAuth routes", () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it("completes auth-code OAuth and creates an auth profile (callback is public)", async () => {
+  async function createOauthApp() {
     const container = await createTestContainer();
+    const secretProvider = await createDbSecretProvider({
+      db: container.db,
+      dbPath: ":memory:",
+      tyrumHome: tempDir,
+    });
     const app = createApp(container, {
       tokenStore,
       secretProvider,
@@ -130,6 +104,12 @@ describe("provider OAuth routes", () => {
         otelEnabled: false,
       },
     });
+
+    return { app, container, secretProvider };
+  }
+
+  it("completes auth-code OAuth and creates an auth profile (callback is public)", async () => {
+    const { app, container, secretProvider } = await createOauthApp();
 
     const authorizeRes = await app.request("/providers/test/oauth/authorize", {
       method: "POST",
@@ -151,11 +131,14 @@ describe("provider OAuth routes", () => {
     expect(callbackRes.status).toBe(200);
 
     const authProfileDal = new AuthProfileDal(container.db);
-    const profiles = await authProfileDal.list({ provider: "test" });
+    const profiles = await authProfileDal.list({
+      tenantId: DEFAULT_TENANT_ID,
+      providerKey: "test",
+    });
     expect(profiles).toHaveLength(1);
     expect(profiles[0]!.type).toBe("oauth");
-    expect(profiles[0]!.secret_handles["access_token_handle"]).toBeTypeOf("string");
-    expect(profiles[0]!.secret_handles["refresh_token_handle"]).toBeTypeOf("string");
+    expect(profiles[0]!.secret_keys["access_token"]).toBeTypeOf("string");
+    expect(profiles[0]!.secret_keys["refresh_token"]).toBeTypeOf("string");
 
     const handles = await secretProvider.list();
     expect(handles.length).toBeGreaterThan(0);
@@ -215,18 +198,7 @@ describe("provider OAuth routes", () => {
       }),
     );
 
-    const container = await createTestContainer();
-    const app = createApp(container, {
-      tokenStore,
-      secretProvider,
-      isLocalOnly: true,
-      runtime: {
-        version: "test",
-        instanceId: "test-instance",
-        role: "all",
-        otelEnabled: false,
-      },
-    });
+    const { app, container } = await createOauthApp();
 
     const authorizeRes = await app.request("/providers/test/oauth/authorize", {
       method: "POST",
@@ -253,18 +225,7 @@ describe("provider OAuth routes", () => {
   it("does not mount provider OAuth routes when auth profiles are disabled", async () => {
     delete process.env["TYRUM_AUTH_PROFILES_ENABLED"];
 
-    const container = await createTestContainer();
-    const app = createApp(container, {
-      tokenStore,
-      secretProvider,
-      isLocalOnly: true,
-      runtime: {
-        version: "test",
-        instanceId: "test-instance",
-        role: "all",
-        otelEnabled: false,
-      },
-    });
+    const { app, container } = await createOauthApp();
 
     const authorizeRes = await app.request("/providers/test/oauth/authorize", {
       method: "POST",
@@ -279,19 +240,8 @@ describe("provider OAuth routes", () => {
     await container.db.close();
   });
 
-  it("rejects non-default agent_id when agent registry is disabled", async () => {
-    const container = await createTestContainer();
-    const app = createApp(container, {
-      tokenStore,
-      secretProvider,
-      isLocalOnly: true,
-      runtime: {
-        version: "test",
-        instanceId: "test-instance",
-        role: "all",
-        otelEnabled: false,
-      },
-    });
+  it("accepts non-default agent_id when agent registry is disabled", async () => {
+    const { app, container } = await createOauthApp();
 
     const authorizeRes = await app.request("/providers/test/oauth/authorize", {
       method: "POST",
@@ -301,10 +251,15 @@ describe("provider OAuth routes", () => {
       },
       body: JSON.stringify({ agent_id: "agent-2" }),
     });
-    expect(authorizeRes.status).toBe(400);
-    const body = (await authorizeRes.json()) as { error: string; message: string };
-    expect(body.error).toBe("invalid_request");
-    expect(body.message).toContain("non-default agent_id");
+    expect(authorizeRes.status).toBe(200);
+    const body = (await authorizeRes.json()) as { state: string };
+    expect(body.state).toBeTypeOf("string");
+
+    const pending = await container.oauthPendingDal.get({
+      tenantId: DEFAULT_TENANT_ID,
+      state: body.state,
+    });
+    expect(pending?.agent_key).toBe("agent-2");
 
     await container.db.close();
   });

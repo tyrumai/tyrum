@@ -17,7 +17,7 @@ describe("Subagent WS protocol", () => {
   });
 
   it("parses subagent.* requests via WsRequest union", () => {
-    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const scope = { tenant_key: "default", agent_key: "default", workspace_key: "default" };
     const subagentId = "123e4567-e89b-12d3-a456-426614174000";
     const workItemId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
     const workItemTaskId = "550e8400-e29b-41d4-a716-446655440000";
@@ -49,11 +49,15 @@ describe("Subagent WS protocol", () => {
   });
 
   it("parses subagent.* responses via WsResponse union", () => {
-    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const scope = {
+      tenant_id: "00000000-0000-4000-8000-000000000001",
+      agent_id: "00000000-0000-4000-8000-000000000002",
+      workspace_id: "00000000-0000-4000-8000-000000000003",
+    };
     const subagentId = "123e4567-e89b-12d3-a456-426614174000";
     const workItemId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
     const workItemTaskId = "550e8400-e29b-41d4-a716-446655440000";
-    const sessionKey = `agent:${scope.agent_id}:subagent:${subagentId}`;
+    const sessionKey = `agent:default:subagent:${subagentId}`;
 
     const subagent = {
       subagent_id: subagentId,
@@ -106,11 +110,15 @@ describe("Subagent WS protocol", () => {
   });
 
   it("parses subagent.* events via WsEvent union", () => {
-    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const scope = {
+      tenant_id: "00000000-0000-4000-8000-000000000001",
+      agent_id: "00000000-0000-4000-8000-000000000002",
+      workspace_id: "00000000-0000-4000-8000-000000000003",
+    };
     const subagentId = "123e4567-e89b-12d3-a456-426614174000";
     const workItemId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
     const workItemTaskId = "550e8400-e29b-41d4-a716-446655440000";
-    const sessionKey = `agent:${scope.agent_id}:subagent:${subagentId}`;
+    const sessionKey = `agent:default:subagent:${subagentId}`;
 
     const subagent = {
       subagent_id: subagentId,

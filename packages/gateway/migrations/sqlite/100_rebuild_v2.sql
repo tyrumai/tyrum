@@ -852,6 +852,22 @@ CREATE TABLE outbox_consumers (
   FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE
 );
 
+CREATE TABLE presence_entries (
+  instance_id        TEXT PRIMARY KEY,
+  role               TEXT NOT NULL CHECK (role IN ('gateway','client','node')),
+  connection_id      TEXT,
+  host               TEXT,
+  ip                 TEXT,
+  version            TEXT,
+  mode               TEXT,
+  last_input_seconds INTEGER,
+  metadata_json      TEXT NOT NULL DEFAULT '{}',
+  connected_at_ms    INTEGER NOT NULL,
+  last_seen_at_ms    INTEGER NOT NULL,
+  expires_at_ms      INTEGER NOT NULL,
+  updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ---------------------------------------------------------------------------
 -- Node pairing + OAuth (tenant-scoped)
 -- ---------------------------------------------------------------------------
