@@ -286,6 +286,7 @@ describe("registerGatewayIpc handlers", () => {
       httpBaseUrl: "http://127.0.0.1:8788/",
       token: "token",
       tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
     });
 
     decryptTokenMock.mockImplementationOnce(() => {
