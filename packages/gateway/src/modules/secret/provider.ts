@@ -1,11 +1,23 @@
 import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "node:crypto";
 import type { SecretHandle as SecretHandleT } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { isUniqueViolation } from "../../utils/sql-errors.js";
+
+export interface SecretStoreOptions {
+  createOnly?: boolean;
+}
+
+export class SecretAlreadyExistsError extends Error {
+  constructor(readonly secretKey: string) {
+    super(`secret ${secretKey} already exists`);
+    this.name = "SecretAlreadyExistsError";
+  }
+}
 
 /** Interface for all secret providers. */
 export interface SecretProvider {
   resolve(handle: SecretHandleT): Promise<string | null>;
-  store(secretKey: string, value: string): Promise<SecretHandleT>;
+  store(secretKey: string, value: string, options?: SecretStoreOptions): Promise<SecretHandleT>;
   revoke(handleId: string): Promise<boolean>;
   list(): Promise<SecretHandleT[]>;
 }
@@ -28,6 +40,14 @@ function normalizeSecretKey(input: string): string {
     throw new Error("secret_key must not contain whitespace");
   }
   return trimmed;
+}
+
+function isSqliteBusyError(err: unknown): boolean {
+  if (err && typeof err === "object") {
+    const code = (err as { code?: unknown }).code;
+    return typeof code === "string" && code.toUpperCase().startsWith("SQLITE_BUSY");
+  }
+  return false;
 }
 
 function encryptValue(masterKey: Buffer, plaintext: string): { nonce: Buffer; ciphertext: Buffer } {
@@ -112,9 +132,95 @@ export class DbSecretProvider implements SecretProvider {
     return decryptValue(this.opts.masterKey, version.nonce, version.ciphertext);
   }
 
-  async store(secretKeyRaw: string, value: string): Promise<SecretHandleT> {
+  async store(
+    secretKeyRaw: string,
+    value: string,
+    options?: SecretStoreOptions,
+  ): Promise<SecretHandleT> {
     const secretKey = normalizeSecretKey(secretKeyRaw);
     const nowIso = new Date().toISOString();
+
+    if (options?.createOnly) {
+      const maxBusyRetries = 3;
+      for (let attempt = 0; attempt <= maxBusyRetries; attempt += 1) {
+        try {
+          return await this.db.transaction(async (tx) => {
+            const secretId = randomUUID();
+            const nextVersion = 1;
+            const encrypted = encryptValue(this.opts.masterKey, value);
+
+            try {
+              await tx.run(
+                `INSERT INTO secrets (
+                   tenant_id,
+                   secret_id,
+                   secret_key,
+                   status,
+                   current_version,
+                   created_at,
+                   updated_at
+                 ) VALUES (?, ?, ?, 'active', ?, ?, ?)`,
+                [this.opts.tenantId, secretId, secretKey, nextVersion, nowIso, nowIso],
+              );
+            } catch (err) {
+              if (isUniqueViolation(err)) {
+                throw new SecretAlreadyExistsError(secretKey);
+              }
+              throw err;
+            }
+
+            await tx.run(
+              `INSERT INTO secret_versions (
+                 tenant_id,
+                 secret_id,
+                 version,
+                 alg,
+                 key_id,
+                 nonce,
+                 ciphertext,
+                 created_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                this.opts.tenantId,
+                secretId,
+                nextVersion,
+                DB_SECRET_ALG,
+                this.opts.keyId,
+                encrypted.nonce,
+                encrypted.ciphertext,
+                nowIso,
+              ],
+            );
+
+            return {
+              handle_id: secretKey,
+              provider: "db",
+              scope: secretKey,
+              created_at: nowIso,
+            };
+          });
+        } catch (err) {
+          if (!isSqliteBusyError(err)) {
+            throw err;
+          }
+
+          const existing = await this.db.get<Pick<SecretRow, "secret_id">>(
+            `SELECT secret_id
+             FROM secrets
+             WHERE tenant_id = ? AND secret_key = ?`,
+            [this.opts.tenantId, secretKey],
+          );
+          if (existing) {
+            throw new SecretAlreadyExistsError(secretKey);
+          }
+          if (attempt === maxBusyRetries) {
+            throw err;
+          }
+        }
+      }
+
+      throw new Error("unreachable");
+    }
 
     return await this.db.transaction(async (tx) => {
       const existing = await tx.get<SecretRow>(

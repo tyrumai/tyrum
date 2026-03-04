@@ -249,14 +249,21 @@ describe("missing slash commands", () => {
     db = openTestSqliteDb();
 
     const nowMs = Date.now();
-    const key = "agent:default:telegram:work:group:thread-1";
+    const key = "agent:default:telegram:work:channel:thread-1";
+
+    const defaultSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      threadId: "thread-1",
+      containerKind: "channel",
+    });
 
     const session = await ensureSession({
       agentKey: "default",
       channel: "telegram",
       accountKey: "work",
       threadId: "thread-1",
-      containerKind: "group",
+      containerKind: "channel",
     });
     await insertChannelInboxRow({
       session,
@@ -276,7 +283,7 @@ describe("missing slash commands", () => {
 
     const payload = result.data as { session_id: string; model_id: string };
     expect(payload.model_id).toBe("openai/gpt-4.1");
-    expect(payload.session_id).toMatch(UUID_RE);
+    expect(payload.session_id).toBe(session.session_id);
 
     const row = await db.get<{ model_id: string }>(
       `SELECT model_id
@@ -285,6 +292,51 @@ describe("missing slash commands", () => {
       [DEFAULT_TENANT_ID, payload.session_id],
     );
     expect(row?.model_id).toBe("openai/gpt-4.1");
+
+    const defaultRow = await db.get<{ model_id: string }>(
+      `SELECT model_id
+       FROM session_model_overrides
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, defaultSession.session_id],
+    );
+    expect(defaultRow).toBeUndefined();
+  });
+
+  it("supports /model using key-only account-scoped fallback (without inbox row)", async () => {
+    db = openTestSqliteDb();
+
+    const key = "agent:default:telegram:work:channel:thread-fallback";
+
+    const defaultSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      threadId: "thread-fallback",
+      containerKind: "channel",
+    });
+    const workSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      accountKey: "work",
+      threadId: "thread-fallback",
+      containerKind: "channel",
+    });
+
+    const result = await executeCommand("/model openai/gpt-4.1", {
+      db,
+      commandContext: { key, lane: "main" },
+    });
+
+    const payload = result.data as { session_id: string; model_id: string };
+    expect(payload.model_id).toBe("openai/gpt-4.1");
+    expect(payload.session_id).toBe(workSession.session_id);
+
+    const defaultRow = await db.get<{ model_id: string }>(
+      `SELECT model_id
+       FROM session_model_overrides
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, defaultSession.session_id],
+    );
+    expect(defaultRow).toBeUndefined();
   });
 
   it("supports /model (show) for a session", async () => {

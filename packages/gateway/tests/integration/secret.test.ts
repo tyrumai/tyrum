@@ -78,6 +78,45 @@ describe("Secret routes (integration)", () => {
     }
   });
 
+  it("POST /secrets returns 409 for one of two concurrent creates and does not clobber", async () => {
+    const firstSetup = await setup();
+    const secondSetup = await setup();
+    try {
+      await firstSetup.db.exec("PRAGMA busy_timeout = 25");
+      await secondSetup.db.exec("PRAGMA busy_timeout = 25");
+
+      const [first, second] = await Promise.all([
+        firstSetup.app.request("/secrets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ secret_key: "dup_atomic", value: "v1" }),
+        }),
+        secondSetup.app.request("/secrets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ secret_key: "dup_atomic", value: "v2" }),
+        }),
+      ]);
+
+      const statuses = [first.status, second.status].sort((a, b) => a - b);
+      expect(statuses).toEqual([201, 409]);
+
+      const winnerValue = first.status === 201 ? "v1" : "v2";
+      const resolved = await firstSetup.provider.resolve({
+        handle_id: "dup_atomic",
+        provider: "db",
+        scope: "dup_atomic",
+        created_at: new Date().toISOString(),
+      });
+      expect(resolved).toBe(winnerValue);
+
+      const handles = await firstSetup.provider.list();
+      expect(handles.filter((h) => h.handle_id === "dup_atomic")).toHaveLength(1);
+    } finally {
+      await Promise.all([firstSetup.db.close(), secondSetup.db.close()]);
+    }
+  });
+
   it("GET /secrets lists stored handles", async () => {
     const { app, db } = await setup();
     try {

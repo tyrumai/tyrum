@@ -17,6 +17,7 @@ describe("session command primitives", () => {
   async function ensureSession(input: {
     agentKey: string;
     channel: string;
+    accountKey?: string;
     threadId: string;
     containerKind: "dm" | "group" | "channel";
   }): Promise<Awaited<ReturnType<SessionDal["getOrCreate"]>>> {
@@ -25,7 +26,7 @@ describe("session command primitives", () => {
     return await sessionDal.getOrCreate({
       scopeKeys: { agentKey: input.agentKey, workspaceKey: "default" },
       connectorKey: input.channel,
-      accountKey: undefined,
+      accountKey: input.accountKey,
       providerThreadId: input.threadId,
       containerKind: input.containerKind,
     });
@@ -73,6 +74,33 @@ describe("session command primitives", () => {
     expect(stored?.session_key).toContain(`:channel:${payload.thread_id}`);
     expect(stored?.summary).toBe("");
     expect(stored?.turns_json).toBe("[]");
+  });
+
+  it("supports /new for non-default channel accounts", async () => {
+    db = openTestSqliteDb();
+
+    const result = await executeCommand("/new", {
+      db,
+      commandContext: { agentId: "default", channel: "telegram:work" },
+    });
+
+    expect(result.data).toMatchObject({ channel: "telegram" });
+    const payload = result.data as { session_id: string };
+
+    const row = await db.get<{ account_key: string }>(
+      `SELECT ca.account_key
+       FROM sessions s
+       JOIN channel_threads ct
+         ON ct.tenant_id = s.tenant_id
+        AND ct.channel_thread_id = s.channel_thread_id
+       JOIN channel_accounts ca
+         ON ca.tenant_id = ct.tenant_id
+        AND ca.workspace_id = ct.workspace_id
+        AND ca.channel_account_id = ct.channel_account_id
+       WHERE s.tenant_id = ? AND s.session_id = ?`,
+      [DEFAULT_TENANT_ID, payload.session_id],
+    );
+    expect(row?.account_key).toBe("work");
   });
 
   it("supports /compact (moves older turns into summary)", async () => {
@@ -125,6 +153,96 @@ describe("session command primitives", () => {
     expect(parsed).toHaveLength(8);
     expect(parsed[0]?.content).toBe("msg-4");
     expect(parsed[7]?.content).toBe("msg-11");
+  });
+
+  it("supports /compact for non-default channel accounts", async () => {
+    db = openTestSqliteDb();
+
+    const nowIso = new Date().toISOString();
+    const workTurns = Array.from({ length: 10 }, (_, idx) => ({
+      role: idx % 2 === 0 ? ("user" as const) : ("assistant" as const),
+      content: `work-msg-${String(idx)}`,
+      timestamp: `work-t-${String(idx)}`,
+    }));
+    const defaultTurns = [
+      { role: "user" as const, content: "default-msg-0", timestamp: "default-t-0" },
+      { role: "assistant" as const, content: "default-msg-1", timestamp: "default-t-1" },
+    ];
+
+    const defaultSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      threadId: "thread-1",
+      containerKind: "channel",
+    });
+    const workSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      accountKey: "work",
+      threadId: "thread-1",
+      containerKind: "channel",
+    });
+
+    await db.run(
+      `UPDATE sessions
+       SET summary = ?, turns_json = ?, updated_at = ?
+       WHERE tenant_id = ? AND session_id = ?`,
+      [
+        "default-summary",
+        JSON.stringify(defaultTurns),
+        nowIso,
+        DEFAULT_TENANT_ID,
+        defaultSession.session_id,
+      ],
+    );
+    await db.run(
+      `UPDATE sessions
+       SET summary = ?, turns_json = ?, updated_at = ?
+       WHERE tenant_id = ? AND session_id = ?`,
+      [
+        "work-summary",
+        JSON.stringify(workTurns),
+        nowIso,
+        DEFAULT_TENANT_ID,
+        workSession.session_id,
+      ],
+    );
+
+    const result = await executeCommand("/compact", {
+      db,
+      commandContext: { agentId: "default", channel: "telegram:work", threadId: "thread-1" },
+    });
+
+    expect(result.data).toMatchObject({
+      agent_id: "default",
+      session_id: workSession.session_id,
+      dropped_messages: 2,
+      kept_messages: 8,
+    });
+
+    const workUpdated = await db.get<{ summary: string; turns_json: string }>(
+      `SELECT summary, turns_json
+       FROM sessions
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, workSession.session_id],
+    );
+    expect(workUpdated?.summary).toContain("work-summary");
+    expect(workUpdated?.summary).toContain("work-msg-0");
+    const workParsed = workUpdated?.turns_json
+      ? (JSON.parse(workUpdated.turns_json) as Array<{ content: string }>)
+      : [];
+    expect(workParsed).toHaveLength(8);
+    expect(workParsed[0]?.content).toBe("work-msg-2");
+    expect(workParsed[7]?.content).toBe("work-msg-9");
+
+    const defaultUpdated = await db.get<{ summary: string; turns_json: string }>(
+      `SELECT summary, turns_json
+       FROM sessions
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, defaultSession.session_id],
+    );
+    expect(defaultUpdated?.summary).toBe("default-summary");
+    expect(defaultUpdated?.turns_json).toBe(JSON.stringify(defaultTurns));
   });
 
   it("supports /stop (cancels active run + clears queued inbox)", async () => {
@@ -624,5 +742,81 @@ describe("session command primitives", () => {
       [DEFAULT_TENANT_ID, key],
     );
     expect(sendOverride).toBeUndefined();
+  });
+
+  it("supports /reset for non-default channel accounts", async () => {
+    db = openTestSqliteDb();
+
+    const nowIso = new Date().toISOString();
+
+    const defaultSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      threadId: "thread-1",
+      containerKind: "channel",
+    });
+    const workSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      accountKey: "work",
+      threadId: "thread-1",
+      containerKind: "channel",
+    });
+
+    const defaultTurns = [{ role: "user", content: "default-hi", timestamp: "default-t-1" }];
+    const workTurns = [{ role: "user", content: "work-hi", timestamp: "work-t-1" }];
+
+    await db.run(
+      `UPDATE sessions
+       SET summary = ?, turns_json = ?, updated_at = ?
+       WHERE tenant_id = ? AND session_id = ?`,
+      [
+        "default-to-keep",
+        JSON.stringify(defaultTurns),
+        nowIso,
+        DEFAULT_TENANT_ID,
+        defaultSession.session_id,
+      ],
+    );
+    await db.run(
+      `UPDATE sessions
+       SET summary = ?, turns_json = ?, updated_at = ?
+       WHERE tenant_id = ? AND session_id = ?`,
+      [
+        "work-to-reset",
+        JSON.stringify(workTurns),
+        nowIso,
+        DEFAULT_TENANT_ID,
+        workSession.session_id,
+      ],
+    );
+
+    const result = await executeCommand("/reset", {
+      db,
+      commandContext: { agentId: "default", channel: "telegram:work", threadId: "thread-1" },
+    });
+
+    expect(result.data).toMatchObject({
+      agent_id: "default",
+      session_id: workSession.session_id,
+    });
+
+    const resetSession = await db.get<{ summary: string; turns_json: string }>(
+      `SELECT summary, turns_json
+       FROM sessions
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, workSession.session_id],
+    );
+    expect(resetSession?.summary).toBe("");
+    expect(resetSession?.turns_json).toBe("[]");
+
+    const defaultUnchanged = await db.get<{ summary: string; turns_json: string }>(
+      `SELECT summary, turns_json
+       FROM sessions
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, defaultSession.session_id],
+    );
+    expect(defaultUnchanged?.summary).toBe("default-to-keep");
+    expect(defaultUnchanged?.turns_json).toBe(JSON.stringify(defaultTurns));
   });
 });

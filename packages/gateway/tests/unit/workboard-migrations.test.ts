@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { SQLITE_MIGRATIONS_DIR } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 describe("WorkBoard migrations", () => {
@@ -48,5 +51,22 @@ describe("WorkBoard migrations", () => {
       );
       expect(row?.name).toBe(table);
     }
+  });
+
+  it("drops execution tables child-first in rebuild migration", () => {
+    const sql = readFileSync(join(SQLITE_MIGRATIONS_DIR, "100_rebuild_v2.sql"), "utf-8");
+
+    const dropOrder = Array.from(
+      sql.matchAll(/^DROP TABLE IF EXISTS ([a-z0-9_]+);$/gim),
+      (match) => match[1],
+    );
+
+    const indexOfDrop = (tableName: string): number => dropOrder.indexOf(tableName);
+
+    expect(indexOfDrop("execution_artifacts")).toBeLessThan(indexOfDrop("execution_attempts"));
+    expect(indexOfDrop("execution_attempts")).toBeLessThan(indexOfDrop("execution_steps"));
+    expect(indexOfDrop("resume_tokens")).toBeLessThan(indexOfDrop("execution_runs"));
+    expect(indexOfDrop("execution_steps")).toBeLessThan(indexOfDrop("execution_runs"));
+    expect(indexOfDrop("execution_runs")).toBeLessThan(indexOfDrop("execution_jobs"));
   });
 });

@@ -61,6 +61,57 @@ describe("approval respond policy overrides", () => {
     ).toHaveLength(0);
   });
 
+  it("returns 400 and keeps approval pending when override workspace_id is not a UUID", async () => {
+    db = openTestSqliteDb();
+    const approvalDal = new ApprovalDal(db);
+    const policyOverrideDal = new PolicyOverrideDal(db);
+    const invalidWorkspaceId = "not-a-uuid";
+
+    const created = await approvalDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Allow tool.exec?",
+      context: {
+        policy: {
+          agent_id: DEFAULT_AGENT_ID,
+          suggested_overrides: [
+            { tool_id: "tool.exec", pattern: "echo hi", workspace_id: invalidWorkspaceId },
+          ],
+        },
+      },
+    });
+
+    const app = new Hono();
+    app.route("/", createApprovalRoutes({ approvalDal, policyOverrideDal }));
+
+    const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        decision: "approved",
+        mode: "always",
+        overrides: [{ tool_id: "tool.exec", pattern: "echo hi", workspace_id: invalidWorkspaceId }],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: "invalid_request",
+      message: "workspace_id must be a UUID",
+    });
+
+    const approvalAfter = await approvalDal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: created.approval_id,
+    });
+    expect(approvalAfter?.status).toBe("pending");
+    expect(
+      await policyOverrideDal.list({ agentId: DEFAULT_AGENT_ID, toolId: "tool.exec" }),
+    ).toHaveLength(0);
+  });
+
   it("does not create duplicate overrides when already resolved", async () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);

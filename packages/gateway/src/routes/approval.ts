@@ -250,6 +250,14 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
           );
         }
       }
+
+      for (const sel of selectedNormalized) {
+        if (!sel.workspace_id) continue;
+        const parsedWorkspaceId = UuidSchema.safeParse(sel.workspace_id);
+        if (!parsedWorkspaceId.success) {
+          return c.json({ error: "invalid_request", message: "workspace_id must be a UUID" }, 400);
+        }
+      }
     }
 
     const updated = await deps.approvalDal.respond({
@@ -306,21 +314,9 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       const snapshotId = extractPolicySnapshotId(updated.context);
 
       for (const sel of selectedNormalized) {
-        let workspaceId: string | undefined;
-        if (sel.workspace_id) {
-          const parsedWorkspaceId = UuidSchema.safeParse(sel.workspace_id);
-          if (!parsedWorkspaceId.success) {
-            return c.json(
-              { error: "invalid_request", message: "workspace_id must be a UUID" },
-              400,
-            );
-          }
-          workspaceId = parsedWorkspaceId.data;
-        }
-
         const row = await overrideDalForRequest.create({
           agentId,
-          workspaceId,
+          workspaceId: sel.workspace_id,
           toolId: sel.tool_id,
           pattern: sel.pattern,
           createdBy,

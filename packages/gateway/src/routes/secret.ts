@@ -7,7 +7,7 @@
 
 import { Hono } from "hono";
 import { SecretRotateRequest, SecretStoreRequest } from "@tyrum/schemas";
-import type { SecretProvider } from "../modules/secret/provider.js";
+import { SecretAlreadyExistsError, type SecretProvider } from "../modules/secret/provider.js";
 
 export interface SecretRouteDeps {
   secretProviderForAgent: (agentId: string) => Promise<SecretProvider>;
@@ -46,13 +46,15 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
     }
 
     const secretKey = parsed.data.secret_key;
-    const existing = (await secretProvider.list()).some((h) => h.handle_id === secretKey);
-    if (existing) {
-      return c.json({ error: "conflict", message: `secret ${secretKey} already exists` }, 409);
+    try {
+      const handle = await secretProvider.store(secretKey, parsed.data.value, { createOnly: true });
+      return c.json({ handle }, 201);
+    } catch (err) {
+      if (err instanceof SecretAlreadyExistsError) {
+        return c.json({ error: "conflict", message: err.message }, 409);
+      }
+      throw err;
     }
-
-    const handle = await secretProvider.store(secretKey, parsed.data.value);
-    return c.json({ handle }, 201);
   });
 
   /** List all secret handles (never values). */

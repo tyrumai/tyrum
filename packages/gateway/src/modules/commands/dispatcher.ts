@@ -22,7 +22,7 @@ import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
 import { IntakeModeOverrideDal } from "../agent/intake-mode-override-dal.js";
 import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
-import { parseChannelSourceKey } from "../channels/interface.js";
+import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../channels/interface.js";
 import { resolveWorkspaceKey } from "../workspace/id.js";
 import { buildAgentTurnKey, encodeTurnKeyPart } from "../agent/turn-key.js";
 import { randomUUID } from "node:crypto";
@@ -328,19 +328,34 @@ async function cancelRunsAndClearQueuedInbox(input: {
 async function resolveChannelThread(
   db: SqlDb,
   ctx: CommandDeps["commandContext"] | undefined,
-): Promise<{ channel: string; threadId: string } | undefined> {
+): Promise<{ channel: string; accountKey?: string; threadId: string } | undefined> {
+  const resolveChannelAddress = (
+    sourceRaw: string,
+  ): { channel: string; accountKey?: string } | undefined => {
+    const source = sourceRaw.trim();
+    if (!source) return undefined;
+
+    try {
+      const parsed = parseChannelSourceKey(source);
+      return {
+        channel: parsed.connector,
+        accountKey: parsed.accountId === DEFAULT_CHANNEL_ACCOUNT_ID ? undefined : parsed.accountId,
+      };
+    } catch {
+      // Intentional: accept unscoped channel IDs by stripping any connector suffix.
+      const idx = source.indexOf(":");
+      const channel = (idx > 0 ? source.slice(0, idx) : source).trim();
+      if (!channel) return undefined;
+      return { channel };
+    }
+  };
+
   const channelRaw = ctx?.channel?.trim();
   const threadIdRaw = ctx?.threadId?.trim();
   if (channelRaw && threadIdRaw) {
-    let channel = channelRaw;
-    try {
-      channel = parseChannelSourceKey(channelRaw).connector;
-    } catch {
-      // Intentional: accept unscoped channel IDs by stripping any connector suffix.
-      const idx = channel.indexOf(":");
-      if (idx > 0) channel = channel.slice(0, idx);
-    }
-    return { channel, threadId: threadIdRaw };
+    const resolved = resolveChannelAddress(channelRaw);
+    if (!resolved) return undefined;
+    return { ...resolved, threadId: threadIdRaw };
   }
 
   const key = ctx?.key?.trim();
@@ -356,25 +371,22 @@ async function resolveChannelThread(
     [key, lane],
   );
   if (row?.source && row?.thread_id) {
-    let channel = row.source.trim();
-    try {
-      channel = parseChannelSourceKey(channel).connector;
-    } catch {
-      // Intentional: accept unscoped channel IDs by stripping any connector suffix.
-      const idx = channel.indexOf(":");
-      if (idx > 0) channel = channel.slice(0, idx);
-    }
+    const resolved = resolveChannelAddress(row.source);
+    if (!resolved) return undefined;
     const threadId = row.thread_id.trim();
-    if (!channel || !threadId) return undefined;
-    return { channel, threadId };
+    if (!threadId) return undefined;
+    return { ...resolved, threadId };
   }
 
   try {
     const parsed = parseTyrumKey(key as never);
     if (parsed.kind === "agent" && "channel" in parsed && "id" in parsed) {
       const channel = String(parsed.channel).trim();
+      const account =
+        "account" in parsed ? String(parsed.account).trim() : DEFAULT_CHANNEL_ACCOUNT_ID;
+      const accountKey = account && account !== DEFAULT_CHANNEL_ACCOUNT_ID ? account : undefined;
       const threadId = String(parsed.id).trim();
-      if (channel && threadId) return { channel, threadId };
+      if (channel && threadId) return { channel, accountKey, threadId };
     }
   } catch {
     // Intentional: ignore parse errors when resolving channel/thread from legacy keys.
@@ -514,8 +526,11 @@ export async function executeCommand(
     }
 
     let channel = channelRaw;
+    let accountKey: string | undefined;
     try {
-      channel = parseChannelSourceKey(channelRaw).connector;
+      const parsed = parseChannelSourceKey(channelRaw);
+      channel = parsed.connector;
+      accountKey = parsed.accountId === DEFAULT_CHANNEL_ACCOUNT_ID ? undefined : parsed.accountId;
     } catch {
       // Intentional: accept unscoped channel IDs by stripping any connector suffix.
       const idx = channel.indexOf(":");
@@ -534,7 +549,7 @@ export async function executeCommand(
     const session = await sessionDal.getOrCreate({
       scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
       connectorKey: channel,
-      accountKey: undefined,
+      accountKey,
       providerThreadId: threadId,
       containerKind: "channel",
     });
@@ -559,7 +574,7 @@ export async function executeCommand(
     if (!resolved) {
       return { output: "Usage: /compact (requires key or channel/thread context)", data: null };
     }
-    const { channel, threadId } = resolved;
+    const { channel, accountKey, threadId } = resolved;
 
     const sessionDal = new SessionDal(
       deps.db,
@@ -569,7 +584,7 @@ export async function executeCommand(
     const session = await sessionDal.getOrCreate({
       scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
       connectorKey: channel,
-      accountKey: undefined,
+      accountKey,
       providerThreadId: threadId,
       containerKind: "channel",
     });
@@ -631,7 +646,7 @@ export async function executeCommand(
     if (!resolved) {
       return { output: "Usage: /reset (requires key or channel/thread context)", data: null };
     }
-    const { channel, threadId } = resolved;
+    const { channel, accountKey, threadId } = resolved;
 
     // Best-effort: stop active execution + clear queued followups (if we can resolve key/lane).
     const keyLane = (await resolveKeyLane(deps.db, ctx)) ??
@@ -664,7 +679,7 @@ export async function executeCommand(
     const session = await sessionDal.getOrCreate({
       scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
       connectorKey: channel,
-      accountKey: undefined,
+      accountKey,
       providerThreadId: threadId,
       containerKind,
     });
@@ -970,7 +985,7 @@ export async function executeCommand(
         data: null,
       };
     }
-    const { channel, threadId } = resolved;
+    const { channel, accountKey, threadId } = resolved;
 
     const sessionDal = new SessionDal(
       deps.db,
@@ -980,7 +995,7 @@ export async function executeCommand(
     const session = await sessionDal.getOrCreate({
       scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
       connectorKey: channel,
-      accountKey: undefined,
+      accountKey,
       providerThreadId: threadId,
       containerKind: "channel",
     });
