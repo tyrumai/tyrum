@@ -1,152 +1,22 @@
 /**
  * Secret management REST routes.
  *
- * Provides endpoints for storing, listing, and revoking secret handles.
- * Secret values are never returned — only opaque handles.
+ * Stores secret values in the database (encrypted at rest) and returns only
+ * stable external handles (never secret values).
  */
 
 import { Hono } from "hono";
 import { SecretRotateRequest, SecretStoreRequest } from "@tyrum/schemas";
-import { EnvSecretProvider, type SecretProvider } from "../modules/secret/provider.js";
-import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
-import type { Logger } from "../modules/observability/logger.js";
-import { safeDetail } from "../utils/safe-detail.js";
+import type { SecretProvider } from "../modules/secret/provider.js";
 
 export interface SecretRouteDeps {
   secretProviderForAgent: (agentId: string) => Promise<SecretProvider>;
-  authProfileDal?: AuthProfileDal;
-  logger?: Logger;
 }
 
 function agentIdFromReq(c: {
   req: { query: (key: string) => string | undefined; header: (key: string) => string | undefined };
 }): string {
   return c.req.query("agent_id")?.trim() || c.req.header("x-tyrum-agent-id")?.trim() || "default";
-}
-
-function replacesSecretHandleId(
-  input: Record<string, string>,
-  from: string,
-  to: string,
-): { changed: boolean; next: Record<string, string> } {
-  let changed = false;
-  const next: Record<string, string> = { ...input };
-  for (const [k, v] of Object.entries(next)) {
-    if (v === from) {
-      next[k] = to;
-      changed = true;
-    }
-  }
-  return { changed, next };
-}
-
-class SecretRotationPropagationError extends Error {
-  constructor(
-    message: string,
-    public readonly updatedCount: number,
-    options?: { cause?: unknown },
-  ) {
-    super(message, options);
-    this.name = "SecretRotationPropagationError";
-  }
-}
-
-async function disableAuthProfilesReferencingSecretHandleId(params: {
-  authProfileDal: AuthProfileDal;
-  agentId: string;
-  handleId: string;
-}): Promise<void> {
-  const pageSize = 200;
-  let after: { createdAt: string; profileId: string } | undefined;
-
-  for (;;) {
-    const profiles = await params.authProfileDal.listByAgentAfter({
-      agentId: params.agentId,
-      after,
-      limit: pageSize,
-    });
-    if (profiles.length === 0) return;
-
-    for (const profile of profiles) {
-      if (profile.status === "disabled") continue;
-      const handleIds = Object.values(profile.secret_handles ?? {});
-      if (!handleIds.includes(params.handleId)) continue;
-      await params.authProfileDal.disableProfile(profile.profile_id, {
-        reason: "secret_handle_revoked",
-        updatedBy: { kind: "secret_revoke", handle_id: params.handleId },
-      });
-    }
-
-    if (profiles.length < pageSize) return;
-    const last = profiles[profiles.length - 1]!;
-    after = { createdAt: last.created_at, profileId: last.profile_id };
-  }
-}
-
-async function rotateAuthProfilesReferencingSecretHandleId(params: {
-  authProfileDal: AuthProfileDal;
-  agentId: string;
-  fromHandleId: string;
-  toHandleId: string;
-}): Promise<number> {
-  if (params.fromHandleId === params.toHandleId) return 0;
-
-  const pageSize = 200;
-  let after: { createdAt: string; profileId: string } | undefined;
-  let updatedCount = 0;
-
-  for (;;) {
-    let profiles: Awaited<ReturnType<AuthProfileDal["listByAgentAfter"]>>;
-    try {
-      profiles = await params.authProfileDal.listByAgentAfter({
-        agentId: params.agentId,
-        after,
-        limit: pageSize,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new SecretRotationPropagationError(
-        `auth profile list failed: ${message}`,
-        updatedCount,
-        { cause: err },
-      );
-    }
-    if (profiles.length === 0) return updatedCount;
-
-    for (const profile of profiles) {
-      const { changed, next } = replacesSecretHandleId(
-        profile.secret_handles ?? {},
-        params.fromHandleId,
-        params.toHandleId,
-      );
-      if (!changed) continue;
-      try {
-        const updated = await params.authProfileDal.updateSecretHandles(profile.profile_id, {
-          secretHandles: next,
-          updatedBy: {
-            kind: "secret_rotate",
-            from_handle_id: params.fromHandleId,
-            to_handle_id: params.toHandleId,
-          },
-        });
-        if (!updated) {
-          throw new Error("auth profile not found");
-        }
-        updatedCount += 1;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        throw new SecretRotationPropagationError(
-          `auth profile update failed: ${message}`,
-          updatedCount,
-          { cause: err },
-        );
-      }
-    }
-
-    if (profiles.length < pageSize) return updatedCount;
-    const last = profiles[profiles.length - 1]!;
-    after = { createdAt: last.created_at, profileId: last.profile_id };
-  }
 }
 
 export function createSecretRoutes(deps: SecretRouteDeps): Hono {
@@ -167,12 +37,6 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
       );
     }
 
-    const { scope, value, provider } = parsed.data;
-
-    // Only allow storing via the active provider — the provider field
-    // is informational; we always delegate to the wired SecretProvider.
-    void provider;
-
     let secretProvider: SecretProvider;
     try {
       secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
@@ -181,17 +45,13 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
       return c.json({ error: "invalid_request", message }, 400);
     }
 
-    if (!(secretProvider instanceof EnvSecretProvider) && (!value || value.trim().length === 0)) {
-      return c.json(
-        {
-          error: "invalid_request",
-          message: "value is required for non-env secret providers",
-        },
-        400,
-      );
+    const secretKey = parsed.data.secret_key;
+    const existing = (await secretProvider.list()).some((h) => h.handle_id === secretKey);
+    if (existing) {
+      return c.json({ error: "conflict", message: `secret ${secretKey} already exists` }, 409);
     }
 
-    const handle = await secretProvider.store(scope, value ?? "");
+    const handle = await secretProvider.store(secretKey, parsed.data.value);
     return c.json({ handle }, 201);
   });
 
@@ -211,40 +71,14 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
   /** Revoke a secret by handle ID. */
   app.delete("/secrets/:id", async (c) => {
     const handleId = c.req.param("id");
-    const agentId = agentIdFromReq(c);
     let secretProvider: SecretProvider;
     try {
-      secretProvider = await deps.secretProviderForAgent(agentId);
+      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);
     }
     const revoked = await secretProvider.revoke(handleId);
-
-    if (deps.authProfileDal) {
-      try {
-        await disableAuthProfilesReferencingSecretHandleId({
-          authProfileDal: deps.authProfileDal,
-          agentId,
-          handleId,
-        });
-      } catch (err) {
-        const error = err instanceof Error ? err.message : String(err);
-        const fields = {
-          agent_id: agentId,
-          handle_id: handleId,
-          error,
-          revoked,
-        };
-        if (deps.logger) {
-          deps.logger.warn("secret.revoke.auth_profiles_disable_failed", fields);
-        } else {
-          process.stderr.write(
-            `secret.revoke.auth_profiles_disable_failed ${JSON.stringify(fields)}\n`,
-          );
-        }
-      }
-    }
 
     if (!revoked) {
       return c.json({ error: "not_found", message: `secret ${handleId} not found` }, 404);
@@ -253,35 +87,21 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
     return c.json({ revoked: true });
   });
 
-  /**
-   * Rotate a secret handle by revoking the old handle and returning a new one
-   * for the same scope. (The secret value is never returned.)
-   */
+  /** Rotate a secret by publishing a new version under the same handle. */
   app.post("/secrets/:id/rotate", async (c) => {
     const handleId = c.req.param("id");
-    const agentId = agentIdFromReq(c);
     let secretProvider: SecretProvider;
     try {
-      secretProvider = await deps.secretProviderForAgent(agentId);
+      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);
     }
+
     const handles = await secretProvider.list();
     const existing = handles.find((h) => h.handle_id === handleId);
     if (!existing) {
       return c.json({ error: "not_found", message: `secret ${handleId} not found` }, 404);
-    }
-
-    if (secretProvider instanceof EnvSecretProvider) {
-      return c.json(
-        {
-          error: "invalid_request",
-          message:
-            "env secrets cannot be rotated via API; update the backing environment value instead",
-        },
-        400,
-      );
     }
 
     const raw = await c.req.json();
@@ -296,37 +116,8 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
       );
     }
 
-    const handle = await secretProvider.store(existing.scope, parsed.data.value);
-    if (deps.authProfileDal) {
-      try {
-        await rotateAuthProfilesReferencingSecretHandleId({
-          authProfileDal: deps.authProfileDal,
-          agentId,
-          fromHandleId: handleId,
-          toHandleId: handle.handle_id,
-        });
-      } catch (err) {
-        const shouldRevokeNewHandle =
-          err instanceof SecretRotationPropagationError && err.updatedCount === 0;
-        if (shouldRevokeNewHandle) {
-          await secretProvider.revoke(handle.handle_id).catch((cleanupErr) => {
-            deps.logger?.warn("secret.rotate.cleanup_revoke_failed", {
-              agent_id: agentId,
-              handle_id: handle.handle_id,
-              error: safeDetail(cleanupErr) ?? "unknown_error",
-            });
-          });
-        }
-        const message = err instanceof Error ? err.message : String(err);
-        return c.json(
-          { error: "internal_error", message: `secret rotation failed: ${message}` },
-          500,
-        );
-      }
-    }
-
-    const revoked = await secretProvider.revoke(handleId);
-    return c.json({ revoked, handle }, 201);
+    const handle = await secretProvider.store(existing.handle_id, parsed.data.value);
+    return c.json({ revoked: true, handle }, 201);
   });
 
   return app;

@@ -3,6 +3,7 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
 import { DateTimeSchema } from "@tyrum/schemas";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("RoutingConfigDal", () => {
   let db: SqliteDb;
@@ -40,9 +41,18 @@ describe("RoutingConfigDal", () => {
     expect(latest?.revision).toBe(created.revision);
     expect(latest?.config).toEqual(created.config);
 
+    const plan = await db.get<{ plan_id: string }>(
+      "SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_key = ?",
+      [DEFAULT_TENANT_ID, "routing.config"],
+    );
+    expect(plan?.plan_id).toBeTruthy();
+
     const audit = await db.all<{ action: string }>(
-      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      ["routing.config"],
+      `SELECT action_json AS action
+       FROM planner_events
+       WHERE tenant_id = ? AND plan_id = ?
+       ORDER BY step_index ASC`,
+      [DEFAULT_TENANT_ID, plan?.plan_id ?? ""],
     );
     expect(audit).toHaveLength(1);
     const action = JSON.parse(audit[0]!.action) as Record<string, unknown>;
@@ -114,9 +124,18 @@ describe("RoutingConfigDal", () => {
     expect(reverted.config).toEqual(initial.config);
     expect(reverted.revertedFromRevision).toBe(initial.revision);
 
+    const plan = await db.get<{ plan_id: string }>(
+      "SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_key = ?",
+      [DEFAULT_TENANT_ID, "routing.config"],
+    );
+    expect(plan?.plan_id).toBeTruthy();
+
     const audit = await db.all<{ action: string }>(
-      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      ["routing.config"],
+      `SELECT action_json AS action
+       FROM planner_events
+       WHERE tenant_id = ? AND plan_id = ?
+       ORDER BY step_index ASC`,
+      [DEFAULT_TENANT_ID, plan?.plan_id ?? ""],
     );
     expect(audit).toHaveLength(3);
     const revertAction = JSON.parse(audit[2]!.action) as Record<string, unknown>;

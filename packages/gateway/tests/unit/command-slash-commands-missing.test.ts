@@ -1,12 +1,92 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { randomUUID } from "node:crypto";
 import { executeCommand } from "../../src/modules/commands/dispatcher.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { ModelsDevService } from "../../src/modules/models/models-dev-service.js";
+import { SessionDal } from "../../src/modules/agent/session-dal.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+  IdentityScopeDal,
+} from "../../src/modules/identity/scope.js";
+import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 describe("missing slash commands", () => {
   let db: ReturnType<typeof openTestSqliteDb> | undefined;
+
+  async function ensureSession(input: {
+    agentKey: string;
+    channel: string;
+    accountKey?: string;
+    threadId: string;
+    containerKind: "dm" | "group" | "channel";
+  }): Promise<Awaited<ReturnType<SessionDal["getOrCreate"]>>> {
+    if (!db) throw new Error("db not initialized");
+    const sessionDal = new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+    return await sessionDal.getOrCreate({
+      scopeKeys: { agentKey: input.agentKey, workspaceKey: "default" },
+      connectorKey: input.channel,
+      accountKey: input.accountKey,
+      providerThreadId: input.threadId,
+      containerKind: input.containerKind,
+    });
+  }
+
+  async function insertChannelInboxRow(input: {
+    session: Awaited<ReturnType<SessionDal["getOrCreate"]>>;
+    source: string;
+    threadId: string;
+    messageId: string;
+    key: string;
+    lane: string;
+    receivedAtMs: number;
+    status: "queued" | "processing" | "completed" | "failed";
+  }): Promise<number> {
+    if (!db) throw new Error("db not initialized");
+    await db.run(
+      `INSERT INTO channel_inbox (
+         tenant_id,
+         source,
+         thread_id,
+         message_id,
+         key,
+         lane,
+         received_at_ms,
+         payload_json,
+         status,
+         workspace_id,
+         session_id,
+         channel_thread_id
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        input.source,
+        input.threadId,
+        input.messageId,
+        input.key,
+        input.lane,
+        input.receivedAtMs,
+        input.status,
+        DEFAULT_WORKSPACE_ID,
+        input.session.session_id,
+        input.session.channel_thread_id,
+      ],
+    );
+
+    const row = await db.get<{ inbox_id: number }>(
+      "SELECT inbox_id FROM channel_inbox WHERE message_id = ? ORDER BY inbox_id DESC LIMIT 1",
+      [input.messageId],
+    );
+    if (!row) {
+      throw new Error("channel_inbox insert failed");
+    }
+    return row.inbox_id;
+  }
 
   afterEach(async () => {
     await db?.close();
@@ -18,7 +98,7 @@ describe("missing slash commands", () => {
     const policyOverrideDal = new PolicyOverrideDal(db);
 
     const created = await policyOverrideDal.create({
-      agentId: "default",
+      agentId: DEFAULT_AGENT_ID,
       toolId: "tool.exec",
       pattern: "git status*",
       createdBy: { kind: "test" },
@@ -43,65 +123,52 @@ describe("missing slash commands", () => {
       db = openTestSqliteDb();
       const nowIso = new Date().toISOString();
 
+      const session = await ensureSession({
+        agentKey: "default",
+        channel: "ui",
+        threadId: "thread-1",
+        containerKind: "channel",
+      });
+
+      const secretId = randomUUID();
+      const secretKey = "secret-openrouter-1";
       await db.run(
-        `INSERT INTO sessions (
-           agent_id,
-           session_id,
-           channel,
-           thread_id,
-           summary,
-           turns_json,
-           created_at,
-           updated_at
-         ) VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
-        ["default", "ui:thread-1", "ui", "thread-1", nowIso, nowIso],
+        `INSERT INTO secrets (tenant_id, secret_id, secret_key, status)
+         VALUES (?, ?, ?, 'active')`,
+        [DEFAULT_TENANT_ID, secretId, secretKey],
       );
 
+      const authProfileId = randomUUID();
       await db.run(
         `INSERT INTO auth_profiles (
-           profile_id,
-           agent_id,
-           provider,
+           tenant_id,
+           auth_profile_id,
+           auth_profile_key,
+           provider_key,
            type,
-           secret_handles_json,
-           labels_json,
            status,
+           labels_json,
            created_at,
            updated_at
-         ) VALUES (?, ?, ?, 'api_key', ?, '{}', 'active', ?, ?)`,
-        [
-          "profile-openrouter-1",
-          "default",
-          "openrouter",
-          JSON.stringify({ api_key_handle: "handle-openrouter-1" }),
-          nowIso,
-          nowIso,
-        ],
+         ) VALUES (?, ?, ?, ?, 'api_key', 'active', '{}', ?, ?)`,
+        [DEFAULT_TENANT_ID, authProfileId, "profile-openrouter-1", "openrouter", nowIso, nowIso],
+      );
+      await db.run(
+        `INSERT INTO auth_profile_secrets (tenant_id, auth_profile_id, slot_key, secret_id)
+         VALUES (?, ?, ?, ?)`,
+        [DEFAULT_TENANT_ID, authProfileId, "api_key", secretId],
       );
 
       await db.run(
-        `INSERT INTO session_provider_pins (
-           agent_id,
-           session_id,
-           provider,
-           profile_id,
-           pinned_at,
-           updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?)`,
-        ["default", "ui:thread-1", "openrouter", "profile-openrouter-1", nowIso, nowIso],
+        `INSERT INTO session_provider_pins (tenant_id, session_id, provider_key, auth_profile_id, pinned_at)
+         VALUES (?, ?, ?, ?, ?)`,
+        [DEFAULT_TENANT_ID, session.session_id, "openrouter", authProfileId, nowIso],
       );
 
       const agents = {
         getSecretProvider: async () => ({
           async list() {
-            return [
-              {
-                handle_id: "handle-openrouter-1",
-                provider: "env",
-                scope: "OPENROUTER_API_KEY",
-                created_at: nowIso,
-              },
-            ];
+            return [];
           },
           async resolve() {
             return "test-token";
@@ -128,14 +195,14 @@ describe("missing slash commands", () => {
 
       expect(first.data).toMatchObject({
         status: "ok",
-        provider: "openrouter",
-        profile_id: "profile-openrouter-1",
+        provider_key: "openrouter",
+        auth_profile_key: "profile-openrouter-1",
         cached: false,
       });
       expect(second.data).toMatchObject({
         status: "ok",
-        provider: "openrouter",
-        profile_id: "profile-openrouter-1",
+        provider_key: "openrouter",
+        auth_profile_key: "profile-openrouter-1",
         cached: true,
       });
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -165,16 +232,15 @@ describe("missing slash commands", () => {
       },
     });
 
-    expect(result.data).toMatchObject({
-      session_id: "ui:thread-1",
-      model_id: "openai/gpt-4.1",
-    });
+    const payload = result.data as { session_id: string; model_id: string };
+    expect(payload.model_id).toBe("openai/gpt-4.1");
+    expect(payload.session_id).toMatch(UUID_RE);
 
     const row = await db.get<{ model_id: string }>(
       `SELECT model_id
        FROM session_model_overrides
-       WHERE agent_id = ? AND session_id = ?`,
-      ["default", "ui:thread-1"],
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, payload.session_id],
     );
     expect(row?.model_id).toBe("openai/gpt-4.1");
   });
@@ -185,35 +251,38 @@ describe("missing slash commands", () => {
     const nowMs = Date.now();
     const key = "agent:default:telegram:work:group:thread-1";
 
-    await db.run(
-      `INSERT INTO channel_inbox (
-         source,
-         thread_id,
-         message_id,
-         key,
-         lane,
-         received_at_ms,
-         payload_json,
-         status
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')`,
-      ["telegram:work", "thread-1", "msg-1", key, "main", nowMs, "{}"],
-    );
+    const session = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      accountKey: "work",
+      threadId: "thread-1",
+      containerKind: "group",
+    });
+    await insertChannelInboxRow({
+      session,
+      source: "telegram:work",
+      threadId: "thread-1",
+      messageId: "msg-1",
+      key,
+      lane: "main",
+      receivedAtMs: nowMs,
+      status: "completed",
+    });
 
     const result = await executeCommand("/model openai/gpt-4.1", {
       db,
       commandContext: { key, lane: "main" },
     });
 
-    expect(result.data).toMatchObject({
-      session_id: "telegram:thread-1",
-      model_id: "openai/gpt-4.1",
-    });
+    const payload = result.data as { session_id: string; model_id: string };
+    expect(payload.model_id).toBe("openai/gpt-4.1");
+    expect(payload.session_id).toMatch(UUID_RE);
 
     const row = await db.get<{ model_id: string }>(
       `SELECT model_id
        FROM session_model_overrides
-       WHERE agent_id = ? AND session_id = ?`,
-      ["default", "telegram:thread-1"],
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, payload.session_id],
     );
     expect(row?.model_id).toBe("openai/gpt-4.1");
   });
@@ -221,10 +290,11 @@ describe("missing slash commands", () => {
   it("supports /model (show) for a session", async () => {
     db = openTestSqliteDb();
 
-    await executeCommand("/model openai/gpt-4.1", {
+    const set = await executeCommand("/model openai/gpt-4.1", {
       db,
       commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
     });
+    const setPayload = set.data as { session_id: string };
 
     const result = await executeCommand("/model", {
       db,
@@ -232,7 +302,7 @@ describe("missing slash commands", () => {
     });
 
     expect(result.data).toMatchObject({
-      session_id: "ui:thread-1",
+      session_id: setPayload.session_id,
       model_id: "openai/gpt-4.1",
     });
   });
@@ -245,26 +315,20 @@ describe("missing slash commands", () => {
       db = openTestSqliteDb();
       const nowIso = new Date().toISOString();
 
+      const authProfileId = randomUUID();
       await db.run(
         `INSERT INTO auth_profiles (
-           profile_id,
-           agent_id,
-           provider,
+           tenant_id,
+           auth_profile_id,
+           auth_profile_key,
+           provider_key,
            type,
-           secret_handles_json,
-           labels_json,
            status,
+           labels_json,
            created_at,
            updated_at
-         ) VALUES (?, ?, ?, 'api_key', ?, '{}', 'active', ?, ?)`,
-        [
-          "profile-openrouter-1",
-          "default",
-          "openrouter",
-          JSON.stringify({ api_key_handle: "handle-openrouter-1" }),
-          nowIso,
-          nowIso,
-        ],
+         ) VALUES (?, ?, ?, ?, 'api_key', 'active', '{}', ?, ?)`,
+        [DEFAULT_TENANT_ID, authProfileId, "profile-openrouter-1", "openrouter", nowIso, nowIso],
       );
 
       const result = await executeCommand("/model openrouter/gpt-4o@profile-openrouter-1", {
@@ -272,28 +336,36 @@ describe("missing slash commands", () => {
         commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
       });
 
-      expect(result.data).toMatchObject({
-        session_id: "ui:thread-1",
+      const payload = result.data as {
+        session_id: string;
+        model_id: string;
+        provider_key: string;
+        auth_profile_id: string;
+        auth_profile_key: string;
+      };
+      expect(payload.session_id).toMatch(UUID_RE);
+      expect(payload).toMatchObject({
         model_id: "openrouter/gpt-4o",
-        profile_id: "profile-openrouter-1",
-        provider: "openrouter",
+        provider_key: "openrouter",
+        auth_profile_id: authProfileId,
+        auth_profile_key: "profile-openrouter-1",
       });
 
       const override = await db.get<{ model_id: string }>(
         `SELECT model_id
          FROM session_model_overrides
-         WHERE agent_id = ? AND session_id = ?`,
-        ["default", "ui:thread-1"],
+         WHERE tenant_id = ? AND session_id = ?`,
+        [DEFAULT_TENANT_ID, payload.session_id],
       );
       expect(override?.model_id).toBe("openrouter/gpt-4o");
 
-      const pin = await db.get<{ profile_id: string }>(
-        `SELECT profile_id
+      const pin = await db.get<{ auth_profile_id: string }>(
+        `SELECT auth_profile_id
          FROM session_provider_pins
-         WHERE agent_id = ? AND session_id = ? AND provider = ?`,
-        ["default", "ui:thread-1", "openrouter"],
+         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
+        [DEFAULT_TENANT_ID, payload.session_id, "openrouter"],
       );
-      expect(pin?.profile_id).toBe("profile-openrouter-1");
+      expect(pin?.auth_profile_id).toBe(authProfileId);
     } finally {
       process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevEnabled;
     }
@@ -307,51 +379,46 @@ describe("missing slash commands", () => {
       db = openTestSqliteDb();
       const nowIso = new Date().toISOString();
 
+      const authProfileId = randomUUID();
       await db.run(
         `INSERT INTO auth_profiles (
-           profile_id,
-           agent_id,
-           provider,
+           tenant_id,
+           auth_profile_id,
+           auth_profile_key,
+           provider_key,
            type,
-           secret_handles_json,
-           labels_json,
            status,
+           labels_json,
            created_at,
            updated_at
-         ) VALUES (?, ?, ?, 'api_key', ?, '{}', 'active', ?, ?)`,
-        [
-          "profile-openrouter-1",
-          "default",
-          "openrouter",
-          JSON.stringify({ api_key_handle: "handle-openrouter-1" }),
-          nowIso,
-          nowIso,
-        ],
+         ) VALUES (?, ?, ?, ?, 'api_key', 'active', '{}', ?, ?)`,
+        [DEFAULT_TENANT_ID, authProfileId, "profile-openrouter-1", "openrouter", nowIso, nowIso],
       );
 
-      await executeCommand("/model openrouter/gpt-4o@profile-openrouter-1", {
+      const withProfile = await executeCommand("/model openrouter/gpt-4o@profile-openrouter-1", {
         db,
         commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
       });
+      const withPayload = withProfile.data as { session_id: string };
 
-      const before = await db.get<{ profile_id: string }>(
-        `SELECT profile_id
+      const before = await db.get<{ auth_profile_id: string }>(
+        `SELECT auth_profile_id
          FROM session_provider_pins
-         WHERE agent_id = ? AND session_id = ? AND provider = ?`,
-        ["default", "ui:thread-1", "openrouter"],
+         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
+        [DEFAULT_TENANT_ID, withPayload.session_id, "openrouter"],
       );
-      expect(before?.profile_id).toBe("profile-openrouter-1");
+      expect(before?.auth_profile_id).toBe(authProfileId);
 
       await executeCommand("/model openrouter/gpt-4o", {
         db,
         commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
       });
 
-      const after = await db.get<{ profile_id: string }>(
-        `SELECT profile_id
+      const after = await db.get<{ auth_profile_id: string }>(
+        `SELECT auth_profile_id
          FROM session_provider_pins
-         WHERE agent_id = ? AND session_id = ? AND provider = ?`,
-        ["default", "ui:thread-1", "openrouter"],
+         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
+        [DEFAULT_TENANT_ID, withPayload.session_id, "openrouter"],
       );
       expect(after).toBeUndefined();
     } finally {
@@ -366,6 +433,13 @@ describe("missing slash commands", () => {
     try {
       db = openTestSqliteDb();
 
+      const session = await ensureSession({
+        agentKey: "default",
+        channel: "ui",
+        threadId: "thread-1",
+        containerKind: "channel",
+      });
+
       const result = await executeCommand("/model openrouter/gpt-4o@profile-openrouter-1", {
         db,
         commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
@@ -376,16 +450,16 @@ describe("missing slash commands", () => {
       const override = await db.get<{ model_id: string }>(
         `SELECT model_id
          FROM session_model_overrides
-         WHERE agent_id = ? AND session_id = ?`,
-        ["default", "ui:thread-1"],
+         WHERE tenant_id = ? AND session_id = ?`,
+        [DEFAULT_TENANT_ID, session.session_id],
       );
       expect(override).toBeUndefined();
 
-      const pin = await db.get<{ profile_id: string }>(
-        `SELECT profile_id
+      const pin = await db.get<{ auth_profile_id: string }>(
+        `SELECT auth_profile_id
          FROM session_provider_pins
-         WHERE agent_id = ? AND session_id = ? AND provider = ?`,
-        ["default", "ui:thread-1", "openrouter"],
+         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
+        [DEFAULT_TENANT_ID, session.session_id, "openrouter"],
       );
       expect(pin).toBeUndefined();
     } finally {
@@ -400,6 +474,13 @@ describe("missing slash commands", () => {
     try {
       db = openTestSqliteDb();
 
+      const session = await ensureSession({
+        agentKey: "default",
+        channel: "ui",
+        threadId: "thread-1",
+        containerKind: "channel",
+      });
+
       const result = await executeCommand("/model openrouter/gpt-4o@profile-missing", {
         db,
         commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
@@ -410,16 +491,16 @@ describe("missing slash commands", () => {
       const override = await db.get<{ model_id: string }>(
         `SELECT model_id
          FROM session_model_overrides
-         WHERE agent_id = ? AND session_id = ?`,
-        ["default", "ui:thread-1"],
+         WHERE tenant_id = ? AND session_id = ?`,
+        [DEFAULT_TENANT_ID, session.session_id],
       );
       expect(override).toBeUndefined();
 
-      const pin = await db.get<{ profile_id: string }>(
-        `SELECT profile_id
+      const pin = await db.get<{ auth_profile_id: string }>(
+        `SELECT auth_profile_id
          FROM session_provider_pins
-         WHERE agent_id = ? AND session_id = ? AND provider = ?`,
-        ["default", "ui:thread-1", "openrouter"],
+         WHERE tenant_id = ? AND session_id = ? AND provider_key = ?`,
+        [DEFAULT_TENANT_ID, session.session_id, "openrouter"],
       );
       expect(pin).toBeUndefined();
     } finally {
@@ -429,6 +510,13 @@ describe("missing slash commands", () => {
 
   it("rejects /model <provider/model> when the model is missing from models.dev catalog", async () => {
     db = openTestSqliteDb();
+
+    const session = await ensureSession({
+      agentKey: "default",
+      channel: "ui",
+      threadId: "thread-1",
+      containerKind: "channel",
+    });
 
     const modelsDev: ModelsDevService = {
       ensureLoaded: async () => ({
@@ -467,8 +555,8 @@ describe("missing slash commands", () => {
     const stored = await db.get<{ model_id: string }>(
       `SELECT model_id
        FROM session_model_overrides
-       WHERE agent_id = ? AND session_id = ?`,
-      ["default", "ui:thread-1"],
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, session.session_id],
     );
     expect(stored).toBeUndefined();
   });
@@ -493,8 +581,8 @@ describe("missing slash commands", () => {
     const row = await db.get<{ queue_mode: string }>(
       `SELECT queue_mode
        FROM lane_queue_mode_overrides
-       WHERE key = ? AND lane = ?`,
-      [key, lane],
+       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+      [DEFAULT_TENANT_ID, key, lane],
     );
     expect(row?.queue_mode).toBe("interrupt");
   });
@@ -512,15 +600,15 @@ describe("missing slash commands", () => {
 
     expect(set.data).toMatchObject({
       key,
-      lane,
+      lane: "main",
       intake_mode: "delegate_execute",
     });
 
     const stored = await db.get<{ intake_mode: string }>(
       `SELECT intake_mode
        FROM intake_mode_overrides
-       WHERE key = ? AND lane = ?`,
-      [key, lane],
+       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+      [DEFAULT_TENANT_ID, key, "main"],
     );
     expect(stored?.intake_mode).toBe("delegate_execute");
 
@@ -528,19 +616,19 @@ describe("missing slash commands", () => {
       db,
       commandContext: { key, lane },
     });
-    expect(shown.data).toMatchObject({ key, lane, intake_mode: "delegate_execute" });
+    expect(shown.data).toMatchObject({ key, lane: "main", intake_mode: "delegate_execute" });
 
     const cleared = await executeCommand("/intake auto", {
       db,
       commandContext: { key, lane },
     });
-    expect(cleared.data).toMatchObject({ key, lane, intake_mode: "auto" });
+    expect(cleared.data).toMatchObject({ key, lane: "main", intake_mode: "auto" });
 
     const afterClear = await db.get<{ intake_mode: string }>(
       `SELECT intake_mode
        FROM intake_mode_overrides
-       WHERE key = ? AND lane = ?`,
-      [key, lane],
+       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+      [DEFAULT_TENANT_ID, key, "main"],
     );
     expect(afterClear).toBeUndefined();
   });
@@ -549,11 +637,10 @@ describe("missing slash commands", () => {
     db = openTestSqliteDb();
 
     const key = "agent:default:telegram:default:dm:chat-1";
-    const lane = "subagent";
 
     const set = await executeCommand("/intake delegate_execute", {
       db,
-      commandContext: { key, lane },
+      commandContext: { key, lane: "subagent" },
     });
 
     expect(set.data).toMatchObject({
@@ -565,16 +652,16 @@ describe("missing slash commands", () => {
     const storedMain = await db.get<{ intake_mode: string }>(
       `SELECT intake_mode
        FROM intake_mode_overrides
-       WHERE key = ? AND lane = ?`,
-      [key, "main"],
+       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+      [DEFAULT_TENANT_ID, key, "main"],
     );
     expect(storedMain?.intake_mode).toBe("delegate_execute");
 
     const storedSubagent = await db.get<{ intake_mode: string }>(
       `SELECT intake_mode
        FROM intake_mode_overrides
-       WHERE key = ? AND lane = ?`,
-      [key, "subagent"],
+       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+      [DEFAULT_TENANT_ID, key, "subagent"],
     );
     expect(storedSubagent).toBeUndefined();
   });
@@ -585,19 +672,22 @@ describe("missing slash commands", () => {
     const key = "agent:default:telegram:default:dm:chat-1";
     const lane = "main";
 
-    await db.run(
-      `INSERT INTO channel_inbox (
-         source,
-         thread_id,
-         message_id,
-         key,
-         lane,
-         received_at_ms,
-         payload_json,
-         status
-       ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'completed')`,
-      ["telegram", "chat-1", "msg-1", key, lane, 1_000],
-    );
+    const session = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      threadId: "chat-1",
+      containerKind: "dm",
+    });
+    await insertChannelInboxRow({
+      session,
+      source: "telegram",
+      threadId: "chat-1",
+      messageId: "msg-1",
+      key,
+      lane,
+      receivedAtMs: 1_000,
+      status: "completed",
+    });
 
     const result = await executeCommand("/queue interrupt", {
       db,
@@ -617,19 +707,22 @@ describe("missing slash commands", () => {
     const key = "agent:default:telegram:default:dm:chat-1";
     const lane = "main";
 
-    await db.run(
-      `INSERT INTO channel_inbox (
-         source,
-         thread_id,
-         message_id,
-         key,
-         lane,
-         received_at_ms,
-         payload_json,
-         status
-       ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'completed')`,
-      ["telegram", "chat-1", "msg-1", key, lane, 1_000],
-    );
+    const session = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      threadId: "chat-1",
+      containerKind: "dm",
+    });
+    await insertChannelInboxRow({
+      session,
+      source: "telegram",
+      threadId: "chat-1",
+      messageId: "msg-1",
+      key,
+      lane,
+      receivedAtMs: 1_000,
+      status: "completed",
+    });
 
     const result = await executeCommand("/queue interrupt", {
       db,
@@ -680,8 +773,8 @@ describe("missing slash commands", () => {
     const stored = await db.get<{ send_policy: string }>(
       `SELECT send_policy
        FROM session_send_policy_overrides
-       WHERE key = ?`,
-      [key],
+       WHERE tenant_id = ? AND key = ?`,
+      [DEFAULT_TENANT_ID, key],
     );
     expect(stored?.send_policy).toBe("off");
 
@@ -700,8 +793,8 @@ describe("missing slash commands", () => {
     const afterClear = await db.get<{ send_policy: string }>(
       `SELECT send_policy
        FROM session_send_policy_overrides
-       WHERE key = ?`,
-      [key],
+       WHERE tenant_id = ? AND key = ?`,
+      [DEFAULT_TENANT_ID, key],
     );
     expect(afterClear).toBeUndefined();
   });
@@ -711,19 +804,22 @@ describe("missing slash commands", () => {
 
     const key = "agent:default:telegram:default:dm:chat-1";
 
-    await db.run(
-      `INSERT INTO channel_inbox (
-         source,
-         thread_id,
-         message_id,
-         key,
-         lane,
-         received_at_ms,
-         payload_json,
-         status
-       ) VALUES (?, ?, ?, ?, 'main', ?, '{}', 'completed')`,
-      ["telegram", "chat-1", "msg-1", key, 1_000],
-    );
+    const session = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      threadId: "chat-1",
+      containerKind: "dm",
+    });
+    await insertChannelInboxRow({
+      session,
+      source: "telegram",
+      threadId: "chat-1",
+      messageId: "msg-1",
+      key,
+      lane: "main",
+      receivedAtMs: 1_000,
+      status: "completed",
+    });
 
     const result = await executeCommand("/send off", {
       db,
@@ -739,33 +835,40 @@ describe("missing slash commands", () => {
     const defaultKey = "agent:default:telegram:default:dm:chat-1";
     const workKey = "agent:default:telegram:work:dm:chat-1";
 
-    await db.run(
-      `INSERT INTO channel_inbox (
-         source,
-         thread_id,
-         message_id,
-         key,
-         lane,
-         received_at_ms,
-         payload_json,
-         status
-       ) VALUES (?, ?, ?, ?, 'main', ?, '{}', 'completed')`,
-      ["telegram", "chat-1", "msg-default", defaultKey, 1_000],
-    );
+    const defaultSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      threadId: "chat-1",
+      containerKind: "dm",
+    });
+    await insertChannelInboxRow({
+      session: defaultSession,
+      source: "telegram",
+      threadId: "chat-1",
+      messageId: "msg-default",
+      key: defaultKey,
+      lane: "main",
+      receivedAtMs: 1_000,
+      status: "completed",
+    });
 
-    await db.run(
-      `INSERT INTO channel_inbox (
-         source,
-         thread_id,
-         message_id,
-         key,
-         lane,
-         received_at_ms,
-         payload_json,
-         status
-       ) VALUES (?, ?, ?, ?, 'main', ?, '{}', 'completed')`,
-      ["telegram:work", "chat-1", "msg-work", workKey, 2_000],
-    );
+    const workSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      accountKey: "work",
+      threadId: "chat-1",
+      containerKind: "dm",
+    });
+    await insertChannelInboxRow({
+      session: workSession,
+      source: "telegram:work",
+      threadId: "chat-1",
+      messageId: "msg-work",
+      key: workKey,
+      lane: "main",
+      receivedAtMs: 2_000,
+      status: "completed",
+    });
 
     const result = await executeCommand("/send off", {
       db,
@@ -777,16 +880,16 @@ describe("missing slash commands", () => {
     const storedDefault = await db.get<{ send_policy: string }>(
       `SELECT send_policy
        FROM session_send_policy_overrides
-       WHERE key = ?`,
-      [defaultKey],
+       WHERE tenant_id = ? AND key = ?`,
+      [DEFAULT_TENANT_ID, defaultKey],
     );
     expect(storedDefault?.send_policy).toBe("off");
 
     const storedWork = await db.get<{ send_policy: string }>(
       `SELECT send_policy
        FROM session_send_policy_overrides
-       WHERE key = ?`,
-      [workKey],
+       WHERE tenant_id = ? AND key = ?`,
+      [DEFAULT_TENANT_ID, workKey],
     );
     expect(storedWork).toBeUndefined();
   });
@@ -797,33 +900,39 @@ describe("missing slash commands", () => {
     const defaultKey = "agent:default:telegram:default:dm:chat-1";
     const otherKey = "agent:agent-2:telegram:default:dm:chat-1";
 
-    await db.run(
-      `INSERT INTO channel_inbox (
-         source,
-         thread_id,
-         message_id,
-         key,
-         lane,
-         received_at_ms,
-         payload_json,
-         status
-       ) VALUES (?, ?, ?, ?, 'main', ?, '{}', 'completed')`,
-      ["telegram", "chat-1", "msg-default", defaultKey, 1_000],
-    );
+    const defaultSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      threadId: "chat-1",
+      containerKind: "dm",
+    });
+    await insertChannelInboxRow({
+      session: defaultSession,
+      source: "telegram",
+      threadId: "chat-1",
+      messageId: "msg-default",
+      key: defaultKey,
+      lane: "main",
+      receivedAtMs: 1_000,
+      status: "completed",
+    });
 
-    await db.run(
-      `INSERT INTO channel_inbox (
-         source,
-         thread_id,
-         message_id,
-         key,
-         lane,
-         received_at_ms,
-         payload_json,
-         status
-       ) VALUES (?, ?, ?, ?, 'main', ?, '{}', 'completed')`,
-      ["telegram", "chat-1", "msg-other", otherKey, 2_000],
-    );
+    const otherSession = await ensureSession({
+      agentKey: "agent-2",
+      channel: "telegram",
+      threadId: "chat-1",
+      containerKind: "dm",
+    });
+    await insertChannelInboxRow({
+      session: otherSession,
+      source: "telegram",
+      threadId: "chat-1",
+      messageId: "msg-other",
+      key: otherKey,
+      lane: "main",
+      receivedAtMs: 2_000,
+      status: "completed",
+    });
 
     const result = await executeCommand("/send off", {
       db,
@@ -835,16 +944,16 @@ describe("missing slash commands", () => {
     const storedDefault = await db.get<{ send_policy: string }>(
       `SELECT send_policy
        FROM session_send_policy_overrides
-       WHERE key = ?`,
-      [defaultKey],
+       WHERE tenant_id = ? AND key = ?`,
+      [DEFAULT_TENANT_ID, defaultKey],
     );
     expect(storedDefault?.send_policy).toBe("off");
 
     const storedOther = await db.get<{ send_policy: string }>(
       `SELECT send_policy
        FROM session_send_policy_overrides
-       WHERE key = ?`,
-      [otherKey],
+       WHERE tenant_id = ? AND key = ?`,
+      [DEFAULT_TENANT_ID, otherKey],
     );
     expect(storedOther).toBeUndefined();
   });
@@ -882,8 +991,8 @@ describe("missing slash commands", () => {
     const stillStored = await db.get<{ send_policy: string }>(
       `SELECT send_policy
        FROM session_send_policy_overrides
-       WHERE key = ?`,
-      [key],
+       WHERE tenant_id = ? AND key = ?`,
+      [DEFAULT_TENANT_ID, key],
     );
     expect(stillStored?.send_policy).toBe("off");
   });

@@ -4,6 +4,7 @@ import { createRoutingConfigRoutes } from "../../src/routes/routing-config.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("routing config routes", () => {
   let db: SqliteDb;
@@ -147,12 +148,19 @@ describe("routing config routes", () => {
       reverted_from_revision: createdBody.revision,
     });
 
-    const audit = await db.all<{ action: string }>(
-      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      ["routing.config"],
+    const audit = await db.all<{ action_json: string }>(
+      `SELECT pe.action_json
+       FROM planner_events pe
+       JOIN plans p
+         ON p.tenant_id = pe.tenant_id
+        AND p.plan_id = pe.plan_id
+       WHERE pe.tenant_id = ?
+         AND p.plan_key = ?
+       ORDER BY pe.step_index ASC`,
+      [DEFAULT_TENANT_ID, "routing.config"],
     );
     expect(audit).toHaveLength(3);
-    const action = JSON.parse(audit[2]!.action) as Record<string, unknown>;
+    const action = JSON.parse(audit[2]!.action_json) as Record<string, unknown>;
     expect(action).toMatchObject({
       type: "routing.config.updated",
       revision: revertedBody.revision,

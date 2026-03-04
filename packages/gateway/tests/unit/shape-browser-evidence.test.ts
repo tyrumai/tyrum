@@ -5,6 +5,11 @@ import { tmpdir } from "node:os";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { FsArtifactStore } from "../../src/modules/artifact/store.js";
 import { shapeBrowserEvidenceForArtifacts } from "../../src/modules/browser/shape-browser-evidence.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 type ExecutionScopeIds = {
   jobId: string;
@@ -18,27 +23,54 @@ async function seedExecutionScope(
   ids: ExecutionScopeIds,
 ): Promise<void> {
   await db.run(
-    `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json, input_json, latest_run_id)
-     VALUES (?, ?, ?, 'running', ?, ?, ?)`,
-    [ids.jobId, "agent:agent-1:thread:thread-1", "main", "{}", "{}", ids.runId],
+    `INSERT INTO execution_jobs (
+       tenant_id,
+       job_id,
+       agent_id,
+       workspace_id,
+       key,
+       lane,
+       status,
+       trigger_json,
+       input_json,
+       latest_run_id
+     )
+     VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
+    [
+      DEFAULT_TENANT_ID,
+      ids.jobId,
+      DEFAULT_AGENT_ID,
+      DEFAULT_WORKSPACE_ID,
+      "agent:default:test:default:channel:thread-1",
+      "main",
+      "{}",
+      "{}",
+      ids.runId,
+    ],
   );
 
   await db.run(
-    `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, 'running', 1)`,
-    [ids.runId, ids.jobId, "agent:agent-1:thread:thread-1", "main"],
+    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+     VALUES (?, ?, ?, ?, ?, 'running', 1)`,
+    [
+      DEFAULT_TENANT_ID,
+      ids.runId,
+      ids.jobId,
+      "agent:default:test:default:channel:thread-1",
+      "main",
+    ],
   );
 
   await db.run(
-    `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-     VALUES (?, ?, 0, 'running', ?)`,
-    [ids.stepId, ids.runId, "{}"],
+    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+     VALUES (?, ?, ?, 0, 'running', ?)`,
+    [DEFAULT_TENANT_ID, ids.stepId, ids.runId, "{}"],
   );
 
   await db.run(
-    `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status, artifacts_json)
-     VALUES (?, ?, 1, 'running', '[]')`,
-    [ids.attemptId, ids.stepId],
+    `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, artifacts_json)
+     VALUES (?, ?, ?, 1, 'running', '[]')`,
+    [DEFAULT_TENANT_ID, ids.attemptId, ids.stepId],
   );
 }
 
@@ -84,7 +116,7 @@ describe("shapeBrowserEvidenceForArtifacts", () => {
       artifactStore,
       runId: scope.runId,
       stepId: scope.stepId,
-      workspaceId: "default",
+      workspaceId: DEFAULT_WORKSPACE_ID,
       evidence,
       sensitivity: "sensitive",
     });

@@ -145,7 +145,7 @@ function ApprovalsScreen({
 }: {
   core: OperatorCore;
   cursor: number;
-  selectedId: number | null;
+  selectedId: string | null;
 }) {
   const approvals = useOperatorStore(core.approvalsStore);
   const pendingIds = approvals.pendingIds;
@@ -153,7 +153,7 @@ function ApprovalsScreen({
 
   const selectedIdFromCursor = pendingIds[effectiveCursor];
   const selected =
-    typeof selectedIdFromCursor === "number" ? approvals.byId[selectedIdFromCursor] : null;
+    typeof selectedIdFromCursor === "string" ? approvals.byId[selectedIdFromCursor] : null;
 
   return (
     <Box flexDirection="column">

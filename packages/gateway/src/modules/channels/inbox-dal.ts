@@ -8,12 +8,15 @@ import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { safeJsonParse } from "../../utils/json.js";
 import { WorkboardDal } from "../workboard/dal.js";
-import { resolveWorkspaceId } from "../workspace/id.js";
+import { resolveWorkspaceKey } from "../workspace/id.js";
+import { SessionDal } from "../agent/session-dal.js";
+import { IdentityScopeDal } from "../identity/scope.js";
 import {
   buildChannelSourceKey,
   DEFAULT_CHANNEL_ACCOUNT_ID,
   parseChannelSourceKey,
 } from "./interface.js";
+import { ChannelThreadDal } from "./thread-dal.js";
 
 export type ChannelInboxStatus = "queued" | "processing" | "completed" | "failed";
 
@@ -93,6 +96,7 @@ function sourceVariantsForChannelAccount(channel: string, accountId: string): st
 
 export interface ChannelInboxRow {
   inbox_id: number;
+  tenant_id: string;
   source: string;
   thread_id: string;
   message_id: string;
@@ -108,10 +112,14 @@ export interface ChannelInboxRow {
   processed_at: string | null;
   error: string | null;
   reply_text: string | null;
+  workspace_id: string;
+  session_id: string;
+  channel_thread_id: string;
 }
 
 interface RawChannelInboxRow {
   inbox_id: number;
+  tenant_id: string;
   source: string;
   thread_id: string;
   message_id: string;
@@ -127,9 +135,13 @@ interface RawChannelInboxRow {
   processed_at: string | Date | null;
   error: string | null;
   reply_text: string | null;
+  workspace_id: string;
+  session_id: string;
+  channel_thread_id: string;
 }
 
 interface RawChannelInboundDedupeRow {
+  tenant_id: string;
   channel: string;
   account_id: string;
   container_id: string;
@@ -209,33 +221,32 @@ type RawQueuedInboxRow = {
   payload_json: string;
 };
 
-async function completeInboxRows(tx: SqlDb, inboxIds: number[], nowIso: string): Promise<number[]> {
-  const completed: number[] = [];
+async function dropQueuedInboxRows(tx: SqlDb, inboxIds: number[]): Promise<number[]> {
+  const dropped: number[] = [];
   for (const inboxId of inboxIds) {
-    const updated = await tx.run(
-      `UPDATE channel_inbox
-       SET status = 'completed',
-           lease_owner = NULL,
-           lease_expires_at_ms = NULL,
-           processed_at = COALESCE(processed_at, ?),
-           error = NULL,
-           reply_text = COALESCE(reply_text, '')
-       WHERE inbox_id = ? AND status = 'queued'`,
-      [nowIso, inboxId],
+    const deleted = await tx.run(
+      "DELETE FROM channel_inbox WHERE inbox_id = ? AND status = 'queued'",
+      [inboxId],
     );
-    if (updated.changes === 1) {
-      completed.push(inboxId);
+    if (deleted.changes === 1) {
+      dropped.push(inboxId);
     }
   }
-  return completed;
+  return dropped;
 }
 
-async function countQueued(tx: SqlDb, input: { key: string; lane: string }): Promise<number> {
+async function countQueued(
+  tx: SqlDb,
+  input: { tenantId: string; key: string; lane: string },
+): Promise<number> {
   const row = await tx.get<{ queued: number | string }>(
     `SELECT COUNT(1) AS queued
      FROM channel_inbox
-     WHERE status = 'queued' AND key = ? AND lane = ?`,
-    [input.key, input.lane],
+     WHERE tenant_id = ?
+       AND status = 'queued'
+       AND key = ?
+       AND lane = ?`,
+    [input.tenantId, input.key, input.lane],
   );
   const queued = row?.queued;
   if (typeof queued === "number") return queued;
@@ -246,6 +257,7 @@ async function countQueued(tx: SqlDb, input: { key: string; lane: string }): Pro
 async function insertSyntheticInboxRow(
   tx: SqlDb,
   input: {
+    tenant_id: string;
     source: string;
     thread_id: string;
     message_id: string;
@@ -254,12 +266,16 @@ async function insertSyntheticInboxRow(
     queue_mode: string;
     received_at_ms: number;
     payload_json: string;
+    workspace_id: string;
+    session_id: string;
+    channel_thread_id: string;
   },
 ): Promise<number> {
   let inboxId: number | undefined;
   if (tx.kind === "postgres") {
     const inserted = await tx.get<{ inbox_id: number }>(
       `INSERT INTO channel_inbox (
+         tenant_id,
          source,
          thread_id,
          message_id,
@@ -268,11 +284,15 @@ async function insertSyntheticInboxRow(
          queue_mode,
          received_at_ms,
          payload_json,
-         status
+         status,
+         workspace_id,
+         session_id,
+         channel_thread_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued')
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)
        RETURNING inbox_id`,
       [
+        input.tenant_id,
         input.source,
         input.thread_id,
         input.message_id,
@@ -281,12 +301,16 @@ async function insertSyntheticInboxRow(
         input.queue_mode,
         input.received_at_ms,
         input.payload_json,
+        input.workspace_id,
+        input.session_id,
+        input.channel_thread_id,
       ],
     );
     inboxId = inserted?.inbox_id;
   } else {
     await tx.run(
       `INSERT INTO channel_inbox (
+         tenant_id,
          source,
          thread_id,
          message_id,
@@ -295,10 +319,14 @@ async function insertSyntheticInboxRow(
          queue_mode,
          received_at_ms,
          payload_json,
-         status
+         status,
+         workspace_id,
+         session_id,
+         channel_thread_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued')`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
       [
+        input.tenant_id,
         input.source,
         input.thread_id,
         input.message_id,
@@ -307,6 +335,9 @@ async function insertSyntheticInboxRow(
         input.queue_mode,
         input.received_at_ms,
         input.payload_json,
+        input.workspace_id,
+        input.session_id,
+        input.channel_thread_id,
       ],
     );
     const inserted = await tx.get<{ inbox_id: number }>("SELECT last_insert_rowid() AS inbox_id");
@@ -323,16 +354,23 @@ async function insertSyntheticInboxRow(
 async function applyInboundQueueOverflowPolicy(
   tx: SqlDb,
   input: {
+    tenantId: string;
+    workspaceId: string;
+    sessionId: string;
+    channelThreadId: string;
     key: string;
     lane: string;
     cap: number;
     policy: ChannelInboundQueueOverflowPolicy;
   },
 ): Promise<ChannelInboundQueueOverflowResult | undefined> {
-  const queuedBefore = await countQueued(tx, { key: input.key, lane: input.lane });
+  const queuedBefore = await countQueued(tx, {
+    tenantId: input.tenantId,
+    key: input.key,
+    lane: input.lane,
+  });
   if (queuedBefore <= input.cap) return undefined;
 
-  const nowIso = new Date().toISOString();
   const dropped: ChannelInboundQueueOverflowResult["dropped"] = [];
   let summary: ChannelInboundQueueOverflowResult["summary"] | undefined;
 
@@ -353,21 +391,23 @@ async function applyInboundQueueOverflowPolicy(
       >(
         `SELECT inbox_id, thread_id, message_id, received_at_ms
          FROM channel_inbox
-         WHERE status = 'queued' AND key = ? AND lane = ?
+         WHERE tenant_id = ?
+           AND status = 'queued'
+           AND key = ?
+           AND lane = ?
          ORDER BY received_at_ms ${ordering}, inbox_id ${ordering}
          LIMIT ?`,
-        [input.key, input.lane, overflow],
+        [input.tenantId, input.key, input.lane, overflow],
       );
       if (rows.length === 0) break;
 
-      const completedIds = await completeInboxRows(
+      const droppedIds = await dropQueuedInboxRows(
         tx,
         rows.map((r) => r.inbox_id),
-        nowIso,
       );
-      const completedSet = new Set(completedIds);
+      const droppedSet = new Set(droppedIds);
       for (const row of rows) {
-        if (!completedSet.has(row.inbox_id)) continue;
+        if (!droppedSet.has(row.inbox_id)) continue;
         dropped.push({
           inbox_id: row.inbox_id,
           thread_id: row.thread_id,
@@ -376,7 +416,11 @@ async function applyInboundQueueOverflowPolicy(
         });
       }
 
-      queued = await countQueued(tx, { key: input.key, lane: input.lane });
+      queued = await countQueued(tx, {
+        tenantId: input.tenantId,
+        key: input.key,
+        lane: input.lane,
+      });
       continue;
     }
 
@@ -385,22 +429,24 @@ async function applyInboundQueueOverflowPolicy(
     const rows = await tx.all<RawQueuedInboxRow>(
       `SELECT inbox_id, source, thread_id, message_id, received_at_ms, payload_json
        FROM channel_inbox
-       WHERE status = 'queued' AND key = ? AND lane = ?
+       WHERE tenant_id = ?
+         AND status = 'queued'
+         AND key = ?
+         AND lane = ?
        ORDER BY received_at_ms ASC, inbox_id ASC
-       LIMIT ?`,
-      [input.key, input.lane, dropCount],
+      LIMIT ?`,
+      [input.tenantId, input.key, input.lane, dropCount],
     );
     if (rows.length === 0) break;
 
-    const completedIds = await completeInboxRows(
+    const droppedIds = await dropQueuedInboxRows(
       tx,
       rows.map((r) => r.inbox_id),
-      nowIso,
     );
-    const completedSet = new Set(completedIds);
-    const completedRows = rows.filter((r) => completedSet.has(r.inbox_id));
+    const droppedSet = new Set(droppedIds);
+    const droppedRows = rows.filter((r) => droppedSet.has(r.inbox_id));
 
-    for (const row of completedRows) {
+    for (const row of droppedRows) {
       dropped.push({
         inbox_id: row.inbox_id,
         thread_id: row.thread_id,
@@ -409,9 +455,9 @@ async function applyInboundQueueOverflowPolicy(
       });
     }
 
-    if (completedRows.length > 0 && !summary) {
+    if (droppedRows.length > 0 && !summary) {
       const droppedDescriptions: Array<{ messageText: string; attachments: number }> = [];
-      for (const row of completedRows) {
+      for (const row of droppedRows) {
         const parsed = NormalizedThreadMessageSchema.safeParse(safeJsonParse(row.payload_json, {}));
         if (parsed.success) {
           const extracted = extractTextFromNormalizedMessage(parsed.data);
@@ -429,9 +475,9 @@ async function applyInboundQueueOverflowPolicy(
         dropped: droppedDescriptions,
       });
       const syntheticMessageId = `queue_overflow:${randomUUID()}`;
-      const basePayload = safeJsonParse(completedRows[0]!.payload_json, {});
+      const basePayload = safeJsonParse(droppedRows[0]!.payload_json, {});
       const parsedBase = NormalizedThreadMessageSchema.safeParse(basePayload);
-      const summarySource = completedRows[0]?.source ?? "telegram";
+      const summarySource = droppedRows[0]?.source ?? "telegram";
       const summaryAddress = (() => {
         try {
           return parseChannelSourceKey(summarySource);
@@ -441,7 +487,7 @@ async function applyInboundQueueOverflowPolicy(
           return { connector: "telegram", accountId: DEFAULT_CHANNEL_ACCOUNT_ID };
         }
       })();
-      const fallbackThreadId = completedRows[0]?.thread_id ?? input.key;
+      const fallbackThreadId = droppedRows[0]?.thread_id ?? input.key;
       const thread = parsedBase.success
         ? parsedBase.data.thread
         : {
@@ -480,22 +526,26 @@ async function applyInboundQueueOverflowPolicy(
         },
       };
 
-      const summaryReceivedAtMs = completedRows[completedRows.length - 1]!.received_at_ms;
+      const summaryReceivedAtMs = droppedRows[droppedRows.length - 1]!.received_at_ms;
       const summaryInboxId = await insertSyntheticInboxRow(tx, {
-        source: completedRows[0]?.source ?? "telegram",
-        thread_id: completedRows[0]?.thread_id ?? fallbackThreadId,
+        tenant_id: input.tenantId,
+        source: droppedRows[0]?.source ?? "telegram",
+        thread_id: droppedRows[0]?.thread_id ?? fallbackThreadId,
         message_id: syntheticMessageId,
         key: input.key,
         lane: input.lane,
         queue_mode: "followup",
         received_at_ms: summaryReceivedAtMs,
         payload_json: JSON.stringify(syntheticPayload),
+        workspace_id: input.workspaceId,
+        session_id: input.sessionId,
+        channel_thread_id: input.channelThreadId,
       });
 
       summary = { inbox_id: summaryInboxId, message_id: syntheticMessageId };
     }
 
-    queued = await countQueued(tx, { key: input.key, lane: input.lane });
+    queued = await countQueued(tx, { tenantId: input.tenantId, key: input.key, lane: input.lane });
   }
 
   const queuedAfter = queued;
@@ -512,6 +562,7 @@ async function applyInboundQueueOverflowPolicy(
 function toRow(raw: RawChannelInboxRow): ChannelInboxRow {
   return {
     inbox_id: raw.inbox_id,
+    tenant_id: raw.tenant_id,
     source: raw.source,
     thread_id: raw.thread_id,
     message_id: raw.message_id,
@@ -527,11 +578,22 @@ function toRow(raw: RawChannelInboxRow): ChannelInboxRow {
     processed_at: normalizeTime(raw.processed_at),
     error: raw.error,
     reply_text: raw.reply_text,
+    workspace_id: raw.workspace_id,
+    session_id: raw.session_id,
+    channel_thread_id: raw.channel_thread_id,
   };
 }
 
 export class ChannelInboxDal {
-  constructor(private readonly db: SqlDb) {}
+  private readonly sessionDal: SessionDal;
+
+  constructor(
+    private readonly db: SqlDb,
+    sessionDal?: SessionDal,
+  ) {
+    this.sessionDal =
+      sessionDal ?? new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+  }
 
   async enqueue(input: {
     source: string;
@@ -562,32 +624,65 @@ export class ChannelInboxDal {
     const cap = inboundQueueCap();
     const overflowPolicy = inboundQueueOverflowPolicy();
 
+    const payloadParsed = NormalizedThreadMessageSchema.safeParse(input.payload);
+    const containerKind = payloadParsed.success
+      ? normalizedContainerKindFromThreadKind(payloadParsed.data.thread.kind)
+      : "channel";
+
+    let agentKey = "default";
+    try {
+      const parsedKey = parseTyrumKey(input.key as never);
+      if (parsedKey.kind === "agent") {
+        agentKey = parsedKey.agent_key;
+      }
+    } catch {
+      // Intentional: fall back to default agent when key parsing fails.
+    }
+
+    const session = await this.sessionDal.getOrCreate({
+      scopeKeys: { agentKey, workspaceKey: resolveWorkspaceKey() },
+      connectorKey: channel,
+      accountKey: accountId,
+      providerThreadId: containerId,
+      containerKind,
+    });
+
+    const tenantId = session.tenant_id;
+    const workspaceId = session.workspace_id;
+    const sessionId = session.session_id;
+    const channelThreadId = session.channel_thread_id;
+
     const result = await this.db.transaction(async (tx) => {
       // Best-effort prune of expired keys to keep the dedupe table bounded.
       await tx.run("DELETE FROM channel_inbound_dedupe WHERE expires_at_ms <= ?", [receivedAtMs]);
 
       const acquire = await tx.run(
         `INSERT INTO channel_inbound_dedupe (
+           tenant_id,
            channel,
            account_id,
            container_id,
            message_id,
            inbox_id,
            expires_at_ms
-         ) VALUES (?, ?, ?, ?, NULL, ?)
-         ON CONFLICT (channel, account_id, container_id, message_id) DO UPDATE SET
+         ) VALUES (?, ?, ?, ?, ?, NULL, ?)
+         ON CONFLICT (tenant_id, channel, account_id, container_id, message_id) DO UPDATE SET
            inbox_id = NULL,
            expires_at_ms = excluded.expires_at_ms
          WHERE channel_inbound_dedupe.expires_at_ms <= ?`,
-        [channel, accountId, containerId, messageId, expiresAtMs, receivedAtMs],
+        [tenantId, channel, accountId, containerId, messageId, expiresAtMs, receivedAtMs],
       );
 
       if (acquire.changes !== 1) {
         const dedupeRow = await tx.get<RawChannelInboundDedupeRow>(
           `SELECT *
            FROM channel_inbound_dedupe
-           WHERE channel = ? AND account_id = ? AND container_id = ? AND message_id = ?`,
-          [channel, accountId, containerId, messageId],
+           WHERE tenant_id = ?
+             AND channel = ?
+             AND account_id = ?
+             AND container_id = ?
+             AND message_id = ?`,
+          [tenantId, channel, accountId, containerId, messageId],
         );
 
         if (typeof dedupeRow?.inbox_id === "number" && Number.isFinite(dedupeRow.inbox_id)) {
@@ -607,26 +702,60 @@ export class ChannelInboxDal {
         const fallback = await tx.get<RawChannelInboxRow>(
           `SELECT *
            FROM channel_inbox
-           WHERE source IN (${placeholders})
+           WHERE tenant_id = ?
+             AND source IN (${placeholders})
              AND thread_id = ?
              AND message_id = ?
            ORDER BY received_at_ms DESC, inbox_id DESC
            LIMIT 1`,
-          [...sources, containerId, messageId],
+          [tenantId, ...sources, containerId, messageId],
         );
         if (fallback) {
           await tx.run(
             `UPDATE channel_inbound_dedupe
              SET inbox_id = ?
-             WHERE channel = ? AND account_id = ? AND container_id = ? AND message_id = ?`,
-            [fallback.inbox_id, channel, accountId, containerId, messageId],
+             WHERE tenant_id = ?
+               AND channel = ?
+               AND account_id = ?
+               AND container_id = ?
+               AND message_id = ?`,
+            [fallback.inbox_id, tenantId, channel, accountId, containerId, messageId],
           );
           return { row: toRow(fallback), deduped: true };
         }
 
-        // If we can't resolve the existing inbox row, treat this as a fresh enqueue.
-        // This is safer than permanently rejecting inbound deliveries when state
-        // is inconsistent.
+        // Queue-only semantics: if the message was previously processed and its
+        // inbox row has been deleted, the dedupe row remains authoritative until
+        // it expires. Treat this as deduped even when the inbox row is gone.
+        const syntheticRow: ChannelInboxRow = {
+          inbox_id:
+            typeof dedupeRow?.inbox_id === "number" && Number.isFinite(dedupeRow.inbox_id)
+              ? dedupeRow.inbox_id
+              : 0,
+          tenant_id: tenantId,
+          source,
+          thread_id: containerId,
+          message_id: messageId,
+          key: input.key,
+          lane: input.lane,
+          queue_mode: queueMode,
+          received_at_ms: receivedAtMs,
+          payload: input.payload ?? {},
+          status: "completed",
+          attempt: 0,
+          lease_owner: null,
+          lease_expires_at_ms: null,
+          processed_at: null,
+          error: null,
+          reply_text: null,
+          workspace_id: workspaceId,
+          session_id: sessionId,
+          channel_thread_id: channelThreadId,
+        };
+        return {
+          row: syntheticRow,
+          deduped: true,
+        };
       }
 
       // Backward-compat (and safety): if an inbox row already exists within the
@@ -637,20 +766,25 @@ export class ChannelInboxDal {
       const existing = await tx.get<RawChannelInboxRow>(
         `SELECT *
          FROM channel_inbox
-         WHERE source IN (${placeholders})
+         WHERE tenant_id = ?
+           AND source IN (${placeholders})
            AND thread_id = ?
            AND message_id = ?
            AND received_at_ms >= ?
          ORDER BY received_at_ms DESC, inbox_id DESC
          LIMIT 1`,
-        [...sources, containerId, messageId, cutoffMs],
+        [tenantId, ...sources, containerId, messageId, cutoffMs],
       );
       if (existing) {
         await tx.run(
           `UPDATE channel_inbound_dedupe
            SET inbox_id = ?
-           WHERE channel = ? AND account_id = ? AND container_id = ? AND message_id = ?`,
-          [existing.inbox_id, channel, accountId, containerId, messageId],
+           WHERE tenant_id = ?
+             AND channel = ?
+             AND account_id = ?
+             AND container_id = ?
+             AND message_id = ?`,
+          [existing.inbox_id, tenantId, channel, accountId, containerId, messageId],
         );
         return { row: toRow(existing), deduped: true };
       }
@@ -659,6 +793,7 @@ export class ChannelInboxDal {
       if (tx.kind === "postgres") {
         const inserted = await tx.get<{ inbox_id: number }>(
           `INSERT INTO channel_inbox (
+             tenant_id,
              source,
              thread_id,
              message_id,
@@ -667,11 +802,15 @@ export class ChannelInboxDal {
              queue_mode,
              received_at_ms,
              payload_json,
-             status
+             status,
+             workspace_id,
+             session_id,
+             channel_thread_id
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued')
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)
            RETURNING inbox_id`,
           [
+            tenantId,
             source,
             containerId,
             messageId,
@@ -680,12 +819,16 @@ export class ChannelInboxDal {
             queueMode,
             receivedAtMs,
             payloadJson,
+            workspaceId,
+            sessionId,
+            channelThreadId,
           ],
         );
         inboxId = inserted?.inbox_id;
       } else {
         await tx.run(
           `INSERT INTO channel_inbox (
+             tenant_id,
              source,
              thread_id,
              message_id,
@@ -694,10 +837,14 @@ export class ChannelInboxDal {
              queue_mode,
              received_at_ms,
              payload_json,
-             status
+             status,
+             workspace_id,
+             session_id,
+             channel_thread_id
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued')`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
           [
+            tenantId,
             source,
             containerId,
             messageId,
@@ -706,6 +853,9 @@ export class ChannelInboxDal {
             queueMode,
             receivedAtMs,
             payloadJson,
+            workspaceId,
+            sessionId,
+            channelThreadId,
           ],
         );
         const inserted = await tx.get<{ inbox_id: number }>(
@@ -721,8 +871,12 @@ export class ChannelInboxDal {
       await tx.run(
         `UPDATE channel_inbound_dedupe
          SET inbox_id = ?
-         WHERE channel = ? AND account_id = ? AND container_id = ? AND message_id = ?`,
-        [inboxId, channel, accountId, containerId, messageId],
+         WHERE tenant_id = ?
+           AND channel = ?
+           AND account_id = ?
+           AND container_id = ?
+           AND message_id = ?`,
+        [inboxId, tenantId, channel, accountId, containerId, messageId],
       );
 
       const row = await tx.get<RawChannelInboxRow>(
@@ -735,6 +889,10 @@ export class ChannelInboxDal {
 
       const overflow = cap
         ? await applyInboundQueueOverflowPolicy(tx, {
+            tenantId,
+            workspaceId,
+            sessionId,
+            channelThreadId,
             key: input.key,
             lane: input.lane,
             cap,
@@ -747,7 +905,34 @@ export class ChannelInboxDal {
         [inboxId],
       );
       if (!finalRow) {
-        throw new Error("failed to enqueue inbound message");
+        // Queue overflow policies may immediately drop the newest message (for example when
+        // overflow policy is drop_newest or summarize_dropped). In that case the inserted row
+        // can be deleted inside the same transaction. The inbound dedupe row remains
+        // authoritative until it expires, so treat this as a successful enqueue that resulted
+        // in a dropped/completed message.
+        const syntheticRow: ChannelInboxRow = {
+          inbox_id: inboxId,
+          tenant_id: tenantId,
+          source,
+          thread_id: containerId,
+          message_id: messageId,
+          key: input.key,
+          lane: input.lane,
+          queue_mode: queueMode,
+          received_at_ms: receivedAtMs,
+          payload: input.payload ?? {},
+          status: "completed",
+          attempt: 0,
+          lease_owner: null,
+          lease_expires_at_ms: null,
+          processed_at: null,
+          error: null,
+          reply_text: null,
+          workspace_id: workspaceId,
+          session_id: sessionId,
+          channel_thread_id: channelThreadId,
+        };
+        return { row: syntheticRow, deduped: false, overflow };
       }
 
       return { row: toRow(finalRow), deduped: false, overflow };
@@ -755,20 +940,17 @@ export class ChannelInboxDal {
 
     // Best-effort update of durable last-active routing for completion notifications.
     try {
-      const parsed = parseTyrumKey(input.key as never);
-      if (parsed.kind === "agent") {
-        await new WorkboardDal(this.db).upsertScopeActivity({
-          scope: {
-            tenant_id: "default",
-            agent_id: parsed.agent_id,
-            workspace_id: resolveWorkspaceId(),
-          },
-          last_active_session_key: input.key,
-          updated_at_ms: receivedAtMs,
-        });
-      }
+      await new WorkboardDal(this.db).upsertScopeActivity({
+        scope: {
+          tenant_id: tenantId,
+          agent_id: session.agent_id,
+          workspace_id: workspaceId,
+        },
+        last_active_session_key: input.key,
+        updated_at_ms: receivedAtMs,
+      });
     } catch (err) {
-      // Intentional: completion notifications are best-effort; ignore invalid keys or activity update failures.
+      // Intentional: completion notifications are best-effort; ignore activity update failures.
       void err;
     }
 
@@ -784,6 +966,7 @@ export class ChannelInboxDal {
   }
 
   async getByDedupeKey(input: {
+    tenant_id: string;
     source: string;
     thread_id: string;
     message_id: string;
@@ -791,10 +974,13 @@ export class ChannelInboxDal {
     const row = await this.db.get<RawChannelInboxRow>(
       `SELECT *
        FROM channel_inbox
-       WHERE source = ? AND thread_id = ? AND message_id = ?
+       WHERE tenant_id = ?
+         AND source = ?
+         AND thread_id = ?
+         AND message_id = ?
        ORDER BY received_at_ms DESC, inbox_id DESC
        LIMIT 1`,
-      [input.source, input.thread_id, input.message_id],
+      [input.tenant_id, input.source, input.thread_id, input.message_id],
     );
     return row ? toRow(row) : undefined;
   }
@@ -866,7 +1052,18 @@ export class ChannelInboxDal {
        WHERE inbox_id = ? AND lease_owner = ? AND status = 'processing'`,
       [nowIso, replyText, inboxId, owner],
     );
-    return result.changes === 1;
+    if (result.changes !== 1) return false;
+
+    // Queue-only semantics: delete completed rows that have no pending outbox work.
+    await this.db.run(
+      `DELETE FROM channel_inbox
+       WHERE inbox_id = ?
+         AND status = 'completed'
+         AND NOT EXISTS (SELECT 1 FROM channel_outbox WHERE inbox_id = ?)`,
+      [inboxId, inboxId],
+    );
+
+    return true;
   }
 
   async markFailed(inboxId: number, owner: string, error: string): Promise<boolean> {
@@ -885,6 +1082,7 @@ export class ChannelInboxDal {
   }
 
   async listQueuedForKey(input: {
+    tenant_id: string;
     key: string;
     lane: string;
     received_at_ms_gte: number;
@@ -899,7 +1097,8 @@ export class ChannelInboxDal {
     const rows = await this.db.all<RawChannelInboxRow>(
       `SELECT *
        FROM channel_inbox
-       WHERE status = 'queued'
+       WHERE tenant_id = ?
+         AND status = 'queued'
          AND key = ?
          AND lane = ?
          AND received_at_ms >= ?
@@ -908,6 +1107,7 @@ export class ChannelInboxDal {
        ORDER BY received_at_ms ASC, inbox_id ASC
        LIMIT ?`,
       [
+        input.tenant_id,
         input.key,
         input.lane,
         input.received_at_ms_gte,

@@ -6,7 +6,7 @@ import {
   ApprovalResolveRequest,
   ApprovalResolveResponse,
 } from "../approval.js";
-import { DateTimeSchema } from "../common.js";
+import { DateTimeSchema, UuidSchema } from "../common.js";
 import {
   WsEventEnvelope,
   WsRequestEnvelope,
@@ -20,9 +20,9 @@ import {
 
 export const WsApprovalRequestPayload = z
   .object({
-    approval_id: z.number().int().positive(),
-    plan_id: z.string().min(1),
-    step_index: z.number().int().nonnegative(),
+    approval_id: UuidSchema,
+    approval_key: z.string().trim().min(1),
+    kind: z.string().trim().min(1),
     prompt: z.string().min(1),
     context: z.unknown().optional(),
     expires_at: DateTimeSchema.nullable().optional(),

@@ -3,9 +3,10 @@ import type { SqlDb } from "../../statestore/types.js";
 export type OauthPendingMode = "auth_code" | "device_code";
 
 export interface OauthPendingRow {
+  tenant_id: string;
   state: string;
   provider_id: string;
-  agent_id: string;
+  agent_key: string;
   created_at: string;
   expires_at: string;
   pkce_verifier: string;
@@ -16,9 +17,10 @@ export interface OauthPendingRow {
 }
 
 interface RawOauthPendingRow {
+  tenant_id: string;
   state: string;
   provider_id: string;
-  agent_id: string;
+  agent_key: string;
   created_at: string | Date;
   expires_at: string | Date;
   pkce_verifier: string;
@@ -53,9 +55,10 @@ function parseJson(value: unknown): Record<string, unknown> {
 function toRow(raw: RawOauthPendingRow): OauthPendingRow {
   const mode: OauthPendingMode = raw.mode === "device_code" ? "device_code" : "auth_code";
   return {
+    tenant_id: raw.tenant_id,
     state: raw.state,
     provider_id: raw.provider_id,
-    agent_id: raw.agent_id,
+    agent_key: raw.agent_key,
     created_at: normalizeTime(raw.created_at),
     expires_at: normalizeTime(raw.expires_at),
     pkce_verifier: raw.pkce_verifier,
@@ -69,10 +72,10 @@ function toRow(raw: RawOauthPendingRow): OauthPendingRow {
 export class OauthPendingDal {
   constructor(private readonly db: SqlDb) {}
 
-  async get(state: string): Promise<OauthPendingRow | undefined> {
+  async get(input: { tenantId: string; state: string }): Promise<OauthPendingRow | undefined> {
     const row = await this.db.get<RawOauthPendingRow>(
-      "SELECT * FROM oauth_pending WHERE state = ?",
-      [state],
+      "SELECT * FROM oauth_pending WHERE tenant_id = ? AND state = ?",
+      [input.tenantId, input.state],
     );
     return row ? toRow(row) : undefined;
   }
@@ -81,14 +84,18 @@ export class OauthPendingDal {
    * Atomically "consume" a pending OAuth request so duplicate callbacks can't
    * process the same state concurrently.
    */
-  async consume(state: string): Promise<OauthPendingRow | undefined> {
+  async consume(input: { tenantId: string; state: string }): Promise<OauthPendingRow | undefined> {
     return await this.db.transaction(async (tx) => {
-      const row = await tx.get<RawOauthPendingRow>("SELECT * FROM oauth_pending WHERE state = ?", [
-        state,
-      ]);
+      const row = await tx.get<RawOauthPendingRow>(
+        "SELECT * FROM oauth_pending WHERE tenant_id = ? AND state = ?",
+        [input.tenantId, input.state],
+      );
       if (!row) return undefined;
 
-      const res = await tx.run("DELETE FROM oauth_pending WHERE state = ?", [state]);
+      const res = await tx.run("DELETE FROM oauth_pending WHERE tenant_id = ? AND state = ?", [
+        input.tenantId,
+        input.state,
+      ]);
       if (res.changes !== 1) return undefined;
       return toRow(row);
     });
@@ -97,9 +104,10 @@ export class OauthPendingDal {
   async create(input: OauthPendingRow): Promise<void> {
     await this.db.run(
       `INSERT INTO oauth_pending (
+         tenant_id,
          state,
          provider_id,
-         agent_id,
+         agent_key,
          created_at,
          expires_at,
          pkce_verifier,
@@ -107,11 +115,12 @@ export class OauthPendingDal {
          scopes,
          mode,
          metadata_json
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        input.tenant_id,
         input.state,
         input.provider_id,
-        input.agent_id,
+        input.agent_key,
         input.created_at,
         input.expires_at,
         input.pkce_verifier,
@@ -123,12 +132,18 @@ export class OauthPendingDal {
     );
   }
 
-  async delete(state: string): Promise<void> {
-    await this.db.run("DELETE FROM oauth_pending WHERE state = ?", [state]);
+  async delete(input: { tenantId: string; state: string }): Promise<void> {
+    await this.db.run("DELETE FROM oauth_pending WHERE tenant_id = ? AND state = ?", [
+      input.tenantId,
+      input.state,
+    ]);
   }
 
-  async deleteExpired(nowIso: string): Promise<number> {
-    const res = await this.db.run("DELETE FROM oauth_pending WHERE expires_at <= ?", [nowIso]);
+  async deleteExpired(input: { tenantId: string; nowIso: string }): Promise<number> {
+    const res = await this.db.run(
+      "DELETE FROM oauth_pending WHERE tenant_id = ? AND expires_at <= ?",
+      [input.tenantId, input.nowIso],
+    );
     return res.changes;
   }
 }

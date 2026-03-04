@@ -5,6 +5,7 @@ export type ChannelOutboxStatus = "queued" | "sending" | "sent" | "failed";
 
 export interface ChannelOutboxRow {
   outbox_id: number;
+  tenant_id: string;
   inbox_id: number;
   source: string;
   thread_id: string;
@@ -16,15 +17,19 @@ export interface ChannelOutboxRow {
   attempt: number;
   lease_owner: string | null;
   lease_expires_at_ms: number | null;
-  approval_id: number | null;
+  approval_id: string | null;
   created_at: string;
   sent_at: string | null;
   error: string | null;
   response: unknown;
+  workspace_id: string;
+  session_id: string;
+  channel_thread_id: string;
 }
 
 interface RawChannelOutboxRow {
   outbox_id: number;
+  tenant_id: string;
   inbox_id: number;
   source: string;
   thread_id: string;
@@ -36,11 +41,14 @@ interface RawChannelOutboxRow {
   attempt: number;
   lease_owner: string | null;
   lease_expires_at_ms: number | null;
-  approval_id: number | null;
+  approval_id: string | null;
   created_at: string | Date;
   sent_at: string | Date | null;
   error: string | null;
   response_json: string | null;
+  workspace_id: string;
+  session_id: string;
+  channel_thread_id: string;
 }
 
 function normalizeTime(value: string | Date | null): string | null {
@@ -51,6 +59,7 @@ function normalizeTime(value: string | Date | null): string | null {
 function toRow(raw: RawChannelOutboxRow): ChannelOutboxRow {
   return {
     outbox_id: raw.outbox_id,
+    tenant_id: raw.tenant_id,
     inbox_id: raw.inbox_id,
     source: raw.source,
     thread_id: raw.thread_id,
@@ -67,6 +76,9 @@ function toRow(raw: RawChannelOutboxRow): ChannelOutboxRow {
     sent_at: normalizeTime(raw.sent_at),
     error: raw.error,
     response: safeJsonParse(raw.response_json, null as unknown),
+    workspace_id: raw.workspace_id,
+    session_id: raw.session_id,
+    channel_thread_id: raw.channel_thread_id,
   };
 }
 
@@ -74,6 +86,7 @@ export class ChannelOutboxDal {
   constructor(private readonly db: SqlDb) {}
 
   async enqueue(input: {
+    tenant_id: string;
     inbox_id: number;
     source: string;
     thread_id: string;
@@ -81,10 +94,14 @@ export class ChannelOutboxDal {
     chunk_index: number;
     text: string;
     parse_mode?: string;
-    approval_id?: number | null;
+    approval_id?: string | null;
+    workspace_id: string;
+    session_id: string;
+    channel_thread_id: string;
   }): Promise<{ row: ChannelOutboxRow; deduped: boolean }> {
     const result = await this.db.run(
       `INSERT INTO channel_outbox (
+         tenant_id,
          inbox_id,
          source,
          thread_id,
@@ -93,11 +110,15 @@ export class ChannelOutboxDal {
          text,
          parse_mode,
          status,
-         approval_id
+         approval_id,
+         workspace_id,
+         session_id,
+         channel_thread_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?)
-       ON CONFLICT (dedupe_key) DO NOTHING`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)
+       ON CONFLICT (tenant_id, dedupe_key) DO NOTHING`,
       [
+        input.tenant_id,
         input.inbox_id,
         input.source,
         input.thread_id,
@@ -106,28 +127,40 @@ export class ChannelOutboxDal {
         input.text,
         input.parse_mode ?? null,
         input.approval_id ?? null,
+        input.workspace_id,
+        input.session_id,
+        input.channel_thread_id,
       ],
     );
 
-    const row = await this.getByDedupeKey(input.dedupe_key);
+    const row = await this.getByDedupeKey({
+      tenant_id: input.tenant_id,
+      dedupe_key: input.dedupe_key,
+    });
     if (!row) {
       throw new Error("failed to enqueue outbound message");
     }
     return { row, deduped: result.changes === 0 };
   }
 
-  async getByDedupeKey(dedupeKey: string): Promise<ChannelOutboxRow | undefined> {
+  async getByDedupeKey(input: {
+    tenant_id: string;
+    dedupe_key: string;
+  }): Promise<ChannelOutboxRow | undefined> {
     const row = await this.db.get<RawChannelOutboxRow>(
-      "SELECT * FROM channel_outbox WHERE dedupe_key = ?",
-      [dedupeKey],
+      "SELECT * FROM channel_outbox WHERE tenant_id = ? AND dedupe_key = ?",
+      [input.tenant_id, input.dedupe_key],
     );
     return row ? toRow(row) : undefined;
   }
 
-  async listForInbox(inboxId: number): Promise<ChannelOutboxRow[]> {
+  async listForInbox(input: { tenant_id: string; inbox_id: number }): Promise<ChannelOutboxRow[]> {
     const rows = await this.db.all<RawChannelOutboxRow>(
-      "SELECT * FROM channel_outbox WHERE inbox_id = ? ORDER BY chunk_index ASC, outbox_id ASC",
-      [inboxId],
+      `SELECT *
+       FROM channel_outbox
+       WHERE tenant_id = ? AND inbox_id = ?
+       ORDER BY chunk_index ASC, outbox_id ASC`,
+      [input.tenant_id, input.inbox_id],
     );
     return rows.map(toRow);
   }
@@ -236,7 +269,7 @@ export class ChannelOutboxDal {
     });
   }
 
-  async setApprovalForInbox(inboxId: number, approvalId: number): Promise<number> {
+  async setApprovalForInbox(inboxId: number, approvalId: string): Promise<number> {
     const result = await this.db.run(
       `UPDATE channel_outbox
        SET approval_id = ?
@@ -248,7 +281,7 @@ export class ChannelOutboxDal {
     return result.changes;
   }
 
-  async clearApprovalById(approvalId: number): Promise<number> {
+  async clearApprovalById(approvalId: string): Promise<number> {
     const result = await this.db.run(
       `UPDATE channel_outbox
        SET approval_id = NULL
@@ -259,7 +292,7 @@ export class ChannelOutboxDal {
     return result.changes;
   }
 
-  async markFailedByApproval(approvalId: number, error: string): Promise<number> {
+  async markFailedByApproval(approvalId: string, error: string): Promise<number> {
     const nowIso = new Date().toISOString();
     const result = await this.db.run(
       `UPDATE channel_outbox
@@ -275,20 +308,15 @@ export class ChannelOutboxDal {
     return result.changes;
   }
 
-  async markSent(outboxId: number, owner: string, response: unknown): Promise<boolean> {
-    const nowIso = new Date().toISOString();
-    const result = await this.db.run(
-      `UPDATE channel_outbox
-       SET status = 'sent',
-           lease_owner = NULL,
-           lease_expires_at_ms = NULL,
-           sent_at = ?,
-           error = NULL,
-           response_json = ?
+  async markSent(input: { outboxId: number; inboxId: number; owner: string }): Promise<boolean> {
+    const deleted = await this.db.run(
+      `DELETE FROM channel_outbox
        WHERE outbox_id = ? AND lease_owner = ? AND status = 'sending'`,
-      [nowIso, JSON.stringify(response ?? null), outboxId, owner],
+      [input.outboxId, input.owner],
     );
-    return result.changes === 1;
+    if (deleted.changes !== 1) return false;
+
+    return true;
   }
 
   async markFailed(outboxId: number, owner: string, error: string): Promise<boolean> {

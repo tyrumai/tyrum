@@ -27,16 +27,21 @@ export async function retryOnUniqueViolation<T>(
 export async function insertPlannerEventNext<T>(
   tx: SqlDb,
   input: {
+    tenantId: string;
     replayId: string;
     planId: string;
     occurredAt: string;
     actionJson: string;
-    returning: "*" | "id";
+    returning: "*";
   },
 ): Promise<{ inserted: T; stepIndex: number }> {
   const lastRow = await tx.get<{ step_index: number; event_hash: string | null }>(
-    "SELECT step_index, event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index DESC LIMIT 1",
-    [input.planId],
+    `SELECT step_index, event_hash
+     FROM planner_events
+     WHERE tenant_id = ? AND plan_id = ?
+     ORDER BY step_index DESC
+     LIMIT 1`,
+    [input.tenantId, input.planId],
   );
   const prevHash = lastRow?.event_hash ?? null;
   const stepIndex = (lastRow?.step_index ?? -1) + 1;
@@ -55,13 +60,22 @@ export async function insertPlannerEventNext<T>(
   );
 
   const inserted = await tx.get<T>(
-    `INSERT INTO planner_events (replay_id, plan_id, step_index, occurred_at, action, prev_hash, event_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO planner_events (
+       tenant_id,
+       plan_id,
+       step_index,
+       replay_id,
+       occurred_at,
+       action_json,
+       prev_hash,
+       event_hash
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      RETURNING ${input.returning}`,
     [
-      input.replayId,
+      input.tenantId,
       input.planId,
       stepIndex,
+      input.replayId,
       input.occurredAt,
       input.actionJson,
       prevHash,

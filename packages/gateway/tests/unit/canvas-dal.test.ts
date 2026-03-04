@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CanvasDal } from "../../src/modules/canvas/dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 
 describe("CanvasDal", () => {
   let db: SqliteDb;
@@ -18,91 +19,128 @@ describe("CanvasDal", () => {
 
   it("publishes and retrieves an artifact", async () => {
     const artifact = await dal.publish({
+      tenantId: DEFAULT_TENANT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       title: "Test Chart",
       contentType: "text/html",
-      htmlContent: "<h1>Hello</h1>",
+      content: "<h1>Hello</h1>",
     });
 
-    expect(artifact.id).toBeTruthy();
+    expect(artifact.canvas_artifact_id).toBeTruthy();
     expect(artifact.title).toBe("Test Chart");
     expect(artifact.content_type).toBe("text/html");
-    expect(artifact.html_content).toBe("<h1>Hello</h1>");
+    expect(artifact.content).toBe("<h1>Hello</h1>");
     expect(artifact.created_at).toBeTruthy();
 
-    const retrieved = await dal.getById(artifact.id);
+    const retrieved = await dal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      canvasArtifactId: artifact.canvas_artifact_id,
+    });
     expect(retrieved).toBeDefined();
     expect(retrieved!.title).toBe("Test Chart");
   });
 
-  it("stores plan_id and metadata", async () => {
+  it("stores links and metadata", async () => {
     const artifact = await dal.publish({
-      planId: "plan-123",
+      tenantId: DEFAULT_TENANT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       title: "Report",
       contentType: "text/html",
-      htmlContent: "<p>Report body</p>",
+      content: "<p>Report body</p>",
       metadata: { source: "agent", version: 2 },
+      links: [{ parentKind: "plan", parentId: "plan-123" }],
     });
 
-    expect(artifact.plan_id).toBe("plan-123");
     const meta = artifact.metadata as Record<string, unknown>;
     expect(meta.source).toBe("agent");
     expect(meta.version).toBe(2);
+
+    const linked = await dal.listByParent({
+      tenantId: DEFAULT_TENANT_ID,
+      parentKind: "plan",
+      parentId: "plan-123",
+    });
+    expect(linked.map((row) => row.canvas_artifact_id)).toContain(artifact.canvas_artifact_id);
   });
 
   it("returns undefined for unknown id", async () => {
-    const result = await dal.getById("nonexistent-uuid");
+    const result = await dal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      canvasArtifactId: "nonexistent-uuid",
+    });
     expect(result).toBeUndefined();
   });
 
-  it("lists artifacts by plan", async () => {
+  it("lists artifacts by parent", async () => {
     await dal.publish({
-      planId: "plan-A",
+      tenantId: DEFAULT_TENANT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       title: "First",
       contentType: "text/html",
-      htmlContent: "<p>1</p>",
+      content: "<p>1</p>",
+      links: [{ parentKind: "plan", parentId: "plan-A" }],
     });
     await dal.publish({
-      planId: "plan-A",
+      tenantId: DEFAULT_TENANT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       title: "Second",
       contentType: "text/plain",
-      htmlContent: "plain text",
+      content: "plain text",
+      links: [{ parentKind: "plan", parentId: "plan-A" }],
     });
     await dal.publish({
-      planId: "plan-B",
+      tenantId: DEFAULT_TENANT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       title: "Other",
       contentType: "text/html",
-      htmlContent: "<p>other</p>",
+      content: "<p>other</p>",
+      links: [{ parentKind: "plan", parentId: "plan-B" }],
     });
 
-    const planA = await dal.listByPlan("plan-A");
+    const planA = await dal.listByParent({
+      tenantId: DEFAULT_TENANT_ID,
+      parentKind: "plan",
+      parentId: "plan-A",
+    });
     expect(planA).toHaveLength(2);
-    expect(planA[0].title).toBe("First");
-    expect(planA[1].title).toBe("Second");
+    expect(planA.map((row) => row.title).sort()).toEqual(["First", "Second"]);
 
-    const planB = await dal.listByPlan("plan-B");
+    const planB = await dal.listByParent({
+      tenantId: DEFAULT_TENANT_ID,
+      parentKind: "plan",
+      parentId: "plan-B",
+    });
     expect(planB).toHaveLength(1);
   });
 
   it("returns empty array for unknown plan", async () => {
-    const result = await dal.listByPlan("nonexistent-plan");
+    const result = await dal.listByParent({
+      tenantId: DEFAULT_TENANT_ID,
+      parentKind: "plan",
+      parentId: "nonexistent-plan",
+    });
     expect(result).toEqual([]);
   });
 
   it("rejects invalid content_type", async () => {
     await expect(
       dal.publish({
+        tenantId: DEFAULT_TENANT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
         title: "Bad",
         contentType: "application/json",
-        htmlContent: "{}",
+        content: "{}",
       }),
     ).rejects.toThrow(/Invalid content_type/);
   });
 
   it("supports text/plain content type", async () => {
     const artifact = await dal.publish({
+      tenantId: DEFAULT_TENANT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       title: "Plain",
       contentType: "text/plain",
-      htmlContent: "Just plain text",
+      content: "Just plain text",
     });
 
     expect(artifact.content_type).toBe("text/plain");
@@ -110,21 +148,13 @@ describe("CanvasDal", () => {
 
   it("defaults metadata to empty object", async () => {
     const artifact = await dal.publish({
+      tenantId: DEFAULT_TENANT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       title: "No Meta",
       contentType: "text/html",
-      htmlContent: "<p>hi</p>",
+      content: "<p>hi</p>",
     });
 
     expect(artifact.metadata).toEqual({});
-  });
-
-  it("defaults plan_id to null", async () => {
-    const artifact = await dal.publish({
-      title: "No Plan",
-      contentType: "text/html",
-      htmlContent: "<p>hi</p>",
-    });
-
-    expect(artifact.plan_id).toBeNull();
   });
 });

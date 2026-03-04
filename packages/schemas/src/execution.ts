@@ -177,7 +177,7 @@ export const ExecutionRunPausedPayload = z
   .object({
     run_id: ExecutionRunId,
     reason: ExecutionPauseReason,
-    approval_id: z.number().int().positive().optional(),
+    approval_id: UuidSchema.optional(),
     detail: z.string().optional(),
   })
   .strict();
@@ -213,7 +213,7 @@ export const ExecutionStep = z
     created_at: DateTimeSchema,
     idempotency_key: z.string().trim().min(1).optional(),
     postcondition: z.unknown().optional(),
-    approval_id: z.number().int().positive().optional(),
+    approval_id: UuidSchema.optional(),
   })
   .strict();
 export type ExecutionStep = z.infer<typeof ExecutionStep>;

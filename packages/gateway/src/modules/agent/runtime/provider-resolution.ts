@@ -5,10 +5,9 @@ import { AuthProfileDal, type AuthProfileRow } from "../../models/auth-profile-d
 import { isAuthProfilesEnabled } from "../../models/auth-profiles-enabled.js";
 import { SessionProviderPinDal } from "../../models/session-pin-dal.js";
 import type { SecretProvider } from "../../secret/provider.js";
-import {
-  createSecretHandleResolver,
-  type SecretHandleResolver,
-} from "../../secret/handle-resolver.js";
+import type { SecretHandle } from "@tyrum/schemas";
+
+export const OAUTH_REFRESH_LEASE_UNAVAILABLE = "__oauth_refresh_lease_unavailable__";
 
 export function parseProviderModelId(model: string): { providerId: string; modelId: string } {
   const trimmed = model.trim();
@@ -97,34 +96,32 @@ export function resolveProviderBaseURL(input: {
 }
 
 export async function listOrderedEligibleProfilesForProvider(input: {
-  agentId: string;
+  tenantId: string;
   sessionId: string;
-  providerId: string;
-  resolver: SecretHandleResolver | undefined;
+  providerKey: string;
   authProfileDal: AuthProfileDal;
   pinDal: SessionProviderPinDal;
 }): Promise<AuthProfileRow[]> {
-  const eligibleProfiles =
-    isAuthProfilesEnabled() && input.resolver
-      ? await input.authProfileDal.listEligibleForProvider({
-          agentId: input.agentId,
-          provider: input.providerId,
-          nowMs: Date.now(),
-        })
-      : [];
+  if (!isAuthProfilesEnabled()) return [];
+
+  const eligibleProfiles = await input.authProfileDal.list({
+    tenantId: input.tenantId,
+    providerKey: input.providerKey,
+    status: "active",
+  });
 
   if (eligibleProfiles.length === 0) return [];
 
   const pin = await input.pinDal.get({
-    agentId: input.agentId,
+    tenantId: input.tenantId,
     sessionId: input.sessionId,
-    provider: input.providerId,
+    providerKey: input.providerKey,
   });
-  const pinnedId = pin?.profile_id;
+  const pinnedId = pin?.auth_profile_id;
 
   return pinnedId
     ? [...eligibleProfiles].sort((a, b) =>
-        a.profile_id === pinnedId ? -1 : b.profile_id === pinnedId ? 1 : 0,
+        a.auth_profile_id === pinnedId ? -1 : b.auth_profile_id === pinnedId ? 1 : 0,
       )
     : eligibleProfiles;
 }
@@ -136,7 +133,6 @@ export function buildProviderResolutionSetup(input: {
   fetchImpl: typeof fetch;
 }): {
   secretProvider: SecretProvider | undefined;
-  resolver: SecretHandleResolver | undefined;
   authProfileDal: AuthProfileDal;
   pinDal: SessionProviderPinDal;
   oauthProviderRegistry: GatewayContainer["oauthProviderRegistry"];
@@ -145,12 +141,8 @@ export function buildProviderResolutionSetup(input: {
   oauthLeaseOwner: string;
   fetchImpl: typeof fetch;
 } {
-  const secretProvider = input.secretProvider;
-  const resolver = secretProvider ? createSecretHandleResolver(secretProvider) : undefined;
-
   return {
-    secretProvider,
-    resolver,
+    secretProvider: input.secretProvider,
     authProfileDal: new AuthProfileDal(input.container.db),
     pinDal: new SessionProviderPinDal(input.container.db),
     oauthProviderRegistry: input.container.oauthProviderRegistry,
@@ -161,12 +153,44 @@ export function buildProviderResolutionSetup(input: {
   };
 }
 
+function buildDbHandle(secretKey: string): SecretHandle {
+  const nowIso = new Date().toISOString();
+  return {
+    handle_id: secretKey,
+    provider: "db",
+    scope: secretKey,
+    created_at: nowIso,
+  };
+}
+
+function pickSecretKey(profile: AuthProfileRow): {
+  apiKey?: string;
+  refreshTokenKey?: string;
+} {
+  const slots = profile.secret_keys ?? {};
+  const values = Object.values(slots).filter((value): value is string => typeof value === "string");
+  const singleton = values.length === 1 ? values[0] : undefined;
+
+  if (profile.type === "api_key") {
+    return { apiKey: slots["api_key"] ?? singleton };
+  }
+
+  if (profile.type === "token") {
+    return { apiKey: slots["token"] ?? slots["api_key"] ?? singleton };
+  }
+
+  // oauth
+  return {
+    apiKey: slots["access_token"] ?? singleton,
+    refreshTokenKey: slots["refresh_token"],
+  };
+}
+
 export async function resolveProfileApiKey(
   profile: AuthProfileRow,
   deps: {
+    tenantId: string;
     secretProvider: SecretProvider | undefined;
-    resolver: SecretHandleResolver | undefined;
-    authProfileDal: AuthProfileDal;
     oauthProviderRegistry: GatewayContainer["oauthProviderRegistry"];
     oauthRefreshLeaseDal: GatewayContainer["oauthRefreshLeaseDal"];
     oauthLeaseOwner: string;
@@ -175,102 +199,35 @@ export async function resolveProfileApiKey(
   },
   opts?: { forceOAuthRefresh?: boolean },
 ): Promise<string | null> {
-  const {
-    secretProvider,
-    resolver,
-    authProfileDal,
-    oauthProviderRegistry,
-    oauthRefreshLeaseDal,
-    oauthLeaseOwner,
-    logger,
-    fetchImpl,
-  } = deps;
+  if (!deps.secretProvider) return null;
 
-  async function maybeRefreshOAuthAccessToken(input?: { force?: boolean }): Promise<string | null> {
+  const selection = pickSecretKey(profile);
+  let refreshLeaseUnavailable = false;
+
+  const maybeRefresh = async (): Promise<string | null> => {
     if (profile.type !== "oauth") return null;
-    if (!secretProvider || !resolver) return null;
+    if (!selection.apiKey || !selection.refreshTokenKey) return null;
 
     const nowMs = Date.now();
-    const refreshThresholdMs = 60_000;
-    const force = input?.force ?? false;
-
-    const expiresAtMs = (() => {
-      const expiresAt = profile.expires_at;
-      if (!expiresAt) return Number.NaN;
-      const parsed = Date.parse(expiresAt);
-      return Number.isFinite(parsed) ? parsed : Number.NaN;
-    })();
-
-    if (!force) {
-      if (!Number.isFinite(expiresAtMs)) return null;
-      if (expiresAtMs - nowMs > refreshThresholdMs) return null;
-    }
-
-    const refreshHandleId = profile.secret_handles?.["refresh_token_handle"];
-    if (!refreshHandleId) return null;
-
-    const acquired = await oauthRefreshLeaseDal.tryAcquire({
-      profileId: profile.profile_id,
-      owner: oauthLeaseOwner,
+    const acquired = await deps.oauthRefreshLeaseDal.tryAcquire({
+      tenantId: deps.tenantId,
+      authProfileId: profile.auth_profile_id,
+      owner: deps.oauthLeaseOwner,
       nowMs,
       leaseTtlMs: 60_000,
     });
     if (!acquired) {
-      // Another instance is refreshing (or the lease is stuck); sync in-memory handles
-      // from the latest row so we don't attempt a revoked access handle.
-      const latest = await authProfileDal.getById(profile.profile_id);
-      if (latest && latest.updated_at !== profile.updated_at) {
-        profile.secret_handles = latest.secret_handles;
-        profile.expires_at = latest.expires_at;
-        profile.updated_at = latest.updated_at;
-        await resolver.refresh().catch((err) => {
-          const msg = err instanceof Error ? err.message : String(err);
-          logger.warn("secret.handle_resolver_refresh_failed", {
-            profile_id: profile.profile_id,
-            error: msg,
-          });
-        });
-      }
+      refreshLeaseUnavailable = true;
       return null;
     }
 
-    let createdAccessHandleId: string | undefined;
-    let createdRefreshHandleId: string | undefined;
-    let updateAttempted = false;
-
     try {
-      const latest = await authProfileDal.getById(profile.profile_id);
-      const current = latest ?? profile;
-
-      const currentExpiresAt = current.expires_at;
-      if (currentExpiresAt) {
-        const currentExpiresAtMs = Date.parse(currentExpiresAt);
-        if (
-          Number.isFinite(currentExpiresAtMs) &&
-          currentExpiresAtMs - nowMs > refreshThresholdMs
-        ) {
-          if (latest && latest.updated_at !== profile.updated_at) {
-            profile.secret_handles = latest.secret_handles;
-            profile.expires_at = latest.expires_at;
-            profile.updated_at = latest.updated_at;
-            await resolver.refresh().catch((err) => {
-              const msg = err instanceof Error ? err.message : String(err);
-              logger.warn("secret.handle_resolver_refresh_failed", {
-                profile_id: profile.profile_id,
-                error: msg,
-              });
-            });
-          }
-          return null;
-        }
-      }
-
-      const currentRefreshHandleId =
-        current.secret_handles?.["refresh_token_handle"] ?? refreshHandleId;
-      const refreshToken = await resolver.resolveById(currentRefreshHandleId);
+      const refreshToken = await deps.secretProvider!.resolve(
+        buildDbHandle(selection.refreshTokenKey),
+      );
       if (!refreshToken) return null;
 
-      const spec = await oauthProviderRegistry.get(current.provider);
+      const spec = await deps.oauthProviderRegistry.get(profile.provider_key);
       if (!spec) return null;
 
       const clientIdEnv = spec.client_id_env?.trim();
@@ -282,7 +239,7 @@ export async function resolveProfileApiKey(
       const clientSecret = clientSecretEnv ? process.env[clientSecretEnv]?.trim() : undefined;
 
       const { tokenEndpoint } = await resolveOAuthEndpoints(spec, {
-        fetchImpl,
+        fetchImpl: deps.fetchImpl,
         requireAuthorizationEndpoint: false,
       });
       if (!tokenEndpoint) return null;
@@ -296,140 +253,47 @@ export async function resolveProfileApiKey(
         refreshToken,
         scope: scope || undefined,
         extraParams: spec.extra_token_params,
-        fetchImpl,
+        fetchImpl: deps.fetchImpl,
       });
 
       const accessToken = token.access_token?.trim();
       if (!accessToken) return null;
 
-      const accessHandle = await secretProvider.store(
-        `oauth:${current.provider}:${current.agent_id}:access`,
-        accessToken,
-      );
-      createdAccessHandleId = accessHandle.handle_id;
-
-      const nextSecretHandles: Record<string, string> = { ...current.secret_handles };
-      const oldAccessHandleId = nextSecretHandles["access_token_handle"];
-      nextSecretHandles["access_token_handle"] = accessHandle.handle_id;
-
-      const refreshTokenNew = token.refresh_token?.trim();
-      let oldRefreshHandleId: string | undefined;
-      let newRefreshHandleId: string | undefined;
-      if (refreshTokenNew) {
-        const refreshHandle = await secretProvider.store(
-          `oauth:${current.provider}:${current.agent_id}:refresh`,
-          refreshTokenNew,
-        );
-        oldRefreshHandleId = nextSecretHandles["refresh_token_handle"];
-        nextSecretHandles["refresh_token_handle"] = refreshHandle.handle_id;
-        newRefreshHandleId = refreshHandle.handle_id;
-        createdRefreshHandleId = refreshHandle.handle_id;
+      await deps.secretProvider!.store(selection.apiKey, accessToken);
+      if (token.refresh_token?.trim()) {
+        await deps.secretProvider!.store(selection.refreshTokenKey, token.refresh_token.trim());
       }
-
-      const nextExpiresAt = (() => {
-        const expiresIn = token.expires_in;
-        if (typeof expiresIn === "number" && Number.isFinite(expiresIn) && expiresIn > 0) {
-          return new Date(nowMs + Math.floor(expiresIn) * 1000).toISOString();
-        }
-        // If the refresh response omits expires_in, clear the stored expiry so we don't keep
-        // treating a newly-refreshed token as already expired.
-        return null;
-      })();
-
-      updateAttempted = true;
-      const updated = await authProfileDal.updateSecretHandles(current.profile_id, {
-        secretHandles: nextSecretHandles,
-        expiresAt: nextExpiresAt,
-        updatedBy: { kind: "oauth_refresh" },
-      });
-
-      if (!updated) {
-        await secretProvider.revoke(accessHandle.handle_id).catch(() => {});
-        if (newRefreshHandleId) {
-          await secretProvider.revoke(newRefreshHandleId).catch(() => {});
-        }
-        return accessToken;
-      }
-
-      if (oldAccessHandleId && oldAccessHandleId !== accessHandle.handle_id) {
-        await secretProvider.revoke(oldAccessHandleId).catch(() => {});
-      }
-      if (oldRefreshHandleId && newRefreshHandleId && oldRefreshHandleId !== newRefreshHandleId) {
-        await secretProvider.revoke(oldRefreshHandleId).catch(() => {});
-      }
-
-      // Keep the in-memory snapshot in sync so subsequent calls in the same turn
-      // don't try to resolve a revoked handle.
-      profile.secret_handles = updated.secret_handles;
-      profile.expires_at = updated.expires_at;
-      profile.updated_at = updated.updated_at;
-      await resolver.refresh().catch((err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.warn("secret.handle_resolver_refresh_failed", {
-          profile_id: profile.profile_id,
-          error: msg,
-        });
-      });
 
       return accessToken;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.warn("oauth.refresh_failed", {
-        provider: profile.provider,
-        profile_id: profile.profile_id,
-        error: msg,
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger.warn("oauth.refresh_failed", {
+        provider: profile.provider_key,
+        auth_profile_id: profile.auth_profile_id,
+        error: message,
       });
-      const createdHandles = [createdAccessHandleId, createdRefreshHandleId].filter(
-        (v): v is string => Boolean(v),
-      );
-      if (createdHandles.length > 0) {
-        if (!updateAttempted) {
-          await Promise.all(
-            createdHandles.map((handleId) => secretProvider.revoke(handleId).catch(() => {})),
-          );
-        } else {
-          const latest = await authProfileDal.getById(profile.profile_id).catch(() => undefined);
-          const referenced = new Set(Object.values(latest?.secret_handles ?? {}));
-          await Promise.all(
-            createdHandles
-              .filter((handleId) => !referenced.has(handleId))
-              .map((handleId) => secretProvider.revoke(handleId).catch(() => {})),
-          );
-        }
-      }
-      // If refresh fails and the token is already expired, avoid hammering the token endpoint.
-      if (force || !Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) {
-        await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + 60_000 });
-      }
       return null;
     } finally {
-      await oauthRefreshLeaseDal
-        .release({ profileId: profile.profile_id, owner: oauthLeaseOwner })
+      await deps.oauthRefreshLeaseDal
+        .release({
+          tenantId: deps.tenantId,
+          authProfileId: profile.auth_profile_id,
+          owner: deps.oauthLeaseOwner,
+        })
         .catch(() => {});
     }
-  }
+  };
 
-  const refreshed = await maybeRefreshOAuthAccessToken({ force: opts?.forceOAuthRefresh ?? false });
-  if (refreshed) return refreshed;
-
-  if (profile.type === "oauth") {
-    const refreshTokenHandleId = profile.secret_handles?.["refresh_token_handle"];
-    if (refreshTokenHandleId) {
-      const expiresAt = profile.expires_at;
-      const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
-      if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
-        return null;
-      }
+  if (opts?.forceOAuthRefresh) {
+    if (profile.type === "oauth") {
+      // When we're forcing a refresh (usually after a 401/403), return only a refreshed token.
+      // If refresh can't run, do not fall back to the same (likely invalid) access token.
+      const refreshed = await maybeRefresh();
+      if (refreshed) return refreshed;
+      return refreshLeaseUnavailable ? OAUTH_REFRESH_LEASE_UNAVAILABLE : null;
     }
   }
 
-  const handles = profile.secret_handles ?? {};
-  const handleId =
-    profile.type === "api_key"
-      ? handles["api_key_handle"]
-      : profile.type === "token"
-        ? handles["token_handle"]
-        : handles["access_token_handle"];
-  if (!handleId || !resolver) return null;
-  return await resolver.resolveById(handleId);
+  if (!selection.apiKey) return null;
+  return await deps.secretProvider.resolve(buildDbHandle(selection.apiKey));
 }

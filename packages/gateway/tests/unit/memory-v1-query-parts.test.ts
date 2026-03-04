@@ -6,6 +6,9 @@ function encodeCursor(cursor: { sort: string; id: string }): string {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64");
 }
 
+const TENANT_ID = "00000000-0000-4000-8000-000000000001";
+const AGENT_ID = "00000000-0000-4000-8000-000000000002";
+
 describe("buildMemoryV1ItemQueryParts", () => {
   it("builds filters, provenance join, extra where, cursor, and clamps limit", () => {
     const filter: MemoryItemFilter = {
@@ -21,7 +24,8 @@ describe("buildMemoryV1ItemQueryParts", () => {
     };
 
     const parts = buildMemoryV1ItemQueryParts({
-      agent: "agent-a",
+      tenantId: TENANT_ID,
+      agentId: AGENT_ID,
       filter,
       limit: 999,
       extraWhere: ["i.sensitivity = ?"],
@@ -48,11 +52,13 @@ describe("buildMemoryV1ItemQueryParts", () => {
     );
 
     expect(parts.values).toEqual([
-      "agent-a",
+      TENANT_ID,
+      AGENT_ID,
       "fact",
       "note",
       "favorite_color",
-      "agent-a",
+      TENANT_ID,
+      AGENT_ID,
       "prefs",
       "project",
       "user",
@@ -68,30 +74,33 @@ describe("buildMemoryV1ItemQueryParts", () => {
 
   it("applies sensitivities filter when provided", () => {
     const parts = buildMemoryV1ItemQueryParts({
-      agent: "agent-a",
+      tenantId: TENANT_ID,
+      agentId: AGENT_ID,
       filter: { sensitivities: ["private", "sensitive"] },
     });
 
     expect(parts.where).toContain("i.sensitivity IN (?, ?)");
-    expect(parts.values).toEqual(["agent-a", "private", "sensitive"]);
+    expect(parts.values).toEqual([TENANT_ID, AGENT_ID, "private", "sensitive"]);
   });
 
   it("avoids provenance join when provenance filter is empty", () => {
     const parts = buildMemoryV1ItemQueryParts({
-      agent: "agent-a",
+      tenantId: TENANT_ID,
+      agentId: AGENT_ID,
       filter: { provenance: { source_kinds: [] } },
       limit: 0,
     });
 
     expect(parts.from).toBe("memory_items i");
     expect(parts.limit).toBe(1);
-    expect(parts.where).toEqual(["i.agent_id = ?"]);
-    expect(parts.values).toEqual(["agent-a"]);
+    expect(parts.where).toEqual(["i.tenant_id = ?", "i.agent_id = ?"]);
+    expect(parts.values).toEqual([TENANT_ID, AGENT_ID]);
   });
 
   it("normalizes filter arrays to avoid duplicate/blank SQL params", () => {
     const parts = buildMemoryV1ItemQueryParts({
-      agent: "agent-a",
+      tenantId: TENANT_ID,
+      agentId: AGENT_ID,
       filter: {
         kinds: ["note", "note", "fact"],
         keys: [" favorite_color ", "", "favorite_color"],
@@ -113,11 +122,13 @@ describe("buildMemoryV1ItemQueryParts", () => {
     expect(parts.where).toContain("p.session_id IN (?)");
 
     expect(parts.values).toEqual([
-      "agent-a",
+      TENANT_ID,
+      AGENT_ID,
       "note",
       "fact",
       "favorite_color",
-      "agent-a",
+      TENANT_ID,
+      AGENT_ID,
       "project",
       "user",
       "telegram",
@@ -132,7 +143,8 @@ describe("buildMemoryV1ItemQueryParts", () => {
         from: string;
       }
     )({
-      agent: "agent-a",
+      tenantId: TENANT_ID,
+      agentId: AGENT_ID,
       alwaysJoinProvenance: true,
     });
 

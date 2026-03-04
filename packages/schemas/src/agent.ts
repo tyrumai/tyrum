@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { AgentId, WorkspaceId } from "./keys.js";
+import { AgentKey, TenantKey, WorkspaceKey, AgentSessionKey } from "./keys.js";
+import { UuidSchema } from "./common.js";
 import { NormalizedContainerKind, NormalizedMessageEnvelope } from "./message.js";
 import { MemorySensitivity } from "./memory.js";
 
@@ -234,8 +235,9 @@ export type McpServerSpec = z.infer<typeof McpServerSpec>;
 
 export const AgentTurnRequest = z
   .object({
-    agent_id: AgentId.optional(),
-    workspace_id: WorkspaceId.optional(),
+    tenant_key: TenantKey.optional(),
+    agent_key: AgentKey.optional(),
+    workspace_key: WorkspaceKey.optional(),
     channel: z.string().trim().min(1).optional(),
     thread_id: z.string().trim().min(1).optional(),
     container_kind: NormalizedContainerKind.optional(),
@@ -289,7 +291,8 @@ export type AgentTurnRequest = z.infer<typeof AgentTurnRequest>;
 
 export const AgentTurnResponse = z.object({
   reply: z.string(),
-  session_id: z.string(),
+  session_id: UuidSchema,
+  session_key: AgentSessionKey,
   used_tools: z.array(z.string()).default([]),
   memory_written: z.boolean().default(false),
 });

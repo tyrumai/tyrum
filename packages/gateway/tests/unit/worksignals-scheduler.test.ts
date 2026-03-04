@@ -3,6 +3,11 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { WorkSignalScheduler } from "../../src/modules/workboard/signal-scheduler.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -30,7 +35,11 @@ describe("WorkSignalScheduler", () => {
     const db = openTestSqliteDb();
     try {
       const dal = new WorkboardDal(db);
-      const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+      const scope = {
+        tenant_id: DEFAULT_TENANT_ID,
+        agent_id: DEFAULT_AGENT_ID,
+        workspace_id: DEFAULT_WORKSPACE_ID,
+      } as const;
 
       const item = await dal.createItem({
         scope,
@@ -75,8 +84,8 @@ describe("WorkSignalScheduler", () => {
       expect(updated?.status).toBe("active");
 
       const tasks = await db.all<{ task_id: string }>(
-        "SELECT task_id FROM work_item_tasks WHERE work_item_id = ?",
-        [item.work_item_id],
+        "SELECT task_id FROM work_item_tasks WHERE tenant_id = ? AND work_item_id = ?",
+        [scope.tenant_id, item.work_item_id],
       );
       expect(tasks).toHaveLength(0);
     } finally {
@@ -89,7 +98,11 @@ describe("WorkSignalScheduler", () => {
     const db = openTestSqliteDb();
     try {
       const dal = new WorkboardDal(db);
-      const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+      const scope = {
+        tenant_id: DEFAULT_TENANT_ID,
+        agent_id: DEFAULT_AGENT_ID,
+        workspace_id: DEFAULT_WORKSPACE_ID,
+      } as const;
 
       const item = await dal.createItem({
         scope,
@@ -127,8 +140,8 @@ describe("WorkSignalScheduler", () => {
       await scheduler.tick();
 
       const firings = await db.all<{ status: string }>(
-        "SELECT status FROM work_signal_firings WHERE signal_id = ?",
-        [signal.signal_id],
+        "SELECT status FROM work_signal_firings WHERE tenant_id = ? AND signal_id = ?",
+        [scope.tenant_id, signal.signal_id],
       );
       expect(firings).toHaveLength(1);
       expect(firings[0]?.status).toBe("failed");
@@ -137,8 +150,8 @@ describe("WorkSignalScheduler", () => {
       expect(updated?.status).toBe("paused");
 
       const tasks = await db.all<{ task_id: string }>(
-        "SELECT task_id FROM work_item_tasks WHERE work_item_id = ?",
-        [item.work_item_id],
+        "SELECT task_id FROM work_item_tasks WHERE tenant_id = ? AND work_item_id = ?",
+        [scope.tenant_id, item.work_item_id],
       );
       expect(tasks).toHaveLength(0);
     } finally {
@@ -165,7 +178,11 @@ describe("WorkSignalScheduler", () => {
     const db = openTestSqliteDb();
     try {
       const dal = new WorkboardDal(db);
-      const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+      const scope = {
+        tenant_id: DEFAULT_TENANT_ID,
+        agent_id: DEFAULT_AGENT_ID,
+        workspace_id: DEFAULT_WORKSPACE_ID,
+      } as const;
 
       const item = await dal.createItem({
         scope,

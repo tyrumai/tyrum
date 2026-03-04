@@ -7,6 +7,7 @@ import { migratePostgres } from "../../src/migrate-postgres.js";
 import { newDb } from "pg-mem";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 type OpenDbResult = { dal: MemoryV1Dal; db: SqlDb; close: () => Promise<void> };
 
@@ -146,9 +147,11 @@ for (const fixture of fixtures) {
     it("rebuilds, searches, drops, and rebuilds again without losing canonical content", async () => {
       const { dal, db, close } = await fixture.open();
       try {
+        const scope = { tenantId: DEFAULT_TENANT_ID, agentId: DEFAULT_AGENT_ID };
         const index = new MemoryV1SemanticIndex({
           db,
-          agentId: "agent-a",
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
           embedder: {
             modelId: "test/deterministic-v1",
             embed: async (t: string) => embedDeterministic(t),
@@ -164,7 +167,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "user", refs: [] },
           },
-          "agent-a",
+          scope,
         );
 
         const _other = await dal.create(
@@ -176,7 +179,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "user", refs: [] },
           },
-          "agent-a",
+          scope,
         );
 
         const procedure = await dal.create(
@@ -188,7 +191,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scope,
         );
 
         const episode = await dal.create(
@@ -200,7 +203,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "system", refs: [] },
           },
-          "agent-a",
+          scope,
         );
 
         const sensitive = await dal.create(
@@ -212,7 +215,7 @@ for (const fixture of fixtures) {
             sensitivity: "sensitive",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scope,
         );
 
         await index.rebuild();
@@ -240,7 +243,7 @@ for (const fixture of fixtures) {
         expect(afterDrop).toEqual([]);
 
         // Canonical content still present after dropping derived index rows.
-        expect(await dal.getById(note.memory_item_id, "agent-a")).toBeTruthy();
+        expect(await dal.getById(note.memory_item_id, scope)).toBeTruthy();
 
         await index.rebuild();
         const afterRebuild = await index.search("pizza", 5);
@@ -249,7 +252,8 @@ for (const fixture of fixtures) {
         // Unrelated agent is isolated.
         const otherAgentIndex = new MemoryV1SemanticIndex({
           db,
-          agentId: "agent-b",
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: "00000000-0000-4000-8000-0000000000b0",
           embedder: {
             modelId: "test/deterministic-v1",
             embed: async (t: string) => embedDeterministic(t),

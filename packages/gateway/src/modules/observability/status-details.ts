@@ -205,45 +205,19 @@ async function loadActiveModel(
 async function loadAuthProfileHealth(db: SqlDb | undefined): Promise<AuthProfilesStatus | null> {
   if (!db) return null;
 
+  const normalizeTime = (value: string | Date): string =>
+    value instanceof Date ? value.toISOString() : value;
+
   let profiles: Array<{
-    profile_id: string;
-    agent_id: string;
-    provider: string;
+    provider_key: string;
     type: string;
     status: string;
-    disabled_reason: string | null;
-    cooldown_until_ms: number | null;
-    expires_at: string | null;
-  }> = [];
-  let pins: Array<{
-    agent_id: string;
-    session_id: string;
-    provider: string;
-    profile_id: string;
-    updated_at: string;
   }> = [];
   try {
-    profiles = await db.all<{
-      profile_id: string;
-      agent_id: string;
-      provider: string;
-      type: string;
-      status: string;
-      disabled_reason: string | null;
-      cooldown_until_ms: number | null;
-      expires_at: string | null;
-    }>(
-      `SELECT
-         profile_id,
-         agent_id,
-         provider,
-         type,
-         status,
-         disabled_reason,
-         cooldown_until_ms,
-         expires_at
+    profiles = await db.all<{ provider_key: string; type: string; status: string }>(
+      `SELECT provider_key, type, status
        FROM auth_profiles
-       ORDER BY updated_at DESC
+       ORDER BY updated_at DESC, auth_profile_id DESC
        LIMIT 500`,
     );
   } catch (err) {
@@ -251,82 +225,54 @@ async function loadAuthProfileHealth(db: SqlDb | undefined): Promise<AuthProfile
     throw err;
   }
 
+  let selected: AuthProfilesStatus["selected"] = null;
   try {
-    pins = await db.all<{
+    const pin = await db.get<{
       agent_id: string;
       session_id: string;
-      provider: string;
-      profile_id: string;
-      updated_at: string;
+      provider_key: string;
+      auth_profile_id: string;
+      pinned_at: string | Date;
     }>(
-      `SELECT
-         agent_id,
-         session_id,
-         provider,
-         profile_id,
-         updated_at
-       FROM session_provider_pins
-       ORDER BY updated_at DESC
-       LIMIT 500`,
+      `SELECT s.agent_id, p.session_id, p.provider_key, p.auth_profile_id, p.pinned_at
+       FROM session_provider_pins p
+       JOIN sessions s
+         ON s.tenant_id = p.tenant_id
+        AND s.session_id = p.session_id
+       ORDER BY p.pinned_at DESC
+       LIMIT 1`,
     );
+    if (pin) {
+      selected = {
+        agent_id: pin.agent_id,
+        session_id: pin.session_id,
+        provider: pin.provider_key,
+        profile_id: pin.auth_profile_id,
+        updated_at: normalizeTime(pin.pinned_at),
+      };
+    }
   } catch (err) {
     if (!isMissingTableError(err)) throw err;
   }
 
-  const nowMs = Date.now();
-  const soonMs = nowMs + 24 * 60 * 60 * 1000;
-  const active = profiles.filter((p) => p.status === "active");
-  const disabled = profiles.filter((p) => p.status === "disabled");
-  const cooldownActive = active.filter(
-    (p) =>
-      typeof p.cooldown_until_ms === "number" &&
-      Number.isFinite(p.cooldown_until_ms) &&
-      p.cooldown_until_ms > nowMs,
-  ).length;
-  const oauthActive = active.filter((p) => p.type === "oauth");
-  const oauthExpired = oauthActive.filter((p) => {
-    const expiresMs = parseIsoToMs(p.expires_at);
-    return expiresMs !== null && expiresMs <= nowMs;
-  }).length;
-  const oauthExpiringSoon = oauthActive.filter((p) => {
-    const expiresMs = parseIsoToMs(p.expires_at);
-    return expiresMs !== null && expiresMs > nowMs && expiresMs <= soonMs;
-  }).length;
-
-  const disabledReasonsMap = new Map<string, number>();
-  for (const profile of disabled) {
-    const reason = profile.disabled_reason?.trim() || "unspecified";
-    disabledReasonsMap.set(reason, (disabledReasonsMap.get(reason) ?? 0) + 1);
-  }
-  const disabledReasons = [...disabledReasonsMap.entries()]
-    .map(([reason, count]) => ({ reason, count }))
-    .sort((a, b) => a.reason.localeCompare(b.reason));
-
-  const providers = [...new Set(profiles.map((p) => p.provider))]
+  const total = profiles.length;
+  const active = profiles.filter((p) => p.status === "active").length;
+  const disabled = profiles.filter((p) => p.status === "disabled").length;
+  const providers = [...new Set(profiles.map((p) => p.provider_key))]
     .filter((provider) => provider.trim().length > 0)
     .sort();
 
-  const selectedPin = pins[0];
-
   return {
     enabled: isAuthProfilesEnabled(),
-    total: profiles.length,
-    active: active.length,
-    disabled: disabled.length,
-    cooldown_active: cooldownActive,
-    oauth_expired: oauthExpired,
-    oauth_expiring_within_24h: oauthExpiringSoon,
+    total,
+    active,
+    disabled,
+    cooldown_active: 0,
+    oauth_expired: 0,
+    oauth_expiring_within_24h: 0,
     providers,
-    disabled_reasons: disabledReasons,
-    selected: selectedPin
-      ? {
-          agent_id: selectedPin.agent_id,
-          session_id: selectedPin.session_id,
-          provider: selectedPin.provider,
-          profile_id: selectedPin.profile_id,
-          updated_at: selectedPin.updated_at,
-        }
-      : null,
+    disabled_reasons: [],
+    selected,
   };
 }
 

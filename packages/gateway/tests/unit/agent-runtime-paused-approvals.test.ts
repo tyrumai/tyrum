@@ -3,9 +3,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { maybeResolvePausedRun } from "../../src/modules/agent/runtime/turn-engine-bridge.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -35,34 +41,56 @@ describe("AgentRuntime paused approvals", () => {
 
     const key = "agent:default:test:thread-1";
     const lane = "main";
-    const jobId = "job-1";
-    const runId = "run-1";
+    const jobId = randomUUID();
+    const runId = randomUUID();
 
     await container.db.run(
-      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?)`,
-      [jobId, key, lane, "queued", "{}"],
+      `INSERT INTO execution_jobs (
+	         tenant_id,
+	         job_id,
+	         agent_id,
+	         workspace_id,
+	         key,
+	         lane,
+	         status,
+	         trigger_json
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, jobId, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID, key, lane, "queued", "{}"],
     );
     await container.db.run(
-      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [runId, jobId, key, lane, "paused", 1],
+      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+	       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, runId, jobId, key, lane, "paused", 1],
     );
 
     const resumeToken = "resume-token-from-context";
     const approval = await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: `approval:${randomUUID()}`,
       prompt: "approve",
       runId,
       context: { resume_token: resumeToken },
     });
-    await container.approvalDal.respond(approval.id, true, "approved");
+    await container.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval.approval_id,
+      decision: "approved",
+      reason: "approved",
+    });
 
     await container.db.run(
-      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json, approval_id)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      ["step-1", runId, 0, "paused", "{}", approval.id],
+      `INSERT INTO execution_steps (
+	         tenant_id,
+	         step_id,
+	         run_id,
+	         step_index,
+	         status,
+	         action_json,
+	         approval_id
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, randomUUID(), runId, 0, "paused", "{}", approval.approval_id],
     );
 
     const resumeRun = vi

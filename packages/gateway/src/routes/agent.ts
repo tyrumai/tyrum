@@ -44,7 +44,7 @@ export function createAgentRoutes(agents: AgentRegistry): Hono {
   });
 
   agent.get("/agent/status", async (c) => {
-    const agentId = c.req.query("agent_id")?.trim() || "default";
+    const agentId = c.req.query("agent_key")?.trim() || "default";
     let runtime;
     try {
       runtime = await agents.getRuntime(agentId);
@@ -64,7 +64,7 @@ export function createAgentRoutes(agents: AgentRegistry): Hono {
     }
 
     try {
-      const agentId = parsed.data.agent_id ?? "default";
+      const agentId = parsed.data.agent_key ?? "default";
       let runtime;
       try {
         runtime = await agents.getRuntime(agentId);

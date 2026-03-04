@@ -141,31 +141,23 @@ describe("status details missing tables", () => {
 
     await db.exec(
       `CREATE TABLE auth_profiles (
-         profile_id TEXT NOT NULL,
-         agent_id TEXT NOT NULL,
-         provider TEXT NOT NULL,
+         auth_profile_id TEXT NOT NULL,
+         provider_key TEXT NOT NULL,
          type TEXT NOT NULL,
          status TEXT NOT NULL,
-         disabled_reason TEXT,
-         cooldown_until_ms INTEGER,
-         expires_at TEXT,
          updated_at TEXT NOT NULL
        );`,
     );
     await db.exec(
       `INSERT INTO auth_profiles (
-         profile_id,
-         agent_id,
-         provider,
+         auth_profile_id,
+         provider_key,
          type,
          status,
-         disabled_reason,
-         cooldown_until_ms,
-         expires_at,
          updated_at
        ) VALUES
-         ('profile-1', 'default', 'openai', 'api_key', 'active', NULL, NULL, NULL, '2026-02-23T00:00:01.000Z'),
-         ('profile-2', 'default', 'openai', 'api_key', 'disabled', 'manual', NULL, NULL, '2026-02-23T00:00:00.000Z');`,
+         ('profile-1', 'openai', 'api_key', 'active', '2026-02-23T00:00:01.000Z'),
+         ('profile-2', 'openai', 'api_key', 'disabled', '2026-02-23T00:00:00.000Z');`,
     );
 
     const details = await buildStatusDetails({ db });

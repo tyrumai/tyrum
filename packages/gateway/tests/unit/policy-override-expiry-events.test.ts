@@ -7,6 +7,7 @@ import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { createPolicyBundleRoutes } from "../../src/routes/policy-bundle.js";
 import { OutboxDal } from "../../src/modules/backplane/outbox-dal.js";
 import { OutboxPoller } from "../../src/modules/backplane/outbox-poller.js";
+import { DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -37,8 +38,8 @@ describe("policy overrides expiry events", () => {
     const policyOverrideDal = new PolicyOverrideDal(db);
 
     const override = await policyOverrideDal.create({
-      agentId: "agent-1",
-      workspaceId: "default",
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       toolId: "tool.exec",
       pattern: "echo hi",
       expiresAt: new Date(Date.now() - 60_000).toISOString(),
@@ -97,8 +98,8 @@ describe("policy overrides expiry events", () => {
     const policyOverrideDal = new PolicyOverrideDal(db);
 
     const override = await policyOverrideDal.create({
-      agentId: "agent-1",
-      workspaceId: "default",
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       toolId: "tool.exec",
       pattern: "echo hi",
       expiresAt: new Date(Date.now() - 60_000).toISOString(),
@@ -117,8 +118,8 @@ describe("policy overrides expiry events", () => {
     });
 
     const active = await policyOverrideDal.listActiveForTool({
-      agentId: "agent-1",
-      workspaceId: "default",
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       toolId: "tool.exec",
     });
     expect(active).toEqual([]);

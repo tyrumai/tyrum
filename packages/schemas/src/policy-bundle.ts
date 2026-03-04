@@ -177,7 +177,7 @@ export const PolicyOverride = z
     tool_id: z.string().trim().min(1),
     pattern: z.string().trim().min(1),
 
-    created_from_approval_id: z.number().int().positive().optional(),
+    created_from_approval_id: UuidSchema.optional(),
     created_from_policy_snapshot_id: PolicySnapshotId.optional(),
 
     expires_at: DateTimeSchema.nullable().optional(),
@@ -230,7 +230,7 @@ export const PolicyOverrideCreateRequest = z
     tool_id: z.string().trim().min(1),
     pattern: z.string().trim().min(1),
     created_by: z.unknown().optional(),
-    created_from_approval_id: z.number().int().positive().optional(),
+    created_from_approval_id: UuidSchema.optional(),
     created_from_policy_snapshot_id: PolicySnapshotId.optional(),
     expires_at: DateTimeSchema.nullable().optional(),
   })

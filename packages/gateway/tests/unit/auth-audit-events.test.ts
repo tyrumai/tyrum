@@ -10,10 +10,20 @@ import { createAuthMiddleware } from "../../src/modules/auth/middleware.js";
 import { createHttpScopeAuthorizationMiddleware } from "../../src/modules/authz/http-scope-middleware.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { AuthAudit, GATEWAY_AUTH_AUDIT_PLAN_ID } from "../../src/modules/auth/audit.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+
+async function getAuthAuditPlanId(db: SqliteDb): Promise<string> {
+  const row = await db.get<{ plan_id: string }>(
+    "SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_key = ?",
+    [DEFAULT_TENANT_ID, GATEWAY_AUTH_AUDIT_PLAN_ID],
+  );
+  if (!row) throw new Error("expected auth audit plan row to exist");
+  return row.plan_id;
+}
 
 describe("auth audit events", () => {
   let db: SqliteDb;
@@ -48,12 +58,13 @@ describe("auth audit events", () => {
     const res = await app.request(`/api/data?token=${encodeURIComponent(secret)}`);
     expect(res.status).toBe(401);
 
-    const rows = await db.all<{ action: string }>(
-      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      [GATEWAY_AUTH_AUDIT_PLAN_ID],
+    const planId = await getAuthAuditPlanId(db);
+    const rows = await db.all<{ action_json: string }>(
+      "SELECT action_json FROM planner_events WHERE tenant_id = ? AND plan_id = ? ORDER BY step_index ASC",
+      [DEFAULT_TENANT_ID, planId],
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.action).not.toContain(secret);
+    expect(rows[0]!.action_json).not.toContain(secret);
 
     const outbox = await db.get<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC LIMIT 1",
@@ -92,18 +103,19 @@ describe("auth audit events", () => {
     expect((await app.request("/api/data")).status).toBe(401);
     expect((await app.request("/api/data")).status).toBe(401);
 
-    const rowsAfterBurst = await db.all<{ id: number }>(
-      "SELECT id FROM planner_events WHERE plan_id = ?",
-      [GATEWAY_AUTH_AUDIT_PLAN_ID],
+    const planId = await getAuthAuditPlanId(db);
+    const rowsAfterBurst = await db.all<{ step_index: number }>(
+      "SELECT step_index FROM planner_events WHERE tenant_id = ? AND plan_id = ?",
+      [DEFAULT_TENANT_ID, planId],
     );
     expect(rowsAfterBurst).toHaveLength(1);
 
     nowMs = 20_000;
     expect((await app.request("/api/data")).status).toBe(401);
 
-    const rowsAfterWindow = await db.all<{ id: number }>(
-      "SELECT id FROM planner_events WHERE plan_id = ?",
-      [GATEWAY_AUTH_AUDIT_PLAN_ID],
+    const rowsAfterWindow = await db.all<{ step_index: number }>(
+      "SELECT step_index FROM planner_events WHERE tenant_id = ? AND plan_id = ?",
+      [DEFAULT_TENANT_ID, planId],
     );
     expect(rowsAfterWindow).toHaveLength(2);
   });
@@ -172,13 +184,14 @@ describe("auth audit events", () => {
       });
       expect(res.status).toBe(403);
 
-      const rows = await db.all<{ action: string }>(
-        "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-        [GATEWAY_AUTH_AUDIT_PLAN_ID],
+      const planId = await getAuthAuditPlanId(db);
+      const rows = await db.all<{ action_json: string }>(
+        "SELECT action_json FROM planner_events WHERE tenant_id = ? AND plan_id = ? ORDER BY step_index ASC",
+        [DEFAULT_TENANT_ID, planId],
       );
       expect(rows).toHaveLength(1);
 
-      const action = JSON.parse(rows[0]!.action) as Record<string, unknown>;
+      const action = JSON.parse(rows[0]!.action_json) as Record<string, unknown>;
       expect(action["type"]).toBe("authz.denied");
       expect(action["required_scopes"]).toEqual(["operator.write"]);
     } finally {
@@ -229,13 +242,14 @@ describe("auth audit events", () => {
     );
     expect(result).toBeDefined();
 
-    const rows = await db.all<{ action: string }>(
-      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      [GATEWAY_AUTH_AUDIT_PLAN_ID],
+    const planId = await getAuthAuditPlanId(db);
+    const rows = await db.all<{ action_json: string }>(
+      "SELECT action_json FROM planner_events WHERE tenant_id = ? AND plan_id = ? ORDER BY step_index ASC",
+      [DEFAULT_TENANT_ID, planId],
     );
     expect(rows).toHaveLength(1);
 
-    const action = JSON.parse(rows[0]!.action) as Record<string, unknown>;
+    const action = JSON.parse(rows[0]!.action_json) as Record<string, unknown>;
     expect(action["type"]).toBe("authz.denied");
     expect(action["surface"]).toBe("ws");
     expect(action["reason"]).toBe("insufficient_scope");
@@ -297,13 +311,14 @@ describe("auth audit events", () => {
     expect(result).toBeDefined();
     expect((result as unknown as { ok?: boolean }).ok).toBe(false);
 
-    const rows = await db.all<{ action: string }>(
-      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      [GATEWAY_AUTH_AUDIT_PLAN_ID],
+    const planId = await getAuthAuditPlanId(db);
+    const rows = await db.all<{ action_json: string }>(
+      "SELECT action_json FROM planner_events WHERE tenant_id = ? AND plan_id = ? ORDER BY step_index ASC",
+      [DEFAULT_TENANT_ID, planId],
     );
     expect(rows).toHaveLength(1);
 
-    const action = JSON.parse(rows[0]!.action) as Record<string, unknown>;
+    const action = JSON.parse(rows[0]!.action_json) as Record<string, unknown>;
     expect(action["type"]).toBe("authz.denied");
     expect(action["surface"]).toBe("ws");
     expect(action["reason"]).toBe("insufficient_scope");

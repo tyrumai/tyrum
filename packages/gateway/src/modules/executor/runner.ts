@@ -14,6 +14,7 @@ import { PlanStateMachine } from "../planner/state-machine.js";
 import { evaluatePolicy } from "../policy/engine.js";
 import { JobQueue, type Job } from "./job-queue.js";
 import { randomUUID } from "node:crypto";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 export interface ExecutionRunnerDeps {
   jobQueue: JobQueue;
@@ -346,8 +347,9 @@ export class ExecutionRunner {
 
   private async logEvent(planId: string, stepIndex: number, action: unknown): Promise<void> {
     await this.eventLog.append({
+      tenantId: DEFAULT_TENANT_ID,
       replayId: randomUUID(),
-      planId,
+      planKey: planId,
       stepIndex,
       occurredAt: new Date().toISOString(),
       action,

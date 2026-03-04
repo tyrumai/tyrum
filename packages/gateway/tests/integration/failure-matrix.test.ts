@@ -4,7 +4,7 @@ import { WebSocket } from "ws";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { createHash, generateKeyPairSync, sign, randomUUID } from "node:crypto";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
@@ -25,6 +25,11 @@ import { WatcherFiringDal } from "../../src/modules/watcher/firing-dal.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
@@ -677,25 +682,28 @@ describe("Failure matrix (scaling-ha)", () => {
     dbs.push(db);
 
     // Minimal watcher + firing.
+    const watcherId = randomUUID();
     await db.run(
-      `INSERT INTO watchers (plan_id, trigger_type, trigger_config, active, created_at, updated_at)
-       VALUES ('plan-1', 'periodic', ?, 1, datetime('now'), datetime('now'))`,
-      [JSON.stringify({ intervalMs: 1000 })],
+      `INSERT INTO watchers (tenant_id, watcher_id, watcher_key, agent_id, workspace_id, trigger_type, trigger_config_json)
+       VALUES (?, ?, ?, ?, ?, 'periodic', ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        watcherId,
+        `watcher-${watcherId}`,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        JSON.stringify({ intervalMs: 1000, planId: "plan-1" }),
+      ],
     );
-    const watcher = await db.get<{ id: number }>(
-      "SELECT id FROM watchers WHERE plan_id = 'plan-1' LIMIT 1",
-    );
-    expect(watcher?.id).toBeTruthy();
 
     const dal = new WatcherFiringDal(db);
     const nowMs = Date.now();
     const slotMs = Math.floor(nowMs / 1000) * 1000;
-    const firingId = `firing-${String(watcher!.id)}-${String(slotMs)}`;
+    const firingId = randomUUID();
     await dal.createIfAbsent({
-      firingId,
-      watcherId: watcher!.id,
-      planId: "plan-1",
-      triggerType: "periodic",
+      tenantId: DEFAULT_TENANT_ID,
+      watcherFiringId: firingId,
+      watcherId,
       scheduledAtMs: slotMs,
     });
 
@@ -710,14 +718,22 @@ describe("Failure matrix (scaling-ha)", () => {
     // After expiry, scheduler B takes over and marks enqueued.
     const claimedB = await dal.claimNext({ owner: "sched-b", nowMs: slotMs + 50, leaseTtlMs: 25 });
     expect(claimedB?.lease_owner).toBe("sched-b");
-    expect(await dal.markEnqueued({ firingId, owner: "sched-b" })).toBe(true);
+    expect(
+      await dal.markEnqueued({
+        tenantId: DEFAULT_TENANT_ID,
+        watcherFiringId: firingId,
+        owner: "sched-b",
+      }),
+    ).toBe(true);
 
-    const row = await dal.getById(firingId);
+    const row = await dal.getById({ tenantId: DEFAULT_TENANT_ID, watcherFiringId: firingId });
     expect(row?.status).toBe("enqueued");
 
     const count = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM watcher_firings WHERE watcher_id = ? AND scheduled_at_ms = ?",
-      [watcher!.id, slotMs],
+      `SELECT COUNT(*) AS n
+       FROM watcher_firings
+       WHERE tenant_id = ? AND watcher_id = ? AND scheduled_at_ms = ?`,
+      [DEFAULT_TENANT_ID, watcherId, slotMs],
     );
     expect(count?.n).toBe(1);
   });
@@ -730,10 +746,18 @@ describe("Failure matrix (scaling-ha)", () => {
     const db = openTestSqliteDb(dbPath);
     dbs.push(db);
 
+    const watcherId = randomUUID();
     await db.run(
-      `INSERT INTO watchers (plan_id, trigger_type, trigger_config, active, created_at, updated_at)
-       VALUES ('plan-1', 'periodic', ?, 1, datetime('now'), datetime('now'))`,
-      [JSON.stringify({ intervalMs: 1000 })],
+      `INSERT INTO watchers (tenant_id, watcher_id, watcher_key, agent_id, workspace_id, trigger_type, trigger_config_json)
+       VALUES (?, ?, ?, ?, ?, 'periodic', ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        watcherId,
+        `watcher-${watcherId}`,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        JSON.stringify({ intervalMs: 1000, planId: "plan-1" }),
+      ],
     );
 
     let allCalls = 0;

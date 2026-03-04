@@ -325,8 +325,11 @@ function buildToolSet(input: {
     const row = await input.container.db.get<{
       status: string;
       context_json: string;
-      response_reason: string | null;
-    }>("SELECT status, context_json, response_reason FROM approvals WHERE id = ?", [approvalId]);
+      resolution_json: string | null;
+    }>(
+      "SELECT status, context_json, resolution_json FROM approvals WHERE tenant_id = ? AND approval_id = ?",
+      [input.executionContext.tenantId, approvalId],
+    );
     if (!row) {
       cachedApproval = null;
       return cachedApproval;
@@ -342,7 +345,16 @@ function buildToolSet(input: {
       });
       context = {};
     }
-    cachedApproval = { status: row.status, context, reason: row.response_reason };
+    const resolution = row.resolution_json
+      ? ((): { reason?: string } | undefined => {
+          try {
+            return JSON.parse(row.resolution_json) as { reason?: string };
+          } catch {
+            return undefined;
+          }
+        })()
+      : undefined;
+    cachedApproval = { status: row.status, context, reason: resolution?.reason ?? null };
     return cachedApproval;
   };
 
@@ -405,6 +417,7 @@ function buildToolSet(input: {
 
     if (needsWorkspaceLease) {
       const acquired = await acquireWorkspaceLease(input.container.db, {
+        tenantId: input.executionContext.tenantId,
         workspaceId: input.executionContext.workspaceId,
         owner: workspaceLeaseOwner,
         ttlMs: Math.max(30_000, totalBudgetMs + 10_000),
@@ -433,6 +446,7 @@ function buildToolSet(input: {
     } finally {
       if (needsWorkspaceLease) {
         await releaseWorkspaceLease(input.container.db, {
+          tenantId: input.executionContext.tenantId,
           workspaceId: input.executionContext.workspaceId,
           owner: workspaceLeaseOwner,
         }).catch((err) => {
@@ -713,10 +727,11 @@ async function executeLlmAction(input: {
     const row = await input.container.db.get<{
       status: string;
       context_json: string;
-      response_reason: string | null;
-    }>("SELECT status, context_json, response_reason FROM approvals WHERE id = ?", [
-      stepApprovalId,
-    ]);
+      resolution_json: string | null;
+    }>(
+      "SELECT status, context_json, resolution_json FROM approvals WHERE tenant_id = ? AND approval_id = ?",
+      [input.executionContext.tenantId, stepApprovalId],
+    );
     if (row && row.status !== "pending") {
       let approvalContext: unknown = {};
       try {
@@ -743,13 +758,24 @@ async function executeLlmAction(input: {
         messages = appendToolApprovalResponseMessage(resumeState.messages, {
           approvalId: resumeState.approval_id,
           approved: row.status === "approved",
-          reason:
-            row.response_reason ??
-            (row.status === "expired"
+          reason: (() => {
+            if (row.resolution_json) {
+              try {
+                const parsed = JSON.parse(row.resolution_json) as unknown;
+                if (parsed && typeof parsed === "object" && "reason" in parsed) {
+                  const reason = (parsed as { reason?: unknown }).reason;
+                  if (typeof reason === "string" && reason.trim().length > 0) return reason.trim();
+                }
+              } catch {
+                // ignore
+              }
+            }
+            return row.status === "expired"
               ? "approval expired"
               : row.status === "cancelled"
                 ? "approval cancelled"
-                : undefined),
+                : undefined;
+          })(),
         });
       }
     }

@@ -7,11 +7,17 @@ const KeyPart = z
   .min(1)
   .regex(/^[^:]+$/, "key parts must not contain ':'");
 
-export const AgentId = KeyPart;
-export type AgentId = z.infer<typeof AgentId>;
+// ---------------------------------------------------------------------------
+// Tenant/agent/workspace identity
+// ---------------------------------------------------------------------------
 
-export const TenantId = KeyPart;
-export type TenantId = z.infer<typeof TenantId>;
+/** Stable external handle (maps to `tenants.tenant_key`). */
+export const TenantKey = KeyPart;
+export type TenantKey = z.infer<typeof TenantKey>;
+
+/** Stable external handle (maps to `agents.agent_key`). */
+export const AgentKey = KeyPart;
+export type AgentKey = z.infer<typeof AgentKey>;
 
 /** Channel type (for example `telegram`, `discord`). */
 export const ChannelKey = KeyPart;
@@ -36,23 +42,35 @@ export const NodeId = KeyPart;
 export type NodeId = z.infer<typeof NodeId>;
 
 /**
- * Workspace identifier.
+ * Workspace stable external handle (maps to `workspaces.workspace_key`).
  *
  * We constrain this to a DNS-label compatible format so it can be used safely
  * in Kubernetes resource names (for example PVC names) and filesystem paths.
  */
-export const WorkspaceId = z
+export const WorkspaceKey = z
   .string()
   .trim()
   .min(1)
   .max(63)
   .regex(
     /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/,
-    "workspace id must be a DNS-label (lowercase alnum and '-')",
+    "workspace key must be a DNS-label (lowercase alnum and '-')",
   );
-export type WorkspaceId = z.infer<typeof WorkspaceId>;
+export type WorkspaceKey = z.infer<typeof WorkspaceKey>;
 
-export const DEFAULT_WORKSPACE_ID = "default" as const;
+export const DEFAULT_WORKSPACE_KEY = "default" as const;
+
+/** Internal tenant UUID (maps to `tenants.tenant_id`). */
+export const TenantId = UuidSchema;
+export type TenantId = z.infer<typeof TenantId>;
+
+/** Internal agent UUID (maps to `agents.agent_id`). */
+export const AgentId = UuidSchema;
+export type AgentId = z.infer<typeof AgentId>;
+
+/** Internal workspace UUID (maps to `workspaces.workspace_id`). */
+export const WorkspaceId = UuidSchema;
+export type WorkspaceId = z.infer<typeof WorkspaceId>;
 
 // ---------------------------------------------------------------------------
 // DM scope + canonical session key construction
@@ -80,7 +98,7 @@ export function resolveDmScope(opts?: {
 }
 
 type BuildDmSessionKeyInput = {
-  agentId: string;
+  agentKey: string;
   container: "dm";
   channel: string;
   account?: string;
@@ -90,7 +108,7 @@ type BuildDmSessionKeyInput = {
 };
 
 type BuildContainerSessionKeyInput = {
-  agentId: string;
+  agentKey: string;
   container: "group" | "channel";
   channel: string;
   account?: string;
@@ -107,7 +125,7 @@ function parseRequiredPeer(peerId: string | undefined): PeerId {
 }
 
 export function buildAgentSessionKey(input: BuildAgentSessionKeyInput): string {
-  const agentId = AgentId.parse(input.agentId);
+  const agentKey = AgentKey.parse(input.agentKey);
 
   if (input.container === "dm") {
     const scope = resolveDmScope({
@@ -115,27 +133,27 @@ export function buildAgentSessionKey(input: BuildAgentSessionKeyInput): string {
       distinctDmSenders: input.distinctDmSenders,
     });
     if (scope === "shared") {
-      return `agent:${agentId}:main`;
+      return `agent:${agentKey}:main`;
     }
 
     const peerId = parseRequiredPeer(input.peerId);
     if (scope === "per_peer") {
-      return `agent:${agentId}:dm:${peerId}`;
+      return `agent:${agentKey}:dm:${peerId}`;
     }
 
     const channel = ChannelKey.parse(input.channel);
     if (scope === "per_channel_peer") {
-      return `agent:${agentId}:${channel}:dm:${peerId}`;
+      return `agent:${agentKey}:${channel}:dm:${peerId}`;
     }
 
     const account = AccountId.parse(input.account ?? "default");
-    return `agent:${agentId}:${channel}:${account}:dm:${peerId}`;
+    return `agent:${agentKey}:${channel}:${account}:dm:${peerId}`;
   }
 
   const channel = ChannelKey.parse(input.channel);
   const account = AccountId.parse(input.account ?? "default");
   const id = ThreadId.parse(input.id);
-  return `agent:${agentId}:${channel}:${account}:${input.container}:${id}`;
+  return `agent:${agentKey}:${channel}:${account}:${input.container}:${id}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,15 +165,6 @@ export const AgentMainKey = z
   .string()
   .regex(/^agent:[^:]+:main$/, "agent main key must be agent:<agentId>:main");
 export type AgentMainKey = z.infer<typeof AgentMainKey>;
-
-// Legacy direct/shared key kept for backward compatibility.
-export const AgentLegacyMainKey = z
-  .string()
-  .regex(
-    /^agent:[^:]+:[^:]+:main$/,
-    "legacy agent main key must be agent:<agentId>:<channel>:main",
-  );
-export type AgentLegacyMainKey = z.infer<typeof AgentLegacyMainKey>;
 
 // Direct/per-peer: agent:<agentId>:dm:<peerId>
 export const AgentDmPerPeerKey = z
@@ -198,35 +207,15 @@ export const AgentChannelKey = z
   );
 export type AgentChannelKey = z.infer<typeof AgentChannelKey>;
 
-// Legacy group/channel keys (no explicit account) retained for compatibility.
-export const AgentLegacyGroupKey = z
-  .string()
-  .regex(
-    /^agent:[^:]+:[^:]+:group:[^:]+$/,
-    "legacy agent group key must be agent:<agentId>:<channel>:group:<id>",
-  );
-export type AgentLegacyGroupKey = z.infer<typeof AgentLegacyGroupKey>;
-
-export const AgentLegacyChannelKey = z
-  .string()
-  .regex(
-    /^agent:[^:]+:[^:]+:channel:[^:]+$/,
-    "legacy agent channel key must be agent:<agentId>:<channel>:channel:<id>",
-  );
-export type AgentLegacyChannelKey = z.infer<typeof AgentLegacyChannelKey>;
-
-export const AgentKey = z.union([
+export const AgentSessionKey = z.union([
   AgentMainKey,
-  AgentLegacyMainKey,
   AgentDmPerPeerKey,
   AgentDmPerChannelPeerKey,
   AgentDmPerAccountChannelPeerKey,
   AgentGroupKey,
   AgentChannelKey,
-  AgentLegacyGroupKey,
-  AgentLegacyChannelKey,
 ]);
-export type AgentKey = z.infer<typeof AgentKey>;
+export type AgentSessionKey = z.infer<typeof AgentSessionKey>;
 
 export const CronKey = z.string().regex(/^cron:[^:]+$/, "cron key must be cron:<jobId>");
 export type CronKey = z.infer<typeof CronKey>;
@@ -241,7 +230,7 @@ export type HookKey = z.infer<typeof HookKey>;
 export const NodeKey = z.string().regex(/^node:[^:]+$/, "node key must be node:<nodeId>");
 export type NodeKey = z.infer<typeof NodeKey>;
 
-export const TyrumKey = z.union([AgentKey, CronKey, HookKey, NodeKey]);
+export const TyrumKey = z.union([AgentSessionKey, CronKey, HookKey, NodeKey]);
 export type TyrumKey = z.infer<typeof TyrumKey>;
 
 // ---------------------------------------------------------------------------
@@ -261,20 +250,19 @@ export type QueueMode = z.infer<typeof QueueMode>;
 export type ParsedTyrumKey =
   | {
       kind: "agent";
-      agent_id: AgentId;
+      agent_key: AgentKey;
       thread_kind: "main";
-      channel?: ChannelKey;
     }
   | {
       kind: "agent";
-      agent_id: AgentId;
+      agent_key: AgentKey;
       thread_kind: "dm";
       dm_scope: "per_peer";
       peer_id: PeerId;
     }
   | {
       kind: "agent";
-      agent_id: AgentId;
+      agent_key: AgentKey;
       thread_kind: "dm";
       dm_scope: "per_channel_peer";
       channel: ChannelKey;
@@ -282,7 +270,7 @@ export type ParsedTyrumKey =
     }
   | {
       kind: "agent";
-      agent_id: AgentId;
+      agent_key: AgentKey;
       thread_kind: "dm";
       dm_scope: "per_account_channel_peer";
       channel: ChannelKey;
@@ -291,7 +279,7 @@ export type ParsedTyrumKey =
     }
   | {
       kind: "agent";
-      agent_id: AgentId;
+      agent_key: AgentKey;
       channel: ChannelKey;
       account?: AccountId;
       thread_kind: "group";
@@ -299,7 +287,7 @@ export type ParsedTyrumKey =
     }
   | {
       kind: "agent";
-      agent_id: AgentId;
+      agent_key: AgentKey;
       channel: ChannelKey;
       account?: AccountId;
       thread_kind: "channel";
@@ -315,8 +303,8 @@ export function parseTyrumKey(key: TyrumKey): ParsedTyrumKey {
 
   switch (kind) {
     case "agent": {
-      const agentId = parts[1];
-      if (!agentId) {
+      const agentKey = parts[1];
+      if (!agentKey) {
         throw new Error(`invalid agent key: ${key}`);
       }
 
@@ -324,17 +312,7 @@ export function parseTyrumKey(key: TyrumKey): ParsedTyrumKey {
       if (parts.length === 3 && parts[2] === "main") {
         return {
           kind: "agent",
-          agent_id: AgentId.parse(agentId),
-          thread_kind: "main",
-        };
-      }
-
-      // legacy: agent:<agentId>:<channel>:main
-      if (parts.length === 4 && parts[3] === "main") {
-        return {
-          kind: "agent",
-          agent_id: AgentId.parse(agentId),
-          channel: ChannelKey.parse(parts[2]),
+          agent_key: AgentKey.parse(agentKey),
           thread_kind: "main",
         };
       }
@@ -343,7 +321,7 @@ export function parseTyrumKey(key: TyrumKey): ParsedTyrumKey {
       if (parts.length === 4 && parts[2] === "dm") {
         return {
           kind: "agent",
-          agent_id: AgentId.parse(agentId),
+          agent_key: AgentKey.parse(agentKey),
           thread_kind: "dm",
           dm_scope: "per_peer",
           peer_id: PeerId.parse(parts[3]),
@@ -354,7 +332,7 @@ export function parseTyrumKey(key: TyrumKey): ParsedTyrumKey {
       if (parts.length === 5 && parts[3] === "dm") {
         return {
           kind: "agent",
-          agent_id: AgentId.parse(agentId),
+          agent_key: AgentKey.parse(agentKey),
           thread_kind: "dm",
           dm_scope: "per_channel_peer",
           channel: ChannelKey.parse(parts[2]),
@@ -362,22 +340,11 @@ export function parseTyrumKey(key: TyrumKey): ParsedTyrumKey {
         };
       }
 
-      // legacy: agent:<agentId>:<channel>:group|channel:<id>
-      if (parts.length === 5 && (parts[3] === "group" || parts[3] === "channel")) {
-        return {
-          kind: "agent",
-          agent_id: AgentId.parse(agentId),
-          channel: ChannelKey.parse(parts[2]),
-          thread_kind: parts[3],
-          id: ThreadId.parse(parts[4]),
-        };
-      }
-
       // agent:<agentId>:<channel>:<account>:dm:<peerId>
       if (parts.length === 6 && parts[4] === "dm") {
         return {
           kind: "agent",
-          agent_id: AgentId.parse(agentId),
+          agent_key: AgentKey.parse(agentKey),
           thread_kind: "dm",
           dm_scope: "per_account_channel_peer",
           channel: ChannelKey.parse(parts[2]),
@@ -390,7 +357,7 @@ export function parseTyrumKey(key: TyrumKey): ParsedTyrumKey {
       if (parts.length === 6 && (parts[4] === "group" || parts[4] === "channel")) {
         return {
           kind: "agent",
-          agent_id: AgentId.parse(agentId),
+          agent_key: AgentKey.parse(agentKey),
           channel: ChannelKey.parse(parts[2]),
           account: AccountId.parse(parts[3]),
           thread_kind: parts[4],

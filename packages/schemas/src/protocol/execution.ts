@@ -380,7 +380,7 @@ export const WsAuditLink = z
   .object({
     plan_id: z.string().min(1),
     step_index: z.number().int().nonnegative(),
-    event_id: z.number().int().positive(),
+    event_id: z.number().int().nonnegative(),
   })
   .strict();
 export type WsAuditLink = z.infer<typeof WsAuditLink>;

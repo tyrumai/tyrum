@@ -1,9 +1,8 @@
 /**
- * Auth profile routes — durable provider credentials (by secret handle).
+ * Auth profile routes — durable provider credentials (tenant-scoped).
  */
 
 import { Hono } from "hono";
-import { randomUUID } from "node:crypto";
 import {
   AuthProfile,
   AuthProfileCreateRequest,
@@ -16,25 +15,42 @@ import {
   SessionProviderPinListResponse,
   SessionProviderPinSetRequest,
 } from "@tyrum/schemas";
-import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
-import type { SessionProviderPinDal } from "../modules/models/session-pin-dal.js";
+import type { AuthProfileDal, AuthProfileRow } from "../modules/models/auth-profile-dal.js";
+import type {
+  SessionProviderPinDal,
+  SessionProviderPinRow,
+} from "../modules/models/session-pin-dal.js";
+import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 
 export interface AuthProfileRouteDeps {
   authProfileDal: AuthProfileDal;
   pinDal: SessionProviderPinDal;
 }
 
+function toContractProfile(row: AuthProfileRow) {
+  const { tenant_id: _tenantId, ...rest } = row;
+  return AuthProfile.parse(rest);
+}
+
+function toContractPin(row: SessionProviderPinRow) {
+  const { tenant_id: _tenantId, ...rest } = row;
+  return SessionProviderPin.parse(rest);
+}
+
 export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
   const app = new Hono();
 
   app.get("/auth/profiles", async (c) => {
-    const agentId = c.req.query("agent_id")?.trim() || undefined;
-    const provider = c.req.query("provider")?.trim() || undefined;
+    const providerKey = c.req.query("provider_key")?.trim() || undefined;
     const statusRaw = c.req.query("status")?.trim();
     const status = statusRaw === "active" || statusRaw === "disabled" ? statusRaw : undefined;
 
-    const rows = await deps.authProfileDal.list({ agentId, provider, status });
-    const profiles = rows.map((r) => AuthProfile.parse(r));
+    const rows = await deps.authProfileDal.list({
+      tenantId: DEFAULT_TENANT_ID,
+      providerKey,
+      status,
+    });
+    const profiles = rows.map(toContractProfile);
     return c.json(AuthProfileListResponse.parse({ profiles }));
   });
 
@@ -45,89 +61,89 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    const profileId = randomUUID();
-    const agentId = parsed.data.agent_id?.trim() || "default";
-
     const row = await deps.authProfileDal.create({
-      profileId,
-      agentId,
-      provider: parsed.data.provider,
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: parsed.data.auth_profile_key,
+      providerKey: parsed.data.provider_key,
       type: parsed.data.type,
-      secretHandles: parsed.data.secret_handles,
+      secretKeys: parsed.data.secret_keys,
       labels: parsed.data.labels,
-      expiresAt: parsed.data.expires_at ?? null,
-      createdBy: parsed.data.created_by,
     });
 
-    const profile = AuthProfile.parse(row);
+    const profile = toContractProfile(row);
     return c.json(AuthProfileCreateResponse.parse({ profile }), 201);
   });
 
-  app.patch("/auth/profiles/:id", async (c) => {
-    const id = c.req.param("id");
+  app.patch("/auth/profiles/:key", async (c) => {
+    const authProfileKey = c.req.param("key");
     const body = (await c.req.json()) as unknown;
     const parsed = AuthProfileUpdateRequest.safeParse(body);
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    const updated = await deps.authProfileDal.updateProfile(id, {
+    const updated = await deps.authProfileDal.updateByKey({
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey,
       labels: parsed.data.labels,
-      expiresAt: parsed.data.expires_at,
-      updatedBy: parsed.data.updated_by,
+      secretKeys: parsed.data.secret_keys,
     });
     if (!updated) {
       return c.json({ error: "not_found", message: "profile not found" }, 404);
     }
 
-    return c.json({ status: "ok", profile: AuthProfile.parse(updated) });
+    return c.json({ status: "ok", profile: toContractProfile(updated) });
   });
 
-  app.post("/auth/profiles/:id/disable", async (c) => {
-    const id = c.req.param("id");
+  app.post("/auth/profiles/:key/disable", async (c) => {
+    const authProfileKey = c.req.param("key");
     const body = (await c.req.json()) as unknown;
     const parsed = AuthProfileDisableRequest.safeParse(body);
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
+    void parsed;
 
-    const updated = await deps.authProfileDal.disableProfile(id, {
-      reason: parsed.data.reason,
-      updatedBy: parsed.data.updated_by,
+    const updated = await deps.authProfileDal.disableByKey({
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey,
     });
     if (!updated) {
       return c.json({ error: "not_found", message: "profile not found" }, 404);
     }
 
-    return c.json({ status: "ok", profile: AuthProfile.parse(updated) });
+    return c.json({ status: "ok", profile: toContractProfile(updated) });
   });
 
-  app.post("/auth/profiles/:id/enable", async (c) => {
-    const id = c.req.param("id");
+  app.post("/auth/profiles/:key/enable", async (c) => {
+    const authProfileKey = c.req.param("key");
     const body = (await c.req.json()) as unknown;
     const parsed = AuthProfileEnableRequest.safeParse(body);
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
+    void parsed;
 
-    const updated = await deps.authProfileDal.enableProfile(id, {
-      updatedBy: parsed.data.updated_by,
+    const updated = await deps.authProfileDal.enableByKey({
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey,
     });
     if (!updated) {
       return c.json({ error: "not_found", message: "profile not found" }, 404);
     }
 
-    return c.json({ status: "ok", profile: AuthProfile.parse(updated) });
+    return c.json({ status: "ok", profile: toContractProfile(updated) });
   });
 
   app.get("/auth/pins", async (c) => {
-    const agentId = c.req.query("agent_id")?.trim() || undefined;
     const sessionId = c.req.query("session_id")?.trim() || undefined;
-    const provider = c.req.query("provider")?.trim() || undefined;
-    const pins = await deps.pinDal.list({ agentId, sessionId, provider });
-    return c.json(
-      SessionProviderPinListResponse.parse({ pins: pins.map((p) => SessionProviderPin.parse(p)) }),
-    );
+    const providerKey = c.req.query("provider_key")?.trim() || undefined;
+    const pins = await deps.pinDal.list({
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId,
+      providerKey,
+    });
+    return c.json(SessionProviderPinListResponse.parse({ pins: pins.map(toContractPin) }));
   });
 
   app.post("/auth/pins", async (c) => {
@@ -137,23 +153,30 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    const agentId = parsed.data.agent_id?.trim() || "default";
-    if (parsed.data.profile_id === null) {
+    if (parsed.data.auth_profile_key === null) {
       const cleared = await deps.pinDal.clear({
-        agentId,
+        tenantId: DEFAULT_TENANT_ID,
         sessionId: parsed.data.session_id,
-        provider: parsed.data.provider,
+        providerKey: parsed.data.provider_key,
       });
       return c.json({ status: "ok", cleared });
     }
 
-    const pin = await deps.pinDal.upsert({
-      agentId,
-      sessionId: parsed.data.session_id,
-      provider: parsed.data.provider,
-      profileId: parsed.data.profile_id,
+    const profile = await deps.authProfileDal.getByKey({
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: parsed.data.auth_profile_key,
     });
-    return c.json({ status: "ok", pin: SessionProviderPin.parse(pin) }, 201);
+    if (!profile) {
+      return c.json({ error: "not_found", message: "profile not found" }, 404);
+    }
+
+    const pin = await deps.pinDal.upsert({
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: parsed.data.session_id,
+      providerKey: parsed.data.provider_key,
+      authProfileId: profile.auth_profile_id,
+    });
+    return c.json({ status: "ok", pin: toContractPin(pin) }, 201);
   });
 
   return app;

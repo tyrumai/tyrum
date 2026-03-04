@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 
-export const SecretProviderKind = z.enum(["env", "file", "keychain"]);
+export const SecretProviderKind = z.enum(["db"]);
 export type SecretProviderKind = z.infer<typeof SecretProviderKind>;
 
 export const SecretHandle = z
@@ -16,9 +16,11 @@ export type SecretHandle = z.infer<typeof SecretHandle>;
 
 export const SecretStoreRequest = z
   .object({
-    scope: z.string().trim().min(1),
-    value: z.string().optional(),
-    provider: SecretProviderKind.default("env"),
+    secret_key: z.string().trim().min(1),
+    value: z
+      .string()
+      .min(1)
+      .refine((value) => value.trim().length > 0, { message: "value is required" }),
   })
   .strict();
 export type SecretStoreRequest = z.infer<typeof SecretStoreRequest>;

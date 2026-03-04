@@ -32,6 +32,7 @@ describe("LaneQueueSignalDal", () => {
     });
 
     await signals.setSignal({
+      tenant_id: row.tenant_id,
       key: row.key,
       lane: row.lane,
       kind: "steer",
@@ -41,11 +42,16 @@ describe("LaneQueueSignalDal", () => {
       created_at_ms: 1_000,
     });
 
-    const claimed = await signals.claimSignal({ key: row.key, lane: row.lane });
+    const claimed = await signals.claimSignal({
+      tenant_id: row.tenant_id,
+      key: row.key,
+      lane: row.lane,
+    });
     expect(claimed?.kind).toBe("steer");
 
     const updated = await inbox.getById(row.inbox_id);
-    expect(updated?.status).toBe("completed");
+    // Queue-only semantics: steer-only rows are removed once processed.
+    expect(updated).toBeUndefined();
   });
 
   it("completes steer-only inbox rows even if they are processing", async () => {
@@ -69,6 +75,7 @@ describe("LaneQueueSignalDal", () => {
     expect(claimed?.status).toBe("processing");
 
     await signals.setSignal({
+      tenant_id: row.tenant_id,
       key: row.key,
       lane: row.lane,
       kind: "steer",
@@ -78,13 +85,16 @@ describe("LaneQueueSignalDal", () => {
       created_at_ms: 1_100,
     });
 
-    const steerSignal = await signals.claimSignal({ key: row.key, lane: row.lane });
+    const steerSignal = await signals.claimSignal({
+      tenant_id: row.tenant_id,
+      key: row.key,
+      lane: row.lane,
+    });
     expect(steerSignal?.kind).toBe("steer");
 
     const updated = await inbox.getById(row.inbox_id);
-    expect(updated?.status).toBe("completed");
-    expect(updated?.lease_owner).toBeNull();
-    expect(updated?.lease_expires_at_ms).toBeNull();
+    // Queue-only semantics: steer-only rows are removed once processed.
+    expect(updated).toBeUndefined();
   });
 
   it("claims steer but preserves steer_backlog inbox rows", async () => {
@@ -100,6 +110,7 @@ describe("LaneQueueSignalDal", () => {
     });
 
     await signals.setSignal({
+      tenant_id: row.tenant_id,
       key: row.key,
       lane: row.lane,
       kind: "steer",
@@ -109,7 +120,11 @@ describe("LaneQueueSignalDal", () => {
       created_at_ms: 1_000,
     });
 
-    const claimed = await signals.claimSignal({ key: row.key, lane: row.lane });
+    const claimed = await signals.claimSignal({
+      tenant_id: row.tenant_id,
+      key: row.key,
+      lane: row.lane,
+    });
     expect(claimed?.kind).toBe("steer");
 
     const updated = await inbox.getById(row.inbox_id);

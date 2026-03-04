@@ -8,7 +8,6 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
   type ActionPrimitive,
-  WsSessionDeleteResult,
 } from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import {
@@ -21,9 +20,11 @@ import {
 import { NodeNotPairedError } from "../../src/ws/protocol/errors.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
-import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
-import { resolveWorkspaceId } from "../../src/modules/workspace/id.js";
-import { ExecutionEngine } from "../../src/modules/execution/engine.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 // ---------------------------------------------------------------------------
 // Mock WebSocket helper
@@ -219,7 +220,6 @@ describe("handleClientMessage", () => {
           type: "command.execute",
           payload: {
             command: "/model openai/gpt-4.1",
-            agent_id: "default",
             channel: "ui",
             thread_id: "thread-1",
           },
@@ -230,7 +230,9 @@ describe("handleClientMessage", () => {
       expect(res).toBeDefined();
       expect((res as unknown as { ok: boolean }).ok).toBe(true);
       expect((res as unknown as { result: { data: unknown } }).result.data).toMatchObject({
-        session_id: "ui:thread-1",
+        session_id: expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+        ),
         model_id: "openai/gpt-4.1",
       });
     } finally {
@@ -458,19 +460,46 @@ describe("handleClientMessage", () => {
       const node = cm.getClient(nodeConnId)!;
 
       await db.run(
-        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?)`,
-        ["job-1", "agent:default", "default", "running", "{}"],
-      );
-      await db.run(
-        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-        ["550e8400-e29b-41d4-a716-446655440000", "job-1", "agent:default", "default", "running", 1],
-      );
-      await db.run(
-        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-       VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO execution_jobs (
+           tenant_id,
+           job_id,
+           agent_id,
+           workspace_id,
+           key,
+           lane,
+           status,
+           trigger_json
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
+          "job-1",
+          DEFAULT_AGENT_ID,
+          DEFAULT_WORKSPACE_ID,
+          "agent:default",
+          "main",
+          "running",
+          "{}",
+        ],
+      );
+      await db.run(
+        `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
+          "550e8400-e29b-41d4-a716-446655440000",
+          "job-1",
+          "agent:default",
+          "main",
+          "running",
+          1,
+        ],
+      );
+      await db.run(
+        `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
           "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           "550e8400-e29b-41d4-a716-446655440000",
           0,
@@ -479,9 +508,10 @@ describe("handleClientMessage", () => {
         ],
       );
       await db.run(
-        `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status, metadata_json)
-       VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, metadata_json)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
           "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
           "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           1,
@@ -584,19 +614,46 @@ describe("handleClientMessage", () => {
       const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
 
       await db.run(
-        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-         VALUES (?, ?, ?, ?, ?)`,
-        ["job-1", "agent:default", "default", "running", "{}"],
-      );
-      await db.run(
-        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        ["550e8400-e29b-41d4-a716-446655440000", "job-1", "agent:default", "default", "running", 1],
-      );
-      await db.run(
-        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO execution_jobs (
+           tenant_id,
+           job_id,
+           agent_id,
+           workspace_id,
+           key,
+           lane,
+           status,
+           trigger_json
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
+          "job-1",
+          DEFAULT_AGENT_ID,
+          DEFAULT_WORKSPACE_ID,
+          "agent:default",
+          "main",
+          "running",
+          "{}",
+        ],
+      );
+      await db.run(
+        `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
+          "550e8400-e29b-41d4-a716-446655440000",
+          "job-1",
+          "agent:default",
+          "main",
+          "running",
+          1,
+        ],
+      );
+      await db.run(
+        `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
           "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           "550e8400-e29b-41d4-a716-446655440000",
           0,
@@ -605,9 +662,10 @@ describe("handleClientMessage", () => {
         ],
       );
       await db.run(
-        `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status, metadata_json)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, metadata_json)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
           "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
           "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           1,
@@ -664,19 +722,46 @@ describe("handleClientMessage", () => {
       const node = cm.getClient(nodeConnId)!;
 
       await db.run(
-        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-         VALUES (?, ?, ?, ?, ?)`,
-        ["job-1", "agent:default", "default", "running", "{}"],
-      );
-      await db.run(
-        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        ["550e8400-e29b-41d4-a716-446655440000", "job-1", "agent:default", "default", "running", 1],
-      );
-      await db.run(
-        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO execution_jobs (
+           tenant_id,
+           job_id,
+           agent_id,
+           workspace_id,
+           key,
+           lane,
+           status,
+           trigger_json
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
+          "job-1",
+          DEFAULT_AGENT_ID,
+          DEFAULT_WORKSPACE_ID,
+          "agent:default",
+          "main",
+          "running",
+          "{}",
+        ],
+      );
+      await db.run(
+        `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
+          "550e8400-e29b-41d4-a716-446655440000",
+          "job-1",
+          "agent:default",
+          "main",
+          "running",
+          1,
+        ],
+      );
+      await db.run(
+        `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
           "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           "550e8400-e29b-41d4-a716-446655440000",
           0,
@@ -685,9 +770,10 @@ describe("handleClientMessage", () => {
         ],
       );
       await db.run(
-        `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status, metadata_json)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, metadata_json)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
           "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
           "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           1,
@@ -745,11 +831,12 @@ describe("handleClientMessage", () => {
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
+    const approvalId = "550e8400-e29b-41d4-a716-446655440000";
 
     const result = await handleClientMessage(
       client,
       JSON.stringify({
-        request_id: "approval-123",
+        request_id: `approval-${approvalId}`,
         type: "approval.request",
         ok: true,
         result: { approved: true },
@@ -758,7 +845,7 @@ describe("handleClientMessage", () => {
     );
 
     expect(result).toBeUndefined();
-    expect(onApprovalDecision).toHaveBeenCalledWith(123, true, undefined);
+    expect(onApprovalDecision).toHaveBeenCalledWith(approvalId, true, undefined);
   });
 
   it("dispatches approval.request rejection with reason", async () => {
@@ -767,11 +854,12 @@ describe("handleClientMessage", () => {
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
+    const approvalId = "6f9619ff-8b86-4d11-b42d-00c04fc964ff";
 
     await handleClientMessage(
       client,
       JSON.stringify({
-        request_id: "approval-124",
+        request_id: `approval-${approvalId}`,
         type: "approval.request",
         ok: true,
         result: { approved: false, reason: "too risky" },
@@ -779,7 +867,7 @@ describe("handleClientMessage", () => {
       deps,
     );
 
-    expect(onApprovalDecision).toHaveBeenCalledWith(124, false, "too risky");
+    expect(onApprovalDecision).toHaveBeenCalledWith(approvalId, false, "too risky");
   });
 
   it("forbids approval.request decisions when scoped device token lacks operator.approvals", async () => {
@@ -798,11 +886,12 @@ describe("handleClientMessage", () => {
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
+    const approvalId = "550e8400-e29b-41d4-a716-446655440000";
 
     const result = await handleClientMessage(
       client,
       JSON.stringify({
-        request_id: "approval-123",
+        request_id: `approval-${approvalId}`,
         type: "approval.request",
         ok: true,
         result: { approved: true },
@@ -834,11 +923,12 @@ describe("handleClientMessage", () => {
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
+    const approvalId = "550e8400-e29b-41d4-a716-446655440000";
 
     const result = await handleClientMessage(
       client,
       JSON.stringify({
-        request_id: "approval-200",
+        request_id: `approval-${approvalId}`,
         type: "approval.request",
         ok: false,
         error: { code: "invalid_request", message: "payload validation failed" },
@@ -860,11 +950,12 @@ describe("handleClientMessage", () => {
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
+    const approvalId = "550e8400-e29b-41d4-a716-446655440000";
 
     const result = await handleClientMessage(
       client,
       JSON.stringify({
-        request_id: "approval-200",
+        request_id: `approval-${approvalId}`,
         type: "approval.request",
         ok: false,
         error: { code: "invalid_request", message: "payload validation failed" },
@@ -886,11 +977,13 @@ describe("handleClientMessage", () => {
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
+    const approvalId = "550e8400-e29b-41d4-a716-446655440000";
+    const requestId = `approval-${approvalId}`;
 
     const result = await handleClientMessage(
       client,
       JSON.stringify({
-        request_id: "approval-200",
+        request_id: requestId,
         type: "approval.request",
         ok: false,
         error: { code: "invalid_request", message: "payload validation failed" },
@@ -903,7 +996,7 @@ describe("handleClientMessage", () => {
     expect(result!.type).toBe("error");
     const payload = (result as unknown as { payload: { code: string; message: string } }).payload;
     expect(payload.code).toBe("approval_request_failed");
-    expect(payload.message).toContain("approval-200");
+    expect(payload.message).toContain(requestId);
     expect(payload.message).toContain("payload validation failed");
   });
 
@@ -913,11 +1006,12 @@ describe("handleClientMessage", () => {
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
+    const approvalId = "550e8400-e29b-41d4-a716-446655440000";
 
     const result = await handleClientMessage(
       client,
       JSON.stringify({
-        request_id: "approval-125",
+        request_id: `approval-${approvalId}`,
         type: "approval.request",
         ok: true,
         result: { approved: "yes" },
@@ -981,21 +1075,33 @@ describe("handleClientMessage", () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
+    const approvalId = "00000000-0000-4000-8000-0000000000aa";
 
     const approvalDal = {
       getPending: vi.fn(async () => {
         return [
           {
-            id: 1,
-            plan_id: "p-1",
-            step_index: 0,
+            tenant_id: DEFAULT_TENANT_ID,
+            approval_id: approvalId,
+            approval_key: `approval:${approvalId}`,
+            agent_id: DEFAULT_AGENT_ID,
+            workspace_id: DEFAULT_WORKSPACE_ID,
+            kind: "policy",
+            status: "pending",
             prompt: "Approve?",
             context: { x: 1 },
-            status: "pending",
             created_at: "2026-02-20 22:00:00",
-            responded_at: null,
-            response_reason: null,
             expires_at: null,
+            resolved_at: null,
+            resolution: null,
+            session_id: null,
+            plan_id: null,
+            run_id: null,
+            step_id: null,
+            attempt_id: null,
+            work_item_id: null,
+            work_item_task_id: null,
+            resume_token: null,
           },
         ];
       }),
@@ -1019,10 +1125,11 @@ describe("handleClientMessage", () => {
     expect((result as unknown as { ok: boolean }).ok).toBe(true);
     const res = result as unknown as {
       result: {
-        approvals: Array<{ approval_id: number; created_at: string; resolution: unknown }>;
+        approvals: Array<{ approval_id: string; created_at: string; resolution: unknown }>;
       };
     };
-    expect(res.result.approvals[0]!.approval_id).toBe(1);
+    expect(res.result.approvals).toHaveLength(1);
+    expect(res.result.approvals[0]!.approval_id).toBe(approvalId);
     expect(res.result.approvals[0]!.created_at).toContain("T");
     expect(res.result.approvals[0]!.created_at).toContain("Z");
     expect(res.result.approvals[0]!.resolution).toBeNull();
@@ -1060,22 +1167,38 @@ describe("handleClientMessage", () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
+    const approvalId = "00000000-0000-4000-8000-0000000000ab";
 
     const approvalDal = {
       getPending: vi.fn(async () => []),
       getByStatus: vi.fn(async () => []),
       respond: vi.fn(async () => {
         return {
-          id: 2,
-          plan_id: "p-2",
-          step_index: 1,
+          tenant_id: DEFAULT_TENANT_ID,
+          approval_id: approvalId,
+          approval_key: `approval:${approvalId}`,
+          agent_id: DEFAULT_AGENT_ID,
+          workspace_id: DEFAULT_WORKSPACE_ID,
+          kind: "policy",
+          status: "approved",
           prompt: "Ok?",
           context: {},
-          status: "approved",
           created_at: "2026-02-20 22:00:00",
-          responded_at: "2026-02-20 22:00:05",
-          response_reason: "looks good",
           expires_at: null,
+          resolved_at: "2026-02-20 22:00:05",
+          resolution: {
+            decision: "approved",
+            resolved_at: "2026-02-20T22:00:05Z",
+            reason: "looks good",
+          },
+          session_id: null,
+          plan_id: null,
+          run_id: null,
+          step_id: null,
+          attempt_id: null,
+          work_item_id: null,
+          work_item_task_id: null,
+          resume_token: null,
         };
       }),
     };
@@ -1087,7 +1210,7 @@ describe("handleClientMessage", () => {
       JSON.stringify({
         request_id: "r-2",
         type: "approval.resolve",
-        payload: { approval_id: 2, decision: "approved", reason: "looks good" },
+        payload: { approval_id: approvalId, decision: "approved", reason: "looks good" },
       }),
       deps,
     );
@@ -1096,10 +1219,10 @@ describe("handleClientMessage", () => {
     expect((result as unknown as { ok: boolean }).ok).toBe(true);
     const res = result as unknown as {
       result: {
-        approval: { approval_id: number; status: string; resolution: { decision: string } };
+        approval: { approval_id: string; status: string; resolution: { decision: string } };
       };
     };
-    expect(res.result.approval.approval_id).toBe(2);
+    expect(res.result.approval.approval_id).toBe(approvalId);
     expect(res.result.approval.status).toBe("approved");
     expect(res.result.approval.resolution.decision).toBe("approved");
   });
@@ -1108,44 +1231,75 @@ describe("handleClientMessage", () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
+    const approvalId = "00000000-0000-4000-8000-0000000000ac";
 
     const approvalDal = {
       getPending: vi.fn(async () => []),
       getByStatus: vi.fn(async () => []),
       getById: vi.fn(async () => {
         return {
-          id: 2,
-          plan_id: "p-2",
-          step_index: 1,
+          tenant_id: DEFAULT_TENANT_ID,
+          approval_id: approvalId,
+          approval_key: `approval:${approvalId}`,
+          agent_id: DEFAULT_AGENT_ID,
+          workspace_id: DEFAULT_WORKSPACE_ID,
+          kind: "policy",
+          status: "pending",
           prompt: "Ok?",
           context: {
             policy: {
-              agent_id: "agent-1",
+              agent_id: DEFAULT_AGENT_ID,
               policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
               suggested_overrides: [
-                { tool_id: "tool.exec", pattern: "echo hi", workspace_id: "default" },
+                {
+                  tool_id: "tool.exec",
+                  pattern: "echo hi",
+                  workspace_id: DEFAULT_WORKSPACE_ID,
+                },
               ],
             },
           },
-          status: "pending",
           created_at: "2026-02-20 22:00:00",
-          responded_at: null,
-          response_reason: null,
           expires_at: null,
+          resolved_at: null,
+          resolution: null,
+          session_id: null,
+          plan_id: null,
+          run_id: null,
+          step_id: null,
+          attempt_id: null,
+          work_item_id: null,
+          work_item_task_id: null,
+          resume_token: null,
         };
       }),
       respond: vi.fn(async () => {
         return {
-          id: 2,
-          plan_id: "p-2",
-          step_index: 1,
+          tenant_id: DEFAULT_TENANT_ID,
+          approval_id: approvalId,
+          approval_key: `approval:${approvalId}`,
+          agent_id: DEFAULT_AGENT_ID,
+          workspace_id: DEFAULT_WORKSPACE_ID,
+          kind: "policy",
+          status: "denied",
           prompt: "Ok?",
           context: {},
-          status: "denied",
           created_at: "2026-02-20 22:00:00",
-          responded_at: "2026-02-20 22:00:05",
-          response_reason: "no",
           expires_at: null,
+          resolved_at: "2026-02-20 22:00:05",
+          resolution: {
+            decision: "denied",
+            resolved_at: "2026-02-20T22:00:05Z",
+            reason: "no",
+          },
+          session_id: null,
+          plan_id: null,
+          run_id: null,
+          step_id: null,
+          attempt_id: null,
+          work_item_id: null,
+          work_item_task_id: null,
+          resume_token: null,
         };
       }),
     };
@@ -1157,11 +1311,11 @@ describe("handleClientMessage", () => {
           status: "active",
           created_at: new Date().toISOString(),
           created_by: { kind: "ws" },
-          agent_id: "agent-1",
-          workspace_id: "default",
+          agent_id: DEFAULT_AGENT_ID,
+          workspace_id: DEFAULT_WORKSPACE_ID,
           tool_id: "tool.exec",
           pattern: "echo hi",
-          created_from_approval_id: 2,
+          created_from_approval_id: approvalId,
           created_from_policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
         };
       }),
@@ -1178,10 +1332,12 @@ describe("handleClientMessage", () => {
         request_id: "r-3",
         type: "approval.resolve",
         payload: {
-          approval_id: 2,
+          approval_id: approvalId,
           decision: "approved",
           mode: "always",
-          overrides: [{ tool_id: "tool.exec", pattern: "echo hi", workspace_id: "default" }],
+          overrides: [
+            { tool_id: "tool.exec", pattern: "echo hi", workspace_id: DEFAULT_WORKSPACE_ID },
+          ],
         },
       }),
       deps,
@@ -1201,44 +1357,75 @@ describe("handleClientMessage", () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
+    const approvalId = "00000000-0000-4000-8000-0000000000ad";
 
     const approvalDal = {
       getPending: vi.fn(async () => []),
       getByStatus: vi.fn(async () => []),
       getById: vi.fn(async () => {
         return {
-          id: 2,
-          plan_id: "p-2",
-          step_index: 1,
+          tenant_id: DEFAULT_TENANT_ID,
+          approval_id: approvalId,
+          approval_key: `approval:${approvalId}`,
+          agent_id: DEFAULT_AGENT_ID,
+          workspace_id: DEFAULT_WORKSPACE_ID,
+          kind: "policy",
+          status: "pending",
           prompt: "Ok?",
           context: {
             policy: {
-              agent_id: "agent-1",
+              agent_id: DEFAULT_AGENT_ID,
               policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
               suggested_overrides: [
-                { tool_id: "tool.exec", pattern: "echo *", workspace_id: "default" },
+                {
+                  tool_id: "tool.exec",
+                  pattern: "echo *",
+                  workspace_id: DEFAULT_WORKSPACE_ID,
+                },
               ],
             },
           },
-          status: "pending",
           created_at: "2026-02-20 22:00:00",
-          responded_at: null,
-          response_reason: null,
           expires_at: null,
+          resolved_at: null,
+          resolution: null,
+          session_id: null,
+          plan_id: null,
+          run_id: null,
+          step_id: null,
+          attempt_id: null,
+          work_item_id: null,
+          work_item_task_id: null,
+          resume_token: null,
         };
       }),
       respond: vi.fn(async () => {
         return {
-          id: 2,
-          plan_id: "p-2",
-          step_index: 1,
+          tenant_id: DEFAULT_TENANT_ID,
+          approval_id: approvalId,
+          approval_key: `approval:${approvalId}`,
+          agent_id: DEFAULT_AGENT_ID,
+          workspace_id: DEFAULT_WORKSPACE_ID,
+          kind: "policy",
+          status: "approved",
           prompt: "Ok?",
           context: {},
-          status: "approved",
           created_at: "2026-02-20 22:00:00",
-          responded_at: "2026-02-20 22:00:05",
-          response_reason: "looks good",
           expires_at: null,
+          resolved_at: "2026-02-20 22:00:05",
+          resolution: {
+            decision: "approved",
+            resolved_at: "2026-02-20T22:00:05Z",
+            reason: "looks good",
+          },
+          session_id: null,
+          plan_id: null,
+          run_id: null,
+          step_id: null,
+          attempt_id: null,
+          work_item_id: null,
+          work_item_task_id: null,
+          resume_token: null,
         };
       }),
     };
@@ -1250,11 +1437,11 @@ describe("handleClientMessage", () => {
           status: "active",
           created_at: new Date().toISOString(),
           created_by: { kind: "ws" },
-          agent_id: "agent-1",
-          workspace_id: "default",
+          agent_id: DEFAULT_AGENT_ID,
+          workspace_id: DEFAULT_WORKSPACE_ID,
           tool_id: "tool.exec",
           pattern: "echo *",
-          created_from_approval_id: 2,
+          created_from_approval_id: approvalId,
           created_from_policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
         };
       }),
@@ -1271,10 +1458,12 @@ describe("handleClientMessage", () => {
         request_id: "r-4",
         type: "approval.resolve",
         payload: {
-          approval_id: 2,
+          approval_id: approvalId,
           decision: "approved",
           mode: "always",
-          overrides: [{ tool_id: "tool.exec", pattern: "echo *", workspace_id: "default" }],
+          overrides: [
+            { tool_id: "tool.exec", pattern: "echo *", workspace_id: DEFAULT_WORKSPACE_ID },
+          ],
         },
       }),
       deps,
@@ -1523,909 +1712,6 @@ describe("handleClientMessage", () => {
     expect((result as unknown as { ok: boolean }).ok).toBe(true);
     expect((result as unknown as { type: string }).type).toBe("ping");
   });
-
-  it("creates ui sessions via session.create", async () => {
-    const db = openTestSqliteDb();
-    try {
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({ request_id: "r-session-create-1", type: "session.create", payload: {} }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(true);
-      expect((result as unknown as { type: string }).type).toBe("session.create");
-
-      const created = (result as unknown as { result: { session_id: string; thread_id: string } })
-        .result;
-      expect(created.session_id).toMatch(/^ui:/);
-      expect(created.thread_id).toMatch(/^ui-/);
-
-      const row = await db.get<{ channel: string; thread_id: string }>(
-        `SELECT channel, thread_id
-         FROM sessions
-         WHERE agent_id = ? AND session_id = ?`,
-        ["default", created.session_id],
-      );
-      expect(row).toEqual({ channel: "ui", thread_id: created.thread_id });
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("returns an error response when session.create hits a db error", async () => {
-    const db = openTestSqliteDb();
-    try {
-      await db.exec("DROP TABLE sessions");
-
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-session-create-db-error-1",
-          type: "session.create",
-          payload: {},
-        }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(false);
-      expect((result as unknown as { type: string }).type).toBe("session.create");
-      expect((result as unknown as { error: { code: string } }).error.code).toBe("internal_error");
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("lists ui sessions via session.list ordered by updated_at desc", async () => {
-    const db = openTestSqliteDb();
-    try {
-      const nowIso = new Date().toISOString();
-      const pastIso = new Date(Date.now() - 60_000).toISOString();
-
-      await db.run(
-        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
-        ["default", "ui:thread-old", "ui", "thread-old", pastIso, pastIso],
-      );
-      await db.run(
-        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
-        ["default", "ui:thread-new", "ui", "thread-new", nowIso, nowIso],
-      );
-      await db.run(
-        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
-        ["default", "telegram:dm-1", "telegram", "dm-1", nowIso, nowIso],
-      );
-
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({ request_id: "r-session-list-1", type: "session.list", payload: {} }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(true);
-      const sessions = (
-        result as unknown as { result: { sessions: Array<{ session_id: string }> } }
-      ).result.sessions;
-      expect(sessions.map((s) => s.session_id)).toEqual(["ui:thread-new", "ui:thread-old"]);
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("rejects invalid session.list cursors", async () => {
-    const db = openTestSqliteDb();
-    try {
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-session-list-invalid-cursor-1",
-          type: "session.list",
-          payload: { cursor: "not-a-cursor" },
-        }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(false);
-      expect((result as unknown as { type: string }).type).toBe("session.list");
-      expect((result as unknown as { error: { code: string } }).error.code).toBe("invalid_request");
-      expect((result as unknown as { error: { message: string } }).error.message).toBe(
-        "invalid cursor",
-      );
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("returns an error response when session.list response schema parsing fails", async () => {
-    const db = openTestSqliteDb();
-    try {
-      await db.run(
-        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
-        [
-          "default",
-          "ui:thread-bad-datetime",
-          "ui",
-          "thread-bad-datetime",
-          "not-a-date",
-          "not-a-date",
-        ],
-      );
-
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-session-list-parse-fail-1",
-          type: "session.list",
-          payload: {},
-        }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(false);
-      expect((result as unknown as { type: string }).type).toBe("session.list");
-      expect((result as unknown as { error: { code: string } }).error.code).toBe("internal_error");
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("returns transcripts via session.get", async () => {
-    const db = openTestSqliteDb();
-    try {
-      const nowIso = new Date().toISOString();
-      await db.run(
-        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, '', ?, ?, ?)`,
-        [
-          "default",
-          "ui:thread-1",
-          "ui",
-          "thread-1",
-          JSON.stringify([
-            { role: "user", content: "hi", timestamp: nowIso },
-            { role: "assistant", content: "hello", timestamp: nowIso },
-          ]),
-          nowIso,
-          nowIso,
-        ],
-      );
-
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-session-get-1",
-          type: "session.get",
-          payload: { session_id: "ui:thread-1" },
-        }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(true);
-      expect((result as unknown as { type: string }).type).toBe("session.get");
-
-      const turns = (
-        result as unknown as {
-          result: { session: { turns: Array<{ role: string; content: string }> } };
-        }
-      ).result.session.turns;
-      expect(turns).toEqual([
-        { role: "user", content: "hi" },
-        { role: "assistant", content: "hello" },
-      ]);
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("returns an error response when session.get hits a db error", async () => {
-    const db = openTestSqliteDb();
-    try {
-      await db.exec("DROP TABLE sessions");
-
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-session-get-db-error-1",
-          type: "session.get",
-          payload: { session_id: "ui:thread-1" },
-        }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(false);
-      expect((result as unknown as { type: string }).type).toBe("session.get");
-      expect((result as unknown as { error: { code: string } }).error.code).toBe("internal_error");
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("compacts sessions via session.compact", async () => {
-    const db = openTestSqliteDb();
-    try {
-      const nowIso = new Date().toISOString();
-      const turns = Array.from({ length: 12 }, (_, idx) => ({
-        role: idx % 2 === 0 ? "user" : "assistant",
-        content: `msg-${idx}`,
-        timestamp: nowIso,
-      }));
-      await db.run(
-        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'prev', ?, ?, ?)`,
-        [
-          "default",
-          "ui:thread-compact",
-          "ui",
-          "thread-compact",
-          JSON.stringify(turns),
-          nowIso,
-          nowIso,
-        ],
-      );
-
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-session-compact-1",
-          type: "session.compact",
-          payload: { session_id: "ui:thread-compact", keep_last_messages: 4 },
-        }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(true);
-      expect((result as unknown as { type: string }).type).toBe("session.compact");
-      expect(
-        (result as unknown as { result: { dropped_messages: number; kept_messages: number } })
-          .result,
-      ).toMatchObject({ dropped_messages: 8, kept_messages: 4 });
-
-      const updated = await db.get<{ turns_json: string; summary: string }>(
-        `SELECT turns_json, summary
-         FROM sessions
-         WHERE agent_id = ? AND session_id = ?`,
-        ["default", "ui:thread-compact"],
-      );
-      expect(updated?.summary).toContain("prev");
-      expect(updated?.summary).toContain("msg-0");
-      expect(JSON.parse(updated?.turns_json ?? "[]")).toHaveLength(4);
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("returns an error response when session.compact hits a db error", async () => {
-    const db = openTestSqliteDb();
-    try {
-      await db.exec("DROP TABLE sessions");
-
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-session-compact-db-error-1",
-          type: "session.compact",
-          payload: { session_id: "ui:thread-compact", keep_last_messages: 4 },
-        }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(false);
-      expect((result as unknown as { type: string }).type).toBe("session.compact");
-      expect((result as unknown as { error: { code: string } }).error.code).toBe("internal_error");
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("deletes sessions via session.delete and clears overrides + cancels active work", async () => {
-    const db = openTestSqliteDb();
-    try {
-      const nowIso = new Date().toISOString();
-      const agentId = "agent-1";
-
-      await db.run(
-        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          agentId,
-          "ui:thread-1",
-          "ui",
-          "thread-1",
-          "to-delete",
-          JSON.stringify([{ role: "user", content: "hi", timestamp: "t-1" }]),
-          nowIso,
-          nowIso,
-        ],
-      );
-
-      await db.run(
-        `INSERT INTO session_model_overrides (agent_id, session_id, model_id, updated_at)
-         VALUES (?, ?, ?, ?)`,
-        [agentId, "ui:thread-1", "openai/gpt-4.1", nowIso],
-      );
-
-      await db.run(
-        `INSERT INTO auth_profiles (
-           profile_id,
-           agent_id,
-           provider,
-           type,
-           secret_handles_json,
-           status,
-           created_at,
-           updated_at
-         ) VALUES (?, ?, ?, 'api_key', ?, 'active', ?, ?)`,
-        [
-          "profile-openai-1",
-          agentId,
-          "openai",
-          JSON.stringify({ api_key_handle: "handle-openai-1" }),
-          nowIso,
-          nowIso,
-        ],
-      );
-
-      await db.run(
-        `INSERT INTO session_provider_pins (agent_id, session_id, provider, profile_id, pinned_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [agentId, "ui:thread-1", "openai", "profile-openai-1", nowIso, nowIso],
-      );
-
-      const key = `agent:${agentId}:ui:${agentId}:channel:thread-1`;
-      const lane = "main";
-
-      await db.run(
-        `INSERT INTO lane_queue_mode_overrides (key, lane, queue_mode, updated_at_ms)
-         VALUES (?, ?, 'interrupt', ?)`,
-        [key, lane, Date.now()],
-      );
-      await db.run(
-        `INSERT INTO session_send_policy_overrides (key, send_policy, updated_at_ms)
-         VALUES (?, 'off', ?)`,
-        [key, Date.now()],
-      );
-
-      await db.run(
-        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-         VALUES (?, ?, ?, 'running', '{}')`,
-        ["job-delete-1", key, lane],
-      );
-      await db.run(
-        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-         VALUES (?, ?, ?, ?, 'running', 1)`,
-        ["run-delete-1", "job-delete-1", key, lane],
-      );
-      await db.run(
-        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-         VALUES (?, ?, 0, 'running', '{}')`,
-        ["step-delete-1", "run-delete-1"],
-      );
-
-      await db.run(
-        `INSERT INTO channel_inbox (
-           source,
-           thread_id,
-           message_id,
-           key,
-           lane,
-           received_at_ms,
-           payload_json,
-           status
-         ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'queued')`,
-        ["ui", "thread-1", "msg-delete-queued", key, lane, 1_000],
-      );
-
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-session-delete-1",
-          type: "session.delete",
-          payload: { agent_id: agentId, session_id: "ui:thread-1" },
-        }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(true);
-      expect((result as unknown as { type: string }).type).toBe("session.delete");
-
-      const session = await db.get<{ session_id: string }>(
-        `SELECT session_id
-         FROM sessions
-         WHERE agent_id = ? AND session_id = ?`,
-        [agentId, "ui:thread-1"],
-      );
-      expect(session).toBeUndefined();
-
-      const modelOverride = await db.get<{ model_id: string }>(
-        `SELECT model_id
-         FROM session_model_overrides
-         WHERE agent_id = ? AND session_id = ?`,
-        [agentId, "ui:thread-1"],
-      );
-      expect(modelOverride).toBeUndefined();
-
-      const pin = await db.get<{ profile_id: string }>(
-        `SELECT profile_id
-         FROM session_provider_pins
-         WHERE agent_id = ? AND session_id = ?`,
-        [agentId, "ui:thread-1"],
-      );
-      expect(pin).toBeUndefined();
-
-      const queueOverride = await db.get<{ queue_mode: string }>(
-        `SELECT queue_mode
-         FROM lane_queue_mode_overrides
-         WHERE key = ? AND lane = ?`,
-        [key, lane],
-      );
-      expect(queueOverride).toBeUndefined();
-
-      const sendOverride = await db.get<{ send_policy: string }>(
-        `SELECT send_policy
-         FROM session_send_policy_overrides
-         WHERE key = ?`,
-        [key],
-      );
-      expect(sendOverride).toBeUndefined();
-
-      const run = await db.get<{ status: string }>(
-        `SELECT status
-         FROM execution_runs
-         WHERE run_id = ?`,
-        ["run-delete-1"],
-      );
-      expect(run?.status).toBe("cancelled");
-
-      const queued = await db.get<{ status: string; error: string | null }>(
-        `SELECT status, error
-         FROM channel_inbox
-         WHERE message_id = ?`,
-        ["msg-delete-queued"],
-      );
-      expect(queued?.status).toBe("failed");
-      expect(queued?.error).toContain("delete");
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("deletes sessions via session.delete and cancels work for non-UI sessions with account/container-scoped keys", async () => {
-    const db = openTestSqliteDb();
-    try {
-      const nowIso = new Date().toISOString();
-      const agentId = "agent-1";
-
-      const sessionId = "agent:agent-1:telegram:thread-1";
-      await db.run(
-        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [agentId, sessionId, "telegram", "thread-1", "to-delete", "[]", nowIso, nowIso],
-      );
-
-      const key = `agent:${agentId}:telegram:${agentId}~default:group:thread-1`;
-      const lane = "main";
-
-      await db.run(
-        `INSERT INTO lane_queue_mode_overrides (key, lane, queue_mode, updated_at_ms)
-         VALUES (?, ?, 'interrupt', ?)`,
-        [key, lane, Date.now()],
-      );
-      await db.run(
-        `INSERT INTO session_send_policy_overrides (key, send_policy, updated_at_ms)
-         VALUES (?, 'off', ?)`,
-        [key, Date.now()],
-      );
-
-      await db.run(
-        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-         VALUES (?, ?, ?, 'running', '{}')`,
-        ["job-delete-telegram-1", key, lane],
-      );
-      await db.run(
-        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-         VALUES (?, ?, ?, ?, 'running', 1)`,
-        ["run-delete-telegram-1", "job-delete-telegram-1", key, lane],
-      );
-      await db.run(
-        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-         VALUES (?, ?, 0, 'running', '{}')`,
-        ["step-delete-telegram-1", "run-delete-telegram-1"],
-      );
-
-      await db.run(
-        `INSERT INTO channel_inbox (
-           source,
-           thread_id,
-           message_id,
-           key,
-           lane,
-           received_at_ms,
-           payload_json,
-           status
-         ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'queued')`,
-        ["telegram", "thread-1", "msg-delete-telegram-queued", key, lane, 1_000],
-      );
-
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-session-delete-telegram-1",
-          type: "session.delete",
-          payload: { agent_id: agentId, session_id: sessionId },
-        }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(true);
-      expect((result as unknown as { type: string }).type).toBe("session.delete");
-
-      expect(
-        await db.get(`SELECT 1 FROM sessions WHERE agent_id = ? AND session_id = ?`, [
-          agentId,
-          sessionId,
-        ]),
-      ).toBeUndefined();
-
-      expect(
-        await db.get(`SELECT 1 FROM lane_queue_mode_overrides WHERE key = ? AND lane = ?`, [
-          key,
-          lane,
-        ]),
-      ).toBeUndefined();
-
-      expect(
-        await db.get(`SELECT 1 FROM session_send_policy_overrides WHERE key = ?`, [key]),
-      ).toBeUndefined();
-
-      const run = await db.get<{ status: string }>(
-        `SELECT status
-         FROM execution_runs
-         WHERE run_id = ?`,
-        ["run-delete-telegram-1"],
-      );
-      expect(run?.status).toBe("cancelled");
-
-      const queued = await db.get<{ status: string; error: string | null }>(
-        `SELECT status, error
-         FROM channel_inbox
-         WHERE message_id = ?`,
-        ["msg-delete-telegram-queued"],
-      );
-      expect(queued?.status).toBe("failed");
-      expect(queued?.error).toContain("delete");
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("clears queued channel_inbox items using resolveWorkspaceId() when no stored key exists", async () => {
-    const prevWorkspaceId = process.env.TYRUM_WORKSPACE_ID;
-    process.env.TYRUM_WORKSPACE_ID = "workspace-1";
-
-    const db = openTestSqliteDb();
-    try {
-      const nowIso = new Date().toISOString();
-      const agentId = "agent-1";
-      const sessionId = "ui:thread-fallback-1";
-      const threadId = "thread-fallback-1";
-
-      await db.run(
-        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [agentId, sessionId, "ui", threadId, "to-delete", "[]", nowIso, nowIso],
-      );
-
-      const key = buildAgentTurnKey({
-        agentId,
-        workspaceId: resolveWorkspaceId(),
-        channel: "ui",
-        containerKind: "channel",
-        threadId,
-      });
-      const lane = "main";
-      const messageId = "msg-delete-fallback-queued";
-
-      await db.run(
-        `INSERT INTO channel_inbox (
-           source,
-           thread_id,
-           message_id,
-           key,
-           lane,
-           received_at_ms,
-           payload_json,
-           status
-         ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'queued')`,
-        ["ui", threadId, messageId, key, lane, 1_000],
-      );
-
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-session-delete-fallback-1",
-          type: "session.delete",
-          payload: { agent_id: agentId, session_id: sessionId },
-        }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(true);
-
-      const queued = await db.get<{ status: string; error: string | null }>(
-        `SELECT status, error
-         FROM channel_inbox
-         WHERE message_id = ?`,
-        [messageId],
-      );
-      expect(queued?.status).toBe("failed");
-      expect(queued?.error).toContain("session.delete");
-    } finally {
-      if (typeof prevWorkspaceId === "string") {
-        process.env.TYRUM_WORKSPACE_ID = prevWorkspaceId;
-      } else {
-        delete process.env.TYRUM_WORKSPACE_ID;
-      }
-      await db.close();
-    }
-  });
-
-  it("uses deps.engine for session.delete cleanup when available", async () => {
-    const db = openTestSqliteDb();
-    try {
-      const nowIso = new Date().toISOString();
-
-      await db.run(
-        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
-        ["default", "ui:thread-delete-engine-1", "ui", "thread-delete-engine-1", nowIso, nowIso],
-      );
-
-      const key = buildAgentTurnKey({
-        agentId: "default",
-        workspaceId: resolveWorkspaceId(),
-        channel: "ui",
-        containerKind: "channel",
-        threadId: "thread-delete-engine-1",
-      });
-      const lane = "main";
-
-      await db.run(
-        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-         VALUES (?, ?, ?, 'running', '{}')`,
-        ["job-delete-engine-1", key, lane],
-      );
-      await db.run(
-        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-         VALUES (?, ?, ?, ?, 'running', 1)`,
-        ["run-delete-engine-1", "job-delete-engine-1", key, lane],
-      );
-
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const engine = new ExecutionEngine({ db, eventsEnabled: true });
-      const cancelSpy = vi.spyOn(engine, "cancelRun");
-      const deps = makeDeps(cm, { db, engine });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-session-delete-engine-1",
-          type: "session.delete",
-          payload: { session_id: "ui:thread-delete-engine-1" },
-        }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(true);
-      expect(cancelSpy).toHaveBeenCalledTimes(1);
-      expect(cancelSpy).toHaveBeenCalledWith("run-delete-engine-1", "deleted by session.delete");
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("returns an error response when session.delete key resolution hits a db error", async () => {
-    const db = openTestSqliteDb();
-    try {
-      const nowIso = new Date().toISOString();
-
-      await db.run(
-        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
-        ["default", "ui:thread-delete-keyerr", "ui", "thread-delete-keyerr", nowIso, nowIso],
-      );
-
-      await db.exec("DROP TABLE execution_runs");
-
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-session-delete-keyerr-1",
-          type: "session.delete",
-          payload: { session_id: "ui:thread-delete-keyerr" },
-        }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(false);
-      expect((result as unknown as { type: string }).type).toBe("session.delete");
-      expect((result as unknown as { error: { code: string } }).error.code).toBe("internal_error");
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("returns an error response when session.delete transaction fails", async () => {
-    const db = openTestSqliteDb();
-    try {
-      const nowIso = new Date().toISOString();
-
-      await db.run(
-        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
-        ["default", "ui:thread-delete-fail", "ui", "thread-delete-fail", nowIso, nowIso],
-      );
-
-      await db.exec("DROP TABLE session_provider_pins");
-
-      const cm = new ConnectionManager();
-      const { id } = makeClient(cm, ["cli"]);
-      const client = cm.getClient(id)!;
-      const deps = makeDeps(cm, { db });
-
-      const result = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-session-delete-fail-1",
-          type: "session.delete",
-          payload: { session_id: "ui:thread-delete-fail" },
-        }),
-        deps,
-      );
-
-      expect(result).toBeDefined();
-      expect((result as unknown as { ok: boolean }).ok).toBe(false);
-      expect((result as unknown as { type: string }).type).toBe("session.delete");
-      expect((result as unknown as { error: { code: string } }).error.code).toBe("internal_error");
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("returns an error response when session.delete response schema parsing fails", async () => {
-    const db = openTestSqliteDb();
-    try {
-      const nowIso = new Date().toISOString();
-
-      await db.run(
-        `INSERT INTO sessions (agent_id, session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
-        [
-          "default",
-          "ui:thread-delete-parse-fail",
-          "ui",
-          "thread-delete-parse-fail",
-          nowIso,
-          nowIso,
-        ],
-      );
-
-      const parseSpy = vi.spyOn(WsSessionDeleteResult, "parse").mockImplementation(() => {
-        throw new Error("parse boom");
-      });
-
-      try {
-        const cm = new ConnectionManager();
-        const { id } = makeClient(cm, ["cli"]);
-        const client = cm.getClient(id)!;
-        const deps = makeDeps(cm, { db });
-
-        const result = await handleClientMessage(
-          client,
-          JSON.stringify({
-            request_id: "r-session-delete-parse-fail-1",
-            type: "session.delete",
-            payload: { session_id: "ui:thread-delete-parse-fail" },
-          }),
-          deps,
-        );
-
-        expect(result).toBeDefined();
-        expect((result as unknown as { ok: boolean }).ok).toBe(false);
-        expect((result as unknown as { type: string }).type).toBe("session.delete");
-        expect((result as unknown as { error: { code: string } }).error.code).toBe(
-          "internal_error",
-        );
-      } finally {
-        parseSpy.mockRestore();
-      }
-    } finally {
-      await db.close();
-    }
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -2518,19 +1804,46 @@ describe("dispatchTask", () => {
     const db = openTestSqliteDb();
     try {
       await db.run(
-        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-         VALUES (?, ?, ?, ?, ?)`,
-        ["job-1", "agent:default", "default", "running", "{}"],
-      );
-      await db.run(
-        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        ["550e8400-e29b-41d4-a716-446655440000", "job-1", "agent:default", "default", "running", 1],
-      );
-      await db.run(
-        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO execution_jobs (
+           tenant_id,
+           job_id,
+           agent_id,
+           workspace_id,
+           key,
+           lane,
+           status,
+           trigger_json
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
+          "job-1",
+          DEFAULT_AGENT_ID,
+          DEFAULT_WORKSPACE_ID,
+          "agent:default",
+          "main",
+          "running",
+          "{}",
+        ],
+      );
+      await db.run(
+        `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
+          "550e8400-e29b-41d4-a716-446655440000",
+          "job-1",
+          "agent:default",
+          "main",
+          "running",
+          1,
+        ],
+      );
+      await db.run(
+        `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
           "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           "550e8400-e29b-41d4-a716-446655440000",
           0,
@@ -2539,9 +1852,10 @@ describe("dispatchTask", () => {
         ],
       );
       await db.run(
-        `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status)
-         VALUES (?, ?, ?, ?)`,
+        `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status)
+         VALUES (?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
           "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
           "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           1,

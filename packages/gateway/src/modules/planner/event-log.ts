@@ -5,17 +5,22 @@ import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { isUniqueViolation } from "../../utils/sql-errors.js";
 import { insertPlannerEventNext, retryOnUniqueViolation } from "./planner-events.js";
+import { PlanDal } from "./plan-dal.js";
+import { DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID } from "../identity/scope.js";
 
 export interface NewPlannerEvent {
+  tenantId: string;
   replayId: string;
-  planId: string;
+  planKey: string;
   stepIndex: number;
   occurredAt: string;
   action: unknown;
 }
 
 export interface PersistedPlannerEvent extends NewPlannerEvent {
+  /** Compatibility identifier (equal to stepIndex). */
   id: number;
+  planId: string;
   createdAt: string;
 }
 
@@ -24,12 +29,12 @@ export type AppendOutcome =
   | { kind: "duplicate" };
 
 interface RawPlannerEventRow {
-  id: number;
+  tenant_id: string;
   replay_id: string;
   plan_id: string;
   step_index: number;
   occurred_at: string;
-  action: string;
+  action_json: string;
   created_at: string | Date;
   prev_hash: string | null;
   event_hash: string | null;
@@ -39,14 +44,16 @@ function normalizeTime(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value;
 }
 
-function rowToEvent(row: RawPlannerEventRow): PersistedPlannerEvent {
+function rowToEvent(row: RawPlannerEventRow, planKey: string): PersistedPlannerEvent {
   return {
-    id: row.id,
+    tenantId: row.tenant_id,
     replayId: row.replay_id,
     planId: row.plan_id,
+    planKey,
     stepIndex: row.step_index,
+    id: row.step_index,
     occurredAt: row.occurred_at,
-    action: JSON.parse(row.action) as unknown,
+    action: JSON.parse(row.action_json) as unknown,
     createdAt: normalizeTime(row.created_at),
   };
 }
@@ -62,6 +69,12 @@ export class EventLog {
     if (event.stepIndex < 0) {
       throw new Error(`step_index must be non-negative, got ${String(event.stepIndex)}`);
     }
+    if (!event.tenantId.trim()) {
+      throw new Error("tenantId is required");
+    }
+    if (!event.planKey.trim()) {
+      throw new Error("planKey is required");
+    }
 
     const action = this.redactionEngine
       ? this.redactionEngine.redactUnknown(event.action).redacted
@@ -69,28 +82,44 @@ export class EventLog {
     const actionJson = JSON.stringify(action);
 
     return await this.db.transaction(async (tx): Promise<AppendOutcome> => {
-      const existing = await tx.get<{ id: number }>(
-        "SELECT id FROM planner_events WHERE plan_id = ? AND step_index = ?",
-        [event.planId, event.stepIndex],
+      const planId = await new PlanDal(tx).ensurePlanId({
+        tenantId: event.tenantId,
+        planKey: event.planKey,
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        kind: "audit",
+        status: "active",
+      });
+
+      const existing = await tx.get<{ n: number }>(
+        `SELECT 1 AS n
+         FROM planner_events
+         WHERE tenant_id = ? AND plan_id = ? AND step_index = ?
+         LIMIT 1`,
+        [event.tenantId, planId, event.stepIndex],
       );
       if (existing) {
         this.logger?.debug("event.duplicate", {
           event_id: event.replayId,
-          plan_id: event.planId,
+          plan_id: planId,
           step_index: event.stepIndex,
         });
         return { kind: "duplicate" };
       }
 
       const lastRow = await tx.get<{ event_hash: string | null }>(
-        "SELECT event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index DESC LIMIT 1",
-        [event.planId],
+        `SELECT event_hash
+         FROM planner_events
+         WHERE tenant_id = ? AND plan_id = ?
+         ORDER BY step_index DESC
+         LIMIT 1`,
+        [event.tenantId, planId],
       );
       const prevHash = lastRow?.event_hash ?? null;
 
       const eventHash = computeEventHash(
         {
-          plan_id: event.planId,
+          plan_id: planId,
           step_index: event.stepIndex,
           occurred_at: event.occurredAt,
           action: actionJson,
@@ -100,13 +129,22 @@ export class EventLog {
 
       try {
         const inserted = await tx.get<RawPlannerEventRow>(
-          `INSERT INTO planner_events (replay_id, plan_id, step_index, occurred_at, action, prev_hash, event_hash)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO planner_events (
+             tenant_id,
+             plan_id,
+             step_index,
+             replay_id,
+             occurred_at,
+             action_json,
+             prev_hash,
+             event_hash
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            RETURNING *`,
           [
-            event.replayId,
-            event.planId,
+            event.tenantId,
+            planId,
             event.stepIndex,
+            event.replayId,
             event.occurredAt,
             actionJson,
             prevHash,
@@ -118,19 +156,18 @@ export class EventLog {
           throw new Error("planner_events insert returned no row");
         }
 
-        const persisted = rowToEvent(inserted);
+        const persisted = rowToEvent(inserted, event.planKey);
         this.logger?.debug("event.appended", {
           event_id: event.replayId,
-          plan_id: event.planId,
+          plan_id: planId,
           step_index: event.stepIndex,
-          row_id: persisted.id,
         });
         return { kind: "inserted", event: persisted };
       } catch (err) {
         if (isUniqueViolation(err)) {
           this.logger?.debug("event.duplicate", {
             event_id: event.replayId,
-            plan_id: event.planId,
+            plan_id: planId,
             step_index: event.stepIndex,
           });
           return { kind: "duplicate" };
@@ -150,6 +187,12 @@ export class EventLog {
     event: Omit<NewPlannerEvent, "stepIndex">,
     afterInsert?: (tx: SqlDb, persisted: PersistedPlannerEvent) => Promise<void>,
   ): Promise<PersistedPlannerEvent> {
+    if (!event.tenantId.trim()) {
+      throw new Error("tenantId is required");
+    }
+    if (!event.planKey.trim()) {
+      throw new Error("planKey is required");
+    }
     const action = this.redactionEngine
       ? this.redactionEngine.redactUnknown(event.action).redacted
       : event.action;
@@ -158,20 +201,28 @@ export class EventLog {
     return await retryOnUniqueViolation(
       async () =>
         await this.db.transaction(async (tx) => {
+          const planId = await new PlanDal(tx).ensurePlanId({
+            tenantId: event.tenantId,
+            planKey: event.planKey,
+            agentId: DEFAULT_AGENT_ID,
+            workspaceId: DEFAULT_WORKSPACE_ID,
+            kind: "audit",
+            status: "active",
+          });
           const { inserted } = await insertPlannerEventNext<RawPlannerEventRow>(tx, {
+            tenantId: event.tenantId,
             replayId: event.replayId,
-            planId: event.planId,
+            planId,
             occurredAt: event.occurredAt,
             actionJson,
             returning: "*",
           });
 
-          const persisted = rowToEvent(inserted);
+          const persisted = rowToEvent(inserted, event.planKey);
           this.logger?.debug("event.appended", {
             event_id: event.replayId,
-            plan_id: event.planId,
+            plan_id: planId,
             step_index: persisted.stepIndex,
-            row_id: persisted.id,
           });
           await afterInsert?.(tx, persisted);
           return persisted;
@@ -180,27 +231,50 @@ export class EventLog {
     );
   }
 
-  async eventsForPlan(planId: string): Promise<PersistedPlannerEvent[]> {
+  async eventsForPlan(input: {
+    tenantId: string;
+    planKey: string;
+  }): Promise<PersistedPlannerEvent[]> {
+    const plan = await new PlanDal(this.db).getByKey({
+      tenantId: input.tenantId,
+      planKey: input.planKey,
+    });
+    if (!plan) return [];
+
     const rows = await this.db.all<RawPlannerEventRow>(
-      "SELECT * FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      [planId],
+      `SELECT *
+       FROM planner_events
+       WHERE tenant_id = ? AND plan_id = ?
+       ORDER BY step_index ASC`,
+      [input.tenantId, plan.plan_id],
     );
-    return rows.map(rowToEvent);
+    return rows.map((row) => rowToEvent(row, input.planKey));
   }
 
   /** Returns events with hash columns for chain verification. */
-  async getEventsForVerification(planId: string): Promise<ChainableEvent[]> {
-    const rows = await this.db.all<{
-      id: number;
-      plan_id: string;
-      step_index: number;
-      occurred_at: string;
-      action: string;
-      prev_hash: string | null;
-      event_hash: string | null;
-    }>(
-      "SELECT id, plan_id, step_index, occurred_at, action, prev_hash, event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      [planId],
+  async getEventsForVerification(input: {
+    tenantId: string;
+    planKey: string;
+  }): Promise<ChainableEvent[]> {
+    const plan = await new PlanDal(this.db).getByKey({
+      tenantId: input.tenantId,
+      planKey: input.planKey,
+    });
+    if (!plan) return [];
+
+    const rows = await this.db.all<ChainableEvent>(
+      `SELECT
+         step_index AS id,
+         plan_id,
+         step_index,
+         occurred_at,
+         action_json AS action,
+         prev_hash,
+         event_hash
+       FROM planner_events
+       WHERE tenant_id = ? AND plan_id = ?
+       ORDER BY step_index ASC`,
+      [input.tenantId, plan.plan_id],
     );
     return rows;
   }

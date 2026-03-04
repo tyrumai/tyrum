@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { ConnectionDirectoryDal } from "../../src/modules/backplane/connection-directory.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
@@ -21,7 +22,7 @@ describe("ConnectionDirectoryDal", () => {
     const now = 1_000_000;
 
     await dir.upsertConnection({
-      connectionId: "c1",
+      connectionId: "00000000-0000-4000-8000-000000000011",
       edgeId: "edge-a",
       role: "client",
       capabilities: ["playwright"],
@@ -43,18 +44,44 @@ describe("ConnectionDirectoryDal", () => {
 
     // Simulate an older edge writing a directory row that does not set readiness.
     await db!.run(
-      `INSERT INTO connection_directory (
+      `INSERT INTO principals (
+         tenant_id,
+         principal_id,
+         kind,
+         principal_key,
+         status,
+         metadata_json
+       ) VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        "00000000-0000-4000-8000-000000000021",
+        "node",
+        "dev_test",
+        "active",
+        "{}",
+      ],
+    );
+    await db!.run(
+      `INSERT INTO connections (
+         tenant_id,
          connection_id,
          edge_id,
-         role,
-         protocol_rev,
-         device_id,
+         principal_id,
          capabilities_json,
          connected_at_ms,
          last_seen_at_ms,
          expires_at_ms
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ["c-node-1", "edge-a", "node", 2, "dev_test", JSON.stringify(["cli"]), now, now, now + 5_000],
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        "00000000-0000-4000-8000-000000000022",
+        "edge-a",
+        "00000000-0000-4000-8000-000000000021",
+        JSON.stringify(["cli"]),
+        now,
+        now,
+        now + 5_000,
+      ],
     );
 
     const rows = await dir.listNonExpired(now);
@@ -69,12 +96,31 @@ describe("ConnectionDirectoryDal", () => {
 
     // Simulate a corrupted readiness payload; should fall back to advertised capabilities.
     await db!.run(
-      `INSERT INTO connection_directory (
+      `INSERT INTO principals (
+         tenant_id,
+         principal_id,
+         kind,
+         principal_key,
+         status,
+         metadata_json
+       ) VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        "00000000-0000-4000-8000-000000000031",
+        "node",
+        "dev_test",
+        "active",
+        "{}",
+      ],
+    );
+
+    await db!.run(
+      `INSERT INTO connections (
+         tenant_id,
          connection_id,
          edge_id,
-         role,
+         principal_id,
          protocol_rev,
-         device_id,
          capabilities_json,
          ready_capabilities_json,
          connected_at_ms,
@@ -82,11 +128,11 @@ describe("ConnectionDirectoryDal", () => {
          expires_at_ms
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        "c-node-1",
+        DEFAULT_TENANT_ID,
+        "00000000-0000-4000-8000-000000000032",
         "edge-a",
-        "node",
+        "00000000-0000-4000-8000-000000000031",
         2,
-        "dev_test",
         JSON.stringify(["cli"]),
         "{ not valid json",
         now,

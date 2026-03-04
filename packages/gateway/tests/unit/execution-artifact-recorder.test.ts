@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { ExecutionEngineArtifactRecorder } from "../../src/modules/execution/engine/artifact-recorder.js";
 import { ExecutionEngineEventEmitter } from "../../src/modules/execution/engine/event-emitter.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
@@ -10,11 +15,12 @@ describe("ExecutionEngineArtifactRecorder", () => {
   async function setup(): Promise<{
     recorder: ExecutionEngineArtifactRecorder;
     scope: {
+      tenantId: string;
       runId: string;
       stepId: string;
       attemptId: string;
       workspaceId: string;
-      key: string;
+      agentId: string;
     };
     artifact: {
       artifact_id: string;
@@ -32,24 +38,40 @@ describe("ExecutionEngineArtifactRecorder", () => {
     const stepId = "6f9619ff-8b86-4d11-b42d-00c04fc964ff";
     const attemptId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
     await db.run(
-      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?)`,
-      [jobId, "agent:agent-1", "main", "running", "{}"],
+      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        jobId,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        "agent:agent-1",
+        "main",
+        "running",
+        "{}",
+      ],
     );
     await db.run(
-      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, runId, jobId, "agent:agent-1", "main", "running", 1],
+    );
+    await db.run(
+      `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [runId, jobId, "agent:agent-1", "main", "running", 1],
+      [
+        DEFAULT_TENANT_ID,
+        stepId,
+        runId,
+        0,
+        "running",
+        JSON.stringify({ type: "Research", args: {} }),
+      ],
     );
     await db.run(
-      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+      `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status)
        VALUES (?, ?, ?, ?, ?)`,
-      [stepId, runId, 0, "running", JSON.stringify({ type: "Research", args: {} })],
-    );
-    await db.run(
-      `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status)
-       VALUES (?, ?, ?, ?)`,
-      [attemptId, stepId, 1, "running"],
+      [DEFAULT_TENANT_ID, attemptId, stepId, 1, "running"],
     );
 
     await db.run("DELETE FROM outbox");
@@ -75,7 +97,14 @@ describe("ExecutionEngineArtifactRecorder", () => {
 
     return {
       recorder,
-      scope: { runId, stepId, attemptId, workspaceId: "default", key: "agent:agent-1" },
+      scope: {
+        tenantId: DEFAULT_TENANT_ID,
+        runId,
+        stepId,
+        attemptId,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        agentId: DEFAULT_AGENT_ID,
+      },
       artifact,
     };
   }
@@ -94,8 +123,8 @@ describe("ExecutionEngineArtifactRecorder", () => {
     });
 
     const row = await db.get<{ artifact_id: string; uri: string }>(
-      "SELECT artifact_id, uri FROM execution_artifacts WHERE artifact_id = ?",
-      [artifact.artifact_id],
+      "SELECT artifact_id, uri FROM execution_artifacts WHERE tenant_id = ? AND artifact_id = ?",
+      [DEFAULT_TENANT_ID, artifact.artifact_id],
     );
     expect(row?.artifact_id).toBe(artifact.artifact_id);
     expect(row?.uri).toBe(artifact.uri);

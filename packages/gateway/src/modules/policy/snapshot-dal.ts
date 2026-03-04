@@ -2,6 +2,7 @@ import type { PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
 import { PolicyBundle } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { sha256HexFromString, stableJsonStringify } from "./canonical-json.js";
 
 export interface PolicySnapshotRow {
@@ -47,8 +48,8 @@ export class PolicySnapshotDal {
     const row = await this.db.get<RawPolicySnapshotRow>(
       `SELECT policy_snapshot_id, sha256, bundle_json, created_at
        FROM policy_snapshots
-       WHERE policy_snapshot_id = ?`,
-      [policySnapshotId],
+       WHERE tenant_id = ? AND policy_snapshot_id = ?`,
+      [DEFAULT_TENANT_ID, policySnapshotId],
     );
     return row ? toRow(row) : undefined;
   }
@@ -57,8 +58,8 @@ export class PolicySnapshotDal {
     const row = await this.db.get<RawPolicySnapshotRow>(
       `SELECT policy_snapshot_id, sha256, bundle_json, created_at
        FROM policy_snapshots
-       WHERE sha256 = ?`,
-      [sha256],
+       WHERE tenant_id = ? AND sha256 = ?`,
+      [DEFAULT_TENANT_ID, sha256],
     );
     return row ? toRow(row) : undefined;
   }
@@ -72,10 +73,10 @@ export class PolicySnapshotDal {
 
     const id = randomUUID();
     const row = await this.db.get<RawPolicySnapshotRow>(
-      `INSERT INTO policy_snapshots (policy_snapshot_id, sha256, bundle_json)
-       VALUES (?, ?, ?)
+      `INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json)
+       VALUES (?, ?, ?, ?)
        RETURNING policy_snapshot_id, sha256, bundle_json, created_at`,
-      [id, sha256, canonicalJson],
+      [DEFAULT_TENANT_ID, id, sha256, canonicalJson],
     );
     if (!row) {
       throw new Error("policy snapshot insert failed");

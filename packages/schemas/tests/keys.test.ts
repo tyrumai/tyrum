@@ -52,31 +52,11 @@ describe("QueueMode", () => {
 });
 
 describe("TyrumKey", () => {
-  it("parses legacy direct shared key", () => {
-    const key = TyrumKey.parse("agent:agent-1:telegram-acc-1:main");
-    expect(parseTyrumKey(key)).toEqual({
-      kind: "agent",
-      agent_id: "agent-1",
-      channel: "telegram-acc-1",
-      thread_kind: "main",
-    });
-  });
-
-  it("parses ambiguous legacy main key before dm per-peer key", () => {
-    const key = TyrumKey.parse("agent:a1:dm:main");
-    expect(parseTyrumKey(key)).toEqual({
-      kind: "agent",
-      agent_id: "a1",
-      channel: "dm",
-      thread_kind: "main",
-    });
-  });
-
   it("parses canonical direct shared key", () => {
     const key = TyrumKey.parse("agent:agent-1:main");
     expect(parseTyrumKey(key)).toEqual({
       kind: "agent",
-      agent_id: "agent-1",
+      agent_key: "agent-1",
       thread_kind: "main",
     });
   });
@@ -85,7 +65,7 @@ describe("TyrumKey", () => {
     const key = TyrumKey.parse("agent:agent-1:dm:user-1");
     expect(parseTyrumKey(key)).toEqual({
       kind: "agent",
-      agent_id: "agent-1",
+      agent_key: "agent-1",
       thread_kind: "dm",
       dm_scope: "per_peer",
       peer_id: "user-1",
@@ -96,7 +76,7 @@ describe("TyrumKey", () => {
     const key = TyrumKey.parse("agent:agent-1:telegram:dm:user-1");
     expect(parseTyrumKey(key)).toEqual({
       kind: "agent",
-      agent_id: "agent-1",
+      agent_key: "agent-1",
       thread_kind: "dm",
       dm_scope: "per_channel_peer",
       channel: "telegram",
@@ -108,7 +88,7 @@ describe("TyrumKey", () => {
     const key = TyrumKey.parse("agent:agent-1:telegram:work:dm:user-1");
     expect(parseTyrumKey(key)).toEqual({
       kind: "agent",
-      agent_id: "agent-1",
+      agent_key: "agent-1",
       thread_kind: "dm",
       dm_scope: "per_account_channel_peer",
       channel: "telegram",
@@ -121,20 +101,9 @@ describe("TyrumKey", () => {
     const key = TyrumKey.parse("agent:a1:discord:work:group:999");
     expect(parseTyrumKey(key)).toEqual({
       kind: "agent",
-      agent_id: "a1",
+      agent_key: "a1",
       channel: "discord",
       account: "work",
-      thread_kind: "group",
-      id: "999",
-    });
-  });
-
-  it("parses legacy group key", () => {
-    const key = TyrumKey.parse("agent:a1:discord:group:999");
-    expect(parseTyrumKey(key)).toEqual({
-      kind: "agent",
-      agent_id: "a1",
-      channel: "discord",
       thread_kind: "group",
       id: "999",
     });
@@ -212,7 +181,7 @@ describe("buildAgentSessionKey", () => {
   it("builds canonical shared dm key", () => {
     expect(
       buildAgentSessionKey({
-        agentId: "agent-1",
+        agentKey: "agent-1",
         container: "dm",
         channel: "telegram",
         account: "work",
@@ -225,7 +194,7 @@ describe("buildAgentSessionKey", () => {
   it("builds canonical per-peer dm key", () => {
     expect(
       buildAgentSessionKey({
-        agentId: "agent-1",
+        agentKey: "agent-1",
         container: "dm",
         channel: "telegram",
         account: "work",
@@ -238,7 +207,7 @@ describe("buildAgentSessionKey", () => {
   it("builds canonical per-channel-peer dm key", () => {
     expect(
       buildAgentSessionKey({
-        agentId: "agent-1",
+        agentKey: "agent-1",
         container: "dm",
         channel: "telegram",
         account: "work",
@@ -251,7 +220,7 @@ describe("buildAgentSessionKey", () => {
   it("builds canonical per-account-channel-peer dm key", () => {
     expect(
       buildAgentSessionKey({
-        agentId: "agent-1",
+        agentKey: "agent-1",
         container: "dm",
         channel: "telegram",
         account: "work",
@@ -264,7 +233,7 @@ describe("buildAgentSessionKey", () => {
   it("defaults to secure dm scope when none is provided", () => {
     expect(
       buildAgentSessionKey({
-        agentId: "agent-1",
+        agentKey: "agent-1",
         container: "dm",
         channel: "telegram",
         account: "work",
@@ -276,7 +245,7 @@ describe("buildAgentSessionKey", () => {
   it("builds canonical group key", () => {
     expect(
       buildAgentSessionKey({
-        agentId: "agent-1",
+        agentKey: "agent-1",
         container: "group",
         channel: "telegram",
         account: "work",
@@ -288,7 +257,7 @@ describe("buildAgentSessionKey", () => {
   it("builds canonical channel key", () => {
     expect(
       buildAgentSessionKey({
-        agentId: "agent-1",
+        agentKey: "agent-1",
         container: "channel",
         channel: "telegram",
         account: "work",

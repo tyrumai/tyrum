@@ -8,7 +8,7 @@ import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { ApprovalRow } from "../../src/modules/approval/dal.js";
 import { createApprovalRoutes } from "../../src/routes/approval.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
-import { FileSecretProvider } from "../../src/modules/secret/provider.js";
+import { createDbSecretProvider } from "../../src/modules/secret/create-secret-provider.js";
 import { Hono } from "hono";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
@@ -1020,10 +1020,11 @@ describe("Tool execution loop", () => {
       callTool: vi.fn(async () => ({ content: [] })),
     };
 
-    const secretProvider = await FileSecretProvider.create(
-      join(homeDir, "secrets.json"),
-      "test-admin-token",
-    );
+    const secretProvider = await createDbSecretProvider({
+      db: container.db,
+      dbPath: ":memory:",
+      tyrumHome: homeDir,
+    });
 
     const runtime = new AgentRuntime({
       container,

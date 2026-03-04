@@ -1,9 +1,6 @@
 import type { ArtifactRef as ArtifactRefT } from "@tyrum/schemas";
 import type { SqlDb } from "../../../statestore/types.js";
-import {
-  deriveAgentIdFromExecutionKey,
-  insertExecutionArtifactRowTx,
-} from "../../artifact/execution-artifacts.js";
+import { insertExecutionArtifactRowTx } from "../../artifact/execution-artifacts.js";
 import type { ExecutionEngineEventEmitter } from "./event-emitter.js";
 
 type RedactUnknownFn = (value: unknown) => unknown;
@@ -19,20 +16,20 @@ export class ExecutionEngineArtifactRecorder {
   async recordArtifactsTx(
     tx: SqlDb,
     scope: {
+      tenantId: string;
       runId: string;
       stepId: string;
       attemptId: string;
       workspaceId: string;
-      key: string;
+      agentId: string | null;
     },
     artifacts: ArtifactRefT[],
   ): Promise<void> {
     if (artifacts.length === 0) return;
 
-    const agentId = deriveAgentIdFromExecutionKey(scope.key);
     const run = await tx.get<{ policy_snapshot_id: string | null }>(
-      "SELECT policy_snapshot_id FROM execution_runs WHERE run_id = ?",
-      [scope.runId],
+      "SELECT policy_snapshot_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      [scope.tenantId, scope.runId],
     );
     const policySnapshotId = run?.policy_snapshot_id ?? null;
 
@@ -45,8 +42,9 @@ export class ExecutionEngineArtifactRecorder {
         labelsJson,
         metadataJson,
         scope: {
+          tenantId: scope.tenantId,
           workspaceId: scope.workspaceId,
-          agentId,
+          agentId: scope.agentId,
           runId: scope.runId,
           stepId: scope.stepId,
           attemptId: scope.attemptId,

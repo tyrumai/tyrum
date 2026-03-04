@@ -15,13 +15,13 @@ describe("WorkBoard migrations", () => {
     return db;
   }
 
-  it("applies the workboard persistence migration", async () => {
+  it("applies the v2 rebuild migration", async () => {
     const db = openDb();
     const migration = await db.get<{ name: string }>(
       "SELECT name FROM _migrations WHERE name = ?",
-      ["033_workboard_persistence.sql"],
+      ["100_rebuild_v2.sql"],
     );
-    expect(migration?.name).toBe("033_workboard_persistence.sql");
+    expect(migration?.name).toBe("100_rebuild_v2.sql");
   });
 
   it("creates workboard tables", async () => {

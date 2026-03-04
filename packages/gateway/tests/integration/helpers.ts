@@ -11,7 +11,7 @@ import { loadConfig } from "../../src/config.js";
 import { isAgentEnabled } from "../../src/modules/agent/enabled.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { AgentRegistry as AgentRegistryImpl } from "../../src/modules/agent/registry.js";
-import { EnvSecretProvider } from "../../src/modules/secret/provider.js";
+import { createDbSecretProvider } from "../../src/modules/secret/create-secret-provider.js";
 import { resolveTyrumHome } from "../../src/modules/agent/home.js";
 import { VERSION } from "../../src/version.js";
 import type { TokenStore } from "../../src/modules/auth/token-store.js";
@@ -61,7 +61,11 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<{
     ? new AgentRegistryImpl({
         container,
         baseHome,
-        defaultSecretProvider: new EnvSecretProvider(),
+        defaultSecretProvider: await createDbSecretProvider({
+          db: container.db,
+          dbPath: ":memory:",
+          tyrumHome: baseHome,
+        }),
         defaultPolicyService: container.policyService,
         defaultLanguageModel: opts.languageModel,
         approvalNotifier: { notify: () => {} },

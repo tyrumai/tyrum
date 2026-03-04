@@ -86,7 +86,7 @@ export const WorkItemTask = z
     execution_profile: z.string().trim().min(1),
     side_effect_class: z.string().trim().min(1),
     run_id: ExecutionRunId.optional(),
-    approval_id: z.number().int().positive().optional(),
+    approval_id: UuidSchema.optional(),
     artifacts: z.array(ArtifactRef).default([]),
     started_at: DateTimeSchema.nullable().optional(),
     finished_at: DateTimeSchema.nullable().optional(),

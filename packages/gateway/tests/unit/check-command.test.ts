@@ -32,6 +32,18 @@ vi.mock("../../src/container.js", () => {
   };
 });
 
+const createDbSecretProvider = vi.fn(async () => {
+  return {
+    list: async () => [],
+  };
+});
+
+vi.mock("../../src/modules/secret/create-secret-provider.js", () => {
+  return {
+    createDbSecretProvider,
+  };
+});
+
 describe("tyrum check", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -48,7 +60,6 @@ describe("tyrum check", () => {
     delete process.env["GATEWAY_PORT"];
     delete process.env["GATEWAY_TOKEN"];
     delete process.env["TYRUM_HOME"];
-    delete process.env["TYRUM_SECRET_PROVIDER"];
     delete process.env["TYRUM_POLICY_ENABLED"];
     delete process.env["TYRUM_POLICY_MODE"];
     delete process.env["TYRUM_POLICY_BUNDLE_PATH"];
@@ -77,7 +88,6 @@ describe("tyrum check", () => {
     process.env["GATEWAY_PORT"] = "8788";
     process.env["GATEWAY_TOKEN"] = "test-token";
     process.env["TYRUM_HOME"] = "/tmp/tyrum-test-home";
-    process.env["TYRUM_SECRET_PROVIDER"] = "env";
 
     ensureLoaded.mockResolvedValueOnce({
       status: {
@@ -111,7 +121,7 @@ describe("tyrum check", () => {
     expect(output).toContain("static.auth: admin_token_source=env");
     expect(output).toContain("static.policy: enabled=true observe_only=false sha256=deadbeef");
     expect(output).toContain("static.plugins:");
-    expect(output).toContain("static.secrets: provider=env handles=0");
+    expect(output).toContain("static.secrets: provider=db handles=0");
     expect(output).toContain("live.http:");
 
     logSpy.mockRestore();
@@ -128,7 +138,6 @@ describe("tyrum check", () => {
     process.env["GATEWAY_PORT"] = "8788";
     process.env["GATEWAY_TOKEN"] = "test-token";
     process.env["TYRUM_HOME"] = "/tmp/tyrum-test-home";
-    process.env["TYRUM_SECRET_PROVIDER"] = "env";
 
     ensureLoaded.mockResolvedValueOnce({
       status: {
@@ -176,7 +185,6 @@ describe("tyrum check", () => {
     process.env["GATEWAY_PORT"] = "8788";
     process.env["GATEWAY_TOKEN"] = "test-token";
     process.env["TYRUM_HOME"] = "/tmp/tyrum-test-home";
-    process.env["TYRUM_SECRET_PROVIDER"] = "env";
 
     ensureLoaded.mockResolvedValueOnce({
       status: {
@@ -237,7 +245,6 @@ describe("tyrum check", () => {
       process.env["GATEWAY_PORT"] = "8788";
       process.env["GATEWAY_TOKEN"] = "test-token";
       process.env["TYRUM_HOME"] = tyrumHome;
-      process.env["TYRUM_SECRET_PROVIDER"] = "env";
 
       ensureLoaded.mockResolvedValueOnce({
         status: {
@@ -284,7 +291,6 @@ describe("tyrum check", () => {
     process.env["GATEWAY_PORT"] = "8788";
     process.env["GATEWAY_TOKEN"] = "test-token";
     process.env["TYRUM_HOME"] = "/tmp/tyrum-test-home";
-    process.env["TYRUM_SECRET_PROVIDER"] = "env";
 
     ensureLoaded.mockResolvedValueOnce({
       status: {

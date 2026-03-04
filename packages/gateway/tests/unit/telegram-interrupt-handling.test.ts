@@ -103,8 +103,6 @@ describe("TelegramChannelProcessor interrupt handling", () => {
     expect(telegramBot.sendMessage).not.toHaveBeenCalled();
 
     const updated = await inbox.getById(row.inbox_id);
-    expect(updated?.status).toBe("completed");
-    expect(updated?.error).toBeNull();
-    expect(updated?.reply_text).toBe("");
+    expect(updated).toBeUndefined();
   });
 });

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "../common.js";
 import { ExecutionBudgets, ExecutionRunId } from "../execution.js";
 import { TyrumKey } from "../keys.js";
+import { ScopeKeys } from "../scope.js";
 import { WorkArtifact, WorkArtifactId, WorkArtifactKind } from "../work-artifacts.js";
 import { DecisionRecord, DecisionRecordId } from "../work-decisions.js";
 import {
@@ -40,7 +41,7 @@ const WorkStateKVEntry = z.union([AgentStateKVEntry, WorkItemStateKVEntry]);
 // Operation payloads (typed) — workboard
 // ---------------------------------------------------------------------------
 
-export const WsWorkListPayload = WorkScope.extend({
+export const WsWorkListPayload = ScopeKeys.extend({
   statuses: z.array(WorkItemState).optional(),
   kinds: z.array(WorkItemKind).optional(),
   limit: z.number().int().positive().optional(),
@@ -54,7 +55,7 @@ export const WsWorkListRequest = WsRequestEnvelope.extend({
 });
 export type WsWorkListRequest = z.infer<typeof WsWorkListRequest>;
 
-export const WsWorkGetPayload = WorkScope.extend({
+export const WsWorkGetPayload = ScopeKeys.extend({
   work_item_id: WorkItemId,
 });
 export type WsWorkGetPayload = z.infer<typeof WsWorkGetPayload>;
@@ -79,7 +80,7 @@ export const WsWorkCreateItemInput = z
   .strict();
 export type WsWorkCreateItemInput = z.infer<typeof WsWorkCreateItemInput>;
 
-export const WsWorkCreatePayload = WorkScope.extend({
+export const WsWorkCreatePayload = ScopeKeys.extend({
   item: WsWorkCreateItemInput,
 });
 export type WsWorkCreatePayload = z.infer<typeof WsWorkCreatePayload>;
@@ -102,7 +103,7 @@ export const WsWorkUpdatePatch = z
   .strict();
 export type WsWorkUpdatePatch = z.infer<typeof WsWorkUpdatePatch>;
 
-export const WsWorkUpdatePayload = WorkScope.extend({
+export const WsWorkUpdatePayload = ScopeKeys.extend({
   work_item_id: WorkItemId,
   patch: WsWorkUpdatePatch,
 });
@@ -114,7 +115,7 @@ export const WsWorkUpdateRequest = WsRequestEnvelope.extend({
 });
 export type WsWorkUpdateRequest = z.infer<typeof WsWorkUpdateRequest>;
 
-export const WsWorkTransitionPayload = WorkScope.extend({
+export const WsWorkTransitionPayload = ScopeKeys.extend({
   work_item_id: WorkItemId,
   status: WorkItemState,
   reason: z.string().trim().min(1).optional(),
@@ -127,7 +128,7 @@ export const WsWorkTransitionRequest = WsRequestEnvelope.extend({
 });
 export type WsWorkTransitionRequest = z.infer<typeof WsWorkTransitionRequest>;
 
-export const WsWorkLinkCreatePayload = WorkScope.extend({
+export const WsWorkLinkCreatePayload = ScopeKeys.extend({
   work_item_id: WorkItemId,
   linked_work_item_id: WorkItemId,
   kind: WorkItemLinkKind,
@@ -141,7 +142,7 @@ export const WsWorkLinkCreateRequest = WsRequestEnvelope.extend({
 });
 export type WsWorkLinkCreateRequest = z.infer<typeof WsWorkLinkCreateRequest>;
 
-export const WsWorkLinkListPayload = WorkScope.extend({
+export const WsWorkLinkListPayload = ScopeKeys.extend({
   work_item_id: WorkItemId,
   limit: z.number().int().positive().optional(),
 }).strict();
@@ -157,7 +158,7 @@ export type WsWorkLinkListRequest = z.infer<typeof WsWorkLinkListRequest>;
 // Drilldown operations (typed) — artifacts
 // ---------------------------------------------------------------------------
 
-export const WsWorkArtifactListPayload = WorkScope.extend({
+export const WsWorkArtifactListPayload = ScopeKeys.extend({
   work_item_id: WorkItemId.optional(),
   limit: z.number().int().positive().optional(),
   cursor: z.string().trim().min(1).optional(),
@@ -170,7 +171,7 @@ export const WsWorkArtifactListRequest = WsRequestEnvelope.extend({
 });
 export type WsWorkArtifactListRequest = z.infer<typeof WsWorkArtifactListRequest>;
 
-export const WsWorkArtifactGetPayload = WorkScope.extend({
+export const WsWorkArtifactGetPayload = ScopeKeys.extend({
   artifact_id: WorkArtifactId,
 });
 export type WsWorkArtifactGetPayload = z.infer<typeof WsWorkArtifactGetPayload>;
@@ -196,7 +197,7 @@ export const WsWorkArtifactCreateInput = z
   .strict();
 export type WsWorkArtifactCreateInput = z.infer<typeof WsWorkArtifactCreateInput>;
 
-export const WsWorkArtifactCreatePayload = WorkScope.extend({
+export const WsWorkArtifactCreatePayload = ScopeKeys.extend({
   artifact: WsWorkArtifactCreateInput,
 });
 export type WsWorkArtifactCreatePayload = z.infer<typeof WsWorkArtifactCreatePayload>;
@@ -211,7 +212,7 @@ export type WsWorkArtifactCreateRequest = z.infer<typeof WsWorkArtifactCreateReq
 // Drilldown operations (typed) — decisions
 // ---------------------------------------------------------------------------
 
-export const WsWorkDecisionListPayload = WorkScope.extend({
+export const WsWorkDecisionListPayload = ScopeKeys.extend({
   work_item_id: WorkItemId.optional(),
   limit: z.number().int().positive().optional(),
   cursor: z.string().trim().min(1).optional(),
@@ -224,7 +225,7 @@ export const WsWorkDecisionListRequest = WsRequestEnvelope.extend({
 });
 export type WsWorkDecisionListRequest = z.infer<typeof WsWorkDecisionListRequest>;
 
-export const WsWorkDecisionGetPayload = WorkScope.extend({
+export const WsWorkDecisionGetPayload = ScopeKeys.extend({
   decision_id: DecisionRecordId,
 });
 export type WsWorkDecisionGetPayload = z.infer<typeof WsWorkDecisionGetPayload>;
@@ -249,7 +250,7 @@ export const WsWorkDecisionCreateInput = z
   .strict();
 export type WsWorkDecisionCreateInput = z.infer<typeof WsWorkDecisionCreateInput>;
 
-export const WsWorkDecisionCreatePayload = WorkScope.extend({
+export const WsWorkDecisionCreatePayload = ScopeKeys.extend({
   decision: WsWorkDecisionCreateInput,
 });
 export type WsWorkDecisionCreatePayload = z.infer<typeof WsWorkDecisionCreatePayload>;
@@ -264,7 +265,7 @@ export type WsWorkDecisionCreateRequest = z.infer<typeof WsWorkDecisionCreateReq
 // Drilldown operations (typed) — signals
 // ---------------------------------------------------------------------------
 
-export const WsWorkSignalListPayload = WorkScope.extend({
+export const WsWorkSignalListPayload = ScopeKeys.extend({
   work_item_id: WorkItemId.optional(),
   statuses: z.array(WorkSignalStatus).optional(),
   limit: z.number().int().positive().optional(),
@@ -278,7 +279,7 @@ export const WsWorkSignalListRequest = WsRequestEnvelope.extend({
 });
 export type WsWorkSignalListRequest = z.infer<typeof WsWorkSignalListRequest>;
 
-export const WsWorkSignalGetPayload = WorkScope.extend({
+export const WsWorkSignalGetPayload = ScopeKeys.extend({
   signal_id: WorkSignalId,
 });
 export type WsWorkSignalGetPayload = z.infer<typeof WsWorkSignalGetPayload>;
@@ -300,7 +301,7 @@ export const WsWorkSignalCreateInput = z
   .strict();
 export type WsWorkSignalCreateInput = z.infer<typeof WsWorkSignalCreateInput>;
 
-export const WsWorkSignalCreatePayload = WorkScope.extend({
+export const WsWorkSignalCreatePayload = ScopeKeys.extend({
   signal: WsWorkSignalCreateInput,
 });
 export type WsWorkSignalCreatePayload = z.infer<typeof WsWorkSignalCreatePayload>;
@@ -320,7 +321,7 @@ export const WsWorkSignalUpdatePatch = z
   .strict();
 export type WsWorkSignalUpdatePatch = z.infer<typeof WsWorkSignalUpdatePatch>;
 
-export const WsWorkSignalUpdatePayload = WorkScope.extend({
+export const WsWorkSignalUpdatePayload = ScopeKeys.extend({
   signal_id: WorkSignalId,
   patch: WsWorkSignalUpdatePatch,
 });
@@ -825,7 +826,7 @@ export type WsWorkTaskStartedEvent = z.infer<typeof WsWorkTaskStartedEvent>;
 export const WsWorkTaskPausedEventPayload = WorkScope.extend({
   work_item_id: WorkItemId,
   task_id: WorkItemTaskId,
-  approval_id: z.number().int().positive(),
+  approval_id: UuidSchema,
 });
 export type WsWorkTaskPausedEventPayload = z.infer<typeof WsWorkTaskPausedEventPayload>;
 

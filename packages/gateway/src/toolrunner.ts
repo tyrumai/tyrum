@@ -1,14 +1,18 @@
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
 import { ActionPrimitive } from "@tyrum/schemas";
 import { homedir } from "node:os";
-import { join } from "node:path";
-import { TokenStore } from "./modules/auth/token-store.js";
-import { createSecretProviderFromEnv } from "./modules/secret/create-secret-provider.js";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createDbSecretProvider } from "./modules/secret/create-secret-provider.js";
 import { createLocalStepExecutor } from "./modules/execution/local-step-executor.js";
 import type { StepExecutionContext } from "./modules/execution/engine.js";
+import { DEFAULT_TENANT_ID } from "./modules/identity/scope.js";
 import { RedactionEngine } from "./modules/redaction/engine.js";
 import { createArtifactStoreFromEnv } from "./modules/artifact/create-artifact-store.js";
 import { Logger } from "./modules/observability/logger.js";
+import { SqliteDb } from "./statestore/sqlite.js";
+import { PostgresDb } from "./statestore/postgres.js";
+import { isPostgresDbUri } from "./statestore/db-uri.js";
 
 interface ToolRunnerStdioRequest {
   plan_id: string;
@@ -31,6 +35,7 @@ function readStdinUtf8(): Promise<string> {
 
 export async function runToolRunnerFromStdio(): Promise<number> {
   const logger = new Logger({ base: { service: "tyrum-toolrunner" } });
+  const __dirname = dirname(fileURLToPath(import.meta.url));
 
   let request: ToolRunnerStdioRequest;
   try {
@@ -68,11 +73,19 @@ export async function runToolRunnerFromStdio(): Promise<number> {
 
   const tyrumHome = process.env["TYRUM_HOME"]?.trim() || join(homedir(), ".tyrum");
 
+  let db: SqliteDb | PostgresDb | undefined;
   try {
     const redactionEngine = new RedactionEngine();
-    const tokenStore = new TokenStore(tyrumHome);
-    const token = await tokenStore.initialize();
-    const secretProvider = await createSecretProviderFromEnv(tyrumHome, token);
+    const dbPath = process.env["GATEWAY_DB_PATH"]?.trim() || "gateway.db";
+    const migrationsDir =
+      process.env["GATEWAY_MIGRATIONS_DIR"]?.trim() ||
+      join(__dirname, "../migrations", isPostgresDbUri(dbPath) ? "postgres" : "sqlite");
+
+    db = isPostgresDbUri(dbPath)
+      ? await PostgresDb.open({ dbUri: dbPath, migrationsDir })
+      : SqliteDb.open({ dbPath, migrationsDir });
+
+    const secretProvider = await createDbSecretProvider({ db, dbPath, tyrumHome });
     const artifactStore = createArtifactStoreFromEnv(tyrumHome, redactionEngine);
 
     const executor = createLocalStepExecutor({
@@ -84,6 +97,7 @@ export async function runToolRunnerFromStdio(): Promise<number> {
     });
 
     const context: StepExecutionContext = {
+      tenantId: DEFAULT_TENANT_ID,
       runId: "toolrunner",
       stepId: `toolrunner:${planId}:${String(stepIndex)}`,
       attemptId: "toolrunner",
@@ -102,5 +116,7 @@ export async function runToolRunnerFromStdio(): Promise<number> {
     logger.error("toolrunner.error", { error: message });
     process.stderr.write(`toolrunner error: ${message}\n`);
     return 1;
+  } finally {
+    await db?.close().catch(() => {});
   }
 }

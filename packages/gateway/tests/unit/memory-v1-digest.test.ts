@@ -3,6 +3,7 @@ import { AgentConfig } from "@tyrum/schemas";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { buildMemoryV1Digest } from "../../src/modules/memory/v1-digest.js";
+import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("buildMemoryV1Digest", () => {
   afterEach(() => {
@@ -17,34 +18,29 @@ describe("buildMemoryV1Digest", () => {
 
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
-      const visible = await dal.create(
-        {
-          kind: "note",
-          title: "Food",
-          body_md: "I like pizza.",
-          tags: [],
-          sensitivity: "private",
-          provenance: { source_kind: "user", refs: [] },
-        },
-        "agent-a",
-      );
+      const visible = await dal.create({
+        kind: "note",
+        title: "Food",
+        body_md: "I like pizza.",
+        tags: [],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      });
 
       vi.setSystemTime(new Date("2026-02-27T00:01:00.000Z"));
-      const hidden = await dal.create(
-        {
-          kind: "note",
-          title: "Sensitive",
-          body_md: "My SSN is 000-00-0000. I also like pizza.",
-          tags: [],
-          sensitivity: "sensitive",
-          provenance: { source_kind: "user", refs: [] },
-        },
-        "agent-a",
-      );
+      const hidden = await dal.create({
+        kind: "note",
+        title: "Sensitive",
+        body_md: "My SSN is 000-00-0000. I also like pizza.",
+        tags: [],
+        sensitivity: "sensitive",
+        provenance: { source_kind: "user", refs: [] },
+      });
 
       const res = await buildMemoryV1Digest({
         dal,
-        agentId: "agent-a",
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
         query: "pizza",
         config,
       });
@@ -65,21 +61,19 @@ describe("buildMemoryV1Digest", () => {
 
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
-      const item = await dal.create(
-        {
-          kind: "note",
-          title: "Food",
-          body_md: "I like pizza.",
-          tags: [],
-          sensitivity: "private",
-          provenance: { source_kind: "user", refs: [] },
-        },
-        "agent-a",
-      );
+      const item = await dal.create({
+        kind: "note",
+        title: "Food",
+        body_md: "I like pizza.",
+        tags: [],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      });
 
       const res = await buildMemoryV1Digest({
         dal,
-        agentId: "agent-a",
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
         query: "pizza",
         config,
       });
@@ -110,51 +104,44 @@ describe("buildMemoryV1Digest", () => {
 
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
-      await dal.create(
-        {
-          kind: "note",
-          title: "A",
-          body_md: "pizza A",
-          tags: [],
-          sensitivity: "private",
-          provenance: { source_kind: "user", refs: [] },
-        },
-        "agent-a",
-      );
+      await dal.create({
+        kind: "note",
+        title: "A",
+        body_md: "pizza A",
+        tags: [],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      });
       vi.setSystemTime(new Date("2026-02-27T00:00:10.000Z"));
-      await dal.create(
-        {
-          kind: "note",
-          title: "B",
-          body_md: "pizza B",
-          tags: [],
-          sensitivity: "private",
-          provenance: { source_kind: "user", refs: [] },
-        },
-        "agent-a",
-      );
+      await dal.create({
+        kind: "note",
+        title: "B",
+        body_md: "pizza B",
+        tags: [],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      });
       vi.setSystemTime(new Date("2026-02-27T00:00:20.000Z"));
-      await dal.create(
-        {
-          kind: "note",
-          title: "C",
-          body_md: "pizza C",
-          tags: [],
-          sensitivity: "private",
-          provenance: { source_kind: "user", refs: [] },
-        },
-        "agent-a",
-      );
+      await dal.create({
+        kind: "note",
+        title: "C",
+        body_md: "pizza C",
+        tags: [],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      });
 
       const first = await buildMemoryV1Digest({
         dal,
-        agentId: "agent-a",
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
         query: "pizza",
         config,
       });
       const second = await buildMemoryV1Digest({
         dal,
-        agentId: "agent-a",
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
         query: "pizza",
         config,
       });
@@ -175,34 +162,29 @@ describe("buildMemoryV1Digest", () => {
 
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
-      const older = await dal.create(
-        {
-          kind: "note",
-          title: "Older",
-          body_md: "pizza",
-          tags: [],
-          sensitivity: "private",
-          provenance: { source_kind: "user", refs: [] },
-        },
-        "agent-a",
-      );
+      const older = await dal.create({
+        kind: "note",
+        title: "Older",
+        body_md: "pizza",
+        tags: [],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      });
 
       vi.setSystemTime(new Date("2026-02-27T00:10:00.000Z"));
-      const newer = await dal.create(
-        {
-          kind: "note",
-          title: "Newer",
-          body_md: "pizza",
-          tags: [],
-          sensitivity: "private",
-          provenance: { source_kind: "user", refs: [] },
-        },
-        "agent-a",
-      );
+      const newer = await dal.create({
+        kind: "note",
+        title: "Newer",
+        body_md: "pizza",
+        tags: [],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      });
 
       const res = await buildMemoryV1Digest({
         dal,
-        agentId: "agent-a",
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
         query: "pizza",
         config: {
           ...config,
@@ -244,26 +226,24 @@ describe("buildMemoryV1Digest", () => {
 
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
-      const fact = await dal.create(
-        {
-          kind: "fact",
-          key: "favorite_color",
-          value: "blue",
-          observed_at: "2026-02-27T00:00:00.000Z",
-          confidence: 0.9,
-          tags: [],
-          sensitivity: "private",
-          provenance: { source_kind: "user", refs: [] },
-        },
-        "agent-a",
-      );
+      const fact = await dal.create({
+        kind: "fact",
+        key: "favorite_color",
+        value: "blue",
+        observed_at: "2026-02-27T00:00:00.000Z",
+        confidence: 0.9,
+        tags: [],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      });
 
       const longQuery = "pizza ".repeat(300);
       expect(longQuery.length).toBeGreaterThan(1024);
 
       const res = await buildMemoryV1Digest({
         dal,
-        agentId: "agent-a",
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
         query: longQuery,
         config,
       });
@@ -292,23 +272,21 @@ describe("buildMemoryV1Digest", () => {
 
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
-      await dal.create(
-        {
-          kind: "fact",
-          key: "favorite_color",
-          value: "blue",
-          observed_at: "2026-02-27T00:00:00.000Z",
-          confidence: 0.9,
-          tags: ["prefs"],
-          sensitivity: "private",
-          provenance: { source_kind: "user", refs: [] },
-        },
-        "agent-a",
-      );
+      await dal.create({
+        kind: "fact",
+        key: "favorite_color",
+        value: "blue",
+        observed_at: "2026-02-27T00:00:00.000Z",
+        confidence: 0.9,
+        tags: ["prefs"],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      });
 
       const res = await buildMemoryV1Digest({
         dal,
-        agentId: "agent-a",
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
         query: "",
         config,
       });
@@ -327,40 +305,35 @@ describe("buildMemoryV1Digest", () => {
 
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
-      const older = await dal.create(
-        {
-          kind: "note",
-          title: "Older",
-          body_md: "pizza",
-          tags: [],
-          sensitivity: "private",
-          provenance: { source_kind: "user", refs: [] },
-        },
-        "agent-a",
-      );
+      const older = await dal.create({
+        kind: "note",
+        title: "Older",
+        body_md: "pizza",
+        tags: [],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      });
 
       vi.setSystemTime(new Date("2026-02-27T00:10:00.000Z"));
-      const newer = await dal.create(
-        {
-          kind: "note",
-          title: "Newer",
-          body_md: "pizza",
-          tags: [],
-          sensitivity: "private",
-          provenance: { source_kind: "user", refs: [] },
-        },
-        "agent-a",
-      );
+      const newer = await dal.create({
+        kind: "note",
+        title: "Newer",
+        body_md: "pizza",
+        tags: [],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      });
 
       const original = dal.getById.bind(dal);
-      vi.spyOn(dal, "getById").mockImplementation(async (id, agentId) => {
+      vi.spyOn(dal, "getById").mockImplementation(async (id, scope) => {
         if (id === newer.memory_item_id) throw new Error("boom");
-        return await original(id, agentId);
+        return await original(id, scope);
       });
 
       const res = await buildMemoryV1Digest({
         dal,
-        agentId: "agent-a",
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
         query: "pizza",
         config: {
           ...config,

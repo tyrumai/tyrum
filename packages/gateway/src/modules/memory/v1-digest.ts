@@ -113,6 +113,7 @@ function sensitivityAllowed(
 
 async function loadStructuredItems(params: {
   dal: MemoryV1Dal;
+  tenantId: string;
   agentId: string;
   allow_sensitivities: readonly MemorySensitivity[];
   structured: AgentConfig["memory"]["v1"]["structured"];
@@ -125,6 +126,7 @@ async function loadStructuredItems(params: {
 
   if (factKeys.length > 0) {
     const { items } = await params.dal.list({
+      tenantId: params.tenantId,
       agentId: params.agentId,
       limit: Math.max(1, Math.min(200, Math.max(factKeys.length * 3, 20))),
       filter: {
@@ -151,6 +153,7 @@ async function loadStructuredItems(params: {
 
   if (tags.length > 0 && out.length < params.maxItems) {
     const { items } = await params.dal.list({
+      tenantId: params.tenantId,
       agentId: params.agentId,
       limit: Math.max(1, Math.min(200, Math.max(params.maxItems * 2, 20))),
       filter: {
@@ -200,6 +203,7 @@ function formatDigestLine(item: MemoryItem, maxChars: number): string {
 
 export async function buildMemoryV1Digest(params: {
   dal: MemoryV1Dal;
+  tenantId: string;
   agentId: string;
   query: string;
   config: AgentConfig["memory"]["v1"];
@@ -255,6 +259,7 @@ export async function buildMemoryV1Digest(params: {
 
   const structuredItems = await loadStructuredItems({
     dal: params.dal,
+    tenantId: params.tenantId,
     agentId: params.agentId,
     allow_sensitivities: allowSensitivities,
     structured: config.structured,
@@ -277,7 +282,7 @@ export async function buildMemoryV1Digest(params: {
             sensitivities: [...allowSensitivities],
           },
         },
-        params.agentId,
+        { tenantId: params.tenantId, agentId: params.agentId },
       );
     } catch {
       // Intentional: keyword search is best-effort; treat failures as no keyword hits.
@@ -361,7 +366,10 @@ export async function buildMemoryV1Digest(params: {
     let item = candidate.item;
     if (!item) {
       try {
-        item = await params.dal.getById(candidate.memory_item_id, params.agentId);
+        item = await params.dal.getById(candidate.memory_item_id, {
+          tenantId: params.tenantId,
+          agentId: params.agentId,
+        });
       } catch {
         // Intentional: best-effort candidate hydration; skip items that cannot be loaded.
         continue;

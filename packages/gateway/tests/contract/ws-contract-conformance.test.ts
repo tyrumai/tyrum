@@ -347,7 +347,11 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     client.connect();
     await withTimeout(connectedP, 5_000, "connected");
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_key: "default",
+      agent_key: "default",
+      workspace_key: "default",
+    } as const;
 
     const created = await client.workCreate({
       ...scope,

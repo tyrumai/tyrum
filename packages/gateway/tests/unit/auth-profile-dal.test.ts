@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("AuthProfileDal", () => {
   let db: SqliteDb | undefined;
@@ -10,59 +11,52 @@ describe("AuthProfileDal", () => {
     await db?.close();
   });
 
-  it("includes expired OAuth profiles with refresh_token_handle in eligible list", async () => {
+  it("creates profiles and filters by status/provider", async () => {
     db = openTestSqliteDb();
     const dal = new AuthProfileDal(db);
 
-    const nowMs = Date.now();
-    const expiredIso = new Date(nowMs - 5 * 60_000).toISOString();
+    await db.run(
+      `INSERT INTO secrets (tenant_id, secret_id, secret_key, status)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "00000000-0000-4000-8000-000000000101", "access-1", "active"],
+    );
+    await db.run(
+      `INSERT INTO secrets (tenant_id, secret_id, secret_key, status)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "00000000-0000-4000-8000-000000000102", "refresh-1", "active"],
+    );
 
-    await dal.create({
-      profileId: "p-refreshable",
-      agentId: "agent-1",
-      provider: "openai",
+    const p1 = await dal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: "p-refreshable",
+      providerKey: "openai",
       type: "oauth",
-      secretHandles: {
-        access_token_handle: "access-1",
-        refresh_token_handle: "refresh-1",
+      secretKeys: {
+        access_token: "access-1",
+        refresh_token: "refresh-1",
       },
-      expiresAt: expiredIso,
-      createdBy: { kind: "test" },
     });
+    expect(p1.secret_keys).toEqual({ access_token: "access-1", refresh_token: "refresh-1" });
+    expect(p1.status).toBe("active");
 
-    await dal.create({
-      profileId: "p-expired-no-refresh",
-      agentId: "agent-1",
-      provider: "openai",
+    const p2 = await dal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: "p-disabled",
+      providerKey: "openai",
       type: "oauth",
-      secretHandles: {
-        access_token_handle: "access-2",
+      secretKeys: {
+        access_token: "access-1",
       },
-      expiresAt: expiredIso,
-      createdBy: { kind: "test" },
     });
+    await dal.disableByKey({ tenantId: DEFAULT_TENANT_ID, authProfileKey: p2.auth_profile_key });
 
-    await dal.create({
-      profileId: "p-expired-token",
-      agentId: "agent-1",
-      provider: "openai",
-      type: "token",
-      secretHandles: {
-        token_handle: "token-1",
-      },
-      expiresAt: expiredIso,
-      createdBy: { kind: "test" },
+    const eligible = await dal.list({
+      tenantId: DEFAULT_TENANT_ID,
+      providerKey: "openai",
+      status: "active",
     });
-
-    const eligible = await dal.listEligibleForProvider({
-      agentId: "agent-1",
-      provider: "openai",
-      nowMs,
-    });
-    const ids = eligible.map((p) => p.profile_id);
-
-    expect(ids).toContain("p-refreshable");
-    expect(ids).not.toContain("p-expired-no-refresh");
-    expect(ids).not.toContain("p-expired-token");
+    const keys = eligible.map((p) => p.auth_profile_key);
+    expect(keys).toContain("p-refreshable");
+    expect(keys).not.toContain("p-disabled");
   });
 });

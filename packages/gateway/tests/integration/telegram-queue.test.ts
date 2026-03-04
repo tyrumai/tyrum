@@ -9,6 +9,9 @@ import {
 } from "../../src/modules/channels/telegram.js";
 import { normalizeUpdate } from "../../src/modules/ingress/telegram.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
+import { SessionDal } from "../../src/modules/agent/session-dal.js";
+import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
+import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
@@ -20,6 +23,10 @@ import { WsDeliveryReceiptEvent } from "@tyrum/schemas";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+function makeSessionDal(db: SqliteDb): SessionDal {
+  return new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+}
 
 function makeTelegramUpdate(
   text: string,
@@ -139,9 +146,11 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       }),
     };
 
-    const queue = new TelegramChannelQueue(db);
+    const sessionDal = makeSessionDal(db);
+    const queue = new TelegramChannelQueue(db, { sessionDal });
     const processor = new TelegramChannelProcessor({
       db,
+      sessionDal,
       agents: makeAgents(mockRuntime),
       telegramBot: bot,
       owner: "test-owner",
@@ -218,6 +227,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("sends typing chat actions in instant mode with bounded cadence", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     process.env["TYRUM_CHANNEL_TYPING_MODE"] = "instant";
     process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"] = "1";
@@ -239,9 +249,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         }),
       };
 
-      const queue = new TelegramChannelQueue(db);
+      const queue = new TelegramChannelQueue(db, { sessionDal });
       const processor = new TelegramChannelProcessor({
         db,
+        sessionDal,
         agents: makeAgents(mockRuntime),
         telegramBot: bot,
         owner: "test-owner",
@@ -273,6 +284,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("starts typing chat actions during response generation when mode is message", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     process.env["TYRUM_CHANNEL_TYPING_MODE"] = "message";
     process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"] = "1";
@@ -294,9 +306,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         }),
       };
 
-      const queue = new TelegramChannelQueue(db);
+      const queue = new TelegramChannelQueue(db, { sessionDal });
       const processor = new TelegramChannelProcessor({
         db,
+        sessionDal,
         agents: makeAgents(mockRuntime),
         telegramBot: bot,
         owner: "test-owner",
@@ -335,6 +348,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("treats thinking mode as instant typing in non-streaming channel turns", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     process.env["TYRUM_CHANNEL_TYPING_MODE"] = "thinking";
     process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"] = "1";
@@ -356,9 +370,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         }),
       };
 
-      const queue = new TelegramChannelQueue(db);
+      const queue = new TelegramChannelQueue(db, { sessionDal });
       const processor = new TelegramChannelProcessor({
         db,
+        sessionDal,
         agents: makeAgents(mockRuntime),
         telegramBot: bot,
         owner: "test-owner",
@@ -384,6 +399,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("does not send typing chat actions when mode is never", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     process.env["TYRUM_CHANNEL_TYPING_MODE"] = "never";
     process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"] = "1";
@@ -405,9 +421,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         }),
       };
 
-      const queue = new TelegramChannelQueue(db);
+      const queue = new TelegramChannelQueue(db, { sessionDal });
       const processor = new TelegramChannelProcessor({
         db,
+        sessionDal,
         agents: makeAgents(mockRuntime),
         telegramBot: bot,
         owner: "test-owner",
@@ -433,6 +450,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("disables typing indicators for automation lanes unless explicitly enabled", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     process.env["TYRUM_CHANNEL_TYPING_MODE"] = "instant";
     process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"] = "1";
@@ -454,9 +472,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         }),
       };
 
-      const queue = new TelegramChannelQueue(db);
+      const queue = new TelegramChannelQueue(db, { sessionDal });
       const processor = new TelegramChannelProcessor({
         db,
+        sessionDal,
         agents: makeAgents(mockRuntime),
         telegramBot: bot,
         owner: "test-owner",
@@ -482,6 +501,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("enables typing indicators for automation lanes when explicitly enabled", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     process.env["TYRUM_CHANNEL_TYPING_MODE"] = "instant";
     process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"] = "1";
@@ -504,9 +524,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         }),
       };
 
-      const queue = new TelegramChannelQueue(db);
+      const queue = new TelegramChannelQueue(db, { sessionDal });
       const processor = new TelegramChannelProcessor({
         db,
+        sessionDal,
         agents: makeAgents(mockRuntime),
         telegramBot: bot,
         owner: "test-owner",
@@ -532,6 +553,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("processes attachment-only messages by passing the normalized envelope through", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
@@ -545,9 +567,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       }),
     };
 
-    const queue = new TelegramChannelQueue(db);
+    const queue = new TelegramChannelQueue(db, { sessionDal });
     const processor = new TelegramChannelProcessor({
       db,
+      sessionDal,
       agents: makeAgents(mockRuntime),
       telegramBot: bot,
       owner: "test-owner",
@@ -604,10 +627,11 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("does not allow webhook callers to override the Telegram account id", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
-    const queue = new TelegramChannelQueue(db);
+    const queue = new TelegramChannelQueue(db, { sessionDal });
 
     const app = new Hono();
     app.route(
@@ -632,14 +656,19 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     const body = (await res.json()) as { ok: boolean; inbox_id: number };
     expect(body.ok).toBe(true);
 
-    const inbox = new ChannelInboxDal(db);
+    const inbox = new ChannelInboxDal(db, sessionDal);
     const row = await inbox.getById(body.inbox_id);
     expect(row?.source).toBe("telegram");
   });
 
   it("uses DM key shape for private Telegram chats", async () => {
     db = openTestSqliteDb();
-    const queue = new TelegramChannelQueue(db, { agentId: "agent-c1", channelKey: "work" });
+    const sessionDal = makeSessionDal(db);
+    const queue = new TelegramChannelQueue(db, {
+      sessionDal,
+      agentId: "agent-c1",
+      channelKey: "work",
+    });
 
     const normalized = normalizeUpdate(
       JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })),
@@ -652,12 +681,14 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
   it("links per-peer dm session keys via canonical identity mapping", async () => {
     db = openTestSqliteDb();
     await db.run(
-      `INSERT INTO peer_identity_links (channel, account, provider_peer_id, canonical_peer_id)
-       VALUES (?, ?, ?, ?)`,
-      ["telegram", "work", "123", "canon-1"],
+      `INSERT INTO peer_identity_links (tenant_id, channel, account, provider_peer_id, canonical_peer_id)
+       VALUES (?, ?, ?, ?, ?)`,
+      ["00000000-0000-4000-8000-000000000001", "telegram", "work", "123", "canon-1"],
     );
 
+    const sessionDal = makeSessionDal(db);
     const queue = new TelegramChannelQueue(db, {
+      sessionDal,
       agentId: "agent-c1",
       channelKey: "work",
       dmScope: "per_peer",
@@ -674,12 +705,14 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
   it("falls back to provider peer id when canonical peer id is invalid", async () => {
     db = openTestSqliteDb();
     await db.run(
-      `INSERT INTO peer_identity_links (channel, account, provider_peer_id, canonical_peer_id)
-       VALUES (?, ?, ?, ?)`,
-      ["telegram", "work", "123", "bad:peer"],
+      `INSERT INTO peer_identity_links (tenant_id, channel, account, provider_peer_id, canonical_peer_id)
+       VALUES (?, ?, ?, ?, ?)`,
+      ["00000000-0000-4000-8000-000000000001", "telegram", "work", "123", "bad:peer"],
     );
 
+    const sessionDal = makeSessionDal(db);
     const queue = new TelegramChannelQueue(db, {
+      sessionDal,
       agentId: "agent-c1",
       channelKey: "work",
       dmScope: "per_peer",
@@ -695,6 +728,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("defaults telegram account id to default", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const originalAccountId = process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
     const originalChannelKey = process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
@@ -702,7 +736,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
       delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
 
-      const queue = new TelegramChannelQueue(db, { agentId: "agent-c1" });
+      const queue = new TelegramChannelQueue(db, { sessionDal, agentId: "agent-c1" });
       const normalized = normalizeUpdate(
         JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })),
       );
@@ -710,7 +744,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
       expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:default:dm:123");
 
-      const inbox = new ChannelInboxDal(db);
+      const inbox = new ChannelInboxDal(db, sessionDal);
       const row = await inbox.getById(enqueued.inbox.inbox_id);
       expect(
         (row?.payload as { message?: { envelope?: { delivery?: { account?: string } } } })?.message
@@ -733,7 +767,12 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("uses canonical group session key taxonomy", async () => {
     db = openTestSqliteDb();
-    const queue = new TelegramChannelQueue(db, { agentId: "agent-c1", channelKey: "work" });
+    const sessionDal = makeSessionDal(db);
+    const queue = new TelegramChannelQueue(db, {
+      sessionDal,
+      agentId: "agent-c1",
+      channelKey: "work",
+    });
 
     const normalized = normalizeUpdate(
       JSON.stringify(makeTelegramUpdate("Group hello", 555, { chatType: "group", senderId: 777 })),
@@ -745,7 +784,12 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("uses canonical channel session key taxonomy", async () => {
     db = openTestSqliteDb();
-    const queue = new TelegramChannelQueue(db, { agentId: "agent-c1", channelKey: "work" });
+    const sessionDal = makeSessionDal(db);
+    const queue = new TelegramChannelQueue(db, {
+      sessionDal,
+      agentId: "agent-c1",
+      channelKey: "work",
+    });
 
     const normalized = normalizeUpdate(
       JSON.stringify(makeTelegramUpdate("announce", 456, { chatType: "channel", senderId: 777 })),
@@ -757,7 +801,8 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("isolates dedupe keys per connector account", async () => {
     db = openTestSqliteDb();
-    const queue = new TelegramChannelQueue(db);
+    const sessionDal = makeSessionDal(db);
+    const queue = new TelegramChannelQueue(db, { sessionDal });
     const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
 
     const workAccount = await queue.enqueue(normalized, { accountId: "work" });
@@ -770,12 +815,13 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("stamps the normalized envelope delivery identity with the queue account id", async () => {
     db = openTestSqliteDb();
-    const queue = new TelegramChannelQueue(db);
+    const sessionDal = makeSessionDal(db);
+    const queue = new TelegramChannelQueue(db, { sessionDal });
     const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
 
     const enqueued = await queue.enqueue(normalized, { accountId: "work" });
 
-    const inbox = new ChannelInboxDal(db);
+    const inbox = new ChannelInboxDal(db, sessionDal);
     const row = await inbox.getById(enqueued.inbox.inbox_id);
     expect(
       (row?.payload as { message?: { envelope?: { delivery?: { account?: string } } } })?.message
@@ -785,10 +831,11 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("dedupes default-account messages against legacy source keys", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
 
-    const inbox = new ChannelInboxDal(db);
+    const inbox = new ChannelInboxDal(db, sessionDal);
     const legacy = await inbox.enqueue({
       source: "telegram",
       thread_id: normalized.thread.id,
@@ -799,7 +846,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       payload: normalized,
     });
 
-    const queue = new TelegramChannelQueue(db);
+    const queue = new TelegramChannelQueue(db, { sessionDal });
     const enqueued = await queue.enqueue(normalized);
 
     expect(enqueued.deduped).toBe(true);
@@ -808,12 +855,13 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("derives account-appropriate thread keys when enqueue overrides account id", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
     const normalized = normalizeUpdate(
       JSON.stringify(makeTelegramUpdate("Help me", 123, { chatType: "group" })),
     );
 
-    const defaultQueue = new TelegramChannelQueue(db, { accountId: "default" });
-    const workQueue = new TelegramChannelQueue(db, { accountId: "work" });
+    const defaultQueue = new TelegramChannelQueue(db, { sessionDal, accountId: "default" });
+    const workQueue = new TelegramChannelQueue(db, { sessionDal, accountId: "work" });
 
     const viaOverride = await defaultQueue.enqueue(normalized, { accountId: "work" });
     const viaWorkQueue = await workQueue.enqueue(normalized);
@@ -824,10 +872,11 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("normalizes connector ids when binding no-account egress connectors", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
-    const queue = new TelegramChannelQueue(db);
+    const queue = new TelegramChannelQueue(db, { sessionDal });
 
     const mockRuntime = {
       turn: vi.fn().mockResolvedValue({
@@ -841,6 +890,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     const send = vi.fn().mockResolvedValue({ ok: true });
     const processor = new TelegramChannelProcessor({
       db,
+      sessionDal,
       agents: makeAgents(mockRuntime),
       telegramBot: bot,
       owner: "test-owner",
@@ -860,6 +910,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("rejects connector ids that contain ':' when binding no-account egress connectors", () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
@@ -876,6 +927,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       () =>
         new TelegramChannelProcessor({
           db: db!,
+          sessionDal,
           agents: makeAgents(mockRuntime),
           telegramBot: bot,
           owner: "test-owner",
@@ -888,6 +940,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("rejects whitespace-only account ids when binding egress connectors", () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
@@ -904,6 +957,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       () =>
         new TelegramChannelProcessor({
           db: db!,
+          sessionDal,
           agents: makeAgents(mockRuntime),
           telegramBot: bot,
           owner: "test-owner",
@@ -916,9 +970,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("uses account-specific egress connectors when provided", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
-    const queue = new TelegramChannelQueue(db);
+    const queue = new TelegramChannelQueue(db, { sessionDal });
 
     const mockRuntime = {
       turn: vi.fn().mockResolvedValue({
@@ -934,6 +989,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
     const processor = new TelegramChannelProcessor({
       db,
+      sessionDal,
       agents: makeAgents(mockRuntime),
       telegramBot: bot,
       owner: "test-owner",
@@ -965,9 +1021,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("sends agent failure messages via account-specific egress connectors", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
-    const queue = new TelegramChannelQueue(db);
+    const queue = new TelegramChannelQueue(db, { sessionDal });
 
     const mockRuntime = {
       turn: vi.fn().mockRejectedValue(new Error("boom")),
@@ -977,6 +1034,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
     const processor = new TelegramChannelProcessor({
       db,
+      sessionDal,
       agents: makeAgents(mockRuntime),
       telegramBot: bot,
       owner: "test-owner",
@@ -1002,6 +1060,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("formats connector approval plan ids without extra colons for account-scoped sources", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const tmp = await mkdtemp(join(tmpdir(), "tyrum-policy-"));
     try {
@@ -1041,9 +1100,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         overrideDal: new PolicyOverrideDal(db),
       });
 
-      const queue = new TelegramChannelQueue(db);
+      const queue = new TelegramChannelQueue(db, { sessionDal });
       const processor = new TelegramChannelProcessor({
         db,
+        sessionDal,
         agents: {
           getRuntime: async () => mockRuntime,
           getPolicyService: () => policyService,
@@ -1061,9 +1121,9 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
       await processor.tick();
 
-      const pending = await approvalDal.getPending();
+      const pending = await approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
       expect(pending).toHaveLength(1);
-      expect(pending[0]!.plan_id).toBe("connector:telegram@work:123:42");
+      expect(pending[0]!.approval_key).toBe("connector:telegram@work:123:42");
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
@@ -1071,10 +1131,11 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("uses legacy connector policy match targets for default accounts", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
-    const queue = new TelegramChannelQueue(db);
+    const queue = new TelegramChannelQueue(db, { sessionDal });
 
     const mockRuntime = {
       turn: vi.fn().mockResolvedValue({
@@ -1096,6 +1157,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
     const processor = new TelegramChannelProcessor({
       db,
+      sessionDal,
       agents: {
         getRuntime: async () => mockRuntime,
         getPolicyService: () => policyService,
@@ -1123,10 +1185,11 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("includes account ids in connector policy match targets for non-default accounts", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
-    const queue = new TelegramChannelQueue(db);
+    const queue = new TelegramChannelQueue(db, { sessionDal });
 
     const mockRuntime = {
       turn: vi.fn().mockResolvedValue({
@@ -1148,6 +1211,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
     const processor = new TelegramChannelProcessor({
       db,
+      sessionDal,
       agents: {
         getRuntime: async () => mockRuntime,
         getPolicyService: () => policyService,
@@ -1175,6 +1239,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("policy-gates outbound sends via approvals when required", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const tmp = await mkdtemp(join(tmpdir(), "tyrum-policy-"));
     try {
@@ -1214,9 +1279,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         overrideDal: new PolicyOverrideDal(db),
       });
 
-      const queue = new TelegramChannelQueue(db);
+      const queue = new TelegramChannelQueue(db, { sessionDal });
       const processor = new TelegramChannelProcessor({
         db,
+        sessionDal,
         agents: {
           getRuntime: async () => mockRuntime,
           getPolicyService: () => policyService,
@@ -1253,10 +1319,14 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       await processor.tick();
       expect(fetchFn).not.toHaveBeenCalled();
 
-      const pending = await approvalDal.getPending();
+      const pending = await approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
       expect(pending).toHaveLength(1);
 
-      await approvalDal.respond(pending[0]!.id, true);
+      await approvalDal.respond({
+        tenantId: DEFAULT_TENANT_ID,
+        approvalId: pending[0]!.approval_id,
+        decision: "approved",
+      });
 
       await processor.tick();
       expect(fetchFn).toHaveBeenCalledOnce();
@@ -1267,6 +1337,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("supports approve-always destination policies for connector sends", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const tmp = await mkdtemp(join(tmpdir(), "tyrum-policy-"));
     try {
@@ -1289,7 +1360,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
       const fetchFn = mockFetch();
       const bot = new TelegramBot("test-token", fetchFn);
-      const queue = new TelegramChannelQueue(db, { agentId: "agent-1" });
+      const queue = new TelegramChannelQueue(db, { sessionDal, agentId: "agent-1" });
 
       const mockRuntime = {
         turn: vi.fn().mockResolvedValue({
@@ -1310,6 +1381,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
       const processor = new TelegramChannelProcessor({
         db,
+        sessionDal,
         agents: {
           getRuntime: async () => mockRuntime,
           getPolicyService: () => policyService,
@@ -1328,7 +1400,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       await processor.tick();
       expect(fetchFn).not.toHaveBeenCalled();
 
-      const pending = await approvalDal.getPending();
+      const pending = await approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
       expect(pending).toHaveLength(1);
 
       const matchTarget = "telegram:work:123";
@@ -1337,7 +1409,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       approvalsApp.route("/", createApprovalRoutes({ approvalDal, policyOverrideDal }));
 
       const respondRes = await approvalsApp.request(
-        `/approvals/${String(pending[0]!.id)}/respond`,
+        `/approvals/${pending[0]!.approval_id}/respond`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -1364,7 +1436,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
       await processor.tick();
       expect(fetchFn).toHaveBeenCalledTimes(2);
-      expect(await approvalDal.getPending()).toHaveLength(0);
+      expect(await approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID })).toHaveLength(0);
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
@@ -1372,6 +1444,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("emits delivery receipt events for outbound sends", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
@@ -1385,9 +1458,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       }),
     };
 
-    const queue = new TelegramChannelQueue(db);
+    const queue = new TelegramChannelQueue(db, { sessionDal });
     const processor = new TelegramChannelProcessor({
       db,
+      sessionDal,
       agents: makeAgents(mockRuntime),
       telegramBot: bot,
       owner: "test-owner",
@@ -1430,6 +1504,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("emits failed delivery receipts when no egress connector is registered", async () => {
     db = openTestSqliteDb();
+    const sessionDal = makeSessionDal(db);
 
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
@@ -1445,9 +1520,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
     const workSend = vi.fn().mockResolvedValue({ ok: true, account: "work" });
 
-    const queue = new TelegramChannelQueue(db);
+    const queue = new TelegramChannelQueue(db, { sessionDal });
     const processor = new TelegramChannelProcessor({
       db,
+      sessionDal,
       agents: makeAgents(mockRuntime),
       telegramBot: bot,
       owner: "test-owner",

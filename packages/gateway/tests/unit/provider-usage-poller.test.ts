@@ -5,7 +5,8 @@ import type {
   SessionProviderPinDal,
   SessionProviderPinRow,
 } from "../../src/modules/models/session-pin-dal.js";
-import type { AgentRegistry } from "../../src/modules/agent/registry.js";
+import type { SecretProvider } from "../../src/modules/secret/provider.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("ProviderUsagePoller", () => {
   it("returns a structured error when the secret provider throws", async () => {
@@ -14,34 +15,29 @@ describe("ProviderUsagePoller", () => {
 
     try {
       const profile: AuthProfileRow = {
-        profile_id: "profile-1",
-        agent_id: "default",
-        provider: "openrouter",
+        tenant_id: DEFAULT_TENANT_ID,
+        auth_profile_id: "00000000-0000-4000-8000-000000000201",
+        auth_profile_key: "profile-1",
+        provider_key: "openrouter",
         type: "api_key",
-        secret_handles: { api_key_handle: "handle-1" },
-        labels: {},
         status: "active",
-        disabled_reason: null,
-        disabled_at: null,
-        cooldown_until_ms: null,
-        expires_at: null,
-        created_by: null,
-        updated_by: null,
+        secret_keys: { api_key: "secret-1" },
+        labels: {},
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
       const pin: SessionProviderPinRow = {
-        agent_id: "default",
+        tenant_id: DEFAULT_TENANT_ID,
         session_id: "session-1",
-        provider: "openrouter",
-        profile_id: profile.profile_id,
+        provider_key: "openrouter",
+        auth_profile_id: profile.auth_profile_id,
+        auth_profile_key: profile.auth_profile_key,
         pinned_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       };
 
       const authProfileDal = {
-        async getById() {
+        async getByKey() {
           return profile;
         },
       } as unknown as AuthProfileDal;
@@ -52,22 +48,28 @@ describe("ProviderUsagePoller", () => {
         },
       } as unknown as SessionProviderPinDal;
 
-      const agents = {
-        async getSecretProvider() {
+      const secretProvider = {
+        async resolve() {
           throw new Error("secret backend down");
         },
-      } as unknown as AgentRegistry;
+      } as unknown as SecretProvider;
 
-      const poller = new ProviderUsagePoller({ authProfileDal, pinDal, agents });
+      const poller = new ProviderUsagePoller({
+        tenantId: DEFAULT_TENANT_ID,
+        authProfileDal,
+        pinDal,
+        secretProvider,
+      });
 
       await expect(poller.pollLatestPinned()).resolves.toMatchObject({
         status: "error",
-        provider: "openrouter",
-        profile_id: profile.profile_id,
+        provider_key: "openrouter",
+        auth_profile_key: profile.auth_profile_key,
         error: {
           code: "secret_resolution_failed",
           message: "Auth profile credential could not be resolved from the secret provider.",
           detail: "secret backend down",
+          retryable: true,
         },
       });
     } finally {
@@ -84,34 +86,29 @@ describe("ProviderUsagePoller", () => {
 
     try {
       const profile: AuthProfileRow = {
-        profile_id: "profile-slow-1",
-        agent_id: "default",
-        provider: "openrouter",
+        tenant_id: DEFAULT_TENANT_ID,
+        auth_profile_id: "00000000-0000-4000-8000-000000000211",
+        auth_profile_key: "profile-slow-1",
+        provider_key: "openrouter",
         type: "api_key",
-        secret_handles: { api_key_handle: "handle-slow-1" },
-        labels: {},
         status: "active",
-        disabled_reason: null,
-        disabled_at: null,
-        cooldown_until_ms: null,
-        expires_at: null,
-        created_by: null,
-        updated_by: null,
+        secret_keys: { api_key: "secret-slow-1" },
+        labels: {},
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
       const pin: SessionProviderPinRow = {
-        agent_id: "default",
+        tenant_id: DEFAULT_TENANT_ID,
         session_id: "session-slow-1",
-        provider: "openrouter",
-        profile_id: profile.profile_id,
+        provider_key: "openrouter",
+        auth_profile_id: profile.auth_profile_id,
+        auth_profile_key: profile.auth_profile_key,
         pinned_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       };
 
       const authProfileDal = {
-        async getById() {
+        async getByKey() {
           return profile;
         },
       } as unknown as AuthProfileDal;
@@ -122,25 +119,11 @@ describe("ProviderUsagePoller", () => {
         },
       } as unknown as SessionProviderPinDal;
 
-      const agents = {
-        async getSecretProvider() {
-          return {
-            async list() {
-              return [
-                {
-                  handle_id: "handle-slow-1",
-                  provider: "env",
-                  scope: "OPENROUTER_API_KEY",
-                  created_at: new Date().toISOString(),
-                },
-              ];
-            },
-            async resolve() {
-              return "test-token";
-            },
-          };
+      const secretProvider = {
+        async resolve() {
+          return "test-token";
         },
-      } as unknown as AgentRegistry;
+      } as unknown as SecretProvider;
 
       const fetchMock = vi.fn(async () => {
         await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
@@ -151,9 +134,10 @@ describe("ProviderUsagePoller", () => {
       });
 
       const poller = new ProviderUsagePoller({
+        tenantId: DEFAULT_TENANT_ID,
         authProfileDal,
         pinDal,
-        agents,
+        secretProvider,
         fetchImpl: fetchMock as unknown as typeof fetch,
         errorCacheTtlMs: 1_000,
       });
@@ -187,7 +171,18 @@ describe("ProviderUsagePoller", () => {
         },
       } as unknown as SessionProviderPinDal;
 
-      const poller = new ProviderUsagePoller({ authProfileDal, pinDal });
+      const secretProvider = {
+        async resolve() {
+          return "token";
+        },
+      } as unknown as SecretProvider;
+
+      const poller = new ProviderUsagePoller({
+        tenantId: DEFAULT_TENANT_ID,
+        authProfileDal,
+        pinDal,
+        secretProvider,
+      });
 
       await expect(poller.pollLatestPinned()).resolves.toMatchObject({
         status: "unavailable",
@@ -204,16 +199,16 @@ describe("ProviderUsagePoller", () => {
 
     try {
       const pin: SessionProviderPinRow = {
-        agent_id: "default",
+        tenant_id: DEFAULT_TENANT_ID,
         session_id: "session-1",
-        provider: "openrouter",
-        profile_id: "profile-1",
+        provider_key: "openrouter",
+        auth_profile_id: "00000000-0000-4000-8000-000000000222",
+        auth_profile_key: "profile-1",
         pinned_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       };
 
       const authProfileDal = {
-        async getById() {
+        async getByKey() {
           throw new Error("db down");
         },
       } as unknown as AuthProfileDal;
@@ -224,12 +219,23 @@ describe("ProviderUsagePoller", () => {
         },
       } as unknown as SessionProviderPinDal;
 
-      const poller = new ProviderUsagePoller({ authProfileDal, pinDal });
+      const secretProvider = {
+        async resolve() {
+          return "token";
+        },
+      } as unknown as SecretProvider;
+
+      const poller = new ProviderUsagePoller({
+        tenantId: DEFAULT_TENANT_ID,
+        authProfileDal,
+        pinDal,
+        secretProvider,
+      });
 
       await expect(poller.pollLatestPinned()).resolves.toMatchObject({
         status: "error",
-        provider: "openrouter",
-        profile_id: "profile-1",
+        provider_key: "openrouter",
+        auth_profile_key: "profile-1",
         error: { code: "auth_profile_lookup_failed", retryable: true },
       });
     } finally {

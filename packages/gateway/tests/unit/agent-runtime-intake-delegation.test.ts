@@ -9,6 +9,11 @@ import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
 import { buildAgentSessionKey } from "@tyrum/schemas";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -74,7 +79,11 @@ describe("AgentRuntime (intake delegation)", () => {
     expect(res.reply.toLowerCase()).toContain("delegat");
 
     const workboard = new WorkboardDal(container.db);
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
 
     const { items } = await workboard.listItems({ scope });
     expect(items).toHaveLength(1);
@@ -127,9 +136,9 @@ describe("AgentRuntime (intake delegation)", () => {
     });
 
     await container.db.run(
-      `INSERT INTO intake_mode_overrides (key, lane, intake_mode, updated_at_ms)
-       VALUES (?, ?, ?, ?)`,
-      [key, "main", "delegate_execute", Date.now()],
+      `INSERT INTO intake_mode_overrides (tenant_id, key, lane, intake_mode, updated_at_ms)
+       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, key, "main", "delegate_execute", Date.now()],
     );
 
     const runtime = new AgentRuntime({
@@ -186,9 +195,9 @@ describe("AgentRuntime (intake delegation)", () => {
     });
 
     await container.db.run(
-      `INSERT INTO intake_mode_overrides (key, lane, intake_mode, updated_at_ms)
-       VALUES (?, ?, ?, ?)`,
-      [key, "main", "delegate_execute", Date.now()],
+      `INSERT INTO intake_mode_overrides (tenant_id, key, lane, intake_mode, updated_at_ms)
+       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, key, "main", "delegate_execute", Date.now()],
     );
 
     const runtime = new AgentRuntime({
@@ -209,7 +218,11 @@ describe("AgentRuntime (intake delegation)", () => {
     expect(res.reply.toLowerCase()).toContain("delegat");
 
     const workboard = new WorkboardDal(container.db);
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
 
     const { items } = await workboard.listItems({ scope });
     expect(items).toHaveLength(1);
@@ -245,7 +258,7 @@ describe("AgentRuntime (intake delegation)", () => {
     );
 
     const key = buildAgentSessionKey({
-      agentId: "default",
+      agentKey: "default",
       container: "channel",
       channel: "telegram",
       account: "work",
@@ -253,9 +266,9 @@ describe("AgentRuntime (intake delegation)", () => {
     });
 
     await container.db.run(
-      `INSERT INTO intake_mode_overrides (key, lane, intake_mode, updated_at_ms)
-       VALUES (?, ?, ?, ?)`,
-      [key, "main", "delegate_execute", Date.now()],
+      `INSERT INTO intake_mode_overrides (tenant_id, key, lane, intake_mode, updated_at_ms)
+       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, key, "main", "delegate_execute", Date.now()],
     );
 
     const runtime = new AgentRuntime({
@@ -279,7 +292,11 @@ describe("AgentRuntime (intake delegation)", () => {
     expect(res.reply.toLowerCase()).toContain("delegat");
 
     const workboard = new WorkboardDal(container.db);
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
 
     const { items } = await workboard.listItems({ scope });
     expect(items).toHaveLength(1);

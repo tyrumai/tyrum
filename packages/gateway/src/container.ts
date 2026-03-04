@@ -27,6 +27,8 @@ import type { ModelsDevService } from "./modules/models/models-dev-service.js";
 import type { OauthPendingDal } from "./modules/oauth/pending-dal.js";
 import type { OauthRefreshLeaseDal } from "./modules/oauth/refresh-lease-dal.js";
 import type { OAuthProviderRegistry } from "./modules/oauth/provider-registry.js";
+import type { IdentityScopeDal } from "./modules/identity/scope.js";
+import type { ChannelThreadDal } from "./modules/channels/thread-dal.js";
 
 import { createEventBus } from "./event-bus.js";
 import { MemoryV1Dal as MemoryV1DalImpl } from "./modules/memory/v1-dal.js";
@@ -70,6 +72,8 @@ import { ModelsDevService as ModelsDevServiceImpl } from "./modules/models/model
 import { OauthPendingDal as OauthPendingDalImpl } from "./modules/oauth/pending-dal.js";
 import { OauthRefreshLeaseDal as OauthRefreshLeaseDalImpl } from "./modules/oauth/refresh-lease-dal.js";
 import { OAuthProviderRegistry as OAuthProviderRegistryImpl } from "./modules/oauth/provider-registry.js";
+import { IdentityScopeDal as IdentityScopeDalImpl } from "./modules/identity/scope.js";
+import { ChannelThreadDal as ChannelThreadDalImpl } from "./modules/channels/thread-dal.js";
 import type { GatewayConfig as GatewayRuntimeConfig } from "./config.js";
 
 export interface GatewayContainerConfig {
@@ -81,6 +85,8 @@ export interface GatewayContainerConfig {
 
 export interface GatewayContainer {
   db: SqlDb;
+  identityScopeDal: IdentityScopeDal;
+  channelThreadDal: ChannelThreadDal;
   memoryV1Dal: MemoryV1Dal;
   contextReportDal: ContextReportDal;
   secretResolutionAuditDal: SecretResolutionAuditDal;
@@ -141,6 +147,8 @@ function wireContainer(
   config: GatewayContainerConfig,
   opts?: { redactionEngine?: RedactionEngine; gatewayConfig?: GatewayRuntimeConfig },
 ): GatewayContainer {
+  const identityScopeDal = new IdentityScopeDalImpl(db);
+  const channelThreadDal = new ChannelThreadDalImpl(db);
   const memoryV1Dal = new MemoryV1DalImpl(db);
   const contextReportDal = new ContextReportDalImpl(db);
   const redactionEngine = opts?.redactionEngine ?? new RedactionEngine();
@@ -150,7 +158,7 @@ function wireContainer(
   const connectorCache = new InMemoryConnectorCache();
   const discoveryPipeline = new DiscoveryPipelineImpl(connectorCache);
   const riskClassifier = new RiskClassifierImpl(defaultRiskConfig());
-  const sessionDal = new SessionDalImpl(db);
+  const sessionDal = new SessionDalImpl(db, identityScopeDal, channelThreadDal);
   const eventBus = createEventBus();
 
   const telegramToken = opts?.gatewayConfig?.channels.telegramBotToken;
@@ -199,6 +207,8 @@ function wireContainer(
 
   return {
     db,
+    identityScopeDal,
+    channelThreadDal,
     memoryV1Dal,
     contextReportDal,
     secretResolutionAuditDal,

@@ -7,6 +7,7 @@ import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
 export type SecretResolutionOutcome = "resolved" | "failed";
 
 export interface SecretResolutionRow {
+  tenant_id: string;
   secret_resolution_id: string;
   tool_call_id: string;
   tool_id: string;
@@ -25,6 +26,7 @@ export interface SecretResolutionRow {
 }
 
 interface RawSecretResolutionRow {
+  tenant_id: string;
   secret_resolution_id: string;
   tool_call_id: string;
   tool_id: string;
@@ -48,6 +50,7 @@ function normalizeTime(value: string | Date): string {
 
 function toRow(raw: RawSecretResolutionRow): SecretResolutionRow {
   return {
+    tenant_id: raw.tenant_id,
     secret_resolution_id: raw.secret_resolution_id,
     tool_call_id: raw.tool_call_id,
     tool_id: raw.tool_id,
@@ -73,6 +76,7 @@ export class SecretResolutionAuditDal {
   ) {}
 
   async record(params: {
+    tenantId: string;
     toolCallId: string;
     toolId: string;
     handleId: string;
@@ -93,6 +97,7 @@ export class SecretResolutionAuditDal {
 
     const inserted = await this.db.get<RawSecretResolutionRow>(
       `INSERT INTO secret_resolutions (
+         tenant_id,
          secret_resolution_id,
          tool_call_id,
          tool_id,
@@ -109,10 +114,11 @@ export class SecretResolutionAuditDal {
          error,
          occurred_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(tool_call_id, handle_id) DO NOTHING
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(tenant_id, tool_call_id, handle_id) DO NOTHING
        RETURNING *`,
       [
+        params.tenantId,
         id,
         params.toolCallId,
         params.toolId,
@@ -146,6 +152,7 @@ export class SecretResolutionAuditDal {
               thread_id: row.thread_id,
             },
             resolution: {
+              tenant_id: row.tenant_id,
               secret_resolution_id: row.secret_resolution_id,
               tool_call_id: row.tool_call_id,
               tool_id: row.tool_id,
@@ -174,11 +181,12 @@ export class SecretResolutionAuditDal {
     const existing = await this.db.get<RawSecretResolutionRow>(
       `SELECT *
        FROM secret_resolutions
-       WHERE tool_call_id = ?
+       WHERE tenant_id = ?
+         AND tool_call_id = ?
          AND handle_id = ?
        ORDER BY occurred_at DESC
        LIMIT 1`,
-      [params.toolCallId, params.handleId],
+      [params.tenantId, params.toolCallId, params.handleId],
     );
     if (!existing) {
       throw new Error("secret resolution audit insert failed");

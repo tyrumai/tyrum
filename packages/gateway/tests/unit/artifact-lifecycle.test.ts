@@ -5,6 +5,11 @@ import { tmpdir } from "node:os";
 import { PolicyBundle } from "@tyrum/schemas";
 import { FsArtifactStore } from "../../src/modules/artifact/store.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
@@ -70,24 +75,26 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     for (const ref of [expiredRef, keptRef]) {
       await db.run(
         `INSERT INTO execution_artifacts (
-           artifact_id,
-           workspace_id,
-           agent_id,
-           kind,
+	           tenant_id,
+	           artifact_id,
+	           workspace_id,
+	           agent_id,
+	           kind,
            uri,
            created_at,
            mime_type,
            size_bytes,
            sha256,
            labels_json,
-           metadata_json,
-           sensitivity,
-           policy_snapshot_id
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	           metadata_json,
+	           sensitivity,
+	           policy_snapshot_id
+	         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
           ref.artifact_id,
-          "default",
-          "agent-1",
+          DEFAULT_WORKSPACE_ID,
+          DEFAULT_AGENT_ID,
           ref.kind,
           ref.uri,
           ref.created_at,
@@ -170,24 +177,26 @@ describe("Artifact lifecycle (retention + quotas)", () => {
 
       await db.run(
         `INSERT INTO execution_artifacts (
-           artifact_id,
-           workspace_id,
-           agent_id,
-           kind,
+	         tenant_id,
+	         artifact_id,
+	         workspace_id,
+	         agent_id,
+	         kind,
            uri,
            created_at,
            mime_type,
            size_bytes,
            sha256,
            labels_json,
-           metadata_json,
-           sensitivity,
-           policy_snapshot_id
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	         metadata_json,
+	         sensitivity,
+	         policy_snapshot_id
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
           ref.artifact_id,
-          "default",
-          "agent-1",
+          DEFAULT_WORKSPACE_ID,
+          DEFAULT_AGENT_ID,
           ref.kind,
           ref.uri,
           createdAt,
@@ -269,24 +278,26 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     for (const ref of [noPolicy1, noPolicy2, withPolicy]) {
       await db.run(
         `INSERT INTO execution_artifacts (
-           artifact_id,
-           workspace_id,
-           agent_id,
-           kind,
+	           tenant_id,
+	           artifact_id,
+	           workspace_id,
+	           agent_id,
+	           kind,
            uri,
            created_at,
            mime_type,
            size_bytes,
            sha256,
            labels_json,
-           metadata_json,
-           sensitivity,
-           policy_snapshot_id
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	           metadata_json,
+	           sensitivity,
+	           policy_snapshot_id
+	         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
           ref.artifact_id,
-          "default",
-          "agent-1",
+          DEFAULT_WORKSPACE_ID,
+          DEFAULT_AGENT_ID,
           ref.kind,
           ref.uri,
           ref.created_at,
@@ -356,24 +367,26 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     for (const ref of [oldRef, newRef]) {
       await db.run(
         `INSERT INTO execution_artifacts (
-           artifact_id,
-           workspace_id,
-           agent_id,
-           kind,
+	           tenant_id,
+	           artifact_id,
+	           workspace_id,
+	           agent_id,
+	           kind,
            uri,
            created_at,
            mime_type,
            size_bytes,
            sha256,
            labels_json,
-           metadata_json,
-           sensitivity,
-           policy_snapshot_id
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	           metadata_json,
+	           sensitivity,
+	           policy_snapshot_id
+	         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
           ref.artifact_id,
-          "default",
-          "agent-1",
+          DEFAULT_WORKSPACE_ID,
+          DEFAULT_AGENT_ID,
           ref.kind,
           ref.uri,
           ref.created_at,
@@ -457,24 +470,26 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     for (const ref of [oldRef, newRef]) {
       await db.run(
         `INSERT INTO execution_artifacts (
-           artifact_id,
-           workspace_id,
-           agent_id,
-           kind,
+	           tenant_id,
+	           artifact_id,
+	           workspace_id,
+	           agent_id,
+	           kind,
            uri,
            created_at,
            mime_type,
            size_bytes,
            sha256,
            labels_json,
-           metadata_json,
-           sensitivity,
-           policy_snapshot_id
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	           metadata_json,
+	           sensitivity,
+	           policy_snapshot_id
+	         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
           ref.artifact_id,
-          "default",
-          "agent-1",
+          DEFAULT_WORKSPACE_ID,
+          DEFAULT_AGENT_ID,
           ref.kind,
           ref.uri,
           ref.created_at,
@@ -549,24 +564,26 @@ describe("Artifact lifecycle (retention + quotas)", () => {
 
     await db.run(
       `INSERT INTO execution_artifacts (
-         artifact_id,
-         workspace_id,
-         agent_id,
-         kind,
+	         tenant_id,
+	         artifact_id,
+	         workspace_id,
+	         agent_id,
+	         kind,
          uri,
          created_at,
          mime_type,
          size_bytes,
          sha256,
          labels_json,
-         metadata_json,
-         sensitivity,
-         policy_snapshot_id
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	         metadata_json,
+	         sensitivity,
+	         policy_snapshot_id
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        DEFAULT_TENANT_ID,
         oldRef.artifact_id,
-        "default",
-        "agent-1",
+        DEFAULT_WORKSPACE_ID,
+        DEFAULT_AGENT_ID,
         oldRef.kind,
         oldRef.uri,
         oldRef.created_at,
@@ -582,24 +599,26 @@ describe("Artifact lifecycle (retention + quotas)", () => {
 
     await db.run(
       `INSERT INTO execution_artifacts (
-         artifact_id,
-         workspace_id,
-         agent_id,
-         kind,
+	         tenant_id,
+	         artifact_id,
+	         workspace_id,
+	         agent_id,
+	         kind,
          uri,
          created_at,
          mime_type,
          size_bytes,
          sha256,
          labels_json,
-         metadata_json,
-         sensitivity,
-         policy_snapshot_id
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	         metadata_json,
+	         sensitivity,
+	         policy_snapshot_id
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        DEFAULT_TENANT_ID,
         newRef.artifact_id,
-        "default",
-        "agent-1",
+        DEFAULT_WORKSPACE_ID,
+        DEFAULT_AGENT_ID,
         newRef.kind,
         newRef.uri,
         newRef.created_at,
@@ -658,24 +677,26 @@ describe("Artifact lifecycle (retention + quotas)", () => {
 
     await db.run(
       `INSERT INTO execution_artifacts (
-         artifact_id,
-         workspace_id,
-         agent_id,
-         kind,
+	         tenant_id,
+	         artifact_id,
+	         workspace_id,
+	         agent_id,
+	         kind,
          uri,
          created_at,
          mime_type,
          size_bytes,
          sha256,
          labels_json,
-         metadata_json,
-         sensitivity,
-         policy_snapshot_id
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	         metadata_json,
+	         sensitivity,
+	         policy_snapshot_id
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        DEFAULT_TENANT_ID,
         ref.artifact_id,
-        "default",
-        "agent-1",
+        DEFAULT_WORKSPACE_ID,
+        DEFAULT_AGENT_ID,
         ref.kind,
         ref.uri,
         ref.created_at,
@@ -742,24 +763,26 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     for (const ref of [oldRef, newRef]) {
       await db.run(
         `INSERT INTO execution_artifacts (
-           artifact_id,
-           workspace_id,
-           agent_id,
-           kind,
+	           tenant_id,
+	           artifact_id,
+	           workspace_id,
+	           agent_id,
+	           kind,
            uri,
            created_at,
            mime_type,
            size_bytes,
            sha256,
            labels_json,
-           metadata_json,
-           sensitivity,
-           policy_snapshot_id
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	           metadata_json,
+	           sensitivity,
+	           policy_snapshot_id
+	         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          DEFAULT_TENANT_ID,
           ref.artifact_id,
-          "default",
-          "agent-1",
+          DEFAULT_WORKSPACE_ID,
+          DEFAULT_AGENT_ID,
           ref.kind,
           ref.uri,
           ref.created_at,

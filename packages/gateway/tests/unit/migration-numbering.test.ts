@@ -3,8 +3,6 @@ import { readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { MIGRATION_FILENAME_RENAMES } from "../../src/migration-renames.js";
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_ROOT = join(__dirname, "../../migrations");
 
@@ -42,19 +40,5 @@ describe("gateway migrations", () => {
     const sqliteFiles = getMigrationFiles("sqlite");
     const postgresFiles = getMigrationFiles("postgres");
     expect(sqliteFiles).toEqual(postgresFiles);
-  });
-
-  it("keeps migration rename shim in sync with migration files", () => {
-    const files = new Set(getMigrationFiles("sqlite"));
-    const missingTo: string[] = [];
-    const presentFrom: string[] = [];
-
-    for (const [from, to] of MIGRATION_FILENAME_RENAMES) {
-      if (!files.has(to)) missingTo.push(to);
-      if (files.has(from)) presentFrom.push(from);
-    }
-
-    expect(missingTo).toEqual([]);
-    expect(presentFrom).toEqual([]);
   });
 });

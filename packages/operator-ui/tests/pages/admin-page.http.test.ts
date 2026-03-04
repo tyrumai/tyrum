@@ -211,8 +211,8 @@ describe("ConfigurePage (HTTP) secrets", () => {
           revoked: true,
           handle: {
             handle_id: "h-1",
-            provider: "env",
-            scope: "scope-1",
+            provider: "db",
+            scope: "h-1",
             created_at: "2026-03-01T00:00:00.000Z",
           },
         }),

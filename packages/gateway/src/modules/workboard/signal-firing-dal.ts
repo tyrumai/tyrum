@@ -3,6 +3,7 @@ import type { SqlDb } from "../../statestore/types.js";
 export type WorkSignalFiringStatus = "queued" | "processing" | "enqueued" | "failed";
 
 export interface WorkSignalFiringRow {
+  tenant_id: string;
   firing_id: string;
   signal_id: string;
   dedupe_key: string;
@@ -17,6 +18,7 @@ export interface WorkSignalFiringRow {
 }
 
 interface RawWorkSignalFiringRow {
+  tenant_id: string;
   firing_id: string;
   signal_id: string;
   dedupe_key: string;
@@ -61,6 +63,7 @@ function toRow(raw: RawWorkSignalFiringRow): WorkSignalFiringRow {
       ? raw.status
       : "queued";
   return {
+    tenant_id: raw.tenant_id,
     firing_id: raw.firing_id,
     signal_id: raw.signal_id,
     dedupe_key: raw.dedupe_key,
@@ -78,31 +81,40 @@ function toRow(raw: RawWorkSignalFiringRow): WorkSignalFiringRow {
 export class WorkSignalFiringDal {
   constructor(private readonly db: SqlDb) {}
 
-  async getById(firingId: string): Promise<WorkSignalFiringRow | undefined> {
+  async getById(input: {
+    tenantId: string;
+    firingId: string;
+  }): Promise<WorkSignalFiringRow | undefined> {
     const row = await this.db.get<RawWorkSignalFiringRow>(
-      "SELECT * FROM work_signal_firings WHERE firing_id = ?",
-      [firingId],
+      "SELECT * FROM work_signal_firings WHERE tenant_id = ? AND firing_id = ?",
+      [input.tenantId, input.firingId],
     );
     return row ? toRow(row) : undefined;
   }
 
-  async getBySignalAndDedupeKey(
-    signalId: string,
-    dedupeKey: string,
-  ): Promise<WorkSignalFiringRow | undefined> {
+  async getBySignalAndDedupeKey(input: {
+    tenantId: string;
+    signalId: string;
+    dedupeKey: string;
+  }): Promise<WorkSignalFiringRow | undefined> {
     const row = await this.db.get<RawWorkSignalFiringRow>(
-      "SELECT * FROM work_signal_firings WHERE signal_id = ? AND dedupe_key = ?",
-      [signalId, dedupeKey],
+      `SELECT *
+       FROM work_signal_firings
+       WHERE tenant_id = ?
+         AND signal_id = ?
+         AND dedupe_key = ?`,
+      [input.tenantId, input.signalId, input.dedupeKey],
     );
     return row ? toRow(row) : undefined;
   }
 
   async createIfAbsent(input: {
+    tenantId: string;
     firingId: string;
     signalId: string;
     dedupeKey: string;
   }): Promise<{ row: WorkSignalFiringRow; created: boolean }> {
-    const existing = await this.getById(input.firingId);
+    const existing = await this.getById({ tenantId: input.tenantId, firingId: input.firingId });
     if (existing) {
       if (existing.signal_id !== input.signalId || existing.dedupe_key !== input.dedupeKey) {
         throw new Error(
@@ -116,6 +128,7 @@ export class WorkSignalFiringDal {
     try {
       const result = await this.db.run(
         `INSERT INTO work_signal_firings (
+           tenant_id,
            firing_id,
            signal_id,
            dedupe_key,
@@ -128,13 +141,16 @@ export class WorkSignalFiringDal {
            created_at,
            updated_at
          )
-         VALUES (?, ?, ?, 'queued', 0, NULL, NULL, NULL, NULL, ?, ?)
-         ON CONFLICT (signal_id, dedupe_key) DO NOTHING`,
-        [input.firingId, input.signalId, input.dedupeKey, nowIso, nowIso],
+         VALUES (?, ?, ?, ?, 'queued', 0, NULL, NULL, NULL, NULL, ?, ?)
+         ON CONFLICT (tenant_id, signal_id, dedupe_key) DO NOTHING`,
+        [input.tenantId, input.firingId, input.signalId, input.dedupeKey, nowIso, nowIso],
       );
 
       if (result.changes === 1) {
-        const createdRow = await this.getById(input.firingId);
+        const createdRow = await this.getById({
+          tenantId: input.tenantId,
+          firingId: input.firingId,
+        });
         if (!createdRow) {
           throw new Error("failed to create work signal firing");
         }
@@ -146,13 +162,17 @@ export class WorkSignalFiringDal {
         return { row: createdRow, created: true };
       }
 
-      const slot = await this.getBySignalAndDedupeKey(input.signalId, input.dedupeKey);
+      const slot = await this.getBySignalAndDedupeKey({
+        tenantId: input.tenantId,
+        signalId: input.signalId,
+        dedupeKey: input.dedupeKey,
+      });
       if (!slot) {
         throw new Error("failed to create work signal firing");
       }
       return { row: slot, created: false };
     } catch (err) {
-      const raced = await this.getById(input.firingId);
+      const raced = await this.getById({ tenantId: input.tenantId, firingId: input.firingId });
       if (raced) {
         if (raced.signal_id !== input.signalId || raced.dedupe_key !== input.dedupeKey) {
           throw new Error(
@@ -199,7 +219,8 @@ export class WorkSignalFiringDal {
              next_attempt_at_ms = NULL,
              attempt = attempt + 1,
              updated_at = ?
-         WHERE firing_id = ?
+         WHERE tenant_id = ?
+           AND firing_id = ?
            AND (
              (
                status = 'queued'
@@ -210,19 +231,32 @@ export class WorkSignalFiringDal {
                AND lease_expires_at_ms <= ?
              )
            )`,
-        [input.owner, leaseExpiresAt, nowIso, candidate.firing_id, input.nowMs, input.nowMs],
+        [
+          input.owner,
+          leaseExpiresAt,
+          nowIso,
+          candidate.tenant_id,
+          candidate.firing_id,
+          input.nowMs,
+          input.nowMs,
+        ],
       );
       if (updated.changes !== 1) return undefined;
 
       const claimed = await tx.get<RawWorkSignalFiringRow>(
-        "SELECT * FROM work_signal_firings WHERE firing_id = ?",
-        [candidate.firing_id],
+        "SELECT * FROM work_signal_firings WHERE tenant_id = ? AND firing_id = ?",
+        [candidate.tenant_id, candidate.firing_id],
       );
       return claimed ? toRow(claimed) : undefined;
     });
   }
 
-  async markFailed(input: { firingId: string; owner: string; error: string }): Promise<void> {
+  async markFailed(input: {
+    tenantId: string;
+    firingId: string;
+    owner: string;
+    error: string;
+  }): Promise<void> {
     const nowIso = new Date().toISOString();
     await this.db.run(
       `UPDATE work_signal_firings
@@ -231,23 +265,29 @@ export class WorkSignalFiringDal {
            lease_expires_at_ms = NULL,
            error = ?,
            updated_at = ?
-       WHERE firing_id = ? AND lease_owner = ? AND status = 'processing'`,
-      [input.error, nowIso, input.firingId, input.owner],
+       WHERE tenant_id = ? AND firing_id = ? AND lease_owner = ? AND status = 'processing'`,
+      [input.error, nowIso, input.tenantId, input.firingId, input.owner],
     );
   }
 
   async markRetryableFailure(input: {
+    tenantId: string;
     firingId: string;
     owner: string;
     nowMs: number;
     maxAttempts: number;
     error: string;
   }): Promise<void> {
-    const firing = await this.getById(input.firingId);
+    const firing = await this.getById({ tenantId: input.tenantId, firingId: input.firingId });
     if (!firing) return;
 
     if (firing.attempt >= input.maxAttempts) {
-      await this.markFailed({ firingId: input.firingId, owner: input.owner, error: input.error });
+      await this.markFailed({
+        tenantId: input.tenantId,
+        firingId: input.firingId,
+        owner: input.owner,
+        error: input.error,
+      });
       return;
     }
 
@@ -265,8 +305,8 @@ export class WorkSignalFiringDal {
            lease_expires_at_ms = NULL,
            error = ?,
            updated_at = ?
-       WHERE firing_id = ? AND lease_owner = ? AND status = 'processing'`,
-      [nextAttemptAt, input.error, nowIso, input.firingId, input.owner],
+       WHERE tenant_id = ? AND firing_id = ? AND lease_owner = ? AND status = 'processing'`,
+      [nextAttemptAt, input.error, nowIso, input.tenantId, input.firingId, input.owner],
     );
   }
 }

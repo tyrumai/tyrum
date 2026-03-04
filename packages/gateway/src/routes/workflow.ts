@@ -82,7 +82,7 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
     try {
       const parsedKey = parseTyrumKey(key as never);
       if (parsedKey.kind === "agent") {
-        agentId = parsedKey.agent_id;
+        agentId = parsedKey.agent_key;
       }
     } catch (err) {
       void err;

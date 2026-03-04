@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Subagent, SubagentDescriptor, SubagentId, SubagentStatus } from "../subagent.js";
+import { ScopeKeys } from "../scope.js";
 import { WorkItemId, WorkItemTaskId, WorkScope } from "../workboard.js";
 import {
   WsEventEnvelope,
@@ -12,7 +13,7 @@ import {
 // Operation payloads (typed) — subagent management
 // ---------------------------------------------------------------------------
 
-export const WsSubagentSpawnPayload = WorkScope.extend({
+export const WsSubagentSpawnPayload = ScopeKeys.extend({
   execution_profile: z.string().trim().min(1),
   work_item_id: WorkItemId.optional(),
   work_item_task_id: WorkItemTaskId.optional(),
@@ -25,7 +26,7 @@ export const WsSubagentSpawnRequest = WsRequestEnvelope.extend({
 });
 export type WsSubagentSpawnRequest = z.infer<typeof WsSubagentSpawnRequest>;
 
-export const WsSubagentListPayload = WorkScope.extend({
+export const WsSubagentListPayload = ScopeKeys.extend({
   statuses: z.array(SubagentStatus).optional(),
   limit: z.number().int().positive().optional(),
   cursor: z.string().trim().min(1).optional(),
@@ -38,7 +39,7 @@ export const WsSubagentListRequest = WsRequestEnvelope.extend({
 });
 export type WsSubagentListRequest = z.infer<typeof WsSubagentListRequest>;
 
-export const WsSubagentGetPayload = WorkScope.extend({
+export const WsSubagentGetPayload = ScopeKeys.extend({
   subagent_id: SubagentId,
 });
 export type WsSubagentGetPayload = z.infer<typeof WsSubagentGetPayload>;
@@ -49,7 +50,7 @@ export const WsSubagentGetRequest = WsRequestEnvelope.extend({
 });
 export type WsSubagentGetRequest = z.infer<typeof WsSubagentGetRequest>;
 
-export const WsSubagentSendPayload = WorkScope.extend({
+export const WsSubagentSendPayload = ScopeKeys.extend({
   subagent_id: SubagentId,
   content: z.string().trim().min(1),
 });
@@ -61,7 +62,7 @@ export const WsSubagentSendRequest = WsRequestEnvelope.extend({
 });
 export type WsSubagentSendRequest = z.infer<typeof WsSubagentSendRequest>;
 
-export const WsSubagentClosePayload = WorkScope.extend({
+export const WsSubagentClosePayload = ScopeKeys.extend({
   subagent_id: SubagentId,
   reason: z.string().trim().min(1).optional(),
 });

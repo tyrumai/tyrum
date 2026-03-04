@@ -2,12 +2,25 @@ import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { ExecutionRunId } from "./execution.js";
 import { AgentId, TenantId, WorkspaceId } from "./keys.js";
+import { ScopeKeys } from "./scope.js";
 import { WorkItemId } from "./workboard.js";
 
 export const WorkStateKVKey = z.string().trim().min(1);
 export type WorkStateKVKey = z.infer<typeof WorkStateKVKey>;
 
 export const WorkStateKVScope = z.discriminatedUnion("kind", [
+  ScopeKeys.extend({
+    kind: z.literal("agent"),
+  }).strict(),
+  ScopeKeys.extend({
+    kind: z.literal("work_item"),
+    work_item_id: WorkItemId,
+  }).strict(),
+]);
+export type WorkStateKVScope = z.infer<typeof WorkStateKVScope>;
+
+/** Internal resolved scope ids for DB reads/writes. */
+export const WorkStateKVScopeIds = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("agent"),
@@ -26,7 +39,7 @@ export const WorkStateKVScope = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
-export type WorkStateKVScope = z.infer<typeof WorkStateKVScope>;
+export type WorkStateKVScopeIds = z.infer<typeof WorkStateKVScopeIds>;
 
 export const AgentStateKVEntry = z
   .object({

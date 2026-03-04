@@ -3,6 +3,9 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { TelegramChannelQueue, telegramThreadKey } from "../../src/modules/channels/telegram.js";
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
+import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
+import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
+import { SessionDal } from "../../src/modules/agent/session-dal.js";
 
 function makeNormalizedTextMessage(input: {
   threadId: string;
@@ -76,19 +79,22 @@ describe("TelegramChannelQueue queue mode overrides", () => {
     nowSpy.mockReturnValue(1_000);
 
     try {
+      const sessionDal = new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+
       await db.run(
-        `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
-         VALUES (?, ?, ?, ?)`,
-        [key, lane, "worker-1", 60_000],
+        `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+         VALUES (?, ?, ?, ?, ?)`,
+        [DEFAULT_TENANT_ID, key, lane, "worker-1", 60_000],
       );
 
       await db.run(
-        `INSERT INTO lane_queue_mode_overrides (key, lane, queue_mode, updated_at_ms)
-         VALUES (?, ?, ?, ?)`,
-        [key, lane, "interrupt", 1_000],
+        `INSERT INTO lane_queue_mode_overrides (tenant_id, key, lane, queue_mode, updated_at_ms)
+         VALUES (?, ?, ?, ?, ?)`,
+        [DEFAULT_TENANT_ID, key, lane, "interrupt", 1_000],
       );
 
       const queue = new TelegramChannelQueue(db, {
+        sessionDal,
         agentId,
         accountId,
         lane,
@@ -101,16 +107,16 @@ describe("TelegramChannelQueue queue mode overrides", () => {
       const inbox = await db.get<{ queue_mode: string }>(
         `SELECT queue_mode
          FROM channel_inbox
-         WHERE key = ? AND lane = ? AND message_id = ?`,
-        [key, lane, "msg-1"],
+         WHERE tenant_id = ? AND key = ? AND lane = ? AND message_id = ?`,
+        [DEFAULT_TENANT_ID, key, lane, "msg-1"],
       );
       expect(inbox?.queue_mode).toBe("interrupt");
 
       const signal = await db.get<{ kind: string; queue_mode: string }>(
         `SELECT kind, queue_mode
          FROM lane_queue_signals
-         WHERE key = ? AND lane = ?`,
-        [key, lane],
+         WHERE tenant_id = ? AND key = ? AND lane = ?`,
+        [DEFAULT_TENANT_ID, key, lane],
       );
       expect(signal).toMatchObject({ kind: "interrupt", queue_mode: "interrupt" });
     } finally {

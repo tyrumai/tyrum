@@ -3,8 +3,8 @@ import type { OperatorWsClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 
 export interface ApprovalsState {
-  byId: Record<number, Approval>;
-  pendingIds: number[];
+  byId: Record<string, Approval>;
+  pendingIds: string[];
   loading: boolean;
   error: string | null;
   lastSyncedAt: string | null;
@@ -12,7 +12,7 @@ export interface ApprovalsState {
 
 export interface ApprovalsStore extends ExternalStore<ApprovalsState> {
   refreshPending(): Promise<void>;
-  resolve(approvalId: number, decision: "approved" | "denied", reason?: string): Promise<Approval>;
+  resolve(approvalId: string, decision: "approved" | "denied", reason?: string): Promise<Approval>;
 }
 
 function upsertApproval(state: ApprovalsState, approval: Approval): ApprovalsState {
@@ -46,7 +46,7 @@ export function createApprovalsStore(ws: OperatorWsClient): {
 
   let refreshPendingRunId = 0;
   let activeRefreshPendingRunId: number | null = null;
-  let bufferedApprovalUpserts = new Map<number, Approval>();
+  let bufferedApprovalUpserts = new Map<string, Approval>();
 
   function handleApprovalUpsert(approval: Approval): void {
     if (activeRefreshPendingRunId !== null) {
@@ -58,7 +58,7 @@ export function createApprovalsStore(ws: OperatorWsClient): {
   async function refreshPending(): Promise<void> {
     const runId = ++refreshPendingRunId;
     activeRefreshPendingRunId = runId;
-    bufferedApprovalUpserts = new Map<number, Approval>();
+    bufferedApprovalUpserts = new Map<string, Approval>();
 
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
@@ -94,13 +94,13 @@ export function createApprovalsStore(ws: OperatorWsClient): {
     } finally {
       if (activeRefreshPendingRunId === runId) {
         activeRefreshPendingRunId = null;
-        bufferedApprovalUpserts = new Map<number, Approval>();
+        bufferedApprovalUpserts = new Map<string, Approval>();
       }
     }
   }
 
   async function resolve(
-    approvalId: number,
+    approvalId: string,
     decision: "approved" | "denied",
     reason?: string,
   ): Promise<Approval> {

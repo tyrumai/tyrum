@@ -5,6 +5,7 @@ import type {
   AgentTurnResponse as AgentTurnResponseT,
   NormalizedContainerKind,
   NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
+  WorkScope,
 } from "@tyrum/schemas";
 import { AgentTurnRequest, AgentTurnResponse, SubagentSessionKey } from "@tyrum/schemas";
 import { applyDeterministicContextCompactionAndToolPruning } from "./context-pruning.js";
@@ -16,6 +17,7 @@ import type { ExecutionEngine, StepExecutor } from "../../execution/engine.js";
 import { LaneQueueInterruptError, type LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { WorkboardDal } from "../../workboard/dal.js";
+import type { IdentityScopeDal } from "../../identity/scope.js";
 
 const TURN_ENGINE_MIN_BACKOFF_MS = 5;
 const TURN_ENGINE_MAX_BACKOFF_MS = 250;
@@ -23,6 +25,7 @@ const TURN_ENGINE_MAX_BACKOFF_MS = 250;
 export type LaneQueueScope = { key: string; lane: string };
 
 export type LaneQueueState = {
+  tenant_id: string;
   scope: LaneQueueScope;
   signals: LaneQueueSignalDal;
   interruptError: LaneQueueInterruptError | undefined;
@@ -43,7 +46,7 @@ type TurnExecutionContext = {
   runId: string;
   stepIndex: number;
   stepId: string;
-  stepApprovalId?: number;
+  stepApprovalId?: string;
 };
 
 type ResolvedAgentTurnInput = {
@@ -54,18 +57,16 @@ type ResolvedAgentTurnInput = {
   metadata?: Record<string, unknown>;
 };
 
-type WorkScope = { tenant_id: "default"; agent_id: string; workspace_id: string };
-
 export type TurnEngineBridgeDeps = {
-  agentId: string;
-  workspaceId: string;
+  agentKey: string;
+  workspaceKey: string;
+  identityScopeDal: IdentityScopeDal;
   executionEngine: ExecutionEngine;
   executionWorkerId: string;
   turnEngineWaitMs: number;
   approvalPollMs: number;
   db: SqlDb;
   approvalDal: ApprovalDal;
-  getWorkScope: () => WorkScope;
   resolveExecutionProfile: (input: {
     laneQueueScope?: LaneQueueScope;
     metadata?: Record<string, unknown>;
@@ -157,8 +158,8 @@ export async function maybeResolvePausedRun(
   deps: Pick<TurnEngineBridgeDeps, "approvalDal" | "db" | "executionEngine">,
   runId: string,
 ): Promise<boolean> {
-  const pausedStep = await deps.db.get<{ approval_id: number | null }>(
-    `SELECT approval_id
+  const pausedStep = await deps.db.get<{ tenant_id: string; approval_id: string | null }>(
+    `SELECT tenant_id, approval_id
        FROM execution_steps
        WHERE run_id = ? AND status = 'paused'
        ORDER BY step_index ASC
@@ -166,20 +167,29 @@ export async function maybeResolvePausedRun(
     [runId],
   );
   const approvalId = pausedStep?.approval_id ?? null;
-  if (approvalId === null) return false;
+  if (!pausedStep || approvalId === null) return false;
+  const tenantId = pausedStep.tenant_id;
 
-  await deps.approvalDal.expireStale();
-  let approval = await deps.approvalDal.getById(approvalId);
+  await deps.approvalDal.expireStale({ tenantId });
+  let approval = await deps.approvalDal.getById({ tenantId, approvalId });
   if (!approval) {
     await deps.executionEngine.cancelRun(runId, "approval record not found");
     return true;
   }
 
+  const extractReason = (): string | undefined => {
+    const record = coerceRecord(approval?.resolution);
+    const reason = typeof record?.["reason"] === "string" ? record["reason"].trim() : "";
+    return reason.length > 0 ? reason : undefined;
+  };
+
   if (approval.status === "pending") {
     const expiresAt = approval.expires_at;
     const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
     if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
-      approval = (await deps.approvalDal.expireById(approval.id)) ?? approval;
+      approval =
+        (await deps.approvalDal.expireById({ tenantId, approvalId: approval.approval_id })) ??
+        approval;
     } else {
       return false;
     }
@@ -194,7 +204,7 @@ export async function maybeResolvePausedRun(
   if (approval.status === "approved" && !resumeToken) {
     await deps.executionEngine.cancelRun(
       approval.run_id ?? runId,
-      approval.response_reason ?? "approved approval missing resume token",
+      extractReason() ?? "approved approval missing resume token",
     );
     return true;
   }
@@ -210,14 +220,13 @@ export async function maybeResolvePausedRun(
 
   if (approval.status === "denied" || approval.status === "expired") {
     const reason =
-      approval.response_reason ??
-      (approval.status === "expired" ? "approval timed out" : "approval denied");
+      extractReason() ?? (approval.status === "expired" ? "approval timed out" : "approval denied");
     await deps.executionEngine.cancelRun(runId, reason);
     return true;
   }
 
   if (approval.status === "cancelled") {
-    await deps.executionEngine.cancelRun(runId, approval.response_reason ?? "approval cancelled");
+    await deps.executionEngine.cancelRun(runId, extractReason() ?? "approval cancelled");
     return true;
   }
 
@@ -229,11 +238,14 @@ export async function turnViaExecutionEngine(
   input: AgentTurnRequestT,
 ): Promise<AgentTurnResponseT> {
   const resolvedInput = deps.resolveAgentTurnInput(input);
+  const tenantKey = input.tenant_key?.trim();
+  const agentKey = input.agent_key?.trim() || deps.agentKey;
+  const workspaceKey = input.workspace_key?.trim() || deps.workspaceKey;
   const containerKind: NormalizedContainerKind =
     input.container_kind ?? resolvedInput.envelope?.container.kind ?? "channel";
   const defaultKey = buildAgentTurnKey({
-    agentId: deps.agentId,
-    workspaceId: deps.workspaceId,
+    agentId: agentKey,
+    workspaceId: workspaceKey,
     channel: resolvedInput.channel,
     containerKind,
     threadId: resolvedInput.thread_id,
@@ -243,17 +255,28 @@ export async function turnViaExecutionEngine(
   const canOverride =
     laneQueueScope &&
     laneQueueScope.lane === "subagent" &&
-    laneQueueScope.key.startsWith(`agent:${deps.agentId}:subagent:`) &&
+    laneQueueScope.key.startsWith(`agent:${agentKey}:subagent:`) &&
     SubagentSessionKey.safeParse(laneQueueScope.key).success;
   const key = canOverride ? laneQueueScope.key : defaultKey;
   const lane = canOverride ? "subagent" : "main";
-  const planId = `agent-turn-${deps.agentId}-${randomUUID()}`;
+  const planId = `agent-turn-${agentKey}-${randomUUID()}`;
   const requestId = deps.resolveTurnRequestId(input);
 
   if (lane === "main") {
     try {
       await new WorkboardDal(deps.db).upsertScopeActivity({
-        scope: deps.getWorkScope(),
+        scope: await (async (): Promise<WorkScope> => {
+          const scopeIds = await deps.identityScopeDal.resolveScopeIds({
+            ...(tenantKey ? { tenantKey } : {}),
+            agentKey,
+            workspaceKey,
+          });
+          return {
+            tenant_id: scopeIds.tenantId,
+            agent_id: scopeIds.agentId,
+            workspace_id: scopeIds.workspaceId,
+          };
+        })(),
         last_active_session_key: key,
         updated_at_ms: Date.now(),
       });
@@ -273,8 +296,9 @@ export async function turnViaExecutionEngine(
     container_kind: containerKind,
     message: input.message,
     envelope: resolvedInput.envelope,
-    agent_id: deps.agentId,
-    workspace_id: deps.workspaceId,
+    ...(tenantKey ? { tenant_key: tenantKey } : {}),
+    agent_key: agentKey,
+    workspace_key: workspaceKey,
   };
   if (input.intake_mode) {
     stepArgs["intake_mode"] = input.intake_mode;
@@ -288,7 +312,7 @@ export async function turnViaExecutionEngine(
   const { runId } = await deps.executionEngine.enqueuePlan({
     key,
     lane,
-    workspaceId: deps.workspaceId,
+    workspaceId: workspaceKey,
     planId,
     requestId,
     budgets: executionProfile.profile.budgets,
@@ -321,7 +345,7 @@ export async function turnViaExecutionEngine(
 
       const stepRow = await deps.db.get<{
         step_id: string;
-        approval_id: number | null;
+        approval_id: string | null;
       }>(
         `SELECT step_id, approval_id
            FROM execution_steps
@@ -480,16 +504,28 @@ export async function turnViaExecutionEngine(
 
   // Best-effort: avoid leaving our lane/workspace leases behind when we give up waiting.
   // (Leases held by other workers expire and are cleaned up via the normal TTL/takeover flow.)
-  await deps.db.run(
-    `DELETE FROM lane_leases
-       WHERE key = ? AND lane = ? AND lease_owner = ?`,
-    [key, lane, workerId],
-  );
-  await deps.db.run(
-    `DELETE FROM workspace_leases
-       WHERE workspace_id = ? AND lease_owner = ?`,
-    [deps.workspaceId, workerId],
-  );
+  try {
+    const scope = await deps.db.get<{ tenant_id: string; workspace_id: string }>(
+      `SELECT tenant_id, workspace_id
+         FROM execution_runs
+         WHERE run_id = ?`,
+      [runId],
+    );
+    if (scope) {
+      await deps.db.run(
+        `DELETE FROM lane_leases
+           WHERE tenant_id = ? AND key = ? AND lane = ? AND lease_owner = ?`,
+        [scope.tenant_id, key, lane, workerId],
+      );
+      await deps.db.run(
+        `DELETE FROM workspace_leases
+           WHERE tenant_id = ? AND workspace_id = ? AND lease_owner = ?`,
+        [scope.tenant_id, scope.workspace_id, workerId],
+      );
+    }
+  } catch {
+    // Intentional: ignore best-effort cleanup failures.
+  }
 
   if (cancelOutcome === "already_terminal") {
     const latest = await deps.db.get<RunStatusRow>(

@@ -4,6 +4,7 @@ import { EventLog } from "../../src/modules/planner/event-log.js";
 import { createAuditRoutes } from "../../src/routes/audit.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("Audit routes", () => {
   let db: SqliteDb;
@@ -24,8 +25,9 @@ describe("Audit routes", () => {
   async function appendEvents(planId: string, count: number): Promise<void> {
     for (let i = 0; i < count; i++) {
       await eventLog.append({
+        tenantId: DEFAULT_TENANT_ID,
         replayId: `r-${planId}-${String(i)}`,
-        planId,
+        planKey: planId,
         stepIndex: i,
         occurredAt: `2025-01-15T10:0${String(i)}:00Z`,
         action: { step: i },
@@ -33,7 +35,7 @@ describe("Audit routes", () => {
     }
   }
 
-  describe("GET /audit/export/:planId", () => {
+  describe("GET /audit/export/:planKey", () => {
     it("exports a valid receipt bundle", async () => {
       await appendEvents("plan-1", 3);
 
@@ -48,7 +50,9 @@ describe("Audit routes", () => {
         chain_verification: { valid: boolean; checked_count: number };
         exported_at: string;
       };
-      expect(body.plan_id).toBe("plan-1");
+      expect(body.plan_id).toMatch(
+        /^([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/,
+      );
       expect(body.events).toHaveLength(3);
       expect(body.chain_verification.valid).toBe(true);
       expect(body.chain_verification.checked_count).toBe(3);
@@ -67,7 +71,10 @@ describe("Audit routes", () => {
   describe("POST /audit/verify", () => {
     it("verifies a valid chain", async () => {
       await appendEvents("plan-1", 3);
-      const events = await eventLog.getEventsForVerification("plan-1");
+      const events = await eventLog.getEventsForVerification({
+        tenantId: DEFAULT_TENANT_ID,
+        planKey: "plan-1",
+      });
 
       const res = await app.request("/audit/verify", {
         method: "POST",
@@ -86,7 +93,10 @@ describe("Audit routes", () => {
 
     it("detects tampered chain", async () => {
       await appendEvents("plan-1", 3);
-      const events = await eventLog.getEventsForVerification("plan-1");
+      const events = await eventLog.getEventsForVerification({
+        tenantId: DEFAULT_TENANT_ID,
+        planKey: "plan-1",
+      });
       events[1]!.action = '{"tampered":true}';
 
       const res = await app.request("/audit/verify", {
@@ -146,7 +156,10 @@ describe("Audit routes", () => {
 
     it("deletes events and inserts a proof event for decision=delete", async () => {
       await appendEvents("plan-1", 3);
-      const eventsBefore = await eventLog.getEventsForVerification("plan-1");
+      const eventsBefore = await eventLog.getEventsForVerification({
+        tenantId: DEFAULT_TENANT_ID,
+        planKey: "plan-1",
+      });
       const lastHashBefore = eventsBefore[eventsBefore.length - 1]!.event_hash;
 
       const res = await app.request("/audit/forget", {
@@ -171,7 +184,10 @@ describe("Audit routes", () => {
       expect(body.proof_event_id).toBeGreaterThan(0);
 
       // Verify the proof event exists
-      const remaining = await eventLog.getEventsForVerification("plan-1");
+      const remaining = await eventLog.getEventsForVerification({
+        tenantId: DEFAULT_TENANT_ID,
+        planKey: "plan-1",
+      });
       expect(remaining).toHaveLength(1);
 
       const proofEvent = remaining[0]!;
@@ -195,7 +211,10 @@ describe("Audit routes", () => {
 
     it("allows verifying the original chain plus the delete proof event", async () => {
       await appendEvents("plan-1", 2);
-      const eventsBefore = await eventLog.getEventsForVerification("plan-1");
+      const eventsBefore = await eventLog.getEventsForVerification({
+        tenantId: DEFAULT_TENANT_ID,
+        planKey: "plan-1",
+      });
 
       const forgetRes = await app.request("/audit/forget", {
         method: "POST",
@@ -209,7 +228,10 @@ describe("Audit routes", () => {
       });
       expect(forgetRes.status).toBe(200);
 
-      const remaining = await eventLog.getEventsForVerification("plan-1");
+      const remaining = await eventLog.getEventsForVerification({
+        tenantId: DEFAULT_TENANT_ID,
+        planKey: "plan-1",
+      });
       expect(remaining).toHaveLength(1);
 
       const verifyRes = await app.request("/audit/verify", {
@@ -226,7 +248,10 @@ describe("Audit routes", () => {
     it("deletes events and inserts a proof event for decision=anonymize", async () => {
       await appendEvents("plan-1", 2);
 
-      const eventsBefore = await eventLog.getEventsForVerification("plan-1");
+      const eventsBefore = await eventLog.getEventsForVerification({
+        tenantId: DEFAULT_TENANT_ID,
+        planKey: "plan-1",
+      });
       const lastHashBefore = eventsBefore[eventsBefore.length - 1]!.event_hash;
 
       const res = await app.request("/audit/forget", {
@@ -241,7 +266,10 @@ describe("Audit routes", () => {
       });
 
       expect(res.status).toBe(200);
-      const remaining = await eventLog.getEventsForVerification("plan-1");
+      const remaining = await eventLog.getEventsForVerification({
+        tenantId: DEFAULT_TENANT_ID,
+        planKey: "plan-1",
+      });
       expect(remaining).toHaveLength(1);
 
       expect(remaining[0]!.prev_hash).toBe(lastHashBefore);
@@ -254,7 +282,10 @@ describe("Audit routes", () => {
 
     it("appends a proof event and leaves events intact for decision=retain", async () => {
       await appendEvents("plan-1", 2);
-      const eventsBefore = await eventLog.getEventsForVerification("plan-1");
+      const eventsBefore = await eventLog.getEventsForVerification({
+        tenantId: DEFAULT_TENANT_ID,
+        planKey: "plan-1",
+      });
       const lastHashBefore = eventsBefore[eventsBefore.length - 1]!.event_hash;
 
       const res = await app.request("/audit/forget", {
@@ -278,7 +309,10 @@ describe("Audit routes", () => {
       expect(body.deleted_count).toBe(0);
       expect(body.proof_event_id).toBeGreaterThan(0);
 
-      const eventsAfter = await eventLog.getEventsForVerification("plan-1");
+      const eventsAfter = await eventLog.getEventsForVerification({
+        tenantId: DEFAULT_TENANT_ID,
+        planKey: "plan-1",
+      });
       expect(eventsAfter).toHaveLength(3);
       expect(eventsAfter[2]!.prev_hash).toBe(lastHashBefore);
       expect(eventsAfter[2]!.event_hash).toMatch(/^[0-9a-f]{64}$/);
@@ -302,9 +336,12 @@ describe("Audit routes", () => {
       expect(res.status).toBe(200);
       const body = (await res.json()) as { deleted_count: number; proof_event_id: number };
       expect(body.deleted_count).toBe(0);
-      expect(body.proof_event_id).toBeGreaterThan(0);
+      expect(body.proof_event_id).toBeGreaterThanOrEqual(0);
 
-      const remaining = await eventLog.getEventsForVerification("nonexistent");
+      const remaining = await eventLog.getEventsForVerification({
+        tenantId: DEFAULT_TENANT_ID,
+        planKey: "nonexistent",
+      });
       expect(remaining).toHaveLength(1);
       const action = JSON.parse(remaining[0]!.action) as {
         type: string;
@@ -342,7 +379,10 @@ describe("Audit routes", () => {
       });
 
       // plan-2 should be untouched
-      const plan2Events = await eventLog.getEventsForVerification("plan-2");
+      const plan2Events = await eventLog.getEventsForVerification({
+        tenantId: DEFAULT_TENANT_ID,
+        planKey: "plan-2",
+      });
       expect(plan2Events).toHaveLength(2);
     });
   });

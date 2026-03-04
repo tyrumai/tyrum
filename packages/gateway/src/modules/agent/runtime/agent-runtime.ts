@@ -11,14 +11,15 @@ import type {
   IdentityPack as IdentityPackT,
   NormalizedContainerKind,
   SecretHandle as SecretHandleT,
+  WorkScope,
 } from "@tyrum/schemas";
 import {
-  AgentId,
+  AgentKey,
   AgentStatusResponse,
   AgentTurnResponse,
   ContextReport as ContextReportSchema,
   SubagentSessionKey,
-  WorkspaceId,
+  WorkspaceKey,
 } from "@tyrum/schemas";
 import {
   prepareLaneQueueStep as prepareLaneQueueStepBridge,
@@ -88,7 +89,6 @@ import { NodeDispatchService } from "../node-dispatch-service.js";
 import { ToolExecutor } from "../tool-executor.js";
 import { tagContent } from "../provenance.js";
 import { sanitizeForModel } from "../sanitizer.js";
-import { EnvSecretProvider } from "../../secret/provider.js";
 import { VectorDal } from "../../memory/vector-dal.js";
 import { EmbeddingPipeline } from "../../memory/embedding-pipeline.js";
 import { MemoryV1Dal } from "../../memory/v1-dal.js";
@@ -111,8 +111,9 @@ import { coerceRecord } from "../../util/coerce.js";
 import { ExecutionEngine } from "../../execution/engine.js";
 import { resolveSandboxHardeningProfile } from "../../sandbox/hardening.js";
 import { LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
-import { resolveWorkspaceId } from "../../workspace/id.js";
+import { resolveWorkspaceKey } from "../../workspace/id.js";
 import { WorkboardDal } from "../../workboard/dal.js";
+import { parseChannelSourceKey } from "../../channels/interface.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -127,6 +128,22 @@ const CROSS_TURN_LOOP_WARNING_TEXT =
   `${LOOP_WARNING_PREFIX} I may be repeating myself. If this isn’t progressing, tell me what to change ` +
   "(goal/constraints/example output) and I’ll take a different approach.";
 
+function makeEventfulAbortSignal(upstream: AbortSignal | undefined): AbortSignal | undefined {
+  if (!upstream) return undefined;
+  const controller = new AbortController();
+
+  const abortLater = () => {
+    queueMicrotask(() => controller.abort());
+  };
+
+  upstream.addEventListener("abort", abortLater, { once: true });
+  if (upstream.aborted) {
+    abortLater();
+  }
+
+  return controller.signal;
+}
+
 interface AgentLoadedContext {
   config: AgentConfigT;
   identity: IdentityPackT;
@@ -140,7 +157,7 @@ type TurnExecutionContext = {
   runId: string;
   stepIndex: number;
   stepId: string;
-  stepApprovalId?: number;
+  stepApprovalId?: string;
 };
 
 type ResolvedExecutionProfile = {
@@ -182,12 +199,7 @@ export class AgentRuntime {
   private lastContextReport: AgentContextReport | undefined;
   private cleanupAtMs = 0;
 
-  private getWorkScope(): { tenant_id: "default"; agent_id: string; workspace_id: string } {
-    return { tenant_id: "default", agent_id: this.agentId, workspace_id: this.workspaceId };
-  }
-
-  private async buildWorkFocusDigest(): Promise<string> {
-    const scope = this.getWorkScope();
+  private async buildWorkFocusDigest(scope: WorkScope): Promise<string> {
     try {
       const workboard = new WorkboardDal(
         this.opts.container.db,
@@ -237,14 +249,14 @@ export class AgentRuntime {
     this.fetchImpl = opts.fetchImpl ?? fetch;
 
     const agentIdCandidate = opts.agentId?.trim() || resolveAgentId();
-    const parsedAgentId = AgentId.safeParse(agentIdCandidate);
+    const parsedAgentId = AgentKey.safeParse(agentIdCandidate);
     if (!parsedAgentId.success) {
       throw new Error(`invalid agent_id '${agentIdCandidate}' (${parsedAgentId.error.message})`);
     }
     this.agentId = parsedAgentId.data;
 
-    const workspaceIdCandidate = opts.workspaceId?.trim() || resolveWorkspaceId();
-    const parsedWorkspaceId = WorkspaceId.safeParse(workspaceIdCandidate);
+    const workspaceIdCandidate = opts.workspaceId?.trim() || resolveWorkspaceKey();
+    const parsedWorkspaceId = WorkspaceKey.safeParse(workspaceIdCandidate);
     if (!parsedWorkspaceId.success) {
       throw new Error(
         `invalid workspace_id '${workspaceIdCandidate}' (${parsedWorkspaceId.error.message})`,
@@ -315,13 +327,13 @@ export class AgentRuntime {
 
   private async resolveSessionModel(input: {
     config: AgentConfigT;
+    tenantId: string;
     sessionId: string;
     profileModelId?: string;
     fetchImpl?: typeof fetch;
   }): Promise<LanguageModelV3> {
     return await resolveSessionModelImpl(
       {
-        agentId: this.agentId,
         container: this.opts.container,
         languageModelOverride: this.languageModelOverride,
         secretProvider: this.opts.secretProvider,
@@ -483,6 +495,11 @@ export class AgentRuntime {
         mode: intake.mode,
         reason_code: intake.reason_code,
         resolved,
+        scope: {
+          tenant_id: session.tenant_id,
+          agent_id: session.agent_id,
+          workspace_id: session.workspace_id,
+        },
         createdFromSessionKey: mainLaneSessionKey,
       });
       const response = await this.finalizeTurn(
@@ -510,7 +527,11 @@ export class AgentRuntime {
     }
 
     await maybeRunPreCompactionMemoryFlush(
-      { db: this.opts.container.db, logger: this.opts.container.logger, agentId: this.agentId },
+      {
+        db: this.opts.container.db,
+        logger: this.opts.container.logger,
+        agentId: session.agent_id,
+      },
       { ctx, session, model, systemPrompt },
     );
 
@@ -557,7 +578,7 @@ export class AgentRuntime {
     args: unknown;
   }): Promise<SecretHandleT | undefined> {
     const secretProvider = this.opts.secretProvider;
-    if (!secretProvider || secretProvider instanceof EnvSecretProvider) {
+    if (!secretProvider) {
       return undefined;
     }
 
@@ -587,6 +608,7 @@ export class AgentRuntime {
     input: AgentTurnRequestT,
     opts?: { abortSignal?: AbortSignal; timeoutMs?: number; execution?: TurnExecutionContext },
   ): Promise<AgentTurnResponseT> {
+    const abortSignal = makeEventfulAbortSignal(opts?.abortSignal);
     const prepared = await this.prepareTurn(input, opts?.execution);
     const {
       ctx,
@@ -604,8 +626,13 @@ export class AgentRuntime {
       resolved,
     } = prepared;
 
+    const workScope: WorkScope = {
+      tenant_id: session.tenant_id,
+      agent_id: session.agent_id,
+      workspace_id: session.workspace_id,
+    };
+
     if (isStatusQuery(resolved.message)) {
-      const scope = this.getWorkScope();
       let reply = "";
       try {
         const workboard = new WorkboardDal(
@@ -613,7 +640,7 @@ export class AgentRuntime {
           this.opts.container.redactionEngine,
         );
         const { items } = await workboard.listItems({
-          scope,
+          scope: workScope,
           statuses: ["doing", "blocked", "ready", "backlog"],
           limit: 50,
         });
@@ -623,7 +650,10 @@ export class AgentRuntime {
           const lines: string[] = ["WorkBoard status:"];
           for (const item of items) {
             lines.push(`- [${item.status}] ${item.work_item_id} — ${item.title}`);
-            const tasks = await workboard.listTasks({ scope, work_item_id: item.work_item_id });
+            const tasks = await workboard.listTasks({
+              scope: workScope,
+              work_item_id: item.work_item_id,
+            });
             for (const task of tasks.slice(0, 10)) {
               lines.push(
                 `  - task ${task.task_id} (${task.status}) profile=${task.execution_profile}`,
@@ -643,7 +673,6 @@ export class AgentRuntime {
 
     const intakeModeDecision = parseIntakeModeDecision(resolved.message);
     if (intakeModeDecision) {
-      const scope = this.getWorkScope();
       const createdFromSessionKeyRaw = resolved.metadata?.["work_session_key"];
       const createdFromSessionKey =
         typeof createdFromSessionKeyRaw === "string" ? createdFromSessionKeyRaw.trim() : "";
@@ -659,7 +688,7 @@ export class AgentRuntime {
       const kind = intakeModeDecision.mode === "delegate_plan" ? "initiative" : "action";
 
       const item = await workboard.createItem({
-        scope,
+        scope: workScope,
         createdFromSessionKey,
         item: {
           kind,
@@ -674,7 +703,7 @@ export class AgentRuntime {
       });
 
       await workboard.setStateKv({
-        scope: { kind: "agent", ...scope },
+        scope: { kind: "agent", ...workScope },
         key: "work.active_work_item_id",
         value_json: item.work_item_id,
         provenance_json: {
@@ -685,13 +714,13 @@ export class AgentRuntime {
       });
 
       await workboard.setStateKv({
-        scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+        scope: { kind: "work_item", ...workScope, work_item_id: item.work_item_id },
         key: "work.intake",
         value_json: { mode: intakeModeDecision.mode, reason_code: intakeModeDecision.reason_code },
       });
 
       await workboard.createTask({
-        scope,
+        scope: workScope,
         task: {
           work_item_id: item.work_item_id,
           status: "queued",
@@ -700,9 +729,17 @@ export class AgentRuntime {
         },
       });
 
-      await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "ready" });
+      await workboard.transitionItem({
+        scope: workScope,
+        work_item_id: item.work_item_id,
+        status: "ready",
+      });
       try {
-        await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "doing" });
+        await workboard.transitionItem({
+          scope: workScope,
+          work_item_id: item.work_item_id,
+          status: "doing",
+        });
       } catch {
         // Intentional: best-effort transition to "doing"; the WorkItem still exists for operator triage.
       }
@@ -723,6 +760,7 @@ export class AgentRuntime {
         mode: intake.mode,
         reason_code: intake.reason_code,
         resolved,
+        scope: workScope,
         createdFromSessionKey: mainLaneSessionKey,
       });
       return await this.finalizeTurn(
@@ -736,13 +774,17 @@ export class AgentRuntime {
     }
 
     await maybeRunPreCompactionMemoryFlush(
-      { db: this.opts.container.db, logger: this.opts.container.logger, agentId: this.agentId },
+      {
+        db: this.opts.container.db,
+        logger: this.opts.container.logger,
+        agentId: session.agent_id,
+      },
       {
         ctx,
         session,
         model,
         systemPrompt,
-        abortSignal: opts?.abortSignal,
+        abortSignal,
         timeoutMs: opts?.timeoutMs,
       },
     );
@@ -757,7 +799,10 @@ export class AgentRuntime {
 
     const stepApprovalId = opts?.execution?.stepApprovalId;
     if (stepApprovalId) {
-      const approval = await this.approvalDal.getById(stepApprovalId);
+      const approval = await this.approvalDal.getById({
+        tenantId: session.tenant_id,
+        approvalId: stepApprovalId,
+      });
       if (approval && approval.status !== "pending") {
         const resumeState = extractToolApprovalResumeState(approval.context);
         if (resumeState) {
@@ -768,13 +813,17 @@ export class AgentRuntime {
           messages = appendToolApprovalResponseMessage(resumeState.messages, {
             approvalId: resumeState.approval_id,
             approved: approval.status === "approved",
-            reason:
-              approval.response_reason ??
-              (approval.status === "expired"
+            reason: (() => {
+              const resolution = coerceRecord(approval.resolution);
+              const reason =
+                typeof resolution?.["reason"] === "string" ? resolution["reason"].trim() : "";
+              if (reason.length > 0) return reason;
+              return approval.status === "expired"
                 ? "approval expired"
                 : approval.status === "cancelled"
                   ? "approval cancelled"
-                  : undefined),
+                  : undefined;
+            })(),
           });
         }
       }
@@ -802,8 +851,7 @@ export class AgentRuntime {
       tools: toolSet,
       stopWhen,
       prepareStep: ({ messages }) => this.prepareLaneQueueStep(laneQueue, messages),
-      abortSignal: opts?.abortSignal,
-      timeout: opts?.timeoutMs,
+      abortSignal,
     });
     const stepsUsedAfterCall = stepsUsedSoFar + result.steps.length;
 
@@ -849,8 +897,8 @@ export class AgentRuntime {
 
       const policyContext = {
         policy_snapshot_id: state.policySnapshotId,
-        agent_id: this.agentId,
-        workspace_id: this.workspaceId,
+        agent_id: session.agent_id,
+        workspace_id: session.workspace_id,
         suggested_overrides: state.suggestedOverrides,
         applied_override_ids: state.appliedOverrideIds,
       };
@@ -890,15 +938,15 @@ export class AgentRuntime {
 
   private async turnViaExecutionEngine(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
     const deps = {
-      agentId: this.agentId,
-      workspaceId: this.workspaceId,
+      agentKey: this.agentId,
+      workspaceKey: this.workspaceId,
+      identityScopeDal: this.opts.container.identityScopeDal,
       executionEngine: this.executionEngine,
       executionWorkerId: this.executionWorkerId,
       turnEngineWaitMs: this.turnEngineWaitMs,
       approvalPollMs: this.approvalPollMs,
       db: this.opts.container.db,
       approvalDal: this.approvalDal,
-      getWorkScope: () => this.getWorkScope(),
       resolveExecutionProfile: (args) => this.resolveExecutionProfile(args),
       turnDirect: (request, opts) => this.turnDirect(request, opts),
       resolveAgentTurnInput,
@@ -916,13 +964,20 @@ export class AgentRuntime {
     limit: number,
     primaryModelId: string,
     sessionId: string,
+    tenantId: string,
+    agentId: string,
   ): Promise<MemoryV1SemanticSearchHit[]> {
     try {
-      const pipeline = await this.resolveEmbeddingPipeline(primaryModelId, sessionId);
+      const pipeline = await this.resolveEmbeddingPipeline(
+        primaryModelId,
+        sessionId,
+        tenantId,
+        agentId,
+      );
       if (!pipeline) return [];
       const index = new MemoryV1SemanticIndex({
         db: this.opts.container.db,
-        agentId: this.agentId,
+        agentId,
         embedder: {
           modelId: "runtime/embedding",
           embed: async (text: string) => pipeline.embed(text),
@@ -938,6 +993,8 @@ export class AgentRuntime {
   private async resolveEmbeddingPipeline(
     primaryModelId: string,
     sessionId: string,
+    tenantId: string,
+    agentId: string,
   ): Promise<EmbeddingPipeline | undefined> {
     try {
       const loaded = await this.opts.container.modelsDev.ensureLoaded();
@@ -1032,7 +1089,6 @@ export class AgentRuntime {
 
       const {
         secretProvider,
-        resolver,
         authProfileDal,
         pinDal,
         oauthProviderRegistry,
@@ -1052,19 +1108,17 @@ export class AgentRuntime {
         provider: ProviderEntry,
       ): Promise<string | undefined> => {
         const orderedProfiles = await listOrderedEligibleProfilesForProvider({
-          agentId: this.agentId,
+          tenantId,
           sessionId,
-          providerId,
-          resolver,
+          providerKey: providerId,
           authProfileDal,
           pinDal,
         });
 
         for (const profile of orderedProfiles) {
           const apiKey = await resolveProfileApiKey(profile, {
+            tenantId,
             secretProvider,
-            resolver,
-            authProfileDal,
             oauthProviderRegistry,
             oauthRefreshLeaseDal,
             oauthLeaseOwner,
@@ -1114,7 +1168,7 @@ export class AgentRuntime {
         const vectorDal = new VectorDal(this.opts.container.db);
         return new EmbeddingPipeline({
           vectorDal,
-          agentId: this.agentId,
+          agentId,
           embeddingModel,
           embeddingModelId: `${candidate.providerId}/${candidate.modelId}`,
         });
@@ -1150,8 +1204,32 @@ export class AgentRuntime {
 
     const resolved = resolveAgentTurnInput(input);
     const laneQueueScope = resolveLaneQueueScope(resolved.metadata);
+    const agentKey = input.agent_key?.trim() || this.agentId;
+    const workspaceKey = input.workspace_key?.trim() || this.workspaceId;
+    const tenantKey = input.tenant_key?.trim();
+
+    const containerKind: NormalizedContainerKind =
+      input.container_kind ?? resolved.envelope?.container.kind ?? "channel";
+
+    const parsedChannel = parseChannelSourceKey(resolved.channel);
+    const connectorKey = parsedChannel.connector;
+    const accountKey = resolved.envelope?.delivery.account ?? parsedChannel.accountId;
+
+    const session = await this.sessionDal.getOrCreate({
+      scopeKeys: {
+        ...(tenantKey ? { tenantKey } : {}),
+        agentKey,
+        workspaceKey,
+      },
+      connectorKey,
+      accountKey,
+      providerThreadId: resolved.thread_id,
+      containerKind,
+    });
+
     const laneQueue: LaneQueueState | undefined = laneQueueScope
       ? {
+          tenant_id: session.tenant_id,
           scope: laneQueueScope,
           signals: new LaneQueueSignalDal(this.opts.container.db),
           interruptError: undefined,
@@ -1159,19 +1237,10 @@ export class AgentRuntime {
           pendingInjectionTexts: [],
         }
       : undefined;
-    const session = await this.sessionDal.getOrCreate(
-      resolved.channel,
-      resolved.thread_id,
-      this.agentId,
-    );
-    const agentId = this.agentId;
-    const workspaceId = this.workspaceId;
 
-    const containerKind: NormalizedContainerKind =
-      input.container_kind ?? resolved.envelope?.container.kind ?? "channel";
     const mainLaneSessionKey = resolveMainLaneSessionKey({
-      agentId,
-      workspaceId,
+      agentId: agentKey,
+      workspaceId: workspaceKey,
       resolved,
       containerKind,
       deliveryAccount: resolved.envelope?.delivery.account,
@@ -1199,18 +1268,26 @@ export class AgentRuntime {
             try {
               return await buildMemoryV1Digest({
                 dal: new MemoryV1Dal(this.opts.container.db),
-                agentId,
+                tenantId: session.tenant_id,
+                agentId: session.agent_id,
                 query: resolved.message,
                 config: ctx.config.memory.v1,
                 semanticSearch: ctx.config.memory.v1.semantic.enabled
                   ? (query, limit) =>
-                      this.semanticSearch(query, limit, ctx.config.model.model, session.session_id)
+                      this.semanticSearch(
+                        query,
+                        limit,
+                        ctx.config.model.model,
+                        session.session_id,
+                        session.tenant_id,
+                        session.agent_id,
+                      )
                   : undefined,
               });
             } catch (error) {
               this.opts.container.logger.warn("memory.v1.digest_failed", {
                 session_id: session.session_id,
-                agent_id: agentId,
+                agent_id: session.agent_id,
                 error: error instanceof Error ? error.message : String(error),
               });
               return {
@@ -1233,8 +1310,9 @@ export class AgentRuntime {
     const pluginToolsRaw = this.plugins?.getToolDescriptors() ?? [];
     const toolSetBuilder = new ToolSetBuilder({
       home: this.home,
-      agentId: this.agentId,
-      workspaceId: this.workspaceId,
+      tenantId: session.tenant_id,
+      agentId: session.agent_id,
+      workspaceId: session.workspace_id,
       policyService: this.policyService,
       approvalDal: this.approvalDal,
       approvalNotifier: this.approvalNotifier,
@@ -1281,7 +1359,8 @@ export class AgentRuntime {
       this.opts.container.secretResolutionAuditDal,
       {
         db: this.opts.container.db,
-        workspaceId,
+        tenantId: session.tenant_id,
+        workspaceId: session.workspace_id,
         ownerPrefix: this.instanceOwner,
       },
       nodeDispatchService,
@@ -1292,7 +1371,11 @@ export class AgentRuntime {
     const workFocusDigest =
       isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
         ? "Skipped for command turns."
-        : await this.buildWorkFocusDigest();
+        : await this.buildWorkFocusDigest({
+            tenant_id: session.tenant_id,
+            agent_id: session.agent_id,
+            workspace_id: session.workspace_id,
+          });
 
     const identityPrompt = formatIdentityPrompt(ctx.identity);
     const safetyPrompt = DATA_TAG_SAFETY_PROMPT;
@@ -1339,8 +1422,8 @@ export class AgentRuntime {
       session_id: session.session_id,
       channel: resolved.channel,
       thread_id: resolved.thread_id,
-      agent_id: agentId,
-      workspace_id: workspaceId,
+      agent_id: session.agent_id,
+      workspace_id: session.workspace_id,
       system_prompt: {
         chars: systemPrompt.length,
         sections: [
@@ -1392,6 +1475,7 @@ export class AgentRuntime {
       toolExecutor,
       usedTools,
       {
+        tenantId: session.tenant_id,
         planId: exec?.planId ?? `agent-turn-${session.session_id}-${randomUUID()}`,
         sessionId: session.session_id,
         channel: resolved.channel,
@@ -1439,6 +1523,7 @@ export class AgentRuntime {
 
     const model = await this.resolveSessionModel({
       config: ctx.config,
+      tenantId: session.tenant_id,
       sessionId: session.session_id,
       profileModelId: executionProfile.profile.model_id,
       fetchImpl: this.fetchImpl,
@@ -1495,11 +1580,15 @@ export class AgentRuntime {
 
     try {
       const workboard = new WorkboardDal(this.opts.container.db);
-      const scope = {
-        tenant_id: "default",
-        agent_id: this.agentId,
-        workspace_id: this.workspaceId,
-      } as const;
+      const scopeIds = await this.opts.container.identityScopeDal.resolveScopeIds({
+        agentKey: this.agentId,
+        workspaceKey: this.workspaceId,
+      });
+      const scope: WorkScope = {
+        tenant_id: scopeIds.tenantId,
+        agent_id: scopeIds.agentId,
+        workspace_id: scopeIds.workspaceId,
+      };
       const subagent = await workboard.getSubagent({ scope, subagent_id: subagentId });
       const normalized =
         subagent && typeof subagent.execution_profile === "string"
@@ -1582,6 +1671,7 @@ export class AgentRuntime {
     mode: "delegate_execute" | "delegate_plan";
     reason_code: string;
     resolved: ResolvedAgentTurnInput;
+    scope: WorkScope;
     createdFromSessionKey: string;
   }): Promise<{ reply: string; work_item_id: string; subagent_id?: string }> {
     const required = ["subagent.spawn", "work.write"] as const;
@@ -1594,11 +1684,7 @@ export class AgentRuntime {
       }
     }
 
-    const scope = {
-      tenant_id: "default",
-      agent_id: this.agentId,
-      workspace_id: this.workspaceId,
-    } as const;
+    const scope = input.scope;
 
     const workboard = new WorkboardDal(this.opts.container.db);
 
@@ -1651,7 +1737,14 @@ export class AgentRuntime {
     }
 
     const subagentId = randomUUID();
-    const sessionKey = `agent:${this.agentId}:subagent:${subagentId}`;
+    const sessionKey = (() => {
+      if (!input.createdFromSessionKey.startsWith("agent:")) {
+        return `agent:${this.agentId}:subagent:${subagentId}`;
+      }
+      const agentKey = input.createdFromSessionKey.split(":")[1]?.trim();
+      const normalized = agentKey && agentKey.length > 0 ? agentKey : this.agentId;
+      return `agent:${normalized}:subagent:${subagentId}`;
+    })();
     const subagent = await workboard.createSubagent({
       scope,
       subagent: {
@@ -1713,6 +1806,7 @@ export class AgentRuntime {
     this.lastContextReport = contextReport;
     try {
       await this.opts.container.contextReportDal.insert({
+        tenantId: session.tenant_id,
         contextReportId: contextReport.context_report_id,
         sessionId: session.session_id,
         channel: input.channel,
@@ -1731,14 +1825,14 @@ export class AgentRuntime {
       });
     }
 
-    await this.sessionDal.appendTurn(
-      session.session_id,
-      input.message,
-      finalizedReply,
-      ctx.config.sessions.max_turns,
-      nowIso,
-      this.agentId,
-    );
+    await this.sessionDal.appendTurn({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      userMessage: input.message,
+      assistantMessage: finalizedReply,
+      maxTurns: ctx.config.sessions.max_turns,
+      timestamp: nowIso,
+    });
 
     let memoryWritten = false;
     if (ctx.config.memory.markdown_enabled) {
@@ -1782,7 +1876,7 @@ export class AgentRuntime {
             session_id: session.session_id,
           },
         },
-        this.agentId,
+        session.agent_id,
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1797,6 +1891,7 @@ export class AgentRuntime {
     return AgentTurnResponse.parse({
       reply: finalizedReply,
       session_id: session.session_id,
+      session_key: session.session_key,
       used_tools: Array.from(usedTools),
       memory_written: memoryWritten,
     });

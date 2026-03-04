@@ -6,6 +6,11 @@ import { tmpdir } from "node:os";
 import { createContainer } from "../../src/container.js";
 import { Logger } from "../../src/modules/observability/logger.js";
 import { PluginRegistry } from "../../src/modules/plugins/registry.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 import { SQLITE_MIGRATIONS_DIR } from "../helpers/sqlite-db.js";
 
 type CapturedLog = { msg: string; fields: Record<string, unknown> };
@@ -220,10 +225,11 @@ describe("PluginRegistry", () => {
 
     const tool = await plugins.executeTool({
       toolId: "plugin.echo.echo",
+      toolCallId: "call-1",
       args: { text: "hi" },
       home,
-      agentId: "default",
-      workspaceId: "default",
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
     });
     expect(tool?.output).toBe("hi");
     expect(tool?.error).toBeUndefined();
@@ -251,8 +257,8 @@ describe("PluginRegistry", () => {
     expect(plugins.list().map((p) => p.id)).toEqual(["echo"]);
 
     const outboxRows = await container.db.all<{ payload_json: string }>(
-      "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC",
-      ["ws.broadcast"],
+      "SELECT payload_json FROM outbox WHERE tenant_id = ? AND topic = ? ORDER BY id ASC",
+      [DEFAULT_TENANT_ID, "ws.broadcast"],
     );
     const lifecycleEvents = outboxRows
       .map(
@@ -273,21 +279,28 @@ describe("PluginRegistry", () => {
       | undefined;
     expect(audit?.plan_id).toBe("gateway.plugins.lifecycle");
 
+    const planRow = await container.db.get<{ plan_id: string }>(
+      "SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_key = ?",
+      [DEFAULT_TENANT_ID, audit?.plan_id ?? ""],
+    );
+    expect(planRow?.plan_id).toBeTruthy();
+
     const auditRow = await container.db.get<{
-      id: number;
-      plan_id: string;
       step_index: number;
-      action: string;
+      action_json: string;
       prev_hash: string | null;
       event_hash: string | null;
     }>(
-      "SELECT id, plan_id, step_index, action, prev_hash, event_hash FROM planner_events WHERE id = ?",
-      [audit?.event_id ?? -1],
+      `SELECT step_index, action_json, prev_hash, event_hash
+       FROM planner_events
+       WHERE tenant_id = ?
+         AND plan_id = ?
+         AND step_index = ?`,
+      [DEFAULT_TENANT_ID, planRow?.plan_id ?? "", audit?.step_index ?? -1],
     );
-    expect(auditRow?.plan_id).toBe(audit?.plan_id);
     expect(auditRow?.step_index).toBe(audit?.step_index);
     expect(auditRow?.event_hash).toMatch(/^[0-9a-f]{64}$/i);
-    const action = auditRow ? (JSON.parse(auditRow.action) as any) : undefined;
+    const action = auditRow ? (JSON.parse(auditRow.action_json) as any) : undefined;
     expect(action?.type).toBe("plugin.lifecycle");
     expect(action?.kind).toBe("loaded");
     expect(action?.plugin_id).toBe("echo");
@@ -318,8 +331,8 @@ describe("PluginRegistry", () => {
     expect(plugins.list()).toHaveLength(0);
 
     const outboxRows = await container.db.all<{ payload_json: string }>(
-      "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC",
-      ["ws.broadcast"],
+      "SELECT payload_json FROM outbox WHERE tenant_id = ? AND topic = ? ORDER BY id ASC",
+      [DEFAULT_TENANT_ID, "ws.broadcast"],
     );
     const lifecycleEvents = outboxRows
       .map(
@@ -342,11 +355,23 @@ describe("PluginRegistry", () => {
       | undefined;
     expect(audit?.plan_id).toBe("gateway.plugins.lifecycle");
 
+    const planRow = await container.db.get<{ plan_id: string }>(
+      "SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_key = ?",
+      [DEFAULT_TENANT_ID, audit?.plan_id ?? ""],
+    );
+    expect(planRow?.plan_id).toBeTruthy();
+
     const auditRow = await container.db.get<{
-      id: number;
-      action: string;
-    }>("SELECT id, action FROM planner_events WHERE id = ?", [audit?.event_id ?? -1]);
-    const action = auditRow ? (JSON.parse(auditRow.action) as any) : undefined;
+      action_json: string;
+    }>(
+      `SELECT action_json
+       FROM planner_events
+       WHERE tenant_id = ?
+         AND plan_id = ?
+         AND step_index = ?`,
+      [DEFAULT_TENANT_ID, planRow?.plan_id ?? "", audit?.step_index ?? -1],
+    );
+    const action = auditRow ? (JSON.parse(auditRow.action_json) as any) : undefined;
     expect(action?.type).toBe("plugin.lifecycle");
     expect(action?.kind).toBe("failed");
     expect(action?.plugin_id).toBe("echo");
@@ -375,8 +400,8 @@ describe("PluginRegistry", () => {
     });
 
     const outboxBefore = await container.db.get<{ count: number }>(
-      "SELECT COUNT(1) AS count FROM outbox WHERE topic = ?",
-      ["ws.broadcast"],
+      "SELECT COUNT(1) AS count FROM outbox WHERE tenant_id = ? AND topic = ?",
+      [DEFAULT_TENANT_ID, "ws.broadcast"],
     );
 
     const toolRes = await plugins.executeTool({
@@ -384,8 +409,8 @@ describe("PluginRegistry", () => {
       toolCallId: "call-1",
       args: { text: "hi" },
       home,
-      agentId: "default",
-      workspaceId: "default",
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       auditPlanId: "agent-turn-test",
       sessionId: "session-1",
       channel: "local",
@@ -396,14 +421,14 @@ describe("PluginRegistry", () => {
     expect(toolRes?.output).toBe("hi");
 
     const outboxAfter = await container.db.get<{ count: number }>(
-      "SELECT COUNT(1) AS count FROM outbox WHERE topic = ?",
-      ["ws.broadcast"],
+      "SELECT COUNT(1) AS count FROM outbox WHERE tenant_id = ? AND topic = ?",
+      [DEFAULT_TENANT_ID, "ws.broadcast"],
     );
     expect(outboxAfter?.count).toBe((outboxBefore?.count ?? 0) + 1);
 
     const lastOutbox = await container.db.get<{ payload_json: string }>(
-      "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id DESC LIMIT 1",
-      ["ws.broadcast"],
+      "SELECT payload_json FROM outbox WHERE tenant_id = ? AND topic = ? ORDER BY id DESC LIMIT 1",
+      [DEFAULT_TENANT_ID, "ws.broadcast"],
     );
     const msg = lastOutbox
       ? (JSON.parse(lastOutbox.payload_json) as { message?: any }).message
@@ -419,17 +444,25 @@ describe("PluginRegistry", () => {
       | undefined;
     expect(audit?.plan_id).toBe("gateway.plugins.tool_invoked:agent-turn-test");
 
+    const planRow = await container.db.get<{ plan_id: string }>(
+      "SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_key = ?",
+      [DEFAULT_TENANT_ID, audit?.plan_id ?? ""],
+    );
+    expect(planRow?.plan_id).toBeTruthy();
+
     const auditRow = await container.db.get<{
-      id: number;
-      plan_id: string;
       step_index: number;
-      action: string;
-    }>("SELECT id, plan_id, step_index, action FROM planner_events WHERE id = ?", [
-      audit?.event_id ?? -1,
-    ]);
-    expect(auditRow?.plan_id).toBe(audit?.plan_id);
+      action_json: string;
+    }>(
+      `SELECT step_index, action_json
+       FROM planner_events
+       WHERE tenant_id = ?
+         AND plan_id = ?
+         AND step_index = ?`,
+      [DEFAULT_TENANT_ID, planRow?.plan_id ?? "", audit?.step_index ?? -1],
+    );
     expect(auditRow?.step_index).toBe(audit?.step_index);
-    const action = auditRow ? (JSON.parse(auditRow.action) as any) : undefined;
+    const action = auditRow ? (JSON.parse(auditRow.action_json) as any) : undefined;
     expect(action?.type).toBe("plugin_tool.invoked");
     expect(action?.tool_id).toBe("plugin.echo.echo");
     expect(action?.tool_call_id).toBe("call-1");
@@ -462,14 +495,15 @@ describe("PluginRegistry", () => {
       toolCallId: "call-1",
       args: { text: "hi" },
       home,
-      agentId: "default",
-      workspaceId: "default",
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       auditPlanId: "agent-turn-test",
     });
 
     const plannerAppend = await container.eventLog.append({
+      tenantId: DEFAULT_TENANT_ID,
       replayId: "planner-replay-1",
-      planId: "agent-turn-test",
+      planKey: "agent-turn-test",
       stepIndex: 0,
       occurredAt: new Date().toISOString(),
       action: { type: "planner.step" },
@@ -501,7 +535,7 @@ describe("PluginRegistry", () => {
     await container.db.exec("DROP TABLE outbox");
 
     const auditBefore = await container.db.all<{ action: string }>(
-      "SELECT action FROM planner_events",
+      "SELECT action_json AS action FROM planner_events",
     );
     const invokedBefore = auditBefore.filter((row) => {
       try {
@@ -517,14 +551,14 @@ describe("PluginRegistry", () => {
       toolCallId: "call-1",
       args: { text: "hi" },
       home,
-      agentId: "default",
-      workspaceId: "default",
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       auditPlanId: "agent-turn-test",
     });
     expect(toolRes?.output).toBe("hi");
 
     const auditAfter = await container.db.all<{ action: string }>(
-      "SELECT action FROM planner_events",
+      "SELECT action_json AS action FROM planner_events",
     );
     const invokedAfter = auditAfter.filter((row) => {
       try {
@@ -568,8 +602,8 @@ describe("PluginRegistry", () => {
       toolCallId: "call-1",
       args: { text: "hi" },
       home,
-      agentId: "default",
-      workspaceId: "default",
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
       auditPlanId: "agent-turn-test",
     });
     expect(toolRes?.output).toBe("hi");
@@ -602,10 +636,11 @@ describe("PluginRegistry", () => {
     expect(
       await plugins.executeTool({
         toolId: "plugin.echo.echo",
+        toolCallId: "call-1",
         args: { text: "hi" },
         home,
-        agentId: "default",
-        workspaceId: "default",
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
       }),
     ).toBeUndefined();
   });
@@ -1108,10 +1143,11 @@ describe("PluginRegistry", () => {
     expect(
       await plugins.executeTool({
         toolId: "plugin.echo.echo",
+        toolCallId: "call-1",
         args: { text: "hi" },
         home,
-        agentId: "default",
-        workspaceId: "default",
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
       }),
     ).toBeUndefined();
   });
@@ -1162,10 +1198,11 @@ describe("PluginRegistry", () => {
     expect(
       await plugins.executeTool({
         toolId: "plugin.echo.undeclared",
+        toolCallId: "call-1",
         args: { text: "hi" },
         home,
-        agentId: "default",
-        workspaceId: "default",
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
       }),
     ).toBeUndefined();
   });

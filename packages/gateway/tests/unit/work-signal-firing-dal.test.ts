@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { WorkSignalFiringDal } from "../../src/modules/workboard/signal-firing-dal.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 describe("WorkSignalFiringDal", () => {
   it("does not expose a standalone markEnqueued helper (scheduler updates inline for atomicity)", () => {
@@ -17,7 +22,11 @@ describe("WorkSignalFiringDal", () => {
   it("creates firings idempotently (deduped per signal + key)", async () => {
     const db = openTestSqliteDb();
     try {
-      const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+      const scope = {
+        tenant_id: DEFAULT_TENANT_ID,
+        agent_id: DEFAULT_AGENT_ID,
+        workspace_id: DEFAULT_WORKSPACE_ID,
+      } as const;
       const workboardDal = new WorkboardDal(db);
       const signal = await workboardDal.createSignal({
         scope,
@@ -30,6 +39,7 @@ describe("WorkSignalFiringDal", () => {
       const dal = new WorkSignalFiringDal(db);
 
       const first = await dal.createIfAbsent({
+        tenantId: DEFAULT_TENANT_ID,
         firingId: "firing-1",
         signalId: signal.signal_id,
         dedupeKey: "dedupe-1",
@@ -38,6 +48,7 @@ describe("WorkSignalFiringDal", () => {
       expect(first.row.firing_id).toBe("firing-1");
 
       const second = await dal.createIfAbsent({
+        tenantId: DEFAULT_TENANT_ID,
         firingId: "firing-1",
         signalId: signal.signal_id,
         dedupeKey: "dedupe-1",
@@ -46,6 +57,7 @@ describe("WorkSignalFiringDal", () => {
       expect(second.row.firing_id).toBe("firing-1");
 
       const deduped = await dal.createIfAbsent({
+        tenantId: DEFAULT_TENANT_ID,
         firingId: "firing-2",
         signalId: signal.signal_id,
         dedupeKey: "dedupe-1",
@@ -60,7 +72,11 @@ describe("WorkSignalFiringDal", () => {
   it("claims queued and expired processing firings with leases", async () => {
     const db = openTestSqliteDb();
     try {
-      const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+      const scope = {
+        tenant_id: DEFAULT_TENANT_ID,
+        agent_id: DEFAULT_AGENT_ID,
+        workspace_id: DEFAULT_WORKSPACE_ID,
+      } as const;
       const workboardDal = new WorkboardDal(db);
       const signal = await workboardDal.createSignal({
         scope,
@@ -72,6 +88,7 @@ describe("WorkSignalFiringDal", () => {
 
       const dal = new WorkSignalFiringDal(db);
       await dal.createIfAbsent({
+        tenantId: DEFAULT_TENANT_ID,
         firingId: "firing-1",
         signalId: signal.signal_id,
         dedupeKey: "k1",
@@ -99,7 +116,11 @@ describe("WorkSignalFiringDal", () => {
   it("backs off retryable failures and marks max-attempt failures", async () => {
     const db = openTestSqliteDb();
     try {
-      const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+      const scope = {
+        tenant_id: DEFAULT_TENANT_ID,
+        agent_id: DEFAULT_AGENT_ID,
+        workspace_id: DEFAULT_WORKSPACE_ID,
+      } as const;
       const workboardDal = new WorkboardDal(db);
       const signal = await workboardDal.createSignal({
         scope,
@@ -111,6 +132,7 @@ describe("WorkSignalFiringDal", () => {
 
       const dal = new WorkSignalFiringDal(db);
       await dal.createIfAbsent({
+        tenantId: DEFAULT_TENANT_ID,
         firingId: "firing-1",
         signalId: signal.signal_id,
         dedupeKey: "k1",
@@ -118,6 +140,7 @@ describe("WorkSignalFiringDal", () => {
 
       await dal.claimNext({ owner: "a", nowMs: 1_000, leaseTtlMs: 10 });
       await dal.markRetryableFailure({
+        tenantId: DEFAULT_TENANT_ID,
         firingId: "firing-1",
         owner: "a",
         nowMs: 2_000,
@@ -125,7 +148,7 @@ describe("WorkSignalFiringDal", () => {
         error: "boom",
       });
 
-      const queued = await dal.getById("firing-1");
+      const queued = await dal.getById({ tenantId: DEFAULT_TENANT_ID, firingId: "firing-1" });
       expect(queued?.status).toBe("queued");
       expect(queued?.lease_owner).toBeNull();
       expect(queued?.next_attempt_at_ms).toBe(3_000);
@@ -133,6 +156,7 @@ describe("WorkSignalFiringDal", () => {
 
       await dal.claimNext({ owner: "a", nowMs: 3_000, leaseTtlMs: 10 });
       await dal.markRetryableFailure({
+        tenantId: DEFAULT_TENANT_ID,
         firingId: "firing-1",
         owner: "a",
         nowMs: 3_000,
@@ -140,7 +164,7 @@ describe("WorkSignalFiringDal", () => {
         error: "still boom",
       });
 
-      const failed = await dal.getById("firing-1");
+      const failed = await dal.getById({ tenantId: DEFAULT_TENANT_ID, firingId: "firing-1" });
       expect(failed?.status).toBe("failed");
       expect(failed?.lease_owner).toBeNull();
       expect(failed?.error).toBe("still boom");

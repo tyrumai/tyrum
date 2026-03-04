@@ -54,7 +54,7 @@ describe("WS event catalog", () => {
       payload: {
         run_id: "550e8400-e29b-41d4-a716-446655440000",
         reason: "approval",
-        approval_id: 7,
+        approval_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         detail: "waiting for approval",
       },
     });

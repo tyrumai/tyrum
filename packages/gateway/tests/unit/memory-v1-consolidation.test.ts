@@ -3,6 +3,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { VectorDal } from "../../src/modules/memory/vector-dal.js";
 import type { AgentConfig } from "@tyrum/schemas";
+import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("Memory v1 consolidation pipeline", () => {
   it("returns under budget via dedupe + episodic consolidation (no eviction)", async () => {
@@ -11,7 +12,8 @@ describe("Memory v1 consolidation pipeline", () => {
     const vectorDal = new VectorDal(db);
 
     try {
-      const agentId = "default";
+      const tenantId = DEFAULT_TENANT_ID;
+      const agentId = DEFAULT_AGENT_ID;
 
       const factLow = await dal.create(
         {
@@ -95,9 +97,23 @@ describe("Memory v1 consolidation pipeline", () => {
         agentId,
       );
       await db.run(
-        `INSERT INTO memory_item_embeddings (agent_id, memory_item_id, embedding_id)
-         VALUES (?, ?, ?)`,
-        [agentId, note.memory_item_id, embeddingId],
+        `INSERT INTO memory_item_embeddings (
+           tenant_id,
+           agent_id,
+           memory_item_id,
+           embedding_id,
+           embedding_model,
+           vector_data
+         )
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          tenantId,
+          agentId,
+          note.memory_item_id,
+          embeddingId,
+          "test-embedder",
+          JSON.stringify([1, 0, 0, 0]),
+        ],
       );
 
       const budgets: AgentConfig["memory"]["v1"]["budgets"] = {
@@ -135,17 +151,19 @@ describe("Memory v1 consolidation pipeline", () => {
       const embeddingLinks = await db.get<{ c: number }>(
         `SELECT COUNT(*) AS c
          FROM memory_item_embeddings
-         WHERE agent_id = ?`,
-        [agentId],
+         WHERE tenant_id = ?
+           AND agent_id = ?`,
+        [tenantId, agentId],
       );
       expect(Number(embeddingLinks?.c ?? 0)).toBe(1);
 
       const memoryVectors = await db.get<{ c: number }>(
         `SELECT COUNT(*) AS c
          FROM vector_metadata
-         WHERE agent_id = ?
+         WHERE tenant_id = ?
+           AND agent_id = ?
            AND label LIKE ?`,
-        [agentId, "memory_item:%"],
+        [tenantId, agentId, "memory_item:%"],
       );
       expect(Number(memoryVectors?.c ?? 0)).toBe(1);
 
@@ -167,7 +185,8 @@ describe("Memory v1 consolidation pipeline", () => {
     const vectorDal = new VectorDal(db);
 
     try {
-      const agentId = "default";
+      const tenantId = DEFAULT_TENANT_ID;
+      const agentId = DEFAULT_AGENT_ID;
 
       const oldNote = await dal.create(
         {
@@ -204,9 +223,23 @@ describe("Memory v1 consolidation pipeline", () => {
         agentId,
       );
       await db.run(
-        `INSERT INTO memory_item_embeddings (agent_id, memory_item_id, embedding_id)
-         VALUES (?, ?, ?)`,
-        [agentId, newNote.memory_item_id, embeddingId],
+        `INSERT INTO memory_item_embeddings (
+           tenant_id,
+           agent_id,
+           memory_item_id,
+           embedding_id,
+           embedding_model,
+           vector_data
+         )
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          tenantId,
+          agentId,
+          newNote.memory_item_id,
+          embeddingId,
+          "test-embedder",
+          JSON.stringify([1, 0, 0, 0]),
+        ],
       );
 
       const budgets: AgentConfig["memory"]["v1"]["budgets"] = {
@@ -236,17 +269,19 @@ describe("Memory v1 consolidation pipeline", () => {
       const embeddingLinks = await db.get<{ c: number }>(
         `SELECT COUNT(*) AS c
          FROM memory_item_embeddings
-         WHERE agent_id = ?`,
-        [agentId],
+         WHERE tenant_id = ?
+           AND agent_id = ?`,
+        [tenantId, agentId],
       );
       expect(Number(embeddingLinks?.c ?? 0)).toBe(0);
 
       const memoryVectors = await db.get<{ c: number }>(
         `SELECT COUNT(*) AS c
          FROM vector_metadata
-         WHERE agent_id = ?
+         WHERE tenant_id = ?
+           AND agent_id = ?
            AND label LIKE ?`,
-        [agentId, "memory_item:%"],
+        [tenantId, agentId, "memory_item:%"],
       );
       expect(Number(memoryVectors?.c ?? 0)).toBe(0);
     } finally {

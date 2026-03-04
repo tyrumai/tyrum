@@ -14,7 +14,7 @@ describe("Memory v1 contracts", () => {
     const base = {
       v: 1,
       memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
-      agent_id: "default",
+      agent_id: "00000000-0000-4000-8000-000000000002",
       tags: ["project"],
       sensitivity: "private",
       provenance: {
@@ -76,7 +76,7 @@ describe("Memory v1 contracts", () => {
     const base = {
       v: 1,
       memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
-      agent_id: "default",
+      agent_id: "00000000-0000-4000-8000-000000000002",
       tags: ["project"],
       sensitivity: "private",
       provenance: {
@@ -132,7 +132,7 @@ describe("Memory v1 contracts", () => {
     const tombstone = MemoryTombstone.parse({
       v: 1,
       memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
-      agent_id: "default",
+      agent_id: "00000000-0000-4000-8000-000000000002",
       deleted_at: "2026-02-19T12:00:00Z",
       deleted_by: "operator",
       reason: "user request",
@@ -212,7 +212,7 @@ describe("Memory v1 contracts", () => {
       item: {
         v: 1,
         memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
-        agent_id: "default",
+        agent_id: "00000000-0000-4000-8000-000000000002",
         kind: "note",
         title: "Ops",
         body_md: "foo",
@@ -234,7 +234,7 @@ describe("Memory v1 contracts", () => {
         {
           v: 1,
           memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
-          agent_id: "default",
+          agent_id: "00000000-0000-4000-8000-000000000002",
           kind: "note",
           title: "Ops",
           body_md: "foo",
@@ -262,7 +262,7 @@ describe("Memory v1 contracts", () => {
       item: {
         v: 1,
         memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
-        agent_id: "default",
+        agent_id: "00000000-0000-4000-8000-000000000002",
         kind: "note",
         title: "Ops",
         body_md: "foo",
@@ -303,7 +303,7 @@ describe("Memory v1 contracts", () => {
       item: {
         v: 1,
         memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
-        agent_id: "default",
+        agent_id: "00000000-0000-4000-8000-000000000002",
         kind: "note",
         title: "Ops",
         body_md: "foo",
@@ -325,7 +325,7 @@ describe("Memory v1 contracts", () => {
       tombstone: {
         v: 1,
         memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
-        agent_id: "default",
+        agent_id: "00000000-0000-4000-8000-000000000002",
         deleted_at: "2026-02-19T12:00:00Z",
         deleted_by: "system",
         reason: "test cleanup",
@@ -366,7 +366,7 @@ describe("Memory v1 contracts", () => {
         {
           v: 1,
           memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
-          agent_id: "default",
+          agent_id: "00000000-0000-4000-8000-000000000002",
           deleted_at: "2026-02-19T12:00:00Z",
           deleted_by: "operator",
         },
@@ -392,7 +392,7 @@ describe("Memory v1 contracts", () => {
     const item = {
       v: 1,
       memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
-      agent_id: "default",
+      agent_id: "00000000-0000-4000-8000-000000000002",
       kind: "note",
       title: "Ops",
       body_md: "foo",
@@ -405,7 +405,7 @@ describe("Memory v1 contracts", () => {
     const tombstone = {
       v: 1,
       memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
-      agent_id: "default",
+      agent_id: "00000000-0000-4000-8000-000000000002",
       deleted_at: "2026-02-19T12:00:00Z",
       deleted_by: "operator",
     } as const;
@@ -414,35 +414,35 @@ describe("Memory v1 contracts", () => {
       v: 1,
       type: "memory.item.created",
       occurred_at: "2026-02-19T12:00:00Z",
-      agent_id: "default",
+      agent_id: "00000000-0000-4000-8000-000000000002",
       payload: { item },
     });
     MemoryChangeEvent.parse({
       v: 1,
       type: "memory.item.updated",
       occurred_at: "2026-02-19T12:05:00Z",
-      agent_id: "default",
+      agent_id: "00000000-0000-4000-8000-000000000002",
       payload: { item },
     });
     MemoryChangeEvent.parse({
       v: 1,
       type: "memory.item.deleted",
       occurred_at: "2026-02-19T12:10:00Z",
-      agent_id: "default",
+      agent_id: "00000000-0000-4000-8000-000000000002",
       payload: { tombstone },
     });
     MemoryChangeEvent.parse({
       v: 1,
       type: "memory.item.forgotten",
       occurred_at: "2026-02-19T12:15:00Z",
-      agent_id: "default",
+      agent_id: "00000000-0000-4000-8000-000000000002",
       payload: { tombstone },
     });
     MemoryChangeEvent.parse({
       v: 1,
       type: "memory.item.consolidated",
       occurred_at: "2026-02-19T12:20:00Z",
-      agent_id: "default",
+      agent_id: "00000000-0000-4000-8000-000000000002",
       payload: {
         from_memory_item_ids: [
           "550e8400-e29b-41d4-a716-446655440000",

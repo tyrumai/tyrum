@@ -8,7 +8,6 @@
 
 import { AttemptCost } from "@tyrum/schemas";
 import { Hono } from "hono";
-import type { AgentRegistry } from "../modules/agent/registry.js";
 import { isAuthProfilesEnabled } from "../modules/models/auth-profiles-enabled.js";
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { SessionProviderPinDal } from "../modules/models/session-pin-dal.js";
@@ -17,6 +16,7 @@ import {
   ProviderUsagePoller,
   type ProviderUsageResult,
 } from "../modules/observability/provider-usage.js";
+import type { SecretProvider } from "../modules/secret/provider.js";
 import type { SqlDb } from "../statestore/types.js";
 import { safeDetail } from "../utils/safe-detail.js";
 
@@ -24,7 +24,7 @@ export interface UsageRouteDeps {
   db: SqlDb;
   authProfileDal?: AuthProfileDal;
   pinDal?: SessionProviderPinDal;
-  agents?: AgentRegistry;
+  secretProvider?: SecretProvider;
   logger?: Logger;
 }
 
@@ -55,7 +55,7 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
   const providerUsagePoller = new ProviderUsagePoller({
     authProfileDal: deps.authProfileDal,
     pinDal: deps.pinDal,
-    agents: deps.agents,
+    secretProvider: deps.secretProvider,
     logger: deps.logger,
   });
 

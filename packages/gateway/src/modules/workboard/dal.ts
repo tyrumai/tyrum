@@ -17,7 +17,7 @@ import type {
   WorkSignalStatus,
   WorkSignalTriggerKind,
   WorkStateKVKey,
-  WorkStateKVScope,
+  WorkStateKVScopeIds,
   SubagentDescriptor,
   SubagentStatus,
   Lane,
@@ -25,6 +25,7 @@ import type {
 import type { SqlDb } from "../../statestore/types.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 import * as dalHelpers from "./dal-helpers.js";
 import type * as DalHelpers from "./dal-helpers.js";
@@ -64,10 +65,14 @@ export class WorkboardDal {
     const redactedPayload = this.redactionEngine
       ? this.redactionEngine.redactUnknown(payload).redacted
       : payload;
+    const tenantId =
+      typeof (evt.payload as any)?.tenant_id === "string" && (evt.payload as any).tenant_id.trim()
+        ? ((evt.payload as any).tenant_id as string)
+        : DEFAULT_TENANT_ID;
     await tx.run(
-      `INSERT INTO outbox (topic, target_edge_id, payload_json)
-       VALUES (?, ?, ?)`,
-      ["ws.broadcast", null, JSON.stringify(redactedPayload)],
+      `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
+       VALUES (?, ?, ?, ?)`,
+      [tenantId, "ws.broadcast", null, JSON.stringify(redactedPayload)],
     );
   }
 
@@ -364,9 +369,10 @@ export class WorkboardDal {
       if (!updated) return undefined;
 
       await tx.run(
-        `INSERT INTO work_item_events (event_id, work_item_id, created_at, kind, payload_json)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO work_item_events (tenant_id, event_id, work_item_id, created_at, kind, payload_json)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
+          params.scope.tenant_id,
           randomUUID(),
           params.work_item_id,
           occurredAtIso,
@@ -391,9 +397,10 @@ export class WorkboardDal {
                lease_expires_at_ms = NULL,
                updated_at = ?,
                finished_at = COALESCE(finished_at, ?)
-           WHERE work_item_id = ?
+           WHERE tenant_id = ?
+             AND work_item_id = ?
              AND status IN ('queued', 'leased', 'running', 'paused')`,
-          [occurredAtIso, occurredAtIso, params.work_item_id],
+          [occurredAtIso, occurredAtIso, params.scope.tenant_id, params.work_item_id],
         );
 
         const signals = new LaneQueueSignalDal(tx);
@@ -415,6 +422,7 @@ export class WorkboardDal {
 
         for (const subagent of runningSubagents) {
           await signals.setSignal({
+            tenant_id: params.scope.tenant_id,
             key: subagent.session_key,
             lane: subagent.lane,
             kind: "interrupt",
@@ -469,10 +477,11 @@ export class WorkboardDal {
     }
 
     const row = await this.db.get<DalHelpers.RawWorkItemEventRow>(
-      `INSERT INTO work_item_events (event_id, work_item_id, created_at, kind, payload_json)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO work_item_events (tenant_id, event_id, work_item_id, created_at, kind, payload_json)
+       VALUES (?, ?, ?, ?, ?, ?)
        RETURNING *`,
       [
+        params.scope.tenant_id,
         eventId,
         params.work_item_id,
         createdAtIso,
@@ -496,7 +505,7 @@ export class WorkboardDal {
     const rows = await this.db.all<DalHelpers.RawWorkItemEventRow>(
       `SELECT e.*
        FROM work_item_events e
-       JOIN work_items i ON i.work_item_id = e.work_item_id
+       JOIN work_items i ON i.tenant_id = e.tenant_id AND i.work_item_id = e.work_item_id
        WHERE i.tenant_id = ?
          AND i.agent_id = ?
          AND i.workspace_id = ?
@@ -516,7 +525,7 @@ export class WorkboardDal {
   }
 
   async getStateKv(params: {
-    scope: WorkStateKVScope;
+    scope: WorkStateKVScopeIds;
     key: WorkStateKVKey;
   }): Promise<(AgentStateKVEntry | WorkItemStateKVEntry) | undefined> {
     if (params.scope.kind === "agent") {
@@ -557,7 +566,7 @@ export class WorkboardDal {
   }
 
   async listStateKv(params: {
-    scope: WorkStateKVScope;
+    scope: WorkStateKVScopeIds;
     prefix?: string;
   }): Promise<{ entries: (AgentStateKVEntry | WorkItemStateKVEntry)[] }> {
     const where: string[] = ["tenant_id = ?", "agent_id = ?", "workspace_id = ?"];
@@ -590,7 +599,7 @@ export class WorkboardDal {
   }
 
   async setStateKv(params: {
-    scope: WorkStateKVScope;
+    scope: WorkStateKVScopeIds;
     key: WorkStateKVKey;
     value_json: unknown;
     provenance_json?: unknown;
@@ -1306,15 +1315,17 @@ export class WorkboardDal {
 
       const row = await tx.get<DalHelpers.RawWorkItemLinkRow>(
         `INSERT INTO work_item_links (
+           tenant_id,
            work_item_id,
            linked_work_item_id,
            kind,
            meta_json,
            created_at
          )
-         VALUES (?, ?, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?)
          RETURNING *`,
         [
+          params.scope.tenant_id,
           params.work_item_id,
           params.linked_work_item_id,
           params.kind,
@@ -1338,7 +1349,7 @@ export class WorkboardDal {
     const rows = await this.db.all<DalHelpers.RawWorkItemLinkRow>(
       `SELECT l.*
        FROM work_item_links l
-       JOIN work_items i ON i.work_item_id = l.work_item_id
+       JOIN work_items i ON i.tenant_id = l.tenant_id AND i.work_item_id = l.work_item_id
        WHERE i.tenant_id = ?
          AND i.agent_id = ?
          AND i.workspace_id = ?
@@ -1365,7 +1376,7 @@ export class WorkboardDal {
       execution_profile: string;
       side_effect_class: string;
       run_id?: string;
-      approval_id?: number;
+      approval_id?: string;
       artifacts?: unknown[];
       started_at?: string | null;
       finished_at?: string | null;
@@ -1399,7 +1410,7 @@ export class WorkboardDal {
       const rows = await this.db.all<{ task_id: string; work_item_id: string }>(
         `SELECT t.task_id, t.work_item_id
          FROM work_item_tasks t
-         JOIN work_items i ON i.work_item_id = t.work_item_id
+         JOIN work_items i ON i.tenant_id = t.tenant_id AND i.work_item_id = t.work_item_id
          WHERE i.tenant_id = ?
            AND i.agent_id = ?
            AND i.workspace_id = ?
@@ -1420,6 +1431,7 @@ export class WorkboardDal {
 
     const row = await this.db.get<DalHelpers.RawWorkItemTaskRow>(
       `INSERT INTO work_item_tasks (
+         tenant_id,
          task_id,
          work_item_id,
          status,
@@ -1435,9 +1447,10 @@ export class WorkboardDal {
          created_at,
          updated_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       [
+        params.scope.tenant_id,
         taskId,
         params.task.work_item_id,
         status,
@@ -1464,16 +1477,18 @@ export class WorkboardDal {
     const rows = await this.db.all<DalHelpers.RawWorkItemTaskRow>(
       `SELECT t.*
        FROM work_item_tasks t
-       JOIN work_items i ON i.work_item_id = t.work_item_id
+       JOIN work_items i ON i.tenant_id = t.tenant_id AND i.work_item_id = t.work_item_id
        WHERE i.tenant_id = ?
          AND i.agent_id = ?
          AND i.workspace_id = ?
+         AND t.tenant_id = ?
          AND t.work_item_id = ?
        ORDER BY t.created_at ASC, t.task_id ASC`,
       [
         params.scope.tenant_id,
         params.scope.agent_id,
         params.scope.workspace_id,
+        params.scope.tenant_id,
         params.work_item_id,
       ],
     );
@@ -1491,7 +1506,7 @@ export class WorkboardDal {
       execution_profile?: string;
       side_effect_class?: string;
       run_id?: string | null;
-      approval_id?: number | null;
+      approval_id?: string | null;
       artifacts?: unknown[];
       started_at?: string | null;
       finished_at?: string | null;
@@ -1505,12 +1520,19 @@ export class WorkboardDal {
       const existing = await tx.get<DalHelpers.RawWorkItemTaskRow>(
         `SELECT t.*
          FROM work_item_tasks t
-         JOIN work_items i ON i.work_item_id = t.work_item_id
+         JOIN work_items i ON i.tenant_id = t.tenant_id AND i.work_item_id = t.work_item_id
          WHERE i.tenant_id = ?
            AND i.agent_id = ?
            AND i.workspace_id = ?
+           AND t.tenant_id = ?
            AND t.task_id = ?`,
-        [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.task_id],
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.scope.tenant_id,
+          params.task_id,
+        ],
       );
       if (!existing) return undefined;
 
@@ -1550,15 +1572,17 @@ export class WorkboardDal {
           const rows = await tx.all<{ task_id: string; work_item_id: string }>(
             `SELECT t.task_id, t.work_item_id
              FROM work_item_tasks t
-             JOIN work_items i ON i.work_item_id = t.work_item_id
+             JOIN work_items i ON i.tenant_id = t.tenant_id AND i.work_item_id = t.work_item_id
              WHERE i.tenant_id = ?
                AND i.agent_id = ?
                AND i.workspace_id = ?
+               AND t.tenant_id = ?
                AND t.task_id IN (${placeholders})`,
             [
               params.scope.tenant_id,
               params.scope.agent_id,
               params.scope.workspace_id,
+              params.scope.tenant_id,
               ...normalizedDependsOn,
             ],
           );
@@ -1577,15 +1601,17 @@ export class WorkboardDal {
         const allTasks = await tx.all<{ task_id: string; depends_on_json: string }>(
           `SELECT t.task_id, t.depends_on_json
            FROM work_item_tasks t
-           JOIN work_items i ON i.work_item_id = t.work_item_id
+           JOIN work_items i ON i.tenant_id = t.tenant_id AND i.work_item_id = t.work_item_id
            WHERE i.tenant_id = ?
              AND i.agent_id = ?
              AND i.workspace_id = ?
+             AND t.tenant_id = ?
              AND t.work_item_id = ?`,
           [
             params.scope.tenant_id,
             params.scope.agent_id,
             params.scope.workspace_id,
+            params.scope.tenant_id,
             existing.work_item_id,
           ],
         );
@@ -1658,9 +1684,10 @@ export class WorkboardDal {
       const row = await tx.get<DalHelpers.RawWorkItemTaskRow>(
         `UPDATE work_item_tasks
          SET ${set.join(", ")}
-         WHERE task_id = ?
+         WHERE tenant_id = ?
+           AND task_id = ?
          RETURNING *`,
-        [...values, params.task_id],
+        [...values, params.scope.tenant_id, params.task_id],
       );
       if (!row) return undefined;
 
@@ -1745,16 +1772,18 @@ export class WorkboardDal {
       const rows = await tx.all<DalHelpers.RawWorkItemTaskRow>(
         `SELECT t.*
          FROM work_item_tasks t
-         JOIN work_items i ON i.work_item_id = t.work_item_id
+         JOIN work_items i ON i.tenant_id = t.tenant_id AND i.work_item_id = t.work_item_id
          WHERE i.tenant_id = ?
            AND i.agent_id = ?
            AND i.workspace_id = ?
+           AND t.tenant_id = ?
            AND t.work_item_id = ?
          ORDER BY t.created_at ASC, t.task_id ASC`,
         [
           params.scope.tenant_id,
           params.scope.agent_id,
           params.scope.workspace_id,
+          params.scope.tenant_id,
           params.work_item_id,
         ],
       );
@@ -1806,13 +1835,21 @@ export class WorkboardDal {
                lease_owner = ?,
                lease_expires_at_ms = ?,
                updated_at = ?
-           WHERE task_id = ?
+           WHERE tenant_id = ?
+             AND task_id = ?
              AND (
                status = 'queued'
                OR (status = 'leased' AND (lease_expires_at_ms IS NULL OR lease_expires_at_ms <= ?))
              )
            RETURNING *`,
-          [params.lease_owner, leaseExpiresAtMs, updatedAtIso, taskId, nowMs],
+          [
+            params.lease_owner,
+            leaseExpiresAtMs,
+            updatedAtIso,
+            params.scope.tenant_id,
+            taskId,
+            nowMs,
+          ],
         );
         if (!updated) continue;
         leased.push({

@@ -45,11 +45,11 @@ class InMemorySecretProvider implements SecretProvider {
     return this.handles.get(handle.handle_id)?.value ?? null;
   }
 
-  async store(scope: string, value: string): Promise<SecretHandle> {
+  async store(secretKey: string, value: string): Promise<SecretHandle> {
     const handle: SecretHandle = {
-      handle_id: `test-${randomUUID()}`,
-      provider: "file",
-      scope,
+      handle_id: secretKey,
+      provider: "db",
+      scope: secretKey,
       created_at: new Date().toISOString(),
     };
     this.handles.set(handle.handle_id, { handle, value });
@@ -86,8 +86,11 @@ describe("Watcher routes + scheduler integration", () => {
     secretValue: string,
     maxSkewMs = 60_000,
     agentId = "default",
-  ): Promise<number> {
-    const handle = await secretProviderFor(agentId).store("watcher:webhook:test", secretValue);
+  ): Promise<string> {
+    const handle = await secretProviderFor(agentId).store(
+      `watcher-webhook-${randomUUID()}`,
+      secretValue,
+    );
     const res = await app.request("/watchers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -97,13 +100,13 @@ describe("Watcher routes + scheduler integration", () => {
         trigger_config: {
           secret_handle: handle,
           max_skew_ms: maxSkewMs,
-          agent_id: agentId,
+          agent_key: agentId,
         },
       }),
     });
     expect(res.status).toBe(201);
-    const body = (await res.json()) as { id: number };
-    return body.id;
+    const body = (await res.json()) as { watcher_id: string };
+    return body.watcher_id;
   }
 
   beforeEach(() => {
@@ -127,7 +130,6 @@ describe("Watcher routes + scheduler integration", () => {
 
   async function listWatcherEpisodes(): Promise<any[]> {
     const { items } = await memoryV1Dal.list({
-      agentId: "default",
       filter: { kinds: ["episode"], provenance: { channels: ["watcher"] } },
       limit: 2000,
     });
@@ -146,8 +148,8 @@ describe("Watcher routes + scheduler integration", () => {
     });
 
     expect(res.status).toBe(201);
-    const body = (await res.json()) as { id: number; plan_id: string };
-    expect(body.id).toBeGreaterThan(0);
+    const body = (await res.json()) as { watcher_id: string; plan_id: string };
+    expect(body.watcher_id).toMatch(/^[0-9a-fA-F-]{36}$/);
     expect(body.plan_id).toBe("plan-1");
   });
 
@@ -347,7 +349,7 @@ describe("Watcher routes + scheduler integration", () => {
     expect(res.status).toBe(401);
   });
 
-  it("POST /watchers/:id/trigger/webhook uses watcher-configured agent_id for secret resolution", async () => {
+  it("POST /watchers/:id/trigger/webhook uses watcher-configured agent_key for secret resolution", async () => {
     const agentA = "agent-a";
     const agentB = "agent-b";
     void secretProviderFor(agentB);

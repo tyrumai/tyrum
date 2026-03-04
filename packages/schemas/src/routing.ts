@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
-import { AgentId, ThreadId } from "./keys.js";
+import { AgentKey, ThreadId } from "./keys.js";
 
 export const TelegramRoutingConfig = z
   .object({
-    default_agent_id: AgentId.optional(),
-    threads: z.record(ThreadId, AgentId).optional(),
+    default_agent_id: AgentKey.optional(),
+    threads: z.record(ThreadId, AgentKey).optional(),
   })
   .strict();
 export type TelegramRoutingConfig = z.infer<typeof TelegramRoutingConfig>;

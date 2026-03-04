@@ -5,11 +5,8 @@ import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { Input } from "../ui/input.js";
-import { Label } from "../ui/label.js";
-import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
 import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
 
-type SecretProviderKind = "env" | "file" | "keychain";
 type SecretsApi = OperatorCore["http"]["secrets"];
 
 function normalizeAgentId(agentIdRaw: string): { agent_id?: string } | undefined {
@@ -135,13 +132,12 @@ function SecretsStoreCard({
   requestEnter: () => void;
 }): React.ReactElement {
   const [open, setOpen] = React.useState(false);
-  const [scopeRaw, setScopeRaw] = React.useState("");
-  const [provider, setProvider] = React.useState<SecretProviderKind>("env");
+  const [secretKeyRaw, setSecretKeyRaw] = React.useState("");
   const [valueRaw, setValueRaw] = React.useState("");
   const [result, setResult] = React.useState<unknown>(undefined);
   const [error, setError] = React.useState<unknown>(undefined);
 
-  const canStore = scopeRaw.trim().length > 0;
+  const canStore = secretKeyRaw.trim().length > 0 && valueRaw.trim().length > 0;
 
   const runStore = async (): Promise<void> => {
     setResult(undefined);
@@ -151,14 +147,14 @@ function SecretsStoreCard({
       throw new Error("Enter Elevated Mode to store secrets.");
     }
 
-    const scope = scopeRaw.trim();
-    if (!scope) return void setError(new Error("scope is required"));
+    const secretKey = secretKeyRaw.trim();
+    if (!secretKey) return void setError(new Error("secret_key is required"));
 
-    const rawValue = valueRaw;
-    const value = rawValue ? rawValue : undefined;
+    const value = valueRaw.trim();
+    if (!value) return void setError(new Error("value is required"));
 
     try {
-      setResult(await api.store({ scope, value, provider }, agentQuery));
+      setResult(await api.store({ secret_key: secretKey, value }, agentQuery));
       setValueRaw("");
     } catch (e) {
       setError(e);
@@ -174,13 +170,11 @@ function SecretsStoreCard({
         </CardHeader>
         <CardContent className="grid gap-4">
           <Input
-            label="Scope"
+            label="Secret key"
             required
-            value={scopeRaw}
-            onChange={(event) => setScopeRaw(event.target.value)}
+            value={secretKeyRaw}
+            onChange={(event) => setSecretKeyRaw(event.target.value)}
           />
-
-          <SecretProviderFieldset provider={provider} onProviderChange={setProvider} />
 
           <Input
             label="Value"
@@ -230,39 +224,6 @@ function SecretsStoreCard({
         onConfirm={runStore}
       />
     </>
-  );
-}
-
-function SecretProviderFieldset({
-  provider,
-  onProviderChange,
-}: {
-  provider: SecretProviderKind;
-  onProviderChange: (next: SecretProviderKind) => void;
-}): React.ReactElement {
-  return (
-    <fieldset className="grid gap-2">
-      <legend className="text-sm font-medium leading-none text-fg">Provider</legend>
-      <RadioGroup
-        value={provider}
-        onValueChange={(value) => {
-          if (value === "env" || value === "file" || value === "keychain") onProviderChange(value);
-        }}
-        className="grid gap-2"
-      >
-        {(["env", "file", "keychain"] as const).map((kind) => {
-          const id = `secret-provider-${kind}`;
-          return (
-            <div key={kind} className="flex items-center gap-2">
-              <RadioGroupItem id={id} value={kind} />
-              <Label htmlFor={id} className="text-sm font-normal text-fg">
-                {kind}
-              </Label>
-            </div>
-          );
-        })}
-      </RadioGroup>
-    </fieldset>
   );
 }
 

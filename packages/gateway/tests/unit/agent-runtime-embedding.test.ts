@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SecretHandle } from "@tyrum/schemas";
-import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
 import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
+import { DbSecretProvider } from "../../src/modules/secret/provider.js";
+import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -39,37 +39,6 @@ vi.mock("../../src/modules/models/provider-factory.js", () => {
     },
   };
 });
-
-class MemorySecretProvider implements SecretProvider {
-  private readonly values = new Map<string, string>();
-  private readonly handles = new Map<string, SecretHandle>();
-
-  async resolve(handle: SecretHandle): Promise<string | null> {
-    return this.values.get(handle.handle_id) ?? null;
-  }
-
-  async store(scope: string, value: string): Promise<SecretHandle> {
-    const handle: SecretHandle = {
-      handle_id: randomUUID(),
-      provider: "memory",
-      scope,
-      created_at: new Date().toISOString(),
-    };
-    this.handles.set(handle.handle_id, handle);
-    this.values.set(handle.handle_id, value);
-    return handle;
-  }
-
-  async revoke(handleId: string): Promise<boolean> {
-    const existed = this.handles.delete(handleId);
-    this.values.delete(handleId);
-    return existed;
-  }
-
-  async list(): Promise<SecretHandle[]> {
-    return [...this.handles.values()];
-  }
-}
 
 describe("AgentRuntime embedding pipeline selection", () => {
   let container: GatewayContainer | undefined;
@@ -120,7 +89,17 @@ describe("AgentRuntime embedding pipeline selection", () => {
       fetchImpl,
     });
 
-    const pipeline = await (runtime as any).resolveEmbeddingPipeline("local/chat", "session-1");
+    const ids = await new IdentityScopeDal(container.db).resolveScopeIds({
+      tenantKey: "default",
+      agentKey: "agent-1",
+      workspaceKey: "default",
+    });
+    const pipeline = await (runtime as any).resolveEmbeddingPipeline(
+      "local/chat",
+      randomUUID(),
+      ids.tenantId,
+      ids.agentId,
+    );
     expect(pipeline).toBeDefined();
 
     expect(seenProviderInputs[0]).toMatchObject({
@@ -176,17 +155,25 @@ describe("AgentRuntime embedding pipeline selection", () => {
       nowIso,
     });
 
-    const secretProvider = new MemorySecretProvider();
-    const apiKeyHandle = await secretProvider.store("api-key:openai", "OPENAI_KEY");
+    const ids = await new IdentityScopeDal(container.db).resolveScopeIds({
+      tenantKey: "default",
+      agentKey: "agent-1",
+      workspaceKey: "default",
+    });
+    const secretProvider = new DbSecretProvider(container.db, {
+      tenantId: ids.tenantId,
+      masterKey: Buffer.alloc(32, 7),
+      keyId: "test-key",
+    });
+    await secretProvider.store("api-key:openai", "OPENAI_KEY");
 
     const authProfileDal = new AuthProfileDal(container.db);
     await authProfileDal.create({
-      profileId: "profile-1",
-      agentId: "agent-1",
-      provider: "openai",
+      tenantId: ids.tenantId,
+      authProfileKey: "profile-1",
+      providerKey: "openai",
       type: "api_key",
-      secretHandles: { api_key_handle: apiKeyHandle.handle_id },
-      createdBy: { kind: "test" },
+      secretKeys: { api_key: "api-key:openai" },
     });
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
@@ -201,7 +188,9 @@ describe("AgentRuntime embedding pipeline selection", () => {
 
     const pipeline = await (runtime as any).resolveEmbeddingPipeline(
       "anthropic/claude-3.5-sonnet",
-      "session-1",
+      randomUUID(),
+      ids.tenantId,
+      ids.agentId,
     );
     expect(pipeline).toBeDefined();
 
@@ -211,7 +200,7 @@ describe("AgentRuntime embedding pipeline selection", () => {
     });
     expect(createdPipelines[0]).toMatchObject({
       embeddingModelId: "openai/text-embedding-3-small",
-      agentId: "agent-1",
+      agentId: ids.agentId,
     });
   });
 });

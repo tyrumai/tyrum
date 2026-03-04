@@ -7,6 +7,8 @@
 import { randomUUID } from "node:crypto";
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../identity/scope.js";
+import { PlanDal } from "../planner/plan-dal.js";
 
 export type JobStatus = "pending" | "running" | "completed" | "failed" | "paused" | "cancelled";
 
@@ -61,7 +63,16 @@ function rowToJob(row: JobRow): Job {
 }
 
 export class JobQueue {
-  constructor(private readonly db: SqlDb) {}
+  constructor(
+    private readonly db: SqlDb,
+    private readonly opts?: {
+      tenantId?: string;
+    },
+  ) {}
+
+  private tenantId(): string {
+    return this.opts?.tenantId ?? DEFAULT_TENANT_ID;
+  }
 
   async enqueue(
     planId: string,
@@ -69,33 +80,61 @@ export class JobQueue {
     action: ActionPrimitiveT,
     opts?: { maxAttempts?: number; timeoutMs?: number },
   ): Promise<Job> {
+    const tenantId = this.tenantId();
     const id = `job-${randomUUID()}`;
     const maxAttempts = opts?.maxAttempts ?? 3;
     const timeoutMs = opts?.timeoutMs ?? 30_000;
     const actionJson = JSON.stringify(action);
 
-    await this.db.run(
-      `INSERT INTO jobs (id, plan_id, step_index, action_json, status, attempt, max_attempts, timeout_ms)
-       VALUES (?, ?, ?, ?, 'pending', 0, ?, ?)`,
-      [id, planId, stepIndex, actionJson, maxAttempts, timeoutMs],
-    );
+    return await this.db.transaction(async (tx) => {
+      await new PlanDal(tx).ensurePlanId({
+        tenantId,
+        planKey: planId,
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        kind: "legacy_executor",
+        status: "active",
+      });
 
-    const created = await this.getById(id);
-    if (!created) {
-      throw new Error(`failed to create job '${id}'`);
-    }
-    return created;
+      await tx.run(
+        `INSERT INTO jobs (
+           tenant_id,
+           id,
+           plan_id,
+           step_index,
+           action_json,
+           status,
+           attempt,
+           max_attempts,
+           timeout_ms
+         )
+         VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)`,
+        [tenantId, id, planId, stepIndex, actionJson, maxAttempts, timeoutMs],
+      );
+
+      const created = await tx.get<JobRow>("SELECT * FROM jobs WHERE tenant_id = ? AND id = ?", [
+        tenantId,
+        id,
+      ]);
+      if (!created) {
+        throw new Error(`failed to create job '${id}'`);
+      }
+      return rowToJob(created);
+    });
   }
 
-  async getById(id: string): Promise<Job | undefined> {
-    const row = await this.db.get<JobRow>("SELECT * FROM jobs WHERE id = ?", [id]);
+  async getById(id: string, tenantId: string = this.tenantId()): Promise<Job | undefined> {
+    const row = await this.db.get<JobRow>("SELECT * FROM jobs WHERE tenant_id = ? AND id = ?", [
+      tenantId,
+      id,
+    ]);
     return row ? rowToJob(row) : undefined;
   }
 
-  async getByPlanId(planId: string): Promise<Job[]> {
+  async getByPlanId(planId: string, tenantId: string = this.tenantId()): Promise<Job[]> {
     const rows = await this.db.all<JobRow>(
-      "SELECT * FROM jobs WHERE plan_id = ? ORDER BY step_index ASC",
-      [planId],
+      "SELECT * FROM jobs WHERE tenant_id = ? AND plan_id = ? ORDER BY step_index ASC",
+      [tenantId, planId],
     );
     return rows.map(rowToJob);
   }
@@ -105,7 +144,7 @@ export class JobQueue {
    * Uses a transaction to prevent TOCTOU races under concurrent access.
    * Returns undefined if no pending jobs remain.
    */
-  async dequeue(planId: string): Promise<Job | undefined> {
+  async dequeue(planId: string, tenantId: string = this.tenantId()): Promise<Job | undefined> {
     const now = new Date().toISOString();
 
     return await this.db.transaction(async (tx) => {
@@ -114,12 +153,12 @@ export class JobQueue {
          SET status = 'running', attempt = attempt + 1, started_at = ?
          WHERE id = (
            SELECT id FROM jobs
-           WHERE plan_id = ? AND status = 'pending'
+           WHERE tenant_id = ? AND plan_id = ? AND status = 'pending'
            ORDER BY step_index ASC
            LIMIT 1
          ) AND status = 'pending'
          RETURNING *`,
-        [now, planId],
+        [now, tenantId, planId],
       );
 
       return claimed ? rowToJob(claimed) : undefined;
@@ -131,54 +170,61 @@ export class JobQueue {
    * Uses a transaction to prevent TOCTOU races.
    * Returns undefined if the job is not found or not pending.
    */
-  async dequeueById(id: string): Promise<Job | undefined> {
+  async dequeueById(id: string, tenantId: string = this.tenantId()): Promise<Job | undefined> {
     const now = new Date().toISOString();
 
     return await this.db.transaction(async (tx) => {
       const claimed = await tx.get<JobRow>(
         `UPDATE jobs
          SET status = 'running', attempt = attempt + 1, started_at = ?
-         WHERE id = ? AND status = 'pending'
+         WHERE tenant_id = ? AND id = ? AND status = 'pending'
          RETURNING *`,
-        [now, id],
+        [now, tenantId, id],
       );
 
       return claimed ? rowToJob(claimed) : undefined;
     });
   }
 
-  async markCompleted(id: string, result: unknown): Promise<void> {
+  async markCompleted(
+    id: string,
+    result: unknown,
+    tenantId: string = this.tenantId(),
+  ): Promise<void> {
     const now = new Date().toISOString();
     const resultJson = result != null ? JSON.stringify(result) : null;
 
     await this.db.run(
       `UPDATE jobs SET status = 'completed', completed_at = ?, result_json = ?
-       WHERE id = ?`,
-      [now, resultJson, id],
+       WHERE tenant_id = ? AND id = ?`,
+      [now, resultJson, tenantId, id],
     );
   }
 
-  async markFailed(id: string, error: string): Promise<void> {
+  async markFailed(id: string, error: string, tenantId: string = this.tenantId()): Promise<void> {
     const now = new Date().toISOString();
 
     await this.db.run(
       `UPDATE jobs SET status = 'failed', completed_at = ?, error = ?
-       WHERE id = ?`,
-      [now, error, id],
+       WHERE tenant_id = ? AND id = ?`,
+      [now, error, tenantId, id],
     );
   }
 
-  async markPaused(id: string): Promise<void> {
-    await this.db.run("UPDATE jobs SET status = 'paused' WHERE id = ?", [id]);
+  async markPaused(id: string, tenantId: string = this.tenantId()): Promise<void> {
+    await this.db.run("UPDATE jobs SET status = 'paused' WHERE tenant_id = ? AND id = ?", [
+      tenantId,
+      id,
+    ]);
   }
 
-  async markCancelled(id: string): Promise<void> {
+  async markCancelled(id: string, tenantId: string = this.tenantId()): Promise<void> {
     const now = new Date().toISOString();
 
     await this.db.run(
       `UPDATE jobs SET status = 'cancelled', completed_at = ?
-       WHERE id = ?`,
-      [now, id],
+       WHERE tenant_id = ? AND id = ?`,
+      [now, tenantId, id],
     );
   }
 
@@ -186,16 +232,16 @@ export class JobQueue {
    * Reset a failed job back to pending for retry, if it has attempts remaining.
    * Returns true if the job was reset, false if max attempts reached.
    */
-  async retryIfPossible(id: string): Promise<boolean> {
-    const job = await this.getById(id);
+  async retryIfPossible(id: string, tenantId: string = this.tenantId()): Promise<boolean> {
+    const job = await this.getById(id, tenantId);
     if (!job) return false;
 
     if (job.attempt >= job.max_attempts) return false;
 
     await this.db.run(
       `UPDATE jobs SET status = 'pending', error = NULL, started_at = NULL
-       WHERE id = ?`,
-      [id],
+       WHERE tenant_id = ? AND id = ?`,
+      [tenantId, id],
     );
 
     return true;
@@ -204,13 +250,13 @@ export class JobQueue {
   /**
    * Cancel all pending/running jobs for a plan.
    */
-  async cancelAllForPlan(planId: string): Promise<void> {
+  async cancelAllForPlan(planId: string, tenantId: string = this.tenantId()): Promise<void> {
     const now = new Date().toISOString();
 
     await this.db.run(
       `UPDATE jobs SET status = 'cancelled', completed_at = ?
-       WHERE plan_id = ? AND status IN ('pending', 'running')`,
-      [now, planId],
+       WHERE tenant_id = ? AND plan_id = ? AND status IN ('pending', 'running')`,
+      [now, tenantId, planId],
     );
   }
 }

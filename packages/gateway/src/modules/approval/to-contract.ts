@@ -1,4 +1,11 @@
-import { Approval, ApprovalKind, ApprovalStatus, Lane, TyrumKey } from "@tyrum/schemas";
+import {
+  Approval,
+  ApprovalKind,
+  ApprovalResolution,
+  ApprovalStatus,
+  Lane,
+  TyrumKey,
+} from "@tyrum/schemas";
 import type {
   Approval as ApprovalT,
   ApprovalResolution as ApprovalResolutionT,
@@ -8,6 +15,10 @@ import type { ApprovalRow } from "./dal.js";
 
 function toIso(value: string | null): string | null {
   return normalizeDbDateTime(value);
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function normalizeKind(raw: string): ApprovalT["kind"] {
@@ -20,43 +31,53 @@ function normalizeStatus(raw: string): ApprovalT["status"] {
   return parsed.success ? parsed.data : "pending";
 }
 
-function buildResolution(
-  status: ApprovalT["status"],
-  createdAt: string,
-  respondedAt: string | null,
-  responseReason: string | null,
-): ApprovalResolutionT | null {
+function buildResolution(row: ApprovalRow, createdAt: string): ApprovalResolutionT | null {
+  const status = normalizeStatus(row.status);
   if (status === "pending") return null;
+
+  const parsed = ApprovalResolution.safeParse(row.resolution ?? null);
+  if (parsed.success) {
+    return parsed.data;
+  }
 
   return {
     decision: status === "approved" ? "approved" : "denied",
-    resolved_at: respondedAt ?? createdAt,
-    reason:
-      responseReason ??
-      (status === "expired" ? "expired" : status === "cancelled" ? "cancelled" : undefined),
+    resolved_at: toIso(row.resolved_at) ?? createdAt,
+    reason: status === "expired" ? "expired" : status === "cancelled" ? "cancelled" : undefined,
   };
 }
 
 function buildScope(row: ApprovalRow): ApprovalT["scope"] | undefined {
   const scope: Record<string, unknown> = {};
 
-  if (row.agent_id && row.agent_id.trim().length > 0) {
-    scope["agent_id"] = row.agent_id;
-  }
   if (row.run_id && row.run_id.trim().length > 0) {
     scope["run_id"] = row.run_id;
   }
-  if (Number.isFinite(row.step_index)) {
-    scope["step_index"] = row.step_index;
+  if (row.step_id && row.step_id.trim().length > 0) {
+    scope["step_id"] = row.step_id;
+  }
+  if (row.attempt_id && row.attempt_id.trim().length > 0) {
+    scope["attempt_id"] = row.attempt_id;
+  }
+  if (row.work_item_id && row.work_item_id.trim().length > 0) {
+    scope["work_item_id"] = row.work_item_id;
+  }
+  if (row.work_item_task_id && row.work_item_task_id.trim().length > 0) {
+    scope["work_item_task_id"] = row.work_item_task_id;
   }
 
-  if (row.key) {
-    const keyParsed = TyrumKey.safeParse(row.key);
-    if (keyParsed.success) scope["key"] = keyParsed.data;
-  }
-  if (row.lane) {
-    const laneParsed = Lane.safeParse(row.lane);
-    if (laneParsed.success) scope["lane"] = laneParsed.data;
+  const ctx = row.context;
+  if (isObject(ctx)) {
+    const key = ctx["key"];
+    if (typeof key === "string") {
+      const parsed = TyrumKey.safeParse(key);
+      if (parsed.success) scope["key"] = parsed.data;
+    }
+    const lane = ctx["lane"];
+    if (typeof lane === "string") {
+      const parsed = Lane.safeParse(lane);
+      if (parsed.success) scope["lane"] = parsed.data;
+    }
   }
 
   return Object.keys(scope).length > 0 ? (scope as ApprovalT["scope"]) : undefined;
@@ -65,11 +86,11 @@ function buildScope(row: ApprovalRow): ApprovalT["scope"] | undefined {
 export function toApprovalContract(row: ApprovalRow): ApprovalT | undefined {
   const status = normalizeStatus(row.status);
   const createdAt = normalizeDbDateTime(row.created_at);
-  const respondedAt = toIso(row.responded_at);
   const expiresAt = toIso(row.expires_at);
 
   const candidate: ApprovalT = {
-    approval_id: row.id,
+    approval_id: row.approval_id,
+    approval_key: row.approval_key,
     kind: normalizeKind(row.kind),
     status,
     prompt: row.prompt,
@@ -77,7 +98,7 @@ export function toApprovalContract(row: ApprovalRow): ApprovalT | undefined {
     scope: buildScope(row),
     created_at: createdAt,
     expires_at: expiresAt,
-    resolution: buildResolution(status, createdAt, respondedAt, row.response_reason),
+    resolution: buildResolution(row, createdAt),
   };
 
   const parsed = Approval.safeParse(candidate);

@@ -7,6 +7,7 @@ function sleep(ms: number): Promise<void> {
 export async function tryAcquireWorkspaceLeaseTx(
   tx: SqlDb,
   opts: {
+    tenantId: string;
     workspaceId: string;
     owner: string;
     nowMs: number;
@@ -16,19 +17,19 @@ export async function tryAcquireWorkspaceLeaseTx(
   const expiresAtMs = opts.nowMs + Math.max(1, opts.ttlMs);
 
   const inserted = await tx.run(
-    `INSERT INTO workspace_leases (workspace_id, lease_owner, lease_expires_at_ms)
-     VALUES (?, ?, ?)
-     ON CONFLICT (workspace_id) DO NOTHING`,
-    [opts.workspaceId, opts.owner, expiresAtMs],
+    `INSERT INTO workspace_leases (tenant_id, workspace_id, lease_owner, lease_expires_at_ms)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT (tenant_id, workspace_id) DO NOTHING`,
+    [opts.tenantId, opts.workspaceId, opts.owner, expiresAtMs],
   );
   if (inserted.changes === 1) return true;
 
   const updated = await tx.run(
     `UPDATE workspace_leases
      SET lease_owner = ?, lease_expires_at_ms = ?
-     WHERE workspace_id = ?
+     WHERE tenant_id = ? AND workspace_id = ?
        AND (lease_expires_at_ms <= ? OR lease_owner = ?)`,
-    [opts.owner, expiresAtMs, opts.workspaceId, opts.nowMs, opts.owner],
+    [opts.owner, expiresAtMs, opts.tenantId, opts.workspaceId, opts.nowMs, opts.owner],
   );
   return updated.changes === 1;
 }
@@ -36,6 +37,7 @@ export async function tryAcquireWorkspaceLeaseTx(
 export async function tryAcquireWorkspaceLease(
   db: SqlDb,
   opts: {
+    tenantId: string;
     workspaceId: string;
     owner: string;
     nowMs: number;
@@ -48,6 +50,7 @@ export async function tryAcquireWorkspaceLease(
 export async function acquireWorkspaceLease(
   db: SqlDb,
   opts: {
+    tenantId: string;
     workspaceId: string;
     owner: string;
     ttlMs: number;
@@ -66,6 +69,7 @@ export async function acquireWorkspaceLease(
   for (;;) {
     const nowMs = clock();
     const ok = await tryAcquireWorkspaceLease(db, {
+      tenantId: opts.tenantId,
       workspaceId: opts.workspaceId,
       owner: opts.owner,
       nowMs,
@@ -85,6 +89,7 @@ export async function acquireWorkspaceLease(
 export async function releaseWorkspaceLease(
   db: SqlDb,
   opts: {
+    tenantId: string;
     workspaceId: string;
     owner: string;
   },
@@ -95,13 +100,14 @@ export async function releaseWorkspaceLease(
 export async function releaseWorkspaceLeaseTx(
   tx: SqlDb,
   opts: {
+    tenantId: string;
     workspaceId: string;
     owner: string;
   },
 ): Promise<void> {
   await tx.run(
     `DELETE FROM workspace_leases
-     WHERE workspace_id = ? AND lease_owner = ?`,
-    [opts.workspaceId, opts.owner],
+     WHERE tenant_id = ? AND workspace_id = ? AND lease_owner = ?`,
+    [opts.tenantId, opts.workspaceId, opts.owner],
   );
 }

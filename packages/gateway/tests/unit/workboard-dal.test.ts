@@ -2,6 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+  IdentityScopeDal,
+} from "../../src/modules/identity/scope.js";
 
 describe("WorkboardDal", () => {
   let db: SqliteDb | undefined;
@@ -16,9 +22,22 @@ describe("WorkboardDal", () => {
     return new WorkboardDal(db);
   }
 
+  async function resolveScope(input?: {
+    tenantKey?: string;
+    agentKey?: string;
+    workspaceKey?: string;
+  }): Promise<{ tenant_id: string; agent_id: string; workspace_id: string }> {
+    if (!db) {
+      throw new Error("db not initialized");
+    }
+    const identity = new IdentityScopeDal(db);
+    const ids = await identity.resolveScopeIds(input);
+    return { tenant_id: ids.tenantId, agent_id: ids.agentId, workspace_id: ids.workspaceId };
+  }
+
   it("creates and fetches a work item", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const created = await dal.createItem({
       scope,
@@ -49,8 +68,8 @@ describe("WorkboardDal", () => {
 
   it("rejects cross-scope parent_work_item_id", async () => {
     const dal = createDal();
-    const scopeA = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
-    const scopeB = { tenant_id: "default", agent_id: "agent-b", workspace_id: "default" } as const;
+    const scopeA = await resolveScope();
+    const scopeB = await resolveScope({ agentKey: "agent-b" });
 
     const foreignParent = await dal.createItem({
       scope: scopeB,
@@ -78,7 +97,7 @@ describe("WorkboardDal", () => {
 
   it("lists work items by scope and status", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const a = await dal.createItem({
       scope,
@@ -119,7 +138,7 @@ describe("WorkboardDal", () => {
 
   it("rejects invalid work item transitions", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const item = await dal.createItem({
       scope,
@@ -146,7 +165,7 @@ describe("WorkboardDal", () => {
 
   it("allows cancelling work items from ready and blocked", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const readyItem = await dal.createItem({
       scope,
@@ -217,7 +236,7 @@ describe("WorkboardDal", () => {
 
   it("cancels open tasks + closes subagents when work item is cancelled", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const terminalStatuses = ["cancelled", "done", "failed"] as const;
     const baseTimeMs = Date.parse("2026-02-27T00:00:00.000Z");
@@ -343,7 +362,7 @@ describe("WorkboardDal", () => {
 
   it("rejects new tasks/subagents and leases for terminal work items", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const terminalStatuses = ["cancelled", "done", "failed"] as const;
     const baseTimeMs = Date.parse("2026-02-27T01:00:00.000Z");
@@ -446,7 +465,7 @@ describe("WorkboardDal", () => {
 
   it("paginates work item lists with cursor", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const one = await dal.createItem({
       scope,
@@ -475,7 +494,7 @@ describe("WorkboardDal", () => {
 
   it("enforces WIP limit when claiming work items", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const [first, second, third] = await Promise.all([
       dal.createItem({
@@ -549,9 +568,9 @@ describe("WorkboardDal", () => {
         if (sql.includes("SELECT *")) {
           return {
             work_item_id: "item-1",
-            tenant_id: "default",
-            agent_id: "default",
-            workspace_id: "default",
+            tenant_id: DEFAULT_TENANT_ID,
+            agent_id: DEFAULT_AGENT_ID,
+            workspace_id: DEFAULT_WORKSPACE_ID,
             kind: "action",
             title: "Seed test",
             status: "ready",
@@ -582,9 +601,9 @@ describe("WorkboardDal", () => {
         if (sql.includes("UPDATE work_items")) {
           return {
             work_item_id: "item-1",
-            tenant_id: "default",
-            agent_id: "default",
-            workspace_id: "default",
+            tenant_id: DEFAULT_TENANT_ID,
+            agent_id: DEFAULT_AGENT_ID,
+            workspace_id: DEFAULT_WORKSPACE_ID,
             kind: "action",
             title: "Seed test",
             status: "doing",
@@ -610,7 +629,11 @@ describe("WorkboardDal", () => {
     };
 
     const dal = new WorkboardDal(tx);
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
 
     await dal.transitionItem({
       scope,
@@ -620,13 +643,13 @@ describe("WorkboardDal", () => {
     });
 
     expect(lockSeeds).toHaveLength(2);
-    expect(lockSeeds[0]).toBe(-673531093);
-    expect(lockSeeds[1]).toBe(-1824826402);
+    expect(lockSeeds[0]).toBe(-1910563556);
+    expect(lockSeeds[1]).toBe(-848283012);
   });
 
   it("updates a work item", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const created = await dal.createItem({
       scope,
@@ -656,11 +679,10 @@ describe("WorkboardDal", () => {
   it("sets and gets state KV (agent + work item scopes)", async () => {
     const dal = createDal();
 
+    const baseScope = await resolveScope();
     const agentScope = {
       kind: "agent",
-      tenant_id: "default",
-      agent_id: "default",
-      workspace_id: "default",
+      ...baseScope,
     } as const;
 
     const agentEntry = await dal.setStateKv({
@@ -674,7 +696,7 @@ describe("WorkboardDal", () => {
     const agentFetched = await dal.getStateKv({ scope: agentScope, key: "prefs.theme" });
     expect(agentFetched).toMatchObject({ key: "prefs.theme", value_json: { mode: "dark" } });
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = baseScope;
     const item = await dal.createItem({
       scope,
       item: { kind: "action", title: "KV", created_from_session_key: "agent:default:main" },
@@ -700,11 +722,10 @@ describe("WorkboardDal", () => {
 
   it("escapes SQL LIKE wildcards in KV prefix search", async () => {
     const dal = createDal();
+    const baseScope = await resolveScope();
     const scope = {
       kind: "agent",
-      tenant_id: "default",
-      agent_id: "default",
-      workspace_id: "default",
+      ...baseScope,
     } as const;
 
     await dal.setStateKv({
@@ -743,8 +764,8 @@ describe("WorkboardDal", () => {
   it("rejects setting work item state KV outside the caller scope", async () => {
     const dal = createDal();
 
-    const scopeA = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
-    const scopeB = { tenant_id: "default", agent_id: "agent-b", workspace_id: "default" } as const;
+    const scopeA = await resolveScope();
+    const scopeB = await resolveScope({ agentKey: "agent-b" });
 
     const foreignItem = await dal.createItem({
       scope: scopeB,
@@ -770,7 +791,7 @@ describe("WorkboardDal", () => {
 
   it("creates and lists artifacts for a work item", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const item = await dal.createItem({
       scope,
@@ -805,8 +826,8 @@ describe("WorkboardDal", () => {
 
   it("rejects attaching artifacts outside the caller scope", async () => {
     const dal = createDal();
-    const scopeA = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
-    const scopeB = { tenant_id: "default", agent_id: "agent-b", workspace_id: "default" } as const;
+    const scopeA = await resolveScope();
+    const scopeB = await resolveScope({ agentKey: "agent-b" });
 
     const foreignItem = await dal.createItem({
       scope: scopeB,
@@ -829,8 +850,8 @@ describe("WorkboardDal", () => {
 
   it("rejects created_by_subagent_id outside the caller scope", async () => {
     const dal = createDal();
-    const scopeA = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
-    const scopeB = { tenant_id: "default", agent_id: "agent-b", workspace_id: "default" } as const;
+    const scopeA = await resolveScope();
+    const scopeB = await resolveScope({ agentKey: "agent-b" });
 
     const foreignItem = await dal.createItem({
       scope: scopeB,
@@ -878,7 +899,7 @@ describe("WorkboardDal", () => {
 
   it("creates and lists decision records", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const item = await dal.createItem({
       scope,
@@ -909,7 +930,7 @@ describe("WorkboardDal", () => {
 
   it("creates and updates a work signal", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const signal = await dal.createSignal({
       scope,
@@ -951,7 +972,7 @@ describe("WorkboardDal", () => {
 
   it("creates tasks, subagents, links, and scope activity", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const a = await dal.createItem({
       scope,
@@ -1052,7 +1073,7 @@ describe("WorkboardDal", () => {
 
   it("persists subagent close metadata (closed_at + reason)", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const subagentId = "00000000-0000-0000-0000-000000000123";
     const created = await dal.createSubagent({
@@ -1086,7 +1107,7 @@ describe("WorkboardDal", () => {
 
   it("rejects cross-work-item task dependencies", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const a = await dal.createItem({
       scope,
@@ -1125,7 +1146,7 @@ describe("WorkboardDal", () => {
 
   it("rejects task dependency cycles", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const item = await dal.createItem({
       scope,
@@ -1171,7 +1192,7 @@ describe("WorkboardDal", () => {
 
   it("leases runnable tasks respecting fan-out/fan-in dependencies", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const item = await dal.createItem({
       scope,
@@ -1288,7 +1309,7 @@ describe("WorkboardDal", () => {
 
   it("leases tasks when dependencies are 'failed'", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const item = await dal.createItem({
       scope,
@@ -1358,7 +1379,7 @@ describe("WorkboardDal", () => {
 
   it("reclaims expired task leases", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const item = await dal.createItem({
       scope,
@@ -1431,7 +1452,7 @@ describe("WorkboardDal", () => {
 
   it("rejects updating leased tasks without a valid lease owner", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const item = await dal.createItem({
       scope,
@@ -1479,7 +1500,7 @@ describe("WorkboardDal", () => {
 
   it("enforces lease owner + expiry when leaving 'leased'", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const item = await dal.createItem({
       scope,
@@ -1562,7 +1583,7 @@ describe("WorkboardDal", () => {
 
   it("emits work.task.* WS events for task lifecycle", async () => {
     const dal = createDal();
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = await resolveScope();
 
     const item = await dal.createItem({
       scope,
@@ -1597,14 +1618,23 @@ describe("WorkboardDal", () => {
     const jobId = "00000000-0000-0000-0000-000000000100";
     const runId = "00000000-0000-0000-0000-000000000101";
     await db!.run(
-      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?)`,
-      [jobId, "agent:default:main", "main", "queued", JSON.stringify({ kind: "manual" })],
+      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        scope.tenant_id,
+        jobId,
+        scope.agent_id,
+        scope.workspace_id,
+        "agent:default:main",
+        "main",
+        "queued",
+        JSON.stringify({ kind: "manual" }),
+      ],
     );
     await db!.run(
-      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [runId, jobId, "agent:default:main", "main", "queued", 1],
+      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [scope.tenant_id, runId, jobId, "agent:default:main", "main", "queued", 1],
     );
 
     await dal.updateTask({
@@ -1616,18 +1646,27 @@ describe("WorkboardDal", () => {
       updatedAtIso: "2026-02-27T00:00:02.000Z",
     });
 
-    const approval = await db!.get<{ id: number }>(
-      `INSERT INTO approvals (plan_id, step_index, prompt)
-       VALUES (?, ?, ?)
-       RETURNING id`,
-      ["plan-test", 0, "approve?"],
+    const approval = await db!.get<{ approval_id: string }>(
+      `INSERT INTO approvals (tenant_id, approval_id, approval_key, agent_id, workspace_id, kind, status, prompt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       RETURNING approval_id`,
+      [
+        scope.tenant_id,
+        "00000000-0000-4000-8000-000000000900",
+        "approval:test",
+        scope.agent_id,
+        scope.workspace_id,
+        "other",
+        "pending",
+        "approve?",
+      ],
     );
     expect(approval).toBeDefined();
 
     await dal.updateTask({
       scope,
       task_id: task.task_id,
-      patch: { status: "paused", approval_id: approval!.id },
+      patch: { status: "paused", approval_id: approval!.approval_id },
       updatedAtIso: "2026-02-27T00:00:03.000Z",
     });
 
@@ -1667,7 +1706,7 @@ describe("WorkboardDal", () => {
     expect(workTaskEvents[0]?.payload?.task_id).toBe(task.task_id);
     expect(workTaskEvents[0]?.payload?.lease_expires_at_ms).toBe(nowMs + ttlMs);
     expect(workTaskEvents[1]?.payload?.run_id).toBe(runId);
-    expect(workTaskEvents[2]?.payload?.approval_id).toBe(approval!.id);
+    expect(workTaskEvents[2]?.payload?.approval_id).toBe(approval!.approval_id);
     expect(workTaskEvents[3]?.payload?.result_summary).toBe("ok");
   });
 });

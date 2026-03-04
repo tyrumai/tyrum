@@ -754,10 +754,11 @@ export {
 
 export {
   AuthProfileId,
+  AuthProfileKey,
   AuthProviderId,
   AuthProfileType,
   AuthProfileStatus,
-  AuthProfileSecretHandles,
+  AuthProfileSecretKeys,
   AuthProfileLabels,
   AuthProfile,
   AuthProfileCreateRequest,
@@ -818,29 +819,29 @@ export {
 } from "./playbook-runtime.js";
 
 export {
-  AgentId,
+  TenantKey,
+  AgentKey,
   TenantId,
+  AgentId,
   ChannelKey,
   AccountId,
   PeerId,
   ThreadId,
   CronJobId,
   NodeId,
+  WorkspaceKey,
   WorkspaceId,
-  DEFAULT_WORKSPACE_ID,
+  DEFAULT_WORKSPACE_KEY,
   DmScope,
   resolveDmScope,
   buildAgentSessionKey,
   AgentMainKey,
-  AgentLegacyMainKey,
   AgentDmPerPeerKey,
   AgentDmPerChannelPeerKey,
   AgentDmPerAccountChannelPeerKey,
   AgentGroupKey,
-  AgentLegacyGroupKey,
   AgentChannelKey,
-  AgentLegacyChannelKey,
-  AgentKey,
+  AgentSessionKey,
   CronKey,
   HookKey,
   NodeKey,
@@ -849,6 +850,8 @@ export {
   QueueMode,
   parseTyrumKey,
 } from "./keys.js";
+
+export { ScopeKeys, ScopeIds } from "./scope.js";
 
 export { ArtifactId, ArtifactKind, Sha256Hex, ArtifactUri, ArtifactRef } from "./artifact.js";
 
@@ -923,6 +926,7 @@ export {
 export {
   WorkStateKVKey,
   WorkStateKVScope,
+  WorkStateKVScopeIds,
   AgentStateKVEntry,
   WorkItemStateKVEntry,
 } from "./work-state-kv.js";

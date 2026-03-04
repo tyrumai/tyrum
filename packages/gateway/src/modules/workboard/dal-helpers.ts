@@ -326,7 +326,7 @@ export interface RawWorkItemTaskRow {
   execution_profile: string;
   side_effect_class: string;
   run_id: string | null;
-  approval_id: number | null;
+  approval_id: string | null;
   artifacts_json: string;
   started_at: RawTime | null;
   finished_at: RawTime | null;

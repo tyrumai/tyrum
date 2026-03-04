@@ -8,6 +8,8 @@ import type { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
 import type { ApprovalDal } from "../../src/modules/approval/dal.js";
 import type { PolicyService } from "../../src/modules/policy/service.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
 
 function makeNormalizedTextMessage(input: {
   threadId: string;
@@ -67,9 +69,9 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     const lane = "main";
 
     await db.run(
-      `INSERT INTO session_send_policy_overrides (key, send_policy, updated_at_ms)
-       VALUES (?, ?, ?)`,
-      [key, "off", 1_000],
+      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, key, "off", 1_000],
     );
 
     await inbox.enqueue({
@@ -117,12 +119,11 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     );
     expect(outboxCount?.count).toBe(0);
 
-    const updated = await db.get<{ status: string; reply_text: string | null }>(
-      "SELECT status, reply_text FROM channel_inbox WHERE message_id = ?",
+    const inboxCount = await db.get<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM channel_inbox WHERE message_id = ?",
       ["msg-1"],
     );
-    expect(updated?.status).toBe("completed");
-    expect(updated?.reply_text).toBe("agent reply");
+    expect(inboxCount?.count).toBe(0);
     expect((telegramBot.sendMessage as any).mock.calls.length).toBe(0);
   });
 
@@ -133,9 +134,9 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     const lane = "main";
 
     await db.run(
-      `INSERT INTO session_send_policy_overrides (key, send_policy, updated_at_ms)
-       VALUES (?, ?, ?)`,
-      [key, "on", 1_000],
+      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, key, "on", 1_000],
     );
 
     await inbox.enqueue({
@@ -209,42 +210,52 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     const lane = "main";
 
     await db.run(
-      `INSERT INTO session_send_policy_overrides (key, send_policy, updated_at_ms)
-       VALUES (?, ?, ?)`,
-      [key, "off", 1_000],
+      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, key, "off", 1_000],
     );
 
-    await db.run(
-      `INSERT INTO channel_inbox (
-         source,
-         thread_id,
-         message_id,
-         key,
-         lane,
-         received_at_ms,
-         payload_json,
-         status,
-         processed_at,
-         reply_text
-       ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'completed', datetime('now'), '')`,
-      ["telegram", "chat-1", "msg-1", key, lane, 1_000],
-    );
-    const inboxRow = await db.get<{ inbox_id: number }>(
-      "SELECT inbox_id FROM channel_inbox WHERE message_id = ?",
-      ["msg-1"],
-    );
-    expect(typeof inboxRow?.inbox_id).toBe("number");
+    const inbox = new ChannelInboxDal(db);
+    const outboxDal = new ChannelOutboxDal(db);
+
+    const { row: inboxRow } = await inbox.enqueue({
+      source: "telegram",
+      thread_id: "chat-1",
+      message_id: "msg-1",
+      key,
+      lane,
+      received_at_ms: 1_000,
+      payload: makeNormalizedTextMessage({
+        threadId: "chat-1",
+        messageId: "msg-1",
+        text: "hello",
+      }),
+    });
 
     await db.run(
-      `INSERT INTO channel_outbox (
-         inbox_id,
-         source,
-         thread_id,
-         dedupe_key,
-         text
-       ) VALUES (?, ?, ?, ?, ?)`,
-      [inboxRow!.inbox_id, "telegram", "chat-1", "dedupe-1", "outbox text"],
+      `UPDATE channel_inbox
+       SET status = 'completed',
+           lease_owner = NULL,
+           lease_expires_at_ms = NULL,
+           processed_at = datetime('now'),
+           error = NULL,
+           reply_text = ''
+       WHERE inbox_id = ?`,
+      [inboxRow.inbox_id],
     );
+
+    await outboxDal.enqueue({
+      tenant_id: inboxRow.tenant_id,
+      inbox_id: inboxRow.inbox_id,
+      source: "telegram",
+      thread_id: "chat-1",
+      dedupe_key: "dedupe-1",
+      chunk_index: 0,
+      text: "outbox text",
+      workspace_id: inboxRow.workspace_id,
+      session_id: inboxRow.session_id,
+      channel_thread_id: inboxRow.channel_thread_id,
+    });
 
     const agents: AgentRegistry = {
       getRuntime: vi.fn(async () => ({
@@ -273,10 +284,10 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     await processor.tick();
 
     expect((telegramBot.sendMessage as any).mock.calls.length).toBe(0);
-    const outbox = await db.get<{ status: string }>(
+    const outboxRow = await db.get<{ status: string }>(
       "SELECT status FROM channel_outbox WHERE dedupe_key = ?",
       ["dedupe-1"],
     );
-    expect(outbox?.status).toBe("failed");
+    expect(outboxRow?.status).toBe("failed");
   });
 });

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SessionDal, formatSessionId } from "../../src/modules/agent/session-dal.js";
+import { SessionDal } from "../../src/modules/agent/session-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
+import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
 
 describe("SessionDal", () => {
   let db: SqliteDb | undefined;
@@ -13,48 +15,93 @@ describe("SessionDal", () => {
 
   function createDal(): SessionDal {
     db = openTestSqliteDb();
-    return new SessionDal(db);
+    const identityScopeDal = new IdentityScopeDal(db, { cacheTtlMs: 60_000 });
+    const channelThreadDal = new ChannelThreadDal(db);
+    return new SessionDal(db, identityScopeDal, channelThreadDal);
   }
 
   it("creates and retrieves sessions by channel/thread", async () => {
     const dal = createDal();
-    const first = await dal.getOrCreate("telegram", "dm-1");
-    const second = await dal.getOrCreate("telegram", "dm-1");
+    const first = await dal.getOrCreate({
+      connectorKey: "telegram",
+      providerThreadId: "dm-1",
+      containerKind: "dm",
+    });
+    const second = await dal.getOrCreate({
+      connectorKey: "telegram",
+      providerThreadId: "dm-1",
+      containerKind: "dm",
+    });
 
-    expect(first.session_id).toBe("telegram:dm-1");
-    expect(first.agent_id).toBe("default");
+    expect(first.session_key).toBe("agent:default:telegram:default:dm:dm-1");
+    expect(first.session_id).toMatch(/^[0-9a-f-]{36}$/i);
     expect(second.session_id).toBe(first.session_id);
     expect(second.turns).toEqual([]);
   });
 
   it("isolates sessions per agent", async () => {
     const dal = createDal();
-    const a = await dal.getOrCreate("telegram", "dm-1", "agent-1");
-    const b = await dal.getOrCreate("telegram", "dm-1", "agent-2");
-    const def = await dal.getOrCreate("telegram", "dm-1");
+    const a = await dal.getOrCreate({
+      scopeKeys: { agentKey: "agent-1" },
+      connectorKey: "telegram",
+      providerThreadId: "dm-1",
+      containerKind: "dm",
+    });
+    const b = await dal.getOrCreate({
+      scopeKeys: { agentKey: "agent-2" },
+      connectorKey: "telegram",
+      providerThreadId: "dm-1",
+      containerKind: "dm",
+    });
+    const def = await dal.getOrCreate({
+      connectorKey: "telegram",
+      providerThreadId: "dm-1",
+      containerKind: "dm",
+    });
 
-    expect(a.agent_id).toBe("agent-1");
-    expect(b.agent_id).toBe("agent-2");
-    expect(def.agent_id).toBe("default");
+    expect(a.agent_id).not.toBe(b.agent_id);
+    expect(def.agent_id).not.toBe(a.agent_id);
+    expect(a.session_key).toContain("agent:agent-1:");
+    expect(b.session_key).toContain("agent:agent-2:");
+    expect(def.session_key).toContain("agent:default:");
 
-    expect(a.session_id).toBe("agent:agent-1:telegram:dm-1");
-    expect(b.session_id).toBe("agent:agent-2:telegram:dm-1");
-    expect(def.session_id).toBe("telegram:dm-1");
+    expect(a.session_id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(b.session_id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(def.session_id).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
   it("stores bounded turn history", async () => {
     const dal = createDal();
-    const session = await dal.getOrCreate("discord", "thread-42");
+    const session = await dal.getOrCreate({
+      connectorKey: "telegram",
+      providerThreadId: "thread-42",
+      containerKind: "group",
+    });
 
-    await dal.appendTurn(session.session_id, "u1", "a1", 2, "2026-02-17T00:00:00.000Z");
-    await dal.appendTurn(session.session_id, "u2", "a2", 2, "2026-02-17T00:01:00.000Z");
-    const updated = await dal.appendTurn(
-      session.session_id,
-      "u3",
-      "a3",
-      2,
-      "2026-02-17T00:02:00.000Z",
-    );
+    await dal.appendTurn({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      userMessage: "u1",
+      assistantMessage: "a1",
+      maxTurns: 2,
+      timestamp: "2026-02-17T00:00:00.000Z",
+    });
+    await dal.appendTurn({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      userMessage: "u2",
+      assistantMessage: "a2",
+      maxTurns: 2,
+      timestamp: "2026-02-17T00:01:00.000Z",
+    });
+    const updated = await dal.appendTurn({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      userMessage: "u3",
+      assistantMessage: "a3",
+      maxTurns: 2,
+      timestamp: "2026-02-17T00:02:00.000Z",
+    });
 
     expect(updated.turns).toHaveLength(4);
     expect(updated.turns[0]?.content).toBe("u2");
@@ -63,25 +110,31 @@ describe("SessionDal", () => {
 
   it("compacts overflow into session summary deterministically", async () => {
     const dal = createDal();
-    const session = await dal.getOrCreate("discord", "thread-compact");
+    const session = await dal.getOrCreate({
+      connectorKey: "telegram",
+      providerThreadId: "thread-compact",
+      containerKind: "group",
+    });
 
-    const first = await dal.appendTurn(
-      session.session_id,
-      "u1",
-      "a1",
-      1,
-      "2026-02-17T00:00:00.000Z",
-    );
+    const first = await dal.appendTurn({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      userMessage: "u1",
+      assistantMessage: "a1",
+      maxTurns: 1,
+      timestamp: "2026-02-17T00:00:00.000Z",
+    });
     expect(first.turns).toHaveLength(2);
     expect(first.summary).toBe("");
 
-    const second = await dal.appendTurn(
-      session.session_id,
-      "u2",
-      "a2",
-      1,
-      "2026-02-17T00:01:00.000Z",
-    );
+    const second = await dal.appendTurn({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      userMessage: "u2",
+      assistantMessage: "a2",
+      maxTurns: 1,
+      timestamp: "2026-02-17T00:01:00.000Z",
+    });
     expect(second.turns).toHaveLength(2);
     expect(second.turns[0]?.content).toBe("u2");
     expect(second.turns[1]?.content).toBe("a2");
@@ -89,13 +142,14 @@ describe("SessionDal", () => {
     expect(second.summary).toContain("a1");
     expect(second.summary).not.toContain("u2");
 
-    const third = await dal.appendTurn(
-      session.session_id,
-      "u3",
-      "a3",
-      1,
-      "2026-02-17T00:02:00.000Z",
-    );
+    const third = await dal.appendTurn({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      userMessage: "u3",
+      assistantMessage: "a3",
+      maxTurns: 1,
+      timestamp: "2026-02-17T00:02:00.000Z",
+    });
     expect(third.turns).toHaveLength(2);
     expect(third.turns[0]?.content).toBe("u3");
     expect(third.turns[1]?.content).toBe("a3");
@@ -106,14 +160,18 @@ describe("SessionDal", () => {
 
   it("deletes expired sessions using ttl days", async () => {
     const dal = createDal();
-    const session = await dal.getOrCreate("mattermost", "ops");
+    const session = await dal.getOrCreate({
+      connectorKey: "telegram",
+      providerThreadId: "ops",
+      containerKind: "group",
+    });
     await db!.run(
-      "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE session_id = ?",
-      [session.session_id],
+      "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE tenant_id = ? AND session_id = ?",
+      [session.tenant_id, session.session_id],
     );
 
     const removed = await dal.deleteExpired(30);
-    const row = await dal.getById(session.session_id);
+    const row = await dal.getById({ tenantId: session.tenant_id, sessionId: session.session_id });
 
     expect(removed).toBe(1);
     expect(row).toBeUndefined();
@@ -121,36 +179,56 @@ describe("SessionDal", () => {
 
   it("deletes expired sessions across agents when agent id is omitted", async () => {
     const dal = createDal();
-    const a = await dal.getOrCreate("mattermost", "ops", "agent-1");
-    const b = await dal.getOrCreate("mattermost", "ops", "agent-2");
+    const a = await dal.getOrCreate({
+      scopeKeys: { agentKey: "agent-1" },
+      connectorKey: "telegram",
+      providerThreadId: "ops",
+      containerKind: "group",
+    });
+    const b = await dal.getOrCreate({
+      scopeKeys: { agentKey: "agent-2" },
+      connectorKey: "telegram",
+      providerThreadId: "ops",
+      containerKind: "group",
+    });
 
     await db!.run(
-      "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE session_id IN (?, ?)",
-      [a.session_id, b.session_id],
+      "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE tenant_id = ? AND session_id IN (?, ?)",
+      [a.tenant_id, a.session_id, b.session_id],
     );
 
     const removed = await dal.deleteExpired(30);
 
     expect(removed).toBe(2);
-    expect(await dal.getById(a.session_id, "agent-1")).toBeUndefined();
-    expect(await dal.getById(b.session_id, "agent-2")).toBeUndefined();
+    expect(await dal.getById({ tenantId: a.tenant_id, sessionId: a.session_id })).toBeUndefined();
+    expect(await dal.getById({ tenantId: b.tenant_id, sessionId: b.session_id })).toBeUndefined();
   });
 
   it("deletes expired sessions only for the specified agent", async () => {
     const dal = createDal();
-    const a = await dal.getOrCreate("mattermost", "ops", "agent-1");
-    const b = await dal.getOrCreate("mattermost", "ops", "agent-2");
+    const a = await dal.getOrCreate({
+      scopeKeys: { agentKey: "agent-1" },
+      connectorKey: "telegram",
+      providerThreadId: "ops",
+      containerKind: "group",
+    });
+    const b = await dal.getOrCreate({
+      scopeKeys: { agentKey: "agent-2" },
+      connectorKey: "telegram",
+      providerThreadId: "ops",
+      containerKind: "group",
+    });
 
     await db!.run(
-      "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE session_id IN (?, ?)",
-      [a.session_id, b.session_id],
+      "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE tenant_id = ? AND session_id IN (?, ?)",
+      [a.tenant_id, a.session_id, b.session_id],
     );
 
     const removed = await dal.deleteExpired(30, "agent-1");
 
     expect(removed).toBe(1);
-    expect(await dal.getById(a.session_id, "agent-1")).toBeUndefined();
-    expect(await dal.getById(b.session_id, "agent-2")).toBeDefined();
+    expect(await dal.getById({ tenantId: a.tenant_id, sessionId: a.session_id })).toBeUndefined();
+    expect(await dal.getById({ tenantId: b.tenant_id, sessionId: b.session_id })).toBeDefined();
   });
 
   it("keeps newer legacy-format timestamps on threshold date", async () => {
@@ -159,21 +237,37 @@ describe("SessionDal", () => {
       vi.setSystemTime(new Date("2026-02-20T12:00:00.000Z"));
 
       const dal = createDal();
-      const stale = await dal.getOrCreate("mattermost", "stale");
-      const fresh = await dal.getOrCreate("mattermost", "fresh");
+      const stale = await dal.getOrCreate({
+        connectorKey: "telegram",
+        providerThreadId: "stale",
+        containerKind: "group",
+      });
+      const fresh = await dal.getOrCreate({
+        connectorKey: "telegram",
+        providerThreadId: "fresh",
+        containerKind: "group",
+      });
 
-      await db!.run("UPDATE sessions SET updated_at = ? WHERE session_id = ?", [
+      await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
         "2026-01-21 11:59:59",
+        stale.tenant_id,
         stale.session_id,
       ]);
-      await db!.run("UPDATE sessions SET updated_at = ? WHERE session_id = ?", [
+      await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
         "2026-01-21 13:00:00",
+        fresh.tenant_id,
         fresh.session_id,
       ]);
 
       const removed = await dal.deleteExpired(30);
-      const staleRow = await dal.getById(stale.session_id);
-      const freshRow = await dal.getById(fresh.session_id);
+      const staleRow = await dal.getById({
+        tenantId: stale.tenant_id,
+        sessionId: stale.session_id,
+      });
+      const freshRow = await dal.getById({
+        tenantId: fresh.tenant_id,
+        sessionId: fresh.session_id,
+      });
 
       expect(removed).toBe(1);
       expect(staleRow).toBeUndefined();
@@ -257,16 +351,5 @@ describe("SessionDal", () => {
     await expect(
       dal.list({ agentId: "default", channel: "ui", cursor: "not-a-cursor" }),
     ).rejects.toThrow("invalid cursor");
-  });
-});
-
-describe("formatSessionId", () => {
-  it("joins channel and thread id deterministically", () => {
-    expect(formatSessionId("telegram", "123")).toBe("telegram:123");
-  });
-
-  it("escapes colons to avoid collisions", () => {
-    expect(formatSessionId("a", "b:c")).toBe("a:b%3Ac");
-    expect(formatSessionId("a:b", "c")).toBe("a%3Ab:c");
   });
 });

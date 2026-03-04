@@ -51,7 +51,7 @@ export function createContextRoutes(deps: ContextRouteDeps): Hono {
 
   app.get("/context/detail/:id", async (c) => {
     const id = c.req.param("id");
-    const row = await deps.contextReportDal.getById(id);
+    const row = await deps.contextReportDal.getById({ contextReportId: id });
     if (!row) {
       return c.json({ error: "not_found", message: `context report '${id}' not found` }, 404);
     }

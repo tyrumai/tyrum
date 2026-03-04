@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import type { SecretHandle } from "@tyrum/schemas";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
@@ -7,6 +6,7 @@ import { createProviderOAuthRoutes } from "../../src/routes/provider-oauth.js";
 import type { OAuthProviderSpec } from "../../src/modules/oauth/provider-registry.js";
 import type { OauthPendingMode, OauthPendingRow } from "../../src/modules/oauth/pending-dal.js";
 import type { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 class MemorySecretProvider implements SecretProvider {
   private byId = new Map<string, { handle: SecretHandle; value: string }>();
@@ -15,11 +15,11 @@ class MemorySecretProvider implements SecretProvider {
     return this.byId.get(handle.handle_id)?.value ?? null;
   }
 
-  async store(scope: string, value: string): Promise<SecretHandle> {
+  async store(secretKey: string, value: string): Promise<SecretHandle> {
     const handle: SecretHandle = {
-      handle_id: randomUUID(),
-      provider: "file",
-      scope,
+      handle_id: secretKey,
+      provider: "db",
+      scope: secretKey,
       created_at: new Date().toISOString(),
     };
     this.byId.set(handle.handle_id, { handle, value });
@@ -38,14 +38,16 @@ class MemorySecretProvider implements SecretProvider {
 class MemoryPendingDal {
   constructor(private row: OauthPendingRow) {}
 
-  async get(state: string): Promise<OauthPendingRow | undefined> {
-    return state === this.row.state ? this.row : undefined;
+  async get(input: { tenantId: string; state: string }): Promise<OauthPendingRow | undefined> {
+    return input.tenantId === this.row.tenant_id && input.state === this.row.state
+      ? this.row
+      : undefined;
   }
 
-  async consume(state: string): Promise<OauthPendingRow | undefined> {
-    const row = await this.get(state);
+  async consume(input: { tenantId: string; state: string }): Promise<OauthPendingRow | undefined> {
+    const row = await this.get(input);
     if (!row) return undefined;
-    await this.delete(state);
+    await this.delete(input);
     return row;
   }
 
@@ -53,13 +55,13 @@ class MemoryPendingDal {
     this.row = input;
   }
 
-  async delete(state: string): Promise<void> {
-    if (state === this.row.state) {
+  async delete(input: { tenantId: string; state: string }): Promise<void> {
+    if (input.tenantId === this.row.tenant_id && input.state === this.row.state) {
       this.row = { ...this.row, state: "__deleted__" };
     }
   }
 
-  async deleteExpired(_nowIso: string): Promise<number> {
+  async deleteExpired(_input: { tenantId: string; nowIso: string }): Promise<number> {
     return 0;
   }
 }
@@ -120,9 +122,10 @@ describe("provider OAuth callback cleanup", () => {
     const nowMs = Date.now();
 
     const pending: OauthPendingRow = {
+      tenant_id: DEFAULT_TENANT_ID,
       state: "state-1",
       provider_id: "test",
-      agent_id: "default",
+      agent_key: "default",
       created_at: new Date(nowMs).toISOString(),
       expires_at: new Date(nowMs + 60_000).toISOString(),
       pkce_verifier: "verifier",
@@ -145,6 +148,7 @@ describe("provider OAuth callback cleanup", () => {
     });
 
     const authProfileDal = {
+      getByKey: async () => undefined,
       create: async () => {
         throw new Error("db down");
       },
@@ -154,7 +158,7 @@ describe("provider OAuth callback cleanup", () => {
       oauthPendingDal: pendingDal as any,
       oauthProviderRegistry: registry as any,
       authProfileDal,
-      secretProviderForAgent: async () => secretProvider,
+      secretProvider,
     });
 
     const res = await app.request(
@@ -171,9 +175,10 @@ describe("provider OAuth callback cleanup", () => {
     const nowMs = Date.now();
 
     const pending: OauthPendingRow = {
+      tenant_id: DEFAULT_TENANT_ID,
       state: "state-1",
       provider_id: "test",
-      agent_id: "default",
+      agent_key: "default",
       created_at: new Date(nowMs).toISOString(),
       expires_at: new Date(nowMs + 60_000).toISOString(),
       pkce_verifier: "verifier",
@@ -199,7 +204,7 @@ describe("provider OAuth callback cleanup", () => {
       oauthPendingDal: pendingDal as any,
       oauthProviderRegistry: registry as any,
       authProfileDal: {} as any,
-      secretProviderForAgent: async () => secretProvider,
+      secretProvider,
     });
 
     const res = await app.request(
@@ -240,7 +245,7 @@ describe("provider OAuth callback cleanup", () => {
       oauthPendingDal,
       oauthProviderRegistry: registry as any,
       authProfileDal: {} as any,
-      secretProviderForAgent: async () => new MemorySecretProvider(),
+      secretProvider: new MemorySecretProvider(),
       logger,
     });
 
@@ -283,7 +288,7 @@ describe("provider OAuth callback cleanup", () => {
         oauthPendingDal,
         oauthProviderRegistry: registry as any,
         authProfileDal: {} as any,
-        secretProviderForAgent: async () => secretProvider,
+        secretProvider,
       }),
     );
 
@@ -329,7 +334,7 @@ describe("provider OAuth callback cleanup", () => {
       oauthPendingDal,
       oauthProviderRegistry: registry as any,
       authProfileDal: {} as any,
-      secretProviderForAgent: async () => secretProvider,
+      secretProvider,
       logger,
     });
 

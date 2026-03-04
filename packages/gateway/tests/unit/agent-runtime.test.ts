@@ -25,6 +25,11 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
 } from "@tyrum/schemas";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -36,8 +41,8 @@ function makeContextReport(overrides?: Partial<Record<string, unknown>>): Record
     session_id: "session-1",
     channel: "test",
     thread_id: "thread-1",
-    agent_id: "default",
-    workspace_id: "default",
+    agent_id: DEFAULT_AGENT_ID,
+    workspace_id: DEFAULT_WORKSPACE_ID,
     system_prompt: { chars: 0, sections: [] },
     user_parts: [],
     selected_tools: [],
@@ -61,8 +66,9 @@ function createToolSetBuilder(input: {
 }): ToolSetBuilder {
   return new ToolSetBuilder({
     home: input.home,
-    agentId: "default",
-    workspaceId: "default",
+    tenantId: DEFAULT_TENANT_ID,
+    agentId: DEFAULT_AGENT_ID,
+    workspaceId: DEFAULT_WORKSPACE_ID,
     policyService: input.policyService as unknown as ConstructorParameters<
       typeof ToolSetBuilder
     >[0]["policyService"],
@@ -458,13 +464,14 @@ describe("AgentRuntime", () => {
     const nowMs = Date.now();
 
     await container.db.run(
-      `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?, ?)`,
-      [key, lane, leaseOwner, nowMs + 60_000],
+      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, key, lane, leaseOwner, nowMs + 60_000],
     );
 
     const signals = new LaneQueueSignalDal(container.db);
     await signals.setSignal({
+      tenant_id: DEFAULT_TENANT_ID,
       key,
       lane,
       kind: "interrupt",
@@ -607,9 +614,9 @@ describe("AgentRuntime", () => {
     const nowMs = Date.now();
 
     await container.db.run(
-      `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?, ?)`,
-      [key, lane, leaseOwner, nowMs + 60_000],
+      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, key, lane, leaseOwner, nowMs + 60_000],
     );
 
     const inbox = new ChannelInboxDal(container.db);
@@ -626,6 +633,7 @@ describe("AgentRuntime", () => {
 
     const signals = new LaneQueueSignalDal(container.db);
     await signals.setSignal({
+      tenant_id: DEFAULT_TENANT_ID,
       key,
       lane,
       kind: "steer",
@@ -727,11 +735,11 @@ describe("AgentRuntime", () => {
     );
     expect(signalConsumed?.n).toBe(0);
 
-    const inboxCompleted = await container.db.get<{ status: string }>(
-      "SELECT status FROM channel_inbox WHERE inbox_id = ?",
+    const inboxCompleted = await container.db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM channel_inbox WHERE inbox_id = ?",
       [steerInbox.inbox_id],
     );
-    expect(inboxCompleted?.status).toBe("completed");
+    expect(inboxCompleted?.n).toBe(0);
   }, 10_000);
 
   it("reports system prompt section char counts as string lengths", async () => {
@@ -901,7 +909,12 @@ describe("AgentRuntime", () => {
       [run!.job_id],
     );
     expect(job).toBeTruthy();
-    expect(job!.workspace_id).toBe("agent-a");
+    const workspace = await container.db.get<{ workspace_id: string }>(
+      "SELECT workspace_id FROM workspaces WHERE workspace_key = ? LIMIT 1",
+      ["agent-a"],
+    );
+    expect(workspace).toBeTruthy();
+    expect(job!.workspace_id).toBe(workspace!.workspace_id);
   });
 
   it("avoids turn key collisions between raw and encoded key parts", async () => {
@@ -919,8 +932,8 @@ describe("AgentRuntime", () => {
     });
 
     await runtime.turn({
-      channel: "a:b",
-      thread_id: "thread-1",
+      channel: "test",
+      thread_id: "a:b",
       message: "m1",
     });
     const first = await container.db.get<{ key: string }>(
@@ -929,8 +942,8 @@ describe("AgentRuntime", () => {
     expect(first).toBeTruthy();
 
     await runtime.turn({
-      channel: "YTpi",
-      thread_id: "thread-1",
+      channel: "test",
+      thread_id: "YTpi",
       message: "m2",
     });
     const second = await container.db.get<{ key: string }>(
@@ -1085,9 +1098,9 @@ describe("AgentRuntime", () => {
 
       const key = "agent:default:test:default:channel:thread-1";
       await container.db.run(
-        `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
-         VALUES (?, 'main', 'other', ?)`,
-        [key, Date.now() + 10_000],
+        `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+         VALUES (?, ?, 'main', 'other', ?)`,
+        [DEFAULT_TENANT_ID, key, Date.now() + 10_000],
       );
 
       const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
@@ -1137,9 +1150,9 @@ describe("AgentRuntime", () => {
 
       const key = "agent:default:test:default:channel:thread-1";
       await container.db.run(
-        `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
-         VALUES (?, 'main', 'other', ?)`,
-        [key, Date.now() + 10_000],
+        `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+         VALUES (?, ?, 'main', 'other', ?)`,
+        [DEFAULT_TENANT_ID, key, Date.now() + 10_000],
       );
 
       const turnPromise = runtime
@@ -1284,11 +1297,11 @@ describe("AgentRuntime", () => {
       .catch((err) => err as unknown);
 
     const deadlineMs = Date.now() + 2_000;
-    let approvalId: number | undefined;
+    let approvalId: string | undefined;
     while (Date.now() < deadlineMs) {
-      const pending = await container.approvalDal.getPending();
+      const pending = await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
       if (pending.length > 0) {
-        approvalId = pending[0]!.id;
+        approvalId = pending[0]!.approval_id;
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 5));
@@ -1297,7 +1310,11 @@ describe("AgentRuntime", () => {
       throw new Error("timed out waiting for pending approval");
     }
 
-    await container.approvalDal.respond(approvalId, true);
+    await container.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId,
+      decision: "approved",
+    });
 
     const result = await turnPromise;
     expect(result).toBeInstanceOf(Error);
@@ -1360,6 +1377,12 @@ describe("AgentRuntime", () => {
             signal?: AbortSignal;
           };
           const abortSignal = anyOptions.abortSignal ?? anyOptions.signal;
+          if (abortSignal?.aborted) {
+            aborted = true;
+            clearTimeout(timer);
+            reject(new Error("timed out"));
+            return;
+          }
           abortSignal?.addEventListener(
             "abort",
             () => {
@@ -1807,7 +1830,10 @@ describe("AgentRuntime", () => {
       expect(r1.reply).toBe("first");
       expect(r2.reply).toBe("second");
 
-      const session = await container.sessionDal.getById("test:thread-1", "default");
+      const session = await container.sessionDal.getByKey({
+        tenantId: DEFAULT_TENANT_ID,
+        sessionKey: "agent:default:test:default:channel:thread-1",
+      });
       expect(session).toBeTruthy();
       expect(session!.turns.map((t) => `${t.role}:${t.content}`)).toEqual([
         "user:m1",
@@ -2051,8 +2077,10 @@ describe("AgentRuntime", () => {
     const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
 
     const approval = await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: "plan-1:step:0:tool_call:tc-other",
       kind: "workflow_step",
       prompt: "Approve tool.exec",
       context: {
@@ -2062,7 +2090,11 @@ describe("AgentRuntime", () => {
         tool_match_target: "echo hi",
       },
     });
-    await container.approvalDal.respond(approval.id, true);
+    await container.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval.approval_id,
+      decision: "approved",
+    });
 
     const toolDesc = {
       id: "tool.exec",
@@ -2101,7 +2133,7 @@ describe("AgentRuntime", () => {
           runId: "run-1",
           stepIndex: 0,
           stepId: "step-1",
-          stepApprovalId: approval.id,
+          stepApprovalId: approval.approval_id,
         },
       },
       makeContextReport(),
@@ -2145,8 +2177,10 @@ describe("AgentRuntime", () => {
     });
 
     const approval = await container.approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: "plan-1:step:0:tool_call:tc-secret",
       kind: "workflow_step",
       prompt: "Resume tool.exec",
       context: {
@@ -2156,7 +2190,7 @@ describe("AgentRuntime", () => {
         ai_sdk: {
           tool_args_handle: {
             handle_id: "h1",
-            provider: "env",
+            provider: "db",
             scope: "  SCOPE  ",
             created_at: " 2026-02-23T00:00:00.000Z ",
           },
@@ -2201,7 +2235,7 @@ describe("AgentRuntime", () => {
           runId: "run-1",
           stepIndex: 0,
           stepId: "step-1",
-          stepApprovalId: approval.id,
+          stepApprovalId: approval.approval_id,
         },
       },
       makeContextReport(),
@@ -2242,7 +2276,7 @@ describe("AgentRuntime", () => {
       resolve: vi.fn(async () => "secret-value"),
       store: vi.fn(async () => ({
         handle_id: "h1",
-        provider: "env",
+        provider: "db",
         scope: "SCOPE",
         created_at: new Date().toISOString(),
       })),
@@ -2332,7 +2366,7 @@ describe("AgentRuntime", () => {
     resolveList?.([
       {
         handle_id: "h1",
-        provider: "env",
+        provider: "db",
         scope: "SCOPE",
         created_at: new Date().toISOString(),
       },
@@ -2426,11 +2460,12 @@ describe("AgentRuntime", () => {
       expect.any(Object),
       expect.any(Number),
       expect.objectContaining({
+        workspace_id: DEFAULT_WORKSPACE_ID,
         suggested_overrides: [
           {
             tool_id: "tool.fs.read",
             pattern: "read:docs/policy-overrides.md",
-            workspace_id: "default",
+            workspace_id: DEFAULT_WORKSPACE_ID,
           },
         ],
       }),
@@ -2529,16 +2564,17 @@ describe("AgentRuntime", () => {
       expect.any(Object),
       expect.any(Number),
       expect.objectContaining({
+        workspace_id: DEFAULT_WORKSPACE_ID,
         suggested_overrides: [
           {
             tool_id: "tool.node.dispatch",
             pattern: "capability:tyrum.desktop;action:Desktop;op:act;act:ui",
-            workspace_id: "default",
+            workspace_id: DEFAULT_WORKSPACE_ID,
           },
           {
             tool_id: "tool.node.dispatch",
             pattern: "capability:tyrum.desktop;action:Desktop;op:act*",
-            workspace_id: "default",
+            workspace_id: DEFAULT_WORKSPACE_ID,
           },
         ],
       }),

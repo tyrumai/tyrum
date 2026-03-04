@@ -8,7 +8,7 @@ import { tagContent } from "../provenance.js";
 import { sanitizeForModel, containsInjectionPatterns } from "../sanitizer.js";
 import type { AgentContextReport } from "./types.js";
 import type { LaneQueueState } from "./turn-engine-bridge.js";
-import { EnvSecretProvider, type SecretProvider } from "../../secret/provider.js";
+import type { SecretProvider } from "../../secret/provider.js";
 import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal, ApprovalStatus } from "../../approval/dal.js";
@@ -25,6 +25,7 @@ import { coerceRecord } from "../../util/coerce.js";
 import { LaneQueueInterruptError } from "../../lanes/queue-signal-dal.js";
 
 interface ToolExecutionContext {
+  tenantId: string;
   planId: string;
   sessionId: string;
   channel: string;
@@ -33,7 +34,7 @@ interface ToolExecutionContext {
     runId: string;
     stepIndex: number;
     stepId: string;
-    stepApprovalId?: number;
+    stepApprovalId?: string;
   };
 }
 
@@ -59,13 +60,21 @@ function coerceSecretHandle(value: unknown): SecretHandleT | undefined {
   const scope = typeof record["scope"] === "string" ? record["scope"].trim() : "";
   const createdAt = typeof record["created_at"] === "string" ? record["created_at"].trim() : "";
   if (!handleId || !provider || !scope || !createdAt) return undefined;
-  if (provider !== "env" && provider !== "file" && provider !== "keychain") return undefined;
+  if (provider !== "db") return undefined;
   return {
     handle_id: handleId,
-    provider,
+    provider: "db",
     scope,
     created_at: createdAt,
   };
+}
+
+function extractApprovalReason(
+  approval: { resolution: unknown | null } | undefined,
+): string | undefined {
+  const record = coerceRecord(approval?.resolution);
+  const reason = typeof record?.["reason"] === "string" ? record["reason"].trim() : "";
+  return reason.length > 0 ? reason : undefined;
 }
 
 function isSideEffectingPluginTool(tool: ToolDescriptor): boolean {
@@ -83,6 +92,7 @@ type ToolSetBuilderRedactionEngine = {
 
 export interface ToolSetBuilderDeps {
   home: string;
+  tenantId: string;
   agentId: string;
   workspaceId: string;
   policyService: PolicyService;
@@ -218,11 +228,14 @@ export class ToolSetBuilder {
       if (!execution?.stepApprovalId) return input.args;
 
       const secretProvider = this.deps.secretProvider;
-      if (!secretProvider || secretProvider instanceof EnvSecretProvider) {
+      if (!secretProvider) {
         return input.args;
       }
 
-      const approval = await this.deps.approvalDal.getById(execution.stepApprovalId);
+      const approval = await this.deps.approvalDal.getById({
+        tenantId: this.deps.tenantId,
+        approvalId: execution.stepApprovalId,
+      });
       const ctx = coerceRecord(approval?.context);
       if (!ctx || ctx["source"] !== "agent-tool-execution") return input.args;
       if (ctx["tool_id"] !== input.toolId || ctx["tool_call_id"] !== input.toolCallId) {
@@ -264,7 +277,10 @@ export class ToolSetBuilder {
                   return false;
                 }
 
-                const signal = await laneQueue.signals.claimSignal(laneQueue.scope);
+                const signal = await laneQueue.signals.claimSignal({
+                  tenant_id: laneQueue.tenant_id,
+                  ...laneQueue.scope,
+                });
                 if (signal?.kind === "interrupt") {
                   laneQueue.interruptError ??= new LaneQueueInterruptError();
                   laneQueue.cancelToolCalls = true;
@@ -299,7 +315,10 @@ export class ToolSetBuilder {
 
               const stepApprovalId = toolExecutionContext.execution?.stepApprovalId;
               if (stepApprovalId) {
-                const approval = await this.deps.approvalDal.getById(stepApprovalId);
+                const approval = await this.deps.approvalDal.getById({
+                  tenantId: this.deps.tenantId,
+                  approvalId: stepApprovalId,
+                });
                 if (
                   approval &&
                   (approval.status === "approved" ||
@@ -328,7 +347,10 @@ export class ToolSetBuilder {
           : undefined,
         execute: async (args: unknown, options: ToolExecutionOptions) => {
           if (laneQueue) {
-            const signal = await laneQueue.signals.claimSignal(laneQueue.scope);
+            const signal = await laneQueue.signals.claimSignal({
+              tenant_id: laneQueue.tenant_id,
+              ...laneQueue.scope,
+            });
             if (signal?.kind === "interrupt") {
               laneQueue.interruptError ??= new LaneQueueInterruptError();
               laneQueue.cancelToolCalls = true;
@@ -406,7 +428,10 @@ export class ToolSetBuilder {
                 });
               }
 
-              const approval = await this.deps.approvalDal.getById(stepApprovalId);
+              const approval = await this.deps.approvalDal.getById({
+                tenantId: this.deps.tenantId,
+                approvalId: stepApprovalId,
+              });
               const approved = approval?.status === "approved";
               const ctx = coerceRecord(approval?.context);
               const matches =
@@ -420,7 +445,7 @@ export class ToolSetBuilder {
                   error: `tool execution not approved for '${toolDesc.id}'`,
                   approval_id: stepApprovalId,
                   status: approval?.status ?? "pending",
-                  reason: approval?.response_reason ?? undefined,
+                  reason: extractApprovalReason(approval),
                 });
               }
             } else {
@@ -558,16 +583,17 @@ export class ToolSetBuilder {
   ): Promise<{
     approved: boolean;
     status: ApprovalStatus;
-    approvalId: number;
+    approvalId: string;
     reason?: string;
   }> {
     const deadline = Date.now() + this.deps.approvalWaitMs;
+    const approvalKey = `${context.planId}:step:${String(stepIndex)}:tool_call:${toolCallId}`;
     const approval = await this.deps.approvalDal.create({
-      planId: context.planId,
-      stepIndex,
+      tenantId: this.deps.tenantId,
       kind: "workflow_step",
       agentId: this.deps.agentId,
       workspaceId: this.deps.workspaceId,
+      approvalKey,
       prompt: `Approve execution of '${tool.id}' (risk=${tool.risk})`,
       context: {
         source: "agent-tool-execution",
@@ -581,10 +607,13 @@ export class ToolSetBuilder {
         policy: policyContext ?? undefined,
       },
       expiresAt: new Date(deadline).toISOString(),
+      sessionId: context.sessionId,
+      runId: context.execution?.runId,
+      stepId: context.execution?.stepId,
     });
 
     this.deps.logger.info("approval.created", {
-      approval_id: approval.id,
+      approval_id: approval.approval_id,
       plan_id: context.planId,
       step_index: stepIndex,
       tool_id: tool.id,
@@ -596,13 +625,16 @@ export class ToolSetBuilder {
     this.deps.approvalNotifier.notify(approval);
 
     while (Date.now() < deadline) {
-      await this.deps.approvalDal.expireStale();
-      const current = await this.deps.approvalDal.getById(approval.id);
+      await this.deps.approvalDal.expireStale({ tenantId: this.deps.tenantId });
+      const current = await this.deps.approvalDal.getById({
+        tenantId: this.deps.tenantId,
+        approvalId: approval.approval_id,
+      });
       if (!current) {
         return {
           approved: false,
           status: "expired",
-          approvalId: approval.id,
+          approvalId: approval.approval_id,
           reason: "approval record not found",
         };
       }
@@ -611,8 +643,8 @@ export class ToolSetBuilder {
         return {
           approved: true,
           status: "approved",
-          approvalId: current.id,
-          reason: current.response_reason ?? undefined,
+          approvalId: current.approval_id,
+          reason: extractApprovalReason(current),
         };
       }
 
@@ -620,8 +652,8 @@ export class ToolSetBuilder {
         return {
           approved: false,
           status: current.status,
-          approvalId: current.id,
-          reason: current.response_reason ?? undefined,
+          approvalId: current.approval_id,
+          reason: extractApprovalReason(current),
         };
       }
 
@@ -629,12 +661,15 @@ export class ToolSetBuilder {
       await new Promise((resolve) => setTimeout(resolve, sleepMs));
     }
 
-    const expired = await this.deps.approvalDal.expireById(approval.id);
+    const expired = await this.deps.approvalDal.expireById({
+      tenantId: this.deps.tenantId,
+      approvalId: approval.approval_id,
+    });
     return {
       approved: false,
       status: "expired",
-      approvalId: approval.id,
-      reason: expired?.response_reason ?? "approval timed out",
+      approvalId: approval.approval_id,
+      reason: extractApprovalReason(expired) ?? "approval timed out",
     };
   }
 

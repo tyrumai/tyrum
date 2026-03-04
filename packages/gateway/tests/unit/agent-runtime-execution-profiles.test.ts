@@ -8,6 +8,11 @@ import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -65,7 +70,11 @@ describe("AgentRuntime (execution profiles)", () => {
       turnEngineWaitMs: 30_000,
     });
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
     const workboard = new WorkboardDal(container.db);
 
     const explorerSubagentId = randomUUID();

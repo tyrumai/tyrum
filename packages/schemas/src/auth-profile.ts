@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
-import { AgentId } from "./keys.js";
 
 export const AuthProfileId = UuidSchema;
 export type AuthProfileId = z.infer<typeof AuthProfileId>;
+
+export const AuthProfileKey = z.string().trim().min(1);
+export type AuthProfileKey = z.infer<typeof AuthProfileKey>;
 
 export const AuthProviderId = z.string().trim().min(1);
 export type AuthProviderId = z.infer<typeof AuthProviderId>;
@@ -14,28 +16,21 @@ export type AuthProfileType = z.infer<typeof AuthProfileType>;
 export const AuthProfileStatus = z.enum(["active", "disabled"]);
 export type AuthProfileStatus = z.infer<typeof AuthProfileStatus>;
 
-export const AuthProfileSecretHandles = z.record(
-  z.string().trim().min(1),
-  z.string().trim().min(1),
-);
-export type AuthProfileSecretHandles = z.infer<typeof AuthProfileSecretHandles>;
+export const AuthProfileSecretKeys = z.record(z.string().trim().min(1), z.string().trim().min(1));
+export type AuthProfileSecretKeys = z.infer<typeof AuthProfileSecretKeys>;
 
 export const AuthProfileLabels = z.record(z.string().trim().min(1), z.unknown());
 export type AuthProfileLabels = z.infer<typeof AuthProfileLabels>;
 
 export const AuthProfile = z
   .object({
-    profile_id: AuthProfileId,
-    agent_id: AgentId,
-    provider: AuthProviderId,
+    auth_profile_id: AuthProfileId,
+    auth_profile_key: AuthProfileKey,
+    provider_key: AuthProviderId,
     type: AuthProfileType,
-    secret_handles: AuthProfileSecretHandles.default({}),
+    secret_keys: AuthProfileSecretKeys.default({}),
     labels: AuthProfileLabels.default({}),
     status: AuthProfileStatus,
-    disabled_reason: z.string().trim().min(1).nullable().optional(),
-    disabled_at: DateTimeSchema.nullable().optional(),
-    cooldown_until_ms: z.number().int().nonnegative().nullable().optional(),
-    expires_at: DateTimeSchema.nullable().optional(),
     created_by: z.unknown().optional(),
     updated_by: z.unknown().optional(),
     created_at: DateTimeSchema,
@@ -46,12 +41,11 @@ export type AuthProfile = z.infer<typeof AuthProfile>;
 
 export const AuthProfileCreateRequest = z
   .object({
-    agent_id: AgentId.optional(),
-    provider: AuthProviderId,
+    auth_profile_key: AuthProfileKey,
+    provider_key: AuthProviderId,
     type: AuthProfileType.default("api_key"),
-    secret_handles: AuthProfileSecretHandles,
+    secret_keys: AuthProfileSecretKeys.default({}),
     labels: AuthProfileLabels.optional(),
-    expires_at: DateTimeSchema.nullable().optional(),
     created_by: z.unknown().optional(),
   })
   .strict();
@@ -74,7 +68,7 @@ export type AuthProfileListResponse = z.infer<typeof AuthProfileListResponse>;
 export const AuthProfileUpdateRequest = z
   .object({
     labels: AuthProfileLabels.optional(),
-    expires_at: DateTimeSchema.nullable().optional(),
+    secret_keys: AuthProfileSecretKeys.optional(),
     updated_by: z.unknown().optional(),
   })
   .strict();
@@ -97,12 +91,11 @@ export type AuthProfileEnableRequest = z.infer<typeof AuthProfileEnableRequest>;
 
 export const SessionProviderPin = z
   .object({
-    agent_id: AgentId,
-    session_id: z.string().trim().min(1),
-    provider: AuthProviderId,
-    profile_id: AuthProfileId,
+    session_id: UuidSchema,
+    provider_key: AuthProviderId,
+    auth_profile_id: AuthProfileId,
+    auth_profile_key: AuthProfileKey,
     pinned_at: DateTimeSchema,
-    updated_at: DateTimeSchema,
   })
   .strict();
 export type SessionProviderPin = z.infer<typeof SessionProviderPin>;
@@ -116,10 +109,9 @@ export type SessionProviderPinListResponse = z.infer<typeof SessionProviderPinLi
 
 export const SessionProviderPinSetRequest = z
   .object({
-    agent_id: AgentId.optional(),
-    session_id: z.string().trim().min(1),
-    provider: AuthProviderId,
-    profile_id: AuthProfileId.nullable(),
+    session_id: UuidSchema,
+    provider_key: AuthProviderId,
+    auth_profile_key: AuthProfileKey.nullable(),
     updated_by: z.unknown().optional(),
   })
   .strict();

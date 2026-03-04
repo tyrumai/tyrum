@@ -10,6 +10,7 @@ import {
   ApprovalListResponse,
   ApprovalResolveRequest,
   ApprovalResolveResponse,
+  UuidSchema,
   WsApprovalDecision,
   WsApprovalListRequest,
   WsApprovalResolveRequest,
@@ -73,6 +74,7 @@ import { broadcastEvent, errorResponse } from "./helpers.js";
 import { handleWorkboardMessage } from "./workboard-handlers.js";
 import { handleSubagentMessage } from "./subagent-handlers.js";
 import { handleMemoryMessage } from "./memory-handlers.js";
+import { DEFAULT_TENANT_ID } from "../../modules/identity/scope.js";
 
 // ---------------------------------------------------------------------------
 // Client message handling
@@ -298,10 +300,10 @@ export async function handleClientMessage(
 
     const rows =
       status === undefined
-        ? await deps.approvalDal.getPending()
+        ? await deps.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID })
         : status === "cancelled"
           ? []
-          : await deps.approvalDal.getByStatus(status);
+          : await deps.approvalDal.getByStatus({ tenantId: DEFAULT_TENANT_ID, status });
 
     const approvals = rows
       .map(toApprovalContract)
@@ -350,7 +352,7 @@ export async function handleClientMessage(
       | Array<{ tool_id: string; pattern: string; workspace_id?: string }>
       | undefined;
     let createOverrideContext:
-      | { agentId: string; policySnapshotId?: string; approvalId: number }
+      | { agentId: string; policySnapshotId?: string; approvalId: string }
       | undefined;
 
     if (req.decision === "approved" && req.mode === "always") {
@@ -363,7 +365,10 @@ export async function handleClientMessage(
         );
       }
 
-      const existing = await deps.approvalDal.getById(req.approval_id);
+      const existing = await deps.approvalDal.getById({
+        tenantId: DEFAULT_TENANT_ID,
+        approvalId: req.approval_id,
+      });
       if (!existing) {
         return errorResponse(
           msg.request_id,
@@ -379,7 +384,7 @@ export async function handleClientMessage(
             msg.request_id,
             msg.type,
             "invalid_state",
-            `approval ${String(existing.id)} could not be converted to contract`,
+            `approval ${String(existing.approval_id)} could not be converted to contract`,
           );
         }
         const result = ApprovalResolveResponse.parse({ approval });
@@ -424,15 +429,17 @@ export async function handleClientMessage(
       createOverrideContext = {
         agentId: extractAgentId(existing.context) ?? "default",
         policySnapshotId: extractPolicySnapshotId(existing.context),
-        approvalId: existing.id,
+        approvalId: existing.approval_id,
       };
     }
 
-    const updated = await deps.approvalDal.respond(
-      req.approval_id,
-      req.decision === "approved",
-      req.reason,
-    );
+    const updated = await deps.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: req.approval_id,
+      decision: req.decision,
+      reason: req.reason,
+      resolvedBy: { kind: "ws", client_id: client.id },
+    });
     if (!updated) {
       return errorResponse(
         msg.request_id,
@@ -449,7 +456,7 @@ export async function handleClientMessage(
         request_id: msg.request_id,
         client_id: client.id,
         request_type: msg.type,
-        approval_id: updated.id,
+        approval_id: updated.approval_id,
         decision: req.decision,
         status: updated.status,
       });
@@ -458,10 +465,7 @@ export async function handleClientMessage(
         if (updated.status === "approved" && updated.resume_token) {
           await deps.engine.resumeRun(updated.resume_token);
         } else if (updated.status === "denied" && updated.run_id) {
-          await deps.engine.cancelRun(
-            updated.run_id,
-            updated.response_reason ?? req.reason ?? "approval denied",
-          );
+          await deps.engine.cancelRun(updated.run_id, req.reason ?? "approval denied");
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -469,7 +473,7 @@ export async function handleClientMessage(
           request_id: msg.request_id,
           client_id: client.id,
           request_type: msg.type,
-          approval_id: updated.id,
+          approval_id: updated.approval_id,
           decision: req.decision,
           run_id: updated.run_id,
           error: message,
@@ -517,7 +521,7 @@ export async function handleClientMessage(
         msg.request_id,
         msg.type,
         "invalid_state",
-        `approval ${String(updated.id)} could not be converted to contract`,
+        `approval ${String(updated.approval_id)} could not be converted to contract`,
       );
     }
     const result = ApprovalResolveResponse.parse({
@@ -1458,7 +1462,7 @@ export async function handleClientMessage(
       const requestId = parsedReq.data.payload.request_id ?? `req-${crypto.randomUUID()}`;
 
       const keyParsed = parseTyrumKey(parsedReq.data.payload.key);
-      const agentId = keyParsed.kind === "agent" ? keyParsed.agent_id : "default";
+      const agentId = keyParsed.kind === "agent" ? keyParsed.agent_key : "default";
       const policy = deps.agents ? deps.agents.getPolicyService(agentId) : deps.policyService!;
       const effectivePolicy = await policy.loadEffectiveBundle();
       const snapshot = await policy.getOrCreateSnapshot(effectivePolicy.bundle);
@@ -1692,13 +1696,12 @@ function errorEvent(code: string, message: string): WsEventEnvelope {
   };
 }
 
-function parseApprovalId(requestId: string): number | undefined {
+function parseApprovalId(requestId: string): string | undefined {
   // request_id is `approval-<approval_id>`
   if (!requestId.startsWith("approval-")) return undefined;
   const raw = requestId.slice("approval-".length);
-  const n = Number.parseInt(raw, 10);
-  if (!Number.isInteger(n) || n <= 0) return undefined;
-  return n;
+  const parsed = UuidSchema.safeParse(raw);
+  return parsed.success ? parsed.data : undefined;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

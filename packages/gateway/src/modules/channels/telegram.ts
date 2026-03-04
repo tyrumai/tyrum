@@ -19,6 +19,7 @@ import { ChannelOutboxDal } from "./outbox-dal.js";
 import { LaneQueueInterruptError, LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
 import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
 import { releaseLaneLease } from "../lanes/lane-lease.js";
+import type { SessionDal } from "../agent/session-dal.js";
 import {
   renderMarkdownForTelegram,
   type TelegramFormattingFallbackEvent,
@@ -42,6 +43,7 @@ import { telegramAccountIdFromEnv } from "./telegram-account.js";
 import { randomUUID } from "node:crypto";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
 import { SessionSendPolicyOverrideDal } from "./send-policy-override-dal.js";
+import { coerceRecord } from "../util/coerce.js";
 
 function isTruthyEnvFlag(value: string | undefined): boolean {
   const trimmed = value?.trim().toLowerCase();
@@ -193,7 +195,7 @@ export function telegramThreadKey(
         configured: opts?.dmScope ?? "per_account_channel_peer",
       });
       return buildAgentSessionKey({
-        agentId,
+        agentKey: agentId,
         container: "dm",
         channel: "telegram",
         account: accountId,
@@ -203,7 +205,7 @@ export function telegramThreadKey(
     }
 
     return buildAgentSessionKey({
-      agentId,
+      agentKey: agentId,
       container,
       channel: "telegram",
       account: accountId,
@@ -226,7 +228,7 @@ export function telegramThreadKey(
       configured: opts?.dmScope ?? "per_account_channel_peer",
     });
     return buildAgentSessionKey({
-      agentId,
+      agentKey: agentId,
       container: "dm",
       channel: "telegram",
       account: accountId,
@@ -236,7 +238,7 @@ export function telegramThreadKey(
   }
 
   return buildAgentSessionKey({
-    agentId,
+    agentKey: agentId,
     container,
     channel: "telegram",
     account: accountId,
@@ -264,6 +266,7 @@ export function createTelegramEgressConnector(telegramBot: TelegramBot): Channel
 async function tryAcquireLaneLease(
   db: SqlDb,
   opts: {
+    tenant_id: string;
     key: string;
     lane: string;
     owner: string;
@@ -274,19 +277,19 @@ async function tryAcquireLaneLease(
   const expiresAt = opts.now_ms + Math.max(1, opts.ttl_ms);
   return await db.transaction(async (tx) => {
     const inserted = await tx.run(
-      `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT (key, lane) DO NOTHING`,
-      [opts.key, opts.lane, opts.owner, expiresAt],
+      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (tenant_id, key, lane) DO NOTHING`,
+      [opts.tenant_id, opts.key, opts.lane, opts.owner, expiresAt],
     );
     if (inserted.changes === 1) return true;
 
     const updated = await tx.run(
       `UPDATE lane_leases
        SET lease_owner = ?, lease_expires_at_ms = ?
-       WHERE key = ? AND lane = ?
+       WHERE tenant_id = ? AND key = ? AND lane = ?
          AND (lease_expires_at_ms <= ? OR lease_owner = ?)`,
-      [opts.owner, expiresAt, opts.key, opts.lane, opts.now_ms, opts.owner],
+      [opts.owner, expiresAt, opts.tenant_id, opts.key, opts.lane, opts.now_ms, opts.owner],
     );
     return updated.changes === 1;
   });
@@ -315,7 +318,8 @@ export class TelegramChannelQueue {
 
   constructor(
     db: SqlDb,
-    opts?: {
+    opts: {
+      sessionDal: SessionDal;
       agentId?: string;
       accountId?: string;
       channelKey?: string;
@@ -326,7 +330,7 @@ export class TelegramChannelQueue {
     },
   ) {
     this.db = db;
-    this.inbox = new ChannelInboxDal(db);
+    this.inbox = new ChannelInboxDal(db, opts.sessionDal);
     this.peerIdentityLinks = new PeerIdentityLinkDal(db);
     this.agentId = opts?.agentId?.trim() || agentIdFromEnv();
     this.accountId =
@@ -422,7 +426,7 @@ export class TelegramChannelQueue {
         const parsedCanonicalPeerId = PeerId.safeParse(canonicalPeerId.trim());
         if (parsedCanonicalPeerId.success) {
           key = buildAgentSessionKey({
-            agentId,
+            agentKey: agentId,
             container: "dm",
             channel: "telegram",
             account: accountId,
@@ -442,15 +446,6 @@ export class TelegramChannelQueue {
       "collect";
 
     const nowMs = Date.now();
-    const activeLease = await this.db.get<{ lease_expires_at_ms: number }>(
-      `SELECT lease_expires_at_ms
-       FROM lane_leases
-       WHERE key = ? AND lane = ?`,
-      [key, lane],
-    );
-    const runActive =
-      typeof activeLease?.lease_expires_at_ms === "number" &&
-      activeLease.lease_expires_at_ms > nowMs;
 
     const { row, deduped, overflow } = await this.inbox.enqueue({
       source,
@@ -462,6 +457,16 @@ export class TelegramChannelQueue {
       received_at_ms: nowMs,
       payload,
     });
+
+    const activeLease = await this.db.get<{ lease_expires_at_ms: number }>(
+      `SELECT lease_expires_at_ms
+       FROM lane_leases
+       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+      [row.tenant_id, key, lane],
+    );
+    const runActive =
+      typeof activeLease?.lease_expires_at_ms === "number" &&
+      activeLease.lease_expires_at_ms > nowMs;
 
     if (!deduped && overflow && overflow.dropped.length > 0) {
       const candidate = {
@@ -504,6 +509,7 @@ export class TelegramChannelQueue {
       await this.db.transaction(async (tx) => {
         const signals = new LaneQueueSignalDal(tx);
         await signals.setSignal({
+          tenant_id: row.tenant_id,
           key,
           lane,
           kind: effectiveQueueMode === "interrupt" ? "interrupt" : "steer",
@@ -514,19 +520,14 @@ export class TelegramChannelQueue {
         });
 
         if (effectiveQueueMode === "interrupt") {
-          const nowIso = new Date(nowMs).toISOString();
           await tx.run(
-            `UPDATE channel_inbox
-             SET status = 'completed',
-                 lease_owner = NULL,
-                 lease_expires_at_ms = NULL,
-                 processed_at = COALESCE(processed_at, ?),
-                 error = NULL,
-                 reply_text = COALESCE(reply_text, '')
-             WHERE key = ? AND lane = ?
+            `DELETE FROM channel_inbox
+             WHERE tenant_id = ?
+               AND key = ?
+               AND lane = ?
                AND status = 'queued'
                AND inbox_id <> ?`,
-            [nowIso, key, lane, row.inbox_id],
+            [row.tenant_id, key, lane, row.inbox_id],
           );
         }
       });
@@ -558,6 +559,7 @@ export class TelegramChannelProcessor {
 
   constructor(opts: {
     db: SqlDb;
+    sessionDal: SessionDal;
     agents: AgentRegistry;
     telegramBot: TelegramBot;
     owner: string;
@@ -574,7 +576,7 @@ export class TelegramChannelProcessor {
     maxBatch?: number;
   }) {
     this.db = opts.db;
-    this.inbox = new ChannelInboxDal(opts.db);
+    this.inbox = new ChannelInboxDal(opts.db, opts.sessionDal);
     this.outbox = new ChannelOutboxDal(opts.db);
     this.agents = opts.agents;
     this.egressConnectors = new Map(
@@ -624,6 +626,7 @@ export class TelegramChannelProcessor {
       });
       if (claimed) {
         const laneAcquired = await tryAcquireLaneLease(this.db, {
+          tenant_id: claimed.tenant_id,
           key: claimed.key,
           lane: claimed.lane,
           owner: this.owner,
@@ -638,6 +641,7 @@ export class TelegramChannelProcessor {
             await this.processBatch(batch);
           } finally {
             await releaseLaneLease(this.db, {
+              tenant_id: claimed.tenant_id,
               key: claimed.key,
               lane: claimed.lane,
               owner: this.owner,
@@ -662,17 +666,15 @@ export class TelegramChannelProcessor {
       return await this.sendNextOutbox();
     }
 
-    // Expire approvals before checking gating.
-    await this.approvalDal.expireStale();
-
-    const pending = await this.db.get<{ approval_id: number; inbox_id: number }>(
-      `SELECT approval_id, inbox_id
+    const pending = await this.db.get<{ tenant_id: string; approval_id: string; inbox_id: number }>(
+      `SELECT tenant_id, approval_id, inbox_id
        FROM channel_outbox
        WHERE approval_id IS NOT NULL AND status = 'queued'
        ORDER BY created_at ASC, outbox_id ASC
        LIMIT 1`,
     );
     if (pending?.approval_id) {
+      const pendingApprovalId = pending.approval_id;
       const scope = await this.db.get<{ key: string }>(
         "SELECT key FROM channel_inbox WHERE inbox_id = ?",
         [pending.inbox_id],
@@ -682,19 +684,23 @@ export class TelegramChannelProcessor {
           key: scope.key,
         });
         if (sendOverride?.send_policy === "on") {
-          await this.outbox.clearApprovalById(pending.approval_id);
+          await this.outbox.clearApprovalById(pendingApprovalId);
           return true;
         }
         if (sendOverride?.send_policy === "off") {
-          await this.outbox.markFailedByApproval(pending.approval_id, "send disabled by operator");
+          await this.outbox.markFailedByApproval(pendingApprovalId, "send disabled by operator");
           return true;
         }
       }
 
-      const approval = await this.approvalDal.getById(pending.approval_id);
+      await this.approvalDal.expireStale({ tenantId: pending.tenant_id });
+      const approval = await this.approvalDal.getById({
+        tenantId: pending.tenant_id,
+        approvalId: pendingApprovalId,
+      });
       if (approval) {
         if (approval.status === "approved") {
-          await this.outbox.clearApprovalById(approval.id);
+          await this.outbox.clearApprovalById(approval.approval_id);
           return true;
         }
         if (
@@ -702,8 +708,12 @@ export class TelegramChannelProcessor {
           approval.status === "expired" ||
           approval.status === "cancelled"
         ) {
-          const reason = approval.response_reason ?? `approval ${approval.status}`;
-          await this.outbox.markFailedByApproval(approval.id, reason);
+          const reason = (() => {
+            const record = coerceRecord(approval.resolution);
+            const candidate = typeof record?.["reason"] === "string" ? record["reason"].trim() : "";
+            return candidate.length > 0 ? candidate : `approval ${approval.status}`;
+          })();
+          await this.outbox.markFailedByApproval(approval.approval_id, reason);
           return true;
         }
       }
@@ -768,7 +778,11 @@ export class TelegramChannelProcessor {
         text: next.text,
         parseMode: next.parse_mode ?? undefined,
       });
-      const marked = await this.outbox.markSent(next.outbox_id, this.owner, resp);
+      const marked = await this.outbox.markSent({
+        outboxId: next.outbox_id,
+        inboxId: next.inbox_id,
+        owner: this.owner,
+      });
       if (marked) {
         await this.enqueueDeliveryReceiptEvent({
           outbox: next,
@@ -780,6 +794,15 @@ export class TelegramChannelProcessor {
             response: resp,
           },
         });
+
+        // Queue-only semantics: drop completed inbox rows once all outbox work has been drained.
+        await this.db.run(
+          `DELETE FROM channel_inbox
+           WHERE inbox_id = ?
+             AND status = 'completed'
+             AND NOT EXISTS (SELECT 1 FROM channel_outbox WHERE inbox_id = ?)`,
+          [next.inbox_id, next.inbox_id],
+        );
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -879,6 +902,7 @@ export class TelegramChannelProcessor {
     const windowEnd = windowStart + this.debounceMs;
 
     const extra = await this.inbox.listQueuedForKey({
+      tenant_id: leader.tenant_id,
       key: leader.key,
       lane: leader.lane,
       received_at_ms_gte: windowStart,
@@ -1015,7 +1039,7 @@ export class TelegramChannelProcessor {
       try {
         const parsedKey = parseTyrumKey(leader.key as never);
         if (parsedKey.kind === "agent") {
-          agentId = parsedKey.agent_id;
+          agentId = parsedKey.agent_key;
         }
       } catch (err) {
         // Intentional: ignore invalid keys; fall back to default agent.
@@ -1137,6 +1161,20 @@ export class TelegramChannelProcessor {
     }
     const source = connectorId;
 
+    const sessionScope = await this.db.get<{ agent_id: string; workspace_id: string }>(
+      `SELECT agent_id, workspace_id
+       FROM sessions
+       WHERE tenant_id = ? AND session_id = ?
+       LIMIT 1`,
+      [leader.tenant_id, leader.session_id],
+    );
+    if (!sessionScope) {
+      for (const row of rows) {
+        await this.inbox.markFailed(row.inbox_id, this.owner, "session not found");
+      }
+      return;
+    }
+
     // Apply outbound send policy before enqueueing side effects.
     let decision: "allow" | "deny" | "require_approval" = "allow";
     let policySnapshotId: string | undefined;
@@ -1154,8 +1192,8 @@ export class TelegramChannelProcessor {
           : `${source}:${accountId}:${leader.thread_id}`;
       try {
         const evalRes = await policyService.evaluateConnectorAction({
-          agentId,
-          workspaceId: agentId,
+          agentId: sessionScope.agent_id,
+          workspaceId: sessionScope.workspace_id,
           matchTarget: connectorMatchTarget,
         });
         decision = evalRes.decision;
@@ -1202,7 +1240,7 @@ export class TelegramChannelProcessor {
       return;
     }
 
-    let approvalId: number | undefined;
+    let approvalId: string | undefined;
     if (decision === "require_approval" && chunks.length > 0) {
       if (!this.approvalDal) {
         for (const row of rows) {
@@ -1226,24 +1264,25 @@ export class TelegramChannelProcessor {
         accountId === DEFAULT_CHANNEL_ACCOUNT_ID ? connectorId : `${connectorId}@${accountId}`;
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
       const approval = await this.approvalDal.create({
-        planId: `connector:${planSource}:${leader.thread_id}:${leader.message_id}`,
-        stepIndex: 0,
+        tenantId: leader.tenant_id,
+        agentId: sessionScope.agent_id,
+        workspaceId: sessionScope.workspace_id,
+        approvalKey: `connector:${planSource}:${leader.thread_id}:${leader.message_id}`,
         kind: "connector.send",
-        agentId,
-        workspaceId: agentId,
-        key: leader.key,
-        lane: leader.lane,
         prompt: `Approve sending a ${source} reply`,
         context: {
           source,
           account_id: accountId,
           thread_id: leader.thread_id,
           inbox_id: leader.inbox_id,
+          key: leader.key,
+          lane: leader.lane,
           policy_snapshot_id: policySnapshotId,
           policy: policyService?.isEnabled()
             ? {
                 policy_snapshot_id: policySnapshotId,
-                agent_id: agentId,
+                agent_id: sessionScope.agent_id,
+                workspace_id: sessionScope.workspace_id,
                 suggested_overrides: suggestedOverrides,
                 applied_override_ids: appliedOverrideIds,
               }
@@ -1253,7 +1292,7 @@ export class TelegramChannelProcessor {
         },
         expiresAt,
       });
-      approvalId = approval.id;
+      approvalId = approval.approval_id;
       try {
         this.approvalNotifier?.notify(approval);
       } catch (err) {
@@ -1262,7 +1301,7 @@ export class TelegramChannelProcessor {
           channel_id: source,
           message_id: leader.message_id,
           inbox_id: leader.inbox_id,
-          approval_id: approval.id,
+          approval_id: approval.approval_id,
           error: message,
         });
       }
@@ -1273,6 +1312,7 @@ export class TelegramChannelProcessor {
       const text = chunks[i]!;
       const dedupeKey = `${leader.source}:${leader.thread_id}:${leader.message_id}:reply:${String(i)}`;
       await this.outbox.enqueue({
+        tenant_id: leader.tenant_id,
         inbox_id: leader.inbox_id,
         source: leader.source,
         thread_id: leader.thread_id,
@@ -1280,6 +1320,9 @@ export class TelegramChannelProcessor {
         chunk_index: i,
         text,
         parse_mode: "HTML",
+        workspace_id: leader.workspace_id,
+        session_id: leader.session_id,
+        channel_thread_id: leader.channel_thread_id,
       });
     }
 
