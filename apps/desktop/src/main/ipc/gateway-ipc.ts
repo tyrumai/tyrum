@@ -411,6 +411,7 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
           httpBaseUrl: resolveOperatorHttpBaseUrl(config),
           token,
           tlsCertFingerprint256: "",
+          tlsAllowSelfSigned: false,
         } satisfies OperatorConnectionInfo;
       }
       return resolveOperatorConnection(config);
