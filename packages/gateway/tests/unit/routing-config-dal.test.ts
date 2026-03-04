@@ -23,7 +23,7 @@ describe("RoutingConfigDal", () => {
       config: {
         v: 1,
         telegram: {
-          default_agent_id: "agent-a",
+          default_agent_key: "agent-a",
           threads: {
             "123": "agent-b",
           },
@@ -89,7 +89,7 @@ describe("RoutingConfigDal", () => {
       config: {
         v: 1,
         telegram: {
-          default_agent_id: "agent-a",
+          default_agent_key: "agent-a",
           threads: {
             "123": "agent-b",
           },
@@ -104,7 +104,7 @@ describe("RoutingConfigDal", () => {
       config: {
         v: 1,
         telegram: {
-          default_agent_id: "agent-c",
+          default_agent_key: "agent-c",
         },
       },
       createdBy: { kind: "test" },

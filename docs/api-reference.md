@@ -179,7 +179,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.read`
-- Request: Optional query params (mutually exclusive): `run_id`, `key`, `agent_id`
+- Request: Optional query params (mutually exclusive): `run_id`, `key`, `agent_key`
 - Response:
   - `200` JSON usage totals (local DB) + optional provider polling status
   - `400` for invalid scope param combinations
@@ -252,7 +252,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.approvals`
-- Request: `:id` numeric
+- Request: `:id` UUID
 - Response:
   - `200` JSON `{ approval: ... }`
   - `400` invalid id
@@ -263,9 +263,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.approvals`
-- Request: JSON (supports both):
-  - `{ decision: "approved" | "denied", reason?: string, mode?: "once"|"always", overrides?: [...] }`
-  - legacy `{ approved: boolean, reason?: string, ... }`
+- Request: JSON `{ decision: "approved" | "denied", reason?: string, mode?: "once"|"always", overrides?: [...] }`
 - Response:
   - `200` JSON `{ approval: ..., created_overrides?: [...] }` (idempotent if already resolved)
   - `400` invalid request
@@ -276,7 +274,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.approvals`
-- Request: `:id` numeric
+- Request: `:id` UUID
 - Response:
   - `200` JSON `{ id, plan_id, step_index, prompt, context, status, expires_at }`
   - `400` invalid id
@@ -329,7 +327,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.admin`
-- Request: Optional query params: `agent_id`, `provider`, `status=active|disabled`
+- Request: Optional query params: `provider_key`, `status=active|disabled`
 - Response:
   - `200` JSON `AuthProfileListResponse`
   - `401`, `403`
@@ -343,7 +341,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
   - `201` JSON `AuthProfileCreateResponse`
   - `400`, `401`, `403`
 
-#### PATCH /auth/profiles/:id
+#### PATCH /auth/profiles/:key
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.admin`
@@ -353,7 +351,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
   - `404` profile not found
   - `400`, `401`, `403`
 
-#### POST /auth/profiles/:id/disable
+#### POST /auth/profiles/:key/disable
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.admin`
@@ -363,7 +361,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
   - `404` profile not found
   - `400`, `401`, `403`
 
-#### POST /auth/profiles/:id/enable
+#### POST /auth/profiles/:key/enable
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.admin`
@@ -377,7 +375,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.admin`
-- Request: Optional query params: `agent_id`, `session_id`, `provider`
+- Request: Optional query params: `session_id`, `provider_key`
 - Response:
   - `200` JSON `SessionProviderPinListResponse`
   - `401`, `403`
@@ -422,8 +420,9 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 - Device scope: `operator.admin`
 - Availability: Only when auth profiles are enabled and OAuth providers are configured
 - Request: JSON (partial; see `packages/gateway/src/routes/provider-oauth.ts`):
-  - `agent_id?: string`
+  - `agent_key?: string`
   - `public_base_url?: string` (http/https)
+  - `auth_profile_key?: string`
 - Response:
   - `200` JSON `{ status: "ok", provider, state, expires_at, authorize_url }`
   - `404` oauth provider not configured
@@ -472,6 +471,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.admin`
 - Availability: Only when a `SecretProvider` is configured
+- Request: Optional query param/header to select agent: `agent_key` or `x-tyrum-agent-key`
 - Request: JSON `SecretStoreRequest`
 - Response:
   - `201` JSON `{ handle: SecretHandle }` (never returns secret value)
@@ -483,7 +483,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.admin`
 - Availability: Only when a `SecretProvider` is configured
-- Request: Optional query param/header to select agent: `agent_id` or `x-tyrum-agent-id`
+- Request: Optional query param/header to select agent: `agent_key` or `x-tyrum-agent-key`
 - Response:
   - `200` JSON `{ handles: SecretHandle[] }`
   - `400` invalid agent
@@ -495,6 +495,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 - Device scope: `operator.admin`
 - Availability: Only when a `SecretProvider` is configured
 - Request: `:id` secret handle id
+- Request: Optional query param/header to select agent: `agent_key` or `x-tyrum-agent-key`
 - Response:
   - `200` JSON `{ revoked: true }`
   - `404` not found
@@ -505,6 +506,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.admin`
 - Availability: Only when a non-env `SecretProvider` is configured
+- Request: Optional query param/header to select agent: `agent_key` or `x-tyrum-agent-key`
 - Request: JSON `SecretRotateRequest`
 - Response:
   - `201` JSON `{ revoked: boolean, handle: SecretHandle }`
@@ -877,10 +879,10 @@ Additional plugin-defined routers may be mounted under:
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.read`
 - Availability: Only when `TYRUM_AGENT_ENABLED=1`
-- Request: Optional query param `agent_id` (default: `default`)
+- Request: Optional query param `agent_key` (default: `default`)
 - Response:
   - `200` JSON agent runtime status
-  - `400` invalid agent id
+  - `400` invalid agent key
   - `401`, `403`
 
 #### POST /agent/turn
@@ -902,10 +904,10 @@ Additional plugin-defined routers may be mounted under:
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.read`
 - Availability: Only when `TYRUM_AGENT_ENABLED=1`
-- Request: Optional query param `agent_id` (default: `default`)
+- Request: Optional query param `agent_key` (default: `default`)
 - Response:
   - `200` JSON `{ status: "ok", report }`
-  - `400` invalid agent id
+  - `400` invalid agent key
   - `401`, `403`
 
 #### GET /context/list
@@ -938,9 +940,9 @@ Additional plugin-defined routers may be mounted under:
 - Request:
   - Raw body text (Telegram update JSON)
   - When Telegram integration is enabled, requires header `x-telegram-bot-api-secret-token`
-  - Optional query param `agent_id` to force routing
+  - Optional query param `agent_key` to force routing
 - Response:
-  - `200` JSON normalized update (legacy behavior when agent runtime disabled)
+  - `200` JSON normalized update (when agent runtime disabled)
   - `200` JSON `{ ok: true, ... }` when processed/queued
   - `401` invalid telegram webhook secret (when enabled)
   - `503` misconfigured (missing `TELEGRAM_WEBHOOK_SECRET`) or temporary queue failure

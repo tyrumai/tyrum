@@ -394,11 +394,8 @@ export class TelegramChannelQueue {
       accountId,
       dmScope,
     });
-    const source =
-      accountId === telegramAccountIdFromEnv()
-        ? "telegram"
-        : buildChannelSourceKey({ connector: "telegram", accountId });
-    const deliveryAccount = source === "telegram" ? DEFAULT_CHANNEL_ACCOUNT_ID : accountId;
+    const source = buildChannelSourceKey({ connector: "telegram", accountId });
+    const deliveryAccount = accountId;
     const payload: NormalizedThreadMessage = normalized.message.envelope
       ? {
           ...normalized,

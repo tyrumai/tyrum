@@ -10,13 +10,13 @@ import { SecretRotateRequest, SecretStoreRequest } from "@tyrum/schemas";
 import { SecretAlreadyExistsError, type SecretProvider } from "../modules/secret/provider.js";
 
 export interface SecretRouteDeps {
-  secretProviderForAgent: (agentId: string) => Promise<SecretProvider>;
+  secretProviderForAgent: (agentKey: string) => Promise<SecretProvider>;
 }
 
-function agentIdFromReq(c: {
+function agentKeyFromReq(c: {
   req: { query: (key: string) => string | undefined; header: (key: string) => string | undefined };
 }): string {
-  return c.req.query("agent_id")?.trim() || c.req.header("x-tyrum-agent-id")?.trim() || "default";
+  return c.req.query("agent_key")?.trim() || c.req.header("x-tyrum-agent-key")?.trim() || "default";
 }
 
 export function createSecretRoutes(deps: SecretRouteDeps): Hono {
@@ -39,7 +39,7 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
 
     let secretProvider: SecretProvider;
     try {
-      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
+      secretProvider = await deps.secretProviderForAgent(agentKeyFromReq(c));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);
@@ -61,7 +61,7 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
   app.get("/secrets", async (c) => {
     let secretProvider: SecretProvider;
     try {
-      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
+      secretProvider = await deps.secretProviderForAgent(agentKeyFromReq(c));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);
@@ -75,7 +75,7 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
     const handleId = c.req.param("id");
     let secretProvider: SecretProvider;
     try {
-      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
+      secretProvider = await deps.secretProviderForAgent(agentKeyFromReq(c));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);
@@ -94,7 +94,7 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
     const handleId = c.req.param("id");
     let secretProvider: SecretProvider;
     try {
-      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
+      secretProvider = await deps.secretProviderForAgent(agentKeyFromReq(c));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);

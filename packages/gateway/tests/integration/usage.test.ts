@@ -246,7 +246,7 @@ describe("usage routes", () => {
     expect(sessionAlphaPayload.scope.kind).toBe("session");
     expect(sessionAlphaPayload.local.totals.total_tokens).toBe(15);
 
-    const agentAlpha = await app.request(`/usage?agent_id=${encodeURIComponent("alpha")}`);
+    const agentAlpha = await app.request(`/usage?agent_key=${encodeURIComponent("alpha")}`);
     expect(agentAlpha.status).toBe(200);
     const agentAlphaPayload = (await agentAlpha.json()) as {
       scope: { kind: string };
@@ -267,7 +267,7 @@ describe("usage routes", () => {
     await container.db.close();
   });
 
-  it("treats agent_id rollups as case-sensitive", async () => {
+  it("treats agent_key rollups as case-sensitive", async () => {
     const { app, container } = await createTestApp();
 
     const insertAttempt = async (input: {
@@ -365,12 +365,12 @@ describe("usage routes", () => {
       totalTokens: 100,
     });
 
-    const lower = await app.request(`/usage?agent_id=${encodeURIComponent("alpha")}`);
+    const lower = await app.request(`/usage?agent_key=${encodeURIComponent("alpha")}`);
     expect(lower.status).toBe(200);
     const lowerPayload = (await lower.json()) as { local: { totals: { total_tokens: number } } };
     expect(lowerPayload.local.totals.total_tokens).toBe(10);
 
-    const upper = await app.request(`/usage?agent_id=${encodeURIComponent("Alpha")}`);
+    const upper = await app.request(`/usage?agent_key=${encodeURIComponent("Alpha")}`);
     expect(upper.status).toBe(200);
     const upperPayload = (await upper.json()) as { local: { totals: { total_tokens: number } } };
     expect(upperPayload.local.totals.total_tokens).toBe(100);

@@ -286,7 +286,7 @@ describe("/status command", () => {
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,
-        "telegram",
+        "telegram:default",
         "chat-1",
         "msg-1",
         mainKey,
@@ -320,7 +320,7 @@ describe("/status command", () => {
       [
         DEFAULT_TENANT_ID,
         inboxRow!.inbox_id,
-        "telegram",
+        "telegram:default",
         "chat-1",
         "dedupe-1",
         "queued",

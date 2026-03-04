@@ -9,24 +9,24 @@ import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.
 
 type SecretsApi = OperatorCore["http"]["secrets"];
 
-function normalizeAgentId(agentIdRaw: string): { agent_id?: string } | undefined {
-  const agentId = agentIdRaw.trim();
-  if (!agentId) return undefined;
-  return { agent_id: agentId };
+function normalizeAgentKey(agentKeyRaw: string): { agent_key?: string } | undefined {
+  const agentKey = agentKeyRaw.trim();
+  if (!agentKey) return undefined;
+  return { agent_key: agentKey };
 }
 
 export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.ReactElement {
-  const [agentIdRaw, setAgentIdRaw] = React.useState("");
+  const [agentKeyRaw, setAgentKeyRaw] = React.useState("");
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
   const api = (useAdminHttpClient() ?? core.http).secrets;
-  const agentQuery = normalizeAgentId(agentIdRaw);
+  const agentQuery = normalizeAgentKey(agentKeyRaw);
 
   return (
     <section className="grid gap-3" data-testid="admin-http-secrets">
       <div className="text-sm font-medium text-fg">Secrets</div>
 
-      <AgentScopeCard agentIdRaw={agentIdRaw} onAgentIdRawChange={setAgentIdRaw} />
+      <AgentScopeCard agentKeyRaw={agentKeyRaw} onAgentKeyRawChange={setAgentKeyRaw} />
       <SecretsListCard api={api} agentQuery={agentQuery} />
       <SecretsStoreCard
         api={api}
@@ -51,11 +51,11 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
 }
 
 function AgentScopeCard({
-  agentIdRaw,
-  onAgentIdRawChange,
+  agentKeyRaw,
+  onAgentKeyRawChange,
 }: {
-  agentIdRaw: string;
-  onAgentIdRawChange: (next: string) => void;
+  agentKeyRaw: string;
+  onAgentKeyRawChange: (next: string) => void;
 }): React.ReactElement {
   return (
     <Card>
@@ -64,10 +64,10 @@ function AgentScopeCard({
       </CardHeader>
       <CardContent>
         <Input
-          label="Agent ID"
+          label="Agent key"
           placeholder="Optional"
-          value={agentIdRaw}
-          onChange={(event) => onAgentIdRawChange(event.target.value)}
+          value={agentKeyRaw}
+          onChange={(event) => onAgentKeyRawChange(event.target.value)}
         />
       </CardContent>
     </Card>
@@ -79,7 +79,7 @@ function SecretsListCard({
   agentQuery,
 }: {
   api: SecretsApi;
-  agentQuery: ReturnType<typeof normalizeAgentId>;
+  agentQuery: ReturnType<typeof normalizeAgentKey>;
 }): React.ReactElement {
   const [busy, setBusy] = React.useState(false);
   const [result, setResult] = React.useState<unknown>(undefined);
@@ -127,7 +127,7 @@ function SecretsStoreCard({
   requestEnter,
 }: {
   api: SecretsApi;
-  agentQuery: ReturnType<typeof normalizeAgentId>;
+  agentQuery: ReturnType<typeof normalizeAgentKey>;
   canMutate: boolean;
   requestEnter: () => void;
 }): React.ReactElement {
@@ -234,7 +234,7 @@ function SecretsRotateCard({
   requestEnter,
 }: {
   api: SecretsApi;
-  agentQuery: ReturnType<typeof normalizeAgentId>;
+  agentQuery: ReturnType<typeof normalizeAgentKey>;
   canMutate: boolean;
   requestEnter: () => void;
 }): React.ReactElement {
@@ -340,7 +340,7 @@ function SecretsRevokeCard({
   requestEnter,
 }: {
   api: SecretsApi;
-  agentQuery: ReturnType<typeof normalizeAgentId>;
+  agentQuery: ReturnType<typeof normalizeAgentKey>;
   canMutate: boolean;
   requestEnter: () => void;
 }): React.ReactElement {

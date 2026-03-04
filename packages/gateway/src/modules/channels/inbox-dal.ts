@@ -86,14 +86,6 @@ function inboundQueueOverflowPolicy(): ChannelInboundQueueOverflowPolicy {
   return DEFAULT_INBOUND_QUEUE_OVERFLOW;
 }
 
-function sourceVariantsForChannelAccount(channel: string, accountId: string): string[] {
-  const canonical = buildChannelSourceKey({ connector: channel, accountId });
-  if (accountId === DEFAULT_CHANNEL_ACCOUNT_ID) {
-    return canonical === channel ? [channel] : [channel, canonical];
-  }
-  return [canonical];
-}
-
 export interface ChannelInboxRow {
   inbox_id: number;
   tenant_id: string;
@@ -614,10 +606,14 @@ export class ChannelInboxDal {
     const ttlMs = inboundDedupeTtlMs();
     const expiresAtMs = receivedAtMs + Math.max(1, ttlMs);
 
-    const source = input.source.trim();
-    const address = parseChannelSourceKey(source);
+    const sourceRaw = input.source.trim();
+    if (!sourceRaw.includes(":")) {
+      throw new Error('channel source must be in "connector:account" form');
+    }
+    const address = parseChannelSourceKey(sourceRaw);
     const channel = address.connector;
     const accountId = address.accountId;
+    const source = buildChannelSourceKey({ connector: channel, accountId });
     const containerId = input.thread_id.trim();
     const messageId = input.message_id.trim();
     const queueMode = normalizeQueueMode(input.queue_mode);
@@ -697,18 +693,16 @@ export class ChannelInboxDal {
 
         // Recovery fallback (should be rare): dedupe row exists but doesn't point
         // at an inbox row. Pick the newest matching inbox row and repair pointer.
-        const sources = sourceVariantsForChannelAccount(channel, accountId);
-        const placeholders = sources.map(() => "?").join(", ");
         const fallback = await tx.get<RawChannelInboxRow>(
           `SELECT *
            FROM channel_inbox
            WHERE tenant_id = ?
-             AND source IN (${placeholders})
+             AND source = ?
              AND thread_id = ?
              AND message_id = ?
            ORDER BY received_at_ms DESC, inbox_id DESC
            LIMIT 1`,
-          [tenantId, ...sources, containerId, messageId],
+          [tenantId, source, containerId, messageId],
         );
         if (fallback) {
           await tx.run(
@@ -758,22 +752,20 @@ export class ChannelInboxDal {
         };
       }
 
-      // Backward-compat (and safety): if an inbox row already exists within the
-      // TTL window, point the dedupe row at it instead of enqueueing a duplicate.
-      const sources = sourceVariantsForChannelAccount(channel, accountId);
-      const placeholders = sources.map(() => "?").join(", ");
+      // Safety: if an inbox row already exists within the TTL window, point the
+      // dedupe row at it instead of enqueueing a duplicate.
       const cutoffMs = receivedAtMs - ttlMs;
       const existing = await tx.get<RawChannelInboxRow>(
         `SELECT *
          FROM channel_inbox
          WHERE tenant_id = ?
-           AND source IN (${placeholders})
+           AND source = ?
            AND thread_id = ?
            AND message_id = ?
            AND received_at_ms >= ?
          ORDER BY received_at_ms DESC, inbox_id DESC
          LIMIT 1`,
-        [tenantId, ...sources, containerId, messageId, cutoffMs],
+        [tenantId, source, containerId, messageId, cutoffMs],
       );
       if (existing) {
         await tx.run(

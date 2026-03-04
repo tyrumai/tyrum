@@ -35,7 +35,7 @@ describe("Workboard completion notifications", () => {
     const sessionKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: sessionKey,
@@ -110,7 +110,7 @@ describe("Workboard completion notifications", () => {
     const outbox = await db.get<{ source: string; thread_id: string }>(
       "SELECT source, thread_id FROM channel_outbox LIMIT 1",
     );
-    expect(outbox).toMatchObject({ source: "telegram", thread_id: "chat-1" });
+    expect(outbox).toMatchObject({ source: "telegram:default", thread_id: "chat-1" });
   });
 
   it("skips channel notifications when send_policy override is off", async () => {
@@ -128,7 +128,7 @@ describe("Workboard completion notifications", () => {
     );
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: sessionKey,
@@ -201,7 +201,7 @@ describe("Workboard completion notifications", () => {
     const sessionKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: sessionKey,
@@ -289,7 +289,7 @@ describe("Workboard completion notifications", () => {
     const sessionKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: sessionKey,
@@ -382,7 +382,7 @@ describe("Workboard completion notifications", () => {
     const sessionKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: sessionKey,
@@ -465,7 +465,7 @@ describe("Workboard completion notifications", () => {
     const sessionKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: sessionKey,

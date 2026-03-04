@@ -111,8 +111,6 @@ export const PolicyBundleV1 = z
     artifacts: z
       .object({
         default: Decision.default("allow"),
-        retention_days: z.number().int().positive().optional(),
-        max_bytes: z.number().int().positive().optional(),
         retention: ArtifactRetentionPolicy.optional(),
         quota: ArtifactQuotaPolicy.optional(),
       })

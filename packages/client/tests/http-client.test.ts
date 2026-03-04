@@ -319,10 +319,10 @@ describe("createTyrumHttpClient", () => {
       fetch,
     });
 
-    await client.secrets.list({ agent_id: "agent-1" });
+    await client.secrets.list({ agent_key: "agent-1" });
 
     const [url] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
-    expect(url).toBe("https://gateway.example/secrets?agent_id=agent-1");
+    expect(url).toBe("https://gateway.example/secrets?agent_key=agent-1");
   });
 
   it("rejects invalid usage scope combinations locally", async () => {
@@ -642,14 +642,14 @@ describe("createTyrumHttpClient", () => {
       fetch,
     });
 
-    const result = await client.secrets.revoke("secret-1", { agent_id: "agent-1" });
+    const result = await client.secrets.revoke("secret-1", { agent_key: "agent-1" });
     expect(result.revoked).toBe(true);
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,
       RequestInit,
     ];
-    expect(url).toBe("https://gateway.example/secrets/secret-1?agent_id=agent-1");
+    expect(url).toBe("https://gateway.example/secrets/secret-1?agent_key=agent-1");
     expect(init.method).toBe("DELETE");
   });
 

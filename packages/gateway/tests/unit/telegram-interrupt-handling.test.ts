@@ -75,7 +75,7 @@ describe("TelegramChannelProcessor interrupt handling", () => {
     } as unknown as TelegramBot;
 
     const { row } = await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: "agent:default:telegram:default:dm:chat-1",

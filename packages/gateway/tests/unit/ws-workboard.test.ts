@@ -974,7 +974,7 @@ describe("handleClientMessage (work.*)", () => {
       const channelKey = "agent:default:telegram:default:dm:chat-1";
 
       await inbox.enqueue({
-        source: "telegram",
+        source: "telegram:default",
         thread_id: "chat-1",
         message_id: "msg-1",
         key: channelKey,

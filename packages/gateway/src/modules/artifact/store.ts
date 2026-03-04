@@ -223,11 +223,6 @@ export class S3ArtifactStore implements ArtifactStore {
     this.presignGetObject = presignGetObject ?? defaultPresignGetObject(client);
   }
 
-  private legacyKeyFor(artifactId: string, suffix: ".bin" | ".json"): string {
-    const shard = artifactShard(artifactId);
-    return `${this.keyPrefix}/${shard}/${artifactId}${suffix}`;
-  }
-
   private manifestKeyFor(artifactId: string): string {
     const shard = artifactShard(artifactId);
     return `${this.keyPrefix}/manifests/${shard}/${artifactId}.json`;
@@ -260,7 +255,7 @@ export class S3ArtifactStore implements ArtifactStore {
     const expiresInSeconds = this.resolveExpiresInSeconds(opts);
 
     const manifestKey = this.manifestKeyFor(artifactId);
-    let parsedManifest: ArtifactManifestV1 | null = null;
+    let parsedManifest: ArtifactManifestV1;
     try {
       const manifestRes = await this.client.send(
         new GetObjectCommand({
@@ -270,45 +265,27 @@ export class S3ArtifactStore implements ArtifactStore {
       );
 
       const manifestBuf = await bodyToBuffer(manifestRes.Body);
+      let candidate: unknown;
       try {
-        const candidate = JSON.parse(manifestBuf.toString("utf8")) as unknown;
-        const maybe = candidate as Partial<ArtifactManifestV1> | null;
-        if (maybe && maybe.v === 1 && typeof maybe.blob_key === "string" && maybe.ref) {
-          parsedManifest = maybe as ArtifactManifestV1;
-        }
-      } catch {
-        // Intentional: treat malformed JSON as missing manifest and fall back to legacy keys.
-      }
-    } catch (err) {
-      if (!isNoSuchKey(err)) throw err;
-    }
-
-    if (parsedManifest) {
-      try {
-        await this.client.send(
-          new HeadObjectCommand({
-            Bucket: this.bucket,
-            Key: parsedManifest.blob_key,
-          }),
-        );
+        candidate = JSON.parse(manifestBuf.toString("utf8")) as unknown;
       } catch (err) {
-        if (isNoSuchKey(err)) return null;
-        // Best-effort: some S3-compatible deployments block HEAD while allowing GET.
+        throw new Error(`invalid artifact manifest for ${artifactId}`, { cause: err });
       }
-
-      return await this.presignGetObject({
-        bucket: this.bucket,
-        key: parsedManifest.blob_key,
-        expiresInSeconds,
-      });
+      const maybe = candidate as Partial<ArtifactManifestV1> | null;
+      if (!maybe || maybe.v !== 1 || typeof maybe.blob_key !== "string" || !maybe.ref) {
+        throw new Error(`invalid artifact manifest for ${artifactId}`);
+      }
+      parsedManifest = maybe as ArtifactManifestV1;
+    } catch (err) {
+      if (isNoSuchKey(err)) return null;
+      throw err;
     }
 
-    const legacyKey = this.legacyKeyFor(artifactId, ".bin");
     try {
       await this.client.send(
         new HeadObjectCommand({
           Bucket: this.bucket,
-          Key: legacyKey,
+          Key: parsedManifest.blob_key,
         }),
       );
     } catch (err) {
@@ -318,7 +295,7 @@ export class S3ArtifactStore implements ArtifactStore {
 
     return await this.presignGetObject({
       bucket: this.bucket,
-      key: legacyKey,
+      key: parsedManifest.blob_key,
       expiresInSeconds,
     });
   }
@@ -400,34 +377,6 @@ export class S3ArtifactStore implements ArtifactStore {
       const bodyBuf = await bodyToBuffer(dataRes.Body);
       return { ref: parsed.ref, body: bodyBuf };
     } catch (err) {
-      if (!isNoSuchKey(err)) throw err;
-    }
-
-    // Legacy fallback: older deployments wrote `<id>.bin` + `<id>.json` directly.
-    try {
-      const [metaRes, dataRes] = await Promise.all([
-        this.client.send(
-          new GetObjectCommand({
-            Bucket: this.bucket,
-            Key: this.legacyKeyFor(artifactId, ".json"),
-          }),
-        ),
-        this.client.send(
-          new GetObjectCommand({
-            Bucket: this.bucket,
-            Key: this.legacyKeyFor(artifactId, ".bin"),
-          }),
-        ),
-      ]);
-
-      const [metaBuf, bodyBuf] = await Promise.all([
-        bodyToBuffer(metaRes.Body),
-        bodyToBuffer(dataRes.Body),
-      ]);
-
-      const ref = JSON.parse(metaBuf.toString("utf8")) as ArtifactRefT;
-      return { ref, body: bodyBuf };
-    } catch (err) {
       if (isNoSuchKey(err)) return null;
       throw err;
     }
@@ -437,11 +386,7 @@ export class S3ArtifactStore implements ArtifactStore {
     await this.ensureBucketOnce();
 
     const manifestKey = this.manifestKeyFor(artifactId);
-    const keys = new Set<string>([
-      manifestKey,
-      this.legacyKeyFor(artifactId, ".bin"),
-      this.legacyKeyFor(artifactId, ".json"),
-    ]);
+    const keys = new Set<string>([manifestKey]);
 
     // Best-effort: include the blob key if we can read the manifest.
     try {

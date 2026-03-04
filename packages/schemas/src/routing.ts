@@ -4,7 +4,7 @@ import { AgentKey, ThreadId } from "./keys.js";
 
 export const TelegramRoutingConfig = z
   .object({
-    default_agent_id: AgentKey.optional(),
+    default_agent_key: AgentKey.optional(),
     threads: z.record(ThreadId, AgentKey).optional(),
   })
   .strict();

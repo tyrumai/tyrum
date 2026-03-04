@@ -33,7 +33,7 @@ describe("routing config (durable) + ingress", () => {
       config: {
         v: 1,
         telegram: {
-          default_agent_id: "default",
+          default_agent_key: "default",
           threads: {
             "123": "agent-b",
           },
@@ -106,7 +106,7 @@ describe("routing config (durable) + ingress", () => {
         JSON.stringify({
           v: 1,
           telegram: {
-            default_agent_id: "default",
+            default_agent_key: "default",
             threads: {
               "123": "agent-b",
             },

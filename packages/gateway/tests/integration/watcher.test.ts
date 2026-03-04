@@ -361,19 +361,16 @@ describe("Watcher routes + scheduler integration", () => {
     const nonce = "nonce-agent";
     const signature = computeWebhookSignature(secretA, timestamp, nonce, payload);
 
-    const res = await app.request(
-      `/watchers/${String(watcherId)}/trigger/webhook?agent_id=${encodeURIComponent(agentB)}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          [WEBHOOK_SIGNATURE_HEADER]: signature,
-          [WEBHOOK_TIMESTAMP_HEADER]: timestamp,
-          [WEBHOOK_NONCE_HEADER]: nonce,
-        },
-        body: payload,
+    const res = await app.request(`/watchers/${String(watcherId)}/trigger/webhook`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        [WEBHOOK_SIGNATURE_HEADER]: signature,
+        [WEBHOOK_TIMESTAMP_HEADER]: timestamp,
+        [WEBHOOK_NONCE_HEADER]: nonce,
       },
-    );
+      body: payload,
+    });
 
     expect(res.status).toBe(202);
   });

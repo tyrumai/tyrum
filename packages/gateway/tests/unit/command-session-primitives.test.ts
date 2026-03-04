@@ -276,10 +276,10 @@ describe("session command primitives", () => {
 
     await db.run(
       `INSERT INTO channel_inbox (
-	         tenant_id,
-	         source,
-	         thread_id,
-	         message_id,
+         tenant_id,
+         source,
+         thread_id,
+         message_id,
 	         key,
 	         lane,
 	         received_at_ms,
@@ -679,7 +679,7 @@ describe("session command primitives", () => {
 	       ) VALUES (?, ?, ?, ?, ?, ?, ?, '{}', 'queued', 'collect', ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,
-        "telegram",
+        "telegram:default",
         "chat-1",
         "msg-reset-queued",
         key,

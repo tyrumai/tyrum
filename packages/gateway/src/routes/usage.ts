@@ -62,12 +62,12 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
   app.get("/usage", async (c) => {
     const runId = c.req.query("run_id")?.trim() || undefined;
     const key = c.req.query("key")?.trim() || undefined;
-    const agentId = c.req.query("agent_id")?.trim() || undefined;
+    const agentKey = c.req.query("agent_key")?.trim() || undefined;
 
     const scopeParams = [
       runId ? "run_id" : null,
       key ? "key" : null,
-      agentId ? "agent_id" : null,
+      agentKey ? "agent_key" : null,
     ].filter((value): value is string => value !== null);
     if (scopeParams.length > 1) {
       return c.json(
@@ -99,8 +99,8 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
            AND a.cost_json IS NOT NULL`,
         [key],
       );
-    } else if (agentId) {
-      const keyPrefix = `agent:${agentId}:`;
+    } else if (agentKey) {
+      const keyPrefix = `agent:${agentKey}:`;
       rows = await deps.db.all<{ cost_json: string | null }>(
         `SELECT a.cost_json
          FROM execution_attempts a
@@ -175,10 +175,10 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
       status: "ok",
       generated_at: new Date().toISOString(),
       scope: {
-        kind: runId ? "run" : key ? "session" : agentId ? "agent" : "deployment",
+        kind: runId ? "run" : key ? "session" : agentKey ? "agent" : "deployment",
         run_id: runId ?? null,
         key: key ?? null,
-        agent_id: agentId ?? null,
+        agent_key: agentKey ?? null,
       },
       local: {
         attempts: {

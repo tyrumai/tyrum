@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
-import { ingress } from "../../src/routes/ingress.js";
+import { createIngressRoutes } from "../../src/routes/ingress.js";
 
 describe("POST /ingress/telegram", () => {
   const app = new Hono();
-  app.route("/", ingress);
+  app.route("/", createIngressRoutes());
 
   it("normalizes a simple text message", async () => {
     const update = {

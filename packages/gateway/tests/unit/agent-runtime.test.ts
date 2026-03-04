@@ -621,7 +621,7 @@ describe("AgentRuntime", () => {
 
     const inbox = new ChannelInboxDal(container.db);
     const { row: steerInbox } = await inbox.enqueue({
-      source: "telegram",
+      source: "test:default",
       thread_id: "thread-1",
       message_id: "steer-1",
       key,

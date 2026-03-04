@@ -159,6 +159,20 @@ describe("agent routes", () => {
     await container.db.close();
   });
 
+  it("accepts agent_key query param for /agent/status", async () => {
+    await mkdir(join(homeDir!, "agents/agent-2"), { recursive: true });
+    await writeWorkspace(join(homeDir!, "agents/agent-2"));
+
+    const { app, agents, container } = await createTestApp();
+    const getRuntimeSpy = vi.spyOn(agents!, "getRuntime");
+    const res = await app.request("/agent/status?agent_key=agent-2");
+    expect(res.status).toBe(200);
+    expect(getRuntimeSpy).toHaveBeenCalledWith("agent-2");
+
+    await agents?.shutdown();
+    await container.db.close();
+  });
+
   it("does not expose agent routes without an AgentRuntime", async () => {
     const container = await createTestContainer();
     const app = createApp(container);

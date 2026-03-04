@@ -808,7 +808,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
 
     await scheduler.tick();
 
-    // With most-specific precedence, max_bytes should be 100 and nothing is pruned.
+    // With most-specific precedence, default_max_bytes should be 100 and nothing is pruned.
     expect(await artifactStore.get(oldRef.artifact_id)).not.toBeNull();
     expect(await artifactStore.get(newRef.artifact_id)).not.toBeNull();
   });

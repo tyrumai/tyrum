@@ -120,9 +120,7 @@ function parseBroadcastPayload(payload: unknown):
       audience: audience ?? undefined,
     };
   }
-
-  // Back-compat: allow the envelope itself as the payload.
-  return { message: payload as WsEnvelope };
+  return undefined;
 }
 
 export class OutboxPoller {

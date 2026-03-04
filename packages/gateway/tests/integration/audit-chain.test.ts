@@ -104,7 +104,7 @@ describe("Audit hash chain integration", () => {
     expect(result.broken_at_index).toBe(1);
   });
 
-  it("handles mix of legacy (null hash) and new events", async () => {
+  it("rejects legacy (null hash) events", async () => {
     // Append new events via EventLog (will have hashes)
     await log.append({
       tenantId: DEFAULT_TENANT_ID,
@@ -153,8 +153,12 @@ describe("Audit hash chain integration", () => {
     expect(events[2]!.event_hash).toBeTruthy();
 
     const result = verifyChain(events);
-    expect(result.valid).toBe(true);
-    expect(result.checked_count).toBe(2);
+    expect(result).toEqual({
+      valid: false,
+      checked_count: 0,
+      broken_at_index: 0,
+      broken_at_id: 0,
+    });
   });
 
   it("chains hashes correctly across events", async () => {

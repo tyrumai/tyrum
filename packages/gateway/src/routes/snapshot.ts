@@ -22,14 +22,6 @@ export interface SnapshotRouteDeps {
   version: string;
 }
 
-const LEGACY_TABLES = new Set([
-  "facts",
-  "episodic_events",
-  "capability_memories",
-  "pam_profiles",
-  "pvp_profiles",
-]);
-
 const DEFAULT_TABLES = [
   // Channels + audit + sessions
   "channel_accounts",
@@ -49,7 +41,7 @@ const DEFAULT_TABLES = [
   "watchers",
   "watcher_firings",
   "approvals",
-  // Legacy plan runner tables (kept for compatibility)
+  // Plan runner job queue tables
   "jobs",
   "canvas_artifacts",
   // Execution engine
@@ -323,8 +315,7 @@ export function createSnapshotRoutes(deps: SnapshotRouteDeps): Hono {
     }
 
     const bundle = parsed.data.bundle;
-    const bundleTables = Object.keys(bundle.tables);
-    const tables = bundleTables.filter((t) => !LEGACY_TABLES.has(t));
+    const tables = Object.keys(bundle.tables);
     for (const t of tables) {
       if (!DEFAULT_TABLES.includes(t as (typeof DEFAULT_TABLES)[number])) {
         return c.json({ error: "invalid_request", message: `unknown table '${t}'` }, 400);

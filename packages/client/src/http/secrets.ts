@@ -1,4 +1,5 @@
 import {
+  AgentKey,
   SecretHandle,
   SecretListResponse,
   SecretRevokeResponse,
@@ -17,7 +18,7 @@ const SecretStoreResponse = z
 
 const SecretListQuery = z
   .object({
-    agent_id: z.string().trim().min(1).optional(),
+    agent_key: AgentKey.optional(),
   })
   .strict();
 
@@ -33,19 +34,19 @@ export type SecretRotateResult = z.output<typeof SecretRotateResponse>;
 export interface SecretsApi {
   store(
     input: SecretStoreInput,
-    query?: { agent_id?: string },
+    query?: { agent_key?: string },
     options?: TyrumRequestOptions,
   ): Promise<SecretStoreResponse>;
-  list(query?: { agent_id?: string }, options?: TyrumRequestOptions): Promise<SecretListResult>;
+  list(query?: { agent_key?: string }, options?: TyrumRequestOptions): Promise<SecretListResult>;
   revoke(
     secretId: string,
-    query?: { agent_id?: string },
+    query?: { agent_key?: string },
     options?: TyrumRequestOptions,
   ): Promise<SecretRevokeResult>;
   rotate(
     secretId: string,
     input: SecretRotateInput,
-    query?: { agent_id?: string },
+    query?: { agent_key?: string },
     options?: TyrumRequestOptions,
   ): Promise<SecretRotateResult>;
 }

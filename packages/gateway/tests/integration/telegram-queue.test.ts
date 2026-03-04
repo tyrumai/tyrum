@@ -658,7 +658,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
     const inbox = new ChannelInboxDal(db, sessionDal);
     const row = await inbox.getById(body.inbox_id);
-    expect(row?.source).toBe("telegram");
+    expect(row?.source).toBe("telegram:default");
   });
 
   it("uses DM key shape for private Telegram chats", async () => {
@@ -829,15 +829,15 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     ).toBe("work");
   });
 
-  it("dedupes default-account messages against legacy source keys", async () => {
+  it("dedupes default-account messages against existing inbox rows", async () => {
     db = openTestSqliteDb();
     const sessionDal = makeSessionDal(db);
 
     const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
 
     const inbox = new ChannelInboxDal(db, sessionDal);
-    const legacy = await inbox.enqueue({
-      source: "telegram",
+    const existing = await inbox.enqueue({
+      source: "telegram:default",
       thread_id: normalized.thread.id,
       message_id: normalized.message.id,
       key: "legacy-key",
@@ -850,7 +850,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     const enqueued = await queue.enqueue(normalized);
 
     expect(enqueued.deduped).toBe(true);
-    expect(enqueued.inbox.inbox_id).toBe(legacy.row.inbox_id);
+    expect(enqueued.inbox.inbox_id).toBe(existing.row.inbox_id);
   });
 
   it("derives account-appropriate thread keys when enqueue overrides account id", async () => {

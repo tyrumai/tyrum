@@ -20,10 +20,10 @@ export function createContextRoutes(deps: ContextRouteDeps): Hono {
   const app = new Hono();
 
   app.get("/context", async (c) => {
-    const agentId = c.req.query("agent_id")?.trim() || "default";
+    const agentKey = c.req.query("agent_key")?.trim() || "default";
     let runtime;
     try {
-      runtime = await deps.agents.getRuntime(agentId);
+      runtime = await deps.agents.getRuntime(agentKey);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);

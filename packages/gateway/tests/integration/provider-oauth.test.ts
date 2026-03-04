@@ -117,7 +117,7 @@ describe("provider OAuth routes", () => {
         "content-type": "application/json",
         Authorization: `Bearer ${adminToken}`,
       },
-      body: JSON.stringify({ agent_id: "default" }),
+      body: JSON.stringify({ agent_key: "default" }),
     });
     expect(authorizeRes.status).toBe(200);
     const authorize = (await authorizeRes.json()) as { state: string; authorize_url: string };
@@ -206,7 +206,7 @@ describe("provider OAuth routes", () => {
         "content-type": "application/json",
         Authorization: `Bearer ${adminToken}`,
       },
-      body: JSON.stringify({ agent_id: "default" }),
+      body: JSON.stringify({ agent_key: "default" }),
     });
     expect(authorizeRes.status).toBe(200);
     const authorize = (await authorizeRes.json()) as { state: string; authorize_url: string };
@@ -233,14 +233,14 @@ describe("provider OAuth routes", () => {
         "content-type": "application/json",
         Authorization: `Bearer ${adminToken}`,
       },
-      body: JSON.stringify({ agent_id: "default" }),
+      body: JSON.stringify({ agent_key: "default" }),
     });
     expect(authorizeRes.status).toBe(404);
 
     await container.db.close();
   });
 
-  it("accepts non-default agent_id when agent registry is disabled", async () => {
+  it("accepts non-default agent_key when agent registry is disabled", async () => {
     const { app, container } = await createOauthApp();
 
     const authorizeRes = await app.request("/providers/test/oauth/authorize", {
@@ -249,7 +249,7 @@ describe("provider OAuth routes", () => {
         "content-type": "application/json",
         Authorization: `Bearer ${adminToken}`,
       },
-      body: JSON.stringify({ agent_id: "agent-2" }),
+      body: JSON.stringify({ agent_key: "agent-2" }),
     });
     expect(authorizeRes.status).toBe(200);
     const body = (await authorizeRes.json()) as { state: string };

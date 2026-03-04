@@ -68,7 +68,7 @@ describe("snapshot routes", () => {
     }
   });
 
-  it("ignores legacy memory tables in snapshot bundles (forward compatible)", async () => {
+  it("rejects snapshot bundles containing legacy v1 memory tables", async () => {
     const originalFlag = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
     process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
 
@@ -79,7 +79,7 @@ describe("snapshot routes", () => {
       const app1 = await createTestApp();
       container = app1.container;
 
-      const seededSession = await container.sessionDal.getOrCreate({
+      await container.sessionDal.getOrCreate({
         connectorKey: "telegram",
         providerThreadId: "thread-legacy",
         containerKind: "dm",
@@ -107,24 +107,10 @@ describe("snapshot routes", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ confirm: "IMPORT", bundle }),
       });
-      expect(importRes.status).toBe(200);
+      expect(importRes.status).toBe(400);
       const importBody = (await importRes.json()) as Record<string, unknown>;
-
-      expect(importBody["tables"]).not.toEqual(
-        expect.arrayContaining([
-          "facts",
-          "episodic_events",
-          "capability_memories",
-          "pam_profiles",
-          "pvp_profiles",
-        ]),
-      );
-
-      const importedSession = await container2.db.get<{ session_id: string }>(
-        "SELECT session_id FROM sessions WHERE session_id = ?",
-        [seededSession.session_id],
-      );
-      expect(importedSession?.session_id).toBe(seededSession.session_id);
+      expect(importBody["error"]).toBe("invalid_request");
+      expect(String(importBody["message"])).toContain("unknown table");
     } finally {
       await container?.db.close();
       await container2?.db.close();
@@ -137,13 +123,13 @@ describe("snapshot routes", () => {
     }
   });
 
-  it("imports v1 snapshot bundles (backward compatible)", async () => {
+  it("rejects v1 snapshot bundles", async () => {
     const originalFlag = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
     process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
 
     const { app, container } = await createTestApp();
 
-    const seededSession = await container.sessionDal.getOrCreate({
+    await container.sessionDal.getOrCreate({
       connectorKey: "telegram",
       providerThreadId: "thread-v1",
       containerKind: "dm",
@@ -162,15 +148,9 @@ describe("snapshot routes", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ confirm: "IMPORT", bundle }),
     });
-    expect(importRes.status).toBe(200);
+    expect(importRes.status).toBe(400);
     const importBody = (await importRes.json()) as Record<string, unknown>;
-    expect(importBody["format"]).toBe("tyrum.snapshot.v1");
-
-    const importedSession = await container2.db.get<{ session_id: string }>(
-      "SELECT session_id FROM sessions WHERE session_id = ?",
-      [seededSession.session_id],
-    );
-    expect(importedSession?.session_id).toBe(seededSession.session_id);
+    expect(importBody["error"]).toBe("invalid_request");
 
     await container.db.close();
     await container2.db.close();
@@ -192,7 +172,7 @@ describe("snapshot routes", () => {
       config: {
         v: 1,
         telegram: {
-          default_agent_id: "default",
+          default_agent_key: "default",
           threads: {
             "123": "agent-b",
           },

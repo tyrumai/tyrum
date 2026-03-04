@@ -40,7 +40,7 @@ Architecture notes:
 
 - `GET /usage` returns a deployment rollup across all locally-accounted execution attempts.
 - `GET /usage?key=<sessionKey>` returns a session rollup (all lanes/runs for a single session key).
-- `GET /usage?agent_id=<agentId>` returns an agent rollup (all session keys for a single agent).
+- `GET /usage?agent_key=<agentKey>` returns an agent rollup (all session keys for a single agent).
 - `GET /usage?run_id=<runId>` returns a per-run rollup (debugging / drilldown).
 
 ## Events, logs, and evidence

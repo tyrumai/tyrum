@@ -52,7 +52,7 @@ describe("Ingress routes", () => {
       },
     };
 
-    const res = await app.request("/ingress/telegram?agent_id=default", {
+    const res = await app.request("/ingress/telegram?agent_key=default", {
       method: "POST",
       headers: {
         "x-telegram-bot-api-secret-token": "test-secret",

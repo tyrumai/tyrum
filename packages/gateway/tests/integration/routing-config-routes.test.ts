@@ -47,7 +47,7 @@ describe("routing config routes", () => {
         config: {
           v: 1,
           telegram: {
-            default_agent_id: "default",
+            default_agent_key: "default",
             threads: {
               "123": "agent-b",
             },
@@ -108,7 +108,7 @@ describe("routing config routes", () => {
         config: {
           v: 1,
           telegram: {
-            default_agent_id: "default",
+            default_agent_key: "default",
             threads: {
               "123": "agent-b",
             },

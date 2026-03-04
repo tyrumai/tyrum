@@ -25,7 +25,7 @@ describe("ChannelInboxDal work_scope_activity updates", () => {
     const key = "agent:default:telegram:default:dm:peer-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
@@ -66,7 +66,7 @@ describe("ChannelInboxDal work_scope_activity updates", () => {
 
     const staleKey = "agent:default:telegram:default:dm:stale";
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: staleKey,

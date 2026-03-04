@@ -546,13 +546,6 @@ function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBu
     (acc, b) => (b?.artifacts?.default ? mostRestrictiveDecision(acc, b.artifacts.default) : acc),
     base.artifacts?.default ?? "allow",
   );
-  const retentionDaysLegacy = bundles
-    .map((b) => b?.artifacts?.retention_days)
-    .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
-  const maxBytesLegacy = bundles
-    .map((b) => b?.artifacts?.max_bytes)
-    .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
-
   const retentionDaysDefaults = bundles
     .map((b) => b?.artifacts?.retention?.default_days)
     .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
@@ -560,8 +553,8 @@ function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBu
     .map((b) => b?.artifacts?.quota?.default_max_bytes)
     .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
 
-  const retentionDefaultDays = [...retentionDaysLegacy, ...retentionDaysDefaults];
-  const maxBytesDefault = [...maxBytesLegacy, ...quotaMaxBytesDefaults];
+  const retentionDefaultDays = [...retentionDaysDefaults];
+  const maxBytesDefault = [...quotaMaxBytesDefaults];
 
   const retentionBySensitivityValues = bundles
     .map((b) => b?.artifacts?.retention?.by_sensitivity)
@@ -690,8 +683,6 @@ function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBu
     connectors,
     artifacts: {
       default: artifactsDefault,
-      retention_days: retentionDefault,
-      max_bytes: maxBytesDefaultValue,
       retention:
         retentionDefault !== undefined ||
         Object.keys(retentionByLabel).length > 0 ||

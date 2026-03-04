@@ -204,7 +204,7 @@ describe("Channel inbox queue overflow policies", () => {
     const key = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
@@ -214,7 +214,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-2",
       key,
@@ -224,7 +224,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-3",
       key,
@@ -250,7 +250,7 @@ describe("Channel inbox queue overflow policies", () => {
     const key = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
@@ -260,7 +260,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-2",
       key,
@@ -270,7 +270,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-3",
       key,
@@ -299,7 +299,7 @@ describe("Channel inbox queue overflow policies", () => {
     const injectingDb = new InjectingOverflowDb(db, {
       key,
       lane,
-      source: "telegram",
+      source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-injected",
       receivedAtMs: 1_500,
@@ -313,7 +313,7 @@ describe("Channel inbox queue overflow policies", () => {
     inbox = new ChannelInboxDal(injectingDb);
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
@@ -323,7 +323,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-2",
       key,
@@ -350,7 +350,7 @@ describe("Channel inbox queue overflow policies", () => {
     const key = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "media-1",
       key,
@@ -364,7 +364,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "media-2",
       key,
@@ -397,7 +397,7 @@ describe("Channel inbox queue overflow policies", () => {
     const key = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
@@ -407,7 +407,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-2",
       key,
@@ -417,7 +417,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-3",
       key,

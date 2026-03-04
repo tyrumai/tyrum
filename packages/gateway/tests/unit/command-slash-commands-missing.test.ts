@@ -732,7 +732,7 @@ describe("missing slash commands", () => {
     });
     await insertChannelInboxRow({
       session,
-      source: "telegram",
+      source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-1",
       key,
@@ -753,7 +753,7 @@ describe("missing slash commands", () => {
     });
   });
 
-  it("supports /queue using channel:default + thread context (legacy source compat)", async () => {
+  it("supports /queue using channel:account + thread context", async () => {
     db = openTestSqliteDb();
 
     const key = "agent:default:telegram:default:dm:chat-1";
@@ -767,7 +767,7 @@ describe("missing slash commands", () => {
     });
     await insertChannelInboxRow({
       session,
-      source: "telegram",
+      source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-1",
       key,
@@ -864,7 +864,7 @@ describe("missing slash commands", () => {
     });
     await insertChannelInboxRow({
       session,
-      source: "telegram",
+      source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-1",
       key,
@@ -881,7 +881,7 @@ describe("missing slash commands", () => {
     expect(result.data).toMatchObject({ key, send_policy: "off" });
   });
 
-  it("resolves /send with channel:default to legacy/default source only", async () => {
+  it("resolves /send with channel:default to the default-account session only", async () => {
     db = openTestSqliteDb();
 
     const defaultKey = "agent:default:telegram:default:dm:chat-1";
@@ -895,7 +895,7 @@ describe("missing slash commands", () => {
     });
     await insertChannelInboxRow({
       session: defaultSession,
-      source: "telegram",
+      source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-default",
       key: defaultKey,
@@ -960,7 +960,7 @@ describe("missing slash commands", () => {
     });
     await insertChannelInboxRow({
       session: defaultSession,
-      source: "telegram",
+      source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-default",
       key: defaultKey,
@@ -977,7 +977,7 @@ describe("missing slash commands", () => {
     });
     await insertChannelInboxRow({
       session: otherSession,
-      source: "telegram",
+      source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-other",
       key: otherKey,

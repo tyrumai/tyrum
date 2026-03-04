@@ -48,10 +48,10 @@ describe("TelegramChannelProcessor approval-gated outbox robustness", () => {
          workspace_id,
          session_id,
          channel_thread_id
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, '{}', 'completed', ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, '{}', 'completed', ?, ?, ?)`,
       [
         session.tenant_id,
-        "telegram",
+        "telegram:default",
         "chat-1",
         "msg-1",
         key,
@@ -86,7 +86,7 @@ describe("TelegramChannelProcessor approval-gated outbox robustness", () => {
       [
         session.tenant_id,
         inboxRow!.inbox_id,
-        "telegram",
+        "telegram:default",
         "chat-1",
         "dedupe-approval-1",
         "outbox text",

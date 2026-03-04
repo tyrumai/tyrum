@@ -7,7 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 
 export function AgentsPage({ core }: { core: OperatorCore }) {
-  const [agentIdRaw, setAgentIdRaw] = useState("default");
+  const [agentKeyRaw, setAgentKeyRaw] = useState("default");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<unknown>(undefined);
   const [error, setError] = useState<unknown>(undefined);
@@ -18,8 +18,8 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     setResult(undefined);
     setError(undefined);
     try {
-      const trimmed = agentIdRaw.trim();
-      setResult(await core.http.agentStatus.get(trimmed ? { agent_id: trimmed } : undefined));
+      const trimmed = agentKeyRaw.trim();
+      setResult(await core.http.agentStatus.get(trimmed ? { agent_key: trimmed } : undefined));
     } catch (e) {
       setError(e);
     } finally {
@@ -49,15 +49,15 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
         <CardHeader>
           <div className="text-sm font-medium text-fg">Agent status</div>
           <div className="text-sm text-fg-muted">
-            Fetches the current gateway agent configuration for a given <code>agent_id</code>.
+            Fetches the current gateway agent configuration for a given <code>agent_key</code>.
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
           <Input
-            label="Agent ID"
+            label="Agent key"
             placeholder="default"
-            value={agentIdRaw}
-            onChange={(e) => setAgentIdRaw(e.target.value)}
+            value={agentKeyRaw}
+            onChange={(e) => setAgentKeyRaw(e.target.value)}
           />
           <ApiResultCard heading="Status" value={result} error={error} />
         </CardContent>

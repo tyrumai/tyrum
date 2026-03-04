@@ -21,7 +21,7 @@ describe("LaneQueueSignalDal", () => {
 
   it("claims steer and completes steer-only inbox rows", async () => {
     const { row } = await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-steer",
       key: "agent:default:telegram:default:dm:chat-1",
@@ -56,7 +56,7 @@ describe("LaneQueueSignalDal", () => {
 
   it("completes steer-only inbox rows even if they are processing", async () => {
     const { row } = await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-steer-processing",
       key: "agent:default:telegram:default:dm:chat-1",
@@ -99,7 +99,7 @@ describe("LaneQueueSignalDal", () => {
 
   it("claims steer but preserves steer_backlog inbox rows", async () => {
     const { row } = await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-steer-backlog",
       key: "agent:default:telegram:default:dm:chat-1",

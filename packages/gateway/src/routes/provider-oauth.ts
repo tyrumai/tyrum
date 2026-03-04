@@ -108,7 +108,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     const tenantId = deps.tenantId ?? DEFAULT_TENANT_ID;
     const body = await c.req.json().catch(() => ({}));
     const record = coerceRecord(body) ?? {};
-    const agentKey = coerceString(record["agent_id"]) ?? "default";
+    const agentKey = coerceString(record["agent_key"]) ?? "default";
     const publicBaseUrl = coerceString(record["public_base_url"]);
     const requestedAuthProfileKey =
       coerceString(record["auth_profile_key"]) ?? `oauth:${providerId}`;

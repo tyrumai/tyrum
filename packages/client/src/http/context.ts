@@ -1,5 +1,6 @@
 import {
   AgentId,
+  AgentKey,
   ContextReport,
   DateTimeSchema,
   ExecutionRunId,
@@ -16,7 +17,7 @@ import {
 
 const ContextGetQuery = z
   .object({
-    agent_id: AgentId.optional(),
+    agent_key: AgentKey.optional(),
   })
   .strict();
 

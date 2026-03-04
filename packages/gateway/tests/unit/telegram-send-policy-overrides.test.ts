@@ -75,7 +75,7 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     );
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
@@ -140,7 +140,7 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     );
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
@@ -219,7 +219,7 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     const outboxDal = new ChannelOutboxDal(db);
 
     const { row: inboxRow } = await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
@@ -247,7 +247,7 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     await outboxDal.enqueue({
       tenant_id: inboxRow.tenant_id,
       inbox_id: inboxRow.inbox_id,
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       dedupe_key: "dedupe-1",
       chunk_index: 0,

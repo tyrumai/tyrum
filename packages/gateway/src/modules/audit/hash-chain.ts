@@ -14,12 +14,11 @@ export interface ChainableEvent extends HashableEvent {
   event_hash: string | null;
 }
 
-function tryParseJson(raw: string): unknown {
+function parseJsonOrThrow(raw: string): unknown {
   try {
     return JSON.parse(raw) as unknown;
-  } catch {
-    // Intentional: fall back to the raw value when the column isn't valid JSON (legacy rows).
-    return raw;
+  } catch (err) {
+    throw new Error("invalid audit event action JSON", { cause: err });
   }
 }
 
@@ -48,10 +47,13 @@ export function verifyChain(events: ChainableEvent[]): {
   for (let i = 0; i < events.length; i++) {
     const event = events[i]!;
 
-    // Skip legacy events with null hashes (pre-chain data)
     if (event.event_hash === null) {
-      prevHash = null;
-      continue;
+      return {
+        valid: false,
+        checked_count: checkedCount,
+        broken_at_index: i,
+        broken_at_id: event.id,
+      };
     }
 
     const expected = computeEventHash(event, event.prev_hash);
@@ -96,7 +98,7 @@ export function exportReceiptBundle(planId: string, events: ChainableEvent[]): R
     plan_id: e.plan_id,
     step_index: e.step_index,
     occurred_at: e.occurred_at,
-    action: tryParseJson(e.action),
+    action: parseJsonOrThrow(e.action),
     prev_hash: e.prev_hash,
     event_hash: e.event_hash,
   }));

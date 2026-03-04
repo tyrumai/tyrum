@@ -5,7 +5,7 @@
  */
 
 import { Hono } from "hono";
-import { AgentTurnRequest, WorkspaceId } from "@tyrum/schemas";
+import { AgentKey, AgentTurnRequest } from "@tyrum/schemas";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -28,7 +28,7 @@ export function createAgentRoutes(agents: AgentRegistry): Hono {
         .filter((entry) => entry.isDirectory())
         .map((entry) => entry.name)
         .filter((name) => name !== "default")
-        .filter((name) => WorkspaceId.safeParse(name).success)
+        .filter((name) => AgentKey.safeParse(name).success)
         .sort((a, b) => a.localeCompare(b));
     } catch (err) {
       const code =
@@ -44,10 +44,10 @@ export function createAgentRoutes(agents: AgentRegistry): Hono {
   });
 
   agent.get("/agent/status", async (c) => {
-    const agentId = c.req.query("agent_key")?.trim() || "default";
+    const agentKey = c.req.query("agent_key")?.trim() || "default";
     let runtime;
     try {
-      runtime = await agents.getRuntime(agentId);
+      runtime = await agents.getRuntime(agentKey);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);
