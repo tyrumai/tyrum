@@ -83,6 +83,7 @@ export { checkPostcondition, deviceIdFromSha256Digest } from "@tyrum/schemas";
 export {
   TyrumClient,
   autoExecute,
+  normalizeFingerprint256,
   createTyrumHttpClient,
   createNodeFileDeviceIdentityStorage,
   loadOrCreateDeviceIdentity,

@@ -1,5 +1,7 @@
 import { join } from "node:path";
 
+import { normalizeFingerprint256 } from "@tyrum/operator-core";
+
 export type GatewayUrls = {
   wsUrl: string;
   httpBaseUrl: string;
@@ -9,24 +11,12 @@ export type ResolvedTuiConfig = GatewayUrls & {
   token: string;
   deviceIdentityPath: string;
   tlsCertFingerprint256?: string;
+  tlsAllowSelfSigned: boolean;
   reconnect: boolean;
 };
 
 function hasScheme(raw: string): boolean {
   return /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw);
-}
-
-function normalizeFingerprint256(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const colonMatch = trimmed.match(/[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){31}/);
-  if (colonMatch) return colonMatch[0].replace(/:/g, "").toLowerCase();
-
-  const hexMatch = trimmed.match(/[0-9A-Fa-f]{64}/);
-  if (hexMatch) return hexMatch[0].toLowerCase();
-
-  return null;
 }
 
 export function resolveGatewayUrls(rawGatewayUrl: string): GatewayUrls {
@@ -72,6 +62,7 @@ export function resolveTuiConfig(input: {
   tyrumHome?: string;
   deviceIdentityPath?: string;
   tlsCertFingerprint256?: string;
+  tlsAllowSelfSigned?: boolean;
   reconnect?: boolean;
 }): ResolvedTuiConfig {
   const gatewayUrl = (input.gatewayUrl ?? "").trim() || input.defaults.gatewayUrl;
@@ -102,11 +93,17 @@ export function resolveTuiConfig(input: {
     return normalized;
   })();
 
+  const tlsAllowSelfSigned = Boolean(input.tlsAllowSelfSigned);
+  if (tlsAllowSelfSigned && !tlsCertFingerprint256) {
+    throw new Error("--tls-allow-self-signed requires --tls-fingerprint256.");
+  }
+
   return {
     ...urls,
     token,
     deviceIdentityPath,
     tlsCertFingerprint256,
+    tlsAllowSelfSigned,
     reconnect: input.reconnect ?? true,
   };
 }

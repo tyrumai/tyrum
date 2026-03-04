@@ -204,6 +204,29 @@ describe("TLS certificate pinning", () => {
     await withTimeout(connected, 2_000, "connected");
   });
 
+  it("connects when the fingerprint matches in self-signed mode", async () => {
+    server = await createSecureTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "test-token",
+      capabilities: [],
+      reconnect: false,
+      tlsCertFingerprint256: server.fingerprint256,
+      tlsAllowSelfSigned: true,
+    });
+
+    const connected = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+
+    client.connect();
+
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+
+    await withTimeout(connected, 2_000, "connected");
+  });
+
   it("rejects connection when the configured fingerprint does not match", async () => {
     server = await createSecureTestServer();
     client = new TyrumClient({

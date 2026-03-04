@@ -11,6 +11,7 @@ const {
   decryptTokenMock,
   generateTokenMock,
   encryptTokenMock,
+  undiciFetchMock,
 } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
   registeredHandlers: new Map<string, (...args: unknown[]) => unknown>(),
@@ -19,10 +20,18 @@ const {
   decryptTokenMock: vi.fn(() => "token"),
   generateTokenMock: vi.fn(() => "generated-token"),
   encryptTokenMock: vi.fn((token: string) => `enc:${token}`),
+  undiciFetchMock: vi.fn(async () => {
+    return new Response(JSON.stringify({ status: "ok" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }),
   testState: {
     port: 8788,
     mode: "embedded" as "embedded" | "remote",
     remoteWsUrl: "ws://127.0.0.1:8788/ws",
+    remoteTlsCertFingerprint256: "",
+    remoteTlsAllowSelfSigned: false,
   },
 }));
 
@@ -31,6 +40,18 @@ vi.mock("electron", () => ({
     handle: ipcMainHandleMock,
   },
 }));
+
+vi.mock("undici", () => {
+  class Agent {
+    destroy = vi.fn(async () => {});
+
+    constructor(_opts: unknown) {
+      // no-op
+    }
+  }
+
+  return { Agent, fetch: undiciFetchMock };
+});
 
 class MockGatewayManager extends EventEmitter {
   public status: "stopped" | "starting" | "running" | "error" = "stopped";
@@ -62,6 +83,8 @@ vi.mock("../src/main/config/store.js", () => ({
     remote: {
       wsUrl: testState.remoteWsUrl,
       tokenRef: "enc:remote-token",
+      tlsCertFingerprint256: testState.remoteTlsCertFingerprint256,
+      tlsAllowSelfSigned: testState.remoteTlsAllowSelfSigned,
     },
   })),
   saveConfig: saveConfigMock,
@@ -83,6 +106,8 @@ describe("registerGatewayIpc handlers", () => {
     testState.port = 8788;
     testState.mode = "embedded";
     testState.remoteWsUrl = "ws://127.0.0.1:8788/ws";
+    testState.remoteTlsCertFingerprint256 = "";
+    testState.remoteTlsAllowSelfSigned = false;
     saveConfigMock.mockReset();
     configExistsMock.mockReset();
     configExistsMock.mockReturnValue(true);
@@ -92,6 +117,13 @@ describe("registerGatewayIpc handlers", () => {
     generateTokenMock.mockImplementation(() => "generated-token");
     encryptTokenMock.mockReset();
     encryptTokenMock.mockImplementation((token: string) => `enc:${token}`);
+    undiciFetchMock.mockReset();
+    undiciFetchMock.mockImplementation(async () => {
+      return new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
     registeredHandlers.clear();
     ipcMainHandleMock.mockReset();
     ipcMainHandleMock.mockImplementation(
@@ -165,6 +197,7 @@ describe("registerGatewayIpc handlers", () => {
       httpBaseUrl: "http://127.0.0.1:8788/",
       token: "token",
       tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
     });
   });
 
@@ -217,6 +250,7 @@ describe("registerGatewayIpc handlers", () => {
       httpBaseUrl: "http://127.0.0.1:8788/",
       token: "generated-token",
       tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
     });
     expect(generateTokenMock).toHaveBeenCalledTimes(1);
     expect(encryptTokenMock).toHaveBeenCalledWith("generated-token");
@@ -326,6 +360,7 @@ describe("registerGatewayIpc handlers", () => {
       httpBaseUrl: "https://remote.example/",
       token: "remote-token",
       tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
     });
   });
 
@@ -397,6 +432,62 @@ describe("registerGatewayIpc handlers", () => {
       headers: { "content-type": "application/json" },
       bodyText: JSON.stringify({ status: "ok" }),
     });
+  });
+
+  it("uses undici.fetch for pinned HTTPS proxy requests", async () => {
+    testState.mode = "remote";
+    testState.remoteWsUrl = "wss://127.0.0.1:8788/ws";
+    testState.remoteTlsCertFingerprint256 = "a".repeat(64);
+    testState.remoteTlsAllowSelfSigned = true;
+
+    const globalFetchMock = vi.fn(async () => {
+      return new Response("unexpected global fetch", { status: 200 });
+    });
+    vi.stubGlobal("fetch", globalFetchMock);
+
+    undiciFetchMock.mockImplementation(async () => {
+      return new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const httpFetchHandler = registeredHandlers.get("gateway:http-fetch");
+    expect(httpFetchHandler).toBeDefined();
+
+    const result = await httpFetchHandler!({} as never, {
+      url: "https://127.0.0.1:8788/status",
+      init: {
+        method: "GET",
+        headers: { authorization: "Bearer token" },
+        redirect: "follow",
+      },
+    });
+
+    expect(globalFetchMock).not.toHaveBeenCalled();
+    expect(undiciFetchMock).toHaveBeenCalledWith(
+      "https://127.0.0.1:8788/status",
+      expect.objectContaining({
+        method: "GET",
+        headers: { authorization: "Bearer token" },
+        redirect: "manual",
+        dispatcher: expect.anything(),
+      }),
+    );
+
+    expect(result.status).toBe(200);
   });
 
   it("does not rotate embedded tokens during HTTP proxy requests", async () => {

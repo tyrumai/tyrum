@@ -140,6 +140,7 @@ const DEFAULT_CONFIG = {
   deviceIdentityPath: "/tmp/device-identity.json",
   reconnect: false,
   tlsCertFingerprint256: undefined,
+  tlsAllowSelfSigned: false,
 } as const;
 
 function createRuntime(core: unknown): {

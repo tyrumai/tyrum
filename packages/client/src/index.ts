@@ -4,6 +4,8 @@ export const VERSION = "0.1.0";
 export { TyrumClient } from "./ws-client.js";
 export type { TyrumClientOptions, TyrumClientEvents } from "./ws-client.js";
 
+export { normalizeFingerprint256 } from "./tls/fingerprint.js";
+
 export { autoExecute } from "./capability.js";
 export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "./capability.js";
 

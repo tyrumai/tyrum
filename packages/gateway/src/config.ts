@@ -161,6 +161,16 @@ export const GatewayConfigSchema = z
         ),
 
       /**
+       * `TYRUM_TLS_SELF_SIGNED` (default: `false`).
+       * Enables native HTTPS/WSS on the gateway listen port using a persistent self-signed certificate.
+       */
+      tlsSelfSigned: z
+        .unknown()
+        .transform((value, ctx) =>
+          parseStrictTransportGuardrailFlag(value, "TYRUM_TLS_SELF_SIGNED", ctx),
+        ),
+
+      /**
        * `TYRUM_ALLOW_INSECURE_HTTP` (default: `false`).
        * Allows plaintext HTTP on non-loopback interfaces in trusted networks.
        */
@@ -603,6 +613,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): GatewayConfig {
       trustedProxies: env["GATEWAY_TRUSTED_PROXIES"],
       corsOrigins: env["TYRUM_CORS_ORIGINS"],
       tlsReady: env["TYRUM_TLS_READY"],
+      tlsSelfSigned: env["TYRUM_TLS_SELF_SIGNED"],
       allowInsecureHttp: env["TYRUM_ALLOW_INSECURE_HTTP"],
     },
     auth: {

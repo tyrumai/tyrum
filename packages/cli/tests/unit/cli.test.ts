@@ -104,6 +104,35 @@ describe("@tyrum/cli config storage", () => {
       await rm(home, { recursive: true, force: true });
     }
   });
+
+  it("errors when --tls-fingerprint256 is missing a value", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
+    process.env["TYRUM_HOME"] = home;
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      const code = await runCli([
+        "config",
+        "set",
+        "--gateway-url",
+        "http://127.0.0.1:8788",
+        "--token",
+        "super-secret-token",
+        "--tls-fingerprint256",
+      ]);
+
+      expect(code).toBe(1);
+
+      const output = errSpy.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(output).toContain("--tls-fingerprint256");
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      await rm(home, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("@tyrum/cli device identity storage", () => {

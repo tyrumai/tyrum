@@ -18,6 +18,7 @@ type OperatorConnectionInfo = {
   httpBaseUrl: string;
   token: string;
   tlsCertFingerprint256: string;
+  tlsAllowSelfSigned: boolean;
 };
 
 export function headersToRecord(
