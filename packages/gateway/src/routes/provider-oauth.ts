@@ -16,6 +16,7 @@ import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import { coerceRecord, coerceString } from "../modules/util/coerce.js";
 import { safeDetail } from "../utils/safe-detail.js";
+import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
 
@@ -26,11 +27,6 @@ function base64Url(input: Buffer): string {
 function sha256Base64Url(input: string): string {
   const hash = createHash("sha256").update(input, "utf-8").digest();
   return base64Url(hash);
-}
-
-function computeExpiresAt(nowMs: number, expiresIn: number | undefined): string | null {
-  if (!Number.isFinite(expiresIn) || !expiresIn || expiresIn <= 0) return null;
-  return new Date(nowMs + Math.floor(expiresIn) * 1000).toISOString();
 }
 
 function computeRequestBaseUrl(c: Context, publicBaseUrl?: string): string {
@@ -54,6 +50,17 @@ function computeRequestBaseUrl(c: Context, publicBaseUrl?: string): string {
   const providersIdx = path.lastIndexOf("/providers/");
   const mountPrefix = providersIdx >= 0 ? path.slice(0, providersIdx) : "";
   return `${requestUrl.origin}${mountPrefix}`.replace(/\/$/, "");
+}
+
+function normalizeAuthProfileKey(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    throw new Error("auth_profile_key is required");
+  }
+  if (/\s/.test(trimmed)) {
+    throw new Error("auth_profile_key must not contain whitespace");
+  }
+  return trimmed;
 }
 
 function renderHtml(title: string, message: string): string {
@@ -88,8 +95,9 @@ export interface ProviderOAuthRouteDeps {
   oauthPendingDal: OauthPendingDal;
   oauthProviderRegistry: OAuthProviderRegistry;
   authProfileDal: AuthProfileDal;
-  secretProviderForAgent: (agentId: string) => Promise<SecretProvider>;
+  secretProvider: SecretProvider;
   logger?: Logger;
+  tenantId?: string;
 }
 
 export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
@@ -97,10 +105,21 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
 
   app.post("/providers/:provider/oauth/authorize", async (c) => {
     const providerId = c.req.param("provider");
+    const tenantId = deps.tenantId ?? DEFAULT_TENANT_ID;
     const body = await c.req.json().catch(() => ({}));
     const record = coerceRecord(body) ?? {};
-    const agentId = coerceString(record["agent_id"]) ?? "default";
+    const agentKey = coerceString(record["agent_key"]) ?? "default";
     const publicBaseUrl = coerceString(record["public_base_url"]);
+    const requestedAuthProfileKey =
+      coerceString(record["auth_profile_key"]) ?? `oauth:${providerId}`;
+
+    let authProfileKey: string;
+    try {
+      authProfileKey = normalizeAuthProfileKey(requestedAuthProfileKey);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: "invalid_request", message: msg }, 400);
+    }
 
     const spec = await deps.oauthProviderRegistry.get(providerId);
     if (!spec) {
@@ -108,13 +127,6 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
         { error: "not_found", message: `oauth provider '${providerId}' not configured` },
         404,
       );
-    }
-
-    try {
-      await deps.secretProviderForAgent(agentId);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return c.json({ error: "invalid_request", message }, 400);
     }
 
     const clientIdEnv = coerceString(spec.client_id_env);
@@ -173,16 +185,17 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     const nowIso = new Date(nowMs).toISOString();
     const expiresAt = new Date(nowMs + PENDING_TTL_MS).toISOString();
 
-    await deps.oauthPendingDal.deleteExpired(nowIso).catch((err) => {
+    await deps.oauthPendingDal.deleteExpired({ tenantId, nowIso }).catch((err) => {
       deps.logger?.warn("oauth.pending_delete_expired_failed", {
         provider: providerId,
         error: safeDetail(err) ?? "unknown_error",
       });
     });
     await deps.oauthPendingDal.create({
+      tenant_id: tenantId,
       state,
       provider_id: providerId,
-      agent_id: agentId,
+      agent_key: agentKey,
       created_at: nowIso,
       expires_at: expiresAt,
       pkce_verifier: pkceVerifier,
@@ -191,6 +204,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       mode: "auth_code",
       metadata: {
         user_agent: c.req.header("user-agent") ?? null,
+        auth_profile_key: authProfileKey,
       },
     });
 
@@ -200,11 +214,13 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       state,
       expires_at: expiresAt,
       authorize_url: authorizeUrl.toString(),
+      auth_profile_key: authProfileKey,
     });
   });
 
   app.get("/providers/:provider/oauth/callback", async (c) => {
     const providerId = c.req.param("provider");
+    const tenantId = deps.tenantId ?? DEFAULT_TENANT_ID;
     const state = c.req.query("state")?.trim();
     const code = c.req.query("code")?.trim();
     const error = c.req.query("error")?.trim();
@@ -213,7 +229,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     if (error) {
       // Consume the pending row (if present) so OAuth `state` remains single-use even on error callbacks.
       if (state) {
-        await deps.oauthPendingDal.consume(state).catch((err) => {
+        await deps.oauthPendingDal.consume({ tenantId, state }).catch((err) => {
           deps.logger?.warn("oauth.pending_consume_failed", {
             provider: providerId,
             error: safeDetail(err) ?? "unknown_error",
@@ -236,7 +252,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       );
     }
 
-    const pending = await deps.oauthPendingDal.get(state);
+    const pending = await deps.oauthPendingDal.get({ tenantId, state });
     if (!pending) {
       return c.html(
         renderHtml(
@@ -259,7 +275,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     const nowMs = Date.now();
     const nowIso = new Date(nowMs).toISOString();
     if (pending.expires_at <= nowIso) {
-      await deps.oauthPendingDal.delete(state).catch((err) => {
+      await deps.oauthPendingDal.delete({ tenantId, state }).catch((err) => {
         deps.logger?.warn("oauth.pending_delete_failed", {
           provider: providerId,
           error: safeDetail(err) ?? "unknown_error",
@@ -270,7 +286,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
         400,
       );
     }
-    const consumed = await deps.oauthPendingDal.consume(state);
+    const consumed = await deps.oauthPendingDal.consume({ tenantId, state });
     if (!consumed) {
       return c.html(
         renderHtml(
@@ -304,9 +320,9 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     const clientSecretEnv = coerceString(spec.client_secret_env);
     const clientSecret = clientSecretEnv ? process.env[clientSecretEnv]?.trim() : undefined;
 
-    let secretProvider: SecretProvider | undefined;
-    const createdHandleIds: string[] = [];
-    let profileCreated = false;
+    let authProfileKey = "";
+    let profileExisted = false;
+    const storedSecretKeys: string[] = [];
 
     try {
       const { tokenEndpoint } = await resolveOAuthEndpoints(spec, {
@@ -331,67 +347,109 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
         extraParams: spec.extra_token_params,
       });
 
-      secretProvider = await deps.secretProviderForAgent(consumed.agent_id);
-      const accessHandle = await secretProvider.store(
-        `oauth:${providerId}:${consumed.agent_id}:access`,
-        token.access_token,
-      );
-      createdHandleIds.push(accessHandle.handle_id);
+      const authProfileKeyRaw = coerceString(consumed.metadata?.["auth_profile_key"]);
+      authProfileKey = normalizeAuthProfileKey(authProfileKeyRaw ?? `oauth:${providerId}`);
 
-      const secretHandles: Record<string, string> = {
-        access_token_handle: accessHandle.handle_id,
-      };
-
-      if (token.refresh_token) {
-        const refreshHandle = await secretProvider.store(
-          `oauth:${providerId}:${consumed.agent_id}:refresh`,
-          token.refresh_token,
-        );
-        createdHandleIds.push(refreshHandle.handle_id);
-        secretHandles["refresh_token_handle"] = refreshHandle.handle_id;
+      const existing = await deps.authProfileDal.getByKey({ tenantId, authProfileKey });
+      if (existing) {
+        if (existing.provider_key !== providerId) {
+          return c.html(
+            renderHtml(
+              "Authorization failed",
+              `Auth profile ${authProfileKey} is for provider '${existing.provider_key}', not '${providerId}'.`,
+            ),
+            400,
+          );
+        }
+        if (existing.type !== "oauth") {
+          return c.html(
+            renderHtml(
+              "Authorization failed",
+              `Auth profile ${authProfileKey} is type '${existing.type}', not 'oauth'.`,
+            ),
+            400,
+          );
+        }
       }
 
-      const profileId = randomUUID();
-      const expiresAt = computeExpiresAt(nowMs, token.expires_in);
+      profileExisted = Boolean(existing);
 
-      const profile = await deps.authProfileDal.create({
-        profileId,
-        agentId: consumed.agent_id,
-        provider: providerId,
-        type: "oauth",
-        secretHandles,
-        labels: {
-          scopes: consumed.scopes,
-          token_type: token.token_type ?? null,
-          oauth: true,
-        },
-        expiresAt,
-        createdBy: { kind: "oauth_callback" },
-      });
-      profileCreated = true;
+      const accessSecretKey =
+        existing?.secret_keys?.["access_token"] ??
+        `oauth:${providerId}:${authProfileKey}:access_token`;
+      const refreshSecretKeyExisting = existing?.secret_keys?.["refresh_token"];
+      const refreshSecretKey = token.refresh_token?.trim()
+        ? (refreshSecretKeyExisting ?? `oauth:${providerId}:${authProfileKey}:refresh_token`)
+        : refreshSecretKeyExisting;
+
+      await deps.secretProvider.store(accessSecretKey, token.access_token);
+      storedSecretKeys.push(accessSecretKey);
+
+      if (token.refresh_token?.trim() && refreshSecretKey) {
+        await deps.secretProvider.store(refreshSecretKey, token.refresh_token.trim());
+        storedSecretKeys.push(refreshSecretKey);
+      }
+
+      const labels = {
+        ...existing?.labels,
+        scopes: consumed.scopes,
+        token_type: token.token_type ?? null,
+        oauth: true,
+      };
+
+      const secretKeys: Record<string, string> = {
+        access_token: accessSecretKey,
+        ...(refreshSecretKey ? { refresh_token: refreshSecretKey } : {}),
+      };
+
+      const profile =
+        existing === undefined
+          ? await deps.authProfileDal.create({
+              tenantId,
+              authProfileKey,
+              providerKey: providerId,
+              type: "oauth",
+              secretKeys,
+              labels,
+            })
+          : await deps.authProfileDal.updateByKey({
+              tenantId,
+              authProfileKey,
+              secretKeys,
+              labels,
+            });
+
+      if (!profile) {
+        throw new Error("failed to save oauth auth profile");
+      }
+
+      if (profile.status !== "active") {
+        await deps.authProfileDal.enableByKey({ tenantId, authProfileKey }).catch(() => {});
+      }
 
       deps.logger?.info("oauth.authorized", {
         provider: providerId,
-        agent_id: consumed.agent_id,
-        profile_id: profile.profile_id,
+        auth_profile_key: authProfileKey,
       });
 
       const wantsJson = (c.req.header("accept") ?? "").includes("application/json");
       if (wantsJson) {
-        return c.json({ status: "ok", provider: providerId, profile_id: profile.profile_id });
+        return c.json({ status: "ok", provider: providerId, auth_profile_key: authProfileKey });
       }
 
       return c.html(
         renderHtml(
           "Authorization complete",
-          `Saved credentials for ${providerId} as profile ${profile.profile_id}.`,
+          `Saved credentials for ${providerId} as profile ${authProfileKey}.`,
         ),
         200,
       );
     } catch (err) {
-      if (secretProvider && !profileCreated && createdHandleIds.length > 0) {
+      if (!profileExisted && storedSecretKeys.length > 0) {
         await Promise.all(
-          createdHandleIds.map((handleId) => secretProvider!.revoke(handleId).catch(() => false)),
+          storedSecretKeys.map((secretKey) =>
+            deps.secretProvider.revoke(secretKey).catch(() => false),
+          ),
         );
       }
       const message = err instanceof Error ? err.message : String(err);

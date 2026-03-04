@@ -197,14 +197,14 @@ describe("Channel inbox queue overflow policies", () => {
     await db.close();
   });
 
-  it("drop_oldest completes the oldest queued rows when cap is exceeded", async () => {
+  it("drop_oldest drops the oldest queued rows when cap is exceeded", async () => {
     process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "2";
     process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "drop_oldest";
 
     const key = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
@@ -214,7 +214,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-2",
       key,
@@ -224,7 +224,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-3",
       key,
@@ -238,20 +238,19 @@ describe("Channel inbox queue overflow policies", () => {
     );
 
     expect(rows.map((r) => [r.message_id, r.status])).toEqual([
-      ["msg-1", "completed"],
       ["msg-2", "queued"],
       ["msg-3", "queued"],
     ]);
   });
 
-  it("drop_newest completes the newest queued rows when cap is exceeded", async () => {
+  it("drop_newest drops the newest queued rows when cap is exceeded", async () => {
     process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "2";
     process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "drop_newest";
 
     const key = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
@@ -261,7 +260,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-2",
       key,
@@ -271,7 +270,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-3",
       key,
@@ -287,7 +286,6 @@ describe("Channel inbox queue overflow policies", () => {
     expect(rows.map((r) => [r.message_id, r.status])).toEqual([
       ["msg-1", "queued"],
       ["msg-2", "queued"],
-      ["msg-3", "completed"],
     ]);
   });
 
@@ -301,7 +299,7 @@ describe("Channel inbox queue overflow policies", () => {
     const injectingDb = new InjectingOverflowDb(db, {
       key,
       lane,
-      source: "telegram",
+      source: "telegram:default",
       threadId: "chat-1",
       messageId: "msg-injected",
       receivedAtMs: 1_500,
@@ -315,7 +313,7 @@ describe("Channel inbox queue overflow policies", () => {
     inbox = new ChannelInboxDal(injectingDb);
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
@@ -325,7 +323,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-2",
       key,
@@ -352,7 +350,7 @@ describe("Channel inbox queue overflow policies", () => {
     const key = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "media-1",
       key,
@@ -366,7 +364,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "media-2",
       key,
@@ -399,7 +397,7 @@ describe("Channel inbox queue overflow policies", () => {
     const key = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
@@ -409,7 +407,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-2",
       key,
@@ -419,7 +417,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-3",
       key,
@@ -447,8 +445,6 @@ describe("Channel inbox queue overflow policies", () => {
       r.status,
     ]);
     expect(rowStates).toEqual([
-      ["msg-1", "completed"],
-      ["msg-2", "completed"],
       ["synthetic", "queued"],
       ["msg-3", "queued"],
     ]);

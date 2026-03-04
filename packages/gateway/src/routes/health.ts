@@ -17,11 +17,3 @@ export function createHealthRoute(opts: HealthOptions = { isLocalOnly: true }): 
 
   return app;
 }
-
-/** @deprecated Use createHealthRoute() instead. Kept for backward compatibility with tests. */
-const health = new Hono();
-health.get("/healthz", (c) => {
-  return c.json({ status: "ok", is_exposed: false });
-});
-
-export { health };

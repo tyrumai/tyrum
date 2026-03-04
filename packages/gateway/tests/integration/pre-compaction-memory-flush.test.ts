@@ -8,6 +8,7 @@ import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { maybeRunPreCompactionMemoryFlush } from "../../src/modules/agent/runtime/pre-compaction-memory-flush.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
+import { DEFAULT_AGENT_ID } from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -132,23 +133,27 @@ describe("Pre-compaction memory flush", () => {
     expect(flushPromptText).toContain("first");
     expect(flushPromptText).toContain("a1");
 
-    const session = await container.sessionDal.getOrCreate("test", "thread-flush");
+    const session = await container.sessionDal.getOrCreate({
+      connectorKey: "test",
+      providerThreadId: "thread-flush",
+      containerKind: "channel",
+    });
     expect(session.summary).toContain("first");
     expect(session.summary).toContain("a1");
     expect(session.summary).not.toContain("FLUSH_OK");
 
     const memory = new MemoryV1Dal(container.db);
-    const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, "default");
+    const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, DEFAULT_AGENT_ID);
     expect(search.hits.length).toBeGreaterThan(0);
     const hit = search.hits[0];
     if (!hit) {
       throw new Error("expected memory v1 search hit");
     }
-    const item = await memory.getById(hit.memory_item_id, "default");
+    const item = await memory.getById(hit.memory_item_id, DEFAULT_AGENT_ID);
     expect(item?.kind).toBe("note");
     expect(item?.provenance.session_id).toBe(session.session_id);
-    expect(item?.provenance.channel).toBe("test");
-    expect(item?.provenance.thread_id).toBe("thread-flush");
+    expect(item?.provenance.channel).toBeUndefined();
+    expect(item?.provenance.thread_id).toBeUndefined();
     expect(item && "body_md" in item ? item.body_md : "").toContain("FLUSH_OK");
   });
 
@@ -290,7 +295,7 @@ describe("Pre-compaction memory flush", () => {
     expect(second.reply).toBe("a2");
 
     const memory = new MemoryV1Dal(container.db);
-    const list = await memory.list({ agentId: "default", limit: 50 });
+    const list = await memory.list({ agentId: DEFAULT_AGENT_ID, limit: 50 });
     const notes = list.items.filter((item) => item.kind === "note");
     expect(notes).toHaveLength(1);
     const item = notes[0];
@@ -444,7 +449,7 @@ describe("Pre-compaction memory flush", () => {
     expect(languageModel.doGenerateCalls).toHaveLength(4);
 
     const memory = new MemoryV1Dal(container.db);
-    const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, "default");
+    const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, DEFAULT_AGENT_ID);
     expect(search.hits.length).toBeGreaterThan(0);
   });
 
@@ -491,15 +496,19 @@ describe("Pre-compaction memory flush", () => {
       >[0]["mcpManager"],
     });
 
-    const session = await container.sessionDal.getOrCreate("test", "thread-idempotent");
-    await container.sessionDal.appendTurn(
-      session.session_id,
-      "first",
-      "a1",
-      1,
-      new Date().toISOString(),
-      "default",
-    );
+    const session = await container.sessionDal.getOrCreate({
+      connectorKey: "test",
+      providerThreadId: "thread-idempotent",
+      containerKind: "channel",
+    });
+    await container.sessionDal.appendTurn({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      userMessage: "first",
+      assistantMessage: "a1",
+      maxTurns: 1,
+      timestamp: new Date().toISOString(),
+    });
 
     const prepared = await (runtime as unknown as { prepareTurn: Function }).prepareTurn({
       channel: "test",
@@ -514,7 +523,7 @@ describe("Pre-compaction memory flush", () => {
       systemPrompt: typeof prepared.systemPrompt;
     }) =>
       maybeRunPreCompactionMemoryFlush(
-        { db: container.db, logger: container.logger, agentId: "default" },
+        { db: container.db, logger: container.logger, agentId: DEFAULT_AGENT_ID },
         input,
       );
 
@@ -527,7 +536,7 @@ describe("Pre-compaction memory flush", () => {
     expect(languageModel.doGenerateCalls).toHaveLength(1);
 
     const memory = new MemoryV1Dal(container.db);
-    const firstList = await memory.list({ agentId: "default", limit: 50 });
+    const firstList = await memory.list({ agentId: DEFAULT_AGENT_ID, limit: 50 });
     expect(firstList.items).toHaveLength(1);
 
     await flush({
@@ -538,7 +547,7 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(languageModel.doGenerateCalls).toHaveLength(1);
 
-    const secondList = await memory.list({ agentId: "default", limit: 50 });
+    const secondList = await memory.list({ agentId: DEFAULT_AGENT_ID, limit: 50 });
     expect(secondList.items).toHaveLength(1);
   });
 

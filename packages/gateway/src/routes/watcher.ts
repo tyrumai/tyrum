@@ -3,7 +3,7 @@
  */
 
 import { createHash, createHmac } from "node:crypto";
-import { SecretHandle, WorkspaceId } from "@tyrum/schemas";
+import { AgentKey, SecretHandle, WorkspaceId } from "@tyrum/schemas";
 import type { SecretHandle as SecretHandleT } from "@tyrum/schemas";
 import { Hono } from "hono";
 import type { SecretProvider } from "../modules/secret/provider.js";
@@ -23,13 +23,13 @@ interface WebhookEnvelope {
 }
 
 interface WebhookTriggerConfig {
-  agent_id: string;
+  agent_key: string;
   secret_handle: SecretHandleT;
   max_skew_ms?: number;
 }
 
 export interface WatcherRouteDeps {
-  secretProviderForAgent?: (agentId: string) => Promise<SecretProvider>;
+  secretProviderForAgent?: (agentKey: string) => Promise<SecretProvider>;
 }
 
 function parseTimestampMs(value: string): number | null {
@@ -73,18 +73,18 @@ function parseWebhookTriggerConfig(raw: unknown): WebhookTriggerConfig | null {
     return null;
   }
 
-  const agentIdRaw = (raw as Record<string, unknown>)["agent_id"];
-  const agentId = (() => {
-    if (agentIdRaw === undefined || agentIdRaw === null) return "default";
-    if (typeof agentIdRaw !== "string") return null;
-    const trimmed = agentIdRaw.trim();
+  const agentKeyRaw = (raw as Record<string, unknown>)["agent_key"];
+  const agentKey = (() => {
+    if (agentKeyRaw === undefined || agentKeyRaw === null) return "default";
+    if (typeof agentKeyRaw !== "string") return null;
+    const trimmed = agentKeyRaw.trim();
     if (!trimmed) return "default";
     if (trimmed === "default") return "default";
-    const parsed = WorkspaceId.safeParse(trimmed);
+    const parsed = AgentKey.safeParse(trimmed);
     if (!parsed.success) return null;
     return parsed.data;
   })();
-  if (!agentId) {
+  if (!agentKey) {
     return null;
   }
 
@@ -96,7 +96,7 @@ function parseWebhookTriggerConfig(raw: unknown): WebhookTriggerConfig | null {
 
   const maxSkewRaw = (raw as Record<string, unknown>)["max_skew_ms"];
   if (maxSkewRaw === undefined) {
-    return { agent_id: agentId, secret_handle: parsedSecret.data };
+    return { agent_key: agentKey, secret_handle: parsedSecret.data };
   }
   if (
     typeof maxSkewRaw !== "number" ||
@@ -108,7 +108,7 @@ function parseWebhookTriggerConfig(raw: unknown): WebhookTriggerConfig | null {
   }
 
   return {
-    agent_id: agentId,
+    agent_key: agentKey,
     secret_handle: parsedSecret.data,
     max_skew_ms: maxSkewRaw,
   };
@@ -153,13 +153,16 @@ export function createWatcherRoutes(
       );
     }
 
-    const id = await processor.createWatcher(
+    const watcherId = await processor.createWatcher(
       body.plan_id,
       body.trigger_type,
       body.trigger_config ?? {},
     );
 
-    return c.json({ id, plan_id: body.plan_id, trigger_type: body.trigger_type }, 201);
+    return c.json(
+      { watcher_id: watcherId, plan_id: body.plan_id, trigger_type: body.trigger_type },
+      201,
+    );
   });
 
   watcher.get("/watchers", async (c) => {
@@ -168,36 +171,39 @@ export function createWatcherRoutes(
   });
 
   watcher.patch("/watchers/:id", async (c) => {
-    const watcherId = parseInt(c.req.param("id"), 10);
-    if (isNaN(watcherId)) {
+    const watcherId = c.req.param("id")?.trim();
+    const parsedWatcherId = WorkspaceId.safeParse(watcherId);
+    if (!parsedWatcherId.success) {
       return c.json({ error: "invalid_request", message: "invalid watcher id" }, 400);
     }
 
     const body = (await c.req.json()) as { active?: boolean };
     if (body.active === false) {
-      await processor.deactivateWatcher(watcherId);
+      await processor.deactivateWatcher(parsedWatcherId.data);
     }
 
-    return c.json({ id: watcherId, updated: true });
+    return c.json({ watcher_id: parsedWatcherId.data, updated: true });
   });
 
   watcher.delete("/watchers/:id", async (c) => {
-    const watcherId = parseInt(c.req.param("id"), 10);
-    if (isNaN(watcherId)) {
+    const watcherId = c.req.param("id")?.trim();
+    const parsedWatcherId = WorkspaceId.safeParse(watcherId);
+    if (!parsedWatcherId.success) {
       return c.json({ error: "invalid_request", message: "invalid watcher id" }, 400);
     }
 
-    await processor.deactivateWatcher(watcherId);
-    return c.json({ id: watcherId, deleted: true });
+    await processor.deactivateWatcher(parsedWatcherId.data);
+    return c.json({ watcher_id: parsedWatcherId.data, deleted: true });
   });
 
   watcher.post("/watchers/:id/trigger/webhook", async (c) => {
-    const watcherId = parseInt(c.req.param("id"), 10);
-    if (isNaN(watcherId)) {
+    const watcherId = c.req.param("id")?.trim();
+    const parsedWatcherId = WorkspaceId.safeParse(watcherId);
+    if (!parsedWatcherId.success) {
       return c.json({ error: "invalid_request", message: "invalid watcher id" }, 400);
     }
 
-    const watcherRow = await processor.getActiveWatcherById(watcherId);
+    const watcherRow = await processor.getActiveWatcherById(parsedWatcherId.data);
     if (!watcherRow || watcherRow.trigger_type !== "webhook") {
       return c.json({ error: "not_found", message: "webhook watcher not found" }, 404);
     }
@@ -262,7 +268,7 @@ export function createWatcherRoutes(
 
     let secretProvider: SecretProvider;
     try {
-      secretProvider = await deps.secretProviderForAgent(webhookConfig.agent_id);
+      secretProvider = await deps.secretProviderForAgent(webhookConfig.agent_key);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);

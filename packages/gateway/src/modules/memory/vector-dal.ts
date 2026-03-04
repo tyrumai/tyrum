@@ -7,6 +7,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
+import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 export interface VectorRow {
   id: number;
@@ -19,11 +20,13 @@ export interface VectorRow {
 }
 
 interface RawVectorRow {
-  id: number;
+  vector_metadata_id: number;
+  tenant_id: string;
+  agent_id: string;
   embedding_id: string;
   embedding_model: string;
   label: string | null;
-  metadata: string | null;
+  metadata_json: string | null;
   vector_data: string | null;
   created_at: string | Date;
 }
@@ -35,7 +38,7 @@ function normalizeTime(value: string | Date): string {
 function toVectorRow(raw: RawVectorRow): VectorRow {
   let metadata: unknown = {};
   try {
-    if (raw.metadata) metadata = JSON.parse(raw.metadata) as unknown;
+    if (raw.metadata_json) metadata = JSON.parse(raw.metadata_json) as unknown;
   } catch {
     // Intentional: treat invalid JSON metadata as an empty object.
   }
@@ -48,7 +51,7 @@ function toVectorRow(raw: RawVectorRow): VectorRow {
   }
 
   return {
-    id: raw.id,
+    id: raw.vector_metadata_id,
     embedding_id: raw.embedding_id,
     embedding_model: raw.embedding_model,
     label: raw.label,
@@ -84,9 +87,21 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 export class VectorDal {
   constructor(private readonly db: SqlDb) {}
 
-  private normalizeAgentId(agentId?: string): string {
-    const trimmed = agentId?.trim();
-    return trimmed && trimmed.length > 0 ? trimmed : "default";
+  private normalizeScope(input?: { tenantId?: string; agentId?: string } | string): {
+    tenantId: string;
+    agentId: string;
+  } {
+    if (typeof input === "string") {
+      const agentId = input.trim();
+      return {
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: agentId.length > 0 ? agentId : DEFAULT_AGENT_ID,
+      };
+    }
+
+    const tenantId = input?.tenantId?.trim() || DEFAULT_TENANT_ID;
+    const agentId = input?.agentId?.trim() || DEFAULT_AGENT_ID;
+    return { tenantId, agentId };
   }
 
   /** Insert a vector embedding. Returns the embedding_id. */
@@ -95,15 +110,25 @@ export class VectorDal {
     vector: number[],
     model: string,
     metadata?: unknown,
-    agentId?: string,
+    scope?: { tenantId?: string; agentId?: string } | string,
   ): Promise<string> {
+    const resolved = this.normalizeScope(scope);
     const embeddingId = randomUUID();
 
     await this.db.run(
-      `INSERT INTO vector_metadata (agent_id, embedding_id, embedding_model, label, metadata, vector_data)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO vector_metadata (
+         tenant_id,
+         agent_id,
+         embedding_id,
+         embedding_model,
+         label,
+         metadata_json,
+         vector_data
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
-        this.normalizeAgentId(agentId),
+        resolved.tenantId,
+        resolved.agentId,
         embeddingId,
         model,
         label,
@@ -119,14 +144,15 @@ export class VectorDal {
   async searchByCosineSimilarity(
     queryVector: number[],
     topK: number,
-    agentId?: string,
+    scope?: { tenantId?: string; agentId?: string } | string,
   ): Promise<VectorSearchResult[]> {
+    const resolved = this.normalizeScope(scope);
     const rows = await this.db.all<RawVectorRow>(
       `SELECT * FROM vector_metadata
-       WHERE agent_id = ?
+       WHERE tenant_id = ? AND agent_id = ?
          AND vector_data IS NOT NULL
        ORDER BY created_at DESC`,
-      [this.normalizeAgentId(agentId)],
+      [resolved.tenantId, resolved.agentId],
     );
 
     const scored: VectorSearchResult[] = [];
@@ -143,30 +169,38 @@ export class VectorDal {
   }
 
   /** Delete all embeddings with the given label. Returns the number of rows deleted. */
-  async deleteByLabel(label: string, agentId?: string): Promise<number> {
+  async deleteByLabel(
+    label: string,
+    scope?: { tenantId?: string; agentId?: string } | string,
+  ): Promise<number> {
+    const resolved = this.normalizeScope(scope);
     return (
-      await this.db.run("DELETE FROM vector_metadata WHERE agent_id = ? AND label = ?", [
-        this.normalizeAgentId(agentId),
-        label,
-      ])
+      await this.db.run(
+        "DELETE FROM vector_metadata WHERE tenant_id = ? AND agent_id = ? AND label = ?",
+        [resolved.tenantId, resolved.agentId, label],
+      )
     ).changes;
   }
 
   /** Get a single embedding by its embedding_id. */
-  async getById(embeddingId: string): Promise<VectorRow | undefined> {
+  async getById(
+    embeddingId: string,
+    tenantId: string = DEFAULT_TENANT_ID,
+  ): Promise<VectorRow | undefined> {
     const raw = await this.db.get<RawVectorRow>(
-      "SELECT * FROM vector_metadata WHERE embedding_id = ?",
-      [embeddingId],
+      "SELECT * FROM vector_metadata WHERE tenant_id = ? AND embedding_id = ?",
+      [tenantId, embeddingId],
     );
 
     return raw ? toVectorRow(raw) : undefined;
   }
 
   /** List all embeddings, ordered by creation time descending. */
-  async list(agentId?: string): Promise<VectorRow[]> {
+  async list(scope?: { tenantId?: string; agentId?: string } | string): Promise<VectorRow[]> {
+    const resolved = this.normalizeScope(scope);
     const rows = await this.db.all<RawVectorRow>(
-      "SELECT * FROM vector_metadata WHERE agent_id = ? ORDER BY created_at DESC, id DESC",
-      [this.normalizeAgentId(agentId)],
+      "SELECT * FROM vector_metadata WHERE tenant_id = ? AND agent_id = ? ORDER BY created_at DESC, vector_metadata_id DESC",
+      [resolved.tenantId, resolved.agentId],
     );
     return rows.map(toVectorRow);
   }

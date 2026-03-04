@@ -4,6 +4,7 @@ import { OutboxDal } from "../../src/modules/backplane/outbox-dal.js";
 import { RedactionEngine } from "../../src/modules/redaction/engine.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("Central redaction at persistence boundaries", () => {
   it("redacts registered secrets in planner_events.action before persistence", async () => {
@@ -13,9 +14,10 @@ describe("Central redaction at persistence boundaries", () => {
       redaction.registerSecrets(["secret-AAA"]);
 
       const log = new EventLog(db, redaction);
-      await log.append({
+      const outcome = await log.append({
+        tenantId: DEFAULT_TENANT_ID,
         replayId: "r1",
-        planId: "p1",
+        planKey: "p1",
         stepIndex: 0,
         occurredAt: new Date().toISOString(),
         action: {
@@ -24,13 +26,17 @@ describe("Central redaction at persistence boundaries", () => {
           nested: { value: "secret-AAA" },
         },
       });
+      expect(outcome.kind).toBe("inserted");
+      if (outcome.kind !== "inserted") {
+        throw new Error("expected planner event insert");
+      }
 
-      const row = await db.get<{ action: string }>(
-        "SELECT action FROM planner_events WHERE plan_id = ? AND step_index = ?",
-        ["p1", 0],
+      const row = await db.get<{ action_json: string }>(
+        "SELECT action_json FROM planner_events WHERE tenant_id = ? AND plan_id = ? AND step_index = ?",
+        [DEFAULT_TENANT_ID, outcome.event.planId, 0],
       );
-      expect(row?.action).toContain("[REDACTED]");
-      expect(row?.action).not.toContain("secret-AAA");
+      expect(row?.action_json).toContain("[REDACTED]");
+      expect(row?.action_json).not.toContain("secret-AAA");
     } finally {
       await db.close();
     }

@@ -20,6 +20,12 @@ import { defaultPolicyBundle } from "../../src/modules/policy/bundle-loader.js";
 import { PolicyService } from "../../src/modules/policy/service.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+  IdentityScopeDal,
+} from "../../src/modules/identity/scope.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { SqlDb, RunResult } from "../../src/statestore/types.js";
@@ -339,9 +345,9 @@ describe("ExecutionEngine (normalized)", () => {
     });
 
     await db.run(
-      `INSERT INTO workspace_leases (workspace_id, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?)`,
-      ["default", "other-worker", 60_000],
+      `INSERT INTO workspace_leases (tenant_id, workspace_id, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID, "other-worker", 60_000],
     );
 
     await engine.enqueuePlan({
@@ -376,9 +382,9 @@ describe("ExecutionEngine (normalized)", () => {
     });
 
     await db.run(
-      `INSERT INTO workspace_leases (workspace_id, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?)`,
-      ["default", "other-worker", 60_000],
+      `INSERT INTO workspace_leases (tenant_id, workspace_id, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID, "other-worker", 60_000],
     );
 
     await engine.enqueuePlan({
@@ -480,7 +486,8 @@ describe("ExecutionEngine (normalized)", () => {
     expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
 
     const approval = await db.get<{ resume_token: string | null }>(
-      "SELECT resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+      "SELECT resume_token FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      [DEFAULT_TENANT_ID],
     );
     expect(approval?.resume_token).toBeTruthy();
 
@@ -590,8 +597,13 @@ describe("ExecutionEngine (normalized)", () => {
     expect(runPaused?.status).toBe("paused");
     expect(runPaused?.paused_reason).toBe("budget");
 
-    const approval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
-      "SELECT id, kind, resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+    const approval = await db.get<{
+      approval_id: string;
+      kind: string;
+      resume_token: string | null;
+    }>(
+      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      [DEFAULT_TENANT_ID],
     );
     expect(approval?.kind).toBe("budget");
     expect(approval?.resume_token).toBeTruthy();
@@ -659,8 +671,13 @@ describe("ExecutionEngine (normalized)", () => {
       (mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
     ).toBe(1);
 
-    const approval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
-      "SELECT id, kind, resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+    const approval = await db.get<{
+      approval_id: string;
+      kind: string;
+      resume_token: string | null;
+    }>(
+      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      [DEFAULT_TENANT_ID],
     );
     expect(approval?.kind).toBe("budget");
     expect(approval?.resume_token).toBeTruthy();
@@ -699,21 +716,28 @@ describe("ExecutionEngine (normalized)", () => {
     });
 
     const token = "resume-token-preexisting-1";
-    await db.run("INSERT INTO resume_tokens (token, run_id) VALUES (?, ?)", [token, runId]);
+    await db.run("INSERT INTO resume_tokens (tenant_id, token, run_id) VALUES (?, ?, ?)", [
+      DEFAULT_TENANT_ID,
+      token,
+      runId,
+    ]);
 
-    await db.run("UPDATE execution_runs SET status = 'cancelled' WHERE run_id = ?", [runId]);
+    await db.run(
+      "UPDATE execution_runs SET status = 'cancelled' WHERE tenant_id = ? AND run_id = ?",
+      [DEFAULT_TENANT_ID, runId],
+    );
 
     const before = await db.get<{ revoked_at: string | null }>(
-      "SELECT revoked_at FROM resume_tokens WHERE token = ?",
-      [token],
+      "SELECT revoked_at FROM resume_tokens WHERE tenant_id = ? AND token = ?",
+      [DEFAULT_TENANT_ID, token],
     );
     expect(before?.revoked_at).toBeNull();
 
     await expect(engine.cancelRun(runId, "idempotent cleanup")).resolves.toBe("cancelled");
 
     const after = await db.get<{ revoked_at: string | null }>(
-      "SELECT revoked_at FROM resume_tokens WHERE token = ?",
-      [token],
+      "SELECT revoked_at FROM resume_tokens WHERE tenant_id = ? AND token = ?",
+      [DEFAULT_TENANT_ID, token],
     );
     expect(after?.revoked_at).toBe(nowIso);
   });
@@ -761,13 +785,23 @@ describe("ExecutionEngine (normalized)", () => {
     expect(runPaused?.status).toBe("paused");
     expect(runPaused?.paused_reason).toBe("policy");
 
-    const approval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
-      "SELECT id, kind, resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+    const approval = await db.get<{
+      approval_id: string;
+      kind: string;
+      resume_token: string | null;
+    }>(
+      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      [DEFAULT_TENANT_ID],
     );
     expect(approval?.kind).toBe("policy");
     expect(approval?.resume_token).toBeTruthy();
 
-    await db.run("UPDATE approvals SET status = 'approved' WHERE id = ?", [approval!.id]);
+    const approvalDal = new ApprovalDal(db);
+    await approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval!.approval_id,
+      decision: "approved",
+    });
     await engine.resumeRun(approval!.resume_token!);
 
     await drain(engine, "w1", mockExecutor);
@@ -784,7 +818,11 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const workboard = new WorkboardDal(db);
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
 
     const item = await workboard.createItem({
       scope,
@@ -832,7 +870,8 @@ describe("ExecutionEngine (normalized)", () => {
     expect(run?.paused_reason).toBe("approval");
 
     const approval = await db.get<{ kind: string }>(
-      "SELECT kind FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+      "SELECT kind FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      [DEFAULT_TENANT_ID],
     );
     expect(approval?.kind).toBe("intent");
 
@@ -855,7 +894,11 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const workboard = new WorkboardDal(db);
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
 
     const item = await workboard.createItem({
       scope,
@@ -892,13 +935,23 @@ describe("ExecutionEngine (normalized)", () => {
       (mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
     ).toBe(0);
 
-    const approval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
-      "SELECT id, kind, resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+    const approval = await db.get<{
+      approval_id: string;
+      kind: string;
+      resume_token: string | null;
+    }>(
+      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      [DEFAULT_TENANT_ID],
     );
     expect(approval?.kind).toBe("intent");
     expect(approval?.resume_token).toBeTruthy();
 
-    await db.run("UPDATE approvals SET status = 'approved' WHERE id = ?", [approval!.id]);
+    const approvalDal = new ApprovalDal(db);
+    await approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval!.approval_id,
+      decision: "approved",
+    });
     await engine.resumeRun(approval!.resume_token!);
 
     // After approval, the step should execute even if ToolIntent is still missing.
@@ -916,7 +969,11 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const workboard = new WorkboardDal(db);
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
 
     const item = await workboard.createItem({
       scope,
@@ -949,8 +1006,10 @@ describe("ExecutionEngine (normalized)", () => {
       });
 
       const run = await tx.get<unknown>(
-        `SELECT r.run_id,
+        `SELECT r.tenant_id,
+                r.run_id,
                 r.job_id,
+                j.agent_id,
                 r.key,
                 r.lane,
                 r.status,
@@ -958,13 +1017,13 @@ describe("ExecutionEngine (normalized)", () => {
                 j.workspace_id,
                 r.policy_snapshot_id
          FROM execution_runs r
-         JOIN execution_jobs j ON j.job_id = r.job_id
-         WHERE r.run_id = ?`,
-        [runId],
+         JOIN execution_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
+         WHERE r.tenant_id = ? AND r.run_id = ?`,
+        [DEFAULT_TENANT_ID, runId],
       );
       const step = await tx.get<unknown>(
-        "SELECT * FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC LIMIT 1",
-        [runId],
+        "SELECT * FROM execution_steps WHERE tenant_id = ? AND run_id = ? ORDER BY step_index ASC LIMIT 1",
+        [DEFAULT_TENANT_ID, runId],
       );
       expect(run).toBeTruthy();
       expect(step).toBeTruthy();
@@ -977,7 +1036,7 @@ describe("ExecutionEngine (normalized)", () => {
         clock: { nowMs: Date.now(), nowIso: new Date().toISOString() },
         workerId: "w1",
       });
-      expect(paused?.approvalId).toBeTypeOf("number");
+      expect(paused?.approvalId).toBeTypeOf("string");
     });
 
     const run = await db.get<{ status: string; paused_reason: string | null }>(
@@ -988,8 +1047,8 @@ describe("ExecutionEngine (normalized)", () => {
     expect(run?.paused_reason).toBe("approval");
 
     const approval = await db.get<{ kind: string; status: string }>(
-      "SELECT kind, status FROM approvals WHERE run_id = ? ORDER BY id DESC LIMIT 1",
-      [runId],
+      "SELECT kind, status FROM approvals WHERE tenant_id = ? AND run_id = ? ORDER BY created_at DESC, approval_id DESC LIMIT 1",
+      [DEFAULT_TENANT_ID, runId],
     );
     expect(approval?.kind).toBe("intent");
     expect(approval?.status).toBe("pending");
@@ -999,7 +1058,11 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const workboard = new WorkboardDal(db);
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
 
     const item = await workboard.createItem({
       scope,
@@ -1069,8 +1132,8 @@ describe("ExecutionEngine (normalized)", () => {
     expect(run?.paused_reason).toBe("approval");
 
     const approval = await db.get<{ kind: string }>(
-      "SELECT kind FROM approvals WHERE run_id = ? AND status = 'pending' ORDER BY id ASC LIMIT 1",
-      [runId],
+      "SELECT kind FROM approvals WHERE tenant_id = ? AND run_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      [DEFAULT_TENANT_ID, runId],
     );
     expect(approval?.kind).toBe("intent");
 
@@ -1086,7 +1149,11 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const workboard = new WorkboardDal(db);
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
 
     const item = await workboard.createItem({
       scope,
@@ -1167,8 +1234,8 @@ describe("ExecutionEngine (normalized)", () => {
     expect(run?.status).toBe("succeeded");
 
     const pendingApprovals = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM approvals WHERE run_id = ? AND status = 'pending'",
-      [runId],
+      "SELECT COUNT(*) AS n FROM approvals WHERE tenant_id = ? AND run_id = ? AND status = 'pending'",
+      [DEFAULT_TENANT_ID, runId],
     );
     expect(pendingApprovals?.n).toBe(0);
 
@@ -1183,7 +1250,11 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const workboard = new WorkboardDal(db);
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
 
     const item = await workboard.createItem({
       scope,
@@ -1231,20 +1302,29 @@ describe("ExecutionEngine (normalized)", () => {
       0,
     );
 
-    const intentApproval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
-      "SELECT id, kind, resume_token FROM approvals WHERE run_id = ? ORDER BY id ASC LIMIT 1",
-      [runId],
+    const intentApproval = await db.get<{
+      approval_id: string;
+      kind: string;
+      resume_token: string | null;
+    }>(
+      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND run_id = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      [DEFAULT_TENANT_ID, runId],
     );
     expect(intentApproval?.kind).toBe("intent");
     expect(intentApproval?.resume_token).toBeTruthy();
 
-    await db.run("UPDATE approvals SET status = 'approved' WHERE id = ?", [intentApproval!.id]);
+    const approvalDal = new ApprovalDal(db);
+    await approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: intentApproval!.approval_id,
+      decision: "approved",
+    });
 
     // Attach a policy snapshot after the intent pause to reproduce approval kind mismatch.
-    await db.run("UPDATE execution_runs SET policy_snapshot_id = ? WHERE run_id = ?", [
-      snapshot.policy_snapshot_id,
-      runId,
-    ]);
+    await db.run(
+      "UPDATE execution_runs SET policy_snapshot_id = ? WHERE tenant_id = ? AND run_id = ?",
+      [snapshot.policy_snapshot_id, DEFAULT_TENANT_ID, runId],
+    );
 
     const { decisions } = await workboard.listDecisions({ scope, work_item_id: item.work_item_id });
     const decisionIds = decisions
@@ -1300,8 +1380,8 @@ describe("ExecutionEngine (normalized)", () => {
     expect(run?.paused_reason).toBe("policy");
 
     const policyApproval = await db.get<{ kind: string }>(
-      "SELECT kind FROM approvals WHERE run_id = ? ORDER BY id DESC LIMIT 1",
-      [runId],
+      "SELECT kind FROM approvals WHERE tenant_id = ? AND run_id = ? ORDER BY created_at DESC, approval_id DESC LIMIT 1",
+      [DEFAULT_TENANT_ID, runId],
     );
     expect(policyApproval?.kind).toBe("policy");
   });
@@ -1387,14 +1467,14 @@ describe("ExecutionEngine (normalized)", () => {
 
       const invalidSnapshotId = "11111111-1111-1111-8111-111111111111";
       await db.run(
-        `INSERT INTO policy_snapshots (policy_snapshot_id, sha256, bundle_json)
-         VALUES (?, ?, ?)`,
-        [invalidSnapshotId, "invalid", "{not-json"],
+        `INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json)
+         VALUES (?, ?, ?, ?)`,
+        [DEFAULT_TENANT_ID, invalidSnapshotId, "invalid", "{not-json"],
       );
 
       await overrideDal.create({
-        agentId: "default",
-        workspaceId: "default",
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
         toolId: "tool.exec",
         pattern: "echo hi",
         createdFromPolicySnapshotId: invalidSnapshotId,
@@ -1525,8 +1605,13 @@ describe("ExecutionEngine (normalized)", () => {
       "SELECT workspace_id, agent_id, run_id, step_id, attempt_id, kind FROM execution_artifacts WHERE artifact_id = ?",
       [artifactRef.artifact_id],
     );
-    expect(metadata?.workspace_id).toBe("default");
-    expect(metadata?.agent_id).toBe("agent-1");
+    const job = await db.get<{ agent_id: string; workspace_id: string }>(
+      "SELECT agent_id, workspace_id FROM execution_jobs WHERE latest_run_id = ? LIMIT 1",
+      [runId],
+    );
+    expect(job).toBeTruthy();
+    expect(metadata?.workspace_id).toBe(job!.workspace_id);
+    expect(metadata?.agent_id).toBe(job!.agent_id);
     expect(metadata?.run_id).toBe(runId);
     expect(metadata?.step_id).toBe(attempt!.step_id);
     expect(metadata?.attempt_id).toBe(attempt!.attempt_id);
@@ -1687,9 +1772,13 @@ describe("ExecutionEngine (normalized)", () => {
     const policyService = new PolicyService({ home, snapshotDal, overrideDal });
 
     const snapshot = await snapshotDal.getOrCreate(defaultPolicyBundle());
+    const scopeIds = await new IdentityScopeDal(db).resolveScopeIds({
+      agentKey: "agent-1",
+      workspaceKey: "default",
+    });
     const override = await overrideDal.create({
-      agentId: "agent-1",
-      workspaceId: "default",
+      agentId: scopeIds.agentId,
+      workspaceId: scopeIds.workspaceId,
       toolId: "tool.exec",
       pattern: "echo hi",
       createdFromPolicySnapshotId: snapshot.policy_snapshot_id,
@@ -1697,7 +1786,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const engine = new ExecutionEngine({ db, policyService });
     await engine.enqueuePlan({
-      key: "agent:agent-1:telegram-1:group:thread-1",
+      key: "agent:agent-1:main",
       lane: "main",
       planId: "plan-policy-attempt-1",
       requestId: "req-policy-attempt-1",
@@ -1770,14 +1859,23 @@ describe("ExecutionEngine (normalized)", () => {
     expect(paused?.status).toBe("paused");
     expect(paused?.paused_reason).toBe("policy");
 
-    const approval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
-      "SELECT id, kind, resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+    const approval = await db.get<{
+      approval_id: string;
+      kind: string;
+      resume_token: string | null;
+    }>(
+      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      [DEFAULT_TENANT_ID],
     );
     expect(approval?.kind).toBe("policy");
     expect(approval?.resume_token).toBeTruthy();
 
     const approvalDal = new ApprovalDal(db);
-    await approvalDal.respond(approval!.id, true);
+    await approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval!.approval_id,
+      decision: "approved",
+    });
     await engine.resumeRun(approval!.resume_token!);
 
     await drain(engine, "w1", executor);
@@ -1787,24 +1885,6 @@ describe("ExecutionEngine (normalized)", () => {
     );
 
     await rm(home, { recursive: true, force: true });
-  });
-
-  it("treats approval id 0 as a valid approved policy gate", async () => {
-    db = openTestSqliteDb();
-
-    const engine = new ExecutionEngine({ db });
-    await db.run(
-      `INSERT INTO approvals (id, plan_id, step_index, prompt, status, kind)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [0, "plan-0", 0, "ok", "approved", "policy"],
-    );
-
-    const ok = await (
-      engine as unknown as {
-        isApprovedPolicyGateTx: (tx: unknown, approvalId: number) => Promise<boolean>;
-      }
-    ).isApprovedPolicyGateTx(db, 0);
-    expect(ok).toBe(true);
   });
 
   it("evaluates secret policy using provider:scope when possible", async () => {
@@ -2004,8 +2084,8 @@ describe("ExecutionEngine (normalized)", () => {
     ).toBe(1);
 
     const approval = await db.get<{ kind: string; resume_token: string | null }>(
-      "SELECT kind, resume_token FROM approvals WHERE run_id = ? ORDER BY id DESC LIMIT 1",
-      [runId],
+      "SELECT kind, resume_token FROM approvals WHERE tenant_id = ? AND run_id = ? ORDER BY created_at DESC, approval_id DESC LIMIT 1",
+      [DEFAULT_TENANT_ID, runId],
     );
     expect(approval?.kind).toBe("retry");
     expect(approval?.resume_token).toBeTruthy();
@@ -2066,30 +2146,33 @@ describe("ExecutionEngine (normalized)", () => {
     expect(step!.status).toBe("paused");
 
     const tokenRow = await db.get<{ token: string; run_id: string; revoked_at: string | null }>(
-      "SELECT token, run_id, revoked_at FROM resume_tokens WHERE run_id = ?",
-      [runId],
+      "SELECT token, run_id, revoked_at FROM resume_tokens WHERE tenant_id = ? AND run_id = ?",
+      [DEFAULT_TENANT_ID, runId],
     );
     expect(tokenRow!.run_id).toBe(runId);
     expect(tokenRow!.revoked_at).toBeNull();
 
     const approvalRow = await db.get<{
-      id: number;
+      approval_id: string;
       kind: string;
       status: string;
       run_id: string | null;
       resume_token: string | null;
-    }>("SELECT id, kind, status, run_id, resume_token FROM approvals WHERE run_id = ?", [runId]);
+    }>(
+      "SELECT approval_id, kind, status, run_id, resume_token FROM approvals WHERE tenant_id = ? AND run_id = ? ORDER BY created_at DESC, approval_id DESC LIMIT 1",
+      [DEFAULT_TENANT_ID, runId],
+    );
     expect(approvalRow).toBeTruthy();
     expect(approvalRow!.kind).toBe("takeover");
     expect(approvalRow!.status).toBe("pending");
     expect(approvalRow!.run_id).toBe(runId);
     expect(approvalRow!.resume_token).toBe(tokenRow!.token);
 
-    const stepApproval = await db.get<{ approval_id: number | null }>(
-      "SELECT approval_id FROM execution_steps WHERE run_id = ?",
-      [runId],
+    const stepApproval = await db.get<{ approval_id: string | null }>(
+      "SELECT approval_id FROM execution_steps WHERE tenant_id = ? AND run_id = ?",
+      [DEFAULT_TENANT_ID, runId],
     );
-    expect(stepApproval!.approval_id).toBe(approvalRow!.id);
+    expect(stepApproval!.approval_id).toBe(approvalRow!.approval_id);
   });
 
   it("resumes a paused run using a resume token", async () => {
@@ -2119,8 +2202,8 @@ describe("ExecutionEngine (normalized)", () => {
     await drain(engine, "w1", pausingExecutor);
 
     const token = (await db.get<{ token: string }>(
-      "SELECT token FROM resume_tokens WHERE run_id = ?",
-      [runId],
+      "SELECT token FROM resume_tokens WHERE tenant_id = ? AND run_id = ?",
+      [DEFAULT_TENANT_ID, runId],
     ))!.token;
 
     const resumed = await engine.resumeRun(token);
@@ -2141,8 +2224,8 @@ describe("ExecutionEngine (normalized)", () => {
     expect(run!.status).toBe("succeeded");
 
     const tokenRow = await db.get<{ revoked_at: string | null }>(
-      "SELECT revoked_at FROM resume_tokens WHERE token = ?",
-      [token],
+      "SELECT revoked_at FROM resume_tokens WHERE tenant_id = ? AND token = ?",
+      [DEFAULT_TENANT_ID, token],
     );
     expect(tokenRow!.revoked_at).not.toBeNull();
   });
@@ -2165,9 +2248,14 @@ describe("ExecutionEngine (normalized)", () => {
     );
 
     await db.run(
-      `INSERT INTO idempotency_records (scope_key, kind, idempotency_key, status, result_json)
-       VALUES (?, 'step', ?, 'succeeded', ?)`,
-      [stepRow!.step_id, stepRow!.idempotency_key, JSON.stringify({ cached: true })],
+      `INSERT INTO idempotency_records (tenant_id, scope_key, kind, idempotency_key, status, result_json)
+       VALUES (?, ?, 'step', ?, 'succeeded', ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        stepRow!.step_id,
+        stepRow!.idempotency_key,
+        JSON.stringify({ cached: true }),
+      ],
     );
 
     const mockExecutor: StepExecutor = {
@@ -2246,9 +2334,9 @@ describe("ExecutionEngine (normalized)", () => {
     ]);
     await db.run(
       `INSERT INTO execution_attempts (
-         attempt_id, step_id, attempt, status, started_at, artifacts_json, lease_owner, lease_expires_at_ms
-       ) VALUES (?, ?, 1, 'running', ?, '[]', 'dead-worker', ?)`,
-      ["attempt-1", step!.step_id, new Date().toISOString(), Date.now() - 1],
+         tenant_id, attempt_id, step_id, attempt, status, started_at, artifacts_json, lease_owner, lease_expires_at_ms
+       ) VALUES (?, ?, ?, 1, 'running', ?, '[]', 'dead-worker', ?)`,
+      [DEFAULT_TENANT_ID, "attempt-1", step!.step_id, new Date().toISOString(), Date.now() - 1],
     );
 
     const mockExecutor: StepExecutor = {
@@ -2260,8 +2348,8 @@ describe("ExecutionEngine (normalized)", () => {
     await drain(engine, "w1", mockExecutor);
 
     const attempts = await db.all<{ attempt: number; status: string }>(
-      "SELECT attempt, status FROM execution_attempts WHERE step_id = ? ORDER BY attempt ASC",
-      [step!.step_id],
+      "SELECT attempt, status FROM execution_attempts WHERE tenant_id = ? AND step_id = ? ORDER BY attempt ASC",
+      [DEFAULT_TENANT_ID, step!.step_id],
     );
     expect(attempts.map((a) => a.status)).toEqual(["cancelled", "succeeded"]);
   });
@@ -2282,25 +2370,17 @@ describe("ExecutionEngine (normalized)", () => {
         lane: "main",
         planId: "plan-concurrency-1",
         requestId: "req-1",
+        workspaceId: "ws-1",
         steps: [action("CLI")],
       });
-      const { runId: run2 } = await engineA.enqueuePlan({
+      await engineA.enqueuePlan({
         key: "agent:default:ui:thread-2",
         lane: "main",
         planId: "plan-concurrency-2",
         requestId: "req-2",
+        workspaceId: "ws-2",
         steps: [action("CLI")],
       });
-
-      // Use distinct workspaces so the workspace lease doesn't serialize the test runs.
-      await dbA.run(
-        "UPDATE execution_jobs SET workspace_id = ? WHERE job_id = (SELECT job_id FROM execution_runs WHERE run_id = ?)",
-        ["ws-1", run1],
-      );
-      await dbA.run(
-        "UPDATE execution_jobs SET workspace_id = ? WHERE job_id = (SELECT job_id FROM execution_runs WHERE run_id = ?)",
-        ["ws-2", run2],
-      );
 
       let unblock: ((value: StepResult) => void) | undefined;
       const blocked = new Promise<StepResult>((resolve) => {

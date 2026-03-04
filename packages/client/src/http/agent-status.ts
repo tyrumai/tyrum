@@ -1,10 +1,10 @@
-import { AgentId, AgentStatusResponse } from "@tyrum/schemas";
+import { AgentKey, AgentStatusResponse } from "@tyrum/schemas";
 import { z } from "zod";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 
 const AgentStatusQuery = z
   .object({
-    agent_id: AgentId.optional(),
+    agent_key: AgentKey.optional(),
   })
   .strict();
 

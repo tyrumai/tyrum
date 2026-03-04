@@ -7,6 +7,7 @@ import { MockLanguageModelV3 } from "ai/test";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { createGatewayStepExecutor } from "../../src/modules/execution/gateway-step-executor.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -134,10 +135,11 @@ describe("Playbook LLM step executor", () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-llm-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
 
-    const policySnapshotId = "ps-1";
+    const policySnapshotId = "550e8400-e29b-41d4-a716-446655440010";
     await container.db.run(
-      "INSERT INTO policy_snapshots (policy_snapshot_id, sha256, bundle_json) VALUES (?, ?, ?)",
+      "INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json) VALUES (?, ?, ?, ?)",
       [
+        DEFAULT_TENANT_ID,
         policySnapshotId,
         "sha-test",
         JSON.stringify({
@@ -227,10 +229,11 @@ describe("Playbook LLM step executor", () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-llm-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
 
-    const policySnapshotId = "ps-http-1";
+    const policySnapshotId = "6f9619ff-8b86-4d11-b42d-00c04fc96410";
     await container.db.run(
-      "INSERT INTO policy_snapshots (policy_snapshot_id, sha256, bundle_json) VALUES (?, ?, ?)",
+      "INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json) VALUES (?, ?, ?, ?)",
       [
+        DEFAULT_TENANT_ID,
         policySnapshotId,
         "sha-http-test",
         JSON.stringify({

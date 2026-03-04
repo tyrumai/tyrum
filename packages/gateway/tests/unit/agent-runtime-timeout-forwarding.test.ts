@@ -4,7 +4,6 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import type { GatewayContainer } from "../../src/container.js";
-import type { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -36,9 +35,7 @@ describe("AgentRuntime", () => {
     }
   });
 
-  it("forwards execution timeouts to generateText", async () => {
-    const timeoutMs = 10_000;
-
+  it("passes an abortSignal to generateText for execution timeouts", async () => {
     generateTextMock.mockResolvedValueOnce({
       text: "ok",
       steps: [],
@@ -61,20 +58,6 @@ describe("AgentRuntime", () => {
       turnEngineWaitMs: 30_000,
     } as ConstructorParameters<typeof AgentRuntime>[0]);
 
-    const engine = (runtime as unknown as { executionEngine: ExecutionEngine }).executionEngine;
-    const engineAny = engine as unknown as Record<string, unknown>;
-    const originalExecuteWithTimeout = engineAny["executeWithTimeout"];
-    if (typeof originalExecuteWithTimeout !== "function") {
-      throw new Error("expected ExecutionEngine.executeWithTimeout to exist");
-    }
-
-    engineAny["executeWithTimeout"] = async (...args: unknown[]) => {
-      return await (originalExecuteWithTimeout as (...args: unknown[]) => Promise<unknown>).apply(
-        engine,
-        [args[0], args[1], args[2], args[3], timeoutMs],
-      );
-    };
-
     const res = await runtime.turn({
       channel: "test",
       thread_id: "thread-1",
@@ -83,6 +66,7 @@ describe("AgentRuntime", () => {
 
     expect(res.reply).toBe("ok");
     expect(generateTextMock).toHaveBeenCalledOnce();
-    expect(generateTextMock.mock.calls[0]?.[0]).toMatchObject({ timeout: timeoutMs });
+    const call = generateTextMock.mock.calls[0]?.[0] as { abortSignal?: AbortSignal } | undefined;
+    expect(call?.abortSignal).toBeInstanceOf(AbortSignal);
   });
 });

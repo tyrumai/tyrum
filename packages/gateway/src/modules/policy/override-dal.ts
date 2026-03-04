@@ -6,6 +6,7 @@ import type {
 import { PolicyOverride } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 export interface PolicyOverrideRow extends PolicyOverrideT {}
 
@@ -19,15 +20,20 @@ interface RawPolicyOverrideRow {
   workspace_id: string | null;
   tool_id: string;
   pattern: string;
-  created_from_approval_id: number | null;
+  created_from_approval_id: string | null;
   created_from_policy_snapshot_id: string | null;
-  expires_at: string | null;
-  revoked_at: string | null;
+  expires_at: string | Date | null;
+  revoked_at: string | Date | null;
   revoked_by_json: string | null;
   revoked_reason: string | null;
 }
 
 function normalizeTime(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function normalizeMaybeTime(value: string | Date | null): string | null {
+  if (value === null) return null;
   return value instanceof Date ? value.toISOString() : value;
 }
 
@@ -45,8 +51,8 @@ function toOverrideRow(raw: RawPolicyOverrideRow): PolicyOverrideRow {
   const status: PolicyOverrideStatusT =
     raw.status === "revoked" || raw.status === "expired" ? raw.status : "active";
 
-  const expiresAt = raw.expires_at ?? undefined;
-  const revokedAt = raw.revoked_at ?? undefined;
+  const expiresAt = normalizeMaybeTime(raw.expires_at) ?? undefined;
+  const revokedAt = normalizeMaybeTime(raw.revoked_at) ?? undefined;
 
   return PolicyOverride.parse({
     policy_override_id: raw.policy_override_id,
@@ -80,7 +86,7 @@ export class PolicyOverrideDal {
     limit?: number;
   }): Promise<PolicyOverrideRow[]> {
     const where: string[] = [];
-    const values: unknown[] = [];
+    const values: unknown[] = [DEFAULT_TENANT_ID];
 
     if (params.agentId) {
       where.push("agent_id = ?");
@@ -98,7 +104,8 @@ export class PolicyOverrideDal {
     const limit = Math.max(1, Math.min(500, params.limit ?? 100));
     const sql =
       `SELECT * FROM policy_overrides` +
-      (where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "") +
+      ` WHERE tenant_id = ?` +
+      (where.length > 0 ? ` AND ${where.join(" AND ")}` : "") +
       ` ORDER BY created_at DESC` +
       ` LIMIT ?`;
     values.push(limit);
@@ -109,8 +116,8 @@ export class PolicyOverrideDal {
 
   async getById(policyOverrideId: string): Promise<PolicyOverrideRow | undefined> {
     const row = await this.db.get<RawPolicyOverrideRow>(
-      `SELECT * FROM policy_overrides WHERE policy_override_id = ?`,
-      [policyOverrideId],
+      `SELECT * FROM policy_overrides WHERE tenant_id = ? AND policy_override_id = ?`,
+      [DEFAULT_TENANT_ID, policyOverrideId],
     );
     return row ? toOverrideRow(row) : undefined;
   }
@@ -121,15 +128,18 @@ export class PolicyOverrideDal {
     toolId: string;
     pattern: string;
     createdBy?: unknown;
-    createdFromApprovalId?: number;
+    createdFromApprovalId?: string;
     createdFromPolicySnapshotId?: string;
     expiresAt?: string | null;
   }): Promise<PolicyOverrideRow> {
     const id = randomUUID();
+    const overrideKey = `override:${id}`;
     const nowIso = isoNow();
     const row = await this.db.get<RawPolicyOverrideRow>(
       `INSERT INTO policy_overrides (
+         tenant_id,
          policy_override_id,
+         override_key,
          status,
          agent_id,
          workspace_id,
@@ -141,10 +151,12 @@ export class PolicyOverrideDal {
          expires_at,
          created_at,
          updated_at
-       ) VALUES (?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       [
+        DEFAULT_TENANT_ID,
         id,
+        overrideKey,
         params.agentId,
         params.workspaceId ?? null,
         params.toolId,
@@ -176,13 +188,15 @@ export class PolicyOverrideDal {
            revoked_by_json = ?,
            revoked_reason = ?,
            updated_at = ?
-       WHERE policy_override_id = ?
+       WHERE tenant_id = ?
+         AND policy_override_id = ?
          AND status = 'active'`,
       [
         nowIso,
         JSON.stringify(params.revokedBy ?? {}),
         params.reason ?? null,
         nowIso,
+        DEFAULT_TENANT_ID,
         params.policyOverrideId,
       ],
     );
@@ -196,11 +210,12 @@ export class PolicyOverrideDal {
         `UPDATE policy_overrides
          SET status = 'expired',
              updated_at = ?
-         WHERE status = 'active'
+         WHERE tenant_id = ?
+           AND status = 'active'
            AND expires_at IS NOT NULL
            AND expires_at <= ?
          RETURNING *`,
-        [nowIso, nowIso],
+        [nowIso, DEFAULT_TENANT_ID, nowIso],
       );
       if (rows.length === 0) return [];
 
@@ -214,9 +229,9 @@ export class PolicyOverrideDal {
           payload: { override },
         };
         await tx.run(
-          `INSERT INTO outbox (topic, target_edge_id, payload_json)
-           VALUES (?, ?, ?)`,
-          ["ws.broadcast", null, JSON.stringify({ message: evt })],
+          `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
+           VALUES (?, ?, ?, ?)`,
+          [DEFAULT_TENANT_ID, "ws.broadcast", null, JSON.stringify({ message: evt })],
         );
       }
 
@@ -235,13 +250,14 @@ export class PolicyOverrideDal {
     const rows = await this.db.all<RawPolicyOverrideRow>(
       `SELECT *
        FROM policy_overrides
-       WHERE status = 'active'
+       WHERE tenant_id = ?
+         AND status = 'active'
          AND agent_id = ?
          AND tool_id = ?
          AND (workspace_id IS NULL OR workspace_id = ?)
          AND (expires_at IS NULL OR expires_at > ?)
        ORDER BY created_at DESC`,
-      [params.agentId, params.toolId, params.workspaceId ?? null, nowIso],
+      [DEFAULT_TENANT_ID, params.agentId, params.toolId, params.workspaceId ?? null, nowIso],
     );
     return rows.map(toOverrideRow);
   }

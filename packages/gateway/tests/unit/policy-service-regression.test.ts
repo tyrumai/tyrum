@@ -7,6 +7,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { PolicyService } from "../../src/modules/policy/service.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
+import { DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 
 async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), "tyrum-policy-test-"));
@@ -39,8 +40,8 @@ describe("PolicyService regressions (precedence + overrides)", () => {
         });
 
         const res = await policy.evaluateToolCall({
-          agentId: "agent-1",
-          workspaceId: "ws-1",
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
           toolId: "tool.exec",
           toolMatchTarget: "echo ok",
           playbookBundle,
@@ -74,8 +75,8 @@ describe("PolicyService regressions (precedence + overrides)", () => {
         });
 
         const res = await policy.evaluateToolCall({
-          agentId: "agent-1",
-          workspaceId: "ws-1",
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
           toolId: "tool.exec",
           toolMatchTarget: "echo ok",
           playbookBundle,
@@ -126,8 +127,8 @@ describe("PolicyService regressions (precedence + overrides)", () => {
         });
 
         const res = await policy.evaluateToolCall({
-          agentId: "agent-1",
-          workspaceId: "ws-1",
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
           toolId: "tool.exec",
           toolMatchTarget: "echo ok",
           playbookBundle,
@@ -162,15 +163,15 @@ describe("PolicyService regressions (precedence + overrides)", () => {
         });
 
         await overrideDal.create({
-          agentId: "agent-1",
-          workspaceId: "ws-1",
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
           toolId: "tool.exec",
           pattern: "echo ok",
         });
 
         const res = await policy.evaluateToolCall({
-          agentId: "agent-1",
-          workspaceId: "ws-1",
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
           toolId: "tool.exec",
           toolMatchTarget: "echo ok",
           playbookBundle,
@@ -206,14 +207,14 @@ describe("PolicyService regressions (precedence + overrides)", () => {
         });
 
         await overrideDal.create({
-          agentId: "agent-1",
+          agentId: DEFAULT_AGENT_ID,
           toolId: "connector.send",
           pattern: "telegram:work:123",
         });
 
         const res = await policy.evaluateConnectorAction({
-          agentId: "agent-1",
-          workspaceId: "ws-1",
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
           matchTarget: "telegram:work:123",
           playbookBundle,
         });
@@ -254,15 +255,15 @@ describe("PolicyService regressions (precedence + overrides)", () => {
         });
 
         await overrideDal.create({
-          agentId: "agent-1",
-          workspaceId: "ws-1",
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
           toolId: "tool.http.fetch",
           pattern: "https://example.com/",
         });
 
         const res = await policy.evaluateToolCall({
-          agentId: "agent-1",
-          workspaceId: "ws-1",
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
           toolId: "tool.http.fetch",
           toolMatchTarget: "https://example.com/",
           url: "https://example.com/",
@@ -299,15 +300,15 @@ describe("PolicyService regressions (precedence + overrides)", () => {
         });
 
         const override = await overrideDal.create({
-          agentId: "agent-1",
-          workspaceId: "ws-1",
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
           toolId: "tool.exec",
           pattern: "echo ok",
         });
 
         const res = await policy.evaluateToolCall({
-          agentId: "agent-1",
-          workspaceId: "ws-1",
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
           toolId: "tool.exec",
           toolMatchTarget: "echo ok",
           playbookBundle,

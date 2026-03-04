@@ -1,4 +1,4 @@
-import { DEFAULT_WORKSPACE_ID, WorkspaceId } from "@tyrum/schemas";
+import { DEFAULT_WORKSPACE_KEY, WorkspaceKey } from "@tyrum/schemas";
 
 export function parsePlanIdFromTriggerJson(triggerJson: string): string | undefined {
   try {
@@ -19,9 +19,9 @@ export function parsePlanIdFromTriggerJson(triggerJson: string): string | undefi
   return undefined;
 }
 
-export function normalizeWorkspaceId(input: string | undefined): string {
+export function normalizeWorkspaceKey(input: string | undefined): string {
   const trimmed = input?.trim();
-  if (!trimmed) return DEFAULT_WORKSPACE_ID;
-  const parsed = WorkspaceId.safeParse(trimmed);
-  return parsed.success ? parsed.data : DEFAULT_WORKSPACE_ID;
+  if (!trimmed) return DEFAULT_WORKSPACE_KEY;
+  const parsed = WorkspaceKey.safeParse(trimmed);
+  return parsed.success ? parsed.data : DEFAULT_WORKSPACE_KEY;
 }

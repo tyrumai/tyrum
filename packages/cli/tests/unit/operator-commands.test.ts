@@ -873,7 +873,8 @@ describe("@tyrum/cli operator commands", () => {
       { mode: 0o600 },
     );
 
-    wsApprovalResolveSpy.mockResolvedValue({ approval: { approval_id: 123 } });
+    const approvalId = "550e8400-e29b-41d4-a716-446655440000";
+    wsApprovalResolveSpy.mockResolvedValue({ approval: { approval_id: approvalId } });
 
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -886,7 +887,7 @@ describe("@tyrum/cli operator commands", () => {
         "approvals",
         "resolve",
         "--approval-id",
-        "123",
+        approvalId,
         "--decision",
         "approved",
         "--reason",
@@ -896,7 +897,7 @@ describe("@tyrum/cli operator commands", () => {
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
       expect(wsApprovalResolveSpy).toHaveBeenCalledWith({
-        approval_id: 123,
+        approval_id: approvalId,
         decision: "approved",
         reason: "ok",
       });
@@ -1320,10 +1321,8 @@ describe("@tyrum/cli operator commands", () => {
       const code = await runCli([
         "secrets",
         "store",
-        "--scope",
+        "--secret-key",
         "demo",
-        "--provider",
-        "env",
         "--value",
         "secret",
         "--elevated-token",
@@ -1339,8 +1338,7 @@ describe("@tyrum/cli operator commands", () => {
         }),
       );
       expect(httpSecretsStoreSpy).toHaveBeenCalledWith({
-        scope: "demo",
-        provider: "env",
+        secret_key: "demo",
         value: "secret",
       });
       expect(logSpy).toHaveBeenCalled();

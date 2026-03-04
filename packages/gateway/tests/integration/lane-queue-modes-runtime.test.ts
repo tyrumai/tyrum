@@ -10,6 +10,7 @@ import {
   LaneQueueSignalDal,
   LaneQueueInterruptError,
 } from "../../src/modules/lanes/queue-signal-dal.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -70,6 +71,7 @@ describe("AgentRuntime lane queue modes", () => {
         callCount += 1;
         if (callCount === 1) {
           await signals.setSignal({
+            tenant_id: DEFAULT_TENANT_ID,
             key,
             lane,
             kind: "steer",
@@ -183,6 +185,7 @@ describe("AgentRuntime lane queue modes", () => {
         callCount += 1;
         if (callCount === 1) {
           await signals.setSignal({
+            tenant_id: DEFAULT_TENANT_ID,
             key,
             lane,
             kind: "interrupt",

@@ -24,8 +24,69 @@ import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { NodeDispatchService } from "../../src/modules/agent/node-dispatch-service.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
-import { seedExecutionScope, type ExecutionScopeIds } from "./execution-scope.js";
+type SqlRunner = {
+  run(sql: string, params?: unknown[]): Promise<unknown>;
+};
+
+type ExecutionScopeIds = {
+  jobId: string;
+  runId: string;
+  stepId: string;
+  attemptId: string;
+};
+
+async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds): Promise<void> {
+  await db.run(
+    `INSERT INTO execution_jobs (
+       tenant_id,
+       job_id,
+       agent_id,
+       workspace_id,
+       key,
+       lane,
+       status,
+       trigger_json,
+       input_json,
+       latest_run_id
+     )
+     VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
+    [
+      DEFAULT_TENANT_ID,
+      ids.jobId,
+      DEFAULT_AGENT_ID,
+      DEFAULT_WORKSPACE_ID,
+      "agent:agent-1:thread:thread-1",
+      "main",
+      "{}",
+      "{}",
+      ids.runId,
+    ],
+  );
+
+  await db.run(
+    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+     VALUES (?, ?, ?, ?, ?, 'running', 1)`,
+    [DEFAULT_TENANT_ID, ids.runId, ids.jobId, "agent:agent-1:thread:thread-1", "main"],
+  );
+
+  await db.run(
+    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+     VALUES (?, ?, ?, 0, 'running', ?)`,
+    [DEFAULT_TENANT_ID, ids.stepId, ids.runId, "{}"],
+  );
+
+  await db.run(
+    `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, artifacts_json)
+     VALUES (?, ?, ?, 1, 'running', '[]')`,
+    [DEFAULT_TENANT_ID, ids.attemptId, ids.stepId],
+  );
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "../../../../");
@@ -348,7 +409,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             undefined,
             {
               db: container.db,
-              workspaceId: "default",
+              workspaceId: DEFAULT_WORKSPACE_ID,
               ownerPrefix: "test-tool",
             },
             nodeDispatchService,

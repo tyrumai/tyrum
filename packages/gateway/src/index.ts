@@ -21,10 +21,7 @@ import { NodeDispatchService } from "./modules/agent/node-dispatch-service.js";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
 import { WorkSignalScheduler } from "./modules/workboard/signal-scheduler.js";
-import {
-  createSecretProviderFromEnv,
-  resolveSecretProviderKind,
-} from "./modules/secret/create-secret-provider.js";
+import { createDbSecretProvider } from "./modules/secret/create-secret-provider.js";
 import { ArtifactLifecycleScheduler } from "./modules/artifact/lifecycle.js";
 import { WsNotifier } from "./modules/approval/notifier.js";
 import { OutboxDal } from "./modules/backplane/outbox-dal.js";
@@ -62,6 +59,7 @@ import { loadLifecycleHooksFromHome } from "./modules/hooks/config.js";
 import { LifecycleHooksRuntime } from "./modules/hooks/runtime.js";
 import { loadConfigFromProcessEnv } from "./config.js";
 import { ensureSelfSignedTlsMaterial } from "./modules/tls/self-signed.js";
+import { DEFAULT_TENANT_ID } from "./modules/identity/scope.js";
 
 // Re-export for library consumers
 export { VERSION } from "./version.js";
@@ -833,14 +831,13 @@ async function runGatewayCheck(): Promise<number> {
       console.log(`static.plugins: error=${message}`);
     }
 
-    const secretProviderKind = resolveSecretProviderKind();
     try {
-      const secretProvider = await createSecretProviderFromEnv(tyrumHome, token);
+      const secretProvider = await createDbSecretProvider({ db: container.db, dbPath, tyrumHome });
       const handles = await secretProvider.list();
-      console.log(`static.secrets: provider=${secretProviderKind} handles=${handles.length}`);
+      console.log(`static.secrets: provider=db handles=${handles.length}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.log(`static.secrets: provider=${secretProviderKind} error=${message}`);
+      console.log(`static.secrets: provider=db error=${message}`);
     }
 
     // --- Live HTTP probes (best-effort) ---
@@ -1068,8 +1065,7 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
     console.log("---");
   }
 
-  // Initialize secret provider (defaults per ADR-0007; override via TYRUM_SECRET_PROVIDER)
-  const secretProvider = await createSecretProviderFromEnv(tyrumHome, token);
+  const secretProvider = await createDbSecretProvider({ db: container.db, dbPath, tyrumHome });
 
   const lifecycleHooks = await loadLifecycleHooksFromHome(tyrumHome, logger);
   const shouldRunEdge = role === "all" || role === "edge";
@@ -1248,9 +1244,15 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
     onConnectionClosed: (connectionId) => {
       taskResults.rejectAllForConnection(connectionId);
     },
-    onApprovalDecision: (approvalId: number, approved: boolean, reason: string | undefined) => {
+    onApprovalDecision: (approvalId: string, approved: boolean, reason: string | undefined) => {
       void container.approvalDal
-        .respond(approvalId, approved, reason)
+        .respond({
+          tenantId: DEFAULT_TENANT_ID,
+          approvalId,
+          decision: approved ? "approved" : "denied",
+          reason,
+          resolvedBy: { kind: "ws.operator" },
+        })
         .then(async (row) => {
           const desiredStatus = approved ? "approved" : "denied";
           const decisionMatches = row?.status === desiredStatus;
@@ -1271,24 +1273,19 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
             const isAgentToolExecution =
               isRecord(row.context) && row.context["source"] === "agent-tool-execution";
             const resumeToken = row.resume_token?.trim();
+            const resolvedReason = reason ?? row.status;
 
             if (row.status === "approved") {
               if (resumeToken) {
                 await protocolDeps.engine.resumeRun(resumeToken);
               } else if (row.run_id) {
-                await protocolDeps.engine.cancelRun(
-                  row.run_id,
-                  row.response_reason ?? reason ?? "approved approval missing resume token",
-                );
+                await protocolDeps.engine.cancelRun(row.run_id, resolvedReason);
               }
             } else if (row.status === "denied") {
               if (isAgentToolExecution && resumeToken) {
                 await protocolDeps.engine.resumeRun(resumeToken);
               } else if (row.run_id) {
-                await protocolDeps.engine.cancelRun(
-                  row.run_id,
-                  row.response_reason ?? reason ?? "approval denied",
-                );
+                await protocolDeps.engine.cancelRun(row.run_id, resolvedReason);
               }
             }
           } catch (err) {
@@ -1418,6 +1415,7 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
     shouldRunEdge && agents && container.telegramBot && config.channels.pipelineEnabled
       ? new TelegramChannelProcessor({
           db: container.db,
+          sessionDal: container.sessionDal,
           agents,
           telegramBot: container.telegramBot,
           owner: instanceId,

@@ -80,17 +80,14 @@ describe("AgentRuntime (Memory v1 digest injection)", () => {
     );
 
     const memory = new MemoryV1Dal(container.db);
-    const item = await memory.create(
-      {
-        kind: "note",
-        title: "Food prefs",
-        body_md: "I like pizza.",
-        tags: ["prefs"],
-        sensitivity: "private",
-        provenance: { source_kind: "user", refs: [] },
-      },
-      "default",
-    );
+    const item = await memory.create({
+      kind: "note",
+      title: "Food prefs",
+      body_md: "I like pizza.",
+      tags: ["prefs"],
+      sensitivity: "private",
+      provenance: { source_kind: "user", refs: [] },
+    });
 
     const runtime = new AgentRuntime({
       container,

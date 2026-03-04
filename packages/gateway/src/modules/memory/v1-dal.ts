@@ -15,6 +15,7 @@ import type {
   MemoryTombstone,
 } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { irToPlainText, markdownToIr } from "../markdown/ir.js";
 
 interface RawMemoryItemRow {
@@ -245,7 +246,8 @@ function truncate(value: string, maxChars: number): string {
 }
 
 export function buildMemoryV1ItemQueryParts(params: {
-  agent: string;
+  tenantId: string;
+  agentId: string;
   filter?: MemoryItemFilter;
   limit?: number;
   cursor?: string;
@@ -253,8 +255,8 @@ export function buildMemoryV1ItemQueryParts(params: {
   extraValues?: readonly unknown[];
   alwaysJoinProvenance?: boolean;
 }): { from: string; where: string[]; values: unknown[]; limit: number } {
-  const where: string[] = ["i.agent_id = ?"];
-  const values: unknown[] = [params.agent];
+  const where: string[] = ["i.tenant_id = ?", "i.agent_id = ?"];
+  const values: unknown[] = [params.tenantId, params.agentId];
 
   const filter = params.filter;
 
@@ -285,11 +287,12 @@ export function buildMemoryV1ItemQueryParts(params: {
         `i.memory_item_id IN (
            SELECT t.memory_item_id
            FROM memory_item_tags t
-           WHERE t.agent_id = ?
+           WHERE t.tenant_id = ?
+             AND t.agent_id = ?
              AND t.tag IN (${tags.map(() => "?").join(", ")})
          )`,
       );
-      values.push(params.agent, ...tags);
+      values.push(params.tenantId, params.agentId, ...tags);
     }
   }
 
@@ -357,7 +360,9 @@ export function buildMemoryV1ItemQueryParts(params: {
   const from = joinProvenance
     ? `memory_items i
        JOIN memory_item_provenance p
-         ON p.agent_id = i.agent_id AND p.memory_item_id = i.memory_item_id`
+         ON p.tenant_id = i.tenant_id
+        AND p.agent_id = i.agent_id
+        AND p.memory_item_id = i.memory_item_id`
     : "memory_items i";
 
   return { from, where, values, limit };
@@ -514,22 +519,30 @@ function assertPatchCompatible(kind: MemoryItemKind, patch: MemoryItemPatch): vo
 export class MemoryV1Dal {
   constructor(private readonly db: SqlDb) {}
 
-  private normalizeAgentId(agentId?: string): string {
-    const trimmed = agentId?.trim();
-    return trimmed && trimmed.length > 0 ? trimmed : "default";
+  private normalizeScope(scope?: { tenantId?: string; agentId?: string } | string): {
+    tenantId: string;
+    agentId: string;
+  } {
+    const normalized = typeof scope === "string" ? { tenantId: undefined, agentId: scope } : scope;
+    const tenantId = normalized?.tenantId?.trim();
+    const agentId = normalized?.agentId?.trim();
+    return {
+      tenantId: tenantId && tenantId.length > 0 ? tenantId : DEFAULT_TENANT_ID,
+      agentId: agentId && agentId.length > 0 ? agentId : DEFAULT_AGENT_ID,
+    };
   }
 
   private async resolveSelectorIds(
     selector: MemoryForgetSelector,
-    agentId: string,
+    scope: { tenantId: string; agentId: string },
   ): Promise<string[]> {
     if (selector.kind === "id") {
       return [selector.memory_item_id];
     }
 
     if (selector.kind === "key") {
-      const where: string[] = ["agent_id = ?", "key = ?"];
-      const values: unknown[] = [agentId, selector.key];
+      const where: string[] = ["tenant_id = ?", "agent_id = ?", "key = ?"];
+      const values: unknown[] = [scope.tenantId, scope.agentId, selector.key];
 
       if (selector.item_kind) {
         where.push("kind = ?");
@@ -549,15 +562,15 @@ export class MemoryV1Dal {
       const rows = await this.db.all<{ memory_item_id: string }>(
         `SELECT DISTINCT memory_item_id
          FROM memory_item_tags
-         WHERE agent_id = ? AND tag = ?`,
-        [agentId, selector.tag],
+         WHERE tenant_id = ? AND agent_id = ? AND tag = ?`,
+        [scope.tenantId, scope.agentId, selector.tag],
       );
       return rows.map((r) => r.memory_item_id);
     }
 
     const provenance = selector.provenance;
-    const where: string[] = ["agent_id = ?"];
-    const values: unknown[] = [agentId];
+    const where: string[] = ["tenant_id = ?", "agent_id = ?"];
+    const values: unknown[] = [scope.tenantId, scope.agentId];
 
     if (provenance.source_kind !== undefined) {
       where.push("source_kind = ?");
@@ -594,15 +607,17 @@ export class MemoryV1Dal {
   }
 
   async list(params: {
+    tenantId?: string;
+    agentId?: string;
     filter?: MemoryItemFilter;
     limit?: number;
     cursor?: string;
-    agentId?: string;
   }): Promise<{ items: MemoryItem[]; next_cursor?: string }> {
-    const agent = this.normalizeAgentId(params.agentId);
+    const scope = this.normalizeScope(params);
 
     const { from, where, values, limit } = buildMemoryV1ItemQueryParts({
-      agent,
+      tenantId: scope.tenantId,
+      agentId: scope.agentId,
       filter: params.filter,
       limit: params.limit,
       cursor: params.cursor,
@@ -619,7 +634,7 @@ export class MemoryV1Dal {
 
     const items: MemoryItem[] = [];
     for (const row of rows) {
-      const item = await this.getById(row.memory_item_id, agent);
+      const item = await this.getById(row.memory_item_id, scope);
       if (item) items.push(item);
     }
 
@@ -633,16 +648,17 @@ export class MemoryV1Dal {
   }
 
   async forget(params: {
+    tenantId?: string;
+    agentId?: string;
     selectors: MemoryForgetSelector[];
     deleted_by: MemoryDeletedBy;
     reason?: string;
-    agentId?: string;
   }): Promise<{ deleted_count: number; tombstones: MemoryTombstone[] }> {
-    const agent = this.normalizeAgentId(params.agentId);
+    const scope = this.normalizeScope(params);
 
     const ids = new Set<string>();
     for (const selector of params.selectors) {
-      const matched = await this.resolveSelectorIds(selector, agent);
+      const matched = await this.resolveSelectorIds(selector, scope);
       for (const id of matched) ids.add(id);
     }
 
@@ -652,7 +668,7 @@ export class MemoryV1Dal {
         const tombstone = await this.delete(
           id,
           { deleted_by: params.deleted_by, reason: params.reason },
-          agent,
+          scope,
         );
         tombstones.push(tombstone);
       } catch (err) {
@@ -667,14 +683,15 @@ export class MemoryV1Dal {
   }
 
   async listTombstones(params: {
+    tenantId?: string;
+    agentId?: string;
     limit?: number;
     cursor?: string;
-    agentId?: string;
   }): Promise<{ tombstones: MemoryTombstone[]; next_cursor?: string }> {
-    const agent = this.normalizeAgentId(params.agentId);
+    const scope = this.normalizeScope(params);
 
-    const where: string[] = ["agent_id = ?"];
-    const values: unknown[] = [agent];
+    const where: string[] = ["tenant_id = ?", "agent_id = ?"];
+    const values: unknown[] = [scope.tenantId, scope.agentId];
 
     if (params.cursor) {
       const cursor = decodeCursor(params.cursor);
@@ -711,8 +728,11 @@ export class MemoryV1Dal {
     return { tombstones, next_cursor };
   }
 
-  async create(input: MemoryItemCreateInput, agentId?: string): Promise<MemoryItem> {
-    const agent = this.normalizeAgentId(agentId);
+  async create(
+    input: MemoryItemCreateInput,
+    scope?: { tenantId?: string; agentId?: string } | string,
+  ): Promise<MemoryItem> {
+    const normalizedScope = this.normalizeScope(scope);
     const nowIso = new Date().toISOString();
     const memoryItemId = randomUUID();
 
@@ -721,7 +741,8 @@ export class MemoryV1Dal {
 
     const baseParams = {
       memory_item_id: memoryItemId,
-      agent_id: agent,
+      tenant_id: normalizedScope.tenantId,
+      agent_id: normalizedScope.agentId,
       kind: input.kind,
       sensitivity,
       created_at: nowIso,
@@ -732,14 +753,15 @@ export class MemoryV1Dal {
         case "fact": {
           await tx.run(
             `INSERT INTO memory_items (
-               memory_item_id, agent_id, kind, sensitivity,
+               tenant_id, agent_id, memory_item_id, kind, sensitivity,
                key, value_json, observed_at, confidence,
                created_at, updated_at
              )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
             [
-              baseParams.memory_item_id,
+              baseParams.tenant_id,
               baseParams.agent_id,
+              baseParams.memory_item_id,
               baseParams.kind,
               baseParams.sensitivity,
               input.key,
@@ -754,14 +776,15 @@ export class MemoryV1Dal {
         case "note": {
           await tx.run(
             `INSERT INTO memory_items (
-               memory_item_id, agent_id, kind, sensitivity,
+               tenant_id, agent_id, memory_item_id, kind, sensitivity,
                title, body_md,
                created_at, updated_at
              )
-             VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
             [
-              baseParams.memory_item_id,
+              baseParams.tenant_id,
               baseParams.agent_id,
+              baseParams.memory_item_id,
               baseParams.kind,
               baseParams.sensitivity,
               input.title ?? null,
@@ -774,14 +797,15 @@ export class MemoryV1Dal {
         case "procedure": {
           await tx.run(
             `INSERT INTO memory_items (
-               memory_item_id, agent_id, kind, sensitivity,
+               tenant_id, agent_id, memory_item_id, kind, sensitivity,
                title, body_md, confidence,
                created_at, updated_at
              )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
             [
-              baseParams.memory_item_id,
+              baseParams.tenant_id,
               baseParams.agent_id,
+              baseParams.memory_item_id,
               baseParams.kind,
               baseParams.sensitivity,
               input.title ?? null,
@@ -795,14 +819,15 @@ export class MemoryV1Dal {
         case "episode": {
           await tx.run(
             `INSERT INTO memory_items (
-               memory_item_id, agent_id, kind, sensitivity,
+               tenant_id, agent_id, memory_item_id, kind, sensitivity,
                occurred_at, summary_md,
                created_at, updated_at
              )
-             VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
             [
-              baseParams.memory_item_id,
+              baseParams.tenant_id,
               baseParams.agent_id,
+              baseParams.memory_item_id,
               baseParams.kind,
               baseParams.sensitivity,
               input.occurred_at,
@@ -816,8 +841,9 @@ export class MemoryV1Dal {
 
       await tx.run(
         `INSERT INTO memory_item_provenance (
-           memory_item_id,
+           tenant_id,
            agent_id,
+           memory_item_id,
            source_kind,
            channel,
            thread_id,
@@ -827,10 +853,11 @@ export class MemoryV1Dal {
            refs_json,
            metadata_json
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          baseParams.tenant_id,
+          baseParams.agent_id,
           memoryItemId,
-          agent,
           input.provenance.source_kind,
           input.provenance.channel ?? null,
           input.provenance.thread_id ?? null,
@@ -846,35 +873,38 @@ export class MemoryV1Dal {
 
       for (const tag of tags) {
         await tx.run(
-          `INSERT INTO memory_item_tags (agent_id, memory_item_id, tag)
-           VALUES (?, ?, ?)
-           ON CONFLICT(agent_id, memory_item_id, tag) DO NOTHING`,
-          [agent, memoryItemId, tag],
+          `INSERT INTO memory_item_tags (tenant_id, agent_id, memory_item_id, tag)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(tenant_id, agent_id, memory_item_id, tag) DO NOTHING`,
+          [baseParams.tenant_id, baseParams.agent_id, memoryItemId, tag],
         );
       }
     });
 
-    const created = await this.getById(memoryItemId, agent);
+    const created = await this.getById(memoryItemId, normalizedScope);
     if (!created) throw new Error("failed to read created memory item");
     return created;
   }
 
-  async getById(memoryItemId: string, agentId?: string): Promise<MemoryItem | undefined> {
-    const agent = this.normalizeAgentId(agentId);
+  async getById(
+    memoryItemId: string,
+    scope?: { tenantId?: string; agentId?: string } | string,
+  ): Promise<MemoryItem | undefined> {
+    const normalizedScope = this.normalizeScope(scope);
 
     const item = await this.db.get<RawMemoryItemRow>(
       `SELECT *
        FROM memory_items
-       WHERE agent_id = ? AND memory_item_id = ?`,
-      [agent, memoryItemId],
+       WHERE tenant_id = ? AND agent_id = ? AND memory_item_id = ?`,
+      [normalizedScope.tenantId, normalizedScope.agentId, memoryItemId],
     );
     if (!item) return undefined;
 
     const provenanceRow = await this.db.get<RawProvenanceRow>(
       `SELECT *
        FROM memory_item_provenance
-       WHERE agent_id = ? AND memory_item_id = ?`,
-      [agent, memoryItemId],
+       WHERE tenant_id = ? AND agent_id = ? AND memory_item_id = ?`,
+      [normalizedScope.tenantId, normalizedScope.agentId, memoryItemId],
     );
     if (!provenanceRow) {
       throw new Error(`missing provenance row for memory_item_id=${memoryItemId}`);
@@ -883,9 +913,9 @@ export class MemoryV1Dal {
     const tagRows = await this.db.all<RawTagRow>(
       `SELECT tag
        FROM memory_item_tags
-       WHERE agent_id = ? AND memory_item_id = ?
+       WHERE tenant_id = ? AND agent_id = ? AND memory_item_id = ?
        ORDER BY tag ASC`,
-      [agent, memoryItemId],
+      [normalizedScope.tenantId, normalizedScope.agentId, memoryItemId],
     );
 
     const provenance: MemoryProvenance = {
@@ -970,17 +1000,17 @@ export class MemoryV1Dal {
   async update(
     memoryItemId: string,
     patch: MemoryItemPatch,
-    agentId?: string,
+    scope?: { tenantId?: string; agentId?: string } | string,
   ): Promise<MemoryItem> {
-    const agent = this.normalizeAgentId(agentId);
+    const normalizedScope = this.normalizeScope(scope);
     const nowIso = new Date().toISOString();
 
     await this.db.transaction(async (tx) => {
       const existing = await tx.get<Pick<RawMemoryItemRow, "kind">>(
         `SELECT kind
          FROM memory_items
-         WHERE agent_id = ? AND memory_item_id = ?`,
-        [agent, memoryItemId],
+         WHERE tenant_id = ? AND agent_id = ? AND memory_item_id = ?`,
+        [normalizedScope.tenantId, normalizedScope.agentId, memoryItemId],
       );
       if (!existing) throw new Error("memory item not found");
 
@@ -1053,11 +1083,11 @@ export class MemoryV1Dal {
         }
       }
 
-      params.push(agent, memoryItemId);
+      params.push(normalizedScope.tenantId, normalizedScope.agentId, memoryItemId);
       await tx.run(
         `UPDATE memory_items
          SET ${updates.join(", ")}
-         WHERE agent_id = ? AND memory_item_id = ?`,
+         WHERE tenant_id = ? AND agent_id = ? AND memory_item_id = ?`,
         params,
       );
 
@@ -1069,10 +1099,10 @@ export class MemoryV1Dal {
                thread_id = ?,
                session_id = ?,
                message_id = ?,
-               tool_call_id = ?,
-               refs_json = ?,
-               metadata_json = ?
-           WHERE agent_id = ? AND memory_item_id = ?`,
+           tool_call_id = ?,
+           refs_json = ?,
+           metadata_json = ?
+           WHERE tenant_id = ? AND agent_id = ? AND memory_item_id = ?`,
           [
             patch.provenance.source_kind,
             patch.provenance.channel ?? null,
@@ -1084,7 +1114,8 @@ export class MemoryV1Dal {
             patch.provenance.metadata !== undefined
               ? JSON.stringify(patch.provenance.metadata)
               : null,
-            agent,
+            normalizedScope.tenantId,
+            normalizedScope.agentId,
             memoryItemId,
           ],
         );
@@ -1094,27 +1125,30 @@ export class MemoryV1Dal {
         const tags = uniqSortedStrings(patch.tags);
         await tx.run(
           `DELETE FROM memory_item_tags
-           WHERE agent_id = ? AND memory_item_id = ?`,
-          [agent, memoryItemId],
+           WHERE tenant_id = ? AND agent_id = ? AND memory_item_id = ?`,
+          [normalizedScope.tenantId, normalizedScope.agentId, memoryItemId],
         );
         for (const tag of tags) {
           await tx.run(
-            `INSERT INTO memory_item_tags (agent_id, memory_item_id, tag)
-             VALUES (?, ?, ?)
-             ON CONFLICT(agent_id, memory_item_id, tag) DO NOTHING`,
-            [agent, memoryItemId, tag],
+            `INSERT INTO memory_item_tags (tenant_id, agent_id, memory_item_id, tag)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(tenant_id, agent_id, memory_item_id, tag) DO NOTHING`,
+            [normalizedScope.tenantId, normalizedScope.agentId, memoryItemId, tag],
           );
         }
       }
     });
 
-    const updated = await this.getById(memoryItemId, agent);
+    const updated = await this.getById(memoryItemId, normalizedScope);
     if (!updated) throw new Error("failed to read updated memory item");
     return updated;
   }
 
-  async search(input: MemorySearchRequest, agentId?: string): Promise<MemorySearchResponse> {
-    const agent = this.normalizeAgentId(agentId);
+  async search(
+    input: MemorySearchRequest,
+    scope?: { tenantId?: string; agentId?: string } | string,
+  ): Promise<MemorySearchResponse> {
+    const normalizedScope = this.normalizeScope(scope);
 
     const query = input.query.trim();
     if (query.length === 0) {
@@ -1218,7 +1252,8 @@ export class MemoryV1Dal {
     }
 
     const queryParts = buildMemoryV1ItemQueryParts({
-      agent,
+      tenantId: normalizedScope.tenantId,
+      agentId: normalizedScope.agentId,
       filter: normalizedFilter,
       alwaysJoinProvenance: true,
     });
@@ -1348,23 +1383,23 @@ export class MemoryV1Dal {
   async delete(
     memoryItemId: string,
     params: { deleted_by: MemoryDeletedBy; reason?: string },
-    agentId?: string,
+    scope?: { tenantId?: string; agentId?: string } | string,
   ): Promise<MemoryTombstone> {
-    const agent = this.normalizeAgentId(agentId);
+    const normalizedScope = this.normalizeScope(scope);
     const nowIso = new Date().toISOString();
 
     return await this.db.transaction(async (tx) => {
       const existingTombstone = await tx.get<RawTombstoneRow>(
         `SELECT *
          FROM memory_tombstones
-         WHERE agent_id = ? AND memory_item_id = ?`,
-        [agent, memoryItemId],
+         WHERE tenant_id = ? AND agent_id = ? AND memory_item_id = ?`,
+        [normalizedScope.tenantId, normalizedScope.agentId, memoryItemId],
       );
       if (existingTombstone) {
         await tx.run(
           `DELETE FROM memory_items
-           WHERE agent_id = ? AND memory_item_id = ?`,
-          [agent, memoryItemId],
+           WHERE tenant_id = ? AND agent_id = ? AND memory_item_id = ?`,
+          [normalizedScope.tenantId, normalizedScope.agentId, memoryItemId],
         );
         return {
           v: 1,
@@ -1379,29 +1414,43 @@ export class MemoryV1Dal {
       const exists = await tx.get<{ memory_item_id: string }>(
         `SELECT memory_item_id
          FROM memory_items
-         WHERE agent_id = ? AND memory_item_id = ?`,
-        [agent, memoryItemId],
+         WHERE tenant_id = ? AND agent_id = ? AND memory_item_id = ?`,
+        [normalizedScope.tenantId, normalizedScope.agentId, memoryItemId],
       );
       if (!exists) throw new Error("memory item not found");
 
       await tx.run(
-        `INSERT INTO memory_tombstones (memory_item_id, agent_id, deleted_at, deleted_by, reason)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(memory_item_id) DO NOTHING`,
-        [memoryItemId, agent, nowIso, params.deleted_by, params.reason ?? null],
+        `INSERT INTO memory_tombstones (
+           tenant_id,
+           agent_id,
+           memory_item_id,
+           deleted_at,
+           deleted_by,
+           reason
+         )
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(tenant_id, agent_id, memory_item_id) DO NOTHING`,
+        [
+          normalizedScope.tenantId,
+          normalizedScope.agentId,
+          memoryItemId,
+          nowIso,
+          params.deleted_by,
+          params.reason ?? null,
+        ],
       );
 
       await tx.run(
         `DELETE FROM memory_items
-         WHERE agent_id = ? AND memory_item_id = ?`,
-        [agent, memoryItemId],
+         WHERE tenant_id = ? AND agent_id = ? AND memory_item_id = ?`,
+        [normalizedScope.tenantId, normalizedScope.agentId, memoryItemId],
       );
 
       const tombstone = await tx.get<RawTombstoneRow>(
         `SELECT *
          FROM memory_tombstones
-         WHERE agent_id = ? AND memory_item_id = ?`,
-        [agent, memoryItemId],
+         WHERE tenant_id = ? AND agent_id = ? AND memory_item_id = ?`,
+        [normalizedScope.tenantId, normalizedScope.agentId, memoryItemId],
       );
       if (!tombstone) throw new Error("failed to read created tombstone");
 
@@ -1418,14 +1467,14 @@ export class MemoryV1Dal {
 
   async getTombstoneById(
     memoryItemId: string,
-    agentId?: string,
+    scope?: { tenantId?: string; agentId?: string } | string,
   ): Promise<MemoryTombstone | undefined> {
-    const agent = this.normalizeAgentId(agentId);
+    const normalizedScope = this.normalizeScope(scope);
     const tombstone = await this.db.get<RawTombstoneRow>(
       `SELECT *
        FROM memory_tombstones
-       WHERE agent_id = ? AND memory_item_id = ?`,
-      [agent, memoryItemId],
+       WHERE tenant_id = ? AND agent_id = ? AND memory_item_id = ?`,
+      [normalizedScope.tenantId, normalizedScope.agentId, memoryItemId],
     );
     if (!tombstone) return undefined;
 
@@ -1440,10 +1489,11 @@ export class MemoryV1Dal {
   }
 
   async consolidateToBudgets(params: {
-    budgets: AgentConfig["memory"]["v1"]["budgets"];
+    tenantId?: string;
     agentId?: string;
+    budgets: AgentConfig["memory"]["v1"]["budgets"];
   }): Promise<MemoryV1ConsolidationResult> {
-    const agent = this.normalizeAgentId(params.agentId);
+    const normalizedScope = this.normalizeScope(params);
     const limits = normalizeBudgets(params.budgets);
 
     const loadRows = async (): Promise<RawBudgetRow[]> =>
@@ -1463,8 +1513,8 @@ export class MemoryV1Dal {
 	           created_at,
 	           updated_at
 	         FROM memory_items
-	         WHERE agent_id = ?`,
-        [agent],
+	         WHERE tenant_id = ? AND agent_id = ?`,
+        [normalizedScope.tenantId, normalizedScope.agentId],
       );
 
     const beforeRows = await loadRows();
@@ -1528,7 +1578,7 @@ export class MemoryV1Dal {
           const tombstone = await this.delete(
             id,
             { deleted_by: "consolidation", reason: "dedupe/merge" },
-            agent,
+            normalizedScope,
           );
           deletedTombstones.push(tombstone);
         } catch (err) {
@@ -1625,7 +1675,7 @@ export class MemoryV1Dal {
                 metadata: { kind: "episodic_consolidation", episode_count: selected.length },
               },
             },
-            agent,
+            normalizedScope,
           );
           createdItems.push(note);
 
@@ -1634,7 +1684,7 @@ export class MemoryV1Dal {
               const tombstone = await this.delete(
                 episode.memory_item_id,
                 { deleted_by: "consolidation", reason: "episodic consolidation" },
-                agent,
+                normalizedScope,
               );
               deletedTombstones.push(tombstone);
             } catch (err) {
@@ -1661,14 +1711,18 @@ export class MemoryV1Dal {
 
     // Stage 3: Drop derived indexes (embeddings) — expendable.
     const deletedLinks = (
-      await this.db.run(`DELETE FROM memory_item_embeddings WHERE agent_id = ?`, [agent])
+      await this.db.run(`DELETE FROM memory_item_embeddings WHERE tenant_id = ? AND agent_id = ?`, [
+        normalizedScope.tenantId,
+        normalizedScope.agentId,
+      ])
     ).changes;
     const deletedVectors = (
       await this.db.run(
         `DELETE FROM vector_metadata
-	         WHERE agent_id = ?
+	         WHERE tenant_id = ?
+	           AND agent_id = ?
 	           AND label LIKE ?`,
-        [agent, "memory_item:%"],
+        [normalizedScope.tenantId, normalizedScope.agentId, "memory_item:%"],
       )
     ).changes;
 
@@ -1737,7 +1791,7 @@ export class MemoryV1Dal {
         const tombstone = await this.delete(
           victim.memory_item_id,
           { deleted_by: "budget", reason: "memory budget exceeded" },
-          agent,
+          normalizedScope,
         );
         deletedTombstones.push(tombstone);
       } catch (err) {

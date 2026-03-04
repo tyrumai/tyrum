@@ -165,18 +165,17 @@ for (;;) {
       throw new Error(`[smoke] run ${runId} paused unexpectedly: reason=${pausedReason ?? "<none>"}`);
     }
 
-    const approvalRes = await client.query(
-      "SELECT id FROM approvals WHERE run_id = $1 AND status = $2 AND kind = $3 ORDER BY id ASC LIMIT 1",
-      [runId, "pending", "policy"],
-    );
-    const approvalIdRaw = approvalRes.rows[0]?.id;
-    const approvalId = approvalIdRaw !== undefined && approvalIdRaw !== null ? String(approvalIdRaw) : "";
-    if (!approvalId) {
-      throw new Error(`[smoke] run ${runId} paused for policy but no pending approval found`);
-    }
+	    const approvalRes = await client.query(
+	      "SELECT approval_id FROM approvals WHERE run_id = $1 AND status = $2 AND kind = $3 ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+	      [runId, "pending", "policy"],
+	    );
+	    const approvalId = approvalRes.rows[0]?.approval_id;
+	    if (typeof approvalId !== "string" || approvalId.length === 0) {
+	      throw new Error(`[smoke] run ${runId} paused for policy but no pending approval found`);
+	    }
 
-    const approveRes = await fetch(
-      `http://tyrum-edge:8788/approvals/${approvalId}/respond`,
+	    const approveRes = await fetch(
+	      `http://tyrum-edge:8788/approvals/${approvalId}/respond`,
       {
         method: "POST",
         headers: {

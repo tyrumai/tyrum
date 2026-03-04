@@ -1,78 +1,57 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdtempSync, rmSync } from "node:fs";
-import { createSecretProviderFromEnv } from "../../src/modules/secret/create-secret-provider.js";
-import { EnvSecretProvider, FileSecretProvider } from "../../src/modules/secret/provider.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { createDbSecretProvider } from "../../src/modules/secret/create-secret-provider.js";
 
-const ENV_KEYS = ["TYRUM_SECRET_PROVIDER", "KUBERNETES_SERVICE_HOST"] as const;
-
-function snapshotEnv(): Record<(typeof ENV_KEYS)[number], string | undefined> {
-  const snapshot = {} as Record<(typeof ENV_KEYS)[number], string | undefined>;
-  for (const key of ENV_KEYS) snapshot[key] = process.env[key];
-  return snapshot;
-}
-
-function restoreEnv(snapshot: Record<(typeof ENV_KEYS)[number], string | undefined>): void {
-  for (const key of ENV_KEYS) {
-    const value = snapshot[key];
-    if (value === undefined) {
-      delete process.env[key];
-    } else {
-      process.env[key] = value;
-    }
-  }
-}
-
-describe("createSecretProviderFromEnv", () => {
-  let homeDir: string;
-  let envSnapshot: Record<(typeof ENV_KEYS)[number], string | undefined>;
+describe("createDbSecretProvider", () => {
+  let tempDir: string;
+  let dbPath: string;
+  let tyrumHome: string;
+  let envSnapshot: Record<string, string | undefined>;
 
   beforeEach(() => {
-    envSnapshot = snapshotEnv();
-    homeDir = mkdtempSync(join(tmpdir(), "tyrum-secret-provider-factory-"));
+    envSnapshot = {
+      TYRUM_SECRETS_MASTER_KEY_PATH: process.env["TYRUM_SECRETS_MASTER_KEY_PATH"],
+    };
+    delete process.env["TYRUM_SECRETS_MASTER_KEY_PATH"];
+
+    tempDir = mkdtempSync(join(tmpdir(), "tyrum-secret-provider-factory-"));
+    dbPath = join(tempDir, "gateway.db");
+    tyrumHome = join(tempDir, "home");
   });
 
   afterEach(() => {
-    restoreEnv(envSnapshot);
-    rmSync(homeDir, { recursive: true, force: true });
+    if (envSnapshot.TYRUM_SECRETS_MASTER_KEY_PATH === undefined) {
+      delete process.env["TYRUM_SECRETS_MASTER_KEY_PATH"];
+    } else {
+      process.env["TYRUM_SECRETS_MASTER_KEY_PATH"] = envSnapshot.TYRUM_SECRETS_MASTER_KEY_PATH;
+    }
+    rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("defaults to file provider outside Kubernetes", async () => {
-    delete process.env["TYRUM_SECRET_PROVIDER"];
-    delete process.env["KUBERNETES_SERVICE_HOST"];
+  it("honors TYRUM_SECRETS_MASTER_KEY_PATH", async () => {
+    const overridePath = join(tempDir, "override.master.key");
+    process.env["TYRUM_SECRETS_MASTER_KEY_PATH"] = overridePath;
 
-    const provider = await createSecretProviderFromEnv(homeDir, "test-admin-token");
-    expect(provider).toBeInstanceOf(FileSecretProvider);
+    const db = openTestSqliteDb(dbPath);
+    try {
+      await createDbSecretProvider({ db, dbPath, tyrumHome });
+      expect(existsSync(overridePath)).toBe(true);
+      expect(existsSync(`${dbPath}.secrets.key`)).toBe(false);
+    } finally {
+      await db.close();
+    }
   });
 
-  it("defaults to env provider inside Kubernetes", async () => {
-    delete process.env["TYRUM_SECRET_PROVIDER"];
-    process.env["KUBERNETES_SERVICE_HOST"] = "1";
-
-    const provider = await createSecretProviderFromEnv(homeDir, undefined);
-    expect(provider).toBeInstanceOf(EnvSecretProvider);
-  });
-
-  it("honors TYRUM_SECRET_PROVIDER=env", async () => {
-    process.env["TYRUM_SECRET_PROVIDER"] = "env";
-    delete process.env["KUBERNETES_SERVICE_HOST"];
-
-    const provider = await createSecretProviderFromEnv(homeDir, undefined);
-    expect(provider).toBeInstanceOf(EnvSecretProvider);
-  });
-
-  it("throws when selecting file provider without a non-empty token", async () => {
-    process.env["TYRUM_SECRET_PROVIDER"] = "file";
-    await expect(() => createSecretProviderFromEnv(homeDir, " ")).rejects.toThrow(
-      /non-empty admin token/i,
-    );
-  });
-
-  it("throws when selecting keychain provider outside Electron", async () => {
-    process.env["TYRUM_SECRET_PROVIDER"] = "keychain";
-    await expect(() => createSecretProviderFromEnv(homeDir, "token")).rejects.toThrow(
-      /safeStorage/i,
-    );
+  it("does not create a key file for :memory: databases by default", async () => {
+    const db = openTestSqliteDb();
+    try {
+      await createDbSecretProvider({ db, dbPath: ":memory:", tyrumHome });
+      expect(existsSync(join(tyrumHome, "secrets.master.key"))).toBe(false);
+    } finally {
+      await db.close();
+    }
   });
 });

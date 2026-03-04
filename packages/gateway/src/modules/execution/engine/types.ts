@@ -25,10 +25,11 @@ export interface StepResult {
 }
 
 export interface StepExecutionContext {
+  tenantId: string;
   runId: string;
   stepId: string;
   attemptId: string;
-  approvalId: number | null;
+  approvalId: string | null;
   key: string;
   lane: string;
   workspaceId: string;

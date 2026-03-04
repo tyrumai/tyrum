@@ -1,10 +1,16 @@
 import { z } from "zod";
-import { DateTimeSchema } from "./common.js";
+import { DateTimeSchema, UuidSchema } from "./common.js";
 import { Lane, TyrumKey } from "./keys.js";
 import { PolicyOverride } from "./policy-bundle.js";
 
 export const ApprovalStatus = z.enum(["pending", "approved", "denied", "expired", "cancelled"]);
 export type ApprovalStatus = z.infer<typeof ApprovalStatus>;
+
+export const ApprovalId = UuidSchema;
+export type ApprovalId = z.infer<typeof ApprovalId>;
+
+export const ApprovalKey = z.string().trim().min(1);
+export type ApprovalKey = z.infer<typeof ApprovalKey>;
 
 export const ApprovalKind = z.enum([
   "spend",
@@ -20,11 +26,13 @@ export type ApprovalKind = z.infer<typeof ApprovalKind>;
 
 export const ApprovalScope = z
   .object({
-    agent_id: z.string().trim().min(1).optional(),
     key: TyrumKey.optional(),
     lane: Lane.optional(),
-    run_id: z.string().trim().min(1).optional(),
-    step_index: z.number().int().nonnegative().optional(),
+    run_id: UuidSchema.optional(),
+    step_id: UuidSchema.optional(),
+    attempt_id: UuidSchema.optional(),
+    work_item_id: UuidSchema.optional(),
+    work_item_task_id: UuidSchema.optional(),
   })
   .strict();
 export type ApprovalScope = z.infer<typeof ApprovalScope>;
@@ -44,7 +52,8 @@ export type ApprovalResolution = z.infer<typeof ApprovalResolution>;
 
 export const Approval = z
   .object({
-    approval_id: z.number().int().positive(),
+    approval_id: ApprovalId,
+    approval_key: ApprovalKey,
     kind: ApprovalKind,
     status: ApprovalStatus,
     prompt: z.string().trim().min(1),
@@ -97,7 +106,7 @@ export type ApprovalListResponse = z.infer<typeof ApprovalListResponse>;
 
 export const ApprovalResolveRequest = z
   .object({
-    approval_id: z.number().int().positive(),
+    approval_id: ApprovalId,
     decision: ApprovalDecision,
     reason: z.string().optional(),
     mode: z.enum(["once", "always"]).optional(),

@@ -7,9 +7,19 @@ import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
 import { enqueueWorkItemStateChangeNotification } from "../../src/modules/workboard/notifications.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import type { PolicyService } from "../../src/modules/policy/service.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 describe("Workboard completion notifications", () => {
   let db: SqliteDb | undefined;
+  const DEFAULT_SCOPE = {
+    tenant_id: DEFAULT_TENANT_ID,
+    agent_id: DEFAULT_AGENT_ID,
+    workspace_id: DEFAULT_WORKSPACE_ID,
+  } as const;
 
   afterEach(async () => {
     await db?.close();
@@ -21,11 +31,11 @@ describe("Workboard completion notifications", () => {
     const workboard = new WorkboardDal(db);
     const inbox = new ChannelInboxDal(db);
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = DEFAULT_SCOPE;
     const sessionKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: sessionKey,
@@ -100,7 +110,7 @@ describe("Workboard completion notifications", () => {
     const outbox = await db.get<{ source: string; thread_id: string }>(
       "SELECT source, thread_id FROM channel_outbox LIMIT 1",
     );
-    expect(outbox).toMatchObject({ source: "telegram", thread_id: "chat-1" });
+    expect(outbox).toMatchObject({ source: "telegram:default", thread_id: "chat-1" });
   });
 
   it("skips channel notifications when send_policy override is off", async () => {
@@ -108,17 +118,17 @@ describe("Workboard completion notifications", () => {
     const workboard = new WorkboardDal(db);
     const inbox = new ChannelInboxDal(db);
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = DEFAULT_SCOPE;
     const sessionKey = "agent:default:telegram:default:dm:chat-1";
 
     await db.run(
-      `INSERT INTO session_send_policy_overrides (key, send_policy, updated_at_ms)
-       VALUES (?, ?, ?)`,
-      [sessionKey, "off", 1_000],
+      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [scope.tenant_id, sessionKey, "off", 1_000],
     );
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: sessionKey,
@@ -187,11 +197,11 @@ describe("Workboard completion notifications", () => {
     const inbox = new ChannelInboxDal(db);
     const approvals = new ApprovalDal(db);
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = DEFAULT_SCOPE;
     const sessionKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: sessionKey,
@@ -260,7 +270,7 @@ describe("Workboard completion notifications", () => {
     });
     expect(res.enqueued).toBe(true);
 
-    const outboxRow = await db.get<{ approval_id: number | null }>(
+    const outboxRow = await db.get<{ approval_id: string | null }>(
       "SELECT approval_id FROM channel_outbox LIMIT 1",
     );
     expect(outboxRow?.approval_id).not.toBeNull();
@@ -275,11 +285,11 @@ describe("Workboard completion notifications", () => {
     const inbox = new ChannelInboxDal(db);
     const approvals = new ApprovalDal(db);
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = DEFAULT_SCOPE;
     const sessionKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: sessionKey,
@@ -368,11 +378,11 @@ describe("Workboard completion notifications", () => {
     const workboard = new WorkboardDal(db);
     const inbox = new ChannelInboxDal(db);
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = DEFAULT_SCOPE;
     const sessionKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: sessionKey,
@@ -451,11 +461,11 @@ describe("Workboard completion notifications", () => {
     const workboard = new WorkboardDal(db);
     const inbox = new ChannelInboxDal(db);
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = DEFAULT_SCOPE;
     const sessionKey = "agent:default:telegram:default:dm:chat-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: sessionKey,

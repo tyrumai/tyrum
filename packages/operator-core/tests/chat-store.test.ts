@@ -65,7 +65,7 @@ function createFakeWs() {
 function createFakeHttp() {
   return {
     agentList: {
-      get: vi.fn(async () => ({ agents: [{ agent_id: "default" }] })),
+      get: vi.fn(async () => ({ agents: [{ agent_key: "default" }] })),
     },
   };
 }

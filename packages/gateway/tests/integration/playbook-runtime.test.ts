@@ -385,13 +385,22 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     const originalRespond = container.approvalDal.respond.bind(container.approvalDal);
     const respondSpy = vi
       .spyOn(container.approvalDal, "respond")
-      .mockImplementation(async (id, approved, reason) => {
+      .mockImplementation(async (input) => {
         const nowIso = new Date().toISOString();
         await container.db.run(
-          "UPDATE approvals SET status = 'approved', responded_at = ?, response_reason = ? WHERE id = ?",
-          [nowIso, "approved concurrently", id],
+          "UPDATE approvals SET status = 'approved', resolved_at = ?, resolution_json = ? WHERE tenant_id = ? AND approval_id = ?",
+          [
+            nowIso,
+            JSON.stringify({
+              decision: "approved",
+              resolved_at: nowIso,
+              reason: "approved concurrently",
+            }),
+            input.tenantId,
+            input.approvalId,
+          ],
         );
-        return await originalRespond(id, approved, reason);
+        return await originalRespond(input);
       });
 
     const resumeRes = await app.request("/playbooks/runtime", {

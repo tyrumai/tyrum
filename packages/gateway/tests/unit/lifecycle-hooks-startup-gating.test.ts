@@ -55,8 +55,7 @@ vi.mock("../../src/modules/auth/token-store.js", () => {
 
 vi.mock("../../src/modules/secret/create-secret-provider.js", () => {
   return {
-    resolveSecretProviderKind: () => "env",
-    createSecretProviderFromEnv: async () => ({}),
+    createDbSecretProvider: async () => ({}),
   };
 });
 

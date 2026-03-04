@@ -134,7 +134,7 @@ describe("ArtifactStore", () => {
     expect(got!.ref.kind).toBe("log");
   });
 
-  it("s3 store: get falls back to legacy keys when manifest is missing", async () => {
+  it("s3 store: get returns null when manifest is missing", async () => {
     const send = vi.fn(async (cmd: unknown) => {
       if (cmd instanceof GetObjectCommand) {
         const key = cmd.input.Key ?? "";
@@ -142,25 +142,6 @@ describe("ArtifactStore", () => {
           const err = Object.assign(new Error("not found"), { name: "NoSuchKey" });
           throw err;
         }
-        if (key.endsWith(".json")) {
-          const meta = JSON.stringify({
-            artifact_id: "550e8400-e29b-41d4-a716-446655440000",
-            uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
-            kind: "log",
-            created_at: "2026-02-19T12:00:00.000Z",
-            labels: [],
-          });
-          return {
-            Body: {
-              transformToByteArray: async () => Buffer.from(meta, "utf8"),
-            },
-          };
-        }
-        return {
-          Body: {
-            transformToByteArray: async () => Buffer.from("legacy-body", "utf8"),
-          },
-        };
       }
       throw new Error("unexpected command");
     });
@@ -172,31 +153,13 @@ describe("ArtifactStore", () => {
     );
 
     const got = await store.get("550e8400-e29b-41d4-a716-446655440000");
-    expect(got).not.toBeNull();
-    expect(got!.body.toString("utf8")).toBe("legacy-body");
-    expect(got!.ref.kind).toBe("log");
+    expect(got).toBeNull();
 
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
         input: expect.objectContaining({
           Bucket: "bucket",
           Key: "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json",
-        }),
-      }),
-    );
-    expect(send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        input: expect.objectContaining({
-          Bucket: "bucket",
-          Key: "artifacts/55/550e8400-e29b-41d4-a716-446655440000.json",
-        }),
-      }),
-    );
-    expect(send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        input: expect.objectContaining({
-          Bucket: "bucket",
-          Key: "artifacts/55/550e8400-e29b-41d4-a716-446655440000.bin",
         }),
       }),
     );
@@ -390,10 +353,9 @@ describe("ArtifactStore", () => {
     });
   });
 
-  it("s3 store: getSignedUrl falls back to legacy key when manifest is malformed", async () => {
+  it("s3 store: getSignedUrl throws when manifest is malformed", async () => {
     const artifactId = "550e8400-e29b-41d4-a716-446655440000";
     const manifestKey = "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json";
-    const legacyKey = "artifacts/55/550e8400-e29b-41d4-a716-446655440000.bin";
 
     const send = vi.fn(async (cmd: unknown) => {
       if (cmd instanceof GetObjectCommand) {
@@ -407,37 +369,24 @@ describe("ArtifactStore", () => {
         }
       }
 
-      if (cmd instanceof HeadObjectCommand) {
-        const key = cmd.input.Key ?? "";
-        if (key === legacyKey) return {};
-      }
-
       throw new Error("unexpected command");
     });
-
-    const presignGetObject = vi.fn(async () => "https://objects.example.test/legacy?sig=test");
 
     const store = new S3ArtifactStore(
       { send } as unknown as import("@aws-sdk/client-s3").S3Client,
       "bucket",
       "artifacts",
       undefined,
-      presignGetObject,
     );
 
-    const url = await store.getSignedUrl(artifactId, { expiresInSeconds: 42 });
-    expect(url).toBe("https://objects.example.test/legacy?sig=test");
-    expect(presignGetObject).toHaveBeenCalledWith({
-      bucket: "bucket",
-      key: legacyKey,
-      expiresInSeconds: 42,
-    });
+    await expect(store.getSignedUrl(artifactId, { expiresInSeconds: 42 })).rejects.toThrow(
+      "invalid artifact manifest",
+    );
   });
 
-  it("s3 store: getSignedUrl propagates presign errors in legacy mode without retrying", async () => {
+  it("s3 store: getSignedUrl returns null when manifest is missing", async () => {
     const artifactId = "550e8400-e29b-41d4-a716-446655440000";
     const manifestKey = "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json";
-    const legacyKey = "artifacts/55/550e8400-e29b-41d4-a716-446655440000.bin";
 
     const send = vi.fn(async (cmd: unknown) => {
       if (cmd instanceof GetObjectCommand) {
@@ -448,17 +397,10 @@ describe("ArtifactStore", () => {
         }
       }
 
-      if (cmd instanceof HeadObjectCommand) {
-        const key = cmd.input.Key ?? "";
-        if (key === legacyKey) return {};
-      }
-
       throw new Error("unexpected command");
     });
 
-    const presignGetObject = vi.fn(async () => {
-      throw new Error("presign-failed");
-    });
+    const presignGetObject = vi.fn(async () => "https://objects.example.test/signed?sig=test");
 
     const store = new S3ArtifactStore(
       { send } as unknown as import("@aws-sdk/client-s3").S3Client,
@@ -468,7 +410,8 @@ describe("ArtifactStore", () => {
       presignGetObject,
     );
 
-    await expect(store.getSignedUrl(artifactId)).rejects.toThrow("presign-failed");
-    expect(presignGetObject).toHaveBeenCalledTimes(1);
+    const url = await store.getSignedUrl(artifactId);
+    expect(url).toBeNull();
+    expect(presignGetObject).not.toHaveBeenCalled();
   });
 });

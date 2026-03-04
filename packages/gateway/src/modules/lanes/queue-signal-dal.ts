@@ -3,6 +3,7 @@ import type { SqlDb } from "../../statestore/types.js";
 export type LaneQueueSignalKind = "steer" | "interrupt";
 
 export type LaneQueueSignal = {
+  tenant_id: string;
   key: string;
   lane: string;
   kind: LaneQueueSignalKind;
@@ -13,6 +14,7 @@ export type LaneQueueSignal = {
 };
 
 type RawLaneQueueSignal = {
+  tenant_id: string;
   key: string;
   lane: string;
   kind: string;
@@ -39,6 +41,7 @@ export class LaneQueueSignalDal {
   constructor(private readonly db: SqlDb) {}
 
   async setSignal(input: {
+    tenant_id: string;
     key: string;
     lane: string;
     kind: LaneQueueSignalKind;
@@ -49,6 +52,7 @@ export class LaneQueueSignalDal {
   }): Promise<void> {
     await this.db.run(
       `INSERT INTO lane_queue_signals (
+         tenant_id,
          key,
          lane,
          kind,
@@ -56,14 +60,15 @@ export class LaneQueueSignalDal {
          queue_mode,
          message_text,
          created_at_ms
-       ) VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (key, lane) DO UPDATE SET
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (tenant_id, key, lane) DO UPDATE SET
          kind = excluded.kind,
          inbox_id = excluded.inbox_id,
          queue_mode = excluded.queue_mode,
          message_text = excluded.message_text,
          created_at_ms = excluded.created_at_ms`,
       [
+        input.tenant_id,
         input.key,
         input.lane,
         input.kind,
@@ -75,19 +80,22 @@ export class LaneQueueSignalDal {
     );
   }
 
-  async clearSignal(input: { key: string; lane: string }): Promise<void> {
-    await this.db.run("DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?", [
-      input.key,
-      input.lane,
-    ]);
+  async clearSignal(input: { tenant_id: string; key: string; lane: string }): Promise<void> {
+    await this.db.run(
+      "DELETE FROM lane_queue_signals WHERE tenant_id = ? AND key = ? AND lane = ?",
+      [input.tenant_id, input.key, input.lane],
+    );
   }
 
-  async claimSignal(input: { key: string; lane: string }): Promise<LaneQueueSignal | undefined> {
-    const nowIso = new Date().toISOString();
-
+  async claimSignal(input: {
+    tenant_id: string;
+    key: string;
+    lane: string;
+  }): Promise<LaneQueueSignal | undefined> {
     return await this.db.transaction(async (tx) => {
       const row = await tx.get<RawLaneQueueSignal>(
         `SELECT
+           tenant_id,
            key,
            lane,
            kind,
@@ -96,31 +104,29 @@ export class LaneQueueSignalDal {
            message_text,
            created_at_ms
          FROM lane_queue_signals
-         WHERE key = ? AND lane = ?`,
-        [input.key, input.lane],
+         WHERE tenant_id = ? AND key = ? AND lane = ?`,
+        [input.tenant_id, input.key, input.lane],
       );
       if (!row) return undefined;
 
-      await tx.run("DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?", [
+      await tx.run("DELETE FROM lane_queue_signals WHERE tenant_id = ? AND key = ? AND lane = ?", [
+        input.tenant_id,
         input.key,
         input.lane,
       ]);
 
       if (row.kind === "steer" && row.queue_mode === "steer" && typeof row.inbox_id === "number") {
         await tx.run(
-          `UPDATE channel_inbox
-           SET status = 'completed',
-               lease_owner = NULL,
-               lease_expires_at_ms = NULL,
-               processed_at = COALESCE(processed_at, ?),
-               error = NULL,
-               reply_text = COALESCE(reply_text, '')
-           WHERE inbox_id = ? AND status IN ('queued', 'processing')`,
-          [nowIso, row.inbox_id],
+          `DELETE FROM channel_inbox
+           WHERE tenant_id = ?
+             AND inbox_id = ?
+             AND status IN ('queued', 'processing')`,
+          [input.tenant_id, row.inbox_id],
         );
       }
 
       return {
+        tenant_id: row.tenant_id,
         key: row.key,
         lane: row.lane,
         kind: row.kind === "interrupt" ? "interrupt" : "steer",

@@ -5,6 +5,7 @@ import type { PolicyService } from "../policy/service.js";
 import { ChannelOutboxDal } from "../channels/outbox-dal.js";
 import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../channels/interface.js";
 import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { WorkboardDal } from "./dal.js";
 
 type WorkItemTerminalState = "blocked" | "done" | "failed";
@@ -41,7 +42,9 @@ export async function enqueueWorkItemStateChangeNotification(input: {
   const activity = await workboard.getScopeActivity({ scope: input.scope });
   const targetSessionKey = activity?.last_active_session_key ?? input.item.created_from_session_key;
 
+  const tenantId = input.scope.tenant_id === "default" ? DEFAULT_TENANT_ID : input.scope.tenant_id;
   const sendOverride = await new SessionSendPolicyOverrideDal(input.db).get({
+    tenant_id: tenantId,
     key: targetSessionKey,
   });
   if (sendOverride?.send_policy === "off") {
@@ -50,15 +53,19 @@ export async function enqueueWorkItemStateChangeNotification(input: {
 
   const route = await input.db.get<{
     inbox_id: number;
+    tenant_id: string;
     source: string;
     thread_id: string;
+    workspace_id: string;
+    session_id: string;
+    channel_thread_id: string;
   }>(
-    `SELECT inbox_id, source, thread_id
+    `SELECT inbox_id, tenant_id, source, thread_id, workspace_id, session_id, channel_thread_id
      FROM channel_inbox
-     WHERE key = ?
+     WHERE tenant_id = ? AND key = ?
      ORDER BY received_at_ms DESC, inbox_id DESC
      LIMIT 1`,
-    [targetSessionKey],
+    [tenantId, targetSessionKey],
   );
 
   if (!route) {
@@ -69,7 +76,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
   const dedupeKey = `work.notify:${input.item.work_item_id}:${input.item.status}:${updatedAtIso}`;
 
   const outbox = new ChannelOutboxDal(input.db);
-  const existing = await outbox.getByDedupeKey(dedupeKey);
+  const existing = await outbox.getByDedupeKey({ tenant_id: tenantId, dedupe_key: dedupeKey });
   if (existing) {
     return { enqueued: true, deduped: true };
   }
@@ -110,7 +117,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
     return { enqueued: false, skipped_reason: "policy_denied" };
   }
 
-  let approvalId: number | undefined;
+  let approvalId: string | undefined;
   if (decision === "require_approval") {
     if (!input.approvalDal) {
       return { enqueued: false, skipped_reason: "approval_required" };
@@ -118,18 +125,18 @@ export async function enqueueWorkItemStateChangeNotification(input: {
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     const approval = await input.approvalDal.create({
-      planId: `connector:work.notify:${route.source}:${route.thread_id}:${input.item.work_item_id}:${updatedAtIso}`,
-      stepIndex: 0,
-      kind: "connector.send",
+      tenantId,
       agentId: input.scope.agent_id,
       workspaceId: input.scope.workspace_id,
-      key: targetSessionKey,
-      lane: "main",
+      approvalKey: `connector:work.notify:${route.source}:${route.thread_id}:${input.item.work_item_id}:${updatedAtIso}`,
+      kind: "connector.send",
       prompt: `Approve sending a ${route.source} completion notification`,
       context: {
         source: route.source,
         thread_id: route.thread_id,
         inbox_id: route.inbox_id,
+        key: targetSessionKey,
+        lane: "main",
         policy_snapshot_id: policySnapshotId,
         work_item: {
           work_item_id: input.item.work_item_id,
@@ -139,17 +146,21 @@ export async function enqueueWorkItemStateChangeNotification(input: {
       },
       expiresAt,
     });
-    approvalId = approval.id;
+    approvalId = approval.approval_id;
   }
 
   const { deduped } = await outbox.enqueue({
+    tenant_id: tenantId,
     inbox_id: route.inbox_id,
     source: route.source,
     thread_id: route.thread_id,
     dedupe_key: dedupeKey,
     chunk_index: 0,
     text: buildNotificationText(input.item),
-    approval_id: approvalId,
+    approval_id: approvalId ?? null,
+    workspace_id: route.workspace_id,
+    session_id: route.session_id,
+    channel_thread_id: route.channel_thread_id,
   });
 
   return { enqueued: true, deduped };

@@ -96,13 +96,17 @@ describe("tui input reducer", () => {
 
   it("moves approvals cursor and emits resolve command", () => {
     const initial = { ...createInitialTuiUiState(), route: "approvals" as const };
+    const approvalIds = [
+      "550e8400-e29b-41d4-a716-446655440000",
+      "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+    ];
 
     const moved = reduceTuiInput({
       state: initial,
       input: "",
       key: { downArrow: true },
       elevatedModeActive: true,
-      approvalsPendingIds: [10, 11],
+      approvalsPendingIds: approvalIds,
       pairingIds: [],
       runIds: [],
       memoryItemIds: [],
@@ -110,34 +114,38 @@ describe("tui input reducer", () => {
 
     expect(moved.state.approvalsCursor).toBe(1);
     expect(
-      (moved.state as unknown as { approvalsSelectedId?: number | null }).approvalsSelectedId,
-    ).toBe(11);
+      (moved.state as unknown as { approvalsSelectedId?: string | null }).approvalsSelectedId,
+    ).toBe(approvalIds[1]);
 
     const approved = reduceTuiInput({
       state: moved.state,
       input: "a",
       key: {},
       elevatedModeActive: true,
-      approvalsPendingIds: [10, 11],
+      approvalsPendingIds: approvalIds,
       pairingIds: [],
       runIds: [],
       memoryItemIds: [],
     });
 
     expect(approved.commands).toEqual([
-      { type: "resolveApproval", approvalId: 11, decision: "approved" },
+      { type: "resolveApproval", approvalId: approvalIds[1], decision: "approved" },
     ]);
   });
 
   it("resolves the selected approval even when list order changes", () => {
     const initial = { ...createInitialTuiUiState(), route: "approvals" as const };
+    const approvalIds = [
+      "550e8400-e29b-41d4-a716-446655440000",
+      "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+    ];
 
     const moved = reduceTuiInput({
       state: initial,
       input: "",
       key: { downArrow: true },
       elevatedModeActive: true,
-      approvalsPendingIds: [10, 11],
+      approvalsPendingIds: approvalIds,
       pairingIds: [],
       runIds: [],
       memoryItemIds: [],
@@ -148,26 +156,27 @@ describe("tui input reducer", () => {
       input: "a",
       key: {},
       elevatedModeActive: true,
-      approvalsPendingIds: [11, 10],
+      approvalsPendingIds: [approvalIds[1]!, approvalIds[0]!],
       pairingIds: [],
       runIds: [],
       memoryItemIds: [],
     });
 
     expect(approved.commands).toEqual([
-      { type: "resolveApproval", approvalId: 11, decision: "approved" },
+      { type: "resolveApproval", approvalId: approvalIds[1], decision: "approved" },
     ]);
   });
 
   it("requests Elevated Mode when attempting to resolve approvals while inactive", () => {
     const initial = { ...createInitialTuiUiState(), route: "approvals" as const };
+    const approvalId = "550e8400-e29b-41d4-a716-446655440000";
 
     const approved = reduceTuiInput({
       state: initial,
       input: "a",
       key: {},
       elevatedModeActive: false,
-      approvalsPendingIds: [10],
+      approvalsPendingIds: [approvalId],
       pairingIds: [],
       runIds: [],
       memoryItemIds: [],

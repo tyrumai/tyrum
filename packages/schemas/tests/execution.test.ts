@@ -15,13 +15,13 @@ import { expectRejects } from "./test-helpers.js";
 describe("Execution engine contracts", () => {
   const baseJob = {
     job_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-    key: "agent:agent-1:telegram-1:main",
+    key: "agent:agent-1:main",
     lane: "main",
     status: "queued",
     created_at: "2026-02-19T12:00:00Z",
     trigger: {
       kind: "session",
-      key: "agent:agent-1:telegram-1:main",
+      key: "agent:agent-1:main",
       lane: "main",
     },
   } as const;
@@ -29,7 +29,7 @@ describe("Execution engine contracts", () => {
   const baseRun = {
     run_id: "550e8400-e29b-41d4-a716-446655440000",
     job_id: baseJob.job_id,
-    key: "agent:agent-1:telegram-1:main",
+    key: "agent:agent-1:main",
     lane: "main",
     status: "running",
     attempt: 1,
@@ -160,7 +160,7 @@ describe("Execution engine contracts", () => {
     const payload = ExecutionRunPausedPayload.parse({
       run_id: "550e8400-e29b-41d4-a716-446655440000",
       reason: "approval",
-      approval_id: 1,
+      approval_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
     });
     expect(payload.reason).toBe("approval");
   });
@@ -169,12 +169,15 @@ describe("Execution engine contracts", () => {
     expectRejects(ExecutionRunPausedPayload, {
       run_id: "550e8400-e29b-41d4-a716-446655440000",
       reason: "approval",
-      approval_id: "1",
+      approval_id: 1,
     });
   });
 
   it("rejects a run paused payload missing run_id", () => {
-    const bad = { reason: "approval", approval_id: 1 } as const;
+    const bad = {
+      reason: "approval",
+      approval_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+    } as const;
     expectRejects(ExecutionRunPausedPayload, bad);
   });
 });

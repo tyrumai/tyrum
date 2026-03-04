@@ -8,6 +8,7 @@ import {
 import { NodePairingRequest } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { createHash, randomBytes } from "node:crypto";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 type NodePairingStatus = "pending" | "approved" | "denied" | "revoked";
 
@@ -124,46 +125,61 @@ function toPairing(row: RawNodePairingRow): NodePairingRequestT {
 export class NodePairingDal {
   constructor(private readonly db: SqlDb) {}
 
-  async getNodeIdForScopedToken(scopedToken: string): Promise<string | undefined> {
+  async getNodeIdForScopedToken(
+    scopedToken: string,
+    tenantId: string = DEFAULT_TENANT_ID,
+  ): Promise<string | undefined> {
     const token = scopedToken.trim();
     if (token.length === 0) return undefined;
     const hash = sha256Hex(token);
     const row = await this.db.get<{ node_id: string }>(
       `SELECT node_id
        FROM node_pairings
-       WHERE status = 'approved'
+       WHERE tenant_id = ?
+         AND status = 'approved'
          AND scoped_token_sha256 = ?`,
-      [hash],
+      [tenantId, hash],
     );
     return row?.node_id;
   }
 
-  async getByNodeId(nodeId: string): Promise<NodePairingRequestT | undefined> {
+  async getByNodeId(
+    nodeId: string,
+    tenantId: string = DEFAULT_TENANT_ID,
+  ): Promise<NodePairingRequestT | undefined> {
     const row = await this.db.get<RawNodePairingRow>(
       `SELECT *
        FROM node_pairings
-       WHERE node_id = ?`,
-      [nodeId],
+       WHERE tenant_id = ?
+         AND node_id = ?`,
+      [tenantId, nodeId],
     );
     return row ? toPairing(row) : undefined;
   }
 
-  async getById(pairingId: number): Promise<NodePairingRequestT | undefined> {
+  async getById(
+    pairingId: number,
+    tenantId: string = DEFAULT_TENANT_ID,
+  ): Promise<NodePairingRequestT | undefined> {
     const row = await this.db.get<RawNodePairingRow>(
       `SELECT *
        FROM node_pairings
-       WHERE pairing_id = ?`,
-      [pairingId],
+       WHERE tenant_id = ?
+         AND pairing_id = ?`,
+      [tenantId, pairingId],
     );
     return row ? toPairing(row) : undefined;
   }
 
   async list(params?: {
+    tenantId?: string;
     status?: NodePairingStatus;
     limit?: number;
   }): Promise<NodePairingRequestT[]> {
+    const tenantId = params?.tenantId?.trim() || DEFAULT_TENANT_ID;
     const where: string[] = [];
-    const values: unknown[] = [];
+    const values: unknown[] = [tenantId];
+    where.push("tenant_id = ?");
     if (params?.status) {
       where.push("status = ?");
       values.push(params.status);
@@ -179,6 +195,7 @@ export class NodePairingDal {
   }
 
   async upsertOnConnect(params: {
+    tenantId?: string;
     nodeId: string;
     pubkey?: string | null;
     label?: string | null;
@@ -186,6 +203,7 @@ export class NodePairingDal {
     metadata?: unknown;
     nowIso?: string;
   }): Promise<NodePairingRequestT> {
+    const tenantId = params.tenantId?.trim() || DEFAULT_TENANT_ID;
     const nowIso = params.nowIso ?? new Date().toISOString();
     const capabilitiesJson = JSON.stringify(params.capabilities ?? []);
     const metadataJson = JSON.stringify(params.metadata ?? {});
@@ -193,13 +211,15 @@ export class NodePairingDal {
     const existing = await this.db.get<RawNodePairingRow>(
       `SELECT *
        FROM node_pairings
-       WHERE node_id = ?`,
-      [params.nodeId],
+       WHERE tenant_id = ?
+         AND node_id = ?`,
+      [tenantId, params.nodeId],
     );
 
     if (!existing) {
       const inserted = await this.db.get<RawNodePairingRow>(
         `INSERT INTO node_pairings (
+           tenant_id,
            status,
            node_id,
            pubkey,
@@ -209,9 +229,10 @@ export class NodePairingDal {
            requested_at,
            last_seen_at,
            updated_at
-         ) VALUES ('pending', ?, ?, ?, ?, ?, ?, ?, ?)
+         ) VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING *`,
         [
+          tenantId,
           params.nodeId,
           params.pubkey ?? null,
           params.label ?? null,
@@ -238,7 +259,8 @@ export class NodePairingDal {
              metadata_json = ?,
              last_seen_at = ?,
              updated_at = ?
-         WHERE node_id = ?`,
+         WHERE tenant_id = ?
+           AND node_id = ?`,
         [
           params.pubkey ?? null,
           params.label ?? null,
@@ -246,10 +268,11 @@ export class NodePairingDal {
           metadataJson,
           nowIso,
           nowIso,
+          tenantId,
           params.nodeId,
         ],
       );
-      const updated = await this.getByNodeId(params.nodeId);
+      const updated = await this.getByNodeId(params.nodeId, tenantId);
       if (!updated) throw new Error("node pairing update failed");
       return updated;
     }
@@ -263,7 +286,8 @@ export class NodePairingDal {
              metadata_json = ?,
              last_seen_at = ?,
              updated_at = ?
-         WHERE node_id = ?`,
+         WHERE tenant_id = ?
+           AND node_id = ?`,
         [
           params.pubkey ?? null,
           params.label ?? null,
@@ -271,10 +295,11 @@ export class NodePairingDal {
           metadataJson,
           nowIso,
           nowIso,
+          tenantId,
           params.nodeId,
         ],
       );
-      const updated = await this.getByNodeId(params.nodeId);
+      const updated = await this.getByNodeId(params.nodeId, tenantId);
       if (!updated) throw new Error("node pairing pending update failed");
       return updated;
     }
@@ -294,7 +319,8 @@ export class NodePairingDal {
            resolved_by_json = NULL,
            resolution_reason = NULL,
            updated_at = ?
-       WHERE node_id = ?`,
+       WHERE tenant_id = ?
+         AND node_id = ?`,
       [
         params.pubkey ?? null,
         params.label ?? null,
@@ -303,11 +329,12 @@ export class NodePairingDal {
         nowIso,
         nowIso,
         nowIso,
+        tenantId,
         params.nodeId,
       ],
     );
 
-    const updated = await this.getByNodeId(params.nodeId);
+    const updated = await this.getByNodeId(params.nodeId, tenantId);
     if (!updated) throw new Error("node pairing reset failed");
     return updated;
   }
@@ -315,6 +342,7 @@ export class NodePairingDal {
   async resolve(
     params:
       | {
+          tenantId?: string;
           pairingId: number;
           decision: "approved";
           reason?: string;
@@ -324,6 +352,7 @@ export class NodePairingDal {
           nowIso?: string;
         }
       | {
+          tenantId?: string;
           pairingId: number;
           decision: "denied";
           reason?: string;
@@ -331,14 +360,16 @@ export class NodePairingDal {
           nowIso?: string;
         },
   ): Promise<{ pairing: NodePairingRequestT; scopedToken?: string } | undefined> {
+    const tenantId = params.tenantId?.trim() || DEFAULT_TENANT_ID;
     const nowIso = params.nowIso ?? new Date().toISOString();
 
     const existing = await this.db.get<RawNodePairingRow>(
       `SELECT *
        FROM node_pairings
-       WHERE pairing_id = ?
+       WHERE tenant_id = ?
+         AND pairing_id = ?
          AND status = 'pending'`,
-      [params.pairingId],
+      [tenantId, params.pairingId],
     );
     if (!existing) return undefined;
 
@@ -365,7 +396,8 @@ export class NodePairingDal {
            resolved_by_json = ?,
            resolution_reason = ?,
            updated_at = ?
-       WHERE pairing_id = ?
+       WHERE tenant_id = ?
+         AND pairing_id = ?
          AND status = 'pending'`,
       [
         params.decision,
@@ -376,21 +408,24 @@ export class NodePairingDal {
         JSON.stringify(params.resolvedBy ?? {}),
         params.reason ?? null,
         nowIso,
+        tenantId,
         params.pairingId,
       ],
     );
     if (result.changes === 0) return undefined;
-    const pairing = await this.getById(params.pairingId);
+    const pairing = await this.getById(params.pairingId, tenantId);
     if (!pairing) return undefined;
     return { pairing, scopedToken };
   }
 
   async revoke(params: {
+    tenantId?: string;
     pairingId: number;
     reason?: string;
     resolvedBy?: unknown;
     nowIso?: string;
   }): Promise<NodePairingRequestT | undefined> {
+    const tenantId = params.tenantId?.trim() || DEFAULT_TENANT_ID;
     const nowIso = params.nowIso ?? new Date().toISOString();
 
     const result = await this.db.run(
@@ -401,17 +436,19 @@ export class NodePairingDal {
            resolved_by_json = ?,
            resolution_reason = ?,
            updated_at = ?
-       WHERE pairing_id = ?
+       WHERE tenant_id = ?
+         AND pairing_id = ?
          AND status = 'approved'`,
       [
         nowIso,
         JSON.stringify(params.resolvedBy ?? {}),
         params.reason ?? null,
         nowIso,
+        tenantId,
         params.pairingId,
       ],
     );
     if (result.changes === 0) return undefined;
-    return await this.getById(params.pairingId);
+    return await this.getById(params.pairingId, tenantId);
   }
 }

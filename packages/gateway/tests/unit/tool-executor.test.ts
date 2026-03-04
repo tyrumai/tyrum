@@ -16,6 +16,7 @@ import type { McpServerSpec } from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 import { NodeDispatchService } from "../../src/modules/agent/node-dispatch-service.js";
+import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 
 function stubMcpManager(overrides?: Partial<McpManager>): McpManager {
   return {
@@ -180,11 +181,13 @@ describe("ToolExecutor", () => {
       const db = openTestSqliteDb();
 
       try {
-        const workspaceId = "default";
+        const tenantId = DEFAULT_TENANT_ID;
+        const workspaceId = DEFAULT_WORKSPACE_ID;
         const timeoutMs = 600;
         const releaseAfterMs = 450;
 
         await acquireWorkspaceLease(db, {
+          tenantId,
           workspaceId,
           owner: "other-owner",
           ttlMs: 60_000,
@@ -193,6 +196,7 @@ describe("ToolExecutor", () => {
         const releaseDone = new Promise<void>((resolve) => {
           setTimeout(() => {
             void releaseWorkspaceLease(db, {
+              tenantId,
               workspaceId,
               owner: "other-owner",
             })
@@ -212,6 +216,7 @@ describe("ToolExecutor", () => {
           undefined,
           {
             db,
+            tenantId,
             workspaceId,
             ownerPrefix: "test-tool",
           },

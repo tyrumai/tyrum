@@ -5,8 +5,8 @@ import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
 import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
-import { SessionDal } from "../../src/modules/agent/session-dal.js";
 import { SessionModelOverrideDal } from "../../src/modules/models/session-model-override-dal.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -115,6 +115,7 @@ describe("AgentRuntime model fallbacks", () => {
           options: {},
         },
       },
+      tenantId: DEFAULT_TENANT_ID,
       sessionId: "session-1",
       fetchImpl,
     });
@@ -183,6 +184,7 @@ describe("AgentRuntime model fallbacks", () => {
             options: {},
           },
         },
+        tenantId: DEFAULT_TENANT_ID,
         sessionId: "session-1",
         fetchImpl,
       }),
@@ -256,6 +258,7 @@ describe("AgentRuntime model fallbacks", () => {
           options: {},
         },
       },
+      tenantId: DEFAULT_TENANT_ID,
       sessionId: "session-1",
       fetchImpl,
     });
@@ -310,12 +313,16 @@ describe("AgentRuntime model fallbacks", () => {
       fetchImpl,
     });
 
-    const sessionDal = new SessionDal(container.db);
-    const session = await sessionDal.getOrCreate("ui", "thread-1", "agent-1");
+    const session = await container.sessionDal.getOrCreate({
+      scopeKeys: { tenantKey: "default", agentKey: "agent-1", workspaceKey: "default" },
+      connectorKey: "ui",
+      providerThreadId: "thread-1",
+      containerKind: "dm",
+    });
 
     const overrides = new SessionModelOverrideDal(container.db);
     await overrides.upsert({
-      agentId: "agent-1",
+      tenantId: DEFAULT_TENANT_ID,
       sessionId: session.session_id,
       modelId: "anthropic/claude-3.5-sonnet",
     });
@@ -332,6 +339,7 @@ describe("AgentRuntime model fallbacks", () => {
           options: {},
         },
       },
+      tenantId: DEFAULT_TENANT_ID,
       sessionId: session.session_id,
       fetchImpl,
     });

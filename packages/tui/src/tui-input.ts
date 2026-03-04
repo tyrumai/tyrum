@@ -9,7 +9,7 @@ export type TuiKey = {
 export type TuiUiState = {
   route: TuiRouteId;
   approvalsCursor: number;
-  approvalsSelectedId: number | null;
+  approvalsSelectedId: string | null;
   pairingCursor: number;
   pairingSelectedId: number | null;
   runsCursor: number;
@@ -29,7 +29,7 @@ export type TuiCommand =
   | { type: "openMemoryForget"; memoryItemId: string }
   | { type: "exportMemory" }
   | { type: "refreshApprovals" }
-  | { type: "resolveApproval"; approvalId: number; decision: "approved" | "denied" }
+  | { type: "resolveApproval"; approvalId: string; decision: "approved" | "denied" }
   | { type: "refreshPairing" }
   | { type: "approvePairing"; pairingId: number }
   | { type: "denyPairing"; pairingId: number }
@@ -75,7 +75,7 @@ export function reduceTuiInput(_params: {
   input: string;
   key: TuiKey;
   elevatedModeActive: boolean;
-  approvalsPendingIds: number[];
+  approvalsPendingIds: string[];
   pairingIds: number[];
   runIds: string[];
   memoryItemIds: string[];
@@ -174,7 +174,7 @@ export function reduceTuiInput(_params: {
 
     if (input === "a" || input === "x") {
       const approvalId = _params.approvalsPendingIds[cursor];
-      if (typeof approvalId === "number") {
+      if (typeof approvalId === "string") {
         if (!_params.elevatedModeActive) {
           commands.push({ type: "openElevatedMode" });
         } else {
@@ -189,7 +189,7 @@ export function reduceTuiInput(_params: {
         state: {
           ..._params.state,
           approvalsCursor: cursor,
-          approvalsSelectedId: typeof approvalId === "number" ? approvalId : null,
+          approvalsSelectedId: typeof approvalId === "string" ? approvalId : null,
         },
         commands,
       };

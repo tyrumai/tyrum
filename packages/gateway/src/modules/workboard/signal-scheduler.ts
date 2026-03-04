@@ -179,6 +179,7 @@ export class WorkSignalScheduler {
       if (!workItemId) continue;
 
       const match = await this.findFirstMatchingStatusTransitionEvent({
+        tenantId: signal.tenant_id,
         workItemId,
         sinceIso: signal.created_at,
         to: spec.to,
@@ -188,6 +189,7 @@ export class WorkSignalScheduler {
       const firingId = `work-signal-${signal.signal_id}-${match.event_id}`;
       try {
         await this.firingDal.createIfAbsent({
+          tenantId: signal.tenant_id,
           firingId,
           signalId: signal.signal_id,
           dedupeKey: match.event_id,
@@ -251,6 +253,7 @@ export class WorkSignalScheduler {
   }
 
   private async findFirstMatchingStatusTransitionEvent(input: {
+    tenantId: string;
     workItemId: string;
     sinceIso: string;
     to: WorkItemState[];
@@ -259,9 +262,11 @@ export class WorkSignalScheduler {
     const rows = await this.db.all<RawWorkItemEventRow>(
       `SELECT *
        FROM work_item_events
-       WHERE work_item_id = ? AND kind = 'status.transition'
+       WHERE tenant_id = ?
+         AND work_item_id = ?
+         AND kind = 'status.transition'
        ORDER BY created_at ASC, event_id ASC`,
-      [input.workItemId],
+      [input.tenantId, input.workItemId],
     );
 
     for (const row of rows) {
@@ -295,8 +300,10 @@ export class WorkSignalScheduler {
           signal_id: string;
           dedupe_key: string;
         }>(
-          "SELECT status, lease_owner, signal_id, dedupe_key FROM work_signal_firings WHERE firing_id = ?",
-          [firing.firing_id],
+          `SELECT status, lease_owner, signal_id, dedupe_key
+           FROM work_signal_firings
+           WHERE tenant_id = ? AND firing_id = ?`,
+          [firing.tenant_id, firing.firing_id],
         );
         if (
           !firingRow ||
@@ -307,8 +314,8 @@ export class WorkSignalScheduler {
         }
 
         const signal = await tx.get<RawWorkSignalRow>(
-          "SELECT * FROM work_signals WHERE signal_id = ?",
-          [firing.signal_id],
+          "SELECT * FROM work_signals WHERE tenant_id = ? AND signal_id = ?",
+          [firing.tenant_id, firing.signal_id],
         );
         if (!signal) {
           await tx.run(
@@ -318,8 +325,8 @@ export class WorkSignalScheduler {
                  lease_expires_at_ms = NULL,
                  error = ?,
                  updated_at = ?
-             WHERE firing_id = ? AND lease_owner = ? AND status = 'processing'`,
-            ["signal not found", nowIso, firing.firing_id, this.owner],
+             WHERE tenant_id = ? AND firing_id = ? AND lease_owner = ? AND status = 'processing'`,
+            ["signal not found", nowIso, firing.tenant_id, firing.firing_id, this.owner],
           );
           return null;
         }
@@ -332,8 +339,14 @@ export class WorkSignalScheduler {
                  lease_expires_at_ms = NULL,
                  error = ?,
                  updated_at = ?
-             WHERE firing_id = ? AND lease_owner = ? AND status = 'processing'`,
-            [`signal not active (${signal.status})`, nowIso, firing.firing_id, this.owner],
+             WHERE tenant_id = ? AND firing_id = ? AND lease_owner = ? AND status = 'processing'`,
+            [
+              `signal not active (${signal.status})`,
+              nowIso,
+              firing.tenant_id,
+              firing.firing_id,
+              this.owner,
+            ],
           );
           return null;
         }
@@ -380,8 +393,8 @@ export class WorkSignalScheduler {
                lease_expires_at_ms = NULL,
                error = NULL,
                updated_at = ?
-           WHERE firing_id = ? AND lease_owner = ? AND status = 'processing'`,
-          [nowIso, firing.firing_id, this.owner],
+           WHERE tenant_id = ? AND firing_id = ? AND lease_owner = ? AND status = 'processing'`,
+          [nowIso, firing.tenant_id, firing.firing_id, this.owner],
         );
         if (updated.changes !== 1) {
           throw new LostFiringLeaseError("lost work signal firing lease while enqueuing");
@@ -425,6 +438,7 @@ export class WorkSignalScheduler {
       }
       const message = err instanceof Error ? err.message : String(err);
       await this.firingDal.markRetryableFailure({
+        tenantId: firing.tenant_id,
         firingId: firing.firing_id,
         owner: this.owner,
         nowMs,
@@ -432,13 +446,16 @@ export class WorkSignalScheduler {
         error: message,
       });
       try {
-        const current = await this.firingDal.getById(firing.firing_id);
+        const current = await this.firingDal.getById({
+          tenantId: firing.tenant_id,
+          firingId: firing.firing_id,
+        });
         if (current?.status === "failed") {
           await this.db.run(
             `UPDATE work_signals
              SET status = 'paused'
-             WHERE signal_id = ? AND status = 'active'`,
-            [firing.signal_id],
+             WHERE tenant_id = ? AND signal_id = ? AND status = 'active'`,
+            [firing.tenant_id, firing.signal_id],
           );
         }
       } catch (pauseErr) {

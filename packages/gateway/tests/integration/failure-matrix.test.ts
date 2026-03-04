@@ -4,7 +4,7 @@ import { WebSocket } from "ws";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { createHash, generateKeyPairSync, sign, randomUUID } from "node:crypto";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
@@ -25,6 +25,11 @@ import { WatcherFiringDal } from "../../src/modules/watcher/firing-dal.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
@@ -529,31 +534,34 @@ describe("Failure matrix (scaling-ha)", () => {
     });
 
     const step = await db2.get<{ step_id: string; max_attempts: number; timeout_ms: number }>(
-      "SELECT step_id, max_attempts, timeout_ms FROM execution_steps WHERE run_id = ?",
-      [runId],
+      "SELECT step_id, max_attempts, timeout_ms FROM execution_steps WHERE tenant_id = ? AND run_id = ?",
+      [DEFAULT_TENANT_ID, runId],
     );
     expect(step?.step_id).toBeTruthy();
 
     // Simulate an in-flight attempt owned by a dead worker with a short lease.
     const attemptId = "attempt-dead-1";
     const leaseExpiresAt = nowMs + 25;
-    await db2.run("UPDATE execution_steps SET status = 'running' WHERE step_id = ?", [
-      step!.step_id,
-    ]);
     await db2.run(
-      `INSERT INTO execution_attempts (
-         attempt_id, step_id, attempt, status, started_at, artifacts_json, lease_owner, lease_expires_at_ms
-       ) VALUES (?, ?, 1, 'running', ?, '[]', 'dead-worker', ?)`,
-      [attemptId, step!.step_id, new Date(nowMs).toISOString(), leaseExpiresAt],
+      "UPDATE execution_steps SET status = 'running' WHERE tenant_id = ? AND step_id = ?",
+      [DEFAULT_TENANT_ID, step!.step_id],
     );
     await db2.run(
-      `INSERT INTO concurrency_slots (scope, scope_id, slot, lease_owner, lease_expires_at_ms, attempt_id)
-       VALUES ('global', 'global', 0, 'dead-worker', ?, ?)
-       ON CONFLICT (scope, scope_id, slot) DO UPDATE SET
+      `INSERT INTO execution_attempts (
+         tenant_id, attempt_id, step_id, attempt, status, started_at, artifacts_json, lease_owner, lease_expires_at_ms
+       ) VALUES (?, ?, ?, 1, 'running', ?, '[]', 'dead-worker', ?)`,
+      [DEFAULT_TENANT_ID, attemptId, step!.step_id, new Date(nowMs).toISOString(), leaseExpiresAt],
+    );
+    await db2.run(
+      `INSERT INTO concurrency_slots (
+         tenant_id, scope, scope_id, slot, lease_owner, lease_expires_at_ms, attempt_id
+       )
+       VALUES (?, 'global', 'global', 0, 'dead-worker', ?, ?)
+       ON CONFLICT (tenant_id, scope, scope_id, slot) DO UPDATE SET
          lease_owner = excluded.lease_owner,
          lease_expires_at_ms = excluded.lease_expires_at_ms,
          attempt_id = excluded.attempt_id`,
-      [leaseExpiresAt, attemptId],
+      [DEFAULT_TENANT_ID, leaseExpiresAt, attemptId],
     );
 
     const fastExecutor: StepExecutor = {
@@ -568,13 +576,16 @@ describe("Failure matrix (scaling-ha)", () => {
     expect(await engine2.workerTick({ workerId: "w2", executor: fastExecutor })).toBe(true);
 
     const cancelled = await db2.get<{ status: string }>(
-      "SELECT status FROM execution_attempts WHERE attempt_id = ?",
-      [attemptId],
+      "SELECT status FROM execution_attempts WHERE tenant_id = ? AND attempt_id = ?",
+      [DEFAULT_TENANT_ID, attemptId],
     );
     expect(cancelled?.status).toBe("cancelled");
 
     const slot = await db2.get<{ attempt_id: string | null }>(
-      "SELECT attempt_id FROM concurrency_slots WHERE scope = 'global' AND scope_id = 'global' AND slot = 0",
+      `SELECT attempt_id
+       FROM concurrency_slots
+       WHERE tenant_id = ? AND scope = 'global' AND scope_id = 'global' AND slot = 0`,
+      [DEFAULT_TENANT_ID],
     );
     expect(slot?.attempt_id).toBeNull();
 
@@ -585,8 +596,8 @@ describe("Failure matrix (scaling-ha)", () => {
     }
 
     const run = await db2.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
+      "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      [DEFAULT_TENANT_ID, runId],
     );
     expect(run?.status).toBe("succeeded");
   });
@@ -644,8 +655,8 @@ describe("Failure matrix (scaling-ha)", () => {
     expect(blocked).toBe(false);
 
     const run2StatusBefore = await db2.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [run2.runId],
+      "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      [DEFAULT_TENANT_ID, run2.runId],
     );
     expect(run2StatusBefore?.status).toBe("queued");
 
@@ -660,8 +671,8 @@ describe("Failure matrix (scaling-ha)", () => {
     await engine2.workerTick({ workerId: "w2", executor });
 
     const statuses = await db2.all<{ run_id: string; status: string }>(
-      "SELECT run_id, status FROM execution_runs WHERE run_id IN (?, ?)",
-      [run1.runId, run2.runId],
+      "SELECT run_id, status FROM execution_runs WHERE tenant_id = ? AND run_id IN (?, ?)",
+      [DEFAULT_TENANT_ID, run1.runId, run2.runId],
     );
     const byId = new Map(statuses.map((r) => [r.run_id, r.status]));
     expect(byId.get(run1.runId)).toBe("succeeded");
@@ -677,25 +688,28 @@ describe("Failure matrix (scaling-ha)", () => {
     dbs.push(db);
 
     // Minimal watcher + firing.
+    const watcherId = randomUUID();
     await db.run(
-      `INSERT INTO watchers (plan_id, trigger_type, trigger_config, active, created_at, updated_at)
-       VALUES ('plan-1', 'periodic', ?, 1, datetime('now'), datetime('now'))`,
-      [JSON.stringify({ intervalMs: 1000 })],
+      `INSERT INTO watchers (tenant_id, watcher_id, watcher_key, agent_id, workspace_id, trigger_type, trigger_config_json)
+       VALUES (?, ?, ?, ?, ?, 'periodic', ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        watcherId,
+        `watcher-${watcherId}`,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        JSON.stringify({ intervalMs: 1000, planId: "plan-1" }),
+      ],
     );
-    const watcher = await db.get<{ id: number }>(
-      "SELECT id FROM watchers WHERE plan_id = 'plan-1' LIMIT 1",
-    );
-    expect(watcher?.id).toBeTruthy();
 
     const dal = new WatcherFiringDal(db);
     const nowMs = Date.now();
     const slotMs = Math.floor(nowMs / 1000) * 1000;
-    const firingId = `firing-${String(watcher!.id)}-${String(slotMs)}`;
+    const firingId = randomUUID();
     await dal.createIfAbsent({
-      firingId,
-      watcherId: watcher!.id,
-      planId: "plan-1",
-      triggerType: "periodic",
+      tenantId: DEFAULT_TENANT_ID,
+      watcherFiringId: firingId,
+      watcherId,
       scheduledAtMs: slotMs,
     });
 
@@ -710,14 +724,22 @@ describe("Failure matrix (scaling-ha)", () => {
     // After expiry, scheduler B takes over and marks enqueued.
     const claimedB = await dal.claimNext({ owner: "sched-b", nowMs: slotMs + 50, leaseTtlMs: 25 });
     expect(claimedB?.lease_owner).toBe("sched-b");
-    expect(await dal.markEnqueued({ firingId, owner: "sched-b" })).toBe(true);
+    expect(
+      await dal.markEnqueued({
+        tenantId: DEFAULT_TENANT_ID,
+        watcherFiringId: firingId,
+        owner: "sched-b",
+      }),
+    ).toBe(true);
 
-    const row = await dal.getById(firingId);
+    const row = await dal.getById({ tenantId: DEFAULT_TENANT_ID, watcherFiringId: firingId });
     expect(row?.status).toBe("enqueued");
 
     const count = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM watcher_firings WHERE watcher_id = ? AND scheduled_at_ms = ?",
-      [watcher!.id, slotMs],
+      `SELECT COUNT(*) AS n
+       FROM watcher_firings
+       WHERE tenant_id = ? AND watcher_id = ? AND scheduled_at_ms = ?`,
+      [DEFAULT_TENANT_ID, watcherId, slotMs],
     );
     expect(count?.n).toBe(1);
   });
@@ -730,10 +752,18 @@ describe("Failure matrix (scaling-ha)", () => {
     const db = openTestSqliteDb(dbPath);
     dbs.push(db);
 
+    const watcherId = randomUUID();
     await db.run(
-      `INSERT INTO watchers (plan_id, trigger_type, trigger_config, active, created_at, updated_at)
-       VALUES ('plan-1', 'periodic', ?, 1, datetime('now'), datetime('now'))`,
-      [JSON.stringify({ intervalMs: 1000 })],
+      `INSERT INTO watchers (tenant_id, watcher_id, watcher_key, agent_id, workspace_id, trigger_type, trigger_config_json)
+       VALUES (?, ?, ?, ?, ?, 'periodic', ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        watcherId,
+        `watcher-${watcherId}`,
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        JSON.stringify({ intervalMs: 1000, planId: "plan-1" }),
+      ],
     );
 
     let allCalls = 0;

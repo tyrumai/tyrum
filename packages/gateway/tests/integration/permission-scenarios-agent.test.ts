@@ -11,6 +11,7 @@ import type { SecretHandle } from "@tyrum/schemas";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -100,7 +101,7 @@ async function waitForPendingApproval(
 ): Promise<ApprovalRow> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const pending = await container.approvalDal.getPending();
+    const pending = await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
     if (pending.length > 0) {
       return pending[0]!;
     }
@@ -227,8 +228,11 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       void (async () => {
         const c = container;
         if (!c) return;
-        await c.approvalDal.expireStale();
-        const current = await c.approvalDal.getById(pending.id);
+        await c.approvalDal.expireStale({ tenantId: DEFAULT_TENANT_ID });
+        const current = await c.approvalDal.getById({
+          tenantId: DEFAULT_TENANT_ID,
+          approvalId: pending.approval_id,
+        });
         if (!current || resumed) return;
         if (current.status !== "expired") return;
         if (current.resume_token) {
@@ -250,7 +254,10 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     expect(result.reply).toBe("done");
     expect(result.used_tools).not.toContain("tool.exec");
 
-    const resolved = await container.approvalDal.getById(pending.id);
+    const resolved = await container.approvalDal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: pending.approval_id,
+    });
     expect(resolved?.status).toBe("expired");
   }, 10_000);
 
@@ -317,8 +324,16 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     expect(pending.prompt).toContain("tool.exec");
     expect(pending.status).toBe("pending");
 
-    await container.approvalDal.respond(pending.id, false, "denied in test");
-    await container.db.run("UPDATE approvals SET resume_token = NULL WHERE id = ?", [pending.id]);
+    await container.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: pending.approval_id,
+      decision: "denied",
+      reason: "denied in test",
+    });
+    await container.db.run(
+      "UPDATE approvals SET resume_token = NULL WHERE tenant_id = ? AND approval_id = ?",
+      [DEFAULT_TENANT_ID, pending.approval_id],
+    );
 
     let err: unknown;
     try {
@@ -406,7 +421,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     expect(result.reply).toBe("done");
     expect(result.used_tools).not.toContain("tool.fs.write");
 
-    const pending = await container.approvalDal.getPending();
+    const pending = await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
     expect(pending).toHaveLength(0);
     await expect(access(join(homeDir, "blocked.txt"))).rejects.toThrow();
   });
@@ -469,7 +484,12 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     const approvalEngine = new ExecutionEngine({ db: container.db });
     const pending = await waitForPendingApproval(container);
     expect(pending.prompt).toContain("tool.exec");
-    const updated = await container.approvalDal.respond(pending.id, true, "approved in test");
+    const updated = await container.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: pending.approval_id,
+      decision: "approved",
+      reason: "approved in test",
+    });
     if (updated?.resume_token) {
       await approvalEngine.resumeRun(updated.resume_token);
     }
@@ -607,7 +627,12 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     expect(secretProvider.list).toHaveBeenCalled();
     expect(secretProvider.resolve).not.toHaveBeenCalled();
 
-    const updated = await container.approvalDal.respond(pending.id, true, "approved in test");
+    const updated = await container.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: pending.approval_id,
+      decision: "approved",
+      reason: "approved in test",
+    });
     if (updated?.resume_token) {
       await approvalEngine.resumeRun(updated.resume_token);
     }

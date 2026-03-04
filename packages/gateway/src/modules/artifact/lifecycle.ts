@@ -84,7 +84,7 @@ function resolveRetentionDays(
   // - by_label_sensitivity(label,sensitivity)
   // - by_sensitivity(sensitivity)
   // - by_label(label)
-  // - defaults (retention.default_days, retention_days legacy)
+  // - defaults (retention.default_days)
   const byLabelSensitivity = artifacts.retention?.by_label_sensitivity?.[label]?.[sensitivity];
   if (
     typeof byLabelSensitivity === "number" &&
@@ -104,7 +104,7 @@ function resolveRetentionDays(
     return byLabel;
   }
 
-  return minPositive([artifacts.retention?.default_days, artifacts.retention_days]);
+  return minPositive([artifacts.retention?.default_days]);
 }
 
 function resolveQuotaMaxBytes(
@@ -119,7 +119,7 @@ function resolveQuotaMaxBytes(
   // - by_label_sensitivity(label,sensitivity)
   // - by_sensitivity(sensitivity)
   // - by_label(label)
-  // - defaults (quota.default_max_bytes, max_bytes legacy)
+  // - defaults (quota.default_max_bytes)
   const byLabelSensitivity = artifacts.quota?.by_label_sensitivity?.[label]?.[sensitivity];
   if (
     typeof byLabelSensitivity === "number" &&
@@ -139,7 +139,7 @@ function resolveQuotaMaxBytes(
     return byLabel;
   }
 
-  return minPositive([artifacts.quota?.default_max_bytes, artifacts.max_bytes]);
+  return minPositive([artifacts.quota?.default_max_bytes]);
 }
 
 function whereNullableEquals(

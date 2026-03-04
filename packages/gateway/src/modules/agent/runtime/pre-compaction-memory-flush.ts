@@ -88,6 +88,7 @@ export async function maybeRunPreCompactionMemoryFlush(
     try {
       const memory = new MemoryV1Dal(deps.db);
       const existing = await memory.list({
+        tenantId: input.session.tenant_id,
         agentId: deps.agentId,
         limit: 1,
         filter: { tags: [flushTag] },
@@ -99,8 +100,7 @@ export async function maybeRunPreCompactionMemoryFlush(
       const message = err instanceof Error ? err.message : String(err);
       deps.logger.warn("memory.flush_v1_dedupe_failed", {
         session_id: input.session.session_id,
-        channel: input.session.channel,
-        thread_id: input.session.thread_id,
+        session_key: input.session.session_key,
         error: message,
       });
     }
@@ -158,8 +158,7 @@ export async function maybeRunPreCompactionMemoryFlush(
     if (flushText !== rawFlushText) {
       deps.logger.warn("memory.flush_redacted_secret_like", {
         session_id: input.session.session_id,
-        channel: input.session.channel,
-        thread_id: input.session.thread_id,
+        session_key: input.session.session_key,
       });
     }
 
@@ -177,8 +176,6 @@ export async function maybeRunPreCompactionMemoryFlush(
             sensitivity: "private",
             provenance: {
               source_kind: "system",
-              channel: input.session.channel,
-              thread_id: input.session.thread_id,
               session_id: input.session.session_id,
               refs: [],
               metadata: {
@@ -188,14 +185,13 @@ export async function maybeRunPreCompactionMemoryFlush(
               },
             },
           },
-          deps.agentId,
+          { tenantId: input.session.tenant_id, agentId: deps.agentId },
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         deps.logger.warn("memory.flush_v1_write_failed", {
           session_id: input.session.session_id,
-          channel: input.session.channel,
-          thread_id: input.session.thread_id,
+          session_key: input.session.session_key,
           error: message,
         });
       }
@@ -208,8 +204,7 @@ export async function maybeRunPreCompactionMemoryFlush(
     const message = err instanceof Error ? err.message : String(err);
     deps.logger.warn("memory.flush_failed", {
       session_id: input.session.session_id,
-      channel: input.session.channel,
-      thread_id: input.session.thread_id,
+      session_key: input.session.session_key,
       error: message,
     });
   }

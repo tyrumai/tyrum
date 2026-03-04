@@ -10,16 +10,17 @@ import { expectRejects } from "./test-helpers.js";
 
 describe("Approval contracts", () => {
   const baseApproval = {
-    approval_id: 1,
+    approval_id: "550e8400-e29b-41d4-a716-446655440000",
+    approval_key: "approval-1",
     kind: "workflow_step",
     status: "pending",
     prompt: "Approve deployment?",
     context: { env: "prod" },
     scope: {
-      key: "agent:agent-1:telegram-1:main",
+      key: "agent:agent-1:main",
       lane: "main",
-      run_id: "run-123",
-      step_index: 2,
+      run_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+      step_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
     },
     created_at: "2026-02-19T12:00:00Z",
     expires_at: null,
@@ -34,7 +35,7 @@ describe("Approval contracts", () => {
   });
 
   it("rejects an approval record with wrong approval_id type", () => {
-    expectRejects(Approval, { ...baseApproval, approval_id: "1" });
+    expectRejects(Approval, { ...baseApproval, approval_id: 1 });
   });
 
   it("rejects an approval record missing created_at", () => {
@@ -72,7 +73,7 @@ describe("Approval contracts", () => {
 
   it("parses approval resolve request", () => {
     const req = ApprovalResolveRequest.parse({
-      approval_id: 123,
+      approval_id: "550e8400-e29b-41d4-a716-446655440001",
       decision: "approved",
       reason: "ok",
     });
@@ -80,7 +81,10 @@ describe("Approval contracts", () => {
   });
 
   it("rejects approval resolve request with invalid decision", () => {
-    expectRejects(ApprovalResolveRequest, { approval_id: 123, decision: "maybe" });
+    expectRejects(ApprovalResolveRequest, {
+      approval_id: "550e8400-e29b-41d4-a716-446655440001",
+      decision: "maybe",
+    });
   });
 
   it("rejects approval resolve request missing approval_id", () => {

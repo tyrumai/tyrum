@@ -132,21 +132,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     };
   })();
 
-  const oauthSecretProviderForAgent = (() => {
-    if (!opts.secretProvider) return undefined;
-    const defaultSecretProvider = opts.secretProvider;
-    return async (agentId: string) => {
-      if (opts.agents) {
-        return await opts.agents.getSecretProvider(agentId);
-      }
-      const trimmed = agentId.trim();
-      if (trimmed !== "default") {
-        throw new Error("non-default agent_id requires TYRUM_AGENT_ENABLED=1");
-      }
-      return defaultSecretProvider;
-    };
-  })();
-
   const trustedProxies = createTrustedProxyAllowlistFromEnv(
     container.gatewayConfig?.server.trustedProxies,
   );
@@ -266,7 +251,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       db: container.db,
       authProfileDal,
       pinDal,
-      agents: opts.agents,
+      secretProvider: opts.secretProvider,
       logger: container.logger,
     }),
   );
@@ -292,14 +277,14 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     app.route("/", createDeviceTokenRoutes({ tokenStore: opts.tokenStore }));
   }
   app.route("/", createModelsDevRoutes({ modelsDev: container.modelsDev }));
-  if (oauthSecretProviderForAgent && isAuthProfilesEnabled()) {
+  if (opts.secretProvider && isAuthProfilesEnabled()) {
     app.route(
       "/",
       createProviderOAuthRoutes({
         oauthPendingDal: container.oauthPendingDal,
         oauthProviderRegistry: container.oauthProviderRegistry,
         authProfileDal,
-        secretProviderForAgent: oauthSecretProviderForAgent,
+        secretProvider: opts.secretProvider,
         logger: container.logger,
       }),
     );
@@ -315,6 +300,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       telegramQueue:
         channelPipelineEnabled && container.telegramBot && opts.agents
           ? new TelegramChannelQueue(container.db, {
+              sessionDal: container.sessionDal,
               logger: container.logger,
               ws: opts.connectionManager
                 ? {
@@ -414,8 +400,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       "/",
       createSecretRoutes({
         secretProviderForAgent,
-        authProfileDal,
-        logger: container.logger,
       }),
     );
   }

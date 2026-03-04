@@ -20,6 +20,7 @@ import type { ArtifactStore } from "../../modules/artifact/store.js";
 import type { RedactionEngine } from "../../modules/redaction/engine.js";
 import type { TaskResultRegistry } from "./task-result-registry.js";
 import type { AgentConfig } from "@tyrum/schemas";
+import type { IdentityScopeDal } from "../../modules/identity/scope.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection
@@ -34,6 +35,7 @@ export interface ProtocolDeps {
   logger?: Logger;
   authAudit?: AuthAudit;
   db?: SqlDb;
+  identityScopeDal?: IdentityScopeDal;
   redactionEngine?: RedactionEngine;
   memoryV1Dal?: MemoryV1Dal;
   memoryV1BudgetsProvider?: (agentId?: string) => Promise<AgentConfig["memory"]["v1"]["budgets"]>;
@@ -84,5 +86,5 @@ export interface ProtocolDeps {
   onConnectionClosed?: (connectionId: string) => void;
 
   /** Called when an approval.request response is received from a client. */
-  onApprovalDecision?: (approvalId: number, approved: boolean, reason: string | undefined) => void;
+  onApprovalDecision?: (approvalId: string, approved: boolean, reason: string | undefined) => void;
 }

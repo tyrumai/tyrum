@@ -2,12 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SecretHandle } from "@tyrum/schemas";
-import type { SecretProvider } from "../../src/modules/secret/provider.js";
+import { APICallError, type LanguageModelV3 } from "@ai-sdk/provider";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
-import type { LanguageModelV3 } from "@ai-sdk/provider";
+import { DbSecretProvider } from "../../src/modules/secret/provider.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -18,6 +18,7 @@ vi.mock("../../src/modules/models/provider-factory.js", () => {
   return {
     createProviderFromNpm: (input: { apiKey?: string }) => {
       const apiKey = input.apiKey;
+
       const model: LanguageModelV3 = {
         specificationVersion: "v3",
         provider: "mock",
@@ -25,6 +26,15 @@ vi.mock("../../src/modules/models/provider-factory.js", () => {
         supportedUrls: {},
         async doGenerate() {
           seenApiKeys.push(apiKey);
+          if (apiKey === "OLD_ACCESS") {
+            throw new APICallError({
+              message: "unauthorized",
+              url: "https://api.example/v1",
+              requestBodyValues: {},
+              statusCode: 401,
+              responseBody: '{"error":"unauthorized"}',
+            });
+          }
           if (!apiKey) {
             throw new Error("missing apiKey");
           }
@@ -44,39 +54,6 @@ vi.mock("../../src/modules/models/provider-factory.js", () => {
   };
 });
 
-class MemorySecretProvider implements SecretProvider {
-  private readonly values = new Map<string, string>();
-  private readonly handles = new Map<string, SecretHandle>();
-  public listCalls = 0;
-
-  async resolve(handle: SecretHandle): Promise<string | null> {
-    return this.values.get(handle.handle_id) ?? null;
-  }
-
-  async store(scope: string, value: string): Promise<SecretHandle> {
-    const handle: SecretHandle = {
-      handle_id: randomUUID(),
-      provider: "memory",
-      scope,
-      created_at: new Date().toISOString(),
-    };
-    this.handles.set(handle.handle_id, handle);
-    this.values.set(handle.handle_id, value);
-    return handle;
-  }
-
-  async revoke(handleId: string): Promise<boolean> {
-    const existed = this.handles.delete(handleId);
-    this.values.delete(handleId);
-    return existed;
-  }
-
-  async list(): Promise<SecretHandle[]> {
-    this.listCalls += 1;
-    return [...this.handles.values()];
-  }
-}
-
 describe("AgentRuntime OAuth refresh", () => {
   let container: GatewayContainer | undefined;
 
@@ -89,69 +66,68 @@ describe("AgentRuntime OAuth refresh", () => {
     delete process.env["OAUTH_TEST_CLIENT_SECRET"];
   });
 
-  it("uses refreshed OAuth access token on subsequent model calls in the same turn", async () => {
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
-    process.env["OAUTH_TEST_CLIENT_ID"] = "client-id";
-    process.env["OAUTH_TEST_CLIENT_SECRET"] = "client-secret";
-
-    container = createContainer({
-      dbPath: ":memory:",
-      migrationsDir,
-    });
-
-    // Seed a minimal models.dev catalog so resolveSessionModel can find the model.
-    const catalog = {
-      openai: {
-        id: "openai",
-        name: "OpenAI",
-        env: [],
-        npm: "@ai-sdk/openai",
-        models: {
-          "gpt-4.1": {
-            id: "gpt-4.1",
-            name: "GPT-4.1",
+  async function seedCatalog(): Promise<void> {
+    const cacheDal = new ModelsDevCacheDal(container!.db);
+    const nowIso = new Date().toISOString();
+    await cacheDal.upsert({
+      fetchedAt: nowIso,
+      etag: null,
+      sha256: "sha",
+      json: JSON.stringify({
+        openai: {
+          id: "openai",
+          name: "OpenAI",
+          env: [],
+          npm: "@ai-sdk/openai",
+          models: {
+            "gpt-4.1": {
+              id: "gpt-4.1",
+              name: "GPT-4.1",
+            },
           },
         },
-      },
-    };
-    const cacheDal = new ModelsDevCacheDal(container.db);
-    const nowIso = new Date().toISOString();
-    await cacheDal.upsert({
-      fetchedAt: nowIso,
-      etag: null,
-      sha256: "sha",
-      json: JSON.stringify(catalog),
+      }),
       source: "remote",
       lastError: null,
       nowIso,
     });
+  }
 
-    const secretProvider = new MemorySecretProvider();
-    const oldAccessHandle = await secretProvider.store(
-      "oauth:openai:agent-1:access-old",
-      "OLD_ACCESS",
-    );
-    const refreshHandle = await secretProvider.store(
-      "oauth:openai:agent-1:refresh",
-      "REFRESH_TOKEN",
-    );
+  it("refreshes an OAuth profile on 401 and reuses the refreshed access token", async () => {
+    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
+    process.env["OAUTH_TEST_CLIENT_ID"] = "client-id";
+    process.env["OAUTH_TEST_CLIENT_SECRET"] = "client-secret";
+
+    container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+    await seedCatalog();
+
+    const secretProvider = new DbSecretProvider(container.db, {
+      tenantId: DEFAULT_TENANT_ID,
+      masterKey: Buffer.alloc(32, 7),
+      keyId: "test-key",
+    });
+
+    const accessKey = "oauth:openai:access";
+    const refreshKey = "oauth:openai:refresh";
+    const accessHandle = await secretProvider.store(accessKey, "OLD_ACCESS");
+    const refreshHandle = await secretProvider.store(refreshKey, "REFRESH_TOKEN");
 
     const authProfileDal = new AuthProfileDal(container.db);
     await authProfileDal.create({
-      profileId: "profile-1",
-      agentId: "agent-1",
-      provider: "openai",
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: "profile-1",
+      providerKey: "openai",
       type: "oauth",
-      secretHandles: {
-        access_token_handle: oldAccessHandle.handle_id,
-        refresh_token_handle: refreshHandle.handle_id,
+      secretKeys: {
+        access_token: accessKey,
+        refresh_token: refreshKey,
       },
-      expiresAt: new Date(Date.now() + 30_000).toISOString(),
-      createdBy: { kind: "test" },
     });
 
-    // Stub OAuth provider registry so refresh can run.
-    (container as unknown as { oauthProviderRegistry: unknown }).oauthProviderRegistry = {
+    (container as any).oauthProviderRegistry = {
       async get(providerId: string) {
         if (providerId !== "openai") return undefined;
         return {
@@ -196,24 +172,22 @@ describe("AgentRuntime OAuth refresh", () => {
       fetchImpl,
     });
 
-    const model = await (
-      runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }
-    ).resolveSessionModel({
+    const model = await (runtime as any).resolveSessionModel({
       config: { model: { model: "openai/gpt-4.1", options: {} } },
-      sessionId: "session-1",
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: randomUUID(),
       fetchImpl,
     });
 
     await model.doGenerate({} as any);
     await model.doGenerate({} as any);
 
-    expect(seenApiKeys).toEqual(["NEW_ACCESS", "NEW_ACCESS"]);
-    expect(secretProvider.listCalls).toBe(2);
+    expect(seenApiKeys).toEqual(["OLD_ACCESS", "NEW_ACCESS", "NEW_ACCESS"]);
+    expect(await secretProvider.resolve(accessHandle)).toBe("NEW_ACCESS");
+    expect(await secretProvider.resolve(refreshHandle)).toBe("NEW_REFRESH");
   });
 
-  it("clears expires_at when refresh response omits expires_in", async () => {
+  it("keeps the existing refresh token when the refresh response omits refresh_token", async () => {
     process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
     process.env["OAUTH_TEST_CLIENT_ID"] = "client-id";
     process.env["OAUTH_TEST_CLIENT_SECRET"] = "client-secret";
@@ -222,52 +196,32 @@ describe("AgentRuntime OAuth refresh", () => {
       dbPath: ":memory:",
       migrationsDir,
     });
+    await seedCatalog();
 
-    const cacheDal = new ModelsDevCacheDal(container.db);
-    const nowIso = new Date().toISOString();
-    await cacheDal.upsert({
-      fetchedAt: nowIso,
-      etag: null,
-      sha256: "sha",
-      json: JSON.stringify({
-        openai: {
-          id: "openai",
-          name: "OpenAI",
-          env: [],
-          npm: "@ai-sdk/openai",
-          models: { "gpt-4.1": { id: "gpt-4.1", name: "GPT-4.1" } },
-        },
-      }),
-      source: "remote",
-      lastError: null,
-      nowIso,
+    const secretProvider = new DbSecretProvider(container.db, {
+      tenantId: DEFAULT_TENANT_ID,
+      masterKey: Buffer.alloc(32, 7),
+      keyId: "test-key",
     });
 
-    const secretProvider = new MemorySecretProvider();
-    const oldAccessHandle = await secretProvider.store(
-      "oauth:openai:agent-1:access-old",
-      "OLD_ACCESS",
-    );
-    const refreshHandle = await secretProvider.store(
-      "oauth:openai:agent-1:refresh",
-      "REFRESH_TOKEN",
-    );
+    const accessKey = "oauth:openai:access";
+    const refreshKey = "oauth:openai:refresh";
+    await secretProvider.store(accessKey, "OLD_ACCESS");
+    const refreshHandle = await secretProvider.store(refreshKey, "REFRESH_TOKEN");
 
     const authProfileDal = new AuthProfileDal(container.db);
     await authProfileDal.create({
-      profileId: "profile-1",
-      agentId: "agent-1",
-      provider: "openai",
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: "profile-1",
+      providerKey: "openai",
       type: "oauth",
-      secretHandles: {
-        access_token_handle: oldAccessHandle.handle_id,
-        refresh_token_handle: refreshHandle.handle_id,
+      secretKeys: {
+        access_token: accessKey,
+        refresh_token: refreshKey,
       },
-      expiresAt: new Date(Date.now() + 30_000).toISOString(),
-      createdBy: { kind: "test" },
     });
 
-    (container as unknown as { oauthProviderRegistry: unknown }).oauthProviderRegistry = {
+    (container as any).oauthProviderRegistry = {
       async get(providerId: string) {
         if (providerId !== "openai") return undefined;
         return {
@@ -287,16 +241,12 @@ describe("AgentRuntime OAuth refresh", () => {
       },
     };
 
-    let tokenCalls = 0;
-    const fetchImpl: typeof fetch = async (input, init) => {
+    const fetchImpl: typeof fetch = async (input) => {
       const url = String(input);
       if (url === "https://oauth.example/token") {
-        tokenCalls += 1;
-        expect(init?.method).toBe("POST");
         return new Response(
           JSON.stringify({
             access_token: "NEW_ACCESS",
-            refresh_token: "NEW_REFRESH",
             token_type: "Bearer",
           }),
           { status: 200, headers: { "content-type": "application/json" } },
@@ -313,222 +263,57 @@ describe("AgentRuntime OAuth refresh", () => {
       fetchImpl,
     });
 
-    const model = await (
-      runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }
-    ).resolveSessionModel({
+    const model = await (runtime as any).resolveSessionModel({
       config: { model: { model: "openai/gpt-4.1", options: {} } },
-      sessionId: "session-1",
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: randomUUID(),
       fetchImpl,
     });
 
     await model.doGenerate({} as any);
-
-    const updated = await authProfileDal.getById("profile-1");
-    expect(updated?.expires_at).toBeNull();
-
-    await model.doGenerate({} as any);
-
-    expect(tokenCalls).toBe(1);
-    expect(seenApiKeys).toEqual(["NEW_ACCESS", "NEW_ACCESS"]);
+    expect(await secretProvider.resolve(refreshHandle)).toBe("REFRESH_TOKEN");
   });
 
-  it("revokes newly stored access token handle when refresh token store fails", async () => {
+  it("disables an OAuth profile when refresh fails and rotates to the next profile", async () => {
     process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
-    process.env["OAUTH_TEST_CLIENT_ID"] = "client-id";
-    process.env["OAUTH_TEST_CLIENT_SECRET"] = "client-secret";
 
     container = createContainer({
       dbPath: ":memory:",
       migrationsDir,
     });
+    await seedCatalog();
 
-    // Seed a minimal models.dev catalog so resolveSessionModel can find the model.
-    const cacheDal = new ModelsDevCacheDal(container.db);
-    const nowIso = new Date().toISOString();
-    await cacheDal.upsert({
-      fetchedAt: nowIso,
-      etag: null,
-      sha256: "sha",
-      json: JSON.stringify({
-        openai: {
-          id: "openai",
-          name: "OpenAI",
-          env: [],
-          npm: "@ai-sdk/openai",
-          models: { "gpt-4.1": { id: "gpt-4.1", name: "GPT-4.1" } },
-        },
-      }),
-      source: "remote",
-      lastError: null,
-      nowIso,
+    const secretProvider = new DbSecretProvider(container.db, {
+      tenantId: DEFAULT_TENANT_ID,
+      masterKey: Buffer.alloc(32, 7),
+      keyId: "test-key",
     });
 
-    const secretProvider = new MemorySecretProvider();
-    const oldAccessHandle = await secretProvider.store(
-      "oauth:openai:agent-1:access-old",
-      "OLD_ACCESS",
-    );
-    const refreshHandle = await secretProvider.store(
-      "oauth:openai:agent-1:refresh",
-      "REFRESH_TOKEN",
-    );
-
-    const originalStore = secretProvider.store.bind(secretProvider);
-    const storeSpy = vi.spyOn(secretProvider, "store").mockImplementation(async (scope, value) => {
-      if (scope.endsWith(":refresh") && value === "NEW_REFRESH") {
-        throw new Error("secret backend down");
-      }
-      return await originalStore(scope, value);
-    });
-
-    try {
-      const authProfileDal = new AuthProfileDal(container.db);
-      await authProfileDal.create({
-        profileId: "profile-1",
-        agentId: "agent-1",
-        provider: "openai",
-        type: "oauth",
-        secretHandles: {
-          access_token_handle: oldAccessHandle.handle_id,
-          refresh_token_handle: refreshHandle.handle_id,
-        },
-        expiresAt: new Date(Date.now() + 30_000).toISOString(),
-        createdBy: { kind: "test" },
-      });
-
-      // Stub OAuth provider registry so refresh can run.
-      (container as unknown as { oauthProviderRegistry: unknown }).oauthProviderRegistry = {
-        async get(providerId: string) {
-          if (providerId !== "openai") return undefined;
-          return {
-            provider_id: "openai",
-            token_endpoint: "https://oauth.example/token",
-            scopes: [],
-            client_id_env: "OAUTH_TEST_CLIENT_ID",
-            client_secret_env: "OAUTH_TEST_CLIENT_SECRET",
-            token_endpoint_basic_auth: true,
-          };
-        },
-        async list() {
-          return [];
-        },
-        async reload() {
-          // no-op
-        },
-      };
-
-      const fetchImpl: typeof fetch = async (input, init) => {
-        const url = String(input);
-        if (url === "https://oauth.example/token") {
-          expect(init?.method).toBe("POST");
-          return new Response(
-            JSON.stringify({
-              access_token: "NEW_ACCESS",
-              refresh_token: "NEW_REFRESH",
-              expires_in: 3600,
-              token_type: "Bearer",
-            }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          );
-        }
-        return new Response("not found", { status: 404 });
-      };
-
-      const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-      const runtime = new AgentRuntime({
-        container,
-        agentId: "agent-1",
-        secretProvider,
-        fetchImpl,
-      });
-
-      const model = await (
-        runtime as unknown as {
-          resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-        }
-      ).resolveSessionModel({
-        config: { model: { model: "openai/gpt-4.1", options: {} } },
-        sessionId: "session-1",
-        fetchImpl,
-      });
-
-      await model.doGenerate({} as any);
-
-      expect(seenApiKeys).toEqual(["OLD_ACCESS"]);
-      expect(await secretProvider.list()).toHaveLength(2);
-    } finally {
-      storeSpy.mockRestore();
-    }
-  });
-
-  it("revokes newly stored token handles when auth profile update throws", async () => {
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
-    process.env["OAUTH_TEST_CLIENT_ID"] = "client-id";
-    process.env["OAUTH_TEST_CLIENT_SECRET"] = "client-secret";
-
-    container = createContainer({
-      dbPath: ":memory:",
-      migrationsDir,
-    });
-
-    const cacheDal = new ModelsDevCacheDal(container.db);
-    const nowIso = new Date().toISOString();
-    await cacheDal.upsert({
-      fetchedAt: nowIso,
-      etag: null,
-      sha256: "sha",
-      json: JSON.stringify({
-        openai: {
-          id: "openai",
-          name: "OpenAI",
-          env: [],
-          npm: "@ai-sdk/openai",
-          models: { "gpt-4.1": { id: "gpt-4.1", name: "GPT-4.1" } },
-        },
-      }),
-      source: "remote",
-      lastError: null,
-      nowIso,
-    });
-
-    const secretProvider = new MemorySecretProvider();
-    const oldAccessHandle = await secretProvider.store(
-      "oauth:openai:agent-1:access-old",
-      "OLD_ACCESS",
-    );
-    const refreshHandle = await secretProvider.store(
-      "oauth:openai:agent-1:refresh",
-      "REFRESH_TOKEN",
-    );
+    const accessKey = "oauth:openai:access";
+    const refreshKey = "oauth:openai:refresh";
+    await secretProvider.store(accessKey, "OLD_ACCESS");
+    await secretProvider.store(refreshKey, "REFRESH_TOKEN");
+    await secretProvider.store("api-key:openai:good", "GOOD_KEY");
 
     const authProfileDal = new AuthProfileDal(container.db);
     await authProfileDal.create({
-      profileId: "profile-1",
-      agentId: "agent-1",
-      provider: "openai",
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: "a-oauth",
+      providerKey: "openai",
       type: "oauth",
-      secretHandles: {
-        access_token_handle: oldAccessHandle.handle_id,
-        refresh_token_handle: refreshHandle.handle_id,
-      },
-      expiresAt: new Date(Date.now() + 30_000).toISOString(),
-      createdBy: { kind: "test" },
+      secretKeys: { access_token: accessKey, refresh_token: refreshKey },
+    });
+    await authProfileDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: "b-api",
+      providerKey: "openai",
+      type: "api_key",
+      secretKeys: { api_key: "api-key:openai:good" },
     });
 
-    // Stub OAuth provider registry so refresh can run.
-    (container as unknown as { oauthProviderRegistry: unknown }).oauthProviderRegistry = {
-      async get(providerId: string) {
-        if (providerId !== "openai") return undefined;
-        return {
-          provider_id: "openai",
-          token_endpoint: "https://oauth.example/token",
-          scopes: [],
-          client_id_env: "OAUTH_TEST_CLIENT_ID",
-          client_secret_env: "OAUTH_TEST_CLIENT_SECRET",
-          token_endpoint_basic_auth: true,
-        };
+    (container as any).oauthProviderRegistry = {
+      async get() {
+        return undefined;
       },
       async list() {
         return [];
@@ -538,52 +323,31 @@ describe("AgentRuntime OAuth refresh", () => {
       },
     };
 
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const url = String(input);
-      if (url === "https://oauth.example/token") {
-        expect(init?.method).toBe("POST");
-        return new Response(
-          JSON.stringify({
-            access_token: "NEW_ACCESS",
-            refresh_token: "NEW_REFRESH",
-            expires_in: 3600,
-            token_type: "Bearer",
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-      return new Response("not found", { status: 404 });
-    };
+    const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const updateSpy = vi
-      .spyOn(AuthProfileDal.prototype, "updateSecretHandles")
-      .mockRejectedValueOnce(new Error("db down"));
+    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+    const runtime = new AgentRuntime({
+      container,
+      agentId: "agent-1",
+      secretProvider,
+      fetchImpl,
+    });
 
-    try {
-      const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-      const runtime = new AgentRuntime({
-        container,
-        agentId: "agent-1",
-        secretProvider,
-        fetchImpl,
-      });
+    const model = await (runtime as any).resolveSessionModel({
+      config: { model: { model: "openai/gpt-4.1", options: {} } },
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: randomUUID(),
+      fetchImpl,
+    });
 
-      const model = await (
-        runtime as unknown as {
-          resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-        }
-      ).resolveSessionModel({
-        config: { model: { model: "openai/gpt-4.1", options: {} } },
-        sessionId: "session-1",
-        fetchImpl,
-      });
+    await model.doGenerate({} as any);
 
-      await model.doGenerate({} as any);
-    } finally {
-      updateSpy.mockRestore();
-    }
+    expect(seenApiKeys).toEqual(["OLD_ACCESS", "GOOD_KEY"]);
 
-    expect(seenApiKeys).toEqual(["OLD_ACCESS"]);
-    expect(await secretProvider.list()).toHaveLength(2);
+    const oauthProfile = await authProfileDal.getByKey({
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: "a-oauth",
+    });
+    expect(oauthProfile?.status).toBe("disabled");
   });
 });

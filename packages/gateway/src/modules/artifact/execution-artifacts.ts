@@ -9,6 +9,7 @@ import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
 export type ExecutionArtifactSensitivity = "normal" | "sensitive";
 
 export type ResolvedExecutionArtifactScope = {
+  tenantId: string;
   workspaceId: string;
   agentId: string | null;
   policySnapshotId: string | null;
@@ -26,35 +27,51 @@ export async function resolveExecutionArtifactScope(
   db: SqlDb,
   ids: { runId: string; stepId: string; workspaceId?: string },
 ): Promise<ResolvedExecutionArtifactScope | null> {
-  const run = await db.get<{ key: string; policy_snapshot_id: string | null }>(
-    `SELECT key, policy_snapshot_id
+  const run = await db.get<{
+    tenant_id: string;
+    job_id: string;
+    policy_snapshot_id: string | null;
+  }>(
+    `SELECT tenant_id, job_id, policy_snapshot_id
      FROM execution_runs
      WHERE run_id = ?`,
     [ids.runId],
   );
   if (!run) return null;
 
-  const step = await db.get<{ run_id: string }>(
-    `SELECT run_id
+  const step = await db.get<{ tenant_id: string; run_id: string }>(
+    `SELECT tenant_id, run_id
      FROM execution_steps
      WHERE step_id = ?`,
     [ids.stepId],
   );
   if (!step) return null;
+  if (step.tenant_id !== run.tenant_id) return null;
   if (step.run_id !== ids.runId) return null;
+
+  const job = await db.get<{ agent_id: string; workspace_id: string }>(
+    `SELECT agent_id, workspace_id
+     FROM execution_jobs
+     WHERE tenant_id = ?
+       AND job_id = ?`,
+    [run.tenant_id, run.job_id],
+  );
+  if (!job) return null;
 
   const attempt = await db.get<{ attempt_id: string }>(
     `SELECT attempt_id
      FROM execution_attempts
-     WHERE step_id = ?
+     WHERE tenant_id = ?
+       AND step_id = ?
      ORDER BY attempt DESC
      LIMIT 1`,
-    [ids.stepId],
+    [run.tenant_id, ids.stepId],
   );
 
   return {
-    workspaceId: ids.workspaceId?.trim() || "default",
-    agentId: deriveAgentIdFromExecutionKey(run.key) ?? null,
+    tenantId: run.tenant_id,
+    workspaceId: ids.workspaceId?.trim() || job.workspace_id,
+    agentId: job.agent_id ?? null,
     policySnapshotId: run.policy_snapshot_id ?? null,
     attemptId: attempt?.attempt_id ?? null,
   };
@@ -67,6 +84,7 @@ export async function insertExecutionArtifactRowTx(
     labelsJson?: string;
     metadataJson?: string;
     scope: {
+      tenantId: string;
       workspaceId: string;
       agentId: string | null;
       runId: string;
@@ -82,6 +100,7 @@ export async function insertExecutionArtifactRowTx(
 
   const insertResult = await tx.run(
     `INSERT INTO execution_artifacts (
+       tenant_id,
        artifact_id,
        workspace_id,
        agent_id,
@@ -96,12 +115,13 @@ export async function insertExecutionArtifactRowTx(
        sha256,
        labels_json,
        metadata_json,
-       sensitivity,
-       policy_snapshot_id
+     sensitivity,
+     policy_snapshot_id
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (artifact_id) DO NOTHING`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (tenant_id, artifact_id) DO NOTHING`,
     [
+      input.scope.tenantId,
       input.artifact.artifact_id,
       input.scope.workspaceId,
       input.scope.agentId,
@@ -186,6 +206,7 @@ export async function persistExecutionArtifactBytes(
     const { inserted } = await insertExecutionArtifactRowTx(tx, {
       artifact,
       scope: {
+        tenantId: scope.tenantId,
         workspaceId: scope.workspaceId,
         agentId: scope.agentId,
         runId: input.runId,

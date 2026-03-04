@@ -18,15 +18,15 @@ describe("Canvas routes", () => {
         body: JSON.stringify({
           title: "Dashboard",
           content_type: "text/html",
-          html_content: "<h1>Dashboard</h1><p>Stats here</p>",
-          plan_id: "plan-42",
+          content: "<h1>Dashboard</h1><p>Stats here</p>",
           metadata: { theme: "dark" },
+          links: [{ parent_kind: "plan", parent_id: "plan-42" }],
         }),
       });
 
       expect(res.status).toBe(201);
-      const body = (await res.json()) as { id: string; created_at: string };
-      expect(body.id).toBeTruthy();
+      const body = (await res.json()) as { canvas_artifact_id: string; created_at: string };
+      expect(body.canvas_artifact_id).toBeTruthy();
       expect(body.created_at).toBeTruthy();
     });
 
@@ -49,7 +49,7 @@ describe("Canvas routes", () => {
         body: JSON.stringify({
           title: "Bad Type",
           content_type: "application/json",
-          html_content: "{}",
+          content: "{}",
         }),
       });
 
@@ -67,11 +67,13 @@ describe("Canvas routes", () => {
         body: JSON.stringify({
           title: "Secure Page",
           content_type: "text/html",
-          html_content: "<h1>Sandboxed</h1>",
+          content: "<h1>Sandboxed</h1>",
         }),
       });
 
-      const { id } = (await publishRes.json()) as { id: string };
+      const { canvas_artifact_id: id } = (await publishRes.json()) as {
+        canvas_artifact_id: string;
+      };
 
       const getRes = await app.request(`/canvas/${id}`);
       expect(getRes.status).toBe(200);
@@ -95,11 +97,13 @@ describe("Canvas routes", () => {
         body: JSON.stringify({
           title: "Plain Doc",
           content_type: "text/plain",
-          html_content: "Just text",
+          content: "Just text",
         }),
       });
 
-      const { id } = (await publishRes.json()) as { id: string };
+      const { canvas_artifact_id: id } = (await publishRes.json()) as {
+        canvas_artifact_id: string;
+      };
 
       const getRes = await app.request(`/canvas/${id}`);
       expect(getRes.status).toBe(200);
@@ -127,33 +131,34 @@ describe("Canvas routes", () => {
         body: JSON.stringify({
           title: "Meta Test",
           content_type: "text/html",
-          html_content: "<p>Body</p>",
-          plan_id: "plan-99",
+          content: "<p>Body</p>",
           metadata: { author: "agent" },
+          links: [{ parent_kind: "plan", parent_id: "plan-99" }],
         }),
       });
 
-      const { id } = (await publishRes.json()) as { id: string };
+      const { canvas_artifact_id: id } = (await publishRes.json()) as {
+        canvas_artifact_id: string;
+      };
 
       const metaRes = await app.request(`/canvas/${id}/meta`);
       expect(metaRes.status).toBe(200);
 
       const body = (await metaRes.json()) as {
-        id: string;
-        plan_id: string;
+        canvas_artifact_id: string;
+        workspace_id: string;
         title: string;
         content_type: string;
         metadata: Record<string, unknown>;
         created_at: string;
       };
 
-      expect(body.id).toBe(id);
-      expect(body.plan_id).toBe("plan-99");
+      expect(body.canvas_artifact_id).toBe(id);
       expect(body.title).toBe("Meta Test");
       expect(body.content_type).toBe("text/html");
       expect(body.metadata.author).toBe("agent");
       // Should NOT include html_content
-      expect("html_content" in body).toBe(false);
+      expect("content" in body).toBe(false);
     });
 
     it("returns 404 for unknown artifact", async () => {

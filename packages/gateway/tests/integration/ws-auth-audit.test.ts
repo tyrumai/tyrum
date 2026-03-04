@@ -11,6 +11,7 @@ import { AuthAudit, GATEWAY_AUTH_AUDIT_PLAN_ID } from "../../src/modules/auth/au
 import { AUTH_COOKIE_NAME } from "../../src/modules/auth/http.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { EventLog } from "../../src/modules/planner/event-log.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 function waitForClose(ws: WebSocket): Promise<{ code: number; reason: Buffer }> {
@@ -99,12 +100,12 @@ describe("WS auth audit events", () => {
     const close1 = await waitForClose(ws1);
     expect(close1.code).toBe(4001);
 
-    const rows1 = await db.all<{ action: string }>(
-      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      [GATEWAY_AUTH_AUDIT_PLAN_ID],
-    );
+    const rows1 = await eventLog.eventsForPlan({
+      tenantId: DEFAULT_TENANT_ID,
+      planKey: GATEWAY_AUTH_AUDIT_PLAN_ID,
+    });
     expect(rows1).toHaveLength(1);
-    const action1 = JSON.parse(rows1[0]!.action) as Record<string, unknown>;
+    const action1 = rows1[0]!.action as Record<string, unknown>;
     expect(action1["type"]).toBe("auth.failed");
     expect(action1["surface"]).toBe("ws.upgrade");
     expect(action1["reason"]).toBe("missing_token");
@@ -114,10 +115,10 @@ describe("WS auth audit events", () => {
     const close2 = await waitForClose(ws2);
     expect(close2.code).toBe(4001);
 
-    const rows2 = await db.all<{ id: number }>(
-      "SELECT id FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      [GATEWAY_AUTH_AUDIT_PLAN_ID],
-    );
+    const rows2 = await eventLog.eventsForPlan({
+      tenantId: DEFAULT_TENANT_ID,
+      planKey: GATEWAY_AUTH_AUDIT_PLAN_ID,
+    });
     expect(rows2).toHaveLength(1);
 
     nowMs = 20_000;
@@ -125,10 +126,10 @@ describe("WS auth audit events", () => {
     const close3 = await waitForClose(ws3);
     expect(close3.code).toBe(4001);
 
-    const rows3 = await db.all<{ id: number }>(
-      "SELECT id FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      [GATEWAY_AUTH_AUDIT_PLAN_ID],
-    );
+    const rows3 = await eventLog.eventsForPlan({
+      tenantId: DEFAULT_TENANT_ID,
+      planKey: GATEWAY_AUTH_AUDIT_PLAN_ID,
+    });
     expect(rows3).toHaveLength(2);
   });
 
@@ -159,12 +160,12 @@ describe("WS auth audit events", () => {
     const close = await waitForClose(ws);
     expect(close.code).toBe(4001);
 
-    const rows = await db.all<{ action: string }>(
-      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      [GATEWAY_AUTH_AUDIT_PLAN_ID],
-    );
+    const rows = await eventLog.eventsForPlan({
+      tenantId: DEFAULT_TENANT_ID,
+      planKey: GATEWAY_AUTH_AUDIT_PLAN_ID,
+    });
     expect(rows).toHaveLength(1);
-    const action = JSON.parse(rows[0]!.action) as Record<string, unknown>;
+    const action = rows[0]!.action as Record<string, unknown>;
     expect(action["type"]).toBe("auth.failed");
     expect(action["surface"]).toBe("ws.upgrade");
     expect(action["reason"]).toBe("missing_token");

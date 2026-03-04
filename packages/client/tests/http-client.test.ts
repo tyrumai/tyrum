@@ -44,11 +44,11 @@ function samplePairing(): Record<string, unknown> {
 
 function sampleAuthProfile(): Record<string, unknown> {
   return {
-    profile_id: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
-    agent_id: "my-agent",
-    provider: "openai",
+    auth_profile_id: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    auth_profile_key: "openai-default",
+    provider_key: "openai",
     type: "api_key",
-    secret_handles: {},
+    secret_keys: {},
     labels: {},
     status: "active",
     created_at: "2026-02-25T00:00:00.000Z",
@@ -118,7 +118,7 @@ describe("createTyrumHttpClient", () => {
   it("requests agent list and validates response", async () => {
     const fetch = makeFetchMock(async () =>
       jsonResponse({
-        agents: [{ agent_id: "default" }, { agent_id: "agent-1", home: "/tmp/agent-1" }],
+        agents: [{ agent_key: "default" }, { agent_key: "agent-1", home: "/tmp/agent-1" }],
       }),
     );
 
@@ -130,7 +130,7 @@ describe("createTyrumHttpClient", () => {
 
     const res = await client.agentList.get({ include_default: false });
 
-    expect(res.agents.map((a) => a.agent_id)).toEqual(["default", "agent-1"]);
+    expect(res.agents.map((a) => a.agent_key)).toEqual(["default", "agent-1"]);
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,
@@ -319,10 +319,10 @@ describe("createTyrumHttpClient", () => {
       fetch,
     });
 
-    await client.secrets.list({ agent_id: "agent-1" });
+    await client.secrets.list({ agent_key: "agent-1" });
 
     const [url] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
-    expect(url).toBe("https://gateway.example/secrets?agent_id=agent-1");
+    expect(url).toBe("https://gateway.example/secrets?agent_key=agent-1");
   });
 
   it("rejects invalid usage scope combinations locally", async () => {
@@ -466,10 +466,12 @@ describe("createTyrumHttpClient", () => {
     });
 
     const result = await client.authProfiles.create({
-      provider: "openai",
-      secret_handles: { api_key: "handle-1" },
+      auth_profile_key: "openai-default",
+      provider_key: "openai",
+      type: "api_key",
+      secret_keys: { api_key: "handle-1" },
     });
-    expect(result.profile.provider).toBe("openai");
+    expect(result.profile.provider_key).toBe("openai");
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,
@@ -548,20 +550,24 @@ describe("createTyrumHttpClient", () => {
       fetch,
     });
 
-    await client.authPins.list({ agent_id: "agent-1", provider: "openai" });
+    await client.authPins.list({
+      session_id: "550e8400-e29b-41d4-a716-446655440000",
+      provider_key: "openai",
+    });
 
     const [url] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
-    expect(url).toBe("https://gateway.example/auth/pins?agent_id=agent-1&provider=openai");
+    expect(url).toBe(
+      "https://gateway.example/auth/pins?session_id=550e8400-e29b-41d4-a716-446655440000&provider_key=openai",
+    );
   });
 
   it("authPins.set branches on profile_id null (clear) vs set (201)", async () => {
     const pin = {
-      agent_id: "my-agent",
-      session_id: "sess-1",
-      provider: "openai",
-      profile_id: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      session_id: "550e8400-e29b-41d4-a716-446655440000",
+      provider_key: "openai",
+      auth_profile_id: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      auth_profile_key: "openai-default",
       pinned_at: "2026-02-25T00:00:00.000Z",
-      updated_at: "2026-02-25T00:00:00.000Z",
     };
 
     const fetchSet = makeFetchMock(async () => jsonResponse({ status: "ok", pin }, 201));
@@ -572,9 +578,9 @@ describe("createTyrumHttpClient", () => {
     });
 
     const setResult = await clientSet.authPins.set({
-      session_id: "sess-1",
-      provider: "openai",
-      profile_id: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      session_id: "550e8400-e29b-41d4-a716-446655440000",
+      provider_key: "openai",
+      auth_profile_key: "openai-default",
     });
     expect(setResult.status).toBe("ok");
     expect("pin" in setResult).toBe(true);
@@ -587,9 +593,9 @@ describe("createTyrumHttpClient", () => {
     });
 
     const clearResult = await clientClear.authPins.set({
-      session_id: "sess-1",
-      provider: "openai",
-      profile_id: null,
+      session_id: "550e8400-e29b-41d4-a716-446655440000",
+      provider_key: "openai",
+      auth_profile_key: null,
     });
     expect(clearResult.status).toBe("ok");
     expect("cleared" in clearResult).toBe(true);
@@ -602,9 +608,9 @@ describe("createTyrumHttpClient", () => {
       jsonResponse(
         {
           handle: {
-            handle_id: "handle-1",
-            provider: "env",
-            scope: "my-scope",
+            handle_id: "my-secret",
+            provider: "db",
+            scope: "my-secret",
             created_at: "2026-02-25T00:00:00.000Z",
           },
         },
@@ -617,8 +623,8 @@ describe("createTyrumHttpClient", () => {
       fetch,
     });
 
-    const result = await client.secrets.store({ scope: "my-scope", value: "s3cret" });
-    expect(result.handle.handle_id).toBe("handle-1");
+    const result = await client.secrets.store({ secret_key: "my-secret", value: "s3cret" });
+    expect(result.handle.handle_id).toBe("my-secret");
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,
@@ -636,14 +642,14 @@ describe("createTyrumHttpClient", () => {
       fetch,
     });
 
-    const result = await client.secrets.revoke("secret-1", { agent_id: "agent-1" });
+    const result = await client.secrets.revoke("secret-1", { agent_key: "agent-1" });
     expect(result.revoked).toBe(true);
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,
       RequestInit,
     ];
-    expect(url).toBe("https://gateway.example/secrets/secret-1?agent_id=agent-1");
+    expect(url).toBe("https://gateway.example/secrets/secret-1?agent_key=agent-1");
     expect(init.method).toBe("DELETE");
   });
 
@@ -653,9 +659,9 @@ describe("createTyrumHttpClient", () => {
         {
           revoked: true,
           handle: {
-            handle_id: "handle-2",
-            provider: "env",
-            scope: "my-scope",
+            handle_id: "secret-1",
+            provider: "db",
+            scope: "secret-1",
             created_at: "2026-02-25T00:00:00.000Z",
           },
         },
@@ -669,7 +675,7 @@ describe("createTyrumHttpClient", () => {
     });
 
     const result = await client.secrets.rotate("secret-1", { value: "new-s3cret" });
-    expect(result.handle.handle_id).toBe("handle-2");
+    expect(result.handle.handle_id).toBe("secret-1");
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,
@@ -716,7 +722,7 @@ describe("createTyrumHttpClient", () => {
             policy_override_id: "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
             status: "active",
             created_at: "2026-02-25T00:00:00.000Z",
-            agent_id: "my-agent",
+            agent_id: "00000000-0000-4000-8000-000000000002",
             tool_id: "bash",
             pattern: "*",
           },
@@ -731,7 +737,7 @@ describe("createTyrumHttpClient", () => {
     });
 
     const result = await client.policy.createOverride({
-      agent_id: "my-agent",
+      agent_id: "00000000-0000-4000-8000-000000000002",
       tool_id: "bash",
       pattern: "*",
     });
@@ -752,7 +758,7 @@ describe("createTyrumHttpClient", () => {
           policy_override_id: "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
           status: "revoked",
           created_at: "2026-02-25T00:00:00.000Z",
-          agent_id: "my-agent",
+          agent_id: "00000000-0000-4000-8000-000000000002",
           tool_id: "bash",
           pattern: "*",
         },

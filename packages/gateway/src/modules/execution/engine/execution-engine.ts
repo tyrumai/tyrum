@@ -9,12 +9,11 @@ import type {
 } from "@tyrum/schemas";
 import {
   evaluatePostcondition,
-  Lane,
+  parseTyrumKey,
   PolicyBundle,
   PostconditionError,
   requiredCapability,
   requiresPostcondition,
-  TyrumKey,
 } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { RedactionEngine } from "../../redaction/engine.js";
@@ -32,9 +31,11 @@ import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.j
 import type { SqlDb } from "../../../statestore/types.js";
 import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
+import { ApprovalDal } from "../../approval/dal.js";
+import { toApprovalContract } from "../../approval/to-contract.js";
+import { IdentityScopeDal } from "../../identity/scope.js";
 import { WorkboardDal } from "../../workboard/dal.js";
 import { sha256HexFromString, stableJsonStringify } from "../../policy/canonical-json.js";
-import { deriveAgentIdFromExecutionKey } from "../../artifact/execution-artifacts.js";
 import { defaultClock } from "./clock.js";
 import { normalizePositiveInt } from "../normalize-positive-int.js";
 import { parseConcurrencyLimitsFromEnv } from "./concurrency.js";
@@ -49,7 +50,7 @@ import {
   tryAcquireLaneLease,
 } from "./concurrency-manager.js";
 import { ExecutionEngineEventEmitter } from "./event-emitter.js";
-import { normalizeWorkspaceId, parsePlanIdFromTriggerJson } from "./db.js";
+import { normalizeWorkspaceKey, parsePlanIdFromTriggerJson } from "./db.js";
 import {
   releaseWorkspaceLease,
   releaseWorkspaceLeaseTx,
@@ -68,6 +69,7 @@ import type {
 } from "./types.js";
 
 interface ResumeTokenRow {
+  tenant_id: string;
   token: string;
   run_id: string;
   expires_at: string | Date | null;
@@ -75,8 +77,10 @@ interface ResumeTokenRow {
 }
 
 interface RunnableRunRow {
+  tenant_id: string;
   run_id: string;
   job_id: string;
+  agent_id: string;
   key: string;
   lane: string;
   status: "queued" | "running";
@@ -86,6 +90,7 @@ interface RunnableRunRow {
 }
 
 interface StepRow {
+  tenant_id: string;
   step_id: string;
   run_id: string;
   step_index: number;
@@ -94,7 +99,7 @@ interface StepRow {
   created_at: string | Date;
   idempotency_key: string | null;
   postcondition_json: string | null;
-  approval_id: number | null;
+  approval_id: string | null;
   max_attempts: number;
   timeout_ms: number;
 }
@@ -204,11 +209,15 @@ export class ExecutionEngine {
     }
   }
 
-  private async isApprovedPolicyGateTx(tx: SqlDb, approvalId: number | null): Promise<boolean> {
+  private async isApprovedPolicyGateTx(
+    tx: SqlDb,
+    tenantId: string,
+    approvalId: string | null,
+  ): Promise<boolean> {
     if (approvalId === null) return false;
     const row = await tx.get<{ kind: string; status: string }>(
-      "SELECT kind, status FROM approvals WHERE id = ? LIMIT 1",
-      [approvalId],
+      "SELECT kind, status FROM approvals WHERE tenant_id = ? AND approval_id = ? LIMIT 1",
+      [tenantId, approvalId],
     );
     if (!row) return false;
     return row.kind === "policy" && row.status === "approved";
@@ -258,7 +267,7 @@ export class ExecutionEngine {
     opts: {
       runId: string;
       reason: string;
-      approvalId?: number;
+      approvalId?: string;
       detail?: string;
     },
   ): Promise<void> {
@@ -287,11 +296,12 @@ export class ExecutionEngine {
   private async recordArtifactsTx(
     tx: SqlDb,
     scope: {
+      tenantId: string;
       runId: string;
       stepId: string;
       attemptId: string;
       workspaceId: string;
-      key: string;
+      agentId: string | null;
     },
     artifacts: ArtifactRefT[],
   ): Promise<void> {
@@ -301,11 +311,29 @@ export class ExecutionEngine {
   async enqueuePlanInTx(tx: SqlDb, input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
     const jobId = randomUUID();
     const runId = randomUUID();
-    const workspaceId = normalizeWorkspaceId(input.workspaceId);
+    const workspaceKey = normalizeWorkspaceKey(input.workspaceId);
+
+    let agentKey = "default";
+    try {
+      const parsedKey = parseTyrumKey(input.key as never);
+      if (parsedKey.kind === "agent") {
+        agentKey = parsedKey.agent_key;
+      }
+    } catch {
+      // ignore; treat as default agent
+    }
+
+    const scopeIds = await new IdentityScopeDal(tx).resolveScopeIds({
+      agentKey,
+      workspaceKey,
+    });
 
     const baseMetadata = {
       plan_id: input.planId,
       request_id: input.requestId,
+      tenant_id: scopeIds.tenantId,
+      agent_id: scopeIds.agentId,
+      workspace_id: scopeIds.workspaceId,
     };
 
     const normalizeTriggerKind = (value: unknown): ExecutionTriggerT["kind"] => {
@@ -361,31 +389,36 @@ export class ExecutionEngine {
 
     await tx.run(
       `INSERT INTO execution_jobs (
+         tenant_id,
          job_id,
+         agent_id,
+         workspace_id,
          key,
          lane,
          status,
          trigger_json,
          input_json,
          latest_run_id,
-         policy_snapshot_id,
-         workspace_id
+         policy_snapshot_id
        )
-       VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
       [
+        scopeIds.tenantId,
         jobId,
+        scopeIds.agentId,
+        scopeIds.workspaceId,
         input.key,
         input.lane,
         triggerJson,
         inputJson,
         runId,
         input.policySnapshotId ?? null,
-        workspaceId,
       ],
     );
 
     await tx.run(
       `INSERT INTO execution_runs (
+         tenant_id,
          run_id,
          job_id,
          key,
@@ -395,8 +428,9 @@ export class ExecutionEngine {
          policy_snapshot_id,
          budgets_json
        )
-       VALUES (?, ?, ?, ?, 'queued', 1, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, 'queued', 1, ?, ?)`,
       [
+        scopeIds.tenantId,
         runId,
         jobId,
         input.key,
@@ -411,6 +445,7 @@ export class ExecutionEngine {
       const action = input.steps[idx]!;
       await tx.run(
         `INSERT INTO execution_steps (
+           tenant_id,
            step_id,
            run_id,
            step_index,
@@ -418,8 +453,9 @@ export class ExecutionEngine {
            action_json,
            idempotency_key,
            postcondition_json
-         ) VALUES (?, ?, ?, 'queued', ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)`,
         [
+          scopeIds.tenantId,
           stepId,
           runId,
           idx,
@@ -433,8 +469,8 @@ export class ExecutionEngine {
     await this.emitRunUpdatedTx(tx, runId);
     await this.emitRunQueuedTx(tx, runId);
     const stepIds = await tx.all<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
-      [runId],
+      "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ? ORDER BY step_index ASC",
+      [scopeIds.tenantId, runId],
     );
     for (const row of stepIds) {
       await this.emitStepUpdatedTx(tx, row.step_id);
@@ -468,7 +504,7 @@ export class ExecutionEngine {
     const { nowIso } = this.clock();
     return await this.db.transaction(async (tx) => {
       const row = await tx.get<ResumeTokenRow>(
-        `SELECT token, run_id, expires_at, revoked_at
+        `SELECT tenant_id, token, run_id, expires_at, revoked_at
          FROM resume_tokens
          WHERE token = ?`,
         [token],
@@ -484,8 +520,8 @@ export class ExecutionEngine {
           await tx.run(
             `UPDATE resume_tokens
              SET revoked_at = ?
-             WHERE token = ? AND revoked_at IS NULL`,
-            [nowIso, token],
+             WHERE tenant_id = ? AND token = ? AND revoked_at IS NULL`,
+            [nowIso, row.tenant_id, token],
           );
           return undefined;
         }
@@ -494,19 +530,19 @@ export class ExecutionEngine {
       await tx.run(
         `UPDATE resume_tokens
          SET revoked_at = ?
-         WHERE token = ? AND revoked_at IS NULL`,
-        [nowIso, token],
+         WHERE tenant_id = ? AND token = ? AND revoked_at IS NULL`,
+        [nowIso, row.tenant_id, token],
       );
 
       const approval = await tx.get<{ kind: string }>(
-        "SELECT kind FROM approvals WHERE resume_token = ? LIMIT 1",
-        [token],
+        "SELECT kind FROM approvals WHERE tenant_id = ? AND resume_token = ? LIMIT 1",
+        [row.tenant_id, token],
       );
       const runResumed = await tx.run(
         `UPDATE execution_runs
          SET status = 'queued', paused_reason = NULL, paused_detail = NULL
-         WHERE run_id = ? AND status = 'paused'`,
-        [row.run_id],
+         WHERE tenant_id = ? AND run_id = ? AND status = 'paused'`,
+        [row.tenant_id, row.run_id],
       );
       if (runResumed.changes !== 1) {
         return undefined;
@@ -516,22 +552,22 @@ export class ExecutionEngine {
         await tx.run(
           `UPDATE execution_runs
            SET budget_overridden_at = COALESCE(budget_overridden_at, ?)
-           WHERE run_id = ?`,
-          [nowIso, row.run_id],
+           WHERE tenant_id = ? AND run_id = ?`,
+          [nowIso, row.tenant_id, row.run_id],
         );
       }
 
       await tx.run(
         `UPDATE execution_steps
          SET status = 'queued'
-         WHERE run_id = ? AND status = 'paused'`,
-        [row.run_id],
+         WHERE tenant_id = ? AND run_id = ? AND status = 'paused'`,
+        [row.tenant_id, row.run_id],
       );
 
       await this.emitRunUpdatedTx(tx, row.run_id);
       const stepIds = await tx.all<{ step_id: string }>(
-        "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
-        [row.run_id],
+        "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ? ORDER BY step_index ASC",
+        [row.tenant_id, row.run_id],
       );
       for (const step of stepIds) {
         await this.emitStepUpdatedTx(tx, step.step_id);
@@ -551,8 +587,15 @@ export class ExecutionEngine {
     const detail = reason ? this.redactText(reason) : null;
 
     return await this.db.transaction(async (tx) => {
-      const row = await tx.get<{ run_id: string; status: string; job_id: string }>(
-        `SELECT run_id, status, job_id
+      const row = await tx.get<{
+        tenant_id: string;
+        run_id: string;
+        status: string;
+        job_id: string;
+        key: string;
+        lane: string;
+      }>(
+        `SELECT tenant_id, run_id, status, job_id, key, lane
          FROM execution_runs
          WHERE run_id = ?`,
         [runId],
@@ -563,8 +606,8 @@ export class ExecutionEngine {
         await tx.run(
           `UPDATE resume_tokens
            SET revoked_at = ?
-           WHERE run_id = ? AND revoked_at IS NULL`,
-          [nowIso, runId],
+           WHERE tenant_id = ? AND run_id = ? AND revoked_at IS NULL`,
+          [nowIso, row.tenant_id, runId],
         );
         return "cancelled";
       }
@@ -578,56 +621,63 @@ export class ExecutionEngine {
              finished_at = COALESCE(finished_at, ?),
              paused_reason = COALESCE(paused_reason, 'cancelled'),
              paused_detail = COALESCE(paused_detail, ?)
-         WHERE run_id = ?`,
-        [nowIso, detail, runId],
+         WHERE tenant_id = ? AND run_id = ?`,
+        [nowIso, detail, row.tenant_id, runId],
       );
 
       await tx.run(
         `UPDATE execution_jobs
          SET status = 'cancelled'
-         WHERE job_id = ?`,
-        [row.job_id],
+         WHERE tenant_id = ? AND job_id = ?`,
+        [row.tenant_id, row.job_id],
       );
 
       await tx.run(
         `UPDATE execution_steps
          SET status = 'cancelled'
-         WHERE run_id = ?
+         WHERE tenant_id = ? AND run_id = ?
            AND status IN ('queued', 'paused', 'running')`,
-        [runId],
+        [row.tenant_id, runId],
       );
 
       await tx.run(
         `UPDATE resume_tokens
          SET revoked_at = ?
-         WHERE run_id = ? AND revoked_at IS NULL`,
-        [nowIso, runId],
+         WHERE tenant_id = ? AND run_id = ? AND revoked_at IS NULL`,
+        [nowIso, row.tenant_id, runId],
       );
 
       // Best-effort: mark any in-flight attempts as cancelled so they don't linger.
       const runningAttempts = await tx.all<{ attempt_id: string }>(
         `SELECT a.attempt_id
          FROM execution_attempts a
-         JOIN execution_steps s ON s.step_id = a.step_id
-         WHERE s.run_id = ? AND a.status = 'running'`,
-        [runId],
+         JOIN execution_steps s ON s.tenant_id = a.tenant_id AND s.step_id = a.step_id
+         WHERE s.tenant_id = ? AND s.run_id = ? AND a.status = 'running'`,
+        [row.tenant_id, runId],
       );
       await tx.run(
         `UPDATE execution_attempts
          SET status = 'cancelled', finished_at = COALESCE(finished_at, ?), error = COALESCE(error, 'cancelled')
-         WHERE status = 'running'
-           AND step_id IN (SELECT step_id FROM execution_steps WHERE run_id = ?)`,
-        [nowIso, runId],
+         WHERE tenant_id = ?
+           AND status = 'running'
+           AND step_id IN (SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ?)`,
+        [nowIso, row.tenant_id, row.tenant_id, runId],
       );
 
       for (const attempt of runningAttempts) {
-        await releaseConcurrencySlotsTx(tx, attempt.attempt_id, nowIso, this.concurrencyLimits);
+        await releaseConcurrencySlotsTx(
+          tx,
+          row.tenant_id,
+          attempt.attempt_id,
+          nowIso,
+          this.concurrencyLimits,
+        );
       }
 
       await this.emitRunUpdatedTx(tx, runId);
       const stepIds = await tx.all<{ step_id: string }>(
-        "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
-        [runId],
+        "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ? ORDER BY step_index ASC",
+        [row.tenant_id, runId],
       );
       for (const step of stepIds) {
         await this.emitStepUpdatedTx(tx, step.step_id);
@@ -652,8 +702,10 @@ export class ExecutionEngine {
 
     const candidates = await this.db.all<RunnableRunRow>(
       `SELECT
+         r.tenant_id,
          r.run_id,
          r.job_id,
+         j.agent_id,
          r.key,
          r.lane,
          r.status,
@@ -661,11 +713,14 @@ export class ExecutionEngine {
          j.workspace_id,
          r.policy_snapshot_id
        FROM execution_runs r
-       JOIN execution_jobs j ON j.job_id = r.job_id
+       JOIN execution_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
        WHERE r.status IN ('running', 'queued')
          AND NOT EXISTS (
            SELECT 1 FROM execution_runs p
-           WHERE p.key = r.key AND p.lane = r.lane AND p.status = 'paused'
+           WHERE p.tenant_id = r.tenant_id
+             AND p.key = r.key
+             AND p.lane = r.lane
+             AND p.status = 'paused'
          )
          ${whereRunId}
        ORDER BY
@@ -677,6 +732,7 @@ export class ExecutionEngine {
 
     for (const run of candidates) {
       const leaseOk = await tryAcquireLaneLease(this.db, {
+        tenantId: run.tenant_id,
         key: run.key,
         lane: run.lane,
         owner: input.workerId,
@@ -711,15 +767,16 @@ export class ExecutionEngine {
       }>(
         `SELECT r.status AS run_status, j.status AS job_status, r.started_at AS started_at
          FROM execution_runs r
-         JOIN execution_jobs j ON j.job_id = r.job_id
-         WHERE r.run_id = ?`,
-        [run.run_id],
+         JOIN execution_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
+         WHERE r.tenant_id = ? AND r.run_id = ?`,
+        [run.tenant_id, run.run_id],
       );
       if (!current) {
         return { kind: "noop" as const };
       }
       if (current.run_status === "cancelled" || current.job_status === "cancelled") {
         await releaseLaneAndWorkspaceLeasesTx(tx, {
+          tenantId: run.tenant_id,
           key: run.key,
           lane: run.lane,
           workspaceId: run.workspace_id,
@@ -733,8 +790,8 @@ export class ExecutionEngine {
         const updated = await tx.run(
           `UPDATE execution_runs
            SET status = 'running', started_at = COALESCE(started_at, ?)
-           WHERE run_id = ? AND status = 'queued'`,
-          [clock.nowIso, run.run_id],
+           WHERE tenant_id = ? AND run_id = ? AND status = 'queued'`,
+          [clock.nowIso, run.tenant_id, run.run_id],
         );
         if (updated.changes === 1) {
           await this.emitRunUpdatedTx(tx, run.run_id);
@@ -747,13 +804,14 @@ export class ExecutionEngine {
       await tx.run(
         `UPDATE execution_jobs
          SET status = 'running'
-         WHERE job_id = ? AND status = 'queued'`,
-        [run.job_id],
+         WHERE tenant_id = ? AND job_id = ? AND status = 'queued'`,
+        [run.tenant_id, run.job_id],
       );
 
       // Find next incomplete step.
       const next = await tx.get<StepRow>(
         `SELECT
+           tenant_id,
            step_id,
            run_id,
            step_index,
@@ -766,25 +824,25 @@ export class ExecutionEngine {
            max_attempts,
            timeout_ms
          FROM execution_steps
-         WHERE run_id = ? AND status IN ('queued', 'running', 'paused')
+         WHERE tenant_id = ? AND run_id = ? AND status IN ('queued', 'running', 'paused')
          ORDER BY step_index ASC
          LIMIT 1`,
-        [run.run_id],
+        [run.tenant_id, run.run_id],
       );
 
       if (!next) {
         // Finalize run if all steps are terminal.
         const statuses = await tx.all<{ status: string }>(
-          "SELECT status FROM execution_steps WHERE run_id = ?",
-          [run.run_id],
+          "SELECT status FROM execution_steps WHERE tenant_id = ? AND run_id = ?",
+          [run.tenant_id, run.run_id],
         );
         const failed = statuses.some((s) => s.status === "failed" || s.status === "cancelled");
 
         const runUpdated = await tx.run(
           `UPDATE execution_runs
            SET status = ?, finished_at = ?
-           WHERE run_id = ? AND status IN ('running', 'queued')`,
-          [failed ? "failed" : "succeeded", clock.nowIso, run.run_id],
+           WHERE tenant_id = ? AND run_id = ? AND status IN ('running', 'queued')`,
+          [failed ? "failed" : "succeeded", clock.nowIso, run.tenant_id, run.run_id],
         );
         await this.emitRunUpdatedTx(tx, run.run_id);
         if (runUpdated.changes === 1) {
@@ -798,10 +856,11 @@ export class ExecutionEngine {
         await tx.run(
           `UPDATE execution_jobs
            SET status = ?
-           WHERE job_id = ? AND status IN ('queued', 'running')`,
-          [failed ? "failed" : "completed", run.job_id],
+           WHERE tenant_id = ? AND job_id = ? AND status IN ('queued', 'running')`,
+          [failed ? "failed" : "completed", run.tenant_id, run.job_id],
         );
         await releaseLaneAndWorkspaceLeasesTx(tx, {
+          tenantId: run.tenant_id,
           key: run.key,
           lane: run.lane,
           workspaceId: run.workspace_id,
@@ -824,10 +883,10 @@ export class ExecutionEngine {
         }>(
           `SELECT attempt_id, lease_expires_at_ms
            FROM execution_attempts
-           WHERE step_id = ? AND status = 'running'
+           WHERE tenant_id = ? AND step_id = ? AND status = 'running'
            ORDER BY attempt DESC
            LIMIT 1`,
-          [next.step_id],
+          [next.tenant_id, next.step_id],
         );
 
         const expiresAtMs = latestAttempt?.lease_expires_at_ms ?? 0;
@@ -835,19 +894,20 @@ export class ExecutionEngine {
           await tx.run(
             `UPDATE execution_attempts
              SET status = 'cancelled', finished_at = ?, error = ?
-             WHERE attempt_id = ? AND status = 'running'`,
-            [clock.nowIso, "lease expired; takeover", latestAttempt.attempt_id],
+             WHERE tenant_id = ? AND attempt_id = ? AND status = 'running'`,
+            [clock.nowIso, "lease expired; takeover", next.tenant_id, latestAttempt.attempt_id],
           );
 
           await tx.run(
             `UPDATE execution_steps
              SET status = 'queued'
-             WHERE step_id = ? AND status = 'running'`,
-            [next.step_id],
+             WHERE tenant_id = ? AND step_id = ? AND status = 'running'`,
+            [next.tenant_id, next.step_id],
           );
           await this.emitAttemptUpdatedTx(tx, latestAttempt.attempt_id);
           await releaseConcurrencySlotsTx(
             tx,
+            next.tenant_id,
             latestAttempt.attempt_id,
             clock.nowIso,
             this.concurrencyLimits,
@@ -868,8 +928,8 @@ export class ExecutionEngine {
       }>(
         `SELECT budgets_json, budget_overridden_at, started_at, policy_snapshot_id
          FROM execution_runs
-         WHERE run_id = ?`,
-        [run.run_id],
+         WHERE tenant_id = ? AND run_id = ?`,
+        [run.tenant_id, run.run_id],
       );
 
       const budgetsRaw = safeJsonParse(budgetRow?.budgets_json ?? null, undefined as unknown);
@@ -891,9 +951,9 @@ export class ExecutionEngine {
         const costRows = await tx.all<{ cost_json: string | null }>(
           `SELECT a.cost_json
            FROM execution_attempts a
-           JOIN execution_steps s ON s.step_id = a.step_id
-           WHERE s.run_id = ? AND a.cost_json IS NOT NULL`,
-          [run.run_id],
+           JOIN execution_steps s ON s.tenant_id = a.tenant_id AND s.step_id = a.step_id
+           WHERE s.tenant_id = ? AND s.run_id = ? AND a.cost_json IS NOT NULL`,
+          [run.tenant_id, run.run_id],
         );
 
         let spentUsdMicros = 0;
@@ -932,12 +992,14 @@ export class ExecutionEngine {
           const paused = await this.pauseRunForApproval(
             tx,
             {
+              tenantId: run.tenant_id,
+              agentId: run.agent_id,
+              workspaceId: run.workspace_id,
               planId,
               stepIndex: next.step_index,
               runId: run.run_id,
               jobId: run.job_id,
               stepId: next.step_id,
-              workspaceId: run.workspace_id,
               key: run.key,
               lane: run.lane,
               workerId: input.workerId,
@@ -986,8 +1048,8 @@ export class ExecutionEngine {
       const policySnapshotId = budgetRow?.policy_snapshot_id ?? null;
       if (policySnapshotId) {
         const policyRow = await tx.get<{ bundle_json: string }>(
-          "SELECT bundle_json FROM policy_snapshots WHERE policy_snapshot_id = ?",
-          [policySnapshotId],
+          "SELECT bundle_json FROM policy_snapshots WHERE tenant_id = ? AND policy_snapshot_id = ?",
+          [run.tenant_id, policySnapshotId],
         );
         let snapshotState: "valid" | "missing" | "invalid" = "missing";
         let policyBundle: PolicyBundleT | undefined;
@@ -1026,10 +1088,9 @@ export class ExecutionEngine {
             }
 
             if (this.policyService?.isEnabled()) {
-              const agentId = deriveAgentIdFromExecutionKey(run.key) ?? "default";
               const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
                 policySnapshotId,
-                agentId,
+                agentId: run.agent_id,
                 workspaceId: run.workspace_id,
                 toolId,
                 toolMatchTarget,
@@ -1067,20 +1128,23 @@ export class ExecutionEngine {
             const updated = await tx.run(
               `UPDATE execution_steps
 		               SET status = 'failed'
-		               WHERE step_id = ? AND status = 'queued'`,
-              [next.step_id],
+		               WHERE tenant_id = ? AND step_id = ? AND status = 'queued'`,
+              [next.tenant_id, next.step_id],
             );
 
             if (updated.changes === 1) {
               const attemptAgg = await tx.get<{ n: number }>(
-                "SELECT COALESCE(MAX(attempt), 0) AS n FROM execution_attempts WHERE step_id = ?",
-                [next.step_id],
+                `SELECT COALESCE(MAX(attempt), 0) AS n
+                 FROM execution_attempts
+                 WHERE tenant_id = ? AND step_id = ?`,
+                [next.tenant_id, next.step_id],
               );
               const attemptNum = (attemptAgg?.n ?? 0) + 1;
               const attemptId = randomUUID();
 
               await tx.run(
                 `INSERT INTO execution_attempts (
+		                   tenant_id,
 		                   attempt_id,
 		                   step_id,
 		                   attempt,
@@ -1092,8 +1156,9 @@ export class ExecutionEngine {
 		                   error,
 		                   artifacts_json,
 		                   metadata_json
-		                 ) VALUES (?, ?, ?, 'failed', ?, ?, ?, NULL, ?, '[]', ?)`,
+		                 ) VALUES (?, ?, ?, ?, 'failed', ?, ?, ?, NULL, ?, '[]', ?)`,
                 [
+                  next.tenant_id,
                   attemptId,
                   next.step_id,
                   attemptNum,
@@ -1118,26 +1183,27 @@ export class ExecutionEngine {
               await tx.run(
                 `UPDATE execution_steps
 	                 SET status = 'cancelled'
-	                 WHERE run_id = ? AND status = 'queued'`,
-                [run.run_id],
+	                 WHERE tenant_id = ? AND run_id = ? AND status = 'queued'`,
+                [run.tenant_id, run.run_id],
               );
               const runUpdated = await tx.run(
                 `UPDATE execution_runs
 	                 SET status = 'failed', finished_at = ?
-	                 WHERE run_id = ? AND status != 'cancelled'`,
-                [clock.nowIso, run.run_id],
+	                 WHERE tenant_id = ? AND run_id = ? AND status != 'cancelled'`,
+                [clock.nowIso, run.tenant_id, run.run_id],
               );
               await tx.run(
                 `UPDATE execution_jobs
 	                 SET status = 'failed'
-	                 WHERE job_id = ? AND status != 'cancelled'`,
-                [run.job_id],
+	                 WHERE tenant_id = ? AND job_id = ? AND status != 'cancelled'`,
+                [run.tenant_id, run.job_id],
               );
               if (runUpdated.changes === 1) {
                 await this.emitRunUpdatedTx(tx, run.run_id);
                 await this.emitRunFailedTx(tx, run.run_id);
               }
               await releaseLaneAndWorkspaceLeasesTx(tx, {
+                tenantId: run.tenant_id,
                 key: run.key,
                 lane: run.lane,
                 workspaceId: run.workspace_id,
@@ -1155,19 +1221,25 @@ export class ExecutionEngine {
           }
 
           if (decision === "require_approval") {
-            const alreadyApproved = await this.isApprovedPolicyGateTx(tx, next.approval_id);
+            const alreadyApproved = await this.isApprovedPolicyGateTx(
+              tx,
+              run.tenant_id,
+              next.approval_id,
+            );
 
             if (!alreadyApproved) {
               const planId = parsePlanIdFromTriggerJson(run.trigger_json) ?? run.run_id;
               const paused = await this.pauseRunForApproval(
                 tx,
                 {
+                  tenantId: run.tenant_id,
+                  agentId: run.agent_id,
+                  workspaceId: run.workspace_id,
                   planId,
                   stepIndex: next.step_index,
                   runId: run.run_id,
                   jobId: run.job_id,
                   stepId: next.step_id,
-                  workspaceId: run.workspace_id,
                   key: run.key,
                   lane: run.lane,
                   workerId: input.workerId,
@@ -1197,8 +1269,10 @@ export class ExecutionEngine {
       }
 
       const attemptAgg = await tx.get<{ n: number }>(
-        "SELECT COALESCE(MAX(attempt), 0) AS n FROM execution_attempts WHERE step_id = ?",
-        [next.step_id],
+        `SELECT COALESCE(MAX(attempt), 0) AS n
+         FROM execution_attempts
+         WHERE tenant_id = ? AND step_id = ?`,
+        [next.tenant_id, next.step_id],
       );
       const attemptNum = (attemptAgg?.n ?? 0) + 1;
       const attemptId = randomUUID();
@@ -1209,20 +1283,21 @@ export class ExecutionEngine {
         const record = await tx.get<{ status: string; result_json: string | null }>(
           `SELECT status, result_json
            FROM idempotency_records
-           WHERE scope_key = ? AND kind = 'step' AND idempotency_key = ?`,
-          [next.step_id, next.idempotency_key],
+           WHERE tenant_id = ? AND scope_key = ? AND kind = 'step' AND idempotency_key = ?`,
+          [next.tenant_id, next.step_id, next.idempotency_key],
         );
 
         if (record?.status === "succeeded") {
           const updated = await tx.run(
             `UPDATE execution_steps
              SET status = 'succeeded'
-             WHERE step_id = ? AND status = 'queued'`,
-            [next.step_id],
+             WHERE tenant_id = ? AND step_id = ? AND status = 'queued'`,
+            [next.tenant_id, next.step_id],
           );
           if (updated.changes === 1) {
             await tx.run(
               `INSERT INTO execution_attempts (
+                 tenant_id,
                  attempt_id,
                  step_id,
                  attempt,
@@ -1233,8 +1308,9 @@ export class ExecutionEngine {
                  artifacts_json,
                  result_json,
                  error
-               ) VALUES (?, ?, ?, 'succeeded', ?, ?, ?, '[]', ?, NULL)`,
+               ) VALUES (?, ?, ?, ?, 'succeeded', ?, ?, ?, '[]', ?, NULL)`,
               [
+                next.tenant_id,
                 attemptId,
                 next.step_id,
                 attemptNum,
@@ -1293,8 +1369,8 @@ export class ExecutionEngine {
             const stepFailed = await tx.run(
               `UPDATE execution_steps
                SET status = 'failed'
-               WHERE step_id = ? AND status = 'queued'`,
-              [next.step_id],
+               WHERE tenant_id = ? AND step_id = ? AND status = 'queued'`,
+              [next.tenant_id, next.step_id],
             );
 
             if (stepFailed.changes !== 1) {
@@ -1303,6 +1379,7 @@ export class ExecutionEngine {
 
             await tx.run(
               `INSERT INTO execution_attempts (
+                 tenant_id,
                  attempt_id,
                  step_id,
                  attempt,
@@ -1313,8 +1390,9 @@ export class ExecutionEngine {
                  artifacts_json,
                  result_json,
                  error
-               ) VALUES (?, ?, ?, 'failed', ?, ?, ?, '[]', NULL, ?)`,
+               ) VALUES (?, ?, ?, ?, 'failed', ?, ?, ?, '[]', NULL, ?)`,
               [
+                next.tenant_id,
                 attemptId,
                 next.step_id,
                 attemptNum,
@@ -1330,26 +1408,27 @@ export class ExecutionEngine {
             await tx.run(
               `UPDATE execution_steps
                SET status = 'cancelled'
-               WHERE run_id = ?
+               WHERE tenant_id = ? AND run_id = ?
                  AND step_id != ?
                  AND status IN ('queued', 'paused', 'running')`,
-              [run.run_id, next.step_id],
+              [run.tenant_id, run.run_id, next.step_id],
             );
 
             const runUpdated = await tx.run(
               `UPDATE execution_runs
                SET status = 'failed', finished_at = ?
-               WHERE run_id = ? AND status IN ('running', 'queued')`,
-              [clock.nowIso, run.run_id],
+               WHERE tenant_id = ? AND run_id = ? AND status IN ('running', 'queued')`,
+              [clock.nowIso, run.tenant_id, run.run_id],
             );
 
             await tx.run(
               `UPDATE execution_jobs
                SET status = 'failed'
-               WHERE job_id = ? AND status IN ('queued', 'running')`,
-              [run.job_id],
+               WHERE tenant_id = ? AND job_id = ? AND status IN ('queued', 'running')`,
+              [run.tenant_id, run.job_id],
             );
             await releaseLaneAndWorkspaceLeasesTx(tx, {
+              tenantId: run.tenant_id,
               key: run.key,
               lane: run.lane,
               workspaceId: run.workspace_id,
@@ -1363,8 +1442,8 @@ export class ExecutionEngine {
             }
 
             const stepIds = await tx.all<{ step_id: string }>(
-              "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
-              [run.run_id],
+              "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ? ORDER BY step_index ASC",
+              [run.tenant_id, run.run_id],
             );
             for (const row of stepIds) {
               await this.emitStepUpdatedTx(tx, row.step_id);
@@ -1374,18 +1453,24 @@ export class ExecutionEngine {
           }
 
           if (secretsDecision === "require_approval") {
-            const alreadyApproved = await this.isApprovedPolicyGateTx(tx, next.approval_id);
+            const alreadyApproved = await this.isApprovedPolicyGateTx(
+              tx,
+              run.tenant_id,
+              next.approval_id,
+            );
             if (!alreadyApproved) {
               const planId = parsePlanIdFromTriggerJson(run.trigger_json) ?? run.run_id;
               const paused = await this.pauseRunForApproval(
                 tx,
                 {
+                  tenantId: run.tenant_id,
+                  agentId: run.agent_id,
+                  workspaceId: run.workspace_id,
                   planId,
                   stepIndex: next.step_index,
                   runId: run.run_id,
                   jobId: run.job_id,
                   stepId: next.step_id,
-                  workspaceId: run.workspace_id,
                   key: run.key,
                   lane: run.lane,
                   workerId: input.workerId,
@@ -1411,12 +1496,13 @@ export class ExecutionEngine {
         }
       }
 
-      const agentId = deriveAgentIdFromExecutionKey(run.key) ?? "default";
+      const agentId = run.agent_id;
       const capability = actionType ? requiredCapability(actionType) : undefined;
 
       const concurrencyOk = await tryAcquireConcurrencyForAttemptTx(
         tx,
         {
+          tenantId: run.tenant_id,
           attemptId,
           owner: input.workerId,
           nowMs: clock.nowMs,
@@ -1434,14 +1520,26 @@ export class ExecutionEngine {
       const needsWorkspaceLease = actionType === "CLI";
       if (needsWorkspaceLease) {
         const workspaceOk = await tryAcquireWorkspaceLeaseTx(tx, {
+          tenantId: run.tenant_id,
           workspaceId: run.workspace_id,
           owner: input.workerId,
           nowMs: clock.nowMs,
           ttlMs: leaseTtlMs,
         });
         if (!workspaceOk) {
-          await releaseConcurrencySlotsTx(tx, attemptId, clock.nowIso, this.concurrencyLimits);
-          await releaseLaneLeaseTx(tx, { key: run.key, lane: run.lane, owner: input.workerId });
+          await releaseConcurrencySlotsTx(
+            tx,
+            run.tenant_id,
+            attemptId,
+            clock.nowIso,
+            this.concurrencyLimits,
+          );
+          await releaseLaneLeaseTx(tx, {
+            tenantId: run.tenant_id,
+            key: run.key,
+            lane: run.lane,
+            owner: input.workerId,
+          });
           return { kind: "noop" as const };
         }
       }
@@ -1449,23 +1547,31 @@ export class ExecutionEngine {
       const updated = await tx.run(
         `UPDATE execution_steps
          SET status = 'running'
-         WHERE step_id = ? AND status = 'queued'`,
-        [next.step_id],
+         WHERE tenant_id = ? AND step_id = ? AND status = 'queued'`,
+        [next.tenant_id, next.step_id],
       );
 
       if (updated.changes !== 1) {
         if (needsWorkspaceLease) {
           await releaseWorkspaceLeaseTx(tx, {
+            tenantId: run.tenant_id,
             workspaceId: run.workspace_id,
             owner: input.workerId,
           });
         }
-        await releaseConcurrencySlotsTx(tx, attemptId, clock.nowIso, this.concurrencyLimits);
+        await releaseConcurrencySlotsTx(
+          tx,
+          run.tenant_id,
+          attemptId,
+          clock.nowIso,
+          this.concurrencyLimits,
+        );
         return { kind: "noop" as const };
       }
 
       await tx.run(
         `INSERT INTO execution_attempts (
+           tenant_id,
            attempt_id,
            step_id,
            attempt,
@@ -1475,8 +1581,9 @@ export class ExecutionEngine {
            artifacts_json,
            lease_owner,
            lease_expires_at_ms
-         ) VALUES (?, ?, ?, 'running', ?, ?, '[]', ?, ?)`,
+         ) VALUES (?, ?, ?, ?, 'running', ?, ?, '[]', ?, ?)`,
         [
+          next.tenant_id,
           attemptId,
           next.step_id,
           attemptNum,
@@ -1488,6 +1595,7 @@ export class ExecutionEngine {
       );
 
       await touchLaneLeaseTx(tx, {
+        tenantId: run.tenant_id,
         key: run.key,
         lane: run.lane,
         owner: input.workerId,
@@ -1498,8 +1606,11 @@ export class ExecutionEngine {
       await this.emitAttemptUpdatedTx(tx, attemptId);
       return {
         kind: "claimed" as const,
+        tenantId: run.tenant_id,
+        agentId: run.agent_id,
         runId: run.run_id,
         jobId: run.job_id,
+        workspaceId: run.workspace_id,
         key: run.key,
         lane: run.lane,
         triggerJson: run.trigger_json,
@@ -1530,9 +1641,11 @@ export class ExecutionEngine {
       postconditionJson: outcome.step.postcondition_json,
       maxAttempts: outcome.step.max_attempts,
       timeoutMs,
+      tenantId: outcome.tenantId,
       runId: outcome.runId,
       jobId: outcome.jobId,
-      workspaceId: run.workspace_id,
+      agentId: outcome.agentId,
+      workspaceId: outcome.workspaceId,
       key: outcome.key,
       lane: outcome.lane,
       stepId: outcome.step.step_id,
@@ -1550,8 +1663,10 @@ export class ExecutionEngine {
     postconditionJson: string | null;
     maxAttempts: number;
     timeoutMs: number;
+    tenantId: string;
     runId: string;
     jobId: string;
+    agentId: string;
     workspaceId: string;
     key: string;
     lane: string;
@@ -1587,13 +1702,13 @@ export class ExecutionEngine {
       });
     });
 
-    const approvalRow = await this.db.get<{ approval_id: number | null }>(
-      "SELECT approval_id FROM execution_steps WHERE step_id = ?",
-      [opts.stepId],
+    const approvalRow = await this.db.get<{ approval_id: string | null }>(
+      "SELECT approval_id FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
+      [opts.tenantId, opts.stepId],
     );
     const runPolicy = await this.db.get<{ policy_snapshot_id: string | null }>(
-      "SELECT policy_snapshot_id FROM execution_runs WHERE run_id = ?",
-      [opts.runId],
+      "SELECT policy_snapshot_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      [opts.tenantId, opts.runId],
     );
 
     const result = await this.executeWithTimeout(
@@ -1603,6 +1718,7 @@ export class ExecutionEngine {
       opts.stepIndex,
       opts.timeoutMs,
       {
+        tenantId: opts.tenantId,
         runId: opts.runId,
         stepId: opts.stepId,
         attemptId: opts.attemptId,
@@ -1655,13 +1771,13 @@ export class ExecutionEngine {
       const current = await tx.get<{ run_status: string; job_status: string }>(
         `SELECT r.status AS run_status, j.status AS job_status
          FROM execution_runs r
-         JOIN execution_jobs j ON j.job_id = r.job_id
-         WHERE r.run_id = ?`,
-        [opts.runId],
+         JOIN execution_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
+         WHERE r.tenant_id = ? AND r.run_id = ?`,
+        [opts.tenantId, opts.runId],
       );
       const step = await tx.get<{ status: string }>(
-        "SELECT status FROM execution_steps WHERE step_id = ?",
-        [opts.stepId],
+        "SELECT status FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
+        [opts.tenantId, opts.stepId],
       );
 
       const cancelled =
@@ -1678,12 +1794,19 @@ export class ExecutionEngine {
                metadata_json = COALESCE(metadata_json, ?),
                artifacts_json = COALESCE(artifacts_json, ?),
                cost_json = COALESCE(cost_json, ?)
-           WHERE attempt_id = ? AND status = 'running'`,
-          [nowIso, evidenceJson, artifactsJson, costJson, opts.attemptId],
+           WHERE tenant_id = ? AND attempt_id = ? AND status = 'running'`,
+          [nowIso, evidenceJson, artifactsJson, costJson, opts.tenantId, opts.attemptId],
         );
         await this.emitAttemptUpdatedTx(tx, opts.attemptId);
-        await releaseConcurrencySlotsTx(tx, opts.attemptId, nowIso, this.concurrencyLimits);
+        await releaseConcurrencySlotsTx(
+          tx,
+          opts.tenantId,
+          opts.attemptId,
+          nowIso,
+          this.concurrencyLimits,
+        );
         await releaseLaneAndWorkspaceLeasesTx(tx, {
+          tenantId: opts.tenantId,
           key: opts.key,
           lane: opts.lane,
           workspaceId: opts.workspaceId,
@@ -1707,11 +1830,12 @@ export class ExecutionEngine {
           await this.recordArtifactsTx(
             tx,
             {
+              tenantId: opts.tenantId,
               runId: opts.runId,
               stepId: opts.stepId,
               attemptId: opts.attemptId,
               workspaceId: opts.workspaceId,
-              key: opts.key,
+              agentId: opts.agentId,
             },
             artifacts,
           );
@@ -1743,11 +1867,12 @@ export class ExecutionEngine {
           await this.recordArtifactsTx(
             tx,
             {
+              tenantId: opts.tenantId,
               runId: opts.runId,
               stepId: opts.stepId,
               attemptId: opts.attemptId,
               workspaceId: opts.workspaceId,
-              key: opts.key,
+              agentId: opts.agentId,
             },
             artifacts,
           );
@@ -1785,17 +1910,20 @@ export class ExecutionEngine {
           await this.recordArtifactsTx(
             tx,
             {
+              tenantId: opts.tenantId,
               runId: opts.runId,
               stepId: opts.stepId,
               attemptId: opts.attemptId,
               workspaceId: opts.workspaceId,
-              key: opts.key,
+              agentId: opts.agentId,
             },
             artifacts,
           );
           await this.maybeRetryOrFailStep({
             tx,
             nowIso,
+            tenantId: opts.tenantId,
+            agentId: opts.agentId,
             attemptNum: opts.attemptNum,
             maxAttempts: opts.maxAttempts,
             stepId: opts.stepId,
@@ -1823,11 +1951,12 @@ export class ExecutionEngine {
         await this.recordArtifactsTx(
           tx,
           {
+            tenantId: opts.tenantId,
             runId: opts.runId,
             stepId: opts.stepId,
             attemptId: opts.attemptId,
             workspaceId: opts.workspaceId,
-            key: opts.key,
+            agentId: opts.agentId,
           },
           artifacts,
         );
@@ -1835,8 +1964,8 @@ export class ExecutionEngine {
         const stepUpdated = await tx.run(
           `UPDATE execution_steps
            SET status = 'succeeded'
-           WHERE step_id = ? AND status = 'running'`,
-          [opts.stepId],
+           WHERE tenant_id = ? AND step_id = ? AND status = 'running'`,
+          [opts.tenantId, opts.stepId],
         );
         if (stepUpdated.changes === 1) {
           await this.emitStepUpdatedTx(tx, opts.stepId);
@@ -1848,6 +1977,7 @@ export class ExecutionEngine {
             result.result !== undefined ? JSON.stringify(this.redactUnknown(result.result)) : null;
           await tx.run(
             `INSERT INTO idempotency_records (
+               tenant_id,
                scope_key,
                kind,
                idempotency_key,
@@ -1855,13 +1985,13 @@ export class ExecutionEngine {
                result_json,
                error,
                updated_at
-             ) VALUES (?, 'step', ?, 'succeeded', ?, NULL, ?)
-             ON CONFLICT (scope_key, kind, idempotency_key) DO UPDATE SET
+             ) VALUES (?, ?, 'step', ?, 'succeeded', ?, NULL, ?)
+             ON CONFLICT (tenant_id, scope_key, kind, idempotency_key) DO UPDATE SET
                status = excluded.status,
                result_json = excluded.result_json,
                error = NULL,
                updated_at = excluded.updated_at`,
-            [opts.stepId, idempotencyKey, resultJson, nowIso],
+            [opts.tenantId, opts.stepId, idempotencyKey, resultJson, nowIso],
           );
         }
 
@@ -1882,27 +2012,45 @@ export class ExecutionEngine {
              metadata_json = ?,
              artifacts_json = ?,
              cost_json = ?
-         WHERE attempt_id = ? AND status = 'running'`,
-        [status, nowIso, redactedError, evidenceJson, artifactsJson, costJson, opts.attemptId],
+         WHERE tenant_id = ? AND attempt_id = ? AND status = 'running'`,
+        [
+          status,
+          nowIso,
+          redactedError,
+          evidenceJson,
+          artifactsJson,
+          costJson,
+          opts.tenantId,
+          opts.attemptId,
+        ],
       );
       await this.emitAttemptUpdatedTx(tx, opts.attemptId);
       const artifacts = safeJsonParse(artifactsJson, [] as ArtifactRefT[]);
       await this.recordArtifactsTx(
         tx,
         {
+          tenantId: opts.tenantId,
           runId: opts.runId,
           stepId: opts.stepId,
           attemptId: opts.attemptId,
           workspaceId: opts.workspaceId,
-          key: opts.key,
+          agentId: opts.agentId,
         },
         artifacts,
       );
-      await releaseConcurrencySlotsTx(tx, opts.attemptId, nowIso, this.concurrencyLimits);
+      await releaseConcurrencySlotsTx(
+        tx,
+        opts.tenantId,
+        opts.attemptId,
+        nowIso,
+        this.concurrencyLimits,
+      );
 
       await this.maybeRetryOrFailStep({
         tx,
         nowIso,
+        tenantId: opts.tenantId,
+        agentId: opts.agentId,
         attemptNum: opts.attemptNum,
         maxAttempts: opts.maxAttempts,
         stepId: opts.stepId,
@@ -1919,6 +2067,7 @@ export class ExecutionEngine {
 
     if (opts.action.type === "CLI") {
       await releaseWorkspaceLease(this.db, {
+        tenantId: opts.tenantId,
         workspaceId: opts.workspaceId,
         owner: opts.workerId,
       }).catch((err) => {
@@ -1982,16 +2131,17 @@ export class ExecutionEngine {
   }
 
   private async persistAttemptPolicyContext(opts: {
+    tenantId: string;
+    agentId: string;
     runId: string;
     stepId: string;
     attemptId: string;
-    key: string;
     workspaceId: string;
     action: ActionPrimitiveT;
   }): Promise<void> {
     const run = await this.db.get<{ policy_snapshot_id: string | null }>(
-      "SELECT policy_snapshot_id FROM execution_runs WHERE run_id = ?",
-      [opts.runId],
+      "SELECT policy_snapshot_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      [opts.tenantId, opts.runId],
     );
     const policySnapshotId = run?.policy_snapshot_id?.trim() ?? "";
     if (!policySnapshotId) return;
@@ -1999,14 +2149,13 @@ export class ExecutionEngine {
     const tool = this.toolCallFromAction(opts.action);
     await this.db.run(
       `UPDATE execution_attempts
-	       SET policy_snapshot_id = ?
-	       WHERE attempt_id = ?`,
-      [policySnapshotId, opts.attemptId],
+		       SET policy_snapshot_id = ?
+		       WHERE tenant_id = ? AND attempt_id = ?`,
+      [policySnapshotId, opts.tenantId, opts.attemptId],
     );
 
     if (!this.policyService?.isEnabled()) return;
 
-    const agentId = deriveAgentIdFromExecutionKey(opts.key) ?? "default";
     const secretScopes = await this.resolveSecretScopesFromArgs(opts.action.args ?? {}, {
       runId: opts.runId,
       stepId: opts.stepId,
@@ -2014,7 +2163,7 @@ export class ExecutionEngine {
     });
     const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
       policySnapshotId,
-      agentId,
+      agentId: opts.agentId,
       workspaceId: opts.workspaceId,
       toolId: tool.toolId,
       toolMatchTarget: tool.matchTarget,
@@ -2032,8 +2181,8 @@ export class ExecutionEngine {
       `UPDATE execution_attempts
        SET policy_decision_json = ?,
            policy_applied_override_ids_json = ?
-       WHERE attempt_id = ?`,
-      [decisionJson, appliedOverrideIdsJson, opts.attemptId],
+       WHERE tenant_id = ? AND attempt_id = ?`,
+      [decisionJson, appliedOverrideIdsJson, opts.tenantId, opts.attemptId],
     );
   }
 
@@ -2074,7 +2223,7 @@ export class ExecutionEngine {
 
   private async markAttemptSucceeded(
     tx: SqlDb,
-    opts: { attemptId: string },
+    opts: { tenantId: string; attemptId: string },
     result: StepResult,
     evidenceJson: string | null,
     postconditionReportJson: string | null,
@@ -2095,7 +2244,7 @@ export class ExecutionEngine {
            metadata_json = ?,
            artifacts_json = ?,
            cost_json = ?
-       WHERE attempt_id = ? AND status = 'running'`,
+       WHERE tenant_id = ? AND attempt_id = ? AND status = 'running'`,
       [
         nowIso,
         resultJson,
@@ -2103,16 +2252,23 @@ export class ExecutionEngine {
         evidenceJson,
         artifactsJson,
         costJson,
+        opts.tenantId,
         opts.attemptId,
       ],
     );
     await this.emitAttemptUpdatedTx(tx, opts.attemptId);
-    await releaseConcurrencySlotsTx(tx, opts.attemptId, nowIso, this.concurrencyLimits);
+    await releaseConcurrencySlotsTx(
+      tx,
+      opts.tenantId,
+      opts.attemptId,
+      nowIso,
+      this.concurrencyLimits,
+    );
   }
 
   private async markAttemptFailed(
     tx: SqlDb,
-    opts: { attemptId: string },
+    opts: { tenantId: string; attemptId: string },
     error: string,
     evidenceJson: string | null,
     postconditionReportJson: string | null,
@@ -2130,7 +2286,7 @@ export class ExecutionEngine {
            metadata_json = ?,
            artifacts_json = ?,
            cost_json = ?
-       WHERE attempt_id = ? AND status = 'running'`,
+       WHERE tenant_id = ? AND attempt_id = ? AND status = 'running'`,
       [
         nowIso,
         this.redactText(error),
@@ -2138,17 +2294,26 @@ export class ExecutionEngine {
         evidenceJson,
         artifactsJson,
         costJson,
+        opts.tenantId,
         opts.attemptId,
       ],
     );
     await this.emitAttemptUpdatedTx(tx, opts.attemptId);
-    await releaseConcurrencySlotsTx(tx, opts.attemptId, nowIso, this.concurrencyLimits);
+    await releaseConcurrencySlotsTx(
+      tx,
+      opts.tenantId,
+      opts.attemptId,
+      nowIso,
+      this.concurrencyLimits,
+    );
   }
 
   private async maybeRetryOrFailStep(
     opts: {
       tx: SqlDb;
       nowIso: string;
+      tenantId: string;
+      agentId: string;
     } & {
       attemptNum: number;
       maxAttempts: number;
@@ -2172,8 +2337,8 @@ export class ExecutionEngine {
       }>(
         `SELECT idempotency_key, action_json, step_index
          FROM execution_steps
-         WHERE step_id = ?`,
-        [opts.stepId],
+         WHERE tenant_id = ? AND step_id = ?`,
+        [opts.tenantId, opts.stepId],
       );
 
       const idempotencyKey = step?.idempotency_key?.trim() ?? "";
@@ -2200,16 +2365,16 @@ export class ExecutionEngine {
         await tx.run(
           `UPDATE execution_steps
            SET status = 'queued'
-           WHERE step_id = ? AND status = 'running'`,
-          [opts.stepId],
+           WHERE tenant_id = ? AND step_id = ? AND status = 'running'`,
+          [opts.tenantId, opts.stepId],
         );
         await this.emitStepUpdatedTx(tx, opts.stepId);
         return true;
       }
 
       const job = await tx.get<{ trigger_json: string }>(
-        "SELECT trigger_json FROM execution_jobs WHERE job_id = ?",
-        [opts.jobId],
+        "SELECT trigger_json FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+        [opts.tenantId, opts.jobId],
       );
       const planId =
         (job?.trigger_json ? parsePlanIdFromTriggerJson(job.trigger_json) : undefined) ??
@@ -2218,13 +2383,15 @@ export class ExecutionEngine {
       await this.pauseRunForApproval(
         tx,
         {
+          tenantId: opts.tenantId,
+          agentId: opts.agentId,
+          workspaceId: opts.workspaceId,
           planId,
           stepIndex: step?.step_index ?? 0,
           runId: opts.runId,
           jobId: opts.jobId,
           stepId: opts.stepId,
           attemptId: opts.attemptId,
-          workspaceId: opts.workspaceId,
           key: opts.key,
           lane: opts.lane,
           workerId: opts.workerId,
@@ -2248,30 +2415,30 @@ export class ExecutionEngine {
     await tx.run(
       `UPDATE execution_steps
        SET status = 'failed'
-       WHERE step_id = ? AND status = 'running'`,
-      [opts.stepId],
+       WHERE tenant_id = ? AND step_id = ? AND status = 'running'`,
+      [opts.tenantId, opts.stepId],
     );
     await this.emitStepUpdatedTx(tx, opts.stepId);
 
     await tx.run(
       `UPDATE execution_steps
        SET status = 'cancelled'
-       WHERE run_id = ? AND status = 'queued'`,
-      [opts.runId],
+       WHERE tenant_id = ? AND run_id = ? AND status = 'queued'`,
+      [opts.tenantId, opts.runId],
     );
 
     const runUpdated = await tx.run(
       `UPDATE execution_runs
        SET status = 'failed', finished_at = ?
-       WHERE run_id = ? AND status != 'cancelled'`,
-      [opts.nowIso, opts.runId],
+       WHERE tenant_id = ? AND run_id = ? AND status != 'cancelled'`,
+      [opts.nowIso, opts.tenantId, opts.runId],
     );
 
     await tx.run(
       `UPDATE execution_jobs
        SET status = 'failed'
-       WHERE job_id = ? AND status != 'cancelled'`,
-      [opts.jobId],
+       WHERE tenant_id = ? AND job_id = ? AND status != 'cancelled'`,
+      [opts.tenantId, opts.jobId],
     );
 
     if (runUpdated.changes === 1) {
@@ -2279,6 +2446,7 @@ export class ExecutionEngine {
       await this.emitRunFailedTx(tx, opts.runId);
     }
     await releaseLaneAndWorkspaceLeasesTx(tx, {
+      tenantId: opts.tenantId,
       key: opts.key,
       lane: opts.lane,
       workspaceId: opts.workspaceId,
@@ -2291,13 +2459,15 @@ export class ExecutionEngine {
   private async pauseRunForApproval(
     tx: SqlDb,
     opts: {
+      tenantId: string;
+      agentId: string;
+      workspaceId: string;
       planId: string;
       stepIndex: number;
       runId: string;
       stepId: string;
       attemptId?: string;
       jobId: string;
-      workspaceId: string;
       key: string;
       lane: string;
       workerId: string;
@@ -2309,7 +2479,7 @@ export class ExecutionEngine {
       context?: unknown;
       expiresAt?: string | null;
     },
-  ): Promise<{ approvalId: number; resumeToken: string }> {
+  ): Promise<{ approvalId: string; resumeToken: string }> {
     const nowIso = this.clock().nowIso;
     const expiresAt =
       input.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -2327,96 +2497,128 @@ export class ExecutionEngine {
     const runUpdated = await tx.run(
       `UPDATE execution_runs
        SET status = 'paused', paused_reason = ?, paused_detail = ?
-       WHERE run_id = ? AND status IN ('running', 'queued')`,
-      [pausedReason, pausedDetail, opts.runId],
+       WHERE tenant_id = ? AND run_id = ? AND status IN ('running', 'queued')`,
+      [pausedReason, pausedDetail, opts.tenantId, opts.runId],
     );
     if (runUpdated.changes !== 1) {
-      throw new Error(`failed to pause run ${opts.runId}`);
+      const current = await tx.get<{ status: string }>(
+        "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+        [opts.tenantId, opts.runId],
+      );
+      if (current?.status !== "paused") {
+        throw new Error(`failed to pause run ${opts.runId}`);
+      }
     }
 
-    const resumeToken = `resume-${randomUUID()}`;
-    await tx.run(
-      `INSERT INTO resume_tokens (token, run_id, created_at)
-       VALUES (?, ?, ?)`,
-      [resumeToken, opts.runId, nowIso],
-    );
+    const approvalKeyBase = `exec:${opts.runId}:${opts.stepId}`;
+    const approvalKey = (() => {
+      if (input.kind === "policy") {
+        return `${approvalKeyBase}:step:${String(opts.stepIndex)}:policy`;
+      }
+      if (input.kind === "budget") {
+        return `exec:${opts.runId}:budget`;
+      }
+      if (opts.attemptId) {
+        return `${approvalKeyBase}:attempt:${opts.attemptId}:${input.kind}`;
+      }
+      return `${approvalKeyBase}:${input.kind}`;
+    })();
+
+    const approvalDal = new ApprovalDal(tx);
+    let approval = await approvalDal.getByKey({ tenantId: opts.tenantId, approvalKey });
+    let resumeToken = approval?.resume_token?.trim() ?? "";
 
     const isRecord = (value: unknown): value is Record<string, unknown> =>
       value !== null && typeof value === "object" && !Array.isArray(value);
 
-    const baseContext: Record<string, unknown> = {
-      ...(isRecord(input.context) ? input.context : {}),
-      resume_token: resumeToken,
-      run_id: opts.runId,
-      job_id: opts.jobId,
-      step_id: opts.stepId,
-      ...(opts.attemptId ? { attempt_id: opts.attemptId } : {}),
-      paused_reason: pausedReason,
-      paused_detail: input.detail,
-    };
-    const contextToPersist = this.redactUnknown(baseContext);
+    if (!approval || approval.status !== "pending") {
+      const suffix = approval && approval.status !== "pending" ? `:${randomUUID()}` : "";
+      const approvalKeyToCreate = suffix ? `${approvalKey}${suffix}` : approvalKey;
+      resumeToken = `resume-${randomUUID()}`;
 
-    const agentId =
-      opts.key.startsWith("agent:") && opts.key.split(":").length > 1
-        ? opts.key.split(":")[1]!
-        : "default";
+      await tx.run(
+        `INSERT INTO resume_tokens (tenant_id, token, run_id, created_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (tenant_id, token) DO NOTHING`,
+        [opts.tenantId, resumeToken, opts.runId, nowIso],
+      );
 
-    const approval = await tx.get<{
-      id: number;
-      kind: string;
-      status: string;
-      prompt: string;
-      context_json: string;
-      created_at: string | Date;
-      expires_at: string | Date | null;
-    }>(
-      `INSERT INTO approvals (
-         plan_id,
-         step_index,
-         prompt,
-         context_json,
-         expires_at,
-         kind,
-         agent_id,
-         workspace_id,
-         key,
-         lane,
-         run_id,
-         resume_token
-       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       RETURNING id, kind, status, prompt, context_json, created_at, expires_at`,
-      [
-        opts.planId,
-        opts.stepIndex,
-        input.prompt,
-        JSON.stringify(contextToPersist),
+      const baseContext: Record<string, unknown> = {
+        ...(isRecord(input.context) ? input.context : {}),
+        resume_token: resumeToken,
+        key: opts.key,
+        lane: opts.lane,
+        plan_id: opts.planId,
+        step_index: opts.stepIndex,
+        run_id: opts.runId,
+        job_id: opts.jobId,
+        step_id: opts.stepId,
+        ...(opts.attemptId ? { attempt_id: opts.attemptId } : {}),
+        paused_reason: pausedReason,
+        paused_detail: input.detail,
+      };
+      const contextToPersist = this.redactUnknown(baseContext);
+
+      approval = await approvalDal.create({
+        tenantId: opts.tenantId,
+        agentId: opts.agentId,
+        workspaceId: opts.workspaceId,
+        approvalKey: approvalKeyToCreate,
+        prompt: input.prompt,
+        kind: input.kind,
+        context: contextToPersist,
         expiresAt,
-        input.kind,
-        agentId,
-        opts.workspaceId,
-        opts.key,
-        opts.lane,
-        opts.runId,
+        runId: opts.runId,
+        stepId: opts.stepId,
+        attemptId: opts.attemptId ?? null,
         resumeToken,
-      ],
-    );
-    if (!approval) {
-      throw new Error("approval insert failed");
+      });
+    } else {
+      if (!resumeToken) {
+        resumeToken = `resume-${randomUUID()}`;
+        await tx.run(
+          `UPDATE approvals
+           SET resume_token = ?
+           WHERE tenant_id = ? AND approval_id = ? AND resume_token IS NULL`,
+          [resumeToken, opts.tenantId, approval.approval_id],
+        );
+      }
+
+      if (resumeToken) {
+        await tx.run(
+          `INSERT INTO resume_tokens (tenant_id, token, run_id, created_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT (tenant_id, token) DO NOTHING`,
+          [opts.tenantId, resumeToken, opts.runId, nowIso],
+        );
+      }
     }
 
     const stepUpdated = await tx.run(
       `UPDATE execution_steps
-       SET status = 'paused', approval_id = ?
-       WHERE step_id = ? AND status IN ('running', 'queued')`,
-      [approval.id, opts.stepId],
+       SET status = 'paused', approval_id = COALESCE(approval_id, ?)
+       WHERE tenant_id = ? AND step_id = ? AND status IN ('running', 'queued')`,
+      [approval.approval_id, opts.tenantId, opts.stepId],
     );
     if (stepUpdated.changes !== 1) {
-      throw new Error(`failed to pause step ${opts.stepId}`);
+      const current = await tx.get<{ status: string }>(
+        "SELECT status FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
+        [opts.tenantId, opts.stepId],
+      );
+      if (current?.status !== "paused") {
+        throw new Error(`failed to pause step ${opts.stepId}`);
+      }
     }
+    await tx.run(
+      `UPDATE execution_steps
+       SET approval_id = COALESCE(approval_id, ?)
+       WHERE tenant_id = ? AND step_id = ? AND status = 'paused'`,
+      [approval.approval_id, opts.tenantId, opts.stepId],
+    );
 
     // Release leases while paused.
     await releaseLaneAndWorkspaceLeasesTx(tx, {
+      tenantId: opts.tenantId,
       key: opts.key,
       lane: opts.lane,
       workspaceId: opts.workspaceId,
@@ -2430,53 +2632,37 @@ export class ExecutionEngine {
     await this.emitRunPausedTx(tx, {
       runId: opts.runId,
       reason: pausedReason,
-      approvalId: approval.id,
+      approvalId: approval.approval_id,
       detail: pausedDetail,
     });
 
-    const approvalContext = safeJsonParse(approval.context_json, {}) as unknown;
-    const approvalRequestedEvt: WsEventEnvelopeT = {
-      event_id: randomUUID(),
-      type: "approval.requested",
-      occurred_at: nowIso,
-      scope: { kind: "run", run_id: opts.runId },
-      payload: {
-        approval: {
-          approval_id: approval.id,
-          kind: approval.kind,
-          status: "pending",
-          prompt: approval.prompt,
-          context: approvalContext,
-          scope: {
-            agent_id: agentId,
-            ...(TyrumKey.safeParse(opts.key).success ? { key: opts.key } : {}),
-            ...(Lane.safeParse(opts.lane).success ? { lane: opts.lane } : {}),
-            run_id: opts.runId,
-            step_index: opts.stepIndex,
-          },
-          created_at: normalizeDbDateTime(approval.created_at) ?? nowIso,
-          expires_at: normalizeDbDateTime(approval.expires_at),
-          resolution: null,
-        },
-      },
-    };
-    await this.enqueueWsEvent(tx, approvalRequestedEvt);
+    const approvalContract = toApprovalContract(approval);
+    if (approvalContract) {
+      const approvalRequestedEvt: WsEventEnvelopeT = {
+        event_id: randomUUID(),
+        type: "approval.requested",
+        occurred_at: nowIso,
+        scope: { kind: "run", run_id: opts.runId },
+        payload: { approval: approvalContract },
+      };
+      await this.enqueueWsEvent(tx, approvalRequestedEvt);
+    }
 
     const approvalRequest: WsRequestEnvelopeT = {
-      request_id: `approval-${String(approval.id)}`,
+      request_id: `approval-${approval.approval_id}`,
       type: "approval.request",
       payload: {
-        approval_id: approval.id,
-        plan_id: opts.planId,
-        step_index: opts.stepIndex,
-        prompt: input.prompt,
-        context: approvalContext,
-        expires_at: normalizeDbDateTime(approval.expires_at),
+        approval_id: approval.approval_id,
+        approval_key: approval.approval_key,
+        kind: approval.kind,
+        prompt: approval.prompt,
+        context: approval.context,
+        expires_at: approval.expires_at,
       },
     };
     await this.enqueueWsMessage(tx, approvalRequest);
 
-    return { approvalId: approval.id, resumeToken };
+    return { approvalId: approval.approval_id, resumeToken };
   }
 
   private async maybePauseForToolIntentGuardrailTx(
@@ -2489,7 +2675,7 @@ export class ExecutionEngine {
       clock: ExecutionClock;
       workerId: string;
     },
-  ): Promise<{ approvalId: number } | undefined> {
+  ): Promise<{ approvalId: string } | undefined> {
     if (!opts.actionType) return undefined;
     if (!requiresPostcondition(opts.actionType)) return undefined;
 
@@ -2501,27 +2687,19 @@ export class ExecutionEngine {
     const existingApproval = await tx.get<{ n: number }>(
       `SELECT 1 AS n
        FROM approvals
-       WHERE run_id = ?
-         AND step_index = ?
+       WHERE tenant_id = ?
+         AND run_id = ?
+         AND step_id = ?
          AND kind = 'intent'
          AND status = 'approved'
        LIMIT 1`,
-      [opts.run.run_id, opts.step.step_index],
+      [opts.run.tenant_id, opts.run.run_id, opts.step.step_id],
     );
     if (existingApproval) return undefined;
 
-    const tenantIdRaw = metadata?.["tenant_id"];
-    const agentIdRaw = metadata?.["agent_id"];
-    const tenantId =
-      typeof tenantIdRaw === "string" && tenantIdRaw.trim() ? tenantIdRaw.trim() : "default";
-    const agentId =
-      typeof agentIdRaw === "string" && agentIdRaw.trim()
-        ? agentIdRaw.trim()
-        : (deriveAgentIdFromExecutionKey(opts.run.key) ?? "default");
-
     const scope = {
-      tenant_id: tenantId,
-      agent_id: agentId,
+      tenant_id: opts.run.tenant_id,
+      agent_id: opts.run.agent_id,
       workspace_id: opts.run.workspace_id,
     } as const;
 
@@ -2534,12 +2712,14 @@ export class ExecutionEngine {
       const paused = await this.pauseRunForApproval(
         tx,
         {
+          tenantId: opts.run.tenant_id,
+          agentId: opts.run.agent_id,
+          workspaceId: opts.run.workspace_id,
           planId,
           stepIndex: opts.step.step_index,
           runId: opts.run.run_id,
-          jobId: opts.run.job_id,
           stepId: opts.step.step_id,
-          workspaceId: opts.run.workspace_id,
+          jobId: opts.run.job_id,
           key: opts.run.key,
           lane: opts.run.lane,
           workerId: opts.workerId,
@@ -2730,12 +2910,14 @@ export class ExecutionEngine {
     const paused = await this.pauseRunForApproval(
       tx,
       {
+        tenantId: opts.run.tenant_id,
+        agentId: opts.run.agent_id,
+        workspaceId: opts.run.workspace_id,
         planId,
         stepIndex: opts.step.step_index,
         runId: opts.run.run_id,
-        jobId: opts.run.job_id,
         stepId: opts.step.step_id,
-        workspaceId: opts.run.workspace_id,
+        jobId: opts.run.job_id,
         key: opts.run.key,
         lane: opts.run.lane,
         workerId: opts.workerId,

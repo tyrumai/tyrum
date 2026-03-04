@@ -6,6 +6,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { PolicyService } from "../../src/modules/policy/service.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
+import { DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 
 async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), "tyrum-policy-test-"));
@@ -47,8 +48,8 @@ describe("PolicyService provenance rules", () => {
           });
 
           const untrusted = await policy.evaluateToolCall({
-            agentId: "agent-1",
-            workspaceId: "ws-1",
+            agentId: DEFAULT_AGENT_ID,
+            workspaceId: DEFAULT_WORKSPACE_ID,
             toolId: "tool.exec",
             toolMatchTarget: "echo ok",
             inputProvenance: { source: "web", trusted: false },
@@ -99,8 +100,8 @@ describe("PolicyService provenance rules", () => {
           });
 
           const trusted = await policy.evaluateToolCall({
-            agentId: "agent-1",
-            workspaceId: "ws-1",
+            agentId: DEFAULT_AGENT_ID,
+            workspaceId: DEFAULT_WORKSPACE_ID,
             toolId: "tool.exec",
             toolMatchTarget: "echo ok",
             inputProvenance: { source: "user", trusted: true },
@@ -108,8 +109,8 @@ describe("PolicyService provenance rules", () => {
           expect(trusted.decision).toBe("allow");
 
           const untrusted = await policy.evaluateToolCall({
-            agentId: "agent-1",
-            workspaceId: "ws-1",
+            agentId: DEFAULT_AGENT_ID,
+            workspaceId: DEFAULT_WORKSPACE_ID,
             toolId: "tool.exec",
             toolMatchTarget: "echo ok",
             inputProvenance: { source: "web", trusted: false },
@@ -161,15 +162,15 @@ describe("PolicyService provenance rules", () => {
           });
 
           const override = await overrideDal.create({
-            agentId: "agent-1",
-            workspaceId: "ws-1",
+            agentId: DEFAULT_AGENT_ID,
+            workspaceId: DEFAULT_WORKSPACE_ID,
             toolId: "tool.exec",
             pattern: "echo ok",
           });
 
           const decision = await policy.evaluateToolCall({
-            agentId: "agent-1",
-            workspaceId: "ws-1",
+            agentId: DEFAULT_AGENT_ID,
+            workspaceId: DEFAULT_WORKSPACE_ID,
             toolId: "tool.exec",
             toolMatchTarget: "echo ok",
             inputProvenance: { source: "web", trusted: false },

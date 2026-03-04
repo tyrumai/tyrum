@@ -22,6 +22,12 @@ import type { GatewayContainer } from "../container.js";
 import { evaluatePolicy } from "../modules/policy/engine.js";
 import { authorizeWithThresholds, defaultThresholds } from "../modules/wallet/authorization.js";
 import type { ExecutionRunner, StepExecutor } from "../modules/executor/runner.js";
+import { PlanDal } from "../modules/planner/plan-dal.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../modules/identity/scope.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -426,13 +432,35 @@ export function createPlanRoutes(container: GatewayContainer, opts?: PlanRouteOp
       outcome_status: outcome.status,
     };
 
-    container.eventLog.append({
-      replayId: randomUUID(),
-      planId,
-      stepIndex: DECISION_AUDIT_STEP_INDEX,
-      occurredAt: new Date().toISOString(),
-      action: auditPayload,
-    });
+    const tenantId = DEFAULT_TENANT_ID;
+    const planKey = planId;
+    try {
+      await new PlanDal(container.db).ensurePlanId({
+        tenantId,
+        planKey,
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        kind: "planner",
+        status: outcome.status,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      container.logger.warn("plan.ensure_failed", { plan_key: planKey, error: message });
+    }
+
+    try {
+      await container.eventLog.append({
+        tenantId,
+        replayId: randomUUID(),
+        planKey,
+        stepIndex: DECISION_AUDIT_STEP_INDEX,
+        occurredAt: new Date().toISOString(),
+        action: auditPayload,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      container.logger.warn("plan.audit_persist_failed", { plan_key: planKey, error: message });
+    }
 
     // --- Hand off to execution runner for async execution ---
     if (outcome.status === "success" && opts?.executionRunner && opts?.stepExecutor) {

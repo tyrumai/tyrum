@@ -95,9 +95,9 @@ describe("WS envelopes", () => {
     const msg = WsApprovalResolveRequest.parse({
       request_id: "r-approval-resolve-1",
       type: "approval.resolve",
-      payload: { approval_id: 7, decision: "approved" },
+      payload: { approval_id: "550e8400-e29b-41d4-a716-446655440000", decision: "approved" },
     });
-    expect(msg.payload.approval_id).toBe(7);
+    expect(msg.payload.approval_id).toBe("550e8400-e29b-41d4-a716-446655440000");
   });
 
   it("rejects approval.resolve request missing approval_id", () => {
@@ -206,14 +206,14 @@ describe("WS envelopes", () => {
       event_id: "e-plugin-tool-1",
       type: "plugin_tool.invoked",
       occurred_at: "2026-02-19T12:00:00Z",
-      scope: { kind: "agent", agent_id: "default" },
+      scope: { kind: "agent", agent_id: "00000000-0000-4000-8000-000000000002" },
       payload: {
         plugin_id: "echo",
         plugin_version: "0.0.1",
         tool_id: "plugin.echo.echo",
         tool_call_id: "call-1",
-        agent_id: "default",
-        workspace_id: "default",
+        agent_id: "00000000-0000-4000-8000-000000000002",
+        workspace_id: "00000000-0000-4000-8000-000000000003",
         session_id: "session-1",
         channel: "local",
         thread_id: "thread-1",

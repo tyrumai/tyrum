@@ -267,7 +267,7 @@ export class ExecutionEngineEventEmitter {
     opts: {
       runId: string;
       reason: string;
-      approvalId?: number;
+      approvalId?: string;
       detail?: string;
     },
   ): Promise<void> {

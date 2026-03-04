@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ChainableEvent } from "../../src/modules/audit/hash-chain.js";
 import { verifyChain } from "../../src/modules/audit/hash-chain.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
@@ -20,6 +25,7 @@ describe("planner event append-next helpers", () => {
       insertPlannerEventNext?: <T>(
         tx: unknown,
         input: {
+          tenantId: string;
           replayId: string;
           planId: string;
           occurredAt: string;
@@ -35,25 +41,58 @@ describe("planner event append-next helpers", () => {
     const { insertPlannerEventNext } = mod;
 
     await db.transaction(async (tx) => {
+      await tx.run(
+        `INSERT INTO plans (
+           tenant_id,
+           plan_id,
+           plan_key,
+           agent_id,
+           workspace_id,
+           kind,
+           status
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
+          "plan-1",
+          "plan-1",
+          DEFAULT_AGENT_ID,
+          DEFAULT_WORKSPACE_ID,
+          "test",
+          "active",
+        ],
+      );
+
       await insertPlannerEventNext(tx, {
+        tenantId: DEFAULT_TENANT_ID,
         replayId: "replay-1",
         planId: "plan-1",
         occurredAt: "2026-02-24T00:00:00.000Z",
         actionJson: JSON.stringify({ type: "test.one" }),
         returning: "*",
       });
-      await insertPlannerEventNext<{ id: number }>(tx, {
+      await insertPlannerEventNext<{ step_index: number }>(tx, {
+        tenantId: DEFAULT_TENANT_ID,
         replayId: "replay-2",
         planId: "plan-1",
         occurredAt: "2026-02-24T00:00:01.000Z",
         actionJson: JSON.stringify({ type: "test.two" }),
-        returning: "id",
+        returning: "step_index",
       });
     });
 
     const rows = await db.all<ChainableEvent>(
-      "SELECT id, plan_id, step_index, occurred_at, action, prev_hash, event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      ["plan-1"],
+      `SELECT
+         step_index AS id,
+         plan_id,
+         step_index,
+         occurred_at,
+         action_json AS action,
+         prev_hash,
+         event_hash
+       FROM planner_events
+       WHERE tenant_id = ? AND plan_id = ?
+       ORDER BY step_index ASC`,
+      [DEFAULT_TENANT_ID, "plan-1"],
     );
 
     expect(rows).toHaveLength(2);

@@ -1,9 +1,36 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
 import { executeCommand } from "../../src/modules/commands/dispatcher.js";
+import { SessionDal } from "../../src/modules/agent/session-dal.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+  IdentityScopeDal,
+} from "../../src/modules/identity/scope.js";
+import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 describe("session command primitives", () => {
   let db: ReturnType<typeof openTestSqliteDb> | undefined;
+
+  async function ensureSession(input: {
+    agentKey: string;
+    channel: string;
+    accountKey?: string;
+    threadId: string;
+    containerKind: "dm" | "group" | "channel";
+  }): Promise<Awaited<ReturnType<SessionDal["getOrCreate"]>>> {
+    if (!db) throw new Error("db not initialized");
+    const sessionDal = new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+    return await sessionDal.getOrCreate({
+      scopeKeys: { agentKey: input.agentKey, workspaceKey: "default" },
+      connectorKey: input.channel,
+      accountKey: input.accountKey,
+      providerThreadId: input.threadId,
+      containerKind: input.containerKind,
+    });
+  }
 
   afterEach(async () => {
     await db?.close();
@@ -29,23 +56,51 @@ describe("session command primitives", () => {
     expect(payload.agent_id).toBe("default");
     expect(payload.thread_id).not.toBe("thread-1");
     expect(payload.thread_id).toMatch(/^ui-/);
-    expect(payload.session_id).toContain("ui:");
+    expect(payload.session_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
 
     const stored = await db.get<{
-      channel: string;
-      thread_id: string;
+      session_key: string;
       summary: string;
       turns_json: string;
     }>(
-      `SELECT channel, thread_id, summary, turns_json
+      `SELECT session_key, summary, turns_json
        FROM sessions
-       WHERE agent_id = ? AND session_id = ?`,
-      ["default", payload.session_id],
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, payload.session_id],
     );
-    expect(stored?.channel).toBe("ui");
-    expect(stored?.thread_id).toBe(payload.thread_id);
+    expect(stored?.session_key).toMatch(/^agent:default:ui:/);
+    expect(stored?.session_key).toContain(`:channel:${payload.thread_id}`);
     expect(stored?.summary).toBe("");
     expect(stored?.turns_json).toBe("[]");
+  });
+
+  it("supports /new for non-default channel accounts", async () => {
+    db = openTestSqliteDb();
+
+    const result = await executeCommand("/new", {
+      db,
+      commandContext: { agentId: "default", channel: "telegram:work" },
+    });
+
+    expect(result.data).toMatchObject({ channel: "telegram" });
+    const payload = result.data as { session_id: string };
+
+    const row = await db.get<{ account_key: string }>(
+      `SELECT ca.account_key
+       FROM sessions s
+       JOIN channel_threads ct
+         ON ct.tenant_id = s.tenant_id
+        AND ct.channel_thread_id = s.channel_thread_id
+       JOIN channel_accounts ca
+         ON ca.tenant_id = ct.tenant_id
+        AND ca.workspace_id = ct.workspace_id
+        AND ca.channel_account_id = ct.channel_account_id
+       WHERE s.tenant_id = ? AND s.session_id = ?`,
+      [DEFAULT_TENANT_ID, payload.session_id],
+    );
+    expect(row?.account_key).toBe("work");
   });
 
   it("supports /compact (moves older turns into summary)", async () => {
@@ -58,27 +113,17 @@ describe("session command primitives", () => {
       timestamp: `t-${String(idx)}`,
     }));
 
+    const session = await ensureSession({
+      agentKey: "default",
+      channel: "ui",
+      threadId: "thread-1",
+      containerKind: "channel",
+    });
     await db.run(
-      `INSERT INTO sessions (
-         agent_id,
-         session_id,
-         channel,
-         thread_id,
-         summary,
-         turns_json,
-         created_at,
-         updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        "default",
-        "ui:thread-1",
-        "ui",
-        "thread-1",
-        "prev-summary",
-        JSON.stringify(turns),
-        nowIso,
-        nowIso,
-      ],
+      `UPDATE sessions
+       SET summary = ?, turns_json = ?, updated_at = ?
+       WHERE tenant_id = ? AND session_id = ?`,
+      ["prev-summary", JSON.stringify(turns), nowIso, session.tenant_id, session.session_id],
     );
 
     const result = await executeCommand("/compact", {
@@ -88,7 +133,7 @@ describe("session command primitives", () => {
 
     expect(result.data).toMatchObject({
       agent_id: "default",
-      session_id: "ui:thread-1",
+      session_id: session.session_id,
       dropped_messages: 4,
       kept_messages: 8,
     });
@@ -96,8 +141,8 @@ describe("session command primitives", () => {
     const updated = await db.get<{ summary: string; turns_json: string }>(
       `SELECT summary, turns_json
        FROM sessions
-       WHERE agent_id = ? AND session_id = ?`,
-      ["default", "ui:thread-1"],
+       WHERE tenant_id = ? AND session_id = ?`,
+      [session.tenant_id, session.session_id],
     );
     expect(updated?.summary).toContain("prev-summary");
     expect(updated?.summary).toContain("msg-0");
@@ -110,53 +155,182 @@ describe("session command primitives", () => {
     expect(parsed[7]?.content).toBe("msg-11");
   });
 
+  it("supports /compact for non-default channel accounts", async () => {
+    db = openTestSqliteDb();
+
+    const nowIso = new Date().toISOString();
+    const workTurns = Array.from({ length: 10 }, (_, idx) => ({
+      role: idx % 2 === 0 ? ("user" as const) : ("assistant" as const),
+      content: `work-msg-${String(idx)}`,
+      timestamp: `work-t-${String(idx)}`,
+    }));
+    const defaultTurns = [
+      { role: "user" as const, content: "default-msg-0", timestamp: "default-t-0" },
+      { role: "assistant" as const, content: "default-msg-1", timestamp: "default-t-1" },
+    ];
+
+    const defaultSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      threadId: "thread-1",
+      containerKind: "channel",
+    });
+    const workSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      accountKey: "work",
+      threadId: "thread-1",
+      containerKind: "channel",
+    });
+
+    await db.run(
+      `UPDATE sessions
+       SET summary = ?, turns_json = ?, updated_at = ?
+       WHERE tenant_id = ? AND session_id = ?`,
+      [
+        "default-summary",
+        JSON.stringify(defaultTurns),
+        nowIso,
+        DEFAULT_TENANT_ID,
+        defaultSession.session_id,
+      ],
+    );
+    await db.run(
+      `UPDATE sessions
+       SET summary = ?, turns_json = ?, updated_at = ?
+       WHERE tenant_id = ? AND session_id = ?`,
+      [
+        "work-summary",
+        JSON.stringify(workTurns),
+        nowIso,
+        DEFAULT_TENANT_ID,
+        workSession.session_id,
+      ],
+    );
+
+    const result = await executeCommand("/compact", {
+      db,
+      commandContext: { agentId: "default", channel: "telegram:work", threadId: "thread-1" },
+    });
+
+    expect(result.data).toMatchObject({
+      agent_id: "default",
+      session_id: workSession.session_id,
+      dropped_messages: 2,
+      kept_messages: 8,
+    });
+
+    const workUpdated = await db.get<{ summary: string; turns_json: string }>(
+      `SELECT summary, turns_json
+       FROM sessions
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, workSession.session_id],
+    );
+    expect(workUpdated?.summary).toContain("work-summary");
+    expect(workUpdated?.summary).toContain("work-msg-0");
+    const workParsed = workUpdated?.turns_json
+      ? (JSON.parse(workUpdated.turns_json) as Array<{ content: string }>)
+      : [];
+    expect(workParsed).toHaveLength(8);
+    expect(workParsed[0]?.content).toBe("work-msg-2");
+    expect(workParsed[7]?.content).toBe("work-msg-9");
+
+    const defaultUpdated = await db.get<{ summary: string; turns_json: string }>(
+      `SELECT summary, turns_json
+       FROM sessions
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, defaultSession.session_id],
+    );
+    expect(defaultUpdated?.summary).toBe("default-summary");
+    expect(defaultUpdated?.turns_json).toBe(JSON.stringify(defaultTurns));
+  });
+
   it("supports /stop (cancels active run + clears queued inbox)", async () => {
     db = openTestSqliteDb();
 
     const key = "agent:default:ui:default:channel:thread-1";
     const lane = "main";
 
+    const session = await ensureSession({
+      agentKey: "default",
+      channel: "ui",
+      threadId: "thread-1",
+      containerKind: "channel",
+    });
+
     await db.run(
-      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, 'running', '{}')`,
-      ["job-1", key, lane],
+      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+	       VALUES (?, ?, ?, ?, ?, ?, 'running', '{}')`,
+      [DEFAULT_TENANT_ID, "job-1", DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID, key, lane],
     );
     await db.run(
-      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, 'running', 1)`,
-      ["run-1", "job-1", key, lane],
+      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+	       VALUES (?, ?, ?, ?, ?, 'running', 1)`,
+      [DEFAULT_TENANT_ID, "run-1", "job-1", key, lane],
     );
     await db.run(
-      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-       VALUES (?, ?, 0, 'running', '{}')`,
-      ["step-1", "run-1"],
+      `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+	       VALUES (?, ?, ?, 0, 'running', '{}')`,
+      [DEFAULT_TENANT_ID, "step-1", "run-1"],
     );
 
     await db.run(
       `INSERT INTO channel_inbox (
+         tenant_id,
          source,
          thread_id,
          message_id,
-         key,
-         lane,
-         received_at_ms,
-         payload_json,
-         status
-       ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'queued')`,
-      ["ui", "thread-1", "msg-queued", key, lane, 1_000],
+	         key,
+	         lane,
+	         received_at_ms,
+	         payload_json,
+	         status,
+	         queue_mode,
+	         workspace_id,
+	         session_id,
+	         channel_thread_id
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?, '{}', 'queued', 'collect', ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        "ui",
+        "thread-1",
+        "msg-queued",
+        key,
+        lane,
+        1_000,
+        DEFAULT_WORKSPACE_ID,
+        session.session_id,
+        session.channel_thread_id,
+      ],
     );
     await db.run(
       `INSERT INTO channel_inbox (
-         source,
-         thread_id,
-         message_id,
-         key,
-         lane,
-         received_at_ms,
-         payload_json,
-         status
-       ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'completed')`,
-      ["ui", "thread-1", "msg-done", key, lane, 900],
+	         tenant_id,
+	         source,
+	         thread_id,
+	         message_id,
+	         key,
+	         lane,
+	         received_at_ms,
+	         payload_json,
+	         status,
+	         queue_mode,
+	         workspace_id,
+	         session_id,
+	         channel_thread_id
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?, '{}', 'completed', 'collect', ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        "ui",
+        "thread-1",
+        "msg-done",
+        key,
+        lane,
+        900,
+        DEFAULT_WORKSPACE_ID,
+        session.session_id,
+        session.channel_thread_id,
+      ],
     );
 
     const result = await executeCommand("/stop", {
@@ -200,19 +374,19 @@ describe("session command primitives", () => {
     const lane = "main";
 
     await db.run(
-      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, 'running', '{}')`,
-      ["job-ctx-1", key, lane],
+      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+	       VALUES (?, ?, ?, ?, ?, ?, 'running', '{}')`,
+      [DEFAULT_TENANT_ID, "job-ctx-1", DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID, key, lane],
     );
     await db.run(
-      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, 'running', 1)`,
-      ["run-ctx-1", "job-ctx-1", key, lane],
+      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+	       VALUES (?, ?, ?, ?, ?, 'running', 1)`,
+      [DEFAULT_TENANT_ID, "run-ctx-1", "job-ctx-1", key, lane],
     );
     await db.run(
-      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-       VALUES (?, ?, 0, 'running', '{}')`,
-      ["step-ctx-1", "run-ctx-1"],
+      `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+	       VALUES (?, ?, ?, 0, 'running', '{}')`,
+      [DEFAULT_TENANT_ID, "step-ctx-1", "run-ctx-1"],
     );
 
     const result = await executeCommand("/stop", {
@@ -241,19 +415,19 @@ describe("session command primitives", () => {
     const lane = "main";
 
     await db.run(
-      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, 'running', '{}')`,
-      ["job-dm-1", key, lane],
+      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+	       VALUES (?, ?, ?, ?, ?, ?, 'running', '{}')`,
+      [DEFAULT_TENANT_ID, "job-dm-1", DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID, key, lane],
     );
     await db.run(
-      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, 'running', 1)`,
-      ["run-dm-1", "job-dm-1", key, lane],
+      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+	       VALUES (?, ?, ?, ?, ?, 'running', 1)`,
+      [DEFAULT_TENANT_ID, "run-dm-1", "job-dm-1", key, lane],
     );
     await db.run(
-      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-       VALUES (?, ?, 0, 'running', '{}')`,
-      ["step-dm-1", "run-dm-1"],
+      `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+	       VALUES (?, ?, ?, 0, 'running', '{}')`,
+      [DEFAULT_TENANT_ID, "step-dm-1", "run-dm-1"],
     );
 
     const result = await executeCommand("/stop", {
@@ -281,20 +455,33 @@ describe("session command primitives", () => {
     const lane = "main";
     const otherAgentKey = "agent:agent-2:telegram:default:dm:chat-1";
 
+    const otherAgentIds = await new IdentityScopeDal(db).resolveScopeIds({
+      tenantKey: "default",
+      agentKey: "agent-2",
+      workspaceKey: "default",
+    });
+
     await db.run(
-      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, 'running', '{}')`,
-      ["job-agent-pattern-1", otherAgentKey, lane],
+      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+	       VALUES (?, ?, ?, ?, ?, ?, 'running', '{}')`,
+      [
+        otherAgentIds.tenantId,
+        "job-agent-pattern-1",
+        otherAgentIds.agentId,
+        otherAgentIds.workspaceId,
+        otherAgentKey,
+        lane,
+      ],
     );
     await db.run(
-      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, 'running', 1)`,
-      ["run-agent-pattern-1", "job-agent-pattern-1", otherAgentKey, lane],
+      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+	       VALUES (?, ?, ?, ?, ?, 'running', 1)`,
+      [otherAgentIds.tenantId, "run-agent-pattern-1", "job-agent-pattern-1", otherAgentKey, lane],
     );
     await db.run(
-      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-       VALUES (?, ?, 0, 'running', '{}')`,
-      ["step-agent-pattern-1", "run-agent-pattern-1"],
+      `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+	       VALUES (?, ?, ?, 0, 'running', '{}')`,
+      [otherAgentIds.tenantId, "step-agent-pattern-1", "run-agent-pattern-1"],
     );
 
     const result = await executeCommand("/stop", {
@@ -318,72 +505,68 @@ describe("session command primitives", () => {
     db = openTestSqliteDb();
 
     const nowIso = new Date().toISOString();
+    const session = await ensureSession({
+      agentKey: "default",
+      channel: "ui",
+      threadId: "thread-1",
+      containerKind: "channel",
+    });
     await db.run(
-      `INSERT INTO sessions (
-         agent_id,
-         session_id,
-         channel,
-         thread_id,
-         summary,
-         turns_json,
-         created_at,
-         updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `UPDATE sessions
+	       SET summary = ?, turns_json = ?, updated_at = ?
+	       WHERE tenant_id = ? AND session_id = ?`,
       [
-        "default",
-        "ui:thread-1",
-        "ui",
-        "thread-1",
         "to-reset",
         JSON.stringify([{ role: "user", content: "hi", timestamp: "t-1" }]),
         nowIso,
-        nowIso,
+        session.tenant_id,
+        session.session_id,
       ],
     );
 
     await db.run(
-      `INSERT INTO session_model_overrides (agent_id, session_id, model_id, updated_at)
-       VALUES (?, ?, ?, ?)`,
-      ["default", "ui:thread-1", "openai/gpt-4.1", nowIso],
+      `INSERT INTO session_model_overrides (tenant_id, session_id, model_id)
+	       VALUES (?, ?, ?)`,
+      [session.tenant_id, session.session_id, "openai/gpt-4.1"],
     );
 
+    const authProfileId = randomUUID();
     await db.run(
       `INSERT INTO auth_profiles (
-         profile_id,
-         agent_id,
-         provider,
-         type,
-         secret_handles_json,
-         status,
-         created_at,
-         updated_at
-       ) VALUES (?, ?, ?, 'api_key', ?, 'active', ?, ?)`,
-      [
-        "profile-openai-1",
-        "default",
-        "openai",
-        JSON.stringify({ api_key_handle: "handle-openai-1" }),
-        nowIso,
-        nowIso,
-      ],
+	         tenant_id,
+	         auth_profile_id,
+	         auth_profile_key,
+	         provider_key,
+	         type,
+	         status,
+	         labels_json,
+	         created_at,
+	         updated_at
+	       ) VALUES (?, ?, ?, ?, 'api_key', 'active', '{}', ?, ?)`,
+      [DEFAULT_TENANT_ID, authProfileId, "profile-openai-1", "openai", nowIso, nowIso],
     );
 
     await db.run(
-      `INSERT INTO session_provider_pins (agent_id, session_id, provider, profile_id, pinned_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      ["default", "ui:thread-1", "openai", "profile-openai-1", nowIso, nowIso],
+      `INSERT INTO session_provider_pins (
+	         tenant_id,
+	         session_id,
+	         provider_key,
+	         auth_profile_id,
+	         pinned_at
+	       ) VALUES (?, ?, ?, ?, ?)`,
+      [session.tenant_id, session.session_id, "openai", authProfileId, nowIso],
     );
 
     const key = "agent:default:ui:default:channel:thread-1";
     await db.run(
-      `INSERT INTO lane_queue_mode_overrides (key, lane, queue_mode, updated_at_ms)
-       VALUES (?, 'main', 'interrupt', ?)`,
-      [key, Date.now()],
+      `INSERT INTO lane_queue_mode_overrides (tenant_id, key, lane, queue_mode, updated_at_ms)
+	       VALUES (?, ?, 'main', 'interrupt', ?)`,
+      [DEFAULT_TENANT_ID, key, Date.now()],
     );
     await db.run(
-      `INSERT INTO session_send_policy_overrides (key, send_policy, updated_at_ms)
-       VALUES (?, 'off', ?)`,
-      [key, Date.now()],
+      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+	       VALUES (?, ?, 'off', ?)`,
+      [DEFAULT_TENANT_ID, key, Date.now()],
     );
 
     const result = await executeCommand("/reset", {
@@ -392,47 +575,47 @@ describe("session command primitives", () => {
     });
     expect(result.data).toMatchObject({
       agent_id: "default",
-      session_id: "ui:thread-1",
+      session_id: session.session_id,
     });
 
-    const session = await db.get<{ summary: string; turns_json: string }>(
+    const resetSession = await db.get<{ summary: string; turns_json: string }>(
       `SELECT summary, turns_json
-       FROM sessions
-       WHERE agent_id = ? AND session_id = ?`,
-      ["default", "ui:thread-1"],
+	       FROM sessions
+	       WHERE tenant_id = ? AND session_id = ?`,
+      [session.tenant_id, session.session_id],
     );
-    expect(session?.summary).toBe("");
-    expect(session?.turns_json).toBe("[]");
+    expect(resetSession?.summary).toBe("");
+    expect(resetSession?.turns_json).toBe("[]");
 
     const modelOverride = await db.get<{ model_id: string }>(
       `SELECT model_id
-       FROM session_model_overrides
-       WHERE agent_id = ? AND session_id = ?`,
-      ["default", "ui:thread-1"],
+	       FROM session_model_overrides
+	       WHERE tenant_id = ? AND session_id = ?`,
+      [session.tenant_id, session.session_id],
     );
     expect(modelOverride).toBeUndefined();
 
-    const pin = await db.get<{ profile_id: string }>(
-      `SELECT profile_id
-       FROM session_provider_pins
-       WHERE agent_id = ? AND session_id = ?`,
-      ["default", "ui:thread-1"],
+    const pin = await db.get<{ auth_profile_id: string }>(
+      `SELECT auth_profile_id
+	       FROM session_provider_pins
+	       WHERE tenant_id = ? AND session_id = ?`,
+      [session.tenant_id, session.session_id],
     );
     expect(pin).toBeUndefined();
 
     const queueOverride = await db.get<{ queue_mode: string }>(
       `SELECT queue_mode
-       FROM lane_queue_mode_overrides
-       WHERE key = ? AND lane = ?`,
-      [key, "main"],
+	       FROM lane_queue_mode_overrides
+	       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+      [DEFAULT_TENANT_ID, key, "main"],
     );
     expect(queueOverride).toBeUndefined();
 
     const sendOverride = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE key = ?`,
-      [key],
+	       FROM session_send_policy_overrides
+	       WHERE tenant_id = ? AND key = ?`,
+      [DEFAULT_TENANT_ID, key],
     );
     expect(sendOverride).toBeUndefined();
   });
@@ -444,67 +627,79 @@ describe("session command primitives", () => {
     const lane = "main";
     const nowIso = new Date().toISOString();
 
+    const session = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      threadId: "chat-1",
+      containerKind: "dm",
+    });
     await db.run(
-      `INSERT INTO sessions (
-         agent_id,
-         session_id,
-         channel,
-         thread_id,
-         summary,
-         turns_json,
-         created_at,
-         updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `UPDATE sessions
+	       SET summary = ?, turns_json = ?, updated_at = ?
+	       WHERE tenant_id = ? AND session_id = ?`,
       [
-        "default",
-        "telegram:chat-1",
-        "telegram",
-        "chat-1",
         "to-reset",
         JSON.stringify([{ role: "user", content: "hi", timestamp: "t-1" }]),
         nowIso,
-        nowIso,
+        session.tenant_id,
+        session.session_id,
       ],
     );
 
     await db.run(
-      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, 'running', '{}')`,
-      ["job-reset-dm-1", key, lane],
+      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+	       VALUES (?, ?, ?, ?, ?, ?, 'running', '{}')`,
+      [DEFAULT_TENANT_ID, "job-reset-dm-1", DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID, key, lane],
     );
     await db.run(
-      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-       VALUES (?, ?, ?, ?, 'running', 1)`,
-      ["run-reset-dm-1", "job-reset-dm-1", key, lane],
+      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+	       VALUES (?, ?, ?, ?, ?, 'running', 1)`,
+      [DEFAULT_TENANT_ID, "run-reset-dm-1", "job-reset-dm-1", key, lane],
     );
     await db.run(
-      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-       VALUES (?, ?, 0, 'running', '{}')`,
-      ["step-reset-dm-1", "run-reset-dm-1"],
+      `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+	       VALUES (?, ?, ?, 0, 'running', '{}')`,
+      [DEFAULT_TENANT_ID, "step-reset-dm-1", "run-reset-dm-1"],
     );
     await db.run(
       `INSERT INTO channel_inbox (
-         source,
-         thread_id,
-         message_id,
-         key,
-         lane,
-         received_at_ms,
-         payload_json,
-         status
-       ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'queued')`,
-      ["telegram", "chat-1", "msg-reset-queued", key, lane, 1_000],
+	         tenant_id,
+	         source,
+	         thread_id,
+	         message_id,
+	         key,
+	         lane,
+	         received_at_ms,
+	         payload_json,
+	         status,
+	         queue_mode,
+	         workspace_id,
+	         session_id,
+	         channel_thread_id
+	       ) VALUES (?, ?, ?, ?, ?, ?, ?, '{}', 'queued', 'collect', ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        "telegram:default",
+        "chat-1",
+        "msg-reset-queued",
+        key,
+        lane,
+        1_000,
+        DEFAULT_WORKSPACE_ID,
+        session.session_id,
+        session.channel_thread_id,
+      ],
     );
 
     await db.run(
-      `INSERT INTO lane_queue_mode_overrides (key, lane, queue_mode, updated_at_ms)
-       VALUES (?, ?, 'interrupt', ?)`,
-      [key, lane, Date.now()],
+      `INSERT INTO lane_queue_mode_overrides (tenant_id, key, lane, queue_mode, updated_at_ms)
+	       VALUES (?, ?, ?, 'interrupt', ?)`,
+      [DEFAULT_TENANT_ID, key, lane, Date.now()],
     );
     await db.run(
-      `INSERT INTO session_send_policy_overrides (key, send_policy, updated_at_ms)
-       VALUES (?, 'off', ?)`,
-      [key, Date.now()],
+      `INSERT INTO session_send_policy_overrides (tenant_id, key, send_policy, updated_at_ms)
+	       VALUES (?, ?, 'off', ?)`,
+      [DEFAULT_TENANT_ID, key, Date.now()],
     );
 
     const result = await executeCommand("/reset", {
@@ -514,7 +709,7 @@ describe("session command primitives", () => {
 
     expect(result.data).toMatchObject({
       agent_id: "default",
-      session_id: "telegram:chat-1",
+      session_id: session.session_id,
     });
 
     const run = await db.get<{ status: string }>(
@@ -534,18 +729,94 @@ describe("session command primitives", () => {
 
     const queueOverride = await db.get<{ queue_mode: string }>(
       `SELECT queue_mode
-       FROM lane_queue_mode_overrides
-       WHERE key = ? AND lane = ?`,
-      [key, lane],
+	       FROM lane_queue_mode_overrides
+	       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+      [DEFAULT_TENANT_ID, key, lane],
     );
     expect(queueOverride).toBeUndefined();
 
     const sendOverride = await db.get<{ send_policy: string }>(
       `SELECT send_policy
-       FROM session_send_policy_overrides
-       WHERE key = ?`,
-      [key],
+	       FROM session_send_policy_overrides
+	       WHERE tenant_id = ? AND key = ?`,
+      [DEFAULT_TENANT_ID, key],
     );
     expect(sendOverride).toBeUndefined();
+  });
+
+  it("supports /reset for non-default channel accounts", async () => {
+    db = openTestSqliteDb();
+
+    const nowIso = new Date().toISOString();
+
+    const defaultSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      threadId: "thread-1",
+      containerKind: "channel",
+    });
+    const workSession = await ensureSession({
+      agentKey: "default",
+      channel: "telegram",
+      accountKey: "work",
+      threadId: "thread-1",
+      containerKind: "channel",
+    });
+
+    const defaultTurns = [{ role: "user", content: "default-hi", timestamp: "default-t-1" }];
+    const workTurns = [{ role: "user", content: "work-hi", timestamp: "work-t-1" }];
+
+    await db.run(
+      `UPDATE sessions
+       SET summary = ?, turns_json = ?, updated_at = ?
+       WHERE tenant_id = ? AND session_id = ?`,
+      [
+        "default-to-keep",
+        JSON.stringify(defaultTurns),
+        nowIso,
+        DEFAULT_TENANT_ID,
+        defaultSession.session_id,
+      ],
+    );
+    await db.run(
+      `UPDATE sessions
+       SET summary = ?, turns_json = ?, updated_at = ?
+       WHERE tenant_id = ? AND session_id = ?`,
+      [
+        "work-to-reset",
+        JSON.stringify(workTurns),
+        nowIso,
+        DEFAULT_TENANT_ID,
+        workSession.session_id,
+      ],
+    );
+
+    const result = await executeCommand("/reset", {
+      db,
+      commandContext: { agentId: "default", channel: "telegram:work", threadId: "thread-1" },
+    });
+
+    expect(result.data).toMatchObject({
+      agent_id: "default",
+      session_id: workSession.session_id,
+    });
+
+    const resetSession = await db.get<{ summary: string; turns_json: string }>(
+      `SELECT summary, turns_json
+       FROM sessions
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, workSession.session_id],
+    );
+    expect(resetSession?.summary).toBe("");
+    expect(resetSession?.turns_json).toBe("[]");
+
+    const defaultUnchanged = await db.get<{ summary: string; turns_json: string }>(
+      `SELECT summary, turns_json
+       FROM sessions
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, defaultSession.session_id],
+    );
+    expect(defaultUnchanged?.summary).toBe("default-to-keep");
+    expect(defaultUnchanged?.turns_json).toBe(JSON.stringify(defaultTurns));
   });
 });

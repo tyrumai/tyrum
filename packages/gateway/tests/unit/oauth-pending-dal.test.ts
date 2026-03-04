@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { OauthPendingDal } from "../../src/modules/oauth/pending-dal.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("OauthPendingDal", () => {
   let db: SqliteDb | undefined;
@@ -16,9 +17,10 @@ describe("OauthPendingDal", () => {
     const dal = new OauthPendingDal(db);
 
     await dal.create({
+      tenant_id: DEFAULT_TENANT_ID,
       state: "state-1",
       provider_id: "openai",
-      agent_id: "agent-1",
+      agent_key: "agent-1",
       created_at: new Date().toISOString(),
       expires_at: new Date(Date.now() + 60_000).toISOString(),
       pkce_verifier: "verifier",
@@ -28,13 +30,13 @@ describe("OauthPendingDal", () => {
       metadata: {},
     });
 
-    const first = await dal.consume("state-1");
+    const first = await dal.consume({ tenantId: DEFAULT_TENANT_ID, state: "state-1" });
     expect(first?.state).toBe("state-1");
 
-    const second = await dal.consume("state-1");
+    const second = await dal.consume({ tenantId: DEFAULT_TENANT_ID, state: "state-1" });
     expect(second).toBeUndefined();
 
-    const stillThere = await dal.get("state-1");
+    const stillThere = await dal.get({ tenantId: DEFAULT_TENANT_ID, state: "state-1" });
     expect(stillThere).toBeUndefined();
   });
 });

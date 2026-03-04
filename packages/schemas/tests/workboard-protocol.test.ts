@@ -23,7 +23,7 @@ describe("WorkBoard WS protocol", () => {
   });
 
   it("parses work.* requests via WsRequest union", () => {
-    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const scope = { tenant_key: "default", agent_key: "default", workspace_key: "default" };
     const workItemId = "123e4567-e89b-12d3-a456-426614174000";
     const linkedWorkItemId = "123e4567-e89b-12d3-a456-426614174001";
     const artifactId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
@@ -111,7 +111,11 @@ describe("WorkBoard WS protocol", () => {
   });
 
   it("parses work.* responses via WsResponse union", () => {
-    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const scope = {
+      tenant_id: "00000000-0000-4000-8000-000000000001",
+      agent_id: "00000000-0000-4000-8000-000000000002",
+      workspace_id: "00000000-0000-4000-8000-000000000003",
+    };
     const workItem = {
       work_item_id: "123e4567-e89b-12d3-a456-426614174000",
       ...scope,
@@ -120,7 +124,7 @@ describe("WorkBoard WS protocol", () => {
       status: "backlog",
       priority: 0,
       created_at: "2026-02-19T12:00:00Z",
-      created_from_session_key: "agent:agent-1:main",
+      created_from_session_key: "agent:default:main",
       last_active_at: null,
       fingerprint: { resources: ["repo:example/repo"] },
       acceptance: { checks: [] },
@@ -231,7 +235,12 @@ describe("WorkBoard WS protocol", () => {
   });
 
   it("parses work.* events via WsEvent union", () => {
-    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const scope = {
+      tenant_id: "00000000-0000-4000-8000-000000000001",
+      agent_id: "00000000-0000-4000-8000-000000000002",
+      workspace_id: "00000000-0000-4000-8000-000000000003",
+    };
+    const scopeKeys = { tenant_key: "default", agent_key: "default", workspace_key: "default" };
     const workItem = {
       work_item_id: "123e4567-e89b-12d3-a456-426614174000",
       ...scope,
@@ -240,7 +249,7 @@ describe("WorkBoard WS protocol", () => {
       status: "backlog",
       priority: 0,
       created_at: "2026-02-19T12:00:00Z",
-      created_from_session_key: "agent:agent-1:main",
+      created_from_session_key: "agent:default:main",
       last_active_at: null,
       fingerprint: { resources: ["repo:example/repo"] },
       acceptance: { checks: [] },
@@ -324,7 +333,7 @@ describe("WorkBoard WS protocol", () => {
           ...scope,
           work_item_id: workItem.work_item_id,
           task_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          approval_id: 7,
+          approval_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         },
       },
       {
@@ -348,7 +357,7 @@ describe("WorkBoard WS protocol", () => {
       {
         type: "work.state_kv.updated",
         payload: {
-          scope: { ...scope, kind: "agent" },
+          scope: { ...scopeKeys, kind: "agent" },
           key: "prefs.timezone",
           updated_at: "2026-02-19T12:00:00Z",
         },

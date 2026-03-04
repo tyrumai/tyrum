@@ -11,6 +11,7 @@ const DEFAULT_TICK_MS = 5 * 60_000;
 const DEFAULT_BATCH_SIZE = 10_000;
 const DEFAULT_MAX_BATCHES_PER_TICK = 10;
 const DEFAULT_SESSIONS_TTL_DAYS = 30;
+const DEFAULT_CHANNEL_QUEUE_FAILURE_RETENTION_DAYS = 7;
 
 const RETENTION_TICK_ENV = "TYRUM_STATESTORE_RETENTION_TICK_MS";
 const RETENTION_BATCH_ENV = "TYRUM_STATESTORE_RETENTION_BATCH_SIZE";
@@ -119,31 +120,48 @@ export class StateStoreLifecycleScheduler {
     const { nowMs, nowIso } = this.clock();
     const sessionsTtlDays = resolveSessionsTtlDays();
     const sessionsCutoffIso = new Date(nowMs - sessionsTtlDays * 24 * 60 * 60 * 1000).toISOString();
+    const queueFailureCutoffIso = new Date(
+      nowMs - DEFAULT_CHANNEL_QUEUE_FAILURE_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const queueFailureCutoffMs =
+      nowMs - DEFAULT_CHANNEL_QUEUE_FAILURE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
     const sessionsPruned = await this.pruneInBatches("sessions", () =>
       this.pruneExpiredSessions(db, { cutoffIso: sessionsCutoffIso }),
     );
-    const presencePruned = await this.pruneInBatches("presence_entries", () =>
-      this.pruneExpiredByMsColumn(db, { table: "presence_entries", pk: "instance_id", nowMs }),
-    );
-    const directoryPruned = await this.pruneInBatches("connection_directory", () =>
-      this.pruneExpiredByMsColumn(db, {
-        table: "connection_directory",
-        pk: "connection_id",
-        nowMs,
-      }),
+    const connectionsPruned = await this.pruneInBatches("connections", () =>
+      this.pruneExpiredConnections(db, { nowMs }),
     );
     const dedupePruned = await this.pruneInBatches("channel_inbound_dedupe", () =>
       this.pruneExpiredInboundDedupe(db, { nowMs }),
     );
+    const inboxFailedPruned = await this.pruneInBatches("channel_inbox.failed", () =>
+      this.pruneFailedChannelInbox(db, { cutoffMs: queueFailureCutoffMs }),
+    );
+    const inboxCompletedPruned = await this.pruneInBatches("channel_inbox.completed", () =>
+      this.pruneCompletedChannelInbox(db, { cutoffMs: queueFailureCutoffMs }),
+    );
+    const outboxFailedPruned = await this.pruneInBatches("channel_outbox.failed", () =>
+      this.pruneFailedChannelOutbox(db, { cutoffIso: queueFailureCutoffIso }),
+    );
 
-    if (sessionsPruned + presencePruned + directoryPruned + dedupePruned > 0) {
+    if (
+      sessionsPruned +
+        connectionsPruned +
+        dedupePruned +
+        inboxFailedPruned +
+        inboxCompletedPruned +
+        outboxFailedPruned >
+      0
+    ) {
       this.logger?.info("statestore.lifecycle_pruned", {
         now: nowIso,
         sessions: sessionsPruned,
-        presence_entries: presencePruned,
-        connection_directory: directoryPruned,
+        connections: connectionsPruned,
         channel_inbound_dedupe: dedupePruned,
+        channel_inbox_failed: inboxFailedPruned,
+        channel_inbox_completed: inboxCompletedPruned,
+        channel_outbox_failed: outboxFailedPruned,
       });
     }
   }
@@ -168,7 +186,7 @@ export class StateStoreLifecycleScheduler {
   private async pruneExpiredSessions(db: SqlDb, input: { cutoffIso: string }): Promise<number> {
     const sessionCutoff = {
       clause: "updated_at < ?",
-      order: "updated_at ASC, session_id ASC",
+      order: "updated_at ASC, tenant_id ASC, session_id ASC",
       params: [input.cutoffIso],
     };
 
@@ -176,8 +194,8 @@ export class StateStoreLifecycleScheduler {
 
     await db.run(
       `DELETE FROM session_model_overrides
-       WHERE session_id IN (
-         SELECT session_id
+       WHERE (tenant_id, session_id) IN (
+         SELECT tenant_id, session_id
          FROM sessions
          WHERE ${sessionCutoff.clause}
          ORDER BY ${sessionCutoff.order}
@@ -188,8 +206,8 @@ export class StateStoreLifecycleScheduler {
 
     await db.run(
       `DELETE FROM session_provider_pins
-       WHERE session_id IN (
-         SELECT session_id
+       WHERE (tenant_id, session_id) IN (
+         SELECT tenant_id, session_id
          FROM sessions
          WHERE ${sessionCutoff.clause}
          ORDER BY ${sessionCutoff.order}
@@ -200,8 +218,8 @@ export class StateStoreLifecycleScheduler {
 
     await db.run(
       `DELETE FROM context_reports
-       WHERE session_id IN (
-         SELECT session_id
+       WHERE (tenant_id, session_id) IN (
+         SELECT tenant_id, session_id
          FROM sessions
          WHERE ${sessionCutoff.clause}
          ORDER BY ${sessionCutoff.order}
@@ -213,8 +231,8 @@ export class StateStoreLifecycleScheduler {
     return (
       await db.run(
         `DELETE FROM sessions
-       WHERE session_id IN (
-         SELECT session_id
+       WHERE (tenant_id, session_id) IN (
+         SELECT tenant_id, session_id
          FROM sessions
          WHERE ${sessionCutoff.clause}
          ORDER BY ${sessionCutoff.order}
@@ -225,24 +243,17 @@ export class StateStoreLifecycleScheduler {
     ).changes;
   }
 
-  private async pruneExpiredByMsColumn(
-    db: SqlDb,
-    input: {
-      table: "presence_entries" | "connection_directory";
-      pk: "instance_id" | "connection_id";
-      nowMs: number;
-    },
-  ): Promise<number> {
+  private async pruneExpiredConnections(db: SqlDb, input: { nowMs: number }): Promise<number> {
     return (
       await db.run(
-        `DELETE FROM ${input.table}
-       WHERE ${input.pk} IN (
-         SELECT ${input.pk}
-         FROM ${input.table}
-         WHERE expires_at_ms <= ?
-         ORDER BY expires_at_ms ASC
-         LIMIT ?
-       )`,
+        `DELETE FROM connections
+         WHERE (tenant_id, connection_id) IN (
+           SELECT tenant_id, connection_id
+           FROM connections
+           WHERE expires_at_ms <= ?
+           ORDER BY expires_at_ms ASC, tenant_id ASC, connection_id ASC
+           LIMIT ?
+         )`,
         [input.nowMs, this.batchSize],
       )
     ).changes;
@@ -252,14 +263,70 @@ export class StateStoreLifecycleScheduler {
     return (
       await db.run(
         `DELETE FROM channel_inbound_dedupe
-       WHERE (channel, account_id, container_id, message_id) IN (
-         SELECT channel, account_id, container_id, message_id
+       WHERE (tenant_id, channel, account_id, container_id, message_id) IN (
+         SELECT tenant_id, channel, account_id, container_id, message_id
          FROM channel_inbound_dedupe
          WHERE expires_at_ms <= ?
          ORDER BY expires_at_ms ASC
          LIMIT ?
        )`,
         [input.nowMs, this.batchSize],
+      )
+    ).changes;
+  }
+
+  private async pruneFailedChannelInbox(db: SqlDb, input: { cutoffMs: number }): Promise<number> {
+    return (
+      await db.run(
+        `DELETE FROM channel_inbox
+         WHERE inbox_id IN (
+           SELECT inbox_id
+           FROM channel_inbox
+           WHERE status = 'failed'
+             AND received_at_ms <= ?
+           ORDER BY received_at_ms ASC, inbox_id ASC
+           LIMIT ?
+         )`,
+        [input.cutoffMs, this.batchSize],
+      )
+    ).changes;
+  }
+
+  private async pruneCompletedChannelInbox(
+    db: SqlDb,
+    input: { cutoffMs: number },
+  ): Promise<number> {
+    return (
+      await db.run(
+        `DELETE FROM channel_inbox
+         WHERE inbox_id IN (
+           SELECT inbox_id
+           FROM channel_inbox i
+           WHERE i.status = 'completed'
+             AND i.received_at_ms <= ?
+             AND NOT EXISTS (SELECT 1 FROM channel_outbox o WHERE o.inbox_id = i.inbox_id)
+           ORDER BY i.received_at_ms ASC, i.inbox_id ASC
+           LIMIT ?
+         )`,
+        [input.cutoffMs, this.batchSize],
+      )
+    ).changes;
+  }
+
+  private async pruneFailedChannelOutbox(db: SqlDb, input: { cutoffIso: string }): Promise<number> {
+    return (
+      await db.run(
+        `DELETE FROM channel_outbox
+         WHERE outbox_id IN (
+           SELECT outbox_id
+           FROM channel_outbox
+           WHERE status = 'failed'
+             AND sent_at IS NOT NULL
+             AND sent_at <= ?
+           ORDER BY sent_at ASC, outbox_id ASC
+           LIMIT ?
+         )`,
+        [input.cutoffIso, this.batchSize],
       )
     ).changes;
   }

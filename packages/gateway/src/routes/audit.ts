@@ -9,6 +9,12 @@ import { verifyChain, exportReceiptBundle, computeEventHash } from "../modules/a
 import type { ChainableEvent } from "../modules/audit/hash-chain.js";
 import type { SqlDb } from "../statestore/types.js";
 import { AuditForgetRequest, type AuditForgetDecision } from "@tyrum/schemas";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../modules/identity/scope.js";
+import { PlanDal } from "../modules/planner/plan-dal.js";
 
 export interface AuditRouteDeps {
   db: SqlDb;
@@ -19,15 +25,22 @@ export function createAuditRoutes(deps: AuditRouteDeps): Hono {
   const audit = new Hono();
 
   /** Export a receipt bundle for a plan. */
-  audit.get("/audit/export/:planId", async (c) => {
-    const planId = c.req.param("planId");
-    const events = await deps.eventLog.getEventsForVerification(planId);
+  audit.get("/audit/export/:planKey", async (c) => {
+    const planKey = c.req.param("planKey");
+    const events = await deps.eventLog.getEventsForVerification({
+      tenantId: DEFAULT_TENANT_ID,
+      planKey,
+    });
 
     if (events.length === 0) {
-      return c.json({ error: "not_found", message: `no events found for plan ${planId}` }, 404);
+      return c.json({ error: "not_found", message: `no events found for plan ${planKey}` }, 404);
     }
 
-    const bundle = exportReceiptBundle(planId, events);
+    const first = events[0];
+    if (!first) {
+      return c.json({ error: "not_found", message: `no events found for plan ${planKey}` }, 404);
+    }
+    const bundle = exportReceiptBundle(first.plan_id, events);
     return c.json(bundle);
   });
 
@@ -72,14 +85,32 @@ async function forgetEvents(
   const occurredAt = new Date().toISOString();
 
   return await deps.db.transaction(async (tx) => {
+    const tenantId = DEFAULT_TENANT_ID;
+    const planKey = entityId;
+    const planId = await new PlanDal(tx).ensurePlanId({
+      tenantId,
+      planKey,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      kind: "audit",
+      status: "active",
+    });
+
     if (tx.kind === "postgres") {
-      // Prevent concurrent appends while we compute chain head, delete, and insert the proof event.
-      await tx.exec("LOCK TABLE planner_events IN EXCLUSIVE MODE");
+      // Serialize forget actions per plan without blocking other tenants/plans.
+      await tx.get("SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_id = ? FOR UPDATE", [
+        tenantId,
+        planId,
+      ]);
     }
 
     const lastRow = await tx.get<{ step_index: number; event_hash: string | null }>(
-      "SELECT step_index, event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index DESC LIMIT 1",
-      [entityId],
+      `SELECT step_index, event_hash
+       FROM planner_events
+       WHERE tenant_id = ? AND plan_id = ?
+       ORDER BY step_index DESC
+       LIMIT 1`,
+      [tenantId, planId],
     );
     const prevHash = lastRow?.event_hash ?? null;
     const stepIndex = (lastRow?.step_index ?? -1) + 1;
@@ -90,7 +121,12 @@ async function forgetEvents(
     const deletedCount =
       decision === "retain"
         ? 0
-        : (await tx.run("DELETE FROM planner_events WHERE plan_id = ?", [entityId])).changes;
+        : (
+            await tx.run("DELETE FROM planner_events WHERE tenant_id = ? AND plan_id = ?", [
+              tenantId,
+              planId,
+            ])
+          ).changes;
 
     const proofAction = JSON.stringify({
       type: "forget.proof",
@@ -102,7 +138,7 @@ async function forgetEvents(
 
     const eventHash = computeEventHash(
       {
-        plan_id: entityId,
+        plan_id: planId,
         step_index: stepIndex,
         occurred_at: occurredAt,
         action: proofAction,
@@ -110,20 +146,36 @@ async function forgetEvents(
       prevHash,
     );
 
-    const result = await tx.get<{ id: number }>(
-      `INSERT INTO planner_events (replay_id, plan_id, step_index, occurred_at, action, prev_hash, event_hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       RETURNING id`,
-      [`forget-${randomUUID()}`, entityId, stepIndex, occurredAt, proofAction, prevHash, eventHash],
+    const inserted = await tx.run(
+      `INSERT INTO planner_events (
+         tenant_id,
+         plan_id,
+         step_index,
+         replay_id,
+         occurred_at,
+         action_json,
+         prev_hash,
+         event_hash
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        `${tenantId}`,
+        planId,
+        stepIndex,
+        `forget-${randomUUID()}`,
+        occurredAt,
+        proofAction,
+        prevHash,
+        eventHash,
+      ],
     );
-    if (!result) {
+    if (inserted.changes !== 1) {
       throw new Error("failed to insert forget proof event");
     }
 
     return {
       decision,
       deleted_count: deletedCount,
-      proof_event_id: result.id,
+      proof_event_id: stepIndex,
     };
   });
 }

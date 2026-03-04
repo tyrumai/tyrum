@@ -122,7 +122,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const pairingState = useOperatorStore(core.pairingStore);
   const runsState = useOperatorStore(core.runsStore);
   const [resolvingById, setResolvingById] = useState<
-    Record<number, "approved" | "denied" | undefined>
+    Record<string, "approved" | "denied" | undefined>
   >({});
 
   const desktopTakeoverLinks = Object.values(pairingState.byId)
@@ -144,7 +144,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const takeoverUrl = desktopTakeoverLinks.at(0)?.url;
 
   const resolveApproval = async (
-    approvalId: number,
+    approvalId: string,
     decision: "approved" | "denied",
   ): Promise<void> => {
     if (resolvingById[approvalId]) return;

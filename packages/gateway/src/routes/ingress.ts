@@ -96,7 +96,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
     }
     const routing = durable?.config ?? (home ? await loadRoutingConfig(home) : { v: 1 });
     const routedAgentId =
-      c.req.query("agent_id")?.trim() || resolveTelegramAgentId(routing, chatId);
+      c.req.query("agent_key")?.trim() || resolveTelegramAgentId(routing, chatId);
 
     if (deps.telegramQueue) {
       try {
@@ -216,6 +216,3 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
 
   return ingressRouter;
 }
-
-// Backward-compatible export for existing consumers
-export const ingress = createIngressRoutes();

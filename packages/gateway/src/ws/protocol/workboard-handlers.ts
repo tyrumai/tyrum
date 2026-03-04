@@ -45,10 +45,45 @@ import type { ConnectedClient } from "../connection-manager.js";
 import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
 import { WorkboardDal } from "../../modules/workboard/dal.js";
 import { enqueueWorkItemStateChangeNotification } from "../../modules/workboard/notifications.js";
+import { IdentityScopeDal, normalizeScopeKeys } from "../../modules/identity/scope.js";
 import type { ProtocolDeps } from "./types.js";
 import { broadcastEvent, errorResponse, workboardErrorResponse } from "./helpers.js";
 
 type WsRequestEnvelope = Extract<WsMessageEnvelope, { request_id: string; payload: unknown }>;
+
+type ScopeKeysPayload = {
+  tenant_key?: string;
+  agent_key?: string;
+  workspace_key?: string;
+};
+
+async function resolveWorkScope(params: {
+  deps: ProtocolDeps;
+  payload: ScopeKeysPayload;
+}): Promise<{
+  scope: { tenant_id: string; agent_id: string; workspace_id: string };
+  keys: { tenantKey: string; agentKey: string; workspaceKey: string };
+}> {
+  if (!params.deps.db) {
+    throw new Error("db is required");
+  }
+
+  const identityScopeDal = params.deps.identityScopeDal ?? new IdentityScopeDal(params.deps.db);
+  const keys = normalizeScopeKeys({
+    tenantKey: params.payload.tenant_key,
+    agentKey: params.payload.agent_key,
+    workspaceKey: params.payload.workspace_key,
+  });
+  const scopeIds = await identityScopeDal.resolveScopeIds(keys);
+  return {
+    keys,
+    scope: {
+      tenant_id: scopeIds.tenantId,
+      agent_id: scopeIds.agentId,
+      workspace_id: scopeIds.workspaceId,
+    },
+  };
+}
 
 export async function handleWorkboardMessage(
   client: ConnectedClient,
@@ -84,11 +119,12 @@ export async function handleWorkboardMessage(
 
     const dal = new WorkboardDal(deps.db, deps.redactionEngine);
     try {
-      const scope = parsedReq.data.payload;
+      const payload = parsedReq.data.payload;
+      const { scope, keys } = await resolveWorkScope({ deps, payload });
       const item = await dal.createItem({
         scope,
-        item: parsedReq.data.payload.item,
-        createdFromSessionKey: `agent:${scope.agent_id}:main`,
+        item: payload.item,
+        createdFromSessionKey: `agent:${keys.agentKey}:main`,
       });
 
       broadcastEvent(
@@ -140,8 +176,9 @@ export async function handleWorkboardMessage(
     const dal = new WorkboardDal(deps.db, deps.redactionEngine);
     try {
       const payload = parsedReq.data.payload;
+      const { scope } = await resolveWorkScope({ deps, payload });
       const { items, next_cursor } = await dal.listItems({
-        scope: payload,
+        scope,
         statuses: payload.statuses,
         kinds: payload.kinds,
         limit: payload.limit,
@@ -182,7 +219,8 @@ export async function handleWorkboardMessage(
     const dal = new WorkboardDal(deps.db, deps.redactionEngine);
     try {
       const payload = parsedReq.data.payload;
-      const item = await dal.getItem({ scope: payload, work_item_id: payload.work_item_id });
+      const { scope } = await resolveWorkScope({ deps, payload });
+      const item = await dal.getItem({ scope, work_item_id: payload.work_item_id });
       if (!item) {
         return errorResponse(msg.request_id, msg.type, "not_found", "work item not found");
       }
@@ -221,8 +259,9 @@ export async function handleWorkboardMessage(
     const dal = new WorkboardDal(deps.db, deps.redactionEngine);
     try {
       const payload = parsedReq.data.payload;
+      const { scope } = await resolveWorkScope({ deps, payload });
       const item = await dal.updateItem({
-        scope: payload,
+        scope,
         work_item_id: payload.work_item_id,
         patch: payload.patch,
       });
@@ -245,7 +284,7 @@ export async function handleWorkboardMessage(
       const fingerprintTouched = parsedReq.data.payload.patch.fingerprint !== undefined;
       await maybeEmitWorkItemOverlapWarningArtifact({
         dal,
-        scope: payload,
+        scope,
         item,
         deps,
         fingerprintTouched,
@@ -286,8 +325,9 @@ export async function handleWorkboardMessage(
     const dal = new WorkboardDal(deps.db, deps.redactionEngine);
     try {
       const payload = parsedReq.data.payload;
+      const { scope } = await resolveWorkScope({ deps, payload });
       const item = await dal.transitionItem({
-        scope: payload,
+        scope,
         work_item_id: payload.work_item_id,
         status: payload.status,
         reason: payload.reason,
@@ -327,7 +367,7 @@ export async function handleWorkboardMessage(
         try {
           await enqueueWorkItemStateChangeNotification({
             db: deps.db,
-            scope: payload,
+            scope,
             item,
             approvalDal: deps.approvalDal,
             policyService: deps.policyService,
@@ -382,6 +422,7 @@ export async function handleWorkboardMessage(
 
       try {
         const payload = parsedReq.data.payload;
+        const { scope } = await resolveWorkScope({ deps, payload });
         if (payload.work_item_id === payload.linked_work_item_id) {
           return errorResponse(
             msg.request_id,
@@ -392,7 +433,7 @@ export async function handleWorkboardMessage(
         }
 
         const link = await dal.createLink({
-          scope: payload,
+          scope,
           work_item_id: payload.work_item_id,
           linked_work_item_id: payload.linked_work_item_id,
           kind: payload.kind,
@@ -404,11 +445,11 @@ export async function handleWorkboardMessage(
             event_id: crypto.randomUUID(),
             type: "work.link.created",
             occurred_at: new Date().toISOString(),
-            scope: { kind: "agent", agent_id: payload.agent_id },
+            scope: { kind: "agent", agent_id: scope.agent_id },
             payload: {
-              tenant_id: payload.tenant_id,
-              agent_id: payload.agent_id,
-              workspace_id: payload.workspace_id,
+              tenant_id: scope.tenant_id,
+              agent_id: scope.agent_id,
+              workspace_id: scope.workspace_id,
               link,
             },
           },
@@ -432,8 +473,9 @@ export async function handleWorkboardMessage(
 
     try {
       const payload = parsedReq.data.payload;
+      const { scope } = await resolveWorkScope({ deps, payload });
       const { links } = await dal.listLinks({
-        scope: payload,
+        scope,
         work_item_id: payload.work_item_id,
         limit: payload.limit,
       });
@@ -478,8 +520,9 @@ export async function handleWorkboardMessage(
 
       try {
         const payload = parsedReq.data.payload;
+        const { scope } = await resolveWorkScope({ deps, payload });
         const { artifacts, next_cursor } = await dal.listArtifacts({
-          scope: payload,
+          scope,
           work_item_id: payload.work_item_id,
           limit: payload.limit,
           cursor: payload.cursor,
@@ -501,8 +544,9 @@ export async function handleWorkboardMessage(
 
       try {
         const payload = parsedReq.data.payload;
+        const { scope } = await resolveWorkScope({ deps, payload });
         const artifact = await dal.getArtifact({
-          scope: payload,
+          scope,
           artifact_id: payload.artifact_id,
         });
         if (!artifact) {
@@ -524,7 +568,8 @@ export async function handleWorkboardMessage(
 
     try {
       const payload = parsedReq.data.payload;
-      const artifact = await dal.createArtifact({ scope: payload, artifact: payload.artifact });
+      const { scope } = await resolveWorkScope({ deps, payload });
+      const artifact = await dal.createArtifact({ scope, artifact: payload.artifact });
 
       broadcastEvent(
         {
@@ -579,8 +624,9 @@ export async function handleWorkboardMessage(
 
       try {
         const payload = parsedReq.data.payload;
+        const { scope } = await resolveWorkScope({ deps, payload });
         const { decisions, next_cursor } = await dal.listDecisions({
-          scope: payload,
+          scope,
           work_item_id: payload.work_item_id,
           limit: payload.limit,
           cursor: payload.cursor,
@@ -602,8 +648,9 @@ export async function handleWorkboardMessage(
 
       try {
         const payload = parsedReq.data.payload;
+        const { scope } = await resolveWorkScope({ deps, payload });
         const decision = await dal.getDecision({
-          scope: payload,
+          scope,
           decision_id: payload.decision_id,
         });
         if (!decision) {
@@ -625,7 +672,8 @@ export async function handleWorkboardMessage(
 
     try {
       const payload = parsedReq.data.payload;
-      const decision = await dal.createDecision({ scope: payload, decision: payload.decision });
+      const { scope } = await resolveWorkScope({ deps, payload });
+      const decision = await dal.createDecision({ scope, decision: payload.decision });
 
       broadcastEvent(
         {
@@ -681,8 +729,9 @@ export async function handleWorkboardMessage(
 
       try {
         const payload = parsedReq.data.payload;
+        const { scope } = await resolveWorkScope({ deps, payload });
         const { signals, next_cursor } = await dal.listSignals({
-          scope: payload,
+          scope,
           work_item_id: payload.work_item_id,
           statuses: payload.statuses,
           limit: payload.limit,
@@ -705,7 +754,8 @@ export async function handleWorkboardMessage(
 
       try {
         const payload = parsedReq.data.payload;
-        const signal = await dal.getSignal({ scope: payload, signal_id: payload.signal_id });
+        const { scope } = await resolveWorkScope({ deps, payload });
+        const signal = await dal.getSignal({ scope, signal_id: payload.signal_id });
         if (!signal) {
           return errorResponse(msg.request_id, msg.type, "not_found", "signal not found");
         }
@@ -726,7 +776,8 @@ export async function handleWorkboardMessage(
 
       try {
         const payload = parsedReq.data.payload;
-        const signal = await dal.createSignal({ scope: payload, signal: payload.signal });
+        const { scope } = await resolveWorkScope({ deps, payload });
+        const signal = await dal.createSignal({ scope, signal: payload.signal });
 
         broadcastEvent(
           {
@@ -756,8 +807,9 @@ export async function handleWorkboardMessage(
 
     try {
       const payload = parsedReq.data.payload;
+      const { scope } = await resolveWorkScope({ deps, payload });
       const signal = await dal.updateSignal({
-        scope: payload,
+        scope,
         signal_id: payload.signal_id,
         patch: payload.patch,
       });
@@ -818,7 +870,12 @@ export async function handleWorkboardMessage(
 
       try {
         const payload = parsedReq.data.payload;
-        const entry = (await dal.getStateKv({ scope: payload.scope, key: payload.key })) ?? null;
+        const { scope } = await resolveWorkScope({ deps, payload: payload.scope });
+        const resolvedScope =
+          payload.scope.kind === "agent"
+            ? ({ kind: "agent", ...scope } as const)
+            : ({ kind: "work_item", ...scope, work_item_id: payload.scope.work_item_id } as const);
+        const entry = (await dal.getStateKv({ scope: resolvedScope, key: payload.key })) ?? null;
         const result = WsWorkStateKvGetResult.parse({ entry });
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       } catch (err) {
@@ -836,7 +893,12 @@ export async function handleWorkboardMessage(
 
       try {
         const payload = parsedReq.data.payload;
-        const { entries } = await dal.listStateKv({ scope: payload.scope, prefix: payload.prefix });
+        const { scope } = await resolveWorkScope({ deps, payload: payload.scope });
+        const resolvedScope =
+          payload.scope.kind === "agent"
+            ? ({ kind: "agent", ...scope } as const)
+            : ({ kind: "work_item", ...scope, work_item_id: payload.scope.work_item_id } as const);
+        const { entries } = await dal.listStateKv({ scope: resolvedScope, prefix: payload.prefix });
         const result = WsWorkStateKvListResult.parse({ entries });
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       } catch (err) {
@@ -853,8 +915,13 @@ export async function handleWorkboardMessage(
 
     try {
       const payload = parsedReq.data.payload;
+      const { scope } = await resolveWorkScope({ deps, payload: payload.scope });
+      const resolvedScope =
+        payload.scope.kind === "agent"
+          ? ({ kind: "agent", ...scope } as const)
+          : ({ kind: "work_item", ...scope, work_item_id: payload.scope.work_item_id } as const);
       const entry = await dal.setStateKv({
-        scope: payload.scope,
+        scope: resolvedScope,
         key: payload.key,
         value_json: payload.value_json,
         provenance_json: payload.provenance_json,
@@ -865,7 +932,7 @@ export async function handleWorkboardMessage(
           event_id: crypto.randomUUID(),
           type: "work.state_kv.updated",
           occurred_at: new Date().toISOString(),
-          scope: { kind: "agent", agent_id: payload.scope.agent_id },
+          scope: { kind: "agent", agent_id: resolvedScope.agent_id },
           payload: { scope: payload.scope, key: payload.key, updated_at: entry.updated_at },
         },
         deps,

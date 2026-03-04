@@ -20,6 +20,7 @@ import {
   isCredentialPaymentOrEntitlementStatus,
   isTransientStatus,
   listOrderedEligibleProfilesForProvider,
+  OAUTH_REFRESH_LEASE_UNAVAILABLE,
   parseProviderModelId,
   resolveEnvApiKey,
   resolveProfileApiKey,
@@ -27,7 +28,6 @@ import {
 } from "./provider-resolution.js";
 
 export interface ResolveSessionModelDeps {
-  agentId: string;
   container: GatewayContainer;
   languageModelOverride?: LanguageModel;
   secretProvider: SecretProvider | undefined;
@@ -39,6 +39,7 @@ export async function resolveSessionModel(
   deps: ResolveSessionModelDeps,
   input: {
     config: AgentConfigT;
+    tenantId: string;
     sessionId: string;
     profileModelId?: string;
     fetchImpl?: typeof fetch;
@@ -56,7 +57,7 @@ export async function resolveSessionModel(
   }
 
   const override = await new SessionModelOverrideDal(deps.container.db).get({
-    agentId: deps.agentId,
+    tenantId: input.tenantId,
     sessionId: input.sessionId,
   });
   const overrideModelId = override?.model_id?.trim();
@@ -146,12 +147,9 @@ export async function resolveSessionModel(
     throw new Error(`model not found in models.dev catalog: ${attemptedLabel}`);
   }
 
-  const agentId = deps.agentId;
-
   const fetchImpl = input.fetchImpl ?? deps.fetchImpl;
   const {
     secretProvider,
-    resolver,
     authProfileDal,
     pinDal,
     oauthProviderRegistry,
@@ -226,9 +224,8 @@ export async function resolveSessionModel(
       return await resolveProfileApiKey(
         profile,
         {
+          tenantId: input.tenantId,
           secretProvider,
-          resolver,
-          authProfileDal,
           oauthProviderRegistry,
           oauthRefreshLeaseDal,
           oauthLeaseOwner,
@@ -258,10 +255,9 @@ export async function resolveSessionModel(
       let lastErr: unknown;
 
       const orderedProfiles = await listOrderedEligibleProfilesForProvider({
-        agentId,
+        tenantId: input.tenantId,
         sessionId: input.sessionId,
-        providerId: chosen.providerId,
-        resolver,
+        providerKey: chosen.providerId,
         authProfileDal,
         pinDal,
       });
@@ -276,10 +272,10 @@ export async function resolveSessionModel(
           if (input.sessionId) {
             void pinDal
               .upsert({
-                agentId: profile.agent_id,
+                tenantId: input.tenantId,
                 sessionId: input.sessionId,
-                provider: chosen.providerId,
-                profileId: profile.profile_id,
+                providerKey: chosen.providerId,
+                authProfileId: profile.auth_profile_id,
               })
               .catch(() => {});
           }
@@ -290,28 +286,25 @@ export async function resolveSessionModel(
             const status = err.statusCode;
             if (isAuthInvalidStatus(status)) {
               if (profile.type === "oauth") {
-                const refreshHandleId = profile.secret_handles?.["refresh_token_handle"];
-                if (refreshHandleId) {
-                  const refreshedApiKey = await resolveApiKeyFromProfile(profile, {
-                    forceOAuthRefresh: true,
-                  });
-                  if (!refreshedApiKey) {
-                    await authProfileDal.setCooldown(profile.profile_id, {
-                      untilMs: Date.now() + 60_000,
-                    });
-                    continue;
-                  }
-
+                const refreshedApiKey = await resolveApiKeyFromProfile(profile, {
+                  forceOAuthRefresh: true,
+                });
+                if (refreshedApiKey === OAUTH_REFRESH_LEASE_UNAVAILABLE) {
+                  // Refresh couldn't run (for example the lease is held by another instance).
+                  // Keep the profile active and rotate to the next eligible credential.
+                  continue;
+                }
+                if (refreshedApiKey) {
                   const refreshedModel = await buildModelFromApiKey(refreshedApiKey);
                   try {
                     const res = await invoke(refreshedModel, options);
                     if (input.sessionId) {
                       void pinDal
                         .upsert({
-                          agentId: profile.agent_id,
+                          tenantId: input.tenantId,
                           sessionId: input.sessionId,
-                          provider: chosen.providerId,
-                          profileId: profile.profile_id,
+                          providerKey: chosen.providerId,
+                          authProfileId: profile.auth_profile_id,
                         })
                         .catch(() => {});
                     }
@@ -323,58 +316,37 @@ export async function resolveSessionModel(
                       if (isAuthInvalidStatus(retryStatus)) {
                         // fall through to disable below
                       } else if (isTransientStatus(retryStatus)) {
-                        const cooldownMs = retryStatus === 429 ? 60_000 : 15_000;
-                        await authProfileDal.setCooldown(profile.profile_id, {
-                          untilMs: Date.now() + cooldownMs,
-                        });
                         continue;
                       } else if (isCredentialPaymentOrEntitlementStatus(retryStatus)) {
-                        const cooldownMs = 10 * 60_000;
-                        await authProfileDal.setCooldown(profile.profile_id, {
-                          untilMs: Date.now() + cooldownMs,
-                        });
                         continue;
                       } else {
                         throw retryErr;
                       }
                     } else {
-                      const cooldownMs = 30_000;
-                      await authProfileDal.setCooldown(profile.profile_id, {
-                        untilMs: Date.now() + cooldownMs,
-                      });
                       continue;
                     }
                   }
                 }
               }
 
-              await authProfileDal.disableProfile(profile.profile_id, {
-                reason: `upstream_auth_${String(status)}`,
-              });
+              await authProfileDal
+                .disableByKey({
+                  tenantId: input.tenantId,
+                  authProfileKey: profile.auth_profile_key,
+                })
+                .catch(() => {});
               continue;
             }
             if (isTransientStatus(status)) {
-              const cooldownMs = status === 429 ? 60_000 : 15_000;
-              await authProfileDal.setCooldown(profile.profile_id, {
-                untilMs: Date.now() + cooldownMs,
-              });
               continue;
             }
             if (isCredentialPaymentOrEntitlementStatus(status)) {
-              const cooldownMs = 10 * 60_000;
-              await authProfileDal.setCooldown(profile.profile_id, {
-                untilMs: Date.now() + cooldownMs,
-              });
               continue;
             }
             throw err;
           }
 
           // Non-HTTP errors: treat as transient and rotate.
-          const cooldownMs = 30_000;
-          await authProfileDal.setCooldown(profile.profile_id, {
-            untilMs: Date.now() + cooldownMs,
-          });
           continue;
         }
       }

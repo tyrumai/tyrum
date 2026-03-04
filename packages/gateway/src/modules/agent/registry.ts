@@ -1,37 +1,40 @@
-import { WorkspaceId } from "@tyrum/schemas";
+import { AgentKey } from "@tyrum/schemas";
 import type { PolicyService } from "../policy/service.js";
 import { PolicyService as PolicyServiceImpl } from "../policy/service.js";
 import type { GatewayContainer } from "../../container.js";
 import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { SecretProvider } from "../secret/provider.js";
-import { createSecretProviderFromEnv } from "../secret/create-secret-provider.js";
 import { join } from "node:path";
 import type { Logger } from "../observability/logger.js";
 import { AgentRuntime } from "./runtime.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { LanguageModel } from "ai";
-import { TokenStore } from "../auth/token-store.js";
 import type { ProtocolDeps } from "../../ws/protocol.js";
 
 function normalizeAgentId(raw: string | undefined): string {
   const trimmed = raw?.trim();
   if (!trimmed) return "default";
   if (trimmed === "default") return "default";
-  const parsed = WorkspaceId.safeParse(trimmed);
+  const parsed = AgentKey.safeParse(trimmed);
   if (!parsed.success) {
-    throw new Error(
-      `invalid agent_id '${trimmed}' (expected a DNS-label like 'default' or 'agent-1')`,
-    );
+    throw new Error(`invalid agent_id '${trimmed}' (${parsed.error.message})`);
   }
-  return parsed.data;
+  const normalized = parsed.data;
+  if (/\s/.test(normalized)) {
+    throw new Error(`invalid agent_id '${trimmed}' (agent ids must not contain whitespace)`);
+  }
+  if (normalized.includes("/") || normalized.includes("\\")) {
+    throw new Error(`invalid agent_id '${trimmed}' (agent ids must not contain path separators)`);
+  }
+  if (normalized === "." || normalized === "..") {
+    throw new Error(`invalid agent_id '${trimmed}' (agent ids must not be '.' or '..')`);
+  }
+  return normalized;
 }
 
 export class AgentRegistry {
   private readonly runtimeByAgentId = new Map<string, Promise<AgentRuntime>>();
-  private readonly secretProviderByAgentId = new Map<string, Promise<SecretProvider>>();
   private readonly policyServiceByAgentId = new Map<string, PolicyService>();
-  private readonly tokenStore: TokenStore;
-  private adminTokenPromise: Promise<string> | undefined;
 
   constructor(
     private readonly opts: {
@@ -46,16 +49,7 @@ export class AgentRegistry {
       protocolDeps?: ProtocolDeps;
       logger: Logger;
     },
-  ) {
-    this.tokenStore = new TokenStore(opts.baseHome);
-  }
-
-  private getAdminToken(): Promise<string> {
-    if (!this.adminTokenPromise) {
-      this.adminTokenPromise = this.tokenStore.initialize();
-    }
-    return this.adminTokenPromise;
-  }
+  ) {}
 
   resolveAgentHome(agentId: string): string {
     const id = normalizeAgentId(agentId);
@@ -81,20 +75,9 @@ export class AgentRegistry {
   }
 
   async getSecretProvider(agentId: string): Promise<SecretProvider> {
-    const id = normalizeAgentId(agentId);
-    if (id === "default") return this.opts.defaultSecretProvider;
-
-    const cached = this.secretProviderByAgentId.get(id);
-    if (cached) return await cached;
-
-    const promise = this.getAdminToken()
-      .then((token) => createSecretProviderFromEnv(this.resolveAgentHome(id), token))
-      .catch((err) => {
-        this.secretProviderByAgentId.delete(id);
-        throw err;
-      });
-    this.secretProviderByAgentId.set(id, promise);
-    return await promise;
+    normalizeAgentId(agentId);
+    // Secrets are tenant-scoped and DB-backed; all agents share the same provider.
+    return this.opts.defaultSecretProvider;
   }
 
   async getRuntime(agentId: string): Promise<AgentRuntime> {
@@ -112,7 +95,6 @@ export class AgentRegistry {
         home,
         fetchImpl: fetch,
         agentId: id,
-        workspaceId: id,
         languageModel: this.opts.defaultLanguageModel,
         secretProvider,
         approvalNotifier: this.opts.approvalNotifier,
@@ -124,7 +106,6 @@ export class AgentRegistry {
       this.opts.logger.info("agents.runtime_ready", {
         agent_id: id,
         home,
-        workspace_id: id,
       });
 
       return runtime;

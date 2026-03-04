@@ -10,7 +10,6 @@ describe("gateway shutdown", () => {
     vi.resetModules();
 
     vi.stubEnv("GATEWAY_DB_PATH", "postgres://user:pass@localhost:5432/test");
-    vi.stubEnv("TYRUM_SECRET_PROVIDER", "env");
 
     const watcherStop = vi.fn();
     const artifactStop = vi.fn();

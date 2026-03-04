@@ -20,6 +20,7 @@ import {
 import { missingRequiredManifestFields, resolveSafeChildPath } from "./validation.js";
 import type { Logger } from "../observability/logger.js";
 import type { ToolDescriptor } from "../agent/tools.js";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 const PLUGIN_LIFECYCLE_AUDIT_PLAN_ID = "gateway.plugins.lifecycle";
 const PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX = "gateway.plugins.tool_invoked";
@@ -1183,8 +1184,9 @@ export class PluginRegistry {
 
       await container.eventLog.appendNext(
         {
+          tenantId: DEFAULT_TENANT_ID,
           replayId: randomUUID(),
-          planId: PLUGIN_LIFECYCLE_AUDIT_PLAN_ID,
+          planKey: PLUGIN_LIFECYCLE_AUDIT_PLAN_ID,
           occurredAt,
           action,
         },
@@ -1217,9 +1219,9 @@ export class PluginRegistry {
           };
 
           await tx.run(
-            `INSERT INTO outbox (topic, target_edge_id, payload_json)
-             VALUES (?, ?, ?)`,
-            ["ws.broadcast", null, JSON.stringify({ message: evt })],
+            `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
+             VALUES (?, ?, ?, ?)`,
+            [DEFAULT_TENANT_ID, "ws.broadcast", null, JSON.stringify({ message: evt })],
           );
         },
       );
@@ -1277,8 +1279,9 @@ export class PluginRegistry {
 
       await container.eventLog.appendNext(
         {
+          tenantId: DEFAULT_TENANT_ID,
           replayId: randomUUID(),
-          planId: auditPlanId,
+          planKey: auditPlanId,
           occurredAt,
           action,
         },
@@ -1311,9 +1314,9 @@ export class PluginRegistry {
           };
 
           await tx.run(
-            `INSERT INTO outbox (topic, target_edge_id, payload_json)
-             VALUES (?, ?, ?)`,
-            ["ws.broadcast", null, JSON.stringify({ message: evt })],
+            `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
+             VALUES (?, ?, ?, ?)`,
+            [DEFAULT_TENANT_ID, "ws.broadcast", null, JSON.stringify({ message: evt })],
           );
         },
       );

@@ -1,8 +1,9 @@
-import type { AgentRegistry } from "../agent/registry.js";
+import type { SecretHandle } from "@tyrum/schemas";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import type { AuthProfileDal, AuthProfileRow } from "../models/auth-profile-dal.js";
 import type { SessionProviderPinDal, SessionProviderPinRow } from "../models/session-pin-dal.js";
-import { createSecretHandleResolver } from "../secret/handle-resolver.js";
+import type { SecretProvider } from "../secret/provider.js";
 import { safeDetail } from "../../utils/safe-detail.js";
 import type { Logger } from "./logger.js";
 
@@ -16,16 +17,16 @@ export type ProviderUsageError = {
 export type ProviderUsageResult =
   | {
       status: "ok";
-      provider: string;
-      profile_id: string;
+      provider_key: string;
+      auth_profile_key: string;
       cached: boolean;
       polled_at: string;
       data: unknown;
     }
   | {
       status: "error";
-      provider: string | null;
-      profile_id: string | null;
+      provider_key: string | null;
+      auth_profile_key: string | null;
       cached: boolean;
       polled_at: string | null;
       error: ProviderUsageError;
@@ -36,13 +37,6 @@ export type ProviderUsageResult =
       polled_at: string | null;
       error: ProviderUsageError;
     };
-
-function pickAuthHandleId(profile: AuthProfileRow): string | undefined {
-  const handles = profile.secret_handles ?? {};
-  if (profile.type === "api_key") return handles["api_key_handle"];
-  if (profile.type === "token") return handles["token_handle"];
-  return handles["access_token_handle"];
-}
 
 function withCached(result: ProviderUsageResult, cached: boolean): ProviderUsageResult {
   if (result.status === "ok") return { ...result, cached };
@@ -72,6 +66,33 @@ function asObject(value: unknown): Record<string, unknown> | undefined {
   return value as Record<string, unknown>;
 }
 
+function buildDbHandle(secretKey: string): SecretHandle {
+  const nowIso = new Date().toISOString();
+  return {
+    handle_id: secretKey,
+    provider: "db",
+    scope: secretKey,
+    created_at: nowIso,
+  };
+}
+
+function pickCredentialSecretKey(profile: AuthProfileRow): string | undefined {
+  const slots = profile.secret_keys ?? {};
+  const values = Object.values(slots).filter((value): value is string => typeof value === "string");
+  const singleton = values.length === 1 ? values[0] : undefined;
+
+  if (profile.type === "api_key") {
+    return slots["api_key"] ?? singleton;
+  }
+
+  if (profile.type === "token") {
+    return slots["token"] ?? slots["api_key"] ?? singleton;
+  }
+
+  // oauth
+  return slots["access_token"] ?? singleton;
+}
+
 type CacheEntry = { expires_at_ms: number; result: ProviderUsageResult };
 
 export class ProviderUsagePoller {
@@ -79,9 +100,11 @@ export class ProviderUsagePoller {
 
   constructor(
     private readonly deps: {
+      tenantId?: string;
       authProfileDal?: AuthProfileDal;
       pinDal?: SessionProviderPinDal;
-      agents?: AgentRegistry;
+      secretProvider?: SecretProvider;
+      secretProviderGetter?: () => Promise<SecretProvider>;
       logger?: Logger;
       fetchImpl?: typeof fetch;
       cacheTtlMs?: number;
@@ -116,9 +139,34 @@ export class ProviderUsagePoller {
       };
     }
 
+    const secretProvider =
+      this.deps.secretProvider ??
+      (this.deps.secretProviderGetter
+        ? await this.deps.secretProviderGetter().catch((err) => {
+            this.deps.logger?.warn("usage.secret_provider_get_failed", {
+              error: safeDetail(err) ?? "unknown_error",
+            });
+            return undefined;
+          })
+        : undefined);
+    if (!secretProvider) {
+      return {
+        status: "unavailable",
+        cached: false,
+        polled_at: null,
+        error: {
+          code: "secret_provider_unavailable",
+          message: "Secret provider is unavailable on this gateway instance.",
+          retryable: false,
+        },
+      };
+    }
+
+    const tenantId = this.deps.tenantId ?? DEFAULT_TENANT_ID;
+
     let pins: SessionProviderPinRow[] = [];
     try {
-      pins = await this.deps.pinDal.list({ limit: 1 });
+      pins = await this.deps.pinDal.list({ tenantId, limit: 1 });
     } catch (err) {
       const error: ProviderUsageError = {
         code: "pin_list_failed",
@@ -137,6 +185,7 @@ export class ProviderUsagePoller {
         error,
       };
     }
+
     const pin = pins[0];
     if (!pin) {
       return {
@@ -151,9 +200,9 @@ export class ProviderUsagePoller {
       };
     }
 
-    const provider = pin.provider.trim();
-    const profileId = pin.profile_id.trim();
-    const cacheKey = `${provider}\u0000${profileId}`;
+    const providerKey = pin.provider_key.trim();
+    const authProfileKey = pin.auth_profile_key.trim();
+    const cacheKey = `${providerKey}\u0000${authProfileKey}`;
     const nowMs = Date.now();
 
     const cached = this.cache.get(cacheKey);
@@ -164,7 +213,12 @@ export class ProviderUsagePoller {
     const cacheTtlMs = Math.max(1_000, this.deps.cacheTtlMs ?? 60_000);
     const errorCacheTtlMs = Math.max(1_000, this.deps.errorCacheTtlMs ?? 10_000);
 
-    const result = await this.pollProviderUsage({ provider, profileId, agentId: pin.agent_id });
+    const result = await this.pollProviderUsage({
+      tenantId,
+      providerKey,
+      authProfileKey,
+      secretProvider,
+    });
     const ttlMs = result.status === "ok" ? cacheTtlMs : errorCacheTtlMs;
     const storedAtMs = Date.now();
     const baseMs = storedAtMs >= nowMs ? storedAtMs : nowMs;
@@ -173,17 +227,22 @@ export class ProviderUsagePoller {
   }
 
   private async pollProviderUsage(input: {
-    provider: string;
-    profileId: string;
-    agentId: string;
+    tenantId: string;
+    providerKey: string;
+    authProfileKey: string;
+    secretProvider: SecretProvider;
   }): Promise<ProviderUsageResult> {
-    const { provider, profileId, agentId } = input;
-
     const nowIso = new Date().toISOString();
+
+    const authProfileDal = this.deps.authProfileDal!;
+    const secretProvider = input.secretProvider;
 
     let profile: AuthProfileRow | undefined;
     try {
-      profile = await this.deps.authProfileDal?.getById(profileId);
+      profile = await authProfileDal.getByKey({
+        tenantId: input.tenantId,
+        authProfileKey: input.authProfileKey,
+      });
     } catch (err) {
       const error: ProviderUsageError = {
         code: "auth_profile_lookup_failed",
@@ -192,25 +251,26 @@ export class ProviderUsagePoller {
         retryable: true,
       };
       this.deps.logger?.warn("usage.auth_profile_lookup_failed", {
-        provider,
-        profile_id: profileId,
+        provider_key: input.providerKey,
+        auth_profile_key: input.authProfileKey,
         code: error.code,
         error: error.detail ?? error.message,
       });
       return {
         status: "error",
-        provider,
-        profile_id: profileId,
+        provider_key: input.providerKey,
+        auth_profile_key: input.authProfileKey,
         cached: false,
         polled_at: nowIso,
         error,
       };
     }
+
     if (!profile) {
       return {
         status: "error",
-        provider,
-        profile_id: profileId,
+        provider_key: input.providerKey,
+        auth_profile_key: input.authProfileKey,
         cached: false,
         polled_at: null,
         error: {
@@ -221,48 +281,32 @@ export class ProviderUsagePoller {
       };
     }
 
-    if (profile.status === "disabled") {
+    if (profile.status !== "active") {
       return {
         status: "error",
-        provider: profile.provider,
-        profile_id: profile.profile_id,
+        provider_key: profile.provider_key,
+        auth_profile_key: profile.auth_profile_key,
         cached: false,
         polled_at: null,
         error: {
           code: "auth_profile_disabled",
           message: "Pinned auth profile is disabled.",
-          detail: profile.disabled_reason ?? undefined,
           retryable: false,
         },
       };
     }
 
-    const handleId = pickAuthHandleId(profile);
-    if (!handleId) {
+    const secretKey = pickCredentialSecretKey(profile);
+    if (!secretKey) {
       return {
         status: "error",
-        provider: profile.provider,
-        profile_id: profile.profile_id,
+        provider_key: profile.provider_key,
+        auth_profile_key: profile.auth_profile_key,
         cached: false,
         polled_at: null,
         error: {
           code: "credential_missing",
-          message: "Auth profile is missing credential handles.",
-          retryable: false,
-        },
-      };
-    }
-
-    if (!this.deps.agents) {
-      return {
-        status: "error",
-        provider: profile.provider,
-        profile_id: profile.profile_id,
-        cached: false,
-        polled_at: null,
-        error: {
-          code: "secret_provider_unavailable",
-          message: "Secret provider is unavailable on this gateway instance.",
+          message: "Auth profile is missing credential secret keys.",
           retryable: false,
         },
       };
@@ -270,9 +314,7 @@ export class ProviderUsagePoller {
 
     let token: string | null = null;
     try {
-      const secretProvider = await this.deps.agents.getSecretProvider(agentId);
-      const resolver = createSecretHandleResolver(secretProvider);
-      token = await resolver.resolveById(handleId);
+      token = await secretProvider.resolve(buildDbHandle(secretKey));
     } catch (err) {
       const error = toError(err, {
         code: "secret_resolution_failed",
@@ -280,25 +322,26 @@ export class ProviderUsagePoller {
         retryable: true,
       });
       this.deps.logger?.warn("usage.secret_resolution_failed", {
-        provider,
-        profile_id: profileId,
+        provider_key: input.providerKey,
+        auth_profile_key: input.authProfileKey,
         code: error.code,
         error: error.detail ?? error.message,
       });
       return {
         status: "error",
-        provider,
-        profile_id: profileId,
+        provider_key: input.providerKey,
+        auth_profile_key: input.authProfileKey,
         cached: false,
         polled_at: nowIso,
         error,
       };
     }
+
     if (!token) {
       return {
         status: "error",
-        provider: profile.provider,
-        profile_id: profile.profile_id,
+        provider_key: profile.provider_key,
+        auth_profile_key: profile.auth_profile_key,
         cached: false,
         polled_at: null,
         error: {
@@ -311,13 +354,13 @@ export class ProviderUsagePoller {
 
     const fetchImpl = this.deps.fetchImpl ?? fetch;
 
-    if (provider === "openrouter") {
+    if (input.providerKey === "openrouter") {
       try {
         const res = await this.fetchOpenRouterKeyInfo(fetchImpl, token);
         return {
           status: "ok",
-          provider,
-          profile_id: profileId,
+          provider_key: input.providerKey,
+          auth_profile_key: input.authProfileKey,
           cached: false,
           polled_at: nowIso,
           data: res,
@@ -332,16 +375,16 @@ export class ProviderUsagePoller {
             });
 
         this.deps.logger?.warn("usage.openrouter_poll_failed", {
-          provider,
-          profile_id: profileId,
+          provider_key: input.providerKey,
+          auth_profile_key: input.authProfileKey,
           error: parsedError.detail ?? parsedError.message,
           code: parsedError.code,
         });
 
         return {
           status: "error",
-          provider,
-          profile_id: profileId,
+          provider_key: input.providerKey,
+          auth_profile_key: input.authProfileKey,
           cached: false,
           polled_at: nowIso,
           error: parsedError,
@@ -351,13 +394,13 @@ export class ProviderUsagePoller {
 
     return {
       status: "error",
-      provider,
-      profile_id: profileId,
+      provider_key: input.providerKey,
+      auth_profile_key: input.authProfileKey,
       cached: false,
       polled_at: nowIso,
       error: {
         code: "provider_unsupported",
-        message: `Provider '${provider}' does not expose a supported usage endpoint.`,
+        message: `Provider '${input.providerKey}' does not expose a supported usage endpoint.`,
         retryable: false,
       },
     };
@@ -388,7 +431,7 @@ export class ProviderUsagePoller {
         const trimmed = text.trim();
         detail = trimmed.length > 0 ? trimmed.slice(0, 512) : undefined;
       } catch {
-        // Intentional: best-effort response detail; ignore response body read failures.
+        // Intentional: ignore response body read errors; treat as no extra detail.
         detail = undefined;
       }
 

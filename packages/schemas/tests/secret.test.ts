@@ -14,15 +14,15 @@ import { expectRejects } from "./test-helpers.js";
 
 const baseHandle = {
   handle_id: "h-1",
-  provider: "env",
-  scope: "MY_API_KEY",
+  provider: "db",
+  scope: "db_password",
   created_at: "2026-02-19T12:00:00Z",
 } as const;
 
 describe("SecretHandle", () => {
   it("parses secret handle", () => {
     const handle = SecretHandle.parse(baseHandle);
-    expect(handle.provider).toBe("env");
+    expect(handle.provider).toBe("db");
   });
 
   it("rejects secret handle missing handle_id", () => {
@@ -39,19 +39,22 @@ describe("SecretHandle", () => {
 describe("SecretStoreRequest", () => {
   it("parses store request", () => {
     const req = SecretStoreRequest.parse({
-      scope: "  MY_API_KEY  ",
+      secret_key: "  db_password  ",
+      value: "secret",
+    });
+    expect(req.secret_key).toBe("db_password");
+  });
+
+  it("rejects store request with blank secret_key", () => {
+    expectRejects(SecretStoreRequest, { secret_key: "   ", value: "secret" });
+  });
+
+  it("rejects store request with unknown fields", () => {
+    expectRejects(SecretStoreRequest, {
+      secret_key: "db_password",
       value: "secret",
       provider: "env",
     });
-    expect(req.scope).toBe("MY_API_KEY");
-  });
-
-  it("rejects store request with blank scope", () => {
-    expectRejects(SecretStoreRequest, { scope: "   ", value: "secret", provider: "env" });
-  });
-
-  it("rejects store request with wrong provider type", () => {
-    expectRejects(SecretStoreRequest, { scope: "MY_API_KEY", value: "secret", provider: 1 });
   });
 });
 
@@ -64,8 +67,8 @@ describe("SecretRotateRequest/Response", () => {
       revoked: true,
       handle: {
         handle_id: "h-2",
-        provider: "file",
-        scope: "DB_PASSWORD",
+        provider: "db",
+        scope: "h-2",
         created_at: "2026-02-19T12:00:00Z",
       },
     });
@@ -106,8 +109,8 @@ describe("SecretListResponse", () => {
       handles: [
         {
           handle_id: "h-1",
-          provider: "file",
-          scope: "DB_PASSWORD",
+          provider: "db",
+          scope: "h-1",
           created_at: "2026-02-19T12:00:00Z",
         },
       ],

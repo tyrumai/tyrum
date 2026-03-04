@@ -15,15 +15,16 @@ import { AuthProfileDal } from "../models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "../models/session-pin-dal.js";
 import { ProviderUsagePoller } from "../observability/provider-usage.js";
 import { SessionDal } from "../agent/session-dal.js";
+import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../identity/scope.js";
+import { ChannelThreadDal } from "../channels/thread-dal.js";
 import { SessionModelOverrideDal } from "../models/session-model-override-dal.js";
 import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
 import { IntakeModeOverrideDal } from "../agent/intake-mode-override-dal.js";
 import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
-import { parseChannelSourceKey } from "../channels/interface.js";
-import { resolveWorkspaceId } from "../workspace/id.js";
-import { buildAgentTurnKey } from "../agent/turn-key.js";
-import { resolveStoredKeyLaneByChannelThread } from "../agent/stored-key-lane-resolution.js";
+import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../channels/interface.js";
+import { resolveWorkspaceKey } from "../workspace/id.js";
+import { buildAgentTurnKey, encodeTurnKeyPart } from "../agent/turn-key.js";
 import { randomUUID } from "node:crypto";
 import { ExecutionEngine } from "../execution/engine.js";
 
@@ -71,6 +72,7 @@ const providerUsagePollers = new WeakMap<
 
 function getProviderUsagePoller(deps: CommandDeps): ProviderUsagePoller | undefined {
   if (!deps.db || !deps.agents) return undefined;
+  const agents = deps.agents;
 
   let byAgents = providerUsagePollers.get(deps.db);
   if (!byAgents) {
@@ -90,7 +92,7 @@ function getProviderUsagePoller(deps: CommandDeps): ProviderUsagePoller | undefi
     poller = new ProviderUsagePoller({
       authProfileDal: new AuthProfileDal(deps.db),
       pinDal: new SessionProviderPinDal(deps.db),
-      agents: deps.agents,
+      secretProviderGetter: async () => await agents.getSecretProvider("default"),
       fetchImpl: deps.fetchImpl,
     });
     byFetch.set(fetchKey, poller);
@@ -184,7 +186,7 @@ function resolveAgentId(ctx: CommandDeps["commandContext"] | undefined): string 
   if (key) {
     try {
       const parsed = parseTyrumKey(key as never);
-      if (parsed.kind === "agent") return parsed.agent_id;
+      if (parsed.kind === "agent") return parsed.agent_key;
     } catch {
       // Intentional: ignore invalid keys; fall back to default agent.
     }
@@ -198,7 +200,7 @@ function buildDefaultCommandKey(input: {
   channel: string;
   threadId: string;
 }): string {
-  const workspaceId = resolveWorkspaceId();
+  const workspaceId = resolveWorkspaceKey();
   return buildAgentTurnKey({
     agentId: input.agentId,
     workspaceId,
@@ -206,6 +208,52 @@ function buildDefaultCommandKey(input: {
     containerKind: "channel",
     threadId: input.threadId.trim(),
   });
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
+async function resolveStoredKeyLaneByChannelThread(
+  db: SqlDb,
+  input: { agentId: string; channel: string; threadId: string },
+): Promise<{ key: string; lane: string } | undefined> {
+  const safeAgentId = escapeLikePattern(encodeTurnKeyPart(input.agentId.trim()));
+  const safeChannel = escapeLikePattern(encodeTurnKeyPart(input.channel.trim()));
+  const safeThread = escapeLikePattern(encodeTurnKeyPart(input.threadId.trim()));
+  const keyPattern = `agent:${safeAgentId}:${safeChannel}:%:%:${safeThread}`;
+
+  const runRow = await db.get<{ key: string; lane: string }>(
+    `SELECT key, lane
+     FROM execution_runs
+     WHERE key LIKE ? ESCAPE '\\'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [keyPattern],
+  );
+  if (runRow?.key) return runRow;
+
+  const queueRow = await db.get<{ key: string; lane: string }>(
+    `SELECT key, lane
+     FROM lane_queue_mode_overrides
+     WHERE key LIKE ? ESCAPE '\\'
+     ORDER BY updated_at_ms DESC
+     LIMIT 1`,
+    [keyPattern],
+  );
+  if (queueRow?.key) return queueRow;
+
+  const sendRow = await db.get<{ key: string }>(
+    `SELECT key
+     FROM session_send_policy_overrides
+     WHERE key LIKE ? ESCAPE '\\'
+     ORDER BY updated_at_ms DESC
+     LIMIT 1`,
+    [keyPattern],
+  );
+  if (sendRow?.key) return { key: sendRow.key, lane: "main" };
+
+  return undefined;
 }
 
 async function resolveFallbackKeyLane(
@@ -280,19 +328,34 @@ async function cancelRunsAndClearQueuedInbox(input: {
 async function resolveChannelThread(
   db: SqlDb,
   ctx: CommandDeps["commandContext"] | undefined,
-): Promise<{ channel: string; threadId: string } | undefined> {
+): Promise<{ channel: string; accountKey?: string; threadId: string } | undefined> {
+  const resolveChannelAddress = (
+    sourceRaw: string,
+  ): { channel: string; accountKey?: string } | undefined => {
+    const source = sourceRaw.trim();
+    if (!source) return undefined;
+
+    try {
+      const parsed = parseChannelSourceKey(source);
+      return {
+        channel: parsed.connector,
+        accountKey: parsed.accountId === DEFAULT_CHANNEL_ACCOUNT_ID ? undefined : parsed.accountId,
+      };
+    } catch {
+      // Intentional: accept unscoped channel IDs by stripping any connector suffix.
+      const idx = source.indexOf(":");
+      const channel = (idx > 0 ? source.slice(0, idx) : source).trim();
+      if (!channel) return undefined;
+      return { channel };
+    }
+  };
+
   const channelRaw = ctx?.channel?.trim();
   const threadIdRaw = ctx?.threadId?.trim();
   if (channelRaw && threadIdRaw) {
-    let channel = channelRaw;
-    try {
-      channel = parseChannelSourceKey(channelRaw).connector;
-    } catch {
-      // Intentional: accept unscoped channel IDs by stripping any connector suffix.
-      const idx = channel.indexOf(":");
-      if (idx > 0) channel = channel.slice(0, idx);
-    }
-    return { channel, threadId: threadIdRaw };
+    const resolved = resolveChannelAddress(channelRaw);
+    if (!resolved) return undefined;
+    return { ...resolved, threadId: threadIdRaw };
   }
 
   const key = ctx?.key?.trim();
@@ -308,25 +371,22 @@ async function resolveChannelThread(
     [key, lane],
   );
   if (row?.source && row?.thread_id) {
-    let channel = row.source.trim();
-    try {
-      channel = parseChannelSourceKey(channel).connector;
-    } catch {
-      // Intentional: accept unscoped channel IDs by stripping any connector suffix.
-      const idx = channel.indexOf(":");
-      if (idx > 0) channel = channel.slice(0, idx);
-    }
+    const resolved = resolveChannelAddress(row.source);
+    if (!resolved) return undefined;
     const threadId = row.thread_id.trim();
-    if (!channel || !threadId) return undefined;
-    return { channel, threadId };
+    if (!threadId) return undefined;
+    return { ...resolved, threadId };
   }
 
   try {
     const parsed = parseTyrumKey(key as never);
     if (parsed.kind === "agent" && "channel" in parsed && "id" in parsed) {
       const channel = String(parsed.channel).trim();
+      const account =
+        "account" in parsed ? String(parsed.account).trim() : DEFAULT_CHANNEL_ACCOUNT_ID;
+      const accountKey = account && account !== DEFAULT_CHANNEL_ACCOUNT_ID ? account : undefined;
       const threadId = String(parsed.id).trim();
-      if (channel && threadId) return { channel, threadId };
+      if (channel && threadId) return { channel, accountKey, threadId };
     }
   } catch {
     // Intentional: ignore parse errors when resolving channel/thread from legacy keys.
@@ -466,8 +526,11 @@ export async function executeCommand(
     }
 
     let channel = channelRaw;
+    let accountKey: string | undefined;
     try {
-      channel = parseChannelSourceKey(channelRaw).connector;
+      const parsed = parseChannelSourceKey(channelRaw);
+      channel = parsed.connector;
+      accountKey = parsed.accountId === DEFAULT_CHANNEL_ACCOUNT_ID ? undefined : parsed.accountId;
     } catch {
       // Intentional: accept unscoped channel IDs by stripping any connector suffix.
       const idx = channel.indexOf(":");
@@ -478,8 +541,18 @@ export async function executeCommand(
     }
 
     const threadId = `${channel}-${randomUUID()}`;
-    const sessionDal = new SessionDal(deps.db);
-    const session = await sessionDal.getOrCreate(channel, threadId, agentId);
+    const sessionDal = new SessionDal(
+      deps.db,
+      new IdentityScopeDal(deps.db),
+      new ChannelThreadDal(deps.db),
+    );
+    const session = await sessionDal.getOrCreate({
+      scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
+      connectorKey: channel,
+      accountKey,
+      providerThreadId: threadId,
+      containerKind: "channel",
+    });
 
     const payload = {
       agent_id: agentId,
@@ -501,13 +574,23 @@ export async function executeCommand(
     if (!resolved) {
       return { output: "Usage: /compact (requires key or channel/thread context)", data: null };
     }
-    const { channel, threadId } = resolved;
+    const { channel, accountKey, threadId } = resolved;
 
-    const sessionDal = new SessionDal(deps.db);
-    const session = await sessionDal.getOrCreate(channel, threadId, agentId);
+    const sessionDal = new SessionDal(
+      deps.db,
+      new IdentityScopeDal(deps.db),
+      new ChannelThreadDal(deps.db),
+    );
+    const session = await sessionDal.getOrCreate({
+      scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
+      connectorKey: channel,
+      accountKey,
+      providerThreadId: threadId,
+      containerKind: "channel",
+    });
     const compacted = await sessionDal.compact({
+      tenantId: session.tenant_id,
       sessionId: session.session_id,
-      agentId,
       keepLastMessages: 8,
     });
 
@@ -563,10 +646,7 @@ export async function executeCommand(
     if (!resolved) {
       return { output: "Usage: /reset (requires key or channel/thread context)", data: null };
     }
-    const { channel, threadId } = resolved;
-
-    const sessionDal = new SessionDal(deps.db);
-    const session = await sessionDal.getOrCreate(channel, threadId, agentId);
+    const { channel, accountKey, threadId } = resolved;
 
     // Best-effort: stop active execution + clear queued followups (if we can resolve key/lane).
     const keyLane = (await resolveKeyLane(deps.db, ctx)) ??
@@ -574,6 +654,36 @@ export async function executeCommand(
         key: buildDefaultCommandKey({ agentId, channel, threadId }),
         lane: "main",
       };
+
+    // Prefer the container kind from the resolved key (so /reset works for dm/group keys too).
+    let containerKind: "dm" | "group" | "channel" = "channel";
+    try {
+      const parsed = parseTyrumKey(keyLane.key as never);
+      if (
+        parsed.kind === "agent" &&
+        (parsed.thread_kind === "dm" ||
+          parsed.thread_kind === "group" ||
+          parsed.thread_kind === "channel")
+      ) {
+        containerKind = parsed.thread_kind;
+      }
+    } catch {
+      // Intentional: fall back to channel-scoped sessions.
+    }
+
+    const sessionDal = new SessionDal(
+      deps.db,
+      new IdentityScopeDal(deps.db),
+      new ChannelThreadDal(deps.db),
+    );
+    const session = await sessionDal.getOrCreate({
+      scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
+      connectorKey: channel,
+      accountKey,
+      providerThreadId: threadId,
+      containerKind,
+    });
+
     if (keyLane?.key) {
       await cancelRunsAndClearQueuedInbox({
         db: deps.db,
@@ -586,21 +696,24 @@ export async function executeCommand(
     }
 
     await deps.db.transaction(async (tx) => {
-      const sessionDalTx = new SessionDal(tx);
-      const didReset = await sessionDalTx.reset(session.session_id, agentId);
+      const sessionDalTx = new SessionDal(tx, new IdentityScopeDal(tx), new ChannelThreadDal(tx));
+      const didReset = await sessionDalTx.reset({
+        tenantId: session.tenant_id,
+        sessionId: session.session_id,
+      });
       if (!didReset) {
         throw new Error(`Session ${session.session_id} not found`);
       }
 
       await tx.run(
         `DELETE FROM session_model_overrides
-         WHERE agent_id = ? AND session_id = ?`,
-        [agentId, session.session_id],
+	         WHERE tenant_id = ? AND session_id = ?`,
+        [session.tenant_id, session.session_id],
       );
       await tx.run(
         `DELETE FROM session_provider_pins
-         WHERE agent_id = ? AND session_id = ?`,
-        [agentId, session.session_id],
+	         WHERE tenant_id = ? AND session_id = ?`,
+        [session.tenant_id, session.session_id],
       );
 
       const queueOverrideDal = new LaneQueueModeOverrideDal(tx);
@@ -666,7 +779,10 @@ export async function executeCommand(
       status && allowed.has(status)
         ? (status as "pending" | "approved" | "denied" | "expired" | "cancelled")
         : "pending";
-    const rows = await deps.approvalDal.getByStatus(filter);
+    const rows = await deps.approvalDal.getByStatus({
+      tenantId: DEFAULT_TENANT_ID,
+      status: filter,
+    });
     const payload = { approvals: rows };
     return { output: jsonBlock(payload), data: payload };
   }
@@ -816,7 +932,7 @@ export async function executeCommand(
           data: null,
         };
       }
-      const row = await deps.contextReportDal.getById(id);
+      const row = await deps.contextReportDal.getById({ contextReportId: id });
       if (!row) {
         return { output: `Context report ${id} not found.`, data: null };
       }
@@ -869,15 +985,28 @@ export async function executeCommand(
         data: null,
       };
     }
-    const { channel, threadId } = resolved;
+    const { channel, accountKey, threadId } = resolved;
 
-    const sessionDal = new SessionDal(deps.db);
-    const session = await sessionDal.getOrCreate(channel, threadId, agentId);
+    const sessionDal = new SessionDal(
+      deps.db,
+      new IdentityScopeDal(deps.db),
+      new ChannelThreadDal(deps.db),
+    );
+    const session = await sessionDal.getOrCreate({
+      scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
+      connectorKey: channel,
+      accountKey,
+      providerThreadId: threadId,
+      containerKind: "channel",
+    });
     const overrides = new SessionModelOverrideDal(deps.db);
 
     const modelArg = toks[1];
     if (!modelArg) {
-      const existing = await overrides.get({ agentId, sessionId: session.session_id });
+      const existing = await overrides.get({
+        tenantId: session.tenant_id,
+        sessionId: session.session_id,
+      });
       const payload = {
         session_id: session.session_id,
         model_id: existing?.model_id ?? null,
@@ -917,19 +1046,16 @@ export async function executeCommand(
       }
 
       const authProfileDal = new AuthProfileDal(deps.db);
-      const profile = await authProfileDal.getById(profileIdRaw);
+      const profile = await authProfileDal.getByKey({
+        tenantId: session.tenant_id,
+        authProfileKey: profileIdRaw,
+      });
       if (!profile) {
         return { output: `Auth profile ${profileIdRaw} not found.`, data: null };
       }
-      if (profile.agent_id !== agentId) {
+      if (profile.provider_key !== providerId) {
         return {
-          output: `Auth profile ${profileIdRaw} is not scoped to agent '${agentId}'.`,
-          data: null,
-        };
-      }
-      if (profile.provider !== providerId) {
-        return {
-          output: `Auth profile ${profileIdRaw} is for provider '${profile.provider}', not '${providerId}'.`,
+          output: `Auth profile ${profileIdRaw} is for provider '${profile.provider_key}', not '${providerId}'.`,
           data: null,
         };
       }
@@ -940,16 +1066,16 @@ export async function executeCommand(
       const res = await deps.db.transaction(async (tx) => {
         const modelOverrideDal = new SessionModelOverrideDal(tx);
         const row = await modelOverrideDal.upsert({
-          agentId,
+          tenantId: session.tenant_id,
           sessionId: session.session_id,
           modelId: modelIdRaw,
         });
         const pins = new SessionProviderPinDal(tx);
         const pinned = await pins.upsert({
-          agentId,
+          tenantId: session.tenant_id,
           sessionId: session.session_id,
-          provider: providerId,
-          profileId: profileIdRaw,
+          providerKey: providerId,
+          authProfileId: profile.auth_profile_id,
         });
         return { row, pinned };
       });
@@ -957,8 +1083,9 @@ export async function executeCommand(
       const payload = {
         session_id: res.row.session_id,
         model_id: res.row.model_id,
-        provider: res.pinned.provider,
-        profile_id: res.pinned.profile_id,
+        provider_key: res.pinned.provider_key,
+        auth_profile_id: res.pinned.auth_profile_id,
+        auth_profile_key: res.pinned.auth_profile_key,
       };
       return { output: jsonBlock(payload), data: payload };
     }
@@ -966,12 +1093,16 @@ export async function executeCommand(
     const row = await deps.db.transaction(async (tx) => {
       const modelOverrideDal = new SessionModelOverrideDal(tx);
       const row = await modelOverrideDal.upsert({
-        agentId,
+        tenantId: session.tenant_id,
         sessionId: session.session_id,
         modelId: modelIdRaw,
       });
       const pins = new SessionProviderPinDal(tx);
-      await pins.clear({ agentId, sessionId: session.session_id, provider: providerId });
+      await pins.clear({
+        tenantId: session.tenant_id,
+        sessionId: session.session_id,
+        providerKey: providerId,
+      });
       return row;
     });
 

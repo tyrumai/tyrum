@@ -158,8 +158,8 @@ export class OutboxLifecycleScheduler {
       return (
         await db.run(
           `DELETE FROM outbox_consumers
-         WHERE consumer_id IN (
-           SELECT consumer_id
+         WHERE (tenant_id, consumer_id) IN (
+           SELECT tenant_id, consumer_id
            FROM outbox_consumers
            WHERE ${cutoff.clause}
            ORDER BY datetime(updated_at) ASC
@@ -181,8 +181,8 @@ export class OutboxLifecycleScheduler {
     return (
       await db.run(
         `DELETE FROM outbox_consumers
-       WHERE consumer_id IN (
-         SELECT consumer_id
+       WHERE (tenant_id, consumer_id) IN (
+         SELECT tenant_id, consumer_id
          FROM outbox_consumers
          WHERE ${clause.clause}
          ORDER BY updated_at ASC

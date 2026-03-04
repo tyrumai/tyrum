@@ -137,7 +137,7 @@ describe("verifyChain", () => {
     expect(result.broken_at_index).toBe(2);
   });
 
-  it("handles legacy events with null hashes", () => {
+  it("rejects events with null hashes", () => {
     const legacyEvent: ChainableEvent = {
       id: 1,
       plan_id: "plan-1",
@@ -150,14 +150,14 @@ describe("verifyChain", () => {
 
     const result = verifyChain([legacyEvent]);
     expect(result).toEqual({
-      valid: true,
+      valid: false,
       checked_count: 0,
-      broken_at_index: null,
-      broken_at_id: null,
+      broken_at_index: 0,
+      broken_at_id: 1,
     });
   });
 
-  it("handles mixed legacy and new events", () => {
+  it("rejects chains containing legacy null-hash events", () => {
     const legacyEvent: ChainableEvent = {
       id: 1,
       plan_id: "plan-1",
@@ -185,10 +185,10 @@ describe("verifyChain", () => {
 
     const result = verifyChain([legacyEvent, newEvent]);
     expect(result).toEqual({
-      valid: true,
-      checked_count: 1,
-      broken_at_index: null,
-      broken_at_id: null,
+      valid: false,
+      checked_count: 0,
+      broken_at_index: 0,
+      broken_at_id: 1,
     });
   });
 });

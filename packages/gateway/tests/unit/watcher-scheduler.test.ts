@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import mitt from "mitt";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
@@ -10,6 +11,11 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { PolicyBundle } from "@tyrum/schemas";
 import type { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import type { PolicyService } from "../../src/modules/policy/service.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 describe("WatcherScheduler", () => {
   let db: SqliteDb;
@@ -78,7 +84,7 @@ describe("WatcherScheduler", () => {
       }),
     );
 
-    const firings = await db.all<{ watcher_id: number; status: string }>(
+    const firings = await db.all<{ watcher_id: string; status: string }>(
       "SELECT watcher_id, status FROM watcher_firings ORDER BY watcher_id",
     );
     expect(firings).toHaveLength(2);
@@ -103,11 +109,11 @@ describe("WatcherScheduler", () => {
 
   it("skips watchers with invalid config", async () => {
     // Insert a periodic watcher with invalid trigger_config directly
-    await db.run("INSERT INTO watchers (plan_id, trigger_type, trigger_config) VALUES (?, ?, ?)", [
-      "plan-1",
-      "periodic",
-      "not-json{",
-    ]);
+    const id = await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
+    await db.run(
+      "UPDATE watchers SET trigger_config_json = ? WHERE tenant_id = ? AND watcher_id = ?",
+      ["not-json{", DEFAULT_TENANT_ID, id],
+    );
 
     await scheduler.tick();
 
@@ -202,7 +208,7 @@ describe("WatcherScheduler", () => {
     const id = await processor.createWatcher("plan-1", "webhook", {
       secret_handle: {
         handle_id: "secret-handle",
-        provider: "file",
+        provider: "db",
         scope: "watcher:webhook:test",
         created_at: new Date().toISOString(),
       },
@@ -221,7 +227,10 @@ describe("WatcherScheduler", () => {
     await scheduler.tick();
 
     const firings = await db.all<{ status: string; trigger_type: string }>(
-      "SELECT status, trigger_type FROM watcher_firings",
+      `SELECT f.status AS status, w.trigger_type AS trigger_type
+       FROM watcher_firings f
+       JOIN watchers w
+         ON w.tenant_id = f.tenant_id AND w.watcher_id = f.watcher_id`,
     );
     expect(firings).toHaveLength(1);
     expect(firings[0]!.trigger_type).toBe("webhook");
@@ -249,9 +258,29 @@ describe("WatcherScheduler", () => {
       owner: "scheduler-1",
       firingLeaseTtlMs: 10_000,
       engine: {
-        enqueuePlanInTx: async (_tx, input) => {
+        enqueuePlanInTx: async (tx, input) => {
           enqueuedInputs.push(input as unknown as Record<string, unknown>);
-          return { jobId: "job-1", runId: "run-1" };
+          const jobId = randomUUID();
+          const runId = randomUUID();
+          await tx.run(
+            `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+             VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)`,
+            [
+              DEFAULT_TENANT_ID,
+              jobId,
+              DEFAULT_AGENT_ID,
+              DEFAULT_WORKSPACE_ID,
+              input.key,
+              input.lane,
+              "{}",
+            ],
+          );
+          await tx.run(
+            `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+             VALUES (?, ?, ?, ?, ?, 'queued', 1)`,
+            [DEFAULT_TENANT_ID, runId, jobId, input.key, input.lane],
+          );
+          return { jobId, runId };
         },
       } as unknown as ExecutionEngine,
       policyService: {
@@ -279,16 +308,18 @@ describe("WatcherScheduler", () => {
 
       expect(enqueuedInputs).toHaveLength(1);
 
-      const firing = await db.get<{ firing_id: string }>("SELECT firing_id FROM watcher_firings");
+      const firing = await db.get<{ watcher_firing_id: string }>(
+        "SELECT watcher_firing_id FROM watcher_firings",
+      );
       expect(firing).toBeDefined();
-      expect(firing!.firing_id).toBeTypeOf("string");
+      expect(firing!.watcher_firing_id).toBeTypeOf("string");
 
       const trigger = enqueuedInputs[0]?.["trigger"] as Record<string, unknown> | undefined;
       expect(trigger).toBeDefined();
       expect(trigger?.["kind"]).toBe("cron");
 
       const metadata = trigger?.["metadata"] as Record<string, unknown> | undefined;
-      expect(metadata?.["firing_id"]).toBe(firing!.firing_id);
+      expect(metadata?.["firing_id"]).toBe(firing!.watcher_firing_id);
       expect(metadata?.["lease_owner"]).toBe("scheduler-1");
       expect(typeof metadata?.["lease_expires_at_ms"]).toBe("number");
     } finally {
@@ -313,9 +344,29 @@ describe("WatcherScheduler", () => {
       owner: "scheduler-1",
       firingLeaseTtlMs: 10_000,
       engine: {
-        enqueuePlanInTx: async (_tx, input) => {
+        enqueuePlanInTx: async (tx, input) => {
           enqueuedInputs.push(input as unknown as Record<string, unknown>);
-          return { jobId: "job-1", runId: "run-1" };
+          const jobId = randomUUID();
+          const runId = randomUUID();
+          await tx.run(
+            `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+             VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)`,
+            [
+              DEFAULT_TENANT_ID,
+              jobId,
+              DEFAULT_AGENT_ID,
+              DEFAULT_WORKSPACE_ID,
+              input.key,
+              input.lane,
+              "{}",
+            ],
+          );
+          await tx.run(
+            `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+             VALUES (?, ?, ?, ?, ?, 'queued', 1)`,
+            [DEFAULT_TENANT_ID, runId, jobId, input.key, input.lane],
+          );
+          return { jobId, runId };
         },
       } as unknown as ExecutionEngine,
       policyService: {
@@ -370,9 +421,29 @@ describe("WatcherScheduler", () => {
       owner: "scheduler-1",
       firingLeaseTtlMs: 10_000,
       engine: {
-        enqueuePlanInTx: async (_tx, input) => {
+        enqueuePlanInTx: async (tx, input) => {
           enqueuedInputs.push(input as unknown as Record<string, unknown>);
-          return { jobId: "job-1", runId: "run-1" };
+          const jobId = randomUUID();
+          const runId = randomUUID();
+          await tx.run(
+            `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+             VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)`,
+            [
+              DEFAULT_TENANT_ID,
+              jobId,
+              DEFAULT_AGENT_ID,
+              DEFAULT_WORKSPACE_ID,
+              input.key,
+              input.lane,
+              "{}",
+            ],
+          );
+          await tx.run(
+            `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+             VALUES (?, ?, ?, ?, ?, 'queued', 1)`,
+            [DEFAULT_TENANT_ID, runId, jobId, input.key, input.lane],
+          );
+          return { jobId, runId };
         },
       } as unknown as ExecutionEngine,
       policyService: {

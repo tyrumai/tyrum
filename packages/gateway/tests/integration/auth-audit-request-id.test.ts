@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { createTestApp } from "./helpers.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { GATEWAY_AUTH_AUDIT_PLAN_ID } from "../../src/modules/auth/audit.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("Auth audit request_id correlation", () => {
   let tempDir: string;
@@ -28,11 +29,16 @@ describe("Auth audit request_id correlation", () => {
       const requestId = res.headers.get("x-request-id");
       expect(requestId).toMatch(/^req-/);
 
-      const rows = await container.db.all<{ action: string }>(
-        "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-        [GATEWAY_AUTH_AUDIT_PLAN_ID],
+      const rows = await container.db.all<{ action_json: string }>(
+        `SELECT e.action_json
+         FROM planner_events e
+         JOIN plans p
+           ON p.tenant_id = e.tenant_id AND p.plan_id = e.plan_id
+         WHERE p.tenant_id = ? AND p.plan_key = ?
+         ORDER BY e.step_index ASC`,
+        [DEFAULT_TENANT_ID, GATEWAY_AUTH_AUDIT_PLAN_ID],
       );
-      const actions = rows.map((row) => JSON.parse(row.action) as Record<string, unknown>);
+      const actions = rows.map((row) => JSON.parse(row.action_json) as Record<string, unknown>);
       const authFailed = actions.find((action) => action["type"] === "auth.failed");
       expect(authFailed).toBeDefined();
       expect(authFailed!["request_id"]).toBe(requestId);
@@ -70,11 +76,16 @@ describe("Auth audit request_id correlation", () => {
       const requestId = res.headers.get("x-request-id");
       expect(requestId).toMatch(/^req-/);
 
-      const rows = await container.db.all<{ action: string }>(
-        "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-        [GATEWAY_AUTH_AUDIT_PLAN_ID],
+      const rows = await container.db.all<{ action_json: string }>(
+        `SELECT e.action_json
+         FROM planner_events e
+         JOIN plans p
+           ON p.tenant_id = e.tenant_id AND p.plan_id = e.plan_id
+         WHERE p.tenant_id = ? AND p.plan_key = ?
+         ORDER BY e.step_index ASC`,
+        [DEFAULT_TENANT_ID, GATEWAY_AUTH_AUDIT_PLAN_ID],
       );
-      const actions = rows.map((row) => JSON.parse(row.action) as Record<string, unknown>);
+      const actions = rows.map((row) => JSON.parse(row.action_json) as Record<string, unknown>);
       const authzDenied = actions.find((action) => action["type"] === "authz.denied");
       expect(authzDenied).toBeDefined();
       expect(authzDenied!["request_id"]).toBe(requestId);

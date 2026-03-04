@@ -6,6 +6,7 @@ import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import type { SecretHandle } from "@tyrum/schemas";
 import { createSecretRoutes } from "../../src/routes/secret.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 class AlwaysNotFoundSecretProvider implements SecretProvider {
   async resolve(_handle: SecretHandle): Promise<string | null> {
@@ -31,18 +32,18 @@ class AlwaysNotFoundSecretProvider implements SecretProvider {
 }
 
 describe("secret revoke convergence (integration)", () => {
-  it("disables auth profiles referencing the handle even if the secret is already gone", async () => {
+  it("returns 404 for missing secrets without mutating auth profiles", async () => {
     const container = await createTestContainer();
     const authProfileDal = new AuthProfileDal(container.db);
 
     const missingHandleId = "missing-handle";
-    const profileId = randomUUID();
+    const authProfileKey = "profile-missing-secret";
     await authProfileDal.create({
-      profileId,
-      agentId: "default",
-      provider: "openai",
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey,
+      providerKey: "openai",
       type: "api_key",
-      secretHandles: { api_key_handle: missingHandleId },
+      labels: { source: "test" },
     });
 
     const app = new Hono();
@@ -50,15 +51,16 @@ describe("secret revoke convergence (integration)", () => {
       "/",
       createSecretRoutes({
         secretProviderForAgent: async () => new AlwaysNotFoundSecretProvider(),
-        authProfileDal,
       }),
     );
 
     const res = await app.request(`/secrets/${missingHandleId}`, { method: "DELETE" });
     expect(res.status).toBe(404);
 
-    const updated = await authProfileDal.getById(profileId);
-    expect(updated?.status).toBe("disabled");
-    expect(updated?.disabled_reason).toBe("secret_handle_revoked");
+    const updated = await authProfileDal.getByKey({
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey,
+    });
+    expect(updated?.status).toBe("active");
   });
 });

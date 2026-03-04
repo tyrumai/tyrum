@@ -19,7 +19,7 @@ function stubMcpManager(): McpManager {
 function stubSecretProvider(secrets: Map<string, string>): SecretProvider {
   const handles: SecretHandle[] = [...secrets.keys()].map((id) => ({
     handle_id: id,
-    provider: "env" as const,
+    provider: "db" as const,
     scope: id,
     created_at: "",
   }));
@@ -27,7 +27,7 @@ function stubSecretProvider(secrets: Map<string, string>): SecretProvider {
     resolve: vi.fn(async (handle: SecretHandle) => secrets.get(handle.handle_id) ?? null),
     store: vi.fn(async () => ({
       handle_id: "h1",
-      provider: "env" as const,
+      provider: "db" as const,
       scope: "test",
       created_at: "",
     })),
@@ -114,7 +114,7 @@ describe("secret resolution events", () => {
         tool_call_id: "call-1",
         tool_id: "tool.http.fetch",
         handle_id: "handle-abc",
-        provider: "env",
+        provider: "db",
         scope: "handle-abc",
         policy_snapshot_id: "ps-1",
         outcome: "resolved",

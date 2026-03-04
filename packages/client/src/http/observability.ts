@@ -32,11 +32,11 @@ const UsageQuery = z
   .object({
     run_id: z.string().trim().min(1).optional(),
     key: z.string().trim().min(1).optional(),
-    agent_id: z.string().trim().min(1).optional(),
+    agent_key: z.string().trim().min(1).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
-    const filled = [value.run_id, value.key, value.agent_id].filter(
+    const filled = [value.run_id, value.key, value.agent_key].filter(
       (entry): entry is string => entry !== undefined,
     );
     if (filled.length > 1) {
@@ -57,7 +57,7 @@ const UsageResponse = z
         kind: z.enum(["run", "session", "agent", "deployment"]),
         run_id: z.string().trim().min(1).nullable(),
         key: z.string().trim().min(1).nullable(),
-        agent_id: z.string().trim().min(1).nullable(),
+        agent_key: z.string().trim().min(1).nullable(),
       })
       .strict(),
     local: z

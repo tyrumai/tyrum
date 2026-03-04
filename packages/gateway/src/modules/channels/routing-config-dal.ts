@@ -5,6 +5,8 @@ import type { SqlDb } from "../../statestore/types.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
 import { insertPlannerEventNext, retryOnUniqueViolation } from "../planner/planner-events.js";
+import { PlanDal } from "../planner/plan-dal.js";
+import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../identity/scope.js";
 
 export type RoutingConfig = RoutingConfigT;
 
@@ -66,8 +68,9 @@ const ROUTING_CONFIG_AUDIT_PLAN_ID = "routing.config";
 async function appendAuditEventNext(
   tx: SqlDb,
   event: {
+    tenantId: string;
     replayId: string;
-    planId: string;
+    planKey: string;
     occurredAt: string;
     action: unknown;
   },
@@ -80,12 +83,22 @@ async function appendAuditEventNext(
       await tx.exec(`SAVEPOINT ${savepoint}`);
 
       try {
-        await insertPlannerEventNext<{ id: number }>(tx, {
+        const planId = await new PlanDal(tx).ensurePlanId({
+          tenantId: event.tenantId,
+          planKey: event.planKey,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          kind: "audit",
+          status: "active",
+        });
+
+        await insertPlannerEventNext<unknown>(tx, {
+          tenantId: event.tenantId,
           replayId: event.replayId,
-          planId: event.planId,
+          planId,
           occurredAt: event.occurredAt,
           actionJson,
-          returning: "id",
+          returning: "*",
         });
 
         await tx.exec(`RELEASE SAVEPOINT ${savepoint}`);
@@ -158,8 +171,9 @@ export class RoutingConfigDal {
       }
 
       await appendAuditEventNext(tx, {
+        tenantId: DEFAULT_TENANT_ID,
         replayId,
-        planId: ROUTING_CONFIG_AUDIT_PLAN_ID,
+        planKey: ROUTING_CONFIG_AUDIT_PLAN_ID,
         occurredAt: createdAt,
         action: {
           type: "routing.config.updated",

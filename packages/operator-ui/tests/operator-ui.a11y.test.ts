@@ -145,7 +145,7 @@ function createFakeHttpClient(): { http: OperatorHttpClient } {
     status: { get: vi.fn(async () => sampleStatusResponse()) },
     usage: { get: vi.fn(async () => sampleUsageResponse()) },
     presence: { list: vi.fn(async () => samplePresenceResponse()) },
-    agentList: { get: vi.fn(async () => ({ agents: [{ agent_id: "default" }] }) as const) },
+    agentList: { get: vi.fn(async () => ({ agents: [{ agent_key: "default" }] }) as const) },
     pairings: {
       list: vi.fn(async () => ({ status: "ok", pairings: [] }) as const),
       approve: vi.fn(async () => ({ status: "ok", pairing: null }) as const),

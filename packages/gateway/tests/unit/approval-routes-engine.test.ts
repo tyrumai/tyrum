@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
+import { randomUUID } from "node:crypto";
 import { createApprovalRoutes } from "../../src/routes/approval.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { ExecutionEngine } from "../../src/modules/execution/engine.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 describe("approval respond engine actions", () => {
   let db: SqliteDb | undefined;
@@ -19,8 +25,10 @@ describe("approval respond engine actions", () => {
     const approvalDal = new ApprovalDal(db);
 
     const created = await approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: `approval:${randomUUID()}`,
       prompt: "Resume run?",
       runId: "run-1",
       resumeToken: "resume-1",
@@ -34,7 +42,7 @@ describe("approval respond engine actions", () => {
     const app = new Hono();
     app.route("/", createApprovalRoutes({ approvalDal, engine }));
 
-    const approveRes = await app.request(`/approvals/${String(created.id)}/respond`, {
+    const approveRes = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ decision: "approved" }),
@@ -45,7 +53,7 @@ describe("approval respond engine actions", () => {
     expect(engine.resumeRun).toHaveBeenCalledWith("resume-1");
     expect(engine.cancelRun).toHaveBeenCalledTimes(0);
 
-    const denyRes = await app.request(`/approvals/${String(created.id)}/respond`, {
+    const denyRes = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ decision: "denied", reason: "no thanks" }),
@@ -61,14 +69,16 @@ describe("approval respond engine actions", () => {
     const approvalDal = new ApprovalDal(db);
 
     const created = await approvalDal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: `approval:${randomUUID()}`,
       prompt: "Resume run?",
       runId: "run-2",
       resumeToken: "resume-2",
     });
 
-    await approvalDal.expireById(created.id);
+    await approvalDal.expireById({ tenantId: DEFAULT_TENANT_ID, approvalId: created.approval_id });
 
     const engine = {
       resumeRun: vi.fn(async () => created.run_id ?? undefined),
@@ -78,7 +88,7 @@ describe("approval respond engine actions", () => {
     const app = new Hono();
     app.route("/", createApprovalRoutes({ approvalDal, engine }));
 
-    const res = await app.request(`/approvals/${String(created.id)}/respond`, {
+    const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ decision: "approved" }),

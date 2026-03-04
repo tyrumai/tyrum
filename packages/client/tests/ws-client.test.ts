@@ -557,10 +557,11 @@ describe("TyrumClient", () => {
       request_id: "approval-7",
       type: "approval.request",
       payload: {
-        approval_id: 7,
-        plan_id: "plan-1",
-        step_index: 0,
+        approval_id: "550e8400-e29b-41d4-a716-446655440000",
+        approval_key: "approval-7",
+        kind: "other",
         prompt: "Approve this?",
+        expires_at: null,
       },
     };
     ws.send(JSON.stringify(confirmMsg));
@@ -596,10 +597,11 @@ describe("TyrumClient", () => {
       request_id: "approval-7",
       type: "approval.request",
       payload: {
-        approval_id: 7,
-        plan_id: "plan-1",
-        step_index: 0,
+        approval_id: "550e8400-e29b-41d4-a716-446655440000",
+        approval_key: "approval-7",
+        kind: "other",
         prompt: "Approve this?",
+        expires_at: null,
       },
     };
     ws1.send(JSON.stringify(confirmMsg));
@@ -655,9 +657,9 @@ describe("TyrumClient", () => {
         request_id: "approval-7",
         type: "approval.request",
         payload: {
-          approval_id: "7",
-          plan_id: "plan-1",
-          step_index: 0,
+          approval_id: "not-a-uuid",
+          approval_key: "approval-7",
+          kind: "other",
           prompt: "Approve this?",
         },
       }),
@@ -789,7 +791,7 @@ describe("TyrumClient", () => {
           item: {
             v: 1,
             memory_item_id: "123e4567-e89b-12d3-a456-426614174000",
-            agent_id: "agent-1",
+            agent_id: "22222222-2222-4222-8222-222222222222",
             kind: "note",
             tags: ["demo"],
             sensitivity: "private",
@@ -872,7 +874,10 @@ describe("TyrumClient", () => {
     await acceptConnect(ws);
     await delay(10);
 
-    const pending = client.approvalResolve({ approval_id: 7, decision: "approved" });
+    const pending = client.approvalResolve({
+      approval_id: "550e8400-e29b-41d4-a716-446655440000",
+      decision: "approved",
+    });
     const req = (await waitForMessage(ws)) as Record<string, unknown>;
     expect(req["type"]).toBe("approval.resolve");
     expect(typeof req["request_id"]).toBe("string");
@@ -884,7 +889,8 @@ describe("TyrumClient", () => {
         ok: true,
         result: {
           approval: {
-            approval_id: 7,
+            approval_id: "550e8400-e29b-41d4-a716-446655440000",
+            approval_key: "approval-7",
             kind: "other",
             status: "approved",
             prompt: "ok?",
@@ -899,7 +905,7 @@ describe("TyrumClient", () => {
     );
 
     const res = await pending;
-    expect(res.approval.approval_id).toBe(7);
+    expect(res.approval.approval_id).toBe("550e8400-e29b-41d4-a716-446655440000");
     expect(res.approval.status).toBe("approved");
   });
 
@@ -1297,17 +1303,22 @@ describe("TyrumClient", () => {
     await acceptConnect(ws);
     await connectedP;
 
-    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const scopeKeys = { tenant_key: "t-1", agent_key: "agent-1", workspace_key: "default" };
+    const scopeIds = {
+      tenant_id: "11111111-1111-4111-8111-111111111111",
+      agent_id: "22222222-2222-4222-8222-222222222222",
+      workspace_id: "33333333-3333-4333-8333-333333333333",
+    };
 
     const workItem = {
       work_item_id: "123e4567-e89b-12d3-a456-426614174000",
-      ...scope,
+      ...scopeIds,
       kind: "action",
       title: "Test item",
       status: "backlog",
       priority: 0,
       created_at: "2026-02-19T12:00:00Z",
-      created_from_session_key: "agent:agent-1:main",
+      created_from_session_key: `agent:${scopeKeys.agent_key}:main`,
       last_active_at: null,
       fingerprint: { resources: ["repo:example/repo"] },
       acceptance: { checks: [] },
@@ -1317,7 +1328,7 @@ describe("TyrumClient", () => {
 
     const workArtifact = {
       artifact_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-      ...scope,
+      ...scopeIds,
       work_item_id: workItem.work_item_id,
       kind: "candidate_plan",
       title: "Plan",
@@ -1328,7 +1339,7 @@ describe("TyrumClient", () => {
 
     const decision = {
       decision_id: "550e8400-e29b-41d4-a716-446655440000",
-      ...scope,
+      ...scopeIds,
       work_item_id: workItem.work_item_id,
       question: "Q?",
       chosen: "A",
@@ -1340,7 +1351,7 @@ describe("TyrumClient", () => {
 
     const signal = {
       signal_id: "11111111-2222-3333-8aaa-555555555555",
-      ...scope,
+      ...scopeIds,
       work_item_id: workItem.work_item_id,
       trigger_kind: "time",
       trigger_spec_json: { at: "tomorrow" },
@@ -1351,7 +1362,7 @@ describe("TyrumClient", () => {
     };
 
     const stateKvEntry = {
-      ...scope,
+      ...scopeIds,
       work_item_id: workItem.work_item_id,
       key: "branch",
       value_json: { name: "main" },
@@ -1381,7 +1392,7 @@ describe("TyrumClient", () => {
       return await pending;
     }
 
-    const listPayload = { ...scope, limit: 1 };
+    const listPayload = { ...scopeKeys, limit: 1 };
     const listRes = await expectWorkRequest(
       () => client!.workList(listPayload),
       "work.list",
@@ -1390,7 +1401,7 @@ describe("TyrumClient", () => {
     );
     expect(listRes.items[0].work_item_id).toBe(workItem.work_item_id);
 
-    const getPayload = { ...scope, work_item_id: workItem.work_item_id };
+    const getPayload = { ...scopeKeys, work_item_id: workItem.work_item_id };
     const getRes = await expectWorkRequest(
       () => client!.workGet(getPayload),
       "work.get",
@@ -1401,7 +1412,7 @@ describe("TyrumClient", () => {
     );
     expect(getRes.item.work_item_id).toBe(workItem.work_item_id);
 
-    const createPayload = { ...scope, item: { kind: "action", title: "Test item" } };
+    const createPayload = { ...scopeKeys, item: { kind: "action", title: "Test item" } };
     const createRes = await expectWorkRequest(
       () => client!.workCreate(createPayload),
       "work.create",
@@ -1411,7 +1422,7 @@ describe("TyrumClient", () => {
     expect(createRes.item.work_item_id).toBe(workItem.work_item_id);
 
     const updatePayload = {
-      ...scope,
+      ...scopeKeys,
       work_item_id: workItem.work_item_id,
       patch: { title: "Updated" },
     };
@@ -1424,7 +1435,7 @@ describe("TyrumClient", () => {
     expect(updateRes.item.work_item_id).toBe(workItem.work_item_id);
 
     const transitionPayload = {
-      ...scope,
+      ...scopeKeys,
       work_item_id: workItem.work_item_id,
       status: "doing",
     };
@@ -1436,7 +1447,7 @@ describe("TyrumClient", () => {
     );
     expect(transitionRes.item.work_item_id).toBe(workItem.work_item_id);
 
-    const artifactListPayload = { ...scope, work_item_id: workItem.work_item_id };
+    const artifactListPayload = { ...scopeKeys, work_item_id: workItem.work_item_id };
     const artifactListRes = await expectWorkRequest(
       () => client!.workArtifactList(artifactListPayload),
       "work.artifact.list",
@@ -1445,7 +1456,7 @@ describe("TyrumClient", () => {
     );
     expect(artifactListRes.artifacts[0].artifact_id).toBe(workArtifact.artifact_id);
 
-    const artifactGetPayload = { ...scope, artifact_id: workArtifact.artifact_id };
+    const artifactGetPayload = { ...scopeKeys, artifact_id: workArtifact.artifact_id };
     const artifactGetRes = await expectWorkRequest(
       () => client!.workArtifactGet(artifactGetPayload),
       "work.artifact.get",
@@ -1455,7 +1466,7 @@ describe("TyrumClient", () => {
     expect(artifactGetRes.artifact.artifact_id).toBe(workArtifact.artifact_id);
 
     const artifactCreatePayload = {
-      ...scope,
+      ...scopeKeys,
       artifact: { kind: "candidate_plan", title: "Plan" },
     };
     const artifactCreateRes = await expectWorkRequest(
@@ -1466,7 +1477,7 @@ describe("TyrumClient", () => {
     );
     expect(artifactCreateRes.artifact.artifact_id).toBe(workArtifact.artifact_id);
 
-    const decisionListPayload = { ...scope, work_item_id: workItem.work_item_id };
+    const decisionListPayload = { ...scopeKeys, work_item_id: workItem.work_item_id };
     const decisionListRes = await expectWorkRequest(
       () => client!.workDecisionList(decisionListPayload),
       "work.decision.list",
@@ -1475,7 +1486,7 @@ describe("TyrumClient", () => {
     );
     expect(decisionListRes.decisions[0].decision_id).toBe(decision.decision_id);
 
-    const decisionGetPayload = { ...scope, decision_id: decision.decision_id };
+    const decisionGetPayload = { ...scopeKeys, decision_id: decision.decision_id };
     const decisionGetRes = await expectWorkRequest(
       () => client!.workDecisionGet(decisionGetPayload),
       "work.decision.get",
@@ -1485,7 +1496,7 @@ describe("TyrumClient", () => {
     expect(decisionGetRes.decision.decision_id).toBe(decision.decision_id);
 
     const decisionCreatePayload = {
-      ...scope,
+      ...scopeKeys,
       decision: { question: "Q?", chosen: "A", rationale_md: "Because" },
     };
     const decisionCreateRes = await expectWorkRequest(
@@ -1496,7 +1507,7 @@ describe("TyrumClient", () => {
     );
     expect(decisionCreateRes.decision.decision_id).toBe(decision.decision_id);
 
-    const signalListPayload = { ...scope, work_item_id: workItem.work_item_id };
+    const signalListPayload = { ...scopeKeys, work_item_id: workItem.work_item_id };
     const signalListRes = await expectWorkRequest(
       () => client!.workSignalList(signalListPayload),
       "work.signal.list",
@@ -1505,7 +1516,7 @@ describe("TyrumClient", () => {
     );
     expect(signalListRes.signals[0].signal_id).toBe(signal.signal_id);
 
-    const signalGetPayload = { ...scope, signal_id: signal.signal_id };
+    const signalGetPayload = { ...scopeKeys, signal_id: signal.signal_id };
     const signalGetRes = await expectWorkRequest(
       () => client!.workSignalGet(signalGetPayload),
       "work.signal.get",
@@ -1515,7 +1526,7 @@ describe("TyrumClient", () => {
     expect(signalGetRes.signal.signal_id).toBe(signal.signal_id);
 
     const signalCreatePayload = {
-      ...scope,
+      ...scopeKeys,
       signal: { trigger_kind: "time", trigger_spec_json: { at: "tomorrow" } },
     };
     const signalCreateRes = await expectWorkRequest(
@@ -1526,7 +1537,7 @@ describe("TyrumClient", () => {
     );
     expect(signalCreateRes.signal.signal_id).toBe(signal.signal_id);
 
-    const signalUpdatePayload = { ...scope, signal_id: signal.signal_id, patch: {} };
+    const signalUpdatePayload = { ...scopeKeys, signal_id: signal.signal_id, patch: {} };
     const signalUpdateRes = await expectWorkRequest(
       () => client!.workSignalUpdate(signalUpdatePayload),
       "work.signal.update",
@@ -1535,7 +1546,7 @@ describe("TyrumClient", () => {
     );
     expect(signalUpdateRes.signal.signal_id).toBe(signal.signal_id);
 
-    const kvGetPayload = { scope: { ...scope, kind: "agent" }, key: "prefs.timezone" };
+    const kvGetPayload = { scope: { ...scopeKeys, kind: "agent" }, key: "prefs.timezone" };
     const kvGetRes = await expectWorkRequest(
       () => client!.workStateKvGet(kvGetPayload),
       "work.state_kv.get",
@@ -1545,7 +1556,7 @@ describe("TyrumClient", () => {
     expect(kvGetRes.entry).toBeNull();
 
     const kvListPayload = {
-      scope: { ...scope, kind: "work_item", work_item_id: workItem.work_item_id },
+      scope: { ...scopeKeys, kind: "work_item", work_item_id: workItem.work_item_id },
     };
     const kvListRes = await expectWorkRequest(
       () => client!.workStateKvList(kvListPayload),
@@ -1556,7 +1567,7 @@ describe("TyrumClient", () => {
     expect(kvListRes.entries).toEqual([]);
 
     const kvSetPayload = {
-      scope: { ...scope, kind: "work_item", work_item_id: workItem.work_item_id },
+      scope: { ...scopeKeys, kind: "work_item", work_item_id: workItem.work_item_id },
       key: "branch",
       value_json: { name: "main" },
     };
@@ -1590,7 +1601,7 @@ describe("TyrumClient", () => {
     const noteItem = {
       v: 1,
       memory_item_id: "123e4567-e89b-12d3-a456-426614174000",
-      agent_id: "agent-1",
+      agent_id: "22222222-2222-4222-8222-222222222222",
       kind: "note",
       tags: ["demo"],
       sensitivity: "private",
@@ -1793,18 +1804,23 @@ describe("TyrumClient", () => {
     await acceptConnect(ws);
     await connectedP;
 
-    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const scopeKeys = { tenant_key: "t-1", agent_key: "agent-1", workspace_key: "default" };
+    const scopeIds = {
+      tenant_id: "11111111-1111-4111-8111-111111111111",
+      agent_id: "22222222-2222-4222-8222-222222222222",
+      workspace_id: "33333333-3333-4333-8333-333333333333",
+    };
     const workItemId = "11111111-2222-3333-8aaa-555555555555";
     const workItemTaskId = "22222222-3333-4444-8aaa-555555555555";
     const subagentId = "123e4567-e89b-12d3-a456-426614174000";
 
     const subagent = {
       subagent_id: subagentId,
-      ...scope,
+      ...scopeIds,
       work_item_id: workItemId,
       work_item_task_id: workItemTaskId,
       execution_profile: "subagent",
-      session_key: `agent:${scope.agent_id}:subagent:${subagentId}`,
+      session_key: `agent:${scopeKeys.agent_key}:subagent:${subagentId}`,
       lane: "subagent",
       status: "running",
       created_at: "2026-02-19T12:00:00Z",
@@ -1835,7 +1851,7 @@ describe("TyrumClient", () => {
     }
 
     const spawnPayload = {
-      ...scope,
+      ...scopeKeys,
       execution_profile: "subagent",
       work_item_id: workItemId,
       work_item_task_id: workItemTaskId,
@@ -1848,7 +1864,7 @@ describe("TyrumClient", () => {
     );
     expect(spawnRes.subagent.subagent_id).toBe(subagentId);
 
-    const listPayload = { ...scope, statuses: ["running"], limit: 1 };
+    const listPayload = { ...scopeKeys, statuses: ["running"], limit: 1 };
     const listRes = await expectSubagentRequest(
       () => client!.subagentList(listPayload),
       "subagent.list",
@@ -1857,7 +1873,7 @@ describe("TyrumClient", () => {
     );
     expect(listRes.subagents[0].subagent_id).toBe(subagentId);
 
-    const getPayload = { ...scope, subagent_id: subagentId };
+    const getPayload = { ...scopeKeys, subagent_id: subagentId };
     const getRes = await expectSubagentRequest(
       () => client!.subagentGet(getPayload),
       "subagent.get",
@@ -1866,7 +1882,7 @@ describe("TyrumClient", () => {
     );
     expect(getRes.subagent.subagent_id).toBe(subagentId);
 
-    const sendPayload = { ...scope, subagent_id: subagentId, content: "hello" };
+    const sendPayload = { ...scopeKeys, subagent_id: subagentId, content: "hello" };
     const sendRes = await expectSubagentRequest(
       () => client!.subagentSend(sendPayload),
       "subagent.send",
@@ -1880,7 +1896,7 @@ describe("TyrumClient", () => {
       status: "closed",
       closed_at: "2026-02-19T12:00:01Z",
     };
-    const closePayload = { ...scope, subagent_id: subagentId, reason: "done" };
+    const closePayload = { ...scopeKeys, subagent_id: subagentId, reason: "done" };
     const closeRes = await expectSubagentRequest(
       () => client!.subagentClose(closePayload),
       "subagent.close",
@@ -1913,7 +1929,7 @@ describe("TyrumClient", () => {
       outbound.push(JSON.parse(data.toString()));
     });
 
-    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const scope = { tenant_key: "t-1", agent_key: "agent-1", workspace_key: "default" };
     const invalidPayload = {
       ...scope,
       subagent_id: "123e4567-e89b-12d3-a456-426614174000",
@@ -1945,7 +1961,11 @@ describe("TyrumClient", () => {
       client!.on("connected", () => resolve());
     });
 
-    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const scope = {
+      tenant_id: "11111111-1111-4111-8111-111111111111",
+      agent_id: "22222222-2222-4222-8222-222222222222",
+      workspace_id: "33333333-3333-4333-8333-333333333333",
+    };
     const workItemId = "11111111-2222-3333-8aaa-555555555555";
     const workItemTaskId = "22222222-3333-4444-8aaa-555555555555";
     const subagentId = "123e4567-e89b-12d3-a456-426614174000";
@@ -1955,7 +1975,7 @@ describe("TyrumClient", () => {
       work_item_id: workItemId,
       work_item_task_id: workItemTaskId,
       execution_profile: "subagent",
-      session_key: `agent:${scope.agent_id}:subagent:${subagentId}`,
+      session_key: `agent:agent-1:subagent:${subagentId}`,
       lane: "subagent",
       status: "running",
       created_at: "2026-02-19T12:00:00Z",
@@ -2169,7 +2189,11 @@ describe("TyrumClient", () => {
     await acceptConnect(ws);
     await connectedP;
 
-    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const scope = {
+      tenant_id: "11111111-1111-4111-8111-111111111111",
+      agent_id: "22222222-2222-4222-8222-222222222222",
+      workspace_id: "33333333-3333-4333-8333-333333333333",
+    };
     const workItem = {
       work_item_id: "123e4567-e89b-12d3-a456-426614174000",
       ...scope,

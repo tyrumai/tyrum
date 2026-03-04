@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 
 describe("ChannelInboxDal work_scope_activity updates", () => {
@@ -20,7 +25,7 @@ describe("ChannelInboxDal work_scope_activity updates", () => {
     const key = "agent:default:telegram:default:dm:peer-1";
 
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key,
@@ -29,7 +34,11 @@ describe("ChannelInboxDal work_scope_activity updates", () => {
       payload: { kind: "test" },
     });
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
     const activity = await workboard.getScopeActivity({ scope });
     expect(activity).toMatchObject({
       last_active_session_key: key,
@@ -42,7 +51,11 @@ describe("ChannelInboxDal work_scope_activity updates", () => {
     const inbox = new ChannelInboxDal(db);
     const workboard = new WorkboardDal(db);
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
     const newerKey = "agent:default:ui:default:channel:newer";
 
     await workboard.upsertScopeActivity({
@@ -53,7 +66,7 @@ describe("ChannelInboxDal work_scope_activity updates", () => {
 
     const staleKey = "agent:default:telegram:default:dm:stale";
     await inbox.enqueue({
-      source: "telegram",
+      source: "telegram:default",
       thread_id: "chat-1",
       message_id: "msg-1",
       key: staleKey,

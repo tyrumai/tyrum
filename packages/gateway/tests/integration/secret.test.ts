@@ -1,190 +1,30 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Hono } from "hono";
-import { createSecretRoutes } from "../../src/routes/secret.js";
-import { EnvSecretProvider, FileSecretProvider } from "../../src/modules/secret/provider.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createSecretRoutes } from "../../src/routes/secret.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { createDbSecretProvider } from "../../src/modules/secret/create-secret-provider.js";
 
 describe("Secret routes (integration)", () => {
-  function setup() {
-    const provider = new EnvSecretProvider();
-    const app = new Hono();
-    app.route(
-      "/",
-      createSecretRoutes({
-        secretProviderForAgent: async () => provider,
-      }),
-    );
-    return { app, provider };
-  }
-
-  it("POST /secrets stores a secret and returns a handle", async () => {
-    const { app } = setup();
-
-    const res = await app.request("/secrets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: "MY_API_KEY", value: "super-secret-123" }),
-    });
-
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as {
-      handle: { handle_id: string; provider: string; scope: string };
-    };
-    expect(body.handle.handle_id).toBeTruthy();
-    expect(body.handle.provider).toBe("env");
-    expect(body.handle.scope).toBe("MY_API_KEY");
-    // Value must never be in the response
-    expect(JSON.stringify(body)).not.toContain("super-secret-123");
-  });
-
-  it("POST /secrets supports env handles without sending a value", async () => {
-    const { app } = setup();
-
-    const res = await app.request("/secrets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: "MY_API_KEY" }),
-    });
-
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { handle: { provider: string; scope: string } };
-    expect(body.handle.provider).toBe("env");
-    expect(body.handle.scope).toBe("MY_API_KEY");
-  });
-
-  it("GET /secrets lists stored handles", async () => {
-    const { app } = setup();
-
-    // Store two secrets
-    await app.request("/secrets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: "KEY_A", value: "val-a" }),
-    });
-    await app.request("/secrets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: "KEY_B", value: "val-b" }),
-    });
-
-    const res = await app.request("/secrets");
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { handles: Array<{ scope: string }> };
-    expect(body.handles).toHaveLength(2);
-    expect(body.handles.map((h) => h.scope).sort()).toEqual(["KEY_A", "KEY_B"]);
-    // Values must never be in the response
-    expect(JSON.stringify(body)).not.toContain("val-a");
-    expect(JSON.stringify(body)).not.toContain("val-b");
-  });
-
-  it("DELETE /secrets/:id revokes a handle", async () => {
-    const { app } = setup();
-
-    const storeRes = await app.request("/secrets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: "TEMP_KEY", value: "temp-val" }),
-    });
-    const { handle } = (await storeRes.json()) as { handle: { handle_id: string } };
-
-    const deleteRes = await app.request(`/secrets/${handle.handle_id}`, {
-      method: "DELETE",
-    });
-    expect(deleteRes.status).toBe(200);
-    const deleteBody = (await deleteRes.json()) as { revoked: boolean };
-    expect(deleteBody.revoked).toBe(true);
-
-    // Verify it's gone from the list
-    const listRes = await app.request("/secrets");
-    const listBody = (await listRes.json()) as { handles: unknown[] };
-    expect(listBody.handles).toHaveLength(0);
-  });
-
-  it("DELETE /secrets/:id returns 404 for unknown handle", async () => {
-    const { app } = setup();
-
-    const res = await app.request("/secrets/nonexistent-id", {
-      method: "DELETE",
-    });
-    expect(res.status).toBe(404);
-  });
-
-  it("POST /secrets/:id/rotate rejects rotation for env provider", async () => {
-    const { app } = setup();
-
-    const storeRes = await app.request("/secrets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: "ROTATE_ME", value: "v1" }),
-    });
-    const { handle } = (await storeRes.json()) as { handle: { handle_id: string } };
-
-    const rotateRes = await app.request(`/secrets/${handle.handle_id}/rotate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ value: "v2" }),
-    });
-    expect(rotateRes.status).toBe(400);
-  });
-
-  it("POST /secrets rejects invalid body", async () => {
-    const { app } = setup();
-
-    const res = await app.request("/secrets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: "", value: "" }),
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it("full flow: store -> list -> revoke -> list", async () => {
-    const { app } = setup();
-
-    // Store
-    const storeRes = await app.request("/secrets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: "FULL_FLOW_KEY", value: "flow-val" }),
-    });
-    expect(storeRes.status).toBe(201);
-    const { handle } = (await storeRes.json()) as { handle: { handle_id: string } };
-
-    // List — should have 1
-    const list1 = await app.request("/secrets");
-    const list1Body = (await list1.json()) as { handles: unknown[] };
-    expect(list1Body.handles).toHaveLength(1);
-
-    // Revoke
-    const revokeRes = await app.request(`/secrets/${handle.handle_id}`, {
-      method: "DELETE",
-    });
-    expect(revokeRes.status).toBe(200);
-
-    // List — should have 0
-    const list2 = await app.request("/secrets");
-    const list2Body = (await list2.json()) as { handles: unknown[] };
-    expect(list2Body.handles).toHaveLength(0);
-  });
-});
-
-describe("Secret routes (integration) — file provider rotation", () => {
   let tempDir: string;
-  let secretsPath: string;
+  let dbPath: string;
+  let tyrumHome: string;
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "tyrum-secret-route-test-"));
-    secretsPath = join(tempDir, ".secrets.enc");
+    dbPath = join(tempDir, "gateway.db");
+    tyrumHome = join(tempDir, "home");
   });
 
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  async function setupFile() {
-    const provider = await FileSecretProvider.create(secretsPath, "test-admin-token-for-testing");
+  async function setup() {
+    const db = openTestSqliteDb(dbPath);
+    const provider = await createDbSecretProvider({ db, dbPath, tyrumHome });
     const app = new Hono();
     app.route(
       "/",
@@ -192,51 +32,183 @@ describe("Secret routes (integration) — file provider rotation", () => {
         secretProviderForAgent: async () => provider,
       }),
     );
-    return { app, provider };
+    return { app, provider, db };
   }
 
-  it("POST /secrets/:id/rotate revokes old handle and returns a new handle", async () => {
-    const { app, provider } = await setupFile();
+  it("POST /secrets stores a secret and returns a handle", async () => {
+    const { app, db } = await setup();
+    try {
+      const res = await app.request("/secrets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret_key: "db_password", value: "super-secret-123" }),
+      });
 
-    const storeRes = await app.request("/secrets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: "DB_PASSWORD", value: "v1" }),
-    });
-    expect(storeRes.status).toBe(201);
-    const { handle: oldHandle } = (await storeRes.json()) as {
-      handle: { handle_id: string; scope: string };
-    };
+      expect(res.status).toBe(201);
+      const body = (await res.json()) as {
+        handle: { handle_id: string; provider: string; scope: string };
+      };
+      expect(body.handle.handle_id).toBe("db_password");
+      expect(body.handle.provider).toBe("db");
+      expect(body.handle.scope).toBe("db_password");
+      expect(JSON.stringify(body)).not.toContain("super-secret-123");
+    } finally {
+      await db.close();
+    }
+  });
 
-    const rotateRes = await app.request(`/secrets/${oldHandle.handle_id}/rotate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ value: "v2" }),
-    });
-    expect(rotateRes.status).toBe(201);
-    const rotateBody = (await rotateRes.json()) as {
-      revoked: boolean;
-      handle: { handle_id: string; scope: string };
-    };
-    expect(rotateBody.revoked).toBe(true);
-    expect(rotateBody.handle.handle_id).not.toBe(oldHandle.handle_id);
-    expect(rotateBody.handle.scope).toBe(oldHandle.scope);
+  it("POST /secrets returns 409 on duplicate secret_key", async () => {
+    const { app, db } = await setup();
+    try {
+      const first = await app.request("/secrets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret_key: "dup", value: "v1" }),
+      });
+      expect(first.status).toBe(201);
 
-    // Old handle should no longer resolve; new handle should resolve to v2.
-    const oldResolved = await provider.resolve({
-      handle_id: oldHandle.handle_id,
-      provider: "file",
-      scope: oldHandle.scope,
-      created_at: new Date().toISOString(),
-    });
-    expect(oldResolved).toBeNull();
+      const second = await app.request("/secrets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret_key: "dup", value: "v2" }),
+      });
+      expect(second.status).toBe(409);
+    } finally {
+      await db.close();
+    }
+  });
 
-    const newResolved = await provider.resolve({
-      handle_id: rotateBody.handle.handle_id,
-      provider: "file",
-      scope: rotateBody.handle.scope,
-      created_at: new Date().toISOString(),
-    });
-    expect(newResolved).toBe("v2");
+  it("POST /secrets returns 409 for one of two concurrent creates and does not clobber", async () => {
+    const firstSetup = await setup();
+    const secondSetup = await setup();
+    try {
+      await firstSetup.db.exec("PRAGMA busy_timeout = 25");
+      await secondSetup.db.exec("PRAGMA busy_timeout = 25");
+
+      const [first, second] = await Promise.all([
+        firstSetup.app.request("/secrets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ secret_key: "dup_atomic", value: "v1" }),
+        }),
+        secondSetup.app.request("/secrets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ secret_key: "dup_atomic", value: "v2" }),
+        }),
+      ]);
+
+      const statuses = [first.status, second.status].sort((a, b) => a - b);
+      expect(statuses).toEqual([201, 409]);
+
+      const winnerValue = first.status === 201 ? "v1" : "v2";
+      const resolved = await firstSetup.provider.resolve({
+        handle_id: "dup_atomic",
+        provider: "db",
+        scope: "dup_atomic",
+        created_at: new Date().toISOString(),
+      });
+      expect(resolved).toBe(winnerValue);
+
+      const handles = await firstSetup.provider.list();
+      expect(handles.filter((h) => h.handle_id === "dup_atomic")).toHaveLength(1);
+    } finally {
+      await Promise.all([firstSetup.db.close(), secondSetup.db.close()]);
+    }
+  });
+
+  it("GET /secrets lists stored handles", async () => {
+    const { app, db } = await setup();
+    try {
+      await app.request("/secrets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret_key: "key_a", value: "val-a" }),
+      });
+      await app.request("/secrets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret_key: "key_b", value: "val-b" }),
+      });
+
+      const res = await app.request("/secrets");
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { handles: Array<{ handle_id: string }> };
+      expect(body.handles.map((h) => h.handle_id).sort()).toEqual(["key_a", "key_b"]);
+      expect(JSON.stringify(body)).not.toContain("val-a");
+      expect(JSON.stringify(body)).not.toContain("val-b");
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("DELETE /secrets/:id revokes a handle", async () => {
+    const { app, db } = await setup();
+    try {
+      const storeRes = await app.request("/secrets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret_key: "temp", value: "temp-val" }),
+      });
+      const { handle } = (await storeRes.json()) as { handle: { handle_id: string } };
+
+      const deleteRes = await app.request(`/secrets/${handle.handle_id}`, { method: "DELETE" });
+      expect(deleteRes.status).toBe(200);
+      const deleteBody = (await deleteRes.json()) as { revoked: boolean };
+      expect(deleteBody.revoked).toBe(true);
+
+      const listRes = await app.request("/secrets");
+      const listBody = (await listRes.json()) as { handles: unknown[] };
+      expect(listBody.handles).toHaveLength(0);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("POST /secrets/:id/rotate publishes a new version under the same handle", async () => {
+    const { app, provider, db } = await setup();
+    try {
+      await app.request("/secrets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret_key: "rotate_me", value: "v1" }),
+      });
+
+      const rotateRes = await app.request(`/secrets/rotate_me/rotate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: "v2" }),
+      });
+      expect(rotateRes.status).toBe(201);
+      const rotateBody = (await rotateRes.json()) as {
+        revoked: boolean;
+        handle: { handle_id: string };
+      };
+      expect(rotateBody.handle.handle_id).toBe("rotate_me");
+
+      const resolved = await provider.resolve({
+        handle_id: "rotate_me",
+        provider: "db",
+        scope: "rotate_me",
+        created_at: new Date().toISOString(),
+      });
+      expect(resolved).toBe("v2");
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("POST /secrets rejects invalid body", async () => {
+    const { app, db } = await setup();
+    try {
+      const res = await app.request("/secrets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret_key: "", value: "" }),
+      });
+      expect(res.status).toBe(400);
+    } finally {
+      await db.close();
+    }
   });
 });

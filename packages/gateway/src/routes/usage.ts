@@ -8,7 +8,6 @@
 
 import { AttemptCost } from "@tyrum/schemas";
 import { Hono } from "hono";
-import type { AgentRegistry } from "../modules/agent/registry.js";
 import { isAuthProfilesEnabled } from "../modules/models/auth-profiles-enabled.js";
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { SessionProviderPinDal } from "../modules/models/session-pin-dal.js";
@@ -17,6 +16,7 @@ import {
   ProviderUsagePoller,
   type ProviderUsageResult,
 } from "../modules/observability/provider-usage.js";
+import type { SecretProvider } from "../modules/secret/provider.js";
 import type { SqlDb } from "../statestore/types.js";
 import { safeDetail } from "../utils/safe-detail.js";
 
@@ -24,7 +24,7 @@ export interface UsageRouteDeps {
   db: SqlDb;
   authProfileDal?: AuthProfileDal;
   pinDal?: SessionProviderPinDal;
-  agents?: AgentRegistry;
+  secretProvider?: SecretProvider;
   logger?: Logger;
 }
 
@@ -55,19 +55,19 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
   const providerUsagePoller = new ProviderUsagePoller({
     authProfileDal: deps.authProfileDal,
     pinDal: deps.pinDal,
-    agents: deps.agents,
+    secretProvider: deps.secretProvider,
     logger: deps.logger,
   });
 
   app.get("/usage", async (c) => {
     const runId = c.req.query("run_id")?.trim() || undefined;
     const key = c.req.query("key")?.trim() || undefined;
-    const agentId = c.req.query("agent_id")?.trim() || undefined;
+    const agentKey = c.req.query("agent_key")?.trim() || undefined;
 
     const scopeParams = [
       runId ? "run_id" : null,
       key ? "key" : null,
-      agentId ? "agent_id" : null,
+      agentKey ? "agent_key" : null,
     ].filter((value): value is string => value !== null);
     if (scopeParams.length > 1) {
       return c.json(
@@ -99,8 +99,8 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
            AND a.cost_json IS NOT NULL`,
         [key],
       );
-    } else if (agentId) {
-      const keyPrefix = `agent:${agentId}:`;
+    } else if (agentKey) {
+      const keyPrefix = `agent:${agentKey}:`;
       rows = await deps.db.all<{ cost_json: string | null }>(
         `SELECT a.cost_json
          FROM execution_attempts a
@@ -175,10 +175,10 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
       status: "ok",
       generated_at: new Date().toISOString(),
       scope: {
-        kind: runId ? "run" : key ? "session" : agentId ? "agent" : "deployment",
+        kind: runId ? "run" : key ? "session" : agentKey ? "agent" : "deployment",
         run_id: runId ?? null,
         key: key ?? null,
-        agent_id: agentId ?? null,
+        agent_key: agentKey ?? null,
       },
       local: {
         attempts: {

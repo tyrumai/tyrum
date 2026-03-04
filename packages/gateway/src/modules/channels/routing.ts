@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
 
 export type TelegramRoutingConfig = {
-  default_agent_id?: string;
+  default_agent_key?: string;
   threads?: Record<string, string>;
 };
 
@@ -40,9 +40,9 @@ export async function loadRoutingConfig(home: string): Promise<RoutingConfig> {
         v: typeof parsed["v"] === "number" ? (parsed["v"] as number) : 1,
         telegram: telegram
           ? {
-              default_agent_id:
-                typeof telegram["default_agent_id"] === "string"
-                  ? String(telegram["default_agent_id"]).trim()
+              default_agent_key:
+                typeof telegram["default_agent_key"] === "string"
+                  ? String(telegram["default_agent_key"]).trim()
                   : undefined,
               threads: Object.keys(threadMap).length > 0 ? threadMap : undefined,
             }
@@ -61,7 +61,7 @@ export function resolveTelegramAgentId(config: RoutingConfig, threadId: string):
   const t = threadId.trim();
   const telegram = config.telegram;
   if (telegram?.threads && t && telegram.threads[t]) {
-    return String(telegram.threads[t]).trim() || telegram.default_agent_id?.trim() || "default";
+    return String(telegram.threads[t]).trim() || telegram.default_agent_key?.trim() || "default";
   }
-  return telegram?.default_agent_id?.trim() || "default";
+  return telegram?.default_agent_key?.trim() || "default";
 }

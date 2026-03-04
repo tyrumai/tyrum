@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { createApp } from "../../src/app.js";
 import { createTestApp, createTestContainer } from "./helpers.js";
 import { createStubLanguageModel } from "../unit/stub-language-model.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
 
 async function writeWorkspace(home: string): Promise<void> {
   await mkdir(home, { recursive: true });
@@ -145,13 +147,29 @@ describe("agent routes", () => {
 
     const res = await app.request("/agent/list");
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { agents: Array<{ agent_id: string }> };
-    expect(payload.agents.map((a) => a.agent_id)).toEqual(["default", "agent-1"]);
+    const payload = (await res.json()) as { agents: Array<{ agent_key: string }> };
+    expect(payload.agents.map((a) => a.agent_key)).toEqual(["default", "agent-1"]);
 
     const resNoDefault = await app.request("/agent/list?include_default=false");
     expect(resNoDefault.status).toBe(200);
-    const payloadNoDefault = (await resNoDefault.json()) as { agents: Array<{ agent_id: string }> };
-    expect(payloadNoDefault.agents.map((a) => a.agent_id)).toEqual(["agent-1"]);
+    const payloadNoDefault = (await resNoDefault.json()) as {
+      agents: Array<{ agent_key: string }>;
+    };
+    expect(payloadNoDefault.agents.map((a) => a.agent_key)).toEqual(["agent-1"]);
+
+    await agents?.shutdown();
+    await container.db.close();
+  });
+
+  it("accepts agent_key query param for /agent/status", async () => {
+    await mkdir(join(homeDir!, "agents/agent-2"), { recursive: true });
+    await writeWorkspace(join(homeDir!, "agents/agent-2"));
+
+    const { app, agents, container } = await createTestApp();
+    const getRuntimeSpy = vi.spyOn(agents!, "getRuntime");
+    const res = await app.request("/agent/status?agent_key=agent-2");
+    expect(res.status).toBe(200);
+    expect(getRuntimeSpy).toHaveBeenCalledWith("agent-2");
 
     await agents?.shutdown();
     await container.db.close();
@@ -203,9 +221,29 @@ describe("agent routes", () => {
     });
     expect(third.status).toBe(200);
 
-    const telegram = await container.sessionDal.getById("telegram:dm-1");
+    const telegramSessionKey = buildAgentTurnKey({
+      agentId: "default",
+      workspaceId: "default",
+      channel: "telegram",
+      containerKind: "channel",
+      threadId: "dm-1",
+    });
+    const telegram = await container.sessionDal.getByKey({
+      tenantId: DEFAULT_TENANT_ID,
+      sessionKey: telegramSessionKey,
+    });
     expect(telegram).toBeTruthy();
-    const discord = await container.sessionDal.getById("discord:dm-1");
+    const discordSessionKey = buildAgentTurnKey({
+      agentId: "default",
+      workspaceId: "default",
+      channel: "discord",
+      containerKind: "channel",
+      threadId: "dm-1",
+    });
+    const discord = await container.sessionDal.getByKey({
+      tenantId: DEFAULT_TENANT_ID,
+      sessionKey: discordSessionKey,
+    });
     expect(discord).toBeTruthy();
 
     const telegramUserTurns = telegram!.turns

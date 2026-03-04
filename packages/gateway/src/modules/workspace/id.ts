@@ -1,7 +1,7 @@
-import { DEFAULT_WORKSPACE_ID, WorkspaceId } from "@tyrum/schemas";
+import { DEFAULT_WORKSPACE_KEY, WorkspaceKey } from "@tyrum/schemas";
 
-export type { WorkspaceId };
-export { DEFAULT_WORKSPACE_ID };
+export type { WorkspaceKey };
+export { DEFAULT_WORKSPACE_KEY };
 
 /**
  * Resolve the workspace id for the current process.
@@ -9,8 +9,8 @@ export { DEFAULT_WORKSPACE_ID };
  * - Desktop / single-host: defaults to "default".
  * - Split/HA: typically provided by the ToolRunner launcher (job/pod env/args).
  */
-export function resolveWorkspaceId(env: NodeJS.ProcessEnv = process.env): WorkspaceId {
+export function resolveWorkspaceKey(env: NodeJS.ProcessEnv = process.env): WorkspaceKey {
   const raw = env["TYRUM_WORKSPACE_ID"]?.trim();
-  if (!raw) return WorkspaceId.parse(DEFAULT_WORKSPACE_ID);
-  return WorkspaceId.parse(raw);
+  if (!raw) return WorkspaceKey.parse(DEFAULT_WORKSPACE_KEY);
+  return WorkspaceKey.parse(raw);
 }

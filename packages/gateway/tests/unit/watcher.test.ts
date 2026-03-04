@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import mitt from "mitt";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
@@ -155,7 +154,7 @@ describe("WatcherProcessor", () => {
     const id = await processor.createWatcher("plan-1", "webhook", {
       secret_handle: {
         handle_id: "secret-handle",
-        provider: "file",
+        provider: "db",
         scope: "watcher:webhook:test",
         created_at: new Date().toISOString(),
       },
@@ -190,7 +189,7 @@ describe("WatcherProcessor", () => {
     const id = await processor.createWatcher("plan-1", "webhook", {
       secret_handle: {
         handle_id: "secret-handle",
-        provider: "file",
+        provider: "db",
         scope: "watcher:webhook:test",
         created_at: new Date().toISOString(),
       },
@@ -234,7 +233,7 @@ describe("WatcherProcessor", () => {
     const id = await processor.createWatcher("plan-1", "webhook", {
       secret_handle: {
         handle_id: "secret-handle",
-        provider: "file",
+        provider: "db",
         scope: "watcher:webhook:test",
         created_at: new Date().toISOString(),
       },
@@ -252,16 +251,12 @@ describe("WatcherProcessor", () => {
     });
     expect(first).toBe(true);
 
-    const replayDigest = createHash("sha256").update(nonce).digest("hex");
     const firings = await db.all<{
-      firing_id: string;
-      trigger_type: string;
+      watcher_firing_id: string;
       status: string;
       scheduled_at_ms: number;
-    }>("SELECT firing_id, trigger_type, status, scheduled_at_ms FROM watcher_firings");
+    }>("SELECT watcher_firing_id, status, scheduled_at_ms FROM watcher_firings");
     expect(firings).toHaveLength(1);
-    expect(firings[0]!.firing_id).toBe(`webhook-${String(id)}-${replayDigest}`);
-    expect(firings[0]!.trigger_type).toBe("webhook");
     expect(firings[0]!.status).toBe("queued");
     expect(firings[0]!.scheduled_at_ms).toBe(timestampMs);
 
@@ -269,14 +264,14 @@ describe("WatcherProcessor", () => {
     const fired = findEpisodeByType(episodes, "webhook_fired");
     expect(fired).toBeDefined();
     const payload = fired!.provenance.metadata as Record<string, unknown> | undefined;
-    expect(payload?.["firing_id"]).toBe(`webhook-${String(id)}-${replayDigest}`);
+    expect(payload?.["firing_id"]).toBe(firings[0]!.watcher_firing_id);
   });
 
   it("rejects webhook nonce replays even when timestamp differs", async () => {
     const id = await processor.createWatcher("plan-1", "webhook", {
       secret_handle: {
         handle_id: "secret-handle",
-        provider: "file",
+        provider: "db",
         scope: "watcher:webhook:test",
         created_at: new Date().toISOString(),
       },
@@ -305,7 +300,7 @@ describe("WatcherProcessor", () => {
     const id = await processor.createWatcher("plan-1", "webhook", {
       secret_handle: {
         handle_id: "secret-handle",
-        provider: "file",
+        provider: "db",
         scope: "watcher:webhook:test",
         created_at: new Date().toISOString(),
       },
@@ -330,7 +325,9 @@ describe("WatcherProcessor", () => {
     });
     expect(second).toBe(true);
 
-    const firings = await db.all<{ firing_id: string }>("SELECT firing_id FROM watcher_firings");
+    const firings = await db.all<{ watcher_firing_id: string }>(
+      "SELECT watcher_firing_id FROM watcher_firings",
+    );
     expect(firings).toHaveLength(2);
   });
 
@@ -341,7 +338,7 @@ describe("WatcherProcessor", () => {
       const id = await processor.createWatcher("plan-1", "webhook", {
         secret_handle: {
           handle_id: "secret-handle",
-          provider: "file",
+          provider: "db",
           scope: "watcher:webhook:test",
           created_at: new Date().toISOString(),
         },
@@ -373,7 +370,7 @@ describe("WatcherProcessor", () => {
     const id = await processor.createWatcher("plan-1", "webhook", {
       secret_handle: {
         handle_id: "secret-handle",
-        provider: "file",
+        provider: "db",
         scope: "watcher:webhook:test",
         created_at: new Date().toISOString(),
       },
@@ -389,7 +386,7 @@ describe("WatcherProcessor", () => {
     });
     expect(recorded).toBe(true);
 
-    const cursor = (processor as unknown as { webhookScheduledAtCursor: Map<number, unknown> })
+    const cursor = (processor as unknown as { webhookScheduledAtCursor: Map<string, unknown> })
       .webhookScheduledAtCursor;
     expect(cursor.has(id)).toBe(true);
 
@@ -405,12 +402,12 @@ describe("WatcherProcessor", () => {
       webhookScheduledAtCursorMaxEntries: 3,
     });
 
-    const ids: number[] = [];
+    const ids: string[] = [];
     for (let i = 0; i < 4; i += 1) {
       const id = await limitedProcessor.createWatcher("plan-1", "webhook", {
         secret_handle: {
           handle_id: "secret-handle",
-          provider: "file",
+          provider: "db",
           scope: "watcher:webhook:test",
           created_at: new Date().toISOString(),
         },
@@ -429,7 +426,7 @@ describe("WatcherProcessor", () => {
     }
 
     const cursor = (
-      limitedProcessor as unknown as { webhookScheduledAtCursor: Map<number, unknown> }
+      limitedProcessor as unknown as { webhookScheduledAtCursor: Map<string, unknown> }
     ).webhookScheduledAtCursor;
     expect(cursor.size).toBe(3);
     expect(cursor.has(ids[0]!)).toBe(false);

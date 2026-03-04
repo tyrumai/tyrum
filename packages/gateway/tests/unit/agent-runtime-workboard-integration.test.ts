@@ -5,6 +5,11 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import type { GatewayContainer } from "../../src/container.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -48,7 +53,11 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
     const workItemId = "123e4567-e89b-12d3-a456-426614174000";
     const taskId = "123e4567-e89b-12d3-a456-426614174001";
 
@@ -112,7 +121,8 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     const row = await container.db.get<{ last_active_session_key: string }>(
       `SELECT last_active_session_key
        FROM work_scope_activity
-       WHERE tenant_id = 'default' AND agent_id = 'default' AND workspace_id = 'default'`,
+       WHERE tenant_id = ? AND agent_id = ? AND workspace_id = ?`,
+      [DEFAULT_TENANT_ID, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID],
     );
 
     expect(row?.last_active_session_key).toBe("agent:default:test:default:channel:thread-1");
@@ -127,7 +137,11 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
     const workItemId = "123e4567-e89b-12d3-a456-426614174010";
 
     const dal = new WorkboardDal(container.db);
@@ -171,7 +185,11 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
 
-    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
     const doingId = "123e4567-e89b-12d3-a456-426614174020";
 
     const dal = new WorkboardDal(container.db);
@@ -248,7 +266,8 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     }>(
       `SELECT work_item_id, kind, title, created_from_session_key
        FROM work_items
-       WHERE tenant_id = 'default' AND agent_id = 'default' AND workspace_id = 'default'`,
+       WHERE tenant_id = ? AND agent_id = ? AND workspace_id = ?`,
+      [DEFAULT_TENANT_ID, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID],
     );
 
     expect(item?.kind).toBe("action");
@@ -259,10 +278,11 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     const activeKv = await container.db.get<{ value_json: string }>(
       `SELECT value_json
        FROM agent_state_kv
-       WHERE tenant_id = 'default'
-         AND agent_id = 'default'
-         AND workspace_id = 'default'
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
          AND key = 'work.active_work_item_id'`,
+      [DEFAULT_TENANT_ID, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID],
     );
     expect(activeKv?.value_json).toContain(item?.work_item_id ?? "");
   });
@@ -294,7 +314,8 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     const item = await container.db.get<{ work_item_id: string; kind: string; title: string }>(
       `SELECT work_item_id, kind, title
        FROM work_items
-       WHERE tenant_id = 'default' AND agent_id = 'default' AND workspace_id = 'default'`,
+       WHERE tenant_id = ? AND agent_id = ? AND workspace_id = ?`,
+      [DEFAULT_TENANT_ID, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID],
     );
 
     expect(item?.kind).toBe("initiative");
@@ -338,7 +359,8 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     const count = await container.db.get<{ count: number }>(
       `SELECT COUNT(*) AS count
        FROM work_items
-       WHERE tenant_id = 'default' AND agent_id = 'default' AND workspace_id = 'default'`,
+       WHERE tenant_id = ? AND agent_id = ? AND workspace_id = ?`,
+      [DEFAULT_TENANT_ID, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID],
     );
     expect(count?.count ?? 0).toBe(0);
   });

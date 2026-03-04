@@ -20,6 +20,7 @@ import type { SecretProvider } from "../secret/provider.js";
 import type { SecretResolutionAuditDal } from "../secret/resolution-audit-dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
 import type { ArtifactStore } from "../artifact/store.js";
 import { NoCapableNodeError, NodeNotPairedError } from "../../ws/protocol/errors.js";
@@ -307,6 +308,7 @@ export type ToolResultMeta = {
 
 type WorkspaceLeaseConfig = {
   db: SqlDb;
+  tenantId: string;
   workspaceId: string;
   ownerPrefix?: string;
 };
@@ -342,6 +344,7 @@ export class ToolExecutor {
     const owner = this.workspaceLeaseOwner(toolCallId);
     const startedAtMs = Date.now();
     const acquired = await acquireWorkspaceLease(lease.db, {
+      tenantId: lease.tenantId,
       workspaceId: lease.workspaceId,
       owner,
       ttlMs: Math.max(1, Math.floor(opts.ttlMs)),
@@ -355,7 +358,11 @@ export class ToolExecutor {
     try {
       return await fn({ waitedMs });
     } finally {
-      await releaseWorkspaceLease(lease.db, { workspaceId: lease.workspaceId, owner }).catch(() => {
+      await releaseWorkspaceLease(lease.db, {
+        tenantId: lease.tenantId,
+        workspaceId: lease.workspaceId,
+        owner,
+      }).catch(() => {
         // Best-effort: leases expire and can be taken over.
       });
     }
@@ -1037,14 +1044,18 @@ export class ToolExecutor {
     const walk = async (value: unknown): Promise<unknown> => {
       if (typeof value === "string" && value.startsWith(SECRET_HANDLE_PREFIX)) {
         const handleId = value.slice(SECRET_HANDLE_PREFIX.length);
-        // Look up the full handle from the provider's stored list so that
-        // scope (needed by EnvSecretProvider) is populated correctly.
-        const allHandles = await this.secretProvider!.list();
-        const handle = allHandles.find((h) => h.handle_id === handleId);
-        const resolved = handle ? await this.secretProvider!.resolve(handle) : null;
-        if (handle && audit && this.secretResolutionAuditDal) {
+        const handle = {
+          handle_id: handleId,
+          provider: "db" as const,
+          scope: handleId,
+          created_at: new Date().toISOString(),
+        };
+        const resolved = await this.secretProvider!.resolve(handle);
+        if (audit && this.secretResolutionAuditDal) {
           try {
+            const tenantId = this.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID;
             await this.secretResolutionAuditDal.record({
+              tenantId,
               toolCallId: audit.tool_call_id,
               toolId: audit.tool_id,
               handleId: handle.handle_id,

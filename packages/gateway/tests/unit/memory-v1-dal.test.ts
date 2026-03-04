@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import type { SqlDb } from "../../src/statestore/types.js";
+import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import { migratePostgres } from "../../src/migrate-postgres.js";
 import { DataType, newDb } from "pg-mem";
 import { dirname, join } from "node:path";
@@ -134,10 +135,27 @@ const fixtures = [
   { name: "postgres" as const, open: openPgMemDal },
 ];
 
+async function ensureAgentScopes(db: SqlDb): Promise<{
+  tenantId: string;
+  scopeA: { tenantId: string; agentId: string };
+  scopeB: { tenantId: string; agentId: string };
+}> {
+  const identity = new IdentityScopeDal(db, { cacheTtlMs: 0 });
+  const tenantId = await identity.ensureTenantId("default");
+  const agentAId = await identity.ensureAgentId(tenantId, "agent-a");
+  const agentBId = await identity.ensureAgentId(tenantId, "agent-b");
+  return {
+    tenantId,
+    scopeA: { tenantId, agentId: agentAId },
+    scopeB: { tenantId, agentId: agentBId },
+  };
+}
+
 for (const fixture of fixtures) {
   describe(`MemoryV1Dal (${fixture.name})`, () => {
     it("creates, reads, updates, and deletes with a tombstone", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA } = await ensureAgentScopes(db);
       try {
         const observedAt = "2026-02-19T12:00:00Z";
 
@@ -159,12 +177,12 @@ for (const fixture of fixtures) {
               metadata: { lang: "en" },
             },
           },
-          "agent-a",
+          scopeA,
         );
 
         expect(created.v).toBe(1);
         expect(created.kind).toBe("fact");
-        expect(created.agent_id).toBe("agent-a");
+        expect(created.agent_id).toBe(scopeA.agentId);
         expect(created.tags.sort()).toEqual(["prefs", "project"]);
         expect(created.created_at).toBeTruthy();
         expect(created.updated_at).toBeUndefined();
@@ -176,17 +194,17 @@ for (const fixture of fixtures) {
         expect(created.observed_at).toBe(observedAt);
         expect(created.confidence).toBe(0.9);
 
-        const fetched = await dal.getById(created.memory_item_id, "agent-a");
+        const fetched = await dal.getById(created.memory_item_id, scopeA);
         expect(fetched).toEqual(created);
 
         const updated = await dal.update(
           created.memory_item_id,
           { value: "green", confidence: 0.5, tags: ["prefs"] },
-          "agent-a",
+          scopeA,
         );
         expect(updated.v).toBe(1);
         expect(updated.memory_item_id).toBe(created.memory_item_id);
-        expect(updated.agent_id).toBe("agent-a");
+        expect(updated.agent_id).toBe(scopeA.agentId);
         expect(updated.kind).toBe("fact");
         expect(updated.value).toBe("green");
         expect(updated.confidence).toBe(0.5);
@@ -196,24 +214,25 @@ for (const fixture of fixtures) {
         const tombstone = await dal.delete(
           created.memory_item_id,
           { deleted_by: "operator", reason: "user request" },
-          "agent-a",
+          scopeA,
         );
         expect(tombstone.v).toBe(1);
-        expect(tombstone.agent_id).toBe("agent-a");
+        expect(tombstone.agent_id).toBe(scopeA.agentId);
         expect(tombstone.memory_item_id).toBe(created.memory_item_id);
         expect(tombstone.deleted_at).toBeTruthy();
         expect(tombstone.deleted_by).toBe("operator");
         expect(tombstone.reason).toBe("user request");
 
-        expect(await dal.getById(created.memory_item_id, "agent-a")).toBeUndefined();
-        expect(await dal.getTombstoneById(created.memory_item_id, "agent-a")).toEqual(tombstone);
+        expect(await dal.getById(created.memory_item_id, scopeA)).toBeUndefined();
+        expect(await dal.getTombstoneById(created.memory_item_id, scopeA)).toEqual(tombstone);
       } finally {
         await close();
       }
     });
 
     it("partitions all records by agent_id", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA, scopeB } = await ensureAgentScopes(db);
       try {
         const created = await dal.create(
           {
@@ -224,20 +243,21 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
-        expect(await dal.getById(created.memory_item_id, "agent-b")).toBeUndefined();
+        expect(await dal.getById(created.memory_item_id, scopeB)).toBeUndefined();
 
-        await dal.delete(created.memory_item_id, { deleted_by: "operator" }, "agent-a");
-        expect(await dal.getTombstoneById(created.memory_item_id, "agent-b")).toBeUndefined();
+        await dal.delete(created.memory_item_id, { deleted_by: "operator" }, scopeA);
+        expect(await dal.getTombstoneById(created.memory_item_id, scopeB)).toBeUndefined();
       } finally {
         await close();
       }
     });
 
     it("rejects kind-incompatible patch fields", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA } = await ensureAgentScopes(db);
       try {
         const created = await dal.create(
           {
@@ -250,11 +270,11 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         await expect(
-          dal.update(created.memory_item_id, { body_md: "should fail" }, "agent-a"),
+          dal.update(created.memory_item_id, { body_md: "should fail" }, scopeA),
         ).rejects.toThrow(/incompatible patch/i);
       } finally {
         await close();
@@ -263,6 +283,7 @@ for (const fixture of fixtures) {
 
     it("self-heals when a tombstone exists but the item still exists", async () => {
       const { dal, db, close } = await fixture.open();
+      const { scopeA } = await ensureAgentScopes(db);
       try {
         const title = "On-call notes";
         const bodyMd = "Remember to check dashboards.";
@@ -276,53 +297,58 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const tombstone = await dal.delete(
           created.memory_item_id,
           { deleted_by: "operator" },
-          "agent-a",
+          scopeA,
         );
-        expect(await dal.getById(created.memory_item_id, "agent-a")).toBeUndefined();
+        expect(await dal.getById(created.memory_item_id, scopeA)).toBeUndefined();
 
         // Simulate inconsistent state: tombstone exists but the canonical row comes back.
         await db.run(
           `INSERT INTO memory_items (
-             memory_item_id, agent_id, kind, sensitivity,
+             tenant_id, agent_id, memory_item_id, kind, sensitivity,
              title, body_md,
              created_at, updated_at
            )
-          VALUES (?, ?, 'note', 'private', ?, ?, ?, NULL)`,
-          [created.memory_item_id, "agent-a", title, bodyMd, "2026-02-19T12:00:00Z"],
+          VALUES (?, ?, ?, 'note', 'private', ?, ?, ?, NULL)`,
+          [
+            scopeA.tenantId,
+            scopeA.agentId,
+            created.memory_item_id,
+            title,
+            bodyMd,
+            "2026-02-19T12:00:00Z",
+          ],
         );
         await db.run(
           `INSERT INTO memory_item_provenance (
-             memory_item_id,
+             tenant_id,
              agent_id,
+             memory_item_id,
              source_kind,
              refs_json
            )
-           VALUES (?, ?, ?, ?)`,
-          [created.memory_item_id, "agent-a", "operator", "[]"],
+           VALUES (?, ?, ?, ?, ?)`,
+          [scopeA.tenantId, scopeA.agentId, created.memory_item_id, "operator", "[]"],
         );
 
-        expect(await dal.getById(created.memory_item_id, "agent-a")).toBeDefined();
+        expect(await dal.getById(created.memory_item_id, scopeA)).toBeDefined();
 
-        const second = await dal.delete(
-          created.memory_item_id,
-          { deleted_by: "operator" },
-          "agent-a",
-        );
+        const second = await dal.delete(created.memory_item_id, { deleted_by: "operator" }, scopeA);
         expect(second).toEqual(tombstone);
-        expect(await dal.getById(created.memory_item_id, "agent-a")).toBeUndefined();
+        expect(await dal.getById(created.memory_item_id, scopeA)).toBeUndefined();
       } finally {
         await close();
       }
     });
 
     it("searches with structured filters, keyword ranking, and safe snippets", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA, scopeB } = await ensureAgentScopes(db);
       try {
         const observedAt = "2026-02-19T12:00:00Z";
 
@@ -337,7 +363,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "user", refs: ["msg:1"] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const noteTitleMatch = await dal.create(
@@ -355,7 +381,7 @@ for (const fixture of fixtures) {
               refs: [],
             },
           },
-          "agent-a",
+          scopeA,
         );
 
         const noteBodyMatch = await dal.create(
@@ -373,7 +399,7 @@ for (const fixture of fixtures) {
               refs: [],
             },
           },
-          "agent-a",
+          scopeA,
         );
 
         const noteSensitive = await dal.create(
@@ -385,7 +411,7 @@ for (const fixture of fixtures) {
             sensitivity: "sensitive",
             provenance: { source_kind: "operator", channel: "slack", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const injection = await dal.create(
@@ -397,7 +423,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", channel: "slack", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const expandedSnippet = await dal.create(
@@ -409,7 +435,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", channel: "slack", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const otherAgent = await dal.create(
@@ -421,7 +447,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", channel: "slack", refs: [] },
           },
-          "agent-b",
+          scopeB,
         );
 
         const structured = await dal.search(
@@ -431,13 +457,13 @@ for (const fixture of fixtures) {
             filter: { keys: ["favorite_color"], kinds: ["fact"] },
             limit: 10,
           },
-          "agent-a",
+          scopeA,
         );
         expect(structured.hits.map((h) => h.memory_item_id)).toContain(fact.memory_item_id);
 
         const ranked = await dal.search(
           { v: 1, query: "restart", filter: { kinds: ["note"] }, limit: 10 },
-          "agent-a",
+          scopeA,
         );
         expect(ranked.hits.length).toBeGreaterThanOrEqual(2);
         expect(ranked.hits.some((h) => h.memory_item_id === noteBodyMatch.memory_item_id)).toBe(
@@ -454,7 +480,7 @@ for (const fixture of fixtures) {
 
         const limited = await dal.search(
           { v: 1, query: "restart", filter: { kinds: ["note"] }, limit: 1 },
-          "agent-a",
+          scopeA,
         );
         expect(limited.hits).toHaveLength(1);
 
@@ -465,7 +491,7 @@ for (const fixture of fixtures) {
             filter: { kinds: ["note"], sensitivities: ["private"] },
             limit: 10,
           },
-          "agent-a",
+          scopeA,
         );
         expect(scopedSensitivity.hits[0]?.memory_item_id).toBe(noteTitleMatch.memory_item_id);
         expect(scopedSensitivity.hits.map((h) => h.memory_item_id)).not.toContain(
@@ -474,7 +500,7 @@ for (const fixture of fixtures) {
 
         const scopedTags = await dal.search(
           { v: 1, query: "restart", filter: { tags: ["project"] }, limit: 10 },
-          "agent-a",
+          scopeA,
         );
         expect(scopedTags.hits.map((h) => h.memory_item_id)).toContain(
           noteTitleMatch.memory_item_id,
@@ -485,7 +511,7 @@ for (const fixture of fixtures) {
 
         const scopedProvenance = await dal.search(
           { v: 1, query: "restart", filter: { provenance: { session_ids: ["s-2"] } }, limit: 10 },
-          "agent-a",
+          scopeA,
         );
         expect(scopedProvenance.hits.map((h) => h.memory_item_id)).toContain(
           noteBodyMatch.memory_item_id,
@@ -494,7 +520,7 @@ for (const fixture of fixtures) {
           noteTitleMatch.memory_item_id,
         );
 
-        const safeSnippet = await dal.search({ v: 1, query: "system", limit: 10 }, "agent-a");
+        const safeSnippet = await dal.search({ v: 1, query: "system", limit: 10 }, scopeA);
         const injectionHit = safeSnippet.hits.find(
           (h) => h.memory_item_id === injection.memory_item_id,
         );
@@ -511,7 +537,8 @@ for (const fixture of fixtures) {
     });
 
     it("treats filter.tags as OR semantics (matches any requested tag)", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA } = await ensureAgentScopes(db);
       try {
         const noteTagA = await dal.create(
           {
@@ -521,7 +548,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
         const noteTagB = await dal.create(
           {
@@ -531,7 +558,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
         const noteOther = await dal.create(
           {
@@ -541,12 +568,12 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const res = await dal.search(
           { v: 1, query: "*", filter: { tags: ["tag-a", "tag-b"] }, limit: 10 },
-          "agent-a",
+          scopeA,
         );
         const ids = res.hits.map((h) => h.memory_item_id);
         expect(ids).toContain(noteTagA.memory_item_id);
@@ -558,7 +585,8 @@ for (const fixture of fixtures) {
     });
 
     it("respects requested search limits up to the handler cap", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA } = await ensureAgentScopes(db);
       try {
         const total = 201;
         for (let i = 0; i < total; i += 1) {
@@ -570,13 +598,13 @@ for (const fixture of fixtures) {
               sensitivity: "private",
               provenance: { source_kind: "operator", refs: [] },
             },
-            "agent-a",
+            scopeA,
           );
         }
 
         const res = await dal.search(
           { v: 1, query: "*", filter: { kinds: ["note"] }, limit: total },
-          "agent-a",
+          scopeA,
         );
         expect(res.hits).toHaveLength(total);
       } finally {
@@ -585,16 +613,17 @@ for (const fixture of fixtures) {
     }, 15_000);
 
     it("rejects overly complex search requests", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA } = await ensureAgentScopes(db);
       try {
         const tooManyTerms = Array.from({ length: 50 }, (_, i) => `t${i}`).join(" ");
-        await expect(
-          dal.search({ v: 1, query: tooManyTerms, limit: 10 }, "agent-a"),
-        ).rejects.toThrow(/too many query terms/i);
+        await expect(dal.search({ v: 1, query: tooManyTerms, limit: 10 }, scopeA)).rejects.toThrow(
+          /too many query terms/i,
+        );
 
         const tooManyTags = Array.from({ length: 50 }, (_, i) => `tag-${i}`);
         await expect(
-          dal.search({ v: 1, query: "*", filter: { tags: tooManyTags }, limit: 10 }, "agent-a"),
+          dal.search({ v: 1, query: "*", filter: { tags: tooManyTags }, limit: 10 }, scopeA),
         ).rejects.toThrow(/too many filter\.tags/i);
       } finally {
         await close();
@@ -602,23 +631,24 @@ for (const fixture of fixtures) {
     });
 
     it("returns empty for blank queries and enforces query/filter guardrails", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA } = await ensureAgentScopes(db);
       try {
-        const blank = await dal.search({ v: 1, query: "   ", limit: 10 }, "agent-a");
+        const blank = await dal.search({ v: 1, query: "   ", limit: 10 }, scopeA);
         expect(blank.hits).toEqual([]);
         expect(blank.next_cursor).toBeUndefined();
 
         await expect(
-          dal.search({ v: 1, query: "a".repeat(1025), limit: 10 }, "agent-a"),
+          dal.search({ v: 1, query: "a".repeat(1025), limit: 10 }, scopeA),
         ).rejects.toThrow(/query too long/i);
 
         await expect(
-          dal.search({ v: 1, query: "a".repeat(65), limit: 10 }, "agent-a"),
+          dal.search({ v: 1, query: "a".repeat(65), limit: 10 }, scopeA),
         ).rejects.toThrow(/query term too long/i);
 
         const tooManyKeys = Array.from({ length: 51 }, (_, i) => `key-${i}`);
         await expect(
-          dal.search({ v: 1, query: "*", filter: { keys: tooManyKeys }, limit: 10 }, "agent-a"),
+          dal.search({ v: 1, query: "*", filter: { keys: tooManyKeys }, limit: 10 }, scopeA),
         ).rejects.toThrow(/too many filter\.keys/i);
 
         const tooManySessionIds = Array.from({ length: 21 }, (_, i) => `session-${i}`);
@@ -630,7 +660,7 @@ for (const fixture of fixtures) {
               filter: { provenance: { session_ids: tooManySessionIds } },
               limit: 10,
             },
-            "agent-a",
+            scopeA,
           ),
         ).rejects.toThrow(/too many filter\.provenance\.session_ids/i);
       } finally {
@@ -639,7 +669,8 @@ for (const fixture of fixtures) {
     });
 
     it("filters by provenance source kinds, channels, and thread ids", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA } = await ensureAgentScopes(db);
       try {
         const operatorSlack = await dal.create(
           {
@@ -650,7 +681,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", channel: "slack", thread_id: "t-op", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const userTelegram = await dal.create(
@@ -662,12 +693,12 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "user", channel: "telegram", thread_id: "t-user", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const bySourceKind = await dal.search(
           { v: 1, query: "*", filter: { provenance: { source_kinds: ["operator"] } }, limit: 10 },
-          "agent-a",
+          scopeA,
         );
         const bySourceKindIds = bySourceKind.hits.map((h) => h.memory_item_id);
         expect(bySourceKindIds).toContain(operatorSlack.memory_item_id);
@@ -675,7 +706,7 @@ for (const fixture of fixtures) {
 
         const byChannel = await dal.search(
           { v: 1, query: "*", filter: { provenance: { channels: ["slack"] } }, limit: 10 },
-          "agent-a",
+          scopeA,
         );
         const byChannelIds = byChannel.hits.map((h) => h.memory_item_id);
         expect(byChannelIds).toContain(operatorSlack.memory_item_id);
@@ -683,7 +714,7 @@ for (const fixture of fixtures) {
 
         const byThreadId = await dal.search(
           { v: 1, query: "*", filter: { provenance: { thread_ids: ["t-user"] } }, limit: 10 },
-          "agent-a",
+          scopeA,
         );
         const byThreadIdIds = byThreadId.hits.map((h) => h.memory_item_id);
         expect(byThreadIdIds).toContain(userTelegram.memory_item_id);
@@ -694,7 +725,8 @@ for (const fixture of fixtures) {
     });
 
     it("builds focused snippets for long content and uses summary matches", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA } = await ensureAgentScopes(db);
       try {
         const longBody = `${"a".repeat(120)} needle ${"b".repeat(400)}`;
         const longNote = await dal.create(
@@ -705,12 +737,12 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const structured = await dal.search(
           { v: 1, query: "*", filter: { kinds: ["note"] }, limit: 10 },
-          "agent-a",
+          scopeA,
         );
         const structuredHit = structured.hits.find(
           (h) => h.memory_item_id === longNote.memory_item_id,
@@ -721,7 +753,7 @@ for (const fixture of fixtures) {
 
         const keyword = await dal.search(
           { v: 1, query: "needle", filter: { kinds: ["note"] }, limit: 10 },
-          "agent-a",
+          scopeA,
         );
         const keywordHit = keyword.hits.find((h) => h.memory_item_id === longNote.memory_item_id);
         expect(keywordHit?.snippet).toBeTruthy();
@@ -738,12 +770,12 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const summaryResults = await dal.search(
           { v: 1, query: "retrospective_term", filter: { kinds: ["episode"] }, limit: 10 },
-          "agent-a",
+          scopeA,
         );
         const summaryHit = summaryResults.hits.find(
           (h) => h.memory_item_id === episode.memory_item_id,
@@ -756,7 +788,8 @@ for (const fixture of fixtures) {
     });
 
     it("expands snippet window when the term is near the end of the text", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA } = await ensureAgentScopes(db);
       try {
         const longBody = `${"a".repeat(450)} needle ${"b".repeat(40)}`;
         await dal.create(
@@ -767,12 +800,12 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const results = await dal.search(
           { v: 1, query: "needle", filter: { kinds: ["note"] }, limit: 10 },
-          "agent-a",
+          scopeA,
         );
 
         expect(results.hits).toHaveLength(1);
@@ -789,7 +822,8 @@ for (const fixture of fixtures) {
     });
 
     it("dedupes keyword terms case-insensitively for scoring", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA } = await ensureAgentScopes(db);
       try {
         const created = await dal.create(
           {
@@ -800,7 +834,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const results = await dal.search(
@@ -810,7 +844,7 @@ for (const fixture of fixtures) {
             filter: { kinds: ["note"], sensitivities: ["private"] },
             limit: 10,
           },
-          "agent-a",
+          scopeA,
         );
 
         const hit = results.hits.find((h) => h.memory_item_id === created.memory_item_id);
@@ -822,7 +856,8 @@ for (const fixture of fixtures) {
     });
 
     it("matches any keyword term and ranks higher matches", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA } = await ensureAgentScopes(db);
       try {
         const bothTerms = await dal.create(
           {
@@ -833,7 +868,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const oneTerm = await dal.create(
@@ -845,7 +880,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const results = await dal.search(
@@ -855,7 +890,7 @@ for (const fixture of fixtures) {
             filter: { kinds: ["note"], sensitivities: ["private"] },
             limit: 10,
           },
-          "agent-a",
+          scopeA,
         );
 
         expect(results.hits.map((h) => h.memory_item_id)).toContain(bothTerms.memory_item_id);
@@ -867,7 +902,8 @@ for (const fixture of fixtures) {
     });
 
     it("escapes LIKE wildcards in keyword terms", async () => {
-      const { dal, close } = await fixture.open();
+      const { dal, db, close } = await fixture.open();
+      const { scopeA } = await ensureAgentScopes(db);
       try {
         const percentNote = await dal.create(
           {
@@ -878,7 +914,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const underscoreNote = await dal.create(
@@ -890,7 +926,7 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const otherNote = await dal.create(
@@ -902,12 +938,12 @@ for (const fixture of fixtures) {
             sensitivity: "private",
             provenance: { source_kind: "operator", refs: [] },
           },
-          "agent-a",
+          scopeA,
         );
 
         const percentResults = await dal.search(
           { v: 1, query: "%", filter: { kinds: ["note"], sensitivities: ["private"] }, limit: 10 },
-          "agent-a",
+          scopeA,
         );
         const percentIds = percentResults.hits.map((h) => h.memory_item_id);
         expect(percentIds).toContain(percentNote.memory_item_id);
@@ -916,7 +952,7 @@ for (const fixture of fixtures) {
 
         const underscoreResults = await dal.search(
           { v: 1, query: "_", filter: { kinds: ["note"], sensitivities: ["private"] }, limit: 10 },
-          "agent-a",
+          scopeA,
         );
         const underscoreIds = underscoreResults.hits.map((h) => h.memory_item_id);
         expect(underscoreIds).toContain(underscoreNote.memory_item_id);

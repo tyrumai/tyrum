@@ -3,6 +3,9 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { TelegramChannelQueue, telegramThreadKey } from "../../src/modules/channels/telegram.js";
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
+import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
+import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
+import { SessionDal } from "../../src/modules/agent/session-dal.js";
 
 function makeNormalizedTextMessage(input: {
   threadId: string;
@@ -73,16 +76,18 @@ describe("TelegramChannelQueue.enqueue dedupe behavior", () => {
     });
 
     await db.run(
-      `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?, ?)`,
-      [key, lane, "worker-1", 60_000],
+      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, key, lane, "worker-1", 60_000],
     );
 
-    const nowSpy = vi.spyOn(Date, "now");
-    nowSpy.mockReturnValueOnce(1_000).mockReturnValueOnce(2_000);
+    let nowMs = 1_000;
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowMs);
 
     try {
+      const sessionDal = new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
       const queue = new TelegramChannelQueue(db, {
+        sessionDal,
         agentId,
         accountId,
         lane,
@@ -93,17 +98,18 @@ describe("TelegramChannelQueue.enqueue dedupe behavior", () => {
       expect(first.deduped).toBe(false);
 
       const firstSignal = await db.get<{ created_at_ms: number }>(
-        "SELECT created_at_ms FROM lane_queue_signals WHERE key = ? AND lane = ?",
-        [key, lane],
+        "SELECT created_at_ms FROM lane_queue_signals WHERE tenant_id = ? AND key = ? AND lane = ?",
+        [DEFAULT_TENANT_ID, key, lane],
       );
       expect(firstSignal?.created_at_ms).toBe(1_000);
 
+      nowMs = 2_000;
       const second = await queue.enqueue(normalized, { queueMode: "interrupt" });
       expect(second.deduped).toBe(true);
 
       const secondSignal = await db.get<{ created_at_ms: number }>(
-        "SELECT created_at_ms FROM lane_queue_signals WHERE key = ? AND lane = ?",
-        [key, lane],
+        "SELECT created_at_ms FROM lane_queue_signals WHERE tenant_id = ? AND key = ? AND lane = ?",
+        [DEFAULT_TENANT_ID, key, lane],
       );
       expect(secondSignal?.created_at_ms).toBe(1_000);
     } finally {

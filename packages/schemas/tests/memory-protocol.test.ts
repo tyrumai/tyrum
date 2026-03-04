@@ -63,11 +63,12 @@ describe("Memory v1 WS protocol", () => {
   it("parses memory.* responses via WsResponse union", () => {
     const memoryItemId = "550e8400-e29b-41d4-a716-446655440000";
     const artifactId = "123e4567-e89b-12d3-a456-426614174000";
+    const agentId = "00000000-0000-4000-8000-000000000002";
 
     const memoryItem = {
       v: 1,
       memory_item_id: memoryItemId,
-      agent_id: "default",
+      agent_id: agentId,
       kind: "note",
       title: "Ops",
       body_md: "foo",
@@ -80,7 +81,7 @@ describe("Memory v1 WS protocol", () => {
     const tombstone = {
       v: 1,
       memory_item_id: memoryItemId,
-      agent_id: "default",
+      agent_id: agentId,
       deleted_at: "2026-02-19T12:00:00Z",
       deleted_by: "operator",
       reason: "user request",
@@ -132,11 +133,12 @@ describe("Memory v1 WS protocol", () => {
   it("parses memory.* events via WsEvent union", () => {
     const memoryItemId = "550e8400-e29b-41d4-a716-446655440000";
     const artifactId = "123e4567-e89b-12d3-a456-426614174000";
+    const agentId = "00000000-0000-4000-8000-000000000002";
 
     const memoryItem = {
       v: 1,
       memory_item_id: memoryItemId,
-      agent_id: "default",
+      agent_id: agentId,
       kind: "note",
       title: "Ops",
       body_md: "foo",
@@ -149,7 +151,7 @@ describe("Memory v1 WS protocol", () => {
     const tombstone = {
       v: 1,
       memory_item_id: memoryItemId,
-      agent_id: "default",
+      agent_id: agentId,
       deleted_at: "2026-02-19T12:00:00Z",
       deleted_by: "operator",
     };

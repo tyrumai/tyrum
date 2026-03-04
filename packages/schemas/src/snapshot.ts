@@ -2,13 +2,10 @@ import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { ArtifactSensitivity } from "./policy-bundle.js";
 
-export const SnapshotFormatV1 = z.literal("tyrum.snapshot.v1");
-export type SnapshotFormatV1 = z.infer<typeof SnapshotFormatV1>;
-
 export const SnapshotFormatV2 = z.literal("tyrum.snapshot.v2");
 export type SnapshotFormatV2 = z.infer<typeof SnapshotFormatV2>;
 
-export const SnapshotFormat = z.union([SnapshotFormatV1, SnapshotFormatV2]);
+export const SnapshotFormat = SnapshotFormatV2;
 export type SnapshotFormat = z.infer<typeof SnapshotFormat>;
 
 export const SnapshotTable = z
@@ -59,17 +56,6 @@ export const SnapshotArtifactsMetadata = z
   .strict();
 export type SnapshotArtifactsMetadata = z.infer<typeof SnapshotArtifactsMetadata>;
 
-export const SnapshotBundleV1 = z
-  .object({
-    format: SnapshotFormatV1,
-    exported_at: DateTimeSchema,
-    gateway_version: z.string().trim().min(1).optional(),
-    db_kind: z.enum(["sqlite", "postgres"]).optional(),
-    tables: z.record(z.string().trim().min(1), SnapshotTable),
-  })
-  .strict();
-export type SnapshotBundleV1 = z.infer<typeof SnapshotBundleV1>;
-
 export const SnapshotBundleV2 = z
   .object({
     format: SnapshotFormatV2,
@@ -82,7 +68,7 @@ export const SnapshotBundleV2 = z
   .strict();
 export type SnapshotBundleV2 = z.infer<typeof SnapshotBundleV2>;
 
-export const SnapshotBundle = z.discriminatedUnion("format", [SnapshotBundleV1, SnapshotBundleV2]);
+export const SnapshotBundle = SnapshotBundleV2;
 export type SnapshotBundle = z.infer<typeof SnapshotBundle>;
 
 export const SnapshotImportRequest = z

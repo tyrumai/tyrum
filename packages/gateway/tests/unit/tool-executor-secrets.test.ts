@@ -8,6 +8,7 @@ import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import type { SecretResolutionAuditDal } from "../../src/modules/secret/resolution-audit-dal.js";
 import type { SecretHandle } from "@tyrum/schemas";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 function stubMcpManager(): McpManager {
   return {
@@ -20,7 +21,7 @@ function stubMcpManager(): McpManager {
 function stubSecretProvider(secrets: Map<string, string>): SecretProvider {
   const handles: SecretHandle[] = [...secrets.keys()].map((id) => ({
     handle_id: id,
-    provider: "env" as const,
+    provider: "db" as const,
     scope: id,
     created_at: "",
   }));
@@ -28,7 +29,7 @@ function stubSecretProvider(secrets: Map<string, string>): SecretProvider {
     resolve: vi.fn(async (handle: SecretHandle) => secrets.get(handle.handle_id) ?? null),
     store: vi.fn(async () => ({
       handle_id: "h1",
-      provider: "env" as const,
+      provider: "db" as const,
       scope: "test",
       created_at: "",
     })),
@@ -99,11 +100,12 @@ describe("ToolExecutor secret resolution", () => {
     const auditDal: SecretResolutionAuditDal = {
       record: vi.fn(async () => {
         return {
+          tenant_id: DEFAULT_TENANT_ID,
           secret_resolution_id: "sr-1",
           tool_call_id: "call-1",
           tool_id: "tool.http.fetch",
           handle_id: "handle-abc",
-          provider: "env",
+          provider: "db",
           scope: "handle-abc",
           agent_id: "default",
           workspace_id: "default",
@@ -148,10 +150,11 @@ describe("ToolExecutor secret resolution", () => {
 
     expect(auditDal.record).toHaveBeenCalledWith(
       expect.objectContaining({
+        tenantId: DEFAULT_TENANT_ID,
         toolCallId: "call-1",
         toolId: "tool.http.fetch",
         handleId: "handle-abc",
-        provider: "env",
+        provider: "db",
         scope: "handle-abc",
         sessionId: "s1",
         channel: "telegram",

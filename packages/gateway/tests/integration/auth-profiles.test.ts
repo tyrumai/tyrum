@@ -9,31 +9,38 @@ describe("auth profile routes", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        provider: "openai",
+        auth_profile_key: "openai-default",
+        provider_key: "openai",
         type: "api_key",
-        secret_handles: { api_key_handle: "handle-1" },
+        secret_keys: {},
         labels: { email: "test@example.com" },
       }),
     });
     expect(createRes.status).toBe(201);
-    const created = (await createRes.json()) as { profile: { profile_id: string; status: string } };
-    expect(created.profile.profile_id).toBeTypeOf("string");
+    const created = (await createRes.json()) as {
+      profile: { auth_profile_id: string; auth_profile_key: string; status: string };
+    };
+    expect(created.profile.auth_profile_id).toBeTypeOf("string");
+    expect(created.profile.auth_profile_key).toBe("openai-default");
     expect(created.profile.status).toBe("active");
 
     const listRes = await app.request("/auth/profiles");
     expect(listRes.status).toBe(200);
-    const listed = (await listRes.json()) as { profiles: Array<{ profile_id: string }> };
-    expect(listed.profiles.some((p) => p.profile_id === created.profile.profile_id)).toBe(true);
+    const listed = (await listRes.json()) as { profiles: Array<{ auth_profile_key: string }> };
+    expect(
+      listed.profiles.some((p) => p.auth_profile_key === created.profile.auth_profile_key),
+    ).toBe(true);
 
-    const disableRes = await app.request(`/auth/profiles/${created.profile.profile_id}/disable`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ reason: "test" }),
-    });
+    const disableRes = await app.request(
+      `/auth/profiles/${created.profile.auth_profile_key}/disable`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason: "test" }),
+      },
+    );
     expect(disableRes.status).toBe(200);
-    const disabled = (await disableRes.json()) as {
-      profile: { status: string; disabled_reason?: string | null };
-    };
+    const disabled = (await disableRes.json()) as { profile: { status: string } };
     expect(disabled.profile.status).toBe("disabled");
   });
 });

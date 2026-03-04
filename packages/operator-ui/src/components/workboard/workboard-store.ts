@@ -94,7 +94,7 @@ export type WorkTaskSummary = {
   last_event_at: string;
   lease_expires_at_ms?: number;
   run_id?: string;
-  approval_id?: number;
+  approval_id?: string;
   result_summary?: string;
 };
 
@@ -129,7 +129,7 @@ export type WorkTaskEvent =
     })
   | (BaseWorkTaskEvent & {
       type: "work.task.paused";
-      payload: BaseWorkTaskEvent["payload"] & { approval_id: number };
+      payload: BaseWorkTaskEvent["payload"] & { approval_id: string };
     })
   | (BaseWorkTaskEvent & {
       type: "work.task.completed";

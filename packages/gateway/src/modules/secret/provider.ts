@@ -1,409 +1,352 @@
-import { randomUUID, createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "node:crypto";
 import type { SecretHandle as SecretHandleT } from "@tyrum/schemas";
+import type { SqlDb } from "../../statestore/types.js";
+import { isUniqueViolation } from "../../utils/sql-errors.js";
+
+export interface SecretStoreOptions {
+  createOnly?: boolean;
+}
+
+export class SecretAlreadyExistsError extends Error {
+  constructor(readonly secretKey: string) {
+    super(`secret ${secretKey} already exists`);
+    this.name = "SecretAlreadyExistsError";
+  }
+}
 
 /** Interface for all secret providers. */
 export interface SecretProvider {
   resolve(handle: SecretHandleT): Promise<string | null>;
-  store(scope: string, value: string): Promise<SecretHandleT>;
+  store(secretKey: string, value: string, options?: SecretStoreOptions): Promise<SecretHandleT>;
   revoke(handleId: string): Promise<boolean>;
   list(): Promise<SecretHandleT[]>;
 }
 
-export interface SafeStorageLike {
-  isEncryptionAvailable(): boolean;
-  encryptString(value: string): Buffer;
-  decryptString(encrypted: Buffer): string;
+const DB_SECRET_ALG = "aes-256-gcm";
+const DB_SECRET_NONCE_BYTES = 12;
+const DB_SECRET_AUTH_TAG_BYTES = 16;
+
+function normalizeTime(value: string | Date | null | undefined): string | null {
+  if (value == null) return null;
+  return value instanceof Date ? value.toISOString() : value;
 }
 
-/** Environment variable-based secret provider (no persistence). */
-export class EnvSecretProvider implements SecretProvider {
-  private handles = new Map<string, SecretHandleT>();
-  private revokedHandleIds = new Set<string>();
-
-  private normalizeScope(scope: string): string {
-    const trimmed = scope.trim();
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) {
-      throw new Error(
-        `Invalid env secret scope '${scope}'. Expected an environment variable name like MY_API_KEY.`,
-      );
-    }
-    return trimmed;
+function normalizeSecretKey(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.length === 0) {
+    throw new Error("secret_key is required");
   }
-
-  async resolve(handle: SecretHandleT): Promise<string | null> {
-    if (this.revokedHandleIds.has(handle.handle_id)) return null;
-    const stored = this.handles.get(handle.handle_id);
-    const scope = this.normalizeScope(stored?.scope ?? handle.scope);
-    return process.env[scope] ?? null;
+  if (/\s/.test(trimmed)) {
+    throw new Error("secret_key must not contain whitespace");
   }
-
-  async store(scope: string, _value: string): Promise<SecretHandleT> {
-    const normalizedScope = this.normalizeScope(scope);
-    const handle: SecretHandleT = {
-      handle_id: randomUUID(),
-      provider: "env",
-      scope: normalizedScope,
-      created_at: new Date().toISOString(),
-    };
-    this.handles.set(handle.handle_id, handle);
-    this.revokedHandleIds.delete(handle.handle_id);
-    return handle;
-  }
-
-  async revoke(handleId: string): Promise<boolean> {
-    this.revokedHandleIds.add(handleId);
-    return this.handles.delete(handleId);
-  }
-
-  async list(): Promise<SecretHandleT[]> {
-    return [...this.handles.values()];
-  }
+  return trimmed;
 }
 
-// --- Internal types for KeychainSecretProvider ---
-
-interface KeychainEncryptedEntry {
-  handle: SecretHandleT;
-  ciphertext_b64: string;
-}
-
-interface KeychainSecretStore {
-  handles: Record<string, KeychainEncryptedEntry>;
-}
-
-function isFsErrorCode(error: unknown, code: string): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === code
-  );
-}
-
-async function loadElectronSafeStorage(): Promise<SafeStorageLike | null> {
-  try {
-    const electron = (await import("electron")) as unknown as {
-      safeStorage?: SafeStorageLike;
-    };
-    if (
-      electron.safeStorage &&
-      typeof electron.safeStorage.isEncryptionAvailable === "function" &&
-      typeof electron.safeStorage.encryptString === "function" &&
-      typeof electron.safeStorage.decryptString === "function"
-    ) {
-      return electron.safeStorage;
-    }
-  } catch {
-    // Intentional: Electron is unavailable in non-desktop runtimes; treat safeStorage as absent.
+function isSqliteBusyError(err: unknown): boolean {
+  if (err && typeof err === "object") {
+    const code = (err as { code?: unknown }).code;
+    return typeof code === "string" && code.toUpperCase().startsWith("SQLITE_BUSY");
   }
-  return null;
+  return false;
 }
 
-/**
- * Keychain-backed secret provider.
- *
- * Uses Electron's `safeStorage` (Keychain/DPAPI/libsecret) for encryption, and
- * persists ciphertext + handle metadata in a local file.
- */
-export class KeychainSecretProvider implements SecretProvider {
-  private constructor(
-    private readonly secretsPath: string,
-    private readonly safeStorage: SafeStorageLike,
-  ) {}
-
-  static async create(
-    secretsPath: string,
-    safeStorage?: SafeStorageLike,
-  ): Promise<KeychainSecretProvider> {
-    const resolved = safeStorage ?? (await loadElectronSafeStorage());
-    if (!resolved) {
-      throw new Error(
-        "KeychainSecretProvider requires Electron safeStorage (not available in this runtime)",
-      );
-    }
-    if (!resolved.isEncryptionAvailable()) {
-      throw new Error("KeychainSecretProvider encryption is not available on this host");
-    }
-    return new KeychainSecretProvider(secretsPath, resolved);
-  }
-
-  async resolve(handle: SecretHandleT): Promise<string | null> {
-    const store = await this.readStore();
-    const entry = store.handles[handle.handle_id];
-    if (!entry) return null;
-    return this.safeStorage.decryptString(Buffer.from(entry.ciphertext_b64, "base64"));
-  }
-
-  async store(scope: string, value: string): Promise<SecretHandleT> {
-    const handle: SecretHandleT = {
-      handle_id: randomUUID(),
-      provider: "keychain",
-      scope,
-      created_at: new Date().toISOString(),
-    };
-
-    const encrypted = this.safeStorage.encryptString(value);
-    const store = await this.readStore();
-    store.handles[handle.handle_id] = {
-      handle,
-      ciphertext_b64: encrypted.toString("base64"),
-    };
-    await this.writeStore(store);
-
-    return handle;
-  }
-
-  async revoke(handleId: string): Promise<boolean> {
-    const store = await this.readStore();
-    if (!(handleId in store.handles)) return false;
-    delete store.handles[handleId];
-    await this.writeStore(store);
-    return true;
-  }
-
-  async list(): Promise<SecretHandleT[]> {
-    const store = await this.readStore();
-    return Object.values(store.handles).map((e) => e.handle);
-  }
-
-  private async readStore(): Promise<KeychainSecretStore> {
-    try {
-      const raw = await readFile(this.secretsPath, "utf8");
-      return JSON.parse(raw) as KeychainSecretStore;
-    } catch (error) {
-      if (isFsErrorCode(error, "ENOENT")) {
-        return { handles: {} };
-      }
-      throw new Error(`Failed to read keychain secrets store: ${this.secretsPath}`, {
-        cause: error,
-      });
-    }
-  }
-
-  private async writeStore(store: KeychainSecretStore): Promise<void> {
-    await writeFile(this.secretsPath, JSON.stringify(store), { mode: 0o600 });
-  }
-}
-
-// --- Internal types for FileSecretProvider ---
-
-interface EncryptedEntry {
-  handle: SecretHandleT;
-  iv: string; // hex-encoded
-  authTag: string; // hex-encoded
-  ciphertext: string; // hex-encoded
-}
-
-interface SecretStore {
-  handles: Record<string, EncryptedEntry>;
-}
-
-const FILE_SECRET_PBKDF2_ITERATIONS = 100_000;
-const FILE_SECRET_PBKDF2_KEY_LENGTH_BYTES = 32;
-const FILE_SECRET_PBKDF2_DIGEST = "sha256";
-const FILE_SECRET_LEGACY_PBKDF2_SALT = "tyrum-secrets-v1";
-const FILE_SECRET_GCM_AUTH_TAG_LENGTH_BYTES = 16;
-
-function resolveFileSecretSaltPath(secretsPath: string): string {
-  return join(dirname(secretsPath), ".salt");
-}
-
-async function ensureParentDirExists(filePath: string): Promise<void> {
-  await mkdir(dirname(filePath), { recursive: true, mode: 0o700 });
-}
-
-function deriveFileSecretKey(adminToken: string, salt: Buffer | string): Buffer {
-  return pbkdf2Sync(
-    adminToken,
-    salt,
-    FILE_SECRET_PBKDF2_ITERATIONS,
-    FILE_SECRET_PBKDF2_KEY_LENGTH_BYTES,
-    FILE_SECRET_PBKDF2_DIGEST,
-  );
-}
-
-function encryptWithKey(
-  key: Buffer,
-  data: string,
-): { iv: string; authTag: string; ciphertext: string } {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key, iv, {
-    authTagLength: FILE_SECRET_GCM_AUTH_TAG_LENGTH_BYTES,
+function encryptValue(masterKey: Buffer, plaintext: string): { nonce: Buffer; ciphertext: Buffer } {
+  const nonce = randomBytes(DB_SECRET_NONCE_BYTES);
+  const cipher = createCipheriv(DB_SECRET_ALG, masterKey, nonce, {
+    authTagLength: DB_SECRET_AUTH_TAG_BYTES,
   });
-  const encrypted = Buffer.concat([cipher.update(data, "utf8"), cipher.final()]);
-  const authTag = cipher.getAuthTag();
-  return {
-    iv: iv.toString("hex"),
-    authTag: authTag.toString("hex"),
-    ciphertext: encrypted.toString("hex"),
-  };
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return { nonce, ciphertext: Buffer.concat([encrypted, tag]) };
 }
 
-function decryptWithKey(
-  key: Buffer,
-  entry: Pick<EncryptedEntry, "iv" | "authTag" | "ciphertext">,
-): string {
-  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(entry.iv, "hex"), {
-    authTagLength: FILE_SECRET_GCM_AUTH_TAG_LENGTH_BYTES,
+function decryptValue(masterKey: Buffer, nonce: Buffer, ciphertextAndTag: Buffer): string {
+  if (ciphertextAndTag.length <= DB_SECRET_AUTH_TAG_BYTES) {
+    throw new Error("ciphertext is too short");
+  }
+  const tag = ciphertextAndTag.subarray(ciphertextAndTag.length - DB_SECRET_AUTH_TAG_BYTES);
+  const ciphertext = ciphertextAndTag.subarray(
+    0,
+    ciphertextAndTag.length - DB_SECRET_AUTH_TAG_BYTES,
+  );
+
+  const decipher = createDecipheriv(DB_SECRET_ALG, masterKey, nonce, {
+    authTagLength: DB_SECRET_AUTH_TAG_BYTES,
   });
-  decipher.setAuthTag(Buffer.from(entry.authTag, "hex"));
-  const decrypted = Buffer.concat([
-    decipher.update(Buffer.from(entry.ciphertext, "hex")),
-    decipher.final(),
-  ]);
+  decipher.setAuthTag(tag);
+  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   return decrypted.toString("utf8");
 }
 
-/** File-based encrypted secret provider using AES-256-GCM. */
-export class FileSecretProvider implements SecretProvider {
-  private constructor(
-    private readonly secretsPath: string,
-    private readonly encryptionKey: Buffer,
-  ) {}
+type SecretRow = {
+  secret_id: string;
+  secret_key: string;
+  status: "active" | "revoked";
+  current_version: number;
+  created_at: string | Date;
+};
 
-  /** Create a FileSecretProvider with PBKDF2-derived key. */
-  static async create(secretsPath: string, adminToken: string): Promise<FileSecretProvider> {
-    const saltPath = resolveFileSecretSaltPath(secretsPath);
+type SecretVersionRow = {
+  alg: string;
+  key_id: string;
+  nonce: Buffer;
+  ciphertext: Buffer;
+  revoked_at: string | Date | null;
+};
 
-    let storedSalt: Buffer | null = null;
-    try {
-      storedSalt = await readFile(saltPath);
-    } catch {
-      // Intentional: ignore missing salt file; migrate/create an instance salt if needed.
-    }
-
-    const store = await FileSecretProvider.readStoreFromPath(secretsPath);
-    const entries = Object.entries(store.handles);
-
-    if (entries.length === 0) {
-      if (!storedSalt) {
-        storedSalt = randomBytes(32);
-        await ensureParentDirExists(saltPath);
-        await writeFile(saltPath, storedSalt, { mode: 0o600 });
-      }
-      return new FileSecretProvider(secretsPath, deriveFileSecretKey(adminToken, storedSalt));
-    }
-
-    const instanceKey = storedSalt ? deriveFileSecretKey(adminToken, storedSalt) : null;
-    const firstEntry = entries[0];
-    if (!firstEntry) {
-      const legacyKey = deriveFileSecretKey(adminToken, FILE_SECRET_LEGACY_PBKDF2_SALT);
-      return new FileSecretProvider(secretsPath, instanceKey ?? legacyKey);
-    }
-    const [, sample] = firstEntry;
-
-    if (instanceKey) {
-      try {
-        decryptWithKey(instanceKey, sample);
-        return new FileSecretProvider(secretsPath, instanceKey);
-      } catch {
-        // Intentional: fall back to the legacy key if the sample cannot be decrypted.
-      }
-    }
-
-    const legacyKey = deriveFileSecretKey(adminToken, FILE_SECRET_LEGACY_PBKDF2_SALT);
-    try {
-      decryptWithKey(legacyKey, sample);
-    } catch {
-      // Intentional: if the legacy key cannot decrypt the sample, stick with the instance key
-      // when available so failures are surfaced by resolve().
-      if (instanceKey) return new FileSecretProvider(secretsPath, instanceKey);
-      return new FileSecretProvider(secretsPath, legacyKey);
-    }
-
-    try {
-      const saltToUse = storedSalt ?? randomBytes(32);
-      const migratedKey = instanceKey ?? deriveFileSecretKey(adminToken, saltToUse);
-
-      if (!storedSalt) {
-        await ensureParentDirExists(saltPath);
-        await writeFile(saltPath, saltToUse, { mode: 0o600 });
-      }
-
-      const migrated: SecretStore = { handles: {} };
-
-      for (const [handleId, existing] of entries) {
-        const plaintext = decryptWithKey(legacyKey, existing);
-        const encrypted = encryptWithKey(migratedKey, plaintext);
-        migrated.handles[handleId] = { handle: existing.handle, ...encrypted };
-      }
-
-      await FileSecretProvider.writeStoreToPath(secretsPath, migrated);
-      return new FileSecretProvider(secretsPath, migratedKey);
-    } catch {
-      // Intentional: best-effort migration; fall back to the legacy key if migration cannot
-      // write the store (e.g., permissions), keeping secrets readable.
-      return new FileSecretProvider(secretsPath, legacyKey);
+export class DbSecretProvider implements SecretProvider {
+  constructor(
+    private readonly db: SqlDb,
+    private readonly opts: {
+      tenantId: string;
+      masterKey: Buffer;
+      keyId: string;
+    },
+  ) {
+    if (opts.masterKey.length !== 32) {
+      throw new Error("DbSecretProvider masterKey must be 32 bytes");
     }
   }
 
   async resolve(handle: SecretHandleT): Promise<string | null> {
-    const store = await this.readStore();
-    const entry = store.handles[handle.handle_id];
-    if (!entry) return null;
-    return this.decrypt(entry);
+    const secretKey = normalizeSecretKey(handle.handle_id);
+
+    const secret = await this.db.get<SecretRow>(
+      `SELECT secret_id, secret_key, status, current_version, created_at
+       FROM secrets
+       WHERE tenant_id = ? AND secret_key = ?`,
+      [this.opts.tenantId, secretKey],
+    );
+    if (!secret || secret.status !== "active") return null;
+
+    const version = await this.db.get<SecretVersionRow>(
+      `SELECT alg, key_id, nonce, ciphertext, revoked_at
+       FROM secret_versions
+       WHERE tenant_id = ? AND secret_id = ? AND version = ?`,
+      [this.opts.tenantId, secret.secret_id, secret.current_version],
+    );
+    if (!version || version.revoked_at != null) return null;
+    if (version.alg !== DB_SECRET_ALG) {
+      throw new Error(`unsupported secret cipher '${version.alg}'`);
+    }
+    if (version.key_id !== this.opts.keyId) {
+      throw new Error(`secret master key mismatch (expected key_id=${this.opts.keyId})`);
+    }
+
+    return decryptValue(this.opts.masterKey, version.nonce, version.ciphertext);
   }
 
-  async store(scope: string, value: string): Promise<SecretHandleT> {
-    const handle: SecretHandleT = {
-      handle_id: randomUUID(),
-      provider: "file",
-      scope,
-      created_at: new Date().toISOString(),
-    };
+  async store(
+    secretKeyRaw: string,
+    value: string,
+    options?: SecretStoreOptions,
+  ): Promise<SecretHandleT> {
+    const secretKey = normalizeSecretKey(secretKeyRaw);
+    const nowIso = new Date().toISOString();
 
-    const encrypted = this.encrypt(value);
-    const store = await this.readStore();
-    store.handles[handle.handle_id] = { handle, ...encrypted };
-    await this.writeStore(store);
+    if (options?.createOnly) {
+      const maxBusyRetries = 3;
+      for (let attempt = 0; attempt <= maxBusyRetries; attempt += 1) {
+        try {
+          return await this.db.transaction(async (tx) => {
+            const secretId = randomUUID();
+            const nextVersion = 1;
+            const encrypted = encryptValue(this.opts.masterKey, value);
 
-    return handle;
+            try {
+              await tx.run(
+                `INSERT INTO secrets (
+                   tenant_id,
+                   secret_id,
+                   secret_key,
+                   status,
+                   current_version,
+                   created_at,
+                   updated_at
+                 ) VALUES (?, ?, ?, 'active', ?, ?, ?)`,
+                [this.opts.tenantId, secretId, secretKey, nextVersion, nowIso, nowIso],
+              );
+            } catch (err) {
+              if (isUniqueViolation(err)) {
+                throw new SecretAlreadyExistsError(secretKey);
+              }
+              throw err;
+            }
+
+            await tx.run(
+              `INSERT INTO secret_versions (
+                 tenant_id,
+                 secret_id,
+                 version,
+                 alg,
+                 key_id,
+                 nonce,
+                 ciphertext,
+                 created_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                this.opts.tenantId,
+                secretId,
+                nextVersion,
+                DB_SECRET_ALG,
+                this.opts.keyId,
+                encrypted.nonce,
+                encrypted.ciphertext,
+                nowIso,
+              ],
+            );
+
+            return {
+              handle_id: secretKey,
+              provider: "db",
+              scope: secretKey,
+              created_at: nowIso,
+            };
+          });
+        } catch (err) {
+          if (!isSqliteBusyError(err)) {
+            throw err;
+          }
+
+          const existing = await this.db.get<Pick<SecretRow, "secret_id">>(
+            `SELECT secret_id
+             FROM secrets
+             WHERE tenant_id = ? AND secret_key = ?`,
+            [this.opts.tenantId, secretKey],
+          );
+          if (existing) {
+            throw new SecretAlreadyExistsError(secretKey);
+          }
+          if (attempt === maxBusyRetries) {
+            throw err;
+          }
+        }
+      }
+
+      throw new Error("unreachable");
+    }
+
+    return await this.db.transaction(async (tx) => {
+      const existing = await tx.get<SecretRow>(
+        `SELECT secret_id, secret_key, status, current_version, created_at
+         FROM secrets
+         WHERE tenant_id = ? AND secret_key = ?`,
+        [this.opts.tenantId, secretKey],
+      );
+
+      const secretId = existing?.secret_id ?? randomUUID();
+      const createdAt = normalizeTime(existing?.created_at) ?? nowIso;
+
+      const nextVersion = (() => {
+        if (!existing) return 1;
+        const current = Number(existing.current_version);
+        return Number.isFinite(current) && current >= 1 ? current + 1 : 1;
+      })();
+
+      const encrypted = encryptValue(this.opts.masterKey, value);
+
+      if (!existing) {
+        await tx.run(
+          `INSERT INTO secrets (
+             tenant_id,
+             secret_id,
+             secret_key,
+             status,
+             current_version,
+             created_at,
+             updated_at
+           ) VALUES (?, ?, ?, 'active', ?, ?, ?)`,
+          [this.opts.tenantId, secretId, secretKey, nextVersion, nowIso, nowIso],
+        );
+      } else {
+        await tx.run(
+          `UPDATE secrets
+           SET status = 'active', current_version = ?, updated_at = ?
+           WHERE tenant_id = ? AND secret_id = ?`,
+          [nextVersion, nowIso, this.opts.tenantId, secretId],
+        );
+      }
+
+      await tx.run(
+        `INSERT INTO secret_versions (
+           tenant_id,
+           secret_id,
+           version,
+           alg,
+           key_id,
+           nonce,
+           ciphertext,
+           created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          this.opts.tenantId,
+          secretId,
+          nextVersion,
+          DB_SECRET_ALG,
+          this.opts.keyId,
+          encrypted.nonce,
+          encrypted.ciphertext,
+          nowIso,
+        ],
+      );
+
+      return {
+        handle_id: secretKey,
+        provider: "db",
+        scope: secretKey,
+        created_at: createdAt,
+      };
+    });
   }
 
   async revoke(handleId: string): Promise<boolean> {
-    const store = await this.readStore();
-    if (!(handleId in store.handles)) return false;
-    delete store.handles[handleId];
-    await this.writeStore(store);
-    return true;
+    const secretKey = normalizeSecretKey(handleId);
+    const nowIso = new Date().toISOString();
+
+    return await this.db.transaction(async (tx) => {
+      const secret = await tx.get<Pick<SecretRow, "secret_id" | "current_version">>(
+        `SELECT secret_id, current_version
+         FROM secrets
+         WHERE tenant_id = ? AND secret_key = ? AND status = 'active'`,
+        [this.opts.tenantId, secretKey],
+      );
+      if (!secret) return false;
+
+      await tx.run(
+        `UPDATE secrets
+         SET status = 'revoked', updated_at = ?
+         WHERE tenant_id = ? AND secret_id = ?`,
+        [nowIso, this.opts.tenantId, secret.secret_id],
+      );
+
+      await tx.run(
+        `UPDATE secret_versions
+         SET revoked_at = ?
+         WHERE tenant_id = ? AND secret_id = ? AND version = ? AND revoked_at IS NULL`,
+        [nowIso, this.opts.tenantId, secret.secret_id, secret.current_version],
+      );
+
+      return true;
+    });
   }
 
   async list(): Promise<SecretHandleT[]> {
-    const store = await this.readStore();
-    return Object.values(store.handles).map((e) => e.handle);
-  }
+    const rows = await this.db.all<Pick<SecretRow, "secret_key" | "created_at">>(
+      `SELECT secret_key, created_at
+       FROM secrets
+       WHERE tenant_id = ? AND status = 'active'
+       ORDER BY created_at ASC, secret_key ASC`,
+      [this.opts.tenantId],
+    );
 
-  private encrypt(data: string): { iv: string; authTag: string; ciphertext: string } {
-    return encryptWithKey(this.encryptionKey, data);
-  }
-
-  private decrypt(entry: EncryptedEntry): string {
-    return decryptWithKey(this.encryptionKey, entry);
-  }
-
-  private async readStore(): Promise<SecretStore> {
-    return await FileSecretProvider.readStoreFromPath(this.secretsPath);
-  }
-
-  private async writeStore(store: SecretStore): Promise<void> {
-    await FileSecretProvider.writeStoreToPath(this.secretsPath, store);
-  }
-
-  private static async readStoreFromPath(secretsPath: string): Promise<SecretStore> {
-    try {
-      const raw = await readFile(secretsPath, "utf8");
-      return JSON.parse(raw) as SecretStore;
-    } catch (error) {
-      if (isFsErrorCode(error, "ENOENT")) {
-        return { handles: {} };
-      }
-      throw new Error(`Failed to read secrets store: ${secretsPath}`, { cause: error });
-    }
-  }
-
-  private static async writeStoreToPath(secretsPath: string, store: SecretStore): Promise<void> {
-    await writeFile(secretsPath, JSON.stringify(store), { mode: 0o600 });
+    return rows.map((row) => {
+      const createdAt = normalizeTime(row.created_at) ?? new Date().toISOString();
+      return {
+        handle_id: row.secret_key,
+        provider: "db",
+        scope: row.secret_key,
+        created_at: createdAt,
+      };
+    });
   }
 }

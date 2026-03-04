@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
-import { health } from "../../src/routes/health.js";
+import { createHealthRoute } from "../../src/routes/health.js";
 
 describe("GET /healthz", () => {
   const app = new Hono();
-  app.route("/", health);
+  app.route("/", createHealthRoute());
 
   it("returns 200 with status ok", async () => {
     const res = await app.request("/healthz");

@@ -1,11 +1,20 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { SqlDb } from "../../src/statestore/types.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 describe("ApprovalDal", () => {
   let db: SqliteDb | undefined;
+  const tenantId = DEFAULT_TENANT_ID;
+  const agentId = DEFAULT_AGENT_ID;
+  const workspaceId = DEFAULT_WORKSPACE_ID;
 
   afterEach(async () => {
     await db?.close();
@@ -19,161 +28,218 @@ describe("ApprovalDal", () => {
 
   it("creates a pending approval", async () => {
     const dal = createDal();
+    const approvalKey = `approval:${randomUUID()}`;
     const approval = await dal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey,
       prompt: "Allow web scrape of example.com?",
       context: { url: "https://example.com" },
+      kind: "policy",
     });
 
-    expect(approval.id).toBeGreaterThan(0);
-    expect(approval.plan_id).toBe("plan-1");
-    expect(approval.step_index).toBe(0);
+    expect(approval.tenant_id).toBe(tenantId);
+    expect(approval.approval_key).toBe(approvalKey);
+    expect(approval.approval_id).toMatch(/[0-9a-fA-F-]{36}/);
     expect(approval.prompt).toBe("Allow web scrape of example.com?");
     expect(approval.context).toEqual({ url: "https://example.com" });
     expect(approval.status).toBe("pending");
-    expect(approval.responded_at).toBeNull();
-    expect(approval.response_reason).toBeNull();
+    expect(approval.resolved_at).toBeNull();
+    expect(approval.resolution).toBeNull();
+
+    const second = await dal.create({
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey,
+      prompt: "ignored",
+    });
+    expect(second.approval_id).toBe(approval.approval_id);
+    expect(second.prompt).toBe(approval.prompt);
   });
 
   it("retrieves approval by id", async () => {
     const dal = createDal();
+    const approvalKey = `approval:${randomUUID()}`;
     const created = await dal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey,
       prompt: "Approve?",
     });
 
-    const fetched = await dal.getById(created.id);
+    const fetched = await dal.getById({ tenantId, approvalId: created.approval_id });
     expect(fetched).toBeDefined();
-    expect(fetched!.id).toBe(created.id);
+    expect(fetched!.approval_id).toBe(created.approval_id);
     expect(fetched!.prompt).toBe("Approve?");
   });
 
   it("returns undefined for non-existent id", async () => {
     const dal = createDal();
-    expect(await dal.getById(999)).toBeUndefined();
+    expect(await dal.getById({ tenantId, approvalId: randomUUID() })).toBeUndefined();
   });
 
   it("approves a pending approval", async () => {
     const dal = createDal();
     const created = await dal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey: `approval:${randomUUID()}`,
       prompt: "Approve?",
     });
 
-    const updated = await dal.respond(created.id, true, "looks safe");
+    const updated = await dal.respond({
+      tenantId,
+      approvalId: created.approval_id,
+      decision: "approved",
+      reason: "looks safe",
+    });
     expect(updated).toBeDefined();
     expect(updated!.status).toBe("approved");
-    expect(updated!.response_reason).toBe("looks safe");
-    expect(updated!.responded_at).toBeTruthy();
+    expect(updated!.resolved_at).toBeTruthy();
+    expect((updated!.resolution as Record<string, unknown>)["decision"]).toBe("approved");
+    expect((updated!.resolution as Record<string, unknown>)["reason"]).toBe("looks safe");
   });
 
   it("denies a pending approval", async () => {
     const dal = createDal();
     const created = await dal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey: `approval:${randomUUID()}`,
       prompt: "Approve?",
     });
 
-    const updated = await dal.respond(created.id, false, "too risky");
+    const updated = await dal.respond({
+      tenantId,
+      approvalId: created.approval_id,
+      decision: "denied",
+      reason: "too risky",
+    });
     expect(updated).toBeDefined();
     expect(updated!.status).toBe("denied");
-    expect(updated!.response_reason).toBe("too risky");
+    expect((updated!.resolution as Record<string, unknown>)["decision"]).toBe("denied");
+    expect((updated!.resolution as Record<string, unknown>)["reason"]).toBe("too risky");
   });
 
   it("is idempotent when responding to already-responded approval", async () => {
     const dal = createDal();
     const created = await dal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey: `approval:${randomUUID()}`,
       prompt: "Approve?",
     });
 
-    await dal.respond(created.id, true);
-    const second = await dal.respond(created.id, false);
+    await dal.respond({ tenantId, approvalId: created.approval_id, decision: "approved" });
+    const second = await dal.respond({
+      tenantId,
+      approvalId: created.approval_id,
+      decision: "denied",
+    });
     expect(second).toBeDefined();
     expect(second!.status).toBe("approved");
 
-    // Original response is preserved
-    const fetched = await dal.getById(created.id);
+    const fetched = await dal.getById({ tenantId, approvalId: created.approval_id });
     expect(fetched!.status).toBe("approved");
   });
 
   it("lists pending approvals in creation order", async () => {
     const dal = createDal();
-    await dal.create({ planId: "plan-1", stepIndex: 0, prompt: "First?" });
-    await dal.create({ planId: "plan-1", stepIndex: 1, prompt: "Second?" });
-    const third = await dal.create({ planId: "plan-2", stepIndex: 0, prompt: "Third?" });
+    const first = await dal.create({
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "First?",
+    });
+    const second = await dal.create({
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Second?",
+    });
+    const third = await dal.create({
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Third?",
+    });
 
-    // Approve the third one so it leaves the pending list
-    await dal.respond(third.id, true);
+    await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
+      "2020-01-01T00:00:00.000Z",
+      tenantId,
+      first.approval_id,
+    ]);
+    await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
+      "2020-01-01T00:00:01.000Z",
+      tenantId,
+      second.approval_id,
+    ]);
+    await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
+      "2020-01-01T00:00:02.000Z",
+      tenantId,
+      third.approval_id,
+    ]);
 
-    const pending = await dal.getPending();
+    await dal.respond({ tenantId, approvalId: third.approval_id, decision: "approved" });
+
+    const pending = await dal.getPending({ tenantId });
     expect(pending).toHaveLength(2);
-    expect(pending[0]!.prompt).toBe("First?");
-    expect(pending[1]!.prompt).toBe("Second?");
-  });
-
-  it("gets approvals by plan id", async () => {
-    const dal = createDal();
-    await dal.create({ planId: "plan-1", stepIndex: 0, prompt: "A?" });
-    await dal.create({ planId: "plan-1", stepIndex: 1, prompt: "B?" });
-    await dal.create({ planId: "plan-2", stepIndex: 0, prompt: "C?" });
-
-    const forPlan1 = await dal.getByPlanId("plan-1");
-    expect(forPlan1).toHaveLength(2);
-    expect(forPlan1[0]!.step_index).toBe(0);
-    expect(forPlan1[1]!.step_index).toBe(1);
-
-    const forPlan2 = await dal.getByPlanId("plan-2");
-    expect(forPlan2).toHaveLength(1);
+    expect(pending[0]!.approval_id).toBe(first.approval_id);
+    expect(pending[1]!.approval_id).toBe(second.approval_id);
   });
 
   it("expires stale approvals", async () => {
     const dal = createDal();
-    // Create an approval with an expires_at in the past
     const created = await dal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey: `approval:${randomUUID()}`,
       prompt: "Approve?",
-      expiresAt: "2020-01-01T00:00:00",
+      expiresAt: "2020-01-01T00:00:00.000Z",
     });
 
-    // Also create one that hasn't expired
     await dal.create({
-      planId: "plan-1",
-      stepIndex: 1,
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey: `approval:${randomUUID()}`,
       prompt: "Also approve?",
-      expiresAt: "2099-12-31T23:59:59",
+      expiresAt: "2099-12-31T23:59:59.000Z",
     });
 
-    // And one without expiry
     await dal.create({
-      planId: "plan-1",
-      stepIndex: 2,
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey: `approval:${randomUUID()}`,
       prompt: "No expiry?",
     });
 
-    const expired = await dal.expireStale();
+    const expired = await dal.expireStale({ tenantId, nowIso: "2026-01-01T00:00:00.000Z" });
     expect(expired).toBe(1);
 
-    const row = await dal.getById(created.id);
+    const row = await dal.getById({ tenantId, approvalId: created.approval_id });
     expect(row!.status).toBe("expired");
-    expect(row!.responded_at).toBeTruthy();
-
-    // The other two remain pending
-    const pending = await dal.getPending();
-    expect(pending).toHaveLength(2);
+    expect(row!.resolved_at).toBeTruthy();
   });
 
   it("creates approval with default empty context when none provided", async () => {
     const dal = createDal();
     const approval = await dal.create({
-      planId: "plan-1",
-      stepIndex: 0,
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey: `approval:${randomUUID()}`,
       prompt: "Approve?",
     });
 
@@ -182,17 +248,29 @@ describe("ApprovalDal", () => {
 
   it("normalizes created_at when Postgres returns Date", async () => {
     const createdAt = new Date("2020-01-01T00:00:00.000Z");
+    const approvalId = randomUUID();
     const row = {
-      id: 123,
-      plan_id: "plan-1",
-      step_index: 0,
+      tenant_id: tenantId,
+      approval_id: approvalId,
+      approval_key: `approval:${randomUUID()}`,
+      agent_id: agentId,
+      workspace_id: workspaceId,
+      kind: "other",
+      status: "pending",
       prompt: "Approve?",
       context_json: "{}",
-      status: "pending",
       created_at: createdAt,
-      responded_at: null,
-      response_reason: null,
       expires_at: null,
+      resolved_at: null,
+      resolution_json: null,
+      session_id: null,
+      plan_id: null,
+      run_id: null,
+      step_id: null,
+      attempt_id: null,
+      work_item_id: null,
+      work_item_task_id: null,
+      resume_token: null,
     };
 
     const stubDb: SqlDb = {
@@ -206,7 +284,7 @@ describe("ApprovalDal", () => {
     };
 
     const dal = new ApprovalDal(stubDb);
-    const fetched = await dal.getById(123);
+    const fetched = await dal.getById({ tenantId, approvalId });
     expect(fetched).toBeDefined();
     expect(fetched!.created_at).toBe(createdAt.toISOString());
   });

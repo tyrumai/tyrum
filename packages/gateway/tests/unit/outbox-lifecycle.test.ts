@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { OutboxLifecycleScheduler } from "../../src/modules/backplane/outbox-lifecycle.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("OutboxLifecycleScheduler", () => {
   let db: SqliteDb | undefined;
@@ -20,25 +21,25 @@ describe("OutboxLifecycleScheduler", () => {
     const cutoffNew = "2026-02-24T00:05:01.000Z";
 
     await db.run(
-      `INSERT INTO outbox (topic, target_edge_id, payload_json, created_at)
-       VALUES (?, ?, ?, ?)`,
-      ["ws.broadcast", null, "{}", cutoffOld],
+      `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "ws.broadcast", null, "{}", cutoffOld],
     );
     await db.run(
-      `INSERT INTO outbox (topic, target_edge_id, payload_json, created_at)
-       VALUES (?, ?, ?, ?)`,
-      ["ws.broadcast", null, "{}", cutoffNew],
+      `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "ws.broadcast", null, "{}", cutoffNew],
     );
 
     await db.run(
-      `INSERT INTO outbox_consumers (consumer_id, last_outbox_id, updated_at)
-       VALUES (?, ?, ?)`,
-      ["edge-old", 0, cutoffOld],
+      `INSERT INTO outbox_consumers (tenant_id, consumer_id, last_outbox_id, updated_at)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "edge-old", 0, cutoffOld],
     );
     await db.run(
-      `INSERT INTO outbox_consumers (consumer_id, last_outbox_id, updated_at)
-       VALUES (?, ?, ?)`,
-      ["edge-new", 0, cutoffNew],
+      `INSERT INTO outbox_consumers (tenant_id, consumer_id, last_outbox_id, updated_at)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "edge-new", 0, cutoffNew],
     );
 
     const scheduler = new OutboxLifecycleScheduler({
@@ -50,12 +51,14 @@ describe("OutboxLifecycleScheduler", () => {
     await scheduler.tick();
 
     const outboxRows = await db.all<{ created_at: string }>(
-      "SELECT created_at FROM outbox ORDER BY id ASC",
+      "SELECT created_at FROM outbox WHERE tenant_id = ? ORDER BY id ASC",
+      [DEFAULT_TENANT_ID],
     );
     expect(outboxRows).toEqual([{ created_at: cutoffNew }]);
 
     const consumerRows = await db.all<{ consumer_id: string }>(
-      "SELECT consumer_id FROM outbox_consumers ORDER BY consumer_id ASC",
+      "SELECT consumer_id FROM outbox_consumers WHERE tenant_id = ? ORDER BY consumer_id ASC",
+      [DEFAULT_TENANT_ID],
     );
     expect(consumerRows).toEqual([{ consumer_id: "edge-new" }]);
   });
@@ -69,9 +72,9 @@ describe("OutboxLifecycleScheduler", () => {
 
     for (let i = 0; i < 3; i += 1) {
       await db.run(
-        `INSERT INTO outbox (topic, target_edge_id, payload_json, created_at)
-         VALUES (?, ?, ?, ?)`,
-        ["ws.broadcast", null, "{}", expiredAt],
+        `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+        [DEFAULT_TENANT_ID, "ws.broadcast", null, "{}", expiredAt],
       );
     }
 
@@ -84,7 +87,10 @@ describe("OutboxLifecycleScheduler", () => {
 
     await scheduler.tick();
 
-    const outboxCount = await db.get<{ count: number }>("SELECT COUNT(*) as count FROM outbox");
+    const outboxCount = await db.get<{ count: number }>(
+      "SELECT COUNT(*) as count FROM outbox WHERE tenant_id = ?",
+      [DEFAULT_TENANT_ID],
+    );
     expect(outboxCount?.count).toBe(0);
   });
 });

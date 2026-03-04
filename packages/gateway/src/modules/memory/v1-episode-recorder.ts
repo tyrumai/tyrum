@@ -15,7 +15,7 @@ export type MemoryV1SystemEpisodeInput = {
 export async function recordMemoryV1SystemEpisode(
   dal: MemoryV1Dal,
   input: MemoryV1SystemEpisodeInput,
-  agentId?: string,
+  scope?: { tenantId?: string; agentId?: string } | string,
 ): Promise<void> {
   const summary = (input.summary_md ?? input.event_type).trim();
   if (!summary) {
@@ -41,6 +41,6 @@ export async function recordMemoryV1SystemEpisode(
       sensitivity: input.sensitivity ?? "private",
       provenance,
     },
-    agentId,
+    scope,
   );
 }

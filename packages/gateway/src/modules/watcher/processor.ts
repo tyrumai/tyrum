@@ -7,12 +7,13 @@
  */
 
 import type { Emitter, Handler } from "mitt";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { GatewayEvents } from "../../event-bus.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { MemoryV1Dal } from "../memory/v1-dal.js";
 import { recordMemoryV1SystemEpisode } from "../memory/v1-episode-recorder.js";
 import { WatcherFiringDal } from "./firing-dal.js";
+import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../identity/scope.js";
 
 const DEFAULT_WEBHOOK_SCHEDULED_AT_CURSOR_MAX_ENTRIES = 10_000;
 
@@ -21,21 +22,29 @@ const DEFAULT_WEBHOOK_SCHEDULED_AT_CURSOR_MAX_ENTRIES = 10_000;
 // ---------------------------------------------------------------------------
 
 export interface WatcherRow {
-  id: number;
-  plan_id: string;
+  tenant_id: string;
+  watcher_id: string;
+  watcher_key: string;
+  agent_id: string;
+  workspace_id: string;
   trigger_type: string;
   trigger_config: unknown;
-  active: number;
+  active: number | boolean;
+  last_fired_at_ms: number | null;
   created_at: string;
   updated_at: string;
 }
 
 interface RawWatcherRow {
-  id: number;
-  plan_id: string;
+  tenant_id: string;
+  watcher_id: string;
+  watcher_key: string;
+  agent_id: string;
+  workspace_id: string;
   trigger_type: string;
-  trigger_config: string;
-  active: number;
+  trigger_config_json: string;
+  active: number | boolean;
+  last_fired_at_ms: number | null;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -74,10 +83,53 @@ export interface WatcherProcessorOptions {
 function parseRow(row: RawWatcherRow): WatcherRow {
   return {
     ...row,
-    trigger_config: JSON.parse(row.trigger_config) as unknown,
+    trigger_config: JSON.parse(row.trigger_config_json) as unknown,
     created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
   };
+}
+
+function deterministicUuidFromHash(bytes: Buffer): string {
+  if (bytes.length < 16) {
+    throw new Error("hash too short for uuid");
+  }
+  const uuid = Buffer.from(bytes.subarray(0, 16));
+  // RFC4122 variant + v4 bits.
+  uuid[6] = (uuid[6]! & 0x0f) | 0x40;
+  uuid[8] = (uuid[8]! & 0x3f) | 0x80;
+  const hex = uuid.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(
+    16,
+    20,
+  )}-${hex.slice(20)}`;
+}
+
+function webhookFiringId(input: { tenantId: string; watcherId: string; nonce: string }): string {
+  const digest = createHash("sha256")
+    .update("watcher:webhook:")
+    .update(input.tenantId)
+    .update(":")
+    .update(input.watcherId)
+    .update(":")
+    .update(input.nonce)
+    .digest();
+  return deterministicUuidFromHash(digest);
+}
+
+function normalizeConfigForPlanId(input: { planId: string; triggerConfig: unknown }): unknown {
+  const planId = input.planId.trim();
+  if (!planId) return input.triggerConfig ?? {};
+  if (!input.triggerConfig || typeof input.triggerConfig !== "object") {
+    return { planId };
+  }
+  if (Array.isArray(input.triggerConfig)) {
+    return { planId };
+  }
+  const cfg = input.triggerConfig as Record<string, unknown>;
+  if (typeof cfg["planId"] === "string" && cfg["planId"].trim().length > 0) {
+    return cfg;
+  }
+  return { ...cfg, planId };
 }
 
 export class WatcherProcessor {
@@ -86,7 +138,7 @@ export class WatcherProcessor {
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly firingDal: WatcherFiringDal;
   private readonly webhookScheduledAtCursorMaxEntries: number;
-  private readonly webhookScheduledAtCursor = new Map<number, { baseMs: number; nextMs: number }>();
+  private readonly webhookScheduledAtCursor = new Map<string, { baseMs: number; nextMs: number }>();
 
   private completedHandler: Handler<GatewayEvents["plan:completed"]> | undefined;
   private failedHandler: Handler<GatewayEvents["plan:failed"]> | undefined;
@@ -106,12 +158,16 @@ export class WatcherProcessor {
     })();
   }
 
+  private activeWhereSql(): string {
+    return this.db.kind === "postgres" ? "active = true" : "active = 1";
+  }
+
   // -----------------------------------------------------------------------
   // Lifecycle
   // -----------------------------------------------------------------------
 
   private setWebhookScheduledAtCursorEntry(
-    watcherId: number,
+    watcherId: string,
     entry: { baseMs: number; nextMs: number },
   ): void {
     if (this.webhookScheduledAtCursorMaxEntries <= 0) return;
@@ -123,7 +179,7 @@ export class WatcherProcessor {
     this.webhookScheduledAtCursor.set(watcherId, entry);
 
     while (this.webhookScheduledAtCursor.size > this.webhookScheduledAtCursorMaxEntries) {
-      const oldest = this.webhookScheduledAtCursor.keys().next().value as number | undefined;
+      const oldest = this.webhookScheduledAtCursor.keys().next().value as string | undefined;
       if (oldest === undefined) break;
       this.webhookScheduledAtCursor.delete(oldest);
     }
@@ -169,7 +225,7 @@ export class WatcherProcessor {
   // -----------------------------------------------------------------------
 
   async onPlanCompleted(event: GatewayEvents["plan:completed"]): Promise<void> {
-    const watchers = await this.getActiveWatchersForPlan(event.planId);
+    const watchers = await this.getActiveWatchersForPlan(DEFAULT_TENANT_ID, event.planId);
     for (const watcher of watchers) {
       if (!this.evaluateTrigger(watcher, event)) continue;
       try {
@@ -180,20 +236,20 @@ export class WatcherProcessor {
             channel: "watcher",
             event_type: "plan_completed",
             summary_md: `Watcher fired: plan_completed`,
-            tags: ["watcher", `watcher_id:${String(watcher.id)}`, `plan_id:${event.planId}`],
+            tags: ["watcher", `watcher_id:${watcher.watcher_id}`, `plan_id:${event.planId}`],
             metadata: {
-              watcher_id: watcher.id,
+              watcher_id: watcher.watcher_id,
               plan_id: event.planId,
               steps_executed: event.stepsExecuted,
               trigger_type: watcher.trigger_type,
             },
           },
-          "default",
+          { tenantId: watcher.tenant_id, agentId: watcher.agent_id },
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.warn("watcher.plan_completed_episode_record_failed", {
-          watcher_id: watcher.id,
+          watcher_id: watcher.watcher_id,
           plan_id: event.planId,
           error: message,
         });
@@ -202,7 +258,7 @@ export class WatcherProcessor {
   }
 
   async onPlanFailed(event: GatewayEvents["plan:failed"]): Promise<void> {
-    const watchers = await this.getActiveWatchersForPlan(event.planId);
+    const watchers = await this.getActiveWatchersForPlan(DEFAULT_TENANT_ID, event.planId);
     for (const watcher of watchers) {
       try {
         await recordMemoryV1SystemEpisode(
@@ -212,27 +268,27 @@ export class WatcherProcessor {
             channel: "watcher",
             event_type: "plan_failed",
             summary_md: `Watcher fired: plan_failed`,
-            tags: ["watcher", `watcher_id:${String(watcher.id)}`, `plan_id:${event.planId}`],
+            tags: ["watcher", `watcher_id:${watcher.watcher_id}`, `plan_id:${event.planId}`],
             metadata: {
-              watcher_id: watcher.id,
+              watcher_id: watcher.watcher_id,
               plan_id: event.planId,
               reason: event.reason,
               trigger_type: watcher.trigger_type,
             },
           },
-          "default",
+          { tenantId: watcher.tenant_id, agentId: watcher.agent_id },
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.warn("watcher.plan_failed_episode_record_failed", {
-          watcher_id: watcher.id,
+          watcher_id: watcher.watcher_id,
           plan_id: event.planId,
           error: message,
         });
       }
 
       if (watcher.trigger_type === "plan_complete") {
-        await this.deactivateWatcher(watcher.id);
+        await this.deactivateWatcher(watcher.watcher_id);
       }
     }
   }
@@ -241,43 +297,88 @@ export class WatcherProcessor {
   // CRUD
   // -----------------------------------------------------------------------
 
-  createWatcher(planId: string, triggerType: string, triggerConfig: unknown): Promise<number> {
+  createWatcher(
+    planId: string,
+    triggerType: string,
+    triggerConfig: unknown,
+    opts?: {
+      tenantId?: string;
+      agentId?: string;
+      workspaceId?: string;
+      watcherKey?: string;
+    },
+  ): Promise<string> {
     const nowIso = new Date().toISOString();
     return this.db.transaction(async (tx) => {
-      const row = await tx.get<{ id: number }>(
-        `INSERT INTO watchers (plan_id, trigger_type, trigger_config, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?)
-         RETURNING id`,
-        [planId, triggerType, JSON.stringify(triggerConfig), nowIso, nowIso],
+      const tenantId = opts?.tenantId ?? DEFAULT_TENANT_ID;
+      const agentId = opts?.agentId ?? DEFAULT_AGENT_ID;
+      const workspaceId = opts?.workspaceId ?? DEFAULT_WORKSPACE_ID;
+      const watcherId = randomUUID();
+      const watcherKey = opts?.watcherKey?.trim() || `watcher-${watcherId}`;
+      const configJson = JSON.stringify(
+        normalizeConfigForPlanId({ planId, triggerConfig: triggerConfig ?? {} }),
+      );
+
+      const row = await tx.get<{ watcher_id: string }>(
+        `INSERT INTO watchers (
+           tenant_id,
+           watcher_id,
+           watcher_key,
+           agent_id,
+           workspace_id,
+           trigger_type,
+           trigger_config_json,
+           created_at,
+           updated_at
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         RETURNING watcher_id`,
+        [
+          tenantId,
+          watcherId,
+          watcherKey,
+          agentId,
+          workspaceId,
+          triggerType,
+          configJson,
+          nowIso,
+          nowIso,
+        ],
       );
       if (!row) {
         throw new Error("failed to create watcher");
       }
-      return Number(row.id);
+      return row.watcher_id;
     });
   }
 
-  async listWatchers(): Promise<WatcherRow[]> {
+  async listWatchers(tenantId: string = DEFAULT_TENANT_ID): Promise<WatcherRow[]> {
     const rows = await this.db.all<RawWatcherRow>(
-      "SELECT * FROM watchers WHERE active = 1 ORDER BY created_at DESC",
+      `SELECT * FROM watchers WHERE tenant_id = ? AND ${this.activeWhereSql()} ORDER BY created_at DESC`,
+      [tenantId],
     );
     return rows.map(parseRow);
   }
 
-  async getActiveWatcherById(watcherId: number): Promise<WatcherRow | null> {
+  async getActiveWatcherById(
+    watcherId: string,
+    tenantId: string = DEFAULT_TENANT_ID,
+  ): Promise<WatcherRow | null> {
     const row = await this.db.get<RawWatcherRow>(
-      "SELECT * FROM watchers WHERE id = ? AND active = 1",
-      [watcherId],
+      `SELECT * FROM watchers WHERE tenant_id = ? AND watcher_id = ? AND ${this.activeWhereSql()}`,
+      [tenantId, watcherId],
     );
     return row ? parseRow(row) : null;
   }
 
-  async deactivateWatcher(watcherId: number): Promise<void> {
+  async deactivateWatcher(watcherId: string, tenantId: string = DEFAULT_TENANT_ID): Promise<void> {
     const nowIso = new Date().toISOString();
-    await this.db.run("UPDATE watchers SET active = 0, updated_at = ? WHERE id = ?", [
-      nowIso,
-      watcherId,
-    ]);
+    await this.db.run(
+      `UPDATE watchers
+       SET active = ${this.db.kind === "postgres" ? "false" : "0"}, updated_at = ?
+       WHERE tenant_id = ? AND watcher_id = ?`,
+      [nowIso, tenantId, watcherId],
+    );
     this.webhookScheduledAtCursor.delete(watcherId);
   }
 
@@ -286,10 +387,16 @@ export class WatcherProcessor {
       return false;
     }
 
-    const replayDigest = createHash("sha256").update(event.nonce).digest("hex");
-    const firingId = `webhook-${String(watcher.id)}-${replayDigest}`;
+    const firingId = webhookFiringId({
+      tenantId: watcher.tenant_id,
+      watcherId: watcher.watcher_id,
+      nonce: event.nonce,
+    });
 
-    const existing = await this.firingDal.getById(firingId);
+    const existing = await this.firingDal.getById({
+      tenantId: watcher.tenant_id,
+      watcherFiringId: firingId,
+    });
     if (existing) {
       return false;
     }
@@ -297,7 +404,7 @@ export class WatcherProcessor {
     const maxScheduledAtSearch = 10_000;
     const baseScheduledAtMs = Math.floor(event.timestampMs);
     const scheduledAtMaxExclusive = baseScheduledAtMs + maxScheduledAtSearch;
-    const cursor = this.webhookScheduledAtCursor.get(watcher.id);
+    const cursor = this.webhookScheduledAtCursor.get(watcher.watcher_id);
     const startScheduledAtMs =
       cursor && cursor.baseMs === baseScheduledAtMs ? cursor.nextMs : baseScheduledAtMs;
 
@@ -308,24 +415,32 @@ export class WatcherProcessor {
       }
 
       const created = await this.firingDal.createIfAbsent({
-        firingId,
-        watcherId: watcher.id,
-        planId: watcher.plan_id,
-        triggerType: watcher.trigger_type,
+        tenantId: watcher.tenant_id,
+        watcherFiringId: firingId,
+        watcherId: watcher.watcher_id,
         scheduledAtMs,
       });
-      if (created.row.firing_id === firingId) {
+      if (created.row.watcher_firing_id === firingId) {
         if (!created.created) {
           return false;
         }
         const nextMs = Math.max(startScheduledAtMs, created.row.scheduled_at_ms + 1);
-        this.setWebhookScheduledAtCursorEntry(watcher.id, { baseMs: baseScheduledAtMs, nextMs });
+        this.setWebhookScheduledAtCursorEntry(watcher.watcher_id, {
+          baseMs: baseScheduledAtMs,
+          nextMs,
+        });
         break;
       }
       if (attempt === maxScheduledAtSearch - 1) {
         throw new Error("failed to allocate unique scheduled_at_ms for webhook firing");
       }
     }
+
+    const planId = (() => {
+      const cfg = watcher.trigger_config as Record<string, unknown> | undefined;
+      const raw = cfg ? cfg["planId"] : undefined;
+      return typeof raw === "string" ? raw : "";
+    })();
 
     try {
       await recordMemoryV1SystemEpisode(
@@ -335,11 +450,11 @@ export class WatcherProcessor {
           channel: "watcher",
           event_type: "webhook_fired",
           summary_md: `Watcher fired: webhook_fired`,
-          tags: ["watcher", `watcher_id:${String(watcher.id)}`, `plan_id:${watcher.plan_id}`],
+          tags: ["watcher", `watcher_id:${watcher.watcher_id}`, `plan_id:${planId}`],
           metadata: {
             firing_id: firingId,
-            watcher_id: watcher.id,
-            plan_id: watcher.plan_id,
+            watcher_id: watcher.watcher_id,
+            plan_id: planId,
             trigger_type: watcher.trigger_type,
             timestamp_ms: event.timestampMs,
             nonce: event.nonce,
@@ -347,21 +462,21 @@ export class WatcherProcessor {
             body_bytes: event.bodyBytes,
           },
         },
-        "default",
+        { tenantId: watcher.tenant_id, agentId: watcher.agent_id },
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.warn("watcher.webhook_episode_record_failed", {
-        watcher_id: watcher.id,
-        plan_id: watcher.plan_id,
+        watcher_id: watcher.watcher_id,
+        plan_id: planId,
         firing_id: firingId,
         error: message,
       });
     }
 
     this.eventBus.emit("watcher:fired", {
-      watcherId: watcher.id,
-      planId: watcher.plan_id,
+      watcherId: watcher.watcher_id,
+      planId,
       triggerType: watcher.trigger_type,
     });
     return true;
@@ -371,12 +486,17 @@ export class WatcherProcessor {
   // Internal helpers
   // -----------------------------------------------------------------------
 
-  private async getActiveWatchersForPlan(planId: string): Promise<WatcherRow[]> {
+  private async getActiveWatchersForPlan(tenantId: string, planId: string): Promise<WatcherRow[]> {
     const rows = await this.db.all<RawWatcherRow>(
-      "SELECT * FROM watchers WHERE plan_id = ? AND active = 1",
-      [planId],
+      `SELECT * FROM watchers WHERE tenant_id = ? AND ${this.activeWhereSql()}`,
+      [tenantId],
     );
-    return rows.map(parseRow);
+    const parsed = rows.map(parseRow);
+    return parsed.filter((watcher) => {
+      const cfg = watcher.trigger_config as Record<string, unknown> | undefined;
+      const id = cfg ? cfg["planId"] : undefined;
+      return typeof id === "string" && id === planId;
+    });
   }
 
   private evaluateTrigger(watcher: WatcherRow, _event: GatewayEvents["plan:completed"]): boolean {

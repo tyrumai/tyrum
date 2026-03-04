@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
+import { randomUUID } from "node:crypto";
 import { createHttpScopeAuthorizationMiddleware } from "../../src/modules/authz/http-scope-middleware.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage, type ProtocolDeps } from "../../src/ws/protocol.js";
@@ -50,10 +51,11 @@ describe("scope normalization", () => {
       lastPong: 0,
     } satisfies ConnectedClient;
 
+    const approvalId = randomUUID();
     const response = await handleClientMessage(
       client,
       JSON.stringify({
-        request_id: "approval-1",
+        request_id: `approval-${approvalId}`,
         type: "approval.request",
         ok: true,
         result: { approved: true },
@@ -62,6 +64,6 @@ describe("scope normalization", () => {
     );
 
     expect(response).toBeUndefined();
-    expect(onApprovalDecision).toHaveBeenCalledWith(1, true, undefined);
+    expect(onApprovalDecision).toHaveBeenCalledWith(approvalId, true, undefined);
   });
 });

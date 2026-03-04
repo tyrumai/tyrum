@@ -1,5 +1,6 @@
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 export interface OutboxRow {
   id: number;
@@ -54,10 +55,10 @@ export class OutboxDal {
     const payloadJson = JSON.stringify(redactedPayload);
 
     const row = await this.db.get<RawOutboxRow>(
-      `INSERT INTO outbox (topic, target_edge_id, payload_json)
-       VALUES (?, ?, ?)
+      `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
+       VALUES (?, ?, ?, ?)
        RETURNING *`,
-      [topic, opts?.targetEdgeId ?? null, payloadJson],
+      [DEFAULT_TENANT_ID, topic, opts?.targetEdgeId ?? null, payloadJson],
     );
     if (!row) {
       throw new Error("outbox insert failed");
@@ -68,18 +69,18 @@ export class OutboxDal {
 
   async ensureConsumer(consumerId: string): Promise<void> {
     await this.db.run(
-      `INSERT INTO outbox_consumers (consumer_id, last_outbox_id)
-       VALUES (?, 0)
-       ON CONFLICT(consumer_id) DO NOTHING`,
-      [consumerId],
+      `INSERT INTO outbox_consumers (tenant_id, consumer_id, last_outbox_id)
+       VALUES (?, ?, 0)
+       ON CONFLICT(tenant_id, consumer_id) DO NOTHING`,
+      [DEFAULT_TENANT_ID, consumerId],
     );
   }
 
   async getConsumerCursor(consumerId: string): Promise<number> {
     await this.ensureConsumer(consumerId);
     const row = await this.db.get<{ last_outbox_id: number }>(
-      "SELECT last_outbox_id FROM outbox_consumers WHERE consumer_id = ?",
-      [consumerId],
+      "SELECT last_outbox_id FROM outbox_consumers WHERE tenant_id = ? AND consumer_id = ?",
+      [DEFAULT_TENANT_ID, consumerId],
     );
     return row?.last_outbox_id ?? 0;
   }
@@ -89,8 +90,8 @@ export class OutboxDal {
     await this.db.run(
       `UPDATE outbox_consumers
        SET last_outbox_id = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE consumer_id = ?`,
-      [lastOutboxId, consumerId],
+       WHERE tenant_id = ? AND consumer_id = ?`,
+      [lastOutboxId, DEFAULT_TENANT_ID, consumerId],
     );
   }
 
@@ -99,11 +100,12 @@ export class OutboxDal {
     const rows = await this.db.all<RawOutboxRow>(
       `SELECT *
        FROM outbox
-       WHERE id > ?
+       WHERE tenant_id = ?
+         AND id > ?
          AND (target_edge_id IS NULL OR target_edge_id = ?)
        ORDER BY id ASC
        LIMIT ?`,
-      [cursor, consumerId, batchSize],
+      [DEFAULT_TENANT_ID, cursor, consumerId, batchSize],
     );
     return rows.map(toOutboxRow);
   }

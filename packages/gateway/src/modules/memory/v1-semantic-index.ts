@@ -1,5 +1,6 @@
 import type { MemoryItemKind, MemorySensitivity } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { VectorDal, cosineSimilarity } from "./vector-dal.js";
 
 export interface MemoryV1Embedder {
@@ -9,6 +10,7 @@ export interface MemoryV1Embedder {
 
 export interface MemoryV1SemanticIndexOptions {
   db: SqlDb;
+  tenantId?: string;
   agentId?: string;
   embedder: MemoryV1Embedder;
   maxEmbedChars?: number;
@@ -32,9 +34,14 @@ type MemoryEmbeddingJoinedRow = {
   vector_data: string | null;
 };
 
+function normalizeTenantId(tenantId?: string): string {
+  const trimmed = tenantId?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : DEFAULT_TENANT_ID;
+}
+
 function normalizeAgentId(agentId?: string): string {
   const trimmed = agentId?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : "default";
+  return trimmed && trimmed.length > 0 ? trimmed : DEFAULT_AGENT_ID;
 }
 
 function assertFiniteVector(value: unknown): asserts value is number[] {
@@ -104,6 +111,7 @@ export type MemoryV1SemanticSearchHit = {
 
 export class MemoryV1SemanticIndex {
   private readonly db: SqlDb;
+  private readonly tenantId: string;
   private readonly agentId: string;
   private readonly embedder: MemoryV1Embedder;
   private readonly vectorDal: VectorDal;
@@ -111,6 +119,7 @@ export class MemoryV1SemanticIndex {
 
   constructor(opts: MemoryV1SemanticIndexOptions) {
     this.db = opts.db;
+    this.tenantId = normalizeTenantId(opts.tenantId);
     this.agentId = normalizeAgentId(opts.agentId);
     this.embedder = opts.embedder;
     this.vectorDal = new VectorDal(opts.db);
@@ -121,14 +130,19 @@ export class MemoryV1SemanticIndex {
     const deletedVectors = (
       await this.db.run(
         `DELETE FROM vector_metadata
-         WHERE agent_id = ?
+         WHERE tenant_id = ?
+           AND agent_id = ?
            AND label LIKE ?`,
-        [this.agentId, "memory_item:%"],
+        [this.tenantId, this.agentId, "memory_item:%"],
       )
     ).changes;
 
     const deletedLinks = (
-      await this.db.run(`DELETE FROM memory_item_embeddings WHERE agent_id = ?`, [this.agentId])
+      await this.db.run(
+        `DELETE FROM memory_item_embeddings
+         WHERE tenant_id = ? AND agent_id = ?`,
+        [this.tenantId, this.agentId],
+      )
     ).changes;
 
     return { deleted_vectors: deletedVectors, deleted_links: deletedLinks };
@@ -140,10 +154,11 @@ export class MemoryV1SemanticIndex {
     const candidates = await this.db.all<MemoryEmbeddingCandidateRow>(
       `SELECT memory_item_id, kind, sensitivity, title, body_md, summary_md
        FROM memory_items
-       WHERE agent_id = ?
+       WHERE tenant_id = ?
+         AND agent_id = ?
          AND kind IN ('note', 'procedure', 'episode')
        ORDER BY created_at DESC`,
-      [this.agentId],
+      [this.tenantId, this.agentId],
     );
 
     let indexed = 0;
@@ -172,14 +187,27 @@ export class MemoryV1SemanticIndex {
         vector,
         this.embedder.modelId,
         { memory_item_id: row.memory_item_id, kind: row.kind, snippet: eligible.snippet },
-        this.agentId,
+        { tenantId: this.tenantId, agentId: this.agentId },
       );
 
       await this.db.run(
-        `INSERT INTO memory_item_embeddings (agent_id, memory_item_id, embedding_id)
-         VALUES (?, ?, ?)
-         ON CONFLICT(agent_id, memory_item_id, embedding_id) DO NOTHING`,
-        [this.agentId, row.memory_item_id, embeddingId],
+        `INSERT INTO memory_item_embeddings (
+           tenant_id,
+           agent_id,
+           memory_item_id,
+           embedding_id,
+           embedding_model,
+           vector_data
+         ) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(tenant_id, agent_id, memory_item_id, embedding_id) DO NOTHING`,
+        [
+          this.tenantId,
+          this.agentId,
+          row.memory_item_id,
+          embeddingId,
+          this.embedder.modelId,
+          JSON.stringify(vector),
+        ],
       );
 
       indexed += 1;
@@ -199,17 +227,18 @@ export class MemoryV1SemanticIndex {
     const queryVector = embedded;
 
     const rows = await this.db.all<MemoryEmbeddingJoinedRow>(
-      `SELECT e.memory_item_id, m.kind, m.title, m.body_md, m.summary_md, v.vector_data
+      `SELECT e.memory_item_id, m.kind, m.title, m.body_md, m.summary_md, e.vector_data
        FROM memory_item_embeddings e
        JOIN memory_items m
-         ON m.agent_id = e.agent_id AND m.memory_item_id = e.memory_item_id
-       JOIN vector_metadata v
-         ON v.agent_id = e.agent_id AND v.embedding_id = e.embedding_id
-       WHERE e.agent_id = ?
+         ON m.tenant_id = e.tenant_id
+        AND m.agent_id = e.agent_id
+        AND m.memory_item_id = e.memory_item_id
+       WHERE e.tenant_id = ?
+         AND e.agent_id = ?
          AND m.sensitivity <> 'sensitive'
          AND m.kind IN ('note', 'procedure', 'episode')
-         AND v.vector_data IS NOT NULL`,
-      [this.agentId],
+         AND e.vector_data IS NOT NULL`,
+      [this.tenantId, this.agentId],
     );
 
     const bestByItem = new Map<

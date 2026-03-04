@@ -5,6 +5,11 @@ import { tmpdir } from "node:os";
 import { createApp } from "../../src/app.js";
 import { S3ArtifactStore } from "../../src/modules/artifact/store.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 import { GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { createTestContainer } from "./helpers.js";
 
@@ -21,27 +26,48 @@ type ExecutionScopeIds = {
 
 async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds): Promise<void> {
   await db.run(
-    `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json, input_json, latest_run_id)
-     VALUES (?, ?, ?, 'running', ?, ?, ?)`,
-    [ids.jobId, "agent:agent-1:thread:thread-1", "main", "{}", "{}", ids.runId],
+    `INSERT INTO execution_jobs (
+       tenant_id,
+       job_id,
+       agent_id,
+       workspace_id,
+       key,
+       lane,
+       status,
+       trigger_json,
+       input_json,
+       latest_run_id
+     )
+     VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
+    [
+      DEFAULT_TENANT_ID,
+      ids.jobId,
+      DEFAULT_AGENT_ID,
+      DEFAULT_WORKSPACE_ID,
+      "agent:agent-1:thread:thread-1",
+      "main",
+      "{}",
+      "{}",
+      ids.runId,
+    ],
   );
 
   await db.run(
-    `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, 'running', 1)`,
-    [ids.runId, ids.jobId, "agent:agent-1:thread:thread-1", "main"],
+    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+     VALUES (?, ?, ?, ?, ?, 'running', 1)`,
+    [DEFAULT_TENANT_ID, ids.runId, ids.jobId, "agent:agent-1:thread:thread-1", "main"],
   );
 
   await db.run(
-    `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
-     VALUES (?, ?, 0, 'running', ?)`,
-    [ids.stepId, ids.runId, "{}"],
+    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+     VALUES (?, ?, ?, 0, 'running', ?)`,
+    [DEFAULT_TENANT_ID, ids.stepId, ids.runId, "{}"],
   );
 
   await db.run(
-    `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status, artifacts_json)
-     VALUES (?, ?, 1, 'running', '[]')`,
-    [ids.attemptId, ids.stepId],
+    `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, artifacts_json)
+     VALUES (?, ?, ?, 1, 'running', '[]')`,
+    [DEFAULT_TENANT_ID, ids.attemptId, ids.stepId],
   );
 }
 
@@ -110,6 +136,7 @@ describe("artifact routes", () => {
 
     await container.db.run(
       `INSERT INTO execution_artifacts (
+         tenant_id,
          artifact_id,
          workspace_id,
          agent_id,
@@ -127,11 +154,12 @@ describe("artifact routes", () => {
          sensitivity,
          policy_snapshot_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        DEFAULT_TENANT_ID,
         ref.artifact_id,
-        "default",
-        "agent-1",
+        DEFAULT_WORKSPACE_ID,
+        DEFAULT_AGENT_ID,
         scope.runId,
         scope.stepId,
         scope.attemptId,
@@ -184,7 +212,13 @@ describe("artifact routes", () => {
     });
 
     await container.db.run(
+      `INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "ps-artifacts-request-id", "sha256-artifacts-request-id", "{}"],
+    );
+    await container.db.run(
       `INSERT INTO execution_artifacts (
+         tenant_id,
          artifact_id,
          workspace_id,
          agent_id,
@@ -202,11 +236,12 @@ describe("artifact routes", () => {
          sensitivity,
          policy_snapshot_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        DEFAULT_TENANT_ID,
         ref.artifact_id,
-        "default",
-        "agent-1",
+        DEFAULT_WORKSPACE_ID,
+        DEFAULT_AGENT_ID,
         scope.runId,
         scope.stepId,
         scope.attemptId,
@@ -279,6 +314,7 @@ describe("artifact routes", () => {
 
     await container.db.run(
       `INSERT INTO execution_artifacts (
+         tenant_id,
          artifact_id,
          workspace_id,
          agent_id,
@@ -296,11 +332,12 @@ describe("artifact routes", () => {
          sensitivity,
          policy_snapshot_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        DEFAULT_TENANT_ID,
         ref.artifact_id,
-        "default",
-        "agent-1",
+        DEFAULT_WORKSPACE_ID,
+        DEFAULT_AGENT_ID,
         scope.runId,
         scope.stepId,
         scope.attemptId,
@@ -395,6 +432,7 @@ describe("artifact routes", () => {
 
     await container.db.run(
       `INSERT INTO execution_artifacts (
+         tenant_id,
          artifact_id,
          workspace_id,
          agent_id,
@@ -412,11 +450,12 @@ describe("artifact routes", () => {
          sensitivity,
          policy_snapshot_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        DEFAULT_TENANT_ID,
         artifactId,
-        "default",
-        "agent-1",
+        DEFAULT_WORKSPACE_ID,
+        DEFAULT_AGENT_ID,
         scope.runId,
         scope.stepId,
         scope.attemptId,
@@ -463,6 +502,7 @@ describe("artifact routes", () => {
 
     await container.db.run(
       `INSERT INTO execution_artifacts (
+         tenant_id,
          artifact_id,
          workspace_id,
          agent_id,
@@ -480,11 +520,12 @@ describe("artifact routes", () => {
          sensitivity,
          policy_snapshot_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        DEFAULT_TENANT_ID,
         ref.artifact_id,
-        "default",
-        "agent-1",
+        DEFAULT_WORKSPACE_ID,
+        DEFAULT_AGENT_ID,
         scope.runId,
         scope.stepId,
         scope.attemptId,
@@ -534,6 +575,7 @@ describe("artifact routes", () => {
 
     await container.db.run(
       `INSERT INTO execution_artifacts (
+         tenant_id,
          artifact_id,
          workspace_id,
          agent_id,
@@ -551,10 +593,11 @@ describe("artifact routes", () => {
          sensitivity,
          policy_snapshot_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        DEFAULT_TENANT_ID,
         ref.artifact_id,
-        "default",
+        DEFAULT_WORKSPACE_ID,
         null,
         null,
         null,
@@ -611,6 +654,7 @@ describe("artifact routes", () => {
 
     await container.db.run(
       `INSERT INTO execution_artifacts (
+         tenant_id,
          artifact_id,
          workspace_id,
          agent_id,
@@ -628,11 +672,12 @@ describe("artifact routes", () => {
          sensitivity,
          policy_snapshot_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        DEFAULT_TENANT_ID,
         ref.artifact_id,
-        "default",
-        "agent-1",
+        DEFAULT_WORKSPACE_ID,
+        DEFAULT_AGENT_ID,
         scopeA.runId,
         scopeB.stepId,
         scopeB.attemptId,
@@ -681,6 +726,7 @@ describe("artifact routes", () => {
 
     await container.db.run(
       `INSERT INTO execution_artifacts (
+         tenant_id,
          artifact_id,
          workspace_id,
          agent_id,
@@ -698,11 +744,12 @@ describe("artifact routes", () => {
          sensitivity,
          policy_snapshot_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        DEFAULT_TENANT_ID,
         ref.artifact_id,
-        "default",
-        "agent-1",
+        DEFAULT_WORKSPACE_ID,
+        DEFAULT_AGENT_ID,
         scope.runId,
         scope.stepId,
         scope.attemptId,

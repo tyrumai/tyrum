@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { ContextReport } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 export interface ContextReportRow {
+  tenant_id: string;
   context_report_id: string;
   session_id: string;
   channel: string;
@@ -15,6 +17,7 @@ export interface ContextReportRow {
 }
 
 interface RawContextReportRow {
+  tenant_id: string;
   context_report_id: string;
   session_id: string;
   channel: string;
@@ -43,6 +46,7 @@ function parseReport(raw: string): unknown {
 
 function toRow(raw: RawContextReportRow): ContextReportRow {
   return {
+    tenant_id: raw.tenant_id,
     context_report_id: raw.context_report_id,
     session_id: raw.session_id,
     channel: raw.channel,
@@ -59,6 +63,7 @@ export class ContextReportDal {
   constructor(private readonly db: SqlDb) {}
 
   async insert(params: {
+    tenantId?: string;
     contextReportId?: string;
     sessionId: string;
     channel: string;
@@ -69,11 +74,13 @@ export class ContextReportDal {
     report: unknown;
     createdAtIso?: string;
   }): Promise<ContextReportRow> {
+    const tenantId = params.tenantId?.trim() || DEFAULT_TENANT_ID;
     const id = params.contextReportId?.trim() || randomUUID();
     const createdAt = params.createdAtIso ?? new Date().toISOString();
 
     const row = await this.db.get<RawContextReportRow>(
       `INSERT INTO context_reports (
+         tenant_id,
          context_report_id,
          session_id,
          channel,
@@ -84,9 +91,10 @@ export class ContextReportDal {
          report_json,
          created_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       [
+        tenantId,
         id,
         params.sessionId,
         params.channel,
@@ -104,24 +112,31 @@ export class ContextReportDal {
     return toRow(row);
   }
 
-  async getById(contextReportId: string): Promise<ContextReportRow | undefined> {
+  async getById(params: {
+    tenantId?: string;
+    contextReportId: string;
+  }): Promise<ContextReportRow | undefined> {
+    const tenantId = params.tenantId?.trim() || DEFAULT_TENANT_ID;
     const row = await this.db.get<RawContextReportRow>(
       `SELECT *
        FROM context_reports
-       WHERE context_report_id = ?`,
-      [contextReportId],
+       WHERE tenant_id = ? AND context_report_id = ?`,
+      [tenantId, params.contextReportId],
     );
     return row ? toRow(row) : undefined;
   }
 
   async list(params?: {
+    tenantId?: string;
     sessionId?: string;
     runId?: string;
     limit?: number;
   }): Promise<ContextReportRow[]> {
+    const tenantId = params?.tenantId?.trim() || DEFAULT_TENANT_ID;
     const where: string[] = [];
-    const values: unknown[] = [];
+    const values: unknown[] = [tenantId];
 
+    where.push("tenant_id = ?");
     if (params?.sessionId) {
       where.push("session_id = ?");
       values.push(params.sessionId);

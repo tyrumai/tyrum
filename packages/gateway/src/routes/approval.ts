@@ -11,10 +11,12 @@ import type { PolicyOverrideDal } from "../modules/policy/override-dal.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { WsEventEnvelope } from "@tyrum/schemas";
+import { UuidSchema } from "@tyrum/schemas";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import { toApprovalContract } from "../modules/approval/to-contract.js";
 import { isSafeSuggestedOverridePattern } from "../modules/policy/override-guardrails.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
+import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>([
   "pending",
@@ -102,14 +104,6 @@ function extractPolicySnapshotId(approvalContext: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
-function extractAgentId(approvalContext: unknown): string | undefined {
-  if (!isObject(approvalContext)) return undefined;
-  const policy = approvalContext["policy"];
-  if (!isObject(policy)) return undefined;
-  const value = policy["agent_id"];
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-}
-
 export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
   const app = new Hono();
 
@@ -127,18 +121,25 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       );
     }
 
-    const approvals = await deps.approvalDal.getByStatus(status ?? "pending");
+    const approvals = await deps.approvalDal.getByStatus({
+      tenantId: DEFAULT_TENANT_ID,
+      status: status ?? "pending",
+    });
     return c.json({ approvals });
   });
 
   /** Get a single approval by id. */
   app.get("/approvals/:id", async (c) => {
-    const id = parseInt(c.req.param("id"), 10);
-    if (isNaN(id)) {
-      return c.json({ error: "invalid_request", message: "id must be a number" }, 400);
+    const id = c.req.param("id");
+    const parsedId = UuidSchema.safeParse(id);
+    if (!parsedId.success) {
+      return c.json({ error: "invalid_request", message: "id must be a UUID" }, 400);
     }
 
-    const approval = await deps.approvalDal.getById(id);
+    const approval = await deps.approvalDal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: parsedId.data,
+    });
     if (!approval) {
       return c.json({ error: "not_found", message: `approval ${String(id)} not found` }, 404);
     }
@@ -148,36 +149,36 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
 
   /** Respond to a pending approval (approve or deny). */
   app.post("/approvals/:id/respond", async (c) => {
-    const id = parseInt(c.req.param("id"), 10);
-    if (isNaN(id)) {
-      return c.json({ error: "invalid_request", message: "id must be a number" }, 400);
+    const id = c.req.param("id");
+    const parsedId = UuidSchema.safeParse(id);
+    if (!parsedId.success) {
+      return c.json({ error: "invalid_request", message: "id must be a UUID" }, 400);
     }
 
     const body = (await c.req.json()) as {
       decision?: "approved" | "denied";
-      approved?: boolean;
       reason?: string;
       mode?: "once" | "always";
       overrides?: Array<{ tool_id?: string; pattern?: string; workspace_id?: string }>;
     };
 
-    // Accept either { decision: "approved"|"denied" } or legacy { approved: boolean }
-    let isApproved: boolean;
+    let decision: "approved" | "denied";
     if (body.decision === "approved" || body.decision === "denied") {
-      isApproved = body.decision === "approved";
-    } else if (typeof body.approved === "boolean") {
-      isApproved = body.approved;
+      decision = body.decision;
     } else {
       return c.json(
         {
           error: "invalid_request",
-          message: 'decision ("approved" or "denied") or approved (boolean) is required',
+          message: 'decision ("approved" or "denied") is required',
         },
         400,
       );
     }
 
-    const existing = await deps.approvalDal.getById(id);
+    const existing = await deps.approvalDal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: parsedId.data,
+    });
     if (!existing) {
       return c.json({ error: "not_found", message: `approval ${String(id)} not found` }, 404);
     }
@@ -189,7 +190,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       return c.json({ approval: existing });
     }
 
-    const shouldCreateOverrides = isApproved && body.mode === "always";
+    const shouldCreateOverrides = decision === "approved" && body.mode === "always";
     const selectedNormalized: Array<{ tool_id: string; pattern: string; workspace_id?: string }> =
       [];
     const overrideDalForRequest = shouldCreateOverrides ? deps.policyOverrideDal : undefined;
@@ -249,9 +250,27 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
           );
         }
       }
+
+      for (const sel of selectedNormalized) {
+        if (!sel.workspace_id) continue;
+        const parsedWorkspaceId = UuidSchema.safeParse(sel.workspace_id);
+        if (!parsedWorkspaceId.success) {
+          return c.json({ error: "invalid_request", message: "workspace_id must be a UUID" }, 400);
+        }
+      }
     }
 
-    const updated = await deps.approvalDal.respond(id, isApproved, body.reason);
+    const updated = await deps.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: parsedId.data,
+      decision,
+      reason: body.reason,
+      resolvedBy: {
+        kind: "http",
+        ip: getClientIp(c),
+        user_agent: c.req.header("user-agent") ?? undefined,
+      },
+    });
     if (!updated) {
       return c.json(
         {
@@ -262,7 +281,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       );
     }
 
-    const desiredStatus = isApproved ? "approved" : "denied";
+    const desiredStatus = decision;
     const decisionMatches = updated.status === desiredStatus;
     if (deps.engine && decisionMatches) {
       const ctx = updated.context;
@@ -274,10 +293,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       ) {
         await deps.engine.resumeRun(updated.resume_token);
       } else if (updated.status === "denied" && updated.run_id) {
-        await deps.engine.cancelRun(
-          updated.run_id,
-          updated.response_reason ?? body.reason ?? "approval denied",
-        );
+        await deps.engine.cancelRun(updated.run_id, body.reason ?? "approval denied");
       }
     }
 
@@ -294,7 +310,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
         ip: getClientIp(c),
         user_agent: c.req.header("user-agent") ?? undefined,
       };
-      const agentId = extractAgentId(updated.context) ?? "default";
+      const agentId = updated.agent_id;
       const snapshotId = extractPolicySnapshotId(updated.context);
 
       for (const sel of selectedNormalized) {
@@ -304,7 +320,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
           toolId: sel.tool_id,
           pattern: sel.pattern,
           createdBy,
-          createdFromApprovalId: updated.id,
+          createdFromApprovalId: updated.approval_id,
           createdFromPolicySnapshotId: snapshotId,
         });
         createdOverrides.push(row);
@@ -338,20 +354,23 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
 
   /** Preview the context of a pending approval. */
   app.get("/approvals/:id/preview", async (c) => {
-    const id = parseInt(c.req.param("id"), 10);
-    if (isNaN(id)) {
-      return c.json({ error: "invalid_request", message: "id must be a number" }, 400);
+    const id = c.req.param("id");
+    const parsedId = UuidSchema.safeParse(id);
+    if (!parsedId.success) {
+      return c.json({ error: "invalid_request", message: "id must be a UUID" }, 400);
     }
 
-    const approval = await deps.approvalDal.getById(id);
+    const approval = await deps.approvalDal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: parsedId.data,
+    });
     if (!approval) {
       return c.json({ error: "not_found", message: `approval ${String(id)} not found` }, 404);
     }
 
     return c.json({
-      id: approval.id,
-      plan_id: approval.plan_id,
-      step_index: approval.step_index,
+      approval_id: approval.approval_id,
+      approval_key: approval.approval_key,
       prompt: approval.prompt,
       context: approval.context,
       status: approval.status,

@@ -8,6 +8,7 @@ import type { PolicyService } from "../policy/service.js";
 import type { ApprovalDal, ApprovalRow } from "../approval/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { PlaybookRunner } from "./runner.js";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -68,10 +69,10 @@ async function loadPendingApprovalForRun(
   const row = await db.get<{ prompt: string; resume_token: string | null }>(
     `SELECT prompt, resume_token
      FROM approvals
-     WHERE run_id = ? AND status = 'pending'
+     WHERE tenant_id = ? AND run_id = ? AND status = 'pending'
      ORDER BY created_at DESC
      LIMIT 1`,
-    [runId],
+    [DEFAULT_TENANT_ID, runId],
   );
   const resumeToken = row?.resume_token?.trim();
   if (!row?.prompt || !resumeToken) return undefined;
@@ -293,7 +294,10 @@ export async function runPlaybookRuntimeEnvelope(
       return await envelopeForRunStatus(deps.db, res.runId, timeoutMs);
     }
 
-    const approval = await deps.approvalDal.getByResumeToken(input.token);
+    const approval = await deps.approvalDal.getByResumeToken({
+      tenantId: DEFAULT_TENANT_ID,
+      resumeToken: input.token,
+    });
     if (!approval) {
       return {
         ok: false,
@@ -320,7 +324,13 @@ export async function runPlaybookRuntimeEnvelope(
 
     const resolvedApproval =
       approval.status === "pending"
-        ? await deps.approvalDal.respond(approval.id, input.approve, input.reason)
+        ? await deps.approvalDal.respond({
+            tenantId: DEFAULT_TENANT_ID,
+            approvalId: approval.approval_id,
+            decision: input.approve ? "approved" : "denied",
+            reason: input.reason,
+            resolvedBy: { kind: "playbook" },
+          })
         : approval;
     if (!resolvedApproval) {
       return {
@@ -347,7 +357,7 @@ export async function runPlaybookRuntimeEnvelope(
       // Best-effort; if already resumed, this may return undefined.
       await deps.engine.resumeRun(input.token);
     } else {
-      const reason = resolvedApproval.response_reason ?? input.reason ?? "approval denied";
+      const reason = input.reason ?? "approval denied";
       await deps.engine.cancelRun(runId, reason);
     }
 

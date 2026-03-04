@@ -1,5 +1,4 @@
 import {
-  AgentId,
   AuthProfile,
   AuthProfileCreateRequest,
   AuthProfileCreateResponse,
@@ -22,17 +21,15 @@ import {
 
 const AuthProfileListQuery = z
   .object({
-    agent_id: AgentId.optional(),
-    provider: NonEmptyString.optional(),
+    provider_key: NonEmptyString.optional(),
     status: AuthProfileStatus.optional(),
   })
   .strict();
 
 const AuthPinListQuery = z
   .object({
-    agent_id: AgentId.optional(),
     session_id: NonEmptyString.optional(),
-    provider: NonEmptyString.optional(),
+    provider_key: NonEmptyString.optional(),
   })
   .strict();
 
@@ -192,7 +189,7 @@ export function createAuthPinsApi(transport: HttpTransport): AuthPinsApi {
     async set(input, options) {
       const body = validateOrThrow(SessionProviderPinSetRequest, input, "auth pin set request");
 
-      if (body.profile_id === null) {
+      if (body.auth_profile_key === null) {
         return await transport.request({
           method: "POST",
           path: "/auth/pins",

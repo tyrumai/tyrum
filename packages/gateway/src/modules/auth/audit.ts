@@ -3,6 +3,7 @@ import type { WsEventEnvelope } from "@tyrum/schemas";
 import type { Logger } from "../observability/logger.js";
 import type { EventLog } from "../planner/event-log.js";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 export const GATEWAY_AUTH_AUDIT_PLAN_ID = "gateway.auth.audit";
 
@@ -94,8 +95,9 @@ export class AuthAudit {
     try {
       await this.eventLog.appendNext(
         {
+          tenantId: DEFAULT_TENANT_ID,
           replayId: randomUUID(),
-          planId: GATEWAY_AUTH_AUDIT_PLAN_ID,
+          planKey: GATEWAY_AUTH_AUDIT_PLAN_ID,
           occurredAt,
           action,
         },
@@ -172,8 +174,9 @@ export class AuthAudit {
     try {
       await this.eventLog.appendNext(
         {
+          tenantId: DEFAULT_TENANT_ID,
           replayId: randomUUID(),
-          planId: GATEWAY_AUTH_AUDIT_PLAN_ID,
+          planKey: GATEWAY_AUTH_AUDIT_PLAN_ID,
           occurredAt,
           action,
         },

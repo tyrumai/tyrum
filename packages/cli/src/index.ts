@@ -41,7 +41,7 @@ type CliCommand =
   | { kind: "approvals_list"; limit: number }
   | {
       kind: "approvals_resolve";
-      approval_id: number;
+      approval_id: string;
       decision: "approved" | "denied";
       reason?: string;
     }
@@ -75,8 +75,7 @@ type CliCommand =
   | {
       kind: "secrets_store";
       elevated_token?: string;
-      scope: string;
-      provider: "env" | "file" | "keychain";
+      secret_key: string;
       value: string;
     }
   | { kind: "secrets_revoke"; elevated_token?: string; handle_id: string }
@@ -172,7 +171,7 @@ function printCliHelp(): void {
       "  tyrum-cli pairing deny --pairing-id <id> [--reason <text>]",
       "  tyrum-cli pairing revoke --pairing-id <id> [--reason <text>]",
       "  tyrum-cli secrets list",
-      "  tyrum-cli secrets store --scope <scope> --provider <env|file|keychain> --value <value>",
+      "  tyrum-cli secrets store --secret-key <secret_key> --value <value>",
       "  tyrum-cli secrets revoke --handle-id <handle-id>",
       "  tyrum-cli secrets rotate --handle-id <handle-id> --value <value>",
       "  tyrum-cli policy bundle",
@@ -356,8 +355,7 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
 
     if (second === "store") {
       let elevatedToken: string | undefined;
-      let scope: string | undefined;
-      let provider: "env" | "file" | "keychain" = "env";
+      let secretKey: string | undefined;
       let value: string | undefined;
 
       for (let i = 2; i < argv.length; i += 1) {
@@ -370,23 +368,12 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
           continue;
         }
 
-        if (arg === "--scope") {
+        if (arg === "--secret-key") {
           const raw = argv[i + 1];
-          if (!raw) throw new Error("--scope requires a value");
+          if (!raw) throw new Error("--secret-key requires a value");
           const trimmed = raw.trim();
-          if (!trimmed) throw new Error("--scope requires a non-empty value");
-          scope = trimmed;
-          i += 1;
-          continue;
-        }
-
-        if (arg === "--provider") {
-          const raw = argv[i + 1]?.trim();
-          if (!raw) throw new Error("--provider requires a value");
-          if (raw !== "env" && raw !== "file" && raw !== "keychain") {
-            throw new Error("--provider must be env, file, or keychain");
-          }
-          provider = raw;
+          if (!trimmed) throw new Error("--secret-key requires a non-empty value");
+          secretKey = trimmed;
           i += 1;
           continue;
         }
@@ -405,9 +392,9 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
         throw new Error(`unexpected secrets.store argument '${arg}'`);
       }
 
-      if (!scope) throw new Error("secrets store requires --scope <scope>");
+      if (!secretKey) throw new Error("secrets store requires --secret-key <secret_key>");
       if (!value) throw new Error("secrets store requires --value <value>");
-      return { kind: "secrets_store", elevated_token: elevatedToken, scope, provider, value };
+      return { kind: "secrets_store", elevated_token: elevatedToken, secret_key: secretKey, value };
     }
 
     if (second === "revoke" || second === "rotate") {
@@ -1209,7 +1196,7 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
       return { kind: "approvals_list", limit };
     }
 
-    let approvalId: number | undefined;
+    let approvalId: string | undefined;
     let decision: "approved" | "denied" | undefined;
     let reason: string | undefined;
 
@@ -1220,11 +1207,12 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
       if (arg === "--approval-id") {
         const raw = argv[i + 1];
         if (!raw) throw new Error("--approval-id requires a value");
-        const parsed = Number.parseInt(raw, 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-          throw new Error("--approval-id must be a positive integer");
+        const trimmed = raw.trim();
+        if (!trimmed) throw new Error("--approval-id requires a non-empty value");
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+          throw new Error("--approval-id must be a UUID");
         }
-        approvalId = parsed;
+        approvalId = trimmed;
         i += 1;
         continue;
       }
@@ -1926,8 +1914,7 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
             return await http.secrets.list();
           case "secrets_store":
             return await http.secrets.store({
-              scope: command.scope,
-              provider: command.provider,
+              secret_key: command.secret_key,
               value: command.value,
             });
           case "secrets_revoke":

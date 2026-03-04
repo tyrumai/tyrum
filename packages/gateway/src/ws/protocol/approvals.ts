@@ -10,9 +10,9 @@ import type { ProtocolDeps } from "./types.js";
  */
 export function requestApproval(
   approval: {
-    approval_id: number;
-    plan_id: string;
-    step_index: number;
+    approval_id: string;
+    approval_key: string;
+    kind: string;
     prompt: string;
     context?: unknown;
     expires_at?: string | null;

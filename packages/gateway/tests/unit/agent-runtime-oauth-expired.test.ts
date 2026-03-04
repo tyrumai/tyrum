@@ -2,12 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SecretHandle } from "@tyrum/schemas";
-import type { SecretProvider } from "../../src/modules/secret/provider.js";
+import { APICallError, type LanguageModelV3 } from "@ai-sdk/provider";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
-import type { LanguageModelV3 } from "@ai-sdk/provider";
+import { DbSecretProvider } from "../../src/modules/secret/provider.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -25,6 +25,15 @@ vi.mock("../../src/modules/models/provider-factory.js", () => {
         supportedUrls: {},
         async doGenerate() {
           seenApiKeys.push(apiKey);
+          if (apiKey === "OAUTH_EXPIRED") {
+            throw new APICallError({
+              message: "unauthorized",
+              url: "https://api.example/v1",
+              requestBodyValues: {},
+              statusCode: 401,
+              responseBody: '{"error":"unauthorized"}',
+            });
+          }
           return { text: "ok" } as unknown as Awaited<ReturnType<LanguageModelV3["doGenerate"]>>;
         },
         async doStream() {
@@ -41,38 +50,7 @@ vi.mock("../../src/modules/models/provider-factory.js", () => {
   };
 });
 
-class MemorySecretProvider implements SecretProvider {
-  private readonly values = new Map<string, string>();
-  private readonly handles = new Map<string, SecretHandle>();
-
-  async resolve(handle: SecretHandle): Promise<string | null> {
-    return this.values.get(handle.handle_id) ?? null;
-  }
-
-  async store(scope: string, value: string): Promise<SecretHandle> {
-    const handle: SecretHandle = {
-      handle_id: randomUUID(),
-      provider: "memory",
-      scope,
-      created_at: new Date().toISOString(),
-    };
-    this.handles.set(handle.handle_id, handle);
-    this.values.set(handle.handle_id, value);
-    return handle;
-  }
-
-  async revoke(handleId: string): Promise<boolean> {
-    const existed = this.handles.delete(handleId);
-    this.values.delete(handleId);
-    return existed;
-  }
-
-  async list(): Promise<SecretHandle[]> {
-    return [...this.handles.values()];
-  }
-}
-
-describe("AgentRuntime OAuth expired token handling", () => {
+describe("AgentRuntime OAuth rotation when refresh cannot run", () => {
   let container: GatewayContainer | undefined;
 
   afterEach(async () => {
@@ -82,7 +60,7 @@ describe("AgentRuntime OAuth expired token handling", () => {
     delete process.env["TYRUM_AUTH_PROFILES_ENABLED"];
   });
 
-  it("does not fall back to an expired OAuth access token when refresh cannot run", async () => {
+  it("rotates to another profile without retrying the same token when the refresh lease is held", async () => {
     process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
 
     container = createContainer({
@@ -120,38 +98,38 @@ describe("AgentRuntime OAuth expired token handling", () => {
       },
     };
 
-    const secretProvider = new MemorySecretProvider();
+    const secretProvider = new DbSecretProvider(container.db, {
+      tenantId: DEFAULT_TENANT_ID,
+      masterKey: Buffer.alloc(32, 7),
+      keyId: "test-key",
+    });
 
-    const oauthAccessHandle = await secretProvider.store(
-      "oauth:openai:agent-1:access",
-      "OAUTH_EXPIRED",
-    );
-    const refreshHandle = await secretProvider.store("oauth:openai:agent-1:refresh", "REFRESH");
-    const apiKeyHandle = await secretProvider.store("api:openai:agent-1:key", "API_KEY");
+    const accessKey = "oauth:openai:access";
+    const refreshKey = "oauth:openai:refresh";
+    const apiKeyKey = "api:openai:key";
+    const accessHandle = await secretProvider.store(accessKey, "OAUTH_EXPIRED");
+    await secretProvider.store(refreshKey, "REFRESH_TOKEN");
+    await secretProvider.store(apiKeyKey, "API_KEY");
 
     const authProfileDal = new AuthProfileDal(container.db);
     await authProfileDal.create({
-      profileId: "a-oauth",
-      agentId: "agent-1",
-      provider: "openai",
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: "a-oauth",
+      providerKey: "openai",
       type: "oauth",
-      secretHandles: {
-        access_token_handle: oauthAccessHandle.handle_id,
-        refresh_token_handle: refreshHandle.handle_id,
+      secretKeys: {
+        access_token: accessKey,
+        refresh_token: refreshKey,
       },
-      expiresAt: new Date(Date.now() - 5_000).toISOString(),
-      createdBy: { kind: "test" },
     });
     await authProfileDal.create({
-      profileId: "b-api",
-      agentId: "agent-1",
-      provider: "openai",
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: "b-api",
+      providerKey: "openai",
       type: "api_key",
-      secretHandles: {
-        api_key_handle: apiKeyHandle.handle_id,
+      secretKeys: {
+        api_key: apiKeyKey,
       },
-      expiresAt: null,
-      createdBy: { kind: "test" },
     });
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
@@ -164,21 +142,22 @@ describe("AgentRuntime OAuth expired token handling", () => {
       fetchImpl,
     });
 
-    const model = await (
-      runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }
-    ).resolveSessionModel({
+    const model = await (runtime as any).resolveSessionModel({
       config: { model: { model: "openai/gpt-4.1", options: {} } },
-      sessionId: "session-1",
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: randomUUID(),
       fetchImpl,
     });
 
     await model.doGenerate({} as any);
 
-    expect(seenApiKeys).toEqual(["API_KEY"]);
+    expect(seenApiKeys).toEqual(["OAUTH_EXPIRED", "API_KEY"]);
+    expect(await secretProvider.resolve(accessHandle)).toBe("OAUTH_EXPIRED");
 
-    const oauth = await authProfileDal.getById("a-oauth");
+    const oauth = await authProfileDal.getByKey({
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: "a-oauth",
+    });
     expect(oauth?.status).toBe("active");
   });
 });

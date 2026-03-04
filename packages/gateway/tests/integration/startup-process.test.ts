@@ -20,6 +20,11 @@ import { describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import Database from "better-sqlite3";
 import { completeHandshake } from "./ws-handshake.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(__dirname, "../..");
@@ -369,41 +374,105 @@ describe("gateway startup process", () => {
             db.pragma("busy_timeout = 5000");
 
             const nowIso = new Date().toISOString();
-            const jobId = "job-ws-approval-test";
-            const runId = "run-ws-approval-test";
+            const jobId = "a8c8b7d6-e3f5-4b3c-a1c8-1c4c5c2f0a01";
+            const runId = "c8b7d6e3-f54b-4b3c-a1c8-1c4c5c2f0a02";
+            const stepId = "d6e3f54b-4b3c-4b3c-a1c8-1c4c5c2f0a03";
             const resumeToken = "resume-ws-approval-test";
+            const approvalId = "e3f54b4b-3c4b-4b3c-a1c8-1c4c5c2f0a04";
+            const approvalKey = "approval-ws-approval-test";
             const key = "test:ws-approval";
             const lane = "main";
+            const triggerJson = JSON.stringify({ kind: "session", key, lane });
             const actionJson = JSON.stringify({ type: "Decide", args: {} });
             const contextJson = JSON.stringify({ source: "agent-tool-execution" });
 
             db.prepare(
-              `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-               VALUES (?, ?, ?, 'queued', '{}')`,
-            ).run(jobId, key, lane);
+              `INSERT INTO execution_jobs (
+	                 tenant_id,
+	                 job_id,
+	                 agent_id,
+	                 workspace_id,
+	                 key,
+	                 lane,
+	                 status,
+	                 trigger_json,
+	                 created_at
+	               ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?)`,
+            ).run(
+              DEFAULT_TENANT_ID,
+              jobId,
+              DEFAULT_AGENT_ID,
+              DEFAULT_WORKSPACE_ID,
+              key,
+              lane,
+              triggerJson,
+              nowIso,
+            );
 
             db.prepare(
-              `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt, started_at, paused_reason, paused_detail)
-               VALUES (?, ?, ?, ?, 'paused', 1, ?, 'approval', 'waiting on approval')`,
-            ).run(runId, jobId, key, lane, nowIso);
+              `INSERT INTO execution_runs (
+	                 tenant_id,
+	                 run_id,
+	                 job_id,
+	                 key,
+	                 lane,
+	                 status,
+	                 attempt,
+	                 created_at,
+	                 started_at,
+	                 paused_reason,
+	                 paused_detail
+	               ) VALUES (?, ?, ?, ?, ?, 'paused', 1, ?, ?, 'approval', 'waiting on approval')`,
+            ).run(DEFAULT_TENANT_ID, runId, jobId, key, lane, nowIso, nowIso);
 
             db.prepare(
-              `INSERT INTO resume_tokens (token, run_id, created_at)
-               VALUES (?, ?, ?)`,
-            ).run(resumeToken, runId, nowIso);
-
-            const approvalInsert = db
-              .prepare(
-                `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at, kind, agent_id, key, lane, run_id, resume_token)
-               VALUES ('plan-ws-approval-test', 0, 'test approval', ?, NULL, 'workflow_step', 'default', ?, ?, ?, ?)`,
-              )
-              .run(contextJson, key, lane, runId, resumeToken);
-            const approvalId = Number(approvalInsert.lastInsertRowid);
+              `INSERT INTO resume_tokens (tenant_id, token, run_id, created_at)
+	               VALUES (?, ?, ?, ?)`,
+            ).run(DEFAULT_TENANT_ID, resumeToken, runId, nowIso);
 
             db.prepare(
-              `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json, approval_id)
-               VALUES ('step-ws-approval-test', ?, 0, 'paused', ?, ?)`,
-            ).run(runId, actionJson, approvalId);
+              `INSERT INTO approvals (
+	                 tenant_id,
+	                 approval_id,
+	                 approval_key,
+	                 agent_id,
+	                 workspace_id,
+	                 kind,
+	                 status,
+	                 prompt,
+	                 context_json,
+	                 created_at,
+	                 expires_at,
+	                 run_id,
+	                 step_id,
+	                 resume_token
+	               ) VALUES (?, ?, ?, ?, ?, 'workflow_step', 'pending', ?, ?, ?, NULL, ?, ?, ?)`,
+            ).run(
+              DEFAULT_TENANT_ID,
+              approvalId,
+              approvalKey,
+              DEFAULT_AGENT_ID,
+              DEFAULT_WORKSPACE_ID,
+              "test approval",
+              contextJson,
+              nowIso,
+              runId,
+              stepId,
+              resumeToken,
+            );
+
+            db.prepare(
+              `INSERT INTO execution_steps (
+	                 tenant_id,
+	                 step_id,
+	                 run_id,
+	                 step_index,
+	                 status,
+	                 action_json,
+	                 created_at,
+	                 approval_id
+	               ) VALUES (?, ?, ?, 0, 'paused', ?, ?, ?)`,
+            ).run(DEFAULT_TENANT_ID, stepId, runId, actionJson, nowIso, approvalId);
 
             const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(gatewayToken));
             try {
@@ -513,35 +582,98 @@ describe("gateway startup process", () => {
             db.pragma("busy_timeout = 5000");
 
             const nowIso = new Date().toISOString();
-            const jobId = "job-ws-approval-missing-token";
-            const runId = "run-ws-approval-missing-token";
+            const jobId = "c78e8356-6c13-4f74-92d8-3386da3fbf01";
+            const runId = "6c13c78e-8356-4f74-92d8-3386da3fbf02";
+            const stepId = "83566c13-c78e-4f74-92d8-3386da3fbf03";
+            const approvalId = "8e83566c-13c7-4f74-92d8-3386da3fbf04";
+            const approvalKey = "approval-ws-approval-missing-token";
             const key = "test:ws-approval-missing-token";
             const lane = "main";
+            const triggerJson = JSON.stringify({ kind: "session", key, lane });
             const actionJson = JSON.stringify({ type: "Decide", args: {} });
             const contextJson = JSON.stringify({ source: "agent-tool-execution" });
 
             db.prepare(
-              `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
-               VALUES (?, ?, ?, 'queued', '{}')`,
-            ).run(jobId, key, lane);
+              `INSERT INTO execution_jobs (
+	                 tenant_id,
+	                 job_id,
+	                 agent_id,
+	                 workspace_id,
+	                 key,
+	                 lane,
+	                 status,
+	                 trigger_json,
+	                 created_at
+	               ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?)`,
+            ).run(
+              DEFAULT_TENANT_ID,
+              jobId,
+              DEFAULT_AGENT_ID,
+              DEFAULT_WORKSPACE_ID,
+              key,
+              lane,
+              triggerJson,
+              nowIso,
+            );
 
             db.prepare(
-              `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt, started_at, paused_reason, paused_detail)
-               VALUES (?, ?, ?, ?, 'paused', 1, ?, 'approval', 'waiting on approval')`,
-            ).run(runId, jobId, key, lane, nowIso);
-
-            const approvalInsert = db
-              .prepare(
-                `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at, kind, agent_id, key, lane, run_id, resume_token)
-               VALUES ('plan-ws-approval-missing-token', 0, 'test approval', ?, NULL, 'workflow_step', 'default', ?, ?, ?, ?)`,
-              )
-              .run(contextJson, key, lane, runId, null);
-            const approvalId = Number(approvalInsert.lastInsertRowid);
+              `INSERT INTO execution_runs (
+	                 tenant_id,
+	                 run_id,
+	                 job_id,
+	                 key,
+	                 lane,
+	                 status,
+	                 attempt,
+	                 created_at,
+	                 started_at,
+	                 paused_reason,
+	                 paused_detail
+	               ) VALUES (?, ?, ?, ?, ?, 'paused', 1, ?, ?, 'approval', 'waiting on approval')`,
+            ).run(DEFAULT_TENANT_ID, runId, jobId, key, lane, nowIso, nowIso);
 
             db.prepare(
-              `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json, approval_id)
-               VALUES ('step-ws-approval-missing-token', ?, 0, 'paused', ?, ?)`,
-            ).run(runId, actionJson, approvalId);
+              `INSERT INTO approvals (
+	                 tenant_id,
+	                 approval_id,
+	                 approval_key,
+	                 agent_id,
+	                 workspace_id,
+	                 kind,
+	                 status,
+	                 prompt,
+	                 context_json,
+	                 created_at,
+	                 expires_at,
+	                 run_id,
+	                 step_id,
+	                 resume_token
+	               ) VALUES (?, ?, ?, ?, ?, 'workflow_step', 'pending', ?, ?, ?, NULL, ?, ?, NULL)`,
+            ).run(
+              DEFAULT_TENANT_ID,
+              approvalId,
+              approvalKey,
+              DEFAULT_AGENT_ID,
+              DEFAULT_WORKSPACE_ID,
+              "test approval",
+              contextJson,
+              nowIso,
+              runId,
+              stepId,
+            );
+
+            db.prepare(
+              `INSERT INTO execution_steps (
+	                 tenant_id,
+	                 step_id,
+	                 run_id,
+	                 step_index,
+	                 status,
+	                 action_json,
+	                 created_at,
+	                 approval_id
+	               ) VALUES (?, ?, ?, 0, 'paused', ?, ?, ?)`,
+            ).run(DEFAULT_TENANT_ID, stepId, runId, actionJson, nowIso, approvalId);
 
             const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(gatewayToken));
             try {

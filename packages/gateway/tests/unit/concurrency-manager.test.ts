@@ -6,6 +6,7 @@ import {
   releaseLaneAndWorkspaceLeasesTx,
   touchLaneLeaseTx,
 } from "../../src/modules/execution/engine/concurrency-manager.js";
+import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
@@ -62,32 +63,33 @@ describe("concurrency-manager", () => {
   it("releases lane and workspace leases in a transaction", async () => {
     db = openTestSqliteDb();
     await db.run(
-      `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?, ?)`,
-      ["key-1", "default", "worker-1", 123],
+      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+	       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "key-1", "default", "worker-1", 123],
     );
     await db.run(
-      `INSERT INTO workspace_leases (workspace_id, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?)`,
-      ["default", "worker-1", 123],
+      `INSERT INTO workspace_leases (tenant_id, workspace_id, lease_owner, lease_expires_at_ms)
+	       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID, "worker-1", 123],
     );
 
     await db.transaction(async (tx) => {
       await releaseLaneAndWorkspaceLeasesTx(tx, {
+        tenantId: DEFAULT_TENANT_ID,
         key: "key-1",
         lane: "default",
-        workspaceId: "default",
+        workspaceId: DEFAULT_WORKSPACE_ID,
         owner: "worker-1",
       });
     });
 
     const lane = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM lane_leases WHERE key = ? AND lane = ?",
-      ["key-1", "default"],
+      "SELECT COUNT(*) AS n FROM lane_leases WHERE tenant_id = ? AND key = ? AND lane = ?",
+      [DEFAULT_TENANT_ID, "key-1", "default"],
     );
     const workspace = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM workspace_leases WHERE workspace_id = ?",
-      ["default"],
+      "SELECT COUNT(*) AS n FROM workspace_leases WHERE tenant_id = ? AND workspace_id = ?",
+      [DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID],
     );
 
     expect(lane?.n ?? 0).toBe(0);
@@ -97,13 +99,14 @@ describe("concurrency-manager", () => {
   it("touches lane leases by updating expires_at_ms", async () => {
     db = openTestSqliteDb();
     await db.run(
-      `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
-       VALUES (?, ?, ?, ?)`,
-      ["key-1", "default", "worker-1", 123],
+      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+	       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "key-1", "default", "worker-1", 123],
     );
 
     await db.transaction(async (tx) => {
       await touchLaneLeaseTx(tx, {
+        tenantId: DEFAULT_TENANT_ID,
         key: "key-1",
         lane: "default",
         owner: "worker-1",
@@ -112,8 +115,8 @@ describe("concurrency-manager", () => {
     });
 
     const row = await db.get<{ lease_expires_at_ms: number }>(
-      "SELECT lease_expires_at_ms FROM lane_leases WHERE key = ? AND lane = ?",
-      ["key-1", "default"],
+      "SELECT lease_expires_at_ms FROM lane_leases WHERE tenant_id = ? AND key = ? AND lane = ?",
+      [DEFAULT_TENANT_ID, "key-1", "default"],
     );
     expect(row?.lease_expires_at_ms).toBe(456);
   });
