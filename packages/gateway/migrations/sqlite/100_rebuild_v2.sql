@@ -585,7 +585,7 @@ CREATE TABLE execution_artifacts (
   sha256               TEXT,
   labels_json          TEXT NOT NULL DEFAULT '[]',
   metadata_json        TEXT NOT NULL DEFAULT '{}',
-  sensitivity          TEXT NOT NULL DEFAULT 'private',
+  sensitivity          TEXT NOT NULL DEFAULT 'normal' CHECK (sensitivity IN ('normal','sensitive')),
   policy_snapshot_id   TEXT,
   retention_expires_at TEXT,
   bytes_deleted_at     TEXT,
@@ -653,30 +653,6 @@ CREATE TABLE concurrency_slots (
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (tenant_id, scope, scope_id, slot)
-);
-
--- ---------------------------------------------------------------------------
--- Planner job queue (legacy executor runner)
--- ---------------------------------------------------------------------------
-
-CREATE TABLE jobs (
-  tenant_id    TEXT NOT NULL,
-  id           TEXT NOT NULL,
-  plan_id      TEXT NOT NULL,
-  step_index   INTEGER NOT NULL,
-  action_json  TEXT NOT NULL,
-  status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','running','completed','failed','paused','cancelled')),
-  attempt      INTEGER NOT NULL DEFAULT 0,
-  max_attempts INTEGER NOT NULL DEFAULT 3,
-  timeout_ms   INTEGER NOT NULL DEFAULT 30000,
-  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-  started_at   TEXT,
-  completed_at TEXT,
-  error        TEXT,
-  result_json  TEXT,
-  PRIMARY KEY (tenant_id, id),
-  FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, plan_id) REFERENCES plans(tenant_id, plan_key) ON DELETE CASCADE
 );
 
 -- ---------------------------------------------------------------------------
