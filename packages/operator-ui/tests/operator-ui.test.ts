@@ -408,7 +408,7 @@ function createFakeHttpClient(): {
   const pairingsRevoke = vi.fn(
     async () => ({ status: "ok", pairing: samplePairingRequestPending() }) as const,
   );
-  const agentListGet = vi.fn(async () => ({ agents: [{ agent_id: "default" }] }) as const);
+  const agentListGet = vi.fn(async () => ({ agents: [{ agent_key: "default" }] }) as const);
 
   const http: OperatorHttpClient = {
     status: { get: statusGet },

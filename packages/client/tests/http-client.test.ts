@@ -118,7 +118,7 @@ describe("createTyrumHttpClient", () => {
   it("requests agent list and validates response", async () => {
     const fetch = makeFetchMock(async () =>
       jsonResponse({
-        agents: [{ agent_id: "default" }, { agent_id: "agent-1", home: "/tmp/agent-1" }],
+        agents: [{ agent_key: "default" }, { agent_key: "agent-1", home: "/tmp/agent-1" }],
       }),
     );
 
@@ -130,7 +130,7 @@ describe("createTyrumHttpClient", () => {
 
     const res = await client.agentList.get({ include_default: false });
 
-    expect(res.agents.map((a) => a.agent_id)).toEqual(["default", "agent-1"]);
+    expect(res.agents.map((a) => a.agent_key)).toEqual(["default", "agent-1"]);
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,

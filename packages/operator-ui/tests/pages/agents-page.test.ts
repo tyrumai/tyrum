@@ -7,7 +7,7 @@ import { AgentsPage } from "../../src/components/pages/agents-page.js";
 import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 describe("AgentsPage", () => {
-  it("trims agent_id before fetching status and supports empty agent_id", async () => {
+  it("trims agent_key before fetching status and supports empty agent_key", async () => {
     const agentStatusGet = vi.fn().mockResolvedValue({ ok: true });
     const core = { http: { agentStatus: { get: agentStatusGet } } } as unknown as OperatorCore;
 
@@ -33,7 +33,7 @@ describe("AgentsPage", () => {
     });
 
     expect(agentStatusGet).toHaveBeenCalledTimes(1);
-    expect(agentStatusGet).toHaveBeenCalledWith({ agent_id: "agent-1" });
+    expect(agentStatusGet).toHaveBeenCalledWith({ agent_key: "agent-1" });
 
     const refreshButton = testRoot.container.querySelector<HTMLButtonElement>(
       '[data-testid="agents-refresh"]',

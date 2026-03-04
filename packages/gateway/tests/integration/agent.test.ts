@@ -147,13 +147,15 @@ describe("agent routes", () => {
 
     const res = await app.request("/agent/list");
     expect(res.status).toBe(200);
-    const payload = (await res.json()) as { agents: Array<{ agent_id: string }> };
-    expect(payload.agents.map((a) => a.agent_id)).toEqual(["default", "agent-1"]);
+    const payload = (await res.json()) as { agents: Array<{ agent_key: string }> };
+    expect(payload.agents.map((a) => a.agent_key)).toEqual(["default", "agent-1"]);
 
     const resNoDefault = await app.request("/agent/list?include_default=false");
     expect(resNoDefault.status).toBe(200);
-    const payloadNoDefault = (await resNoDefault.json()) as { agents: Array<{ agent_id: string }> };
-    expect(payloadNoDefault.agents.map((a) => a.agent_id)).toEqual(["agent-1"]);
+    const payloadNoDefault = (await resNoDefault.json()) as {
+      agents: Array<{ agent_key: string }>;
+    };
+    expect(payloadNoDefault.agents.map((a) => a.agent_key)).toEqual(["agent-1"]);
 
     await agents?.shutdown();
     await container.db.close();

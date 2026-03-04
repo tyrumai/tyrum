@@ -280,76 +280,85 @@ describe("SessionDal", () => {
   it("lists sessions by agent/channel ordered by updated_at desc with cursor pagination", async () => {
     const dal = createDal();
 
-    const nowIso = new Date().toISOString();
     const t1 = "2026-02-17T00:00:00.000Z";
     const t2 = "2026-02-17T00:01:00.000Z";
     const t3 = "2026-02-17T00:02:00.000Z";
 
-    const s1 = await dal.getOrCreate("ui", "thread-1");
-    const s2 = await dal.getOrCreate("ui", "thread-2");
-    const s3 = await dal.getOrCreate("ui", "thread-3");
+    const s1 = await dal.getOrCreate({
+      connectorKey: "ui",
+      providerThreadId: "thread-1",
+      containerKind: "group",
+    });
+    const s2 = await dal.getOrCreate({
+      connectorKey: "ui",
+      providerThreadId: "thread-2",
+      containerKind: "group",
+    });
+    const s3 = await dal.getOrCreate({
+      connectorKey: "ui",
+      providerThreadId: "thread-3",
+      containerKind: "group",
+    });
 
-    await dal.appendTurn(s3.session_id, "hello", "world", 20, "2026-02-17T00:00:30.000Z");
+    await dal.appendTurn({
+      tenantId: s3.tenant_id,
+      sessionId: s3.session_id,
+      userMessage: "hello",
+      assistantMessage: "world",
+      maxTurns: 20,
+      timestamp: "2026-02-17T00:00:30.000Z",
+    });
 
     // Ensure deterministic ordering independent of creation time.
-    await db!.run("UPDATE sessions SET updated_at = ? WHERE agent_id = ? AND session_id = ?", [
+    await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
       t1,
-      "default",
+      s1.tenant_id,
       s1.session_id,
     ]);
-    await db!.run("UPDATE sessions SET updated_at = ? WHERE agent_id = ? AND session_id = ?", [
+    await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
       t2,
-      "default",
+      s2.tenant_id,
       s2.session_id,
     ]);
-    await db!.run("UPDATE sessions SET updated_at = ? WHERE agent_id = ? AND session_id = ?", [
+    await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
       t3,
-      "default",
+      s3.tenant_id,
       s3.session_id,
     ]);
 
     // Different channel should be excluded.
-    await dal.getOrCreate("telegram", "dm-1");
+    await dal.getOrCreate({
+      connectorKey: "telegram",
+      providerThreadId: "dm-1",
+      containerKind: "dm",
+    });
 
-    // Same updated_at: uses session_id tie-breaker.
-    await db!.run("UPDATE sessions SET updated_at = ? WHERE agent_id = ? AND session_id = ?", [
-      nowIso,
-      "default",
-      s2.session_id,
-    ]);
-    await db!.run("UPDATE sessions SET updated_at = ? WHERE agent_id = ? AND session_id = ?", [
-      nowIso,
-      "default",
-      s3.session_id,
-    ]);
-
-    const page1 = await dal.list({ agentId: "default", channel: "ui", limit: 2 });
+    const page1 = await dal.list({ connectorKey: "ui", limit: 2 });
     expect(page1.sessions).toHaveLength(2);
     expect(page1.nextCursor).toBeTypeOf("string");
     const decodedCursor = JSON.parse(
       Buffer.from(page1.nextCursor as string, "base64url").toString("utf-8"),
     ) as Record<string, unknown>;
     expect(Object.keys(decodedCursor).sort()).toEqual(["session_id", "updated_at"]);
-    expect(page1.sessions.map((s) => s.session_id)).toEqual([s3.session_id, s2.session_id]);
+    expect(page1.sessions.map((s) => s.session_id)).toEqual([s3.session_key, s2.session_key]);
     expect(page1.sessions[0]?.turns_count).toBe(2);
     expect(page1.sessions[0]?.last_turn).toEqual({ role: "assistant", content: "world" });
     expect(page1.sessions[1]?.turns_count).toBe(0);
     expect(page1.sessions[1]?.last_turn).toBeNull();
 
     const page2 = await dal.list({
-      agentId: "default",
-      channel: "ui",
+      connectorKey: "ui",
       limit: 2,
       cursor: page1.nextCursor,
     });
-    expect(page2.sessions.map((s) => s.session_id)).toEqual([s1.session_id]);
+    expect(page2.sessions.map((s) => s.session_id)).toEqual([s1.session_key]);
     expect(page2.nextCursor).toBeNull();
   });
 
   it("rejects invalid list cursors", async () => {
     const dal = createDal();
-    await expect(
-      dal.list({ agentId: "default", channel: "ui", cursor: "not-a-cursor" }),
-    ).rejects.toThrow("invalid cursor");
+    await expect(dal.list({ connectorKey: "ui", cursor: "not-a-cursor" })).rejects.toThrow(
+      "invalid cursor",
+    );
   });
 });

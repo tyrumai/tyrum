@@ -113,7 +113,7 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
       setState((prev) => ({
         ...prev,
         agents: {
-          agents: res.agents.map((a) => ({ agent_id: a.agent_id })),
+          agents: res.agents.map((a) => ({ agent_id: a.agent_key })),
           loading: false,
           error: null,
         },

@@ -38,9 +38,9 @@ export function createAgentRoutes(agents: AgentRegistry): Hono {
       if (code !== "ENOENT") throw err;
     }
 
-    const agentIds = includeDefault ? ["default", ...discovered] : discovered;
+    const agentKeys = includeDefault ? ["default", ...discovered] : discovered;
 
-    return c.json({ agents: agentIds.map((agent_id) => ({ agent_id })) }, 200);
+    return c.json({ agents: agentKeys.map((agent_key) => ({ agent_key })) }, 200);
   });
 
   agent.get("/agent/status", async (c) => {
