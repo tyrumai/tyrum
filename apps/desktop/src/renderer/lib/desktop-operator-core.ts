@@ -36,6 +36,7 @@ export type DesktopOperatorCoreState = {
   core: OperatorCore | null;
   busy: boolean;
   errorMessage: string | null;
+  needsConfiguration: boolean;
   retry: () => void;
 };
 
@@ -51,6 +52,7 @@ export function useDesktopOperatorCore(
   const [core, setCore] = useState<OperatorCore | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [needsConfiguration, setNeedsConfiguration] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const managerRef = useRef<OperatorCoreManager | null>(null);
   const unsubManagerRef = useRef<(() => void) | null>(null);
@@ -65,6 +67,7 @@ export function useDesktopOperatorCore(
       setCore(null);
       setBusy(false);
       setErrorMessage(null);
+      setNeedsConfiguration(false);
       return;
     }
     let disposed = false;
@@ -73,6 +76,16 @@ export function useDesktopOperatorCore(
       setBusy(true);
       setErrorMessage(null);
       try {
+        const hasConfig = await api.configExists();
+        if (disposed) return;
+        if (!hasConfig) {
+          setNeedsConfiguration(true);
+          setCore(null);
+          setErrorMessage(null);
+          return;
+        }
+        setNeedsConfiguration(false);
+
         const connection = (await api.gateway.getOperatorConnection()) as OperatorConnectionInfo;
         if (disposed) return;
 
@@ -142,6 +155,7 @@ export function useDesktopOperatorCore(
         manager.getCore().connect();
       } catch (error) {
         if (disposed) return;
+        setNeedsConfiguration(false);
         setErrorMessage(toErrorMessage(error));
         setCore(null);
       } finally {
@@ -164,5 +178,5 @@ export function useDesktopOperatorCore(
     };
   }, [api, enabled, retryCount]);
 
-  return { core, busy, errorMessage, retry };
+  return { core, busy, errorMessage, needsConfiguration, retry };
 }
