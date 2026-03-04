@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema } from "../common.js";
-import { AgentId, Lane, TyrumKey } from "../keys.js";
+import { AgentKey, Lane, TyrumKey } from "../keys.js";
 import {
   WsError,
   WsEventEnvelope,
@@ -18,7 +18,7 @@ export type WsMessageRole = z.infer<typeof WsMessageRole>;
 
 export const WsSessionSendPayload = z
   .object({
-    agent_id: AgentId.optional(),
+    agent_id: AgentKey.optional(),
     channel: z.string().trim().min(1),
     thread_id: z.string().trim().min(1),
     content: z.string().trim().min(1),
@@ -50,7 +50,7 @@ export type WsSessionTurn = z.infer<typeof WsSessionTurn>;
 
 export const WsSessionListPayload = z
   .object({
-    agent_id: AgentId.optional(),
+    agent_id: AgentKey.optional(),
     channel: z.string().trim().min(1).optional(),
     limit: z.number().int().positive().max(200).optional(),
     cursor: z.string().trim().min(1).optional(),
@@ -66,7 +66,7 @@ export type WsSessionListRequest = z.infer<typeof WsSessionListRequest>;
 
 export const WsSessionGetPayload = z
   .object({
-    agent_id: AgentId.optional(),
+    agent_id: AgentKey.optional(),
     session_id: z.string().trim().min(1),
   })
   .strict();
@@ -80,7 +80,7 @@ export type WsSessionGetRequest = z.infer<typeof WsSessionGetRequest>;
 
 export const WsSessionCreatePayload = z
   .object({
-    agent_id: AgentId.optional(),
+    agent_id: AgentKey.optional(),
     channel: z.string().trim().min(1).optional(),
   })
   .strict();
@@ -94,7 +94,7 @@ export type WsSessionCreateRequest = z.infer<typeof WsSessionCreateRequest>;
 
 export const WsSessionCompactPayload = z
   .object({
-    agent_id: AgentId.optional(),
+    agent_id: AgentKey.optional(),
     session_id: z.string().trim().min(1),
     keep_last_messages: z.number().int().positive().max(200).optional(),
   })
@@ -109,7 +109,7 @@ export type WsSessionCompactRequest = z.infer<typeof WsSessionCompactRequest>;
 
 export const WsSessionDeletePayload = z
   .object({
-    agent_id: AgentId.optional(),
+    agent_id: AgentKey.optional(),
     session_id: z.string().trim().min(1),
   })
   .strict();
@@ -124,7 +124,7 @@ export type WsSessionDeleteRequest = z.infer<typeof WsSessionDeleteRequest>;
 export const WsCommandExecutePayload = z
   .object({
     command: z.string().trim().min(1),
-    agent_id: AgentId.optional(),
+    agent_id: AgentKey.optional(),
     channel: z.string().trim().min(1).optional(),
     thread_id: z.string().trim().min(1).optional(),
     key: TyrumKey.optional(),
@@ -171,7 +171,7 @@ export type WsSessionSendResponseEnvelope = z.infer<typeof WsSessionSendResponse
 export const WsSessionListItem = z
   .object({
     session_id: z.string().trim().min(1),
-    agent_id: AgentId,
+    agent_id: AgentKey,
     channel: z.string().trim().min(1),
     thread_id: z.string().trim().min(1),
     summary: z.string().default(""),
@@ -205,7 +205,7 @@ export type WsSessionListResponseErrEnvelope = z.infer<typeof WsSessionListRespo
 export const WsSessionGetSession = z
   .object({
     session_id: z.string().trim().min(1),
-    agent_id: AgentId,
+    agent_id: AgentKey,
     channel: z.string().trim().min(1),
     thread_id: z.string().trim().min(1),
     summary: z.string().default(""),
@@ -237,7 +237,7 @@ export type WsSessionGetResponseErrEnvelope = z.infer<typeof WsSessionGetRespons
 export const WsSessionCreateResult = z
   .object({
     session_id: z.string().trim().min(1),
-    agent_id: AgentId,
+    agent_id: AgentKey,
     channel: z.string().trim().min(1),
     thread_id: z.string().trim().min(1),
   })

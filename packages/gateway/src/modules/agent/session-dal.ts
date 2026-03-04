@@ -34,6 +34,28 @@ export interface SessionRow {
   updated_at: string;
 }
 
+export interface SessionListRow {
+  agent_id: string;
+  session_id: string;
+  channel: string;
+  thread_id: string;
+  summary: string;
+  turns_count: number;
+  last_turn: { role: "user" | "assistant"; content: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type SessionWithDelivery = {
+  session: SessionRow;
+  agent_key: string;
+  workspace_key: string;
+  connector_key: string;
+  account_key: string;
+  provider_thread_id: string;
+  container_kind: NormalizedContainerKind;
+};
+
 interface RawSessionRow {
   tenant_id: string;
   session_id: string;
@@ -47,8 +69,38 @@ interface RawSessionRow {
   updated_at: string | Date;
 }
 
+interface RawSessionListRow {
+  session_id: string;
+  session_key: string;
+  agent_key: string;
+  connector_key: string;
+  provider_thread_id: string;
+  summary: string;
+  turns_count: number | string;
+  last_turn_role: string | null;
+  last_turn_content: string | null;
+  created_at: string | Date;
+  updated_at: string | Date;
+}
+
+interface RawSessionWithDeliveryRow extends RawSessionRow {
+  agent_key: string;
+  workspace_key: string;
+  connector_key: string;
+  account_key: string;
+  provider_thread_id: string;
+  container_kind: string;
+}
+
 function normalizeTime(value: string | Date): string {
-  return value instanceof Date ? value.toISOString() : value;
+  if (value instanceof Date) return value.toISOString();
+
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(trimmed) && !trimmed.includes("T")) {
+    return trimmed.replace(" ", "T") + "Z";
+  }
+
+  return value;
 }
 
 function parseTurns(raw: string): SessionMessage[] {
@@ -100,6 +152,42 @@ function toSessionRow(raw: RawSessionRow): SessionRow {
   };
 }
 
+function normalizeContainerKind(value: string): NormalizedContainerKind {
+  if (value === "dm" || value === "group" || value === "channel") return value;
+  return "channel";
+}
+
+function asNumber(value: number | string): number {
+  if (typeof value === "number") return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toSessionListRow(raw: RawSessionListRow): SessionListRow {
+  const createdAt = normalizeTime(raw.created_at);
+  const updatedAt = normalizeTime(raw.updated_at);
+  const turnsCount = asNumber(raw.turns_count);
+
+  const role = raw.last_turn_role;
+  const content = raw.last_turn_content;
+  let lastTurn: { role: "user" | "assistant"; content: string } | null = null;
+  if ((role === "user" || role === "assistant") && typeof content === "string") {
+    lastTurn = { role, content };
+  }
+
+  return {
+    agent_id: raw.agent_key,
+    session_id: raw.session_key,
+    channel: raw.connector_key,
+    thread_id: raw.provider_thread_id,
+    summary: raw.summary,
+    turns_count: turnsCount,
+    last_turn: lastTurn,
+    created_at: createdAt,
+    updated_at: updatedAt,
+  };
+}
+
 function trimTo(value: string, maxChars: number): string {
   if (value.length <= maxChars) return value;
   return `${value.slice(0, Math.max(0, maxChars - 3))}...`;
@@ -141,6 +229,30 @@ export class SessionDal {
     private readonly channelThreadDal: ChannelThreadDal,
   ) {}
 
+  private static encodeCursor(input: { updated_at: string; session_id: string }): string {
+    const payload = { updated_at: input.updated_at, session_id: input.session_id };
+    return Buffer.from(JSON.stringify(payload), "utf-8").toString("base64url");
+  }
+
+  private static decodeCursor(
+    cursor: string,
+  ): { updated_at: string; session_id: string } | undefined {
+    const trimmed = cursor.trim();
+    if (!trimmed) return undefined;
+    try {
+      const parsed = JSON.parse(Buffer.from(trimmed, "base64url").toString("utf-8")) as unknown;
+      if (!parsed || typeof parsed !== "object") return undefined;
+      const updatedAt = (parsed as Record<string, unknown>)["updated_at"];
+      const sessionId = (parsed as Record<string, unknown>)["session_id"];
+      if (typeof updatedAt !== "string" || updatedAt.trim().length === 0) return undefined;
+      if (typeof sessionId !== "string" || sessionId.trim().length === 0) return undefined;
+      return { updated_at: updatedAt, session_id: sessionId };
+    } catch {
+      // Intentional: treat any cursor decode failures as an invalid cursor.
+      return undefined;
+    }
+  }
+
   async getById(input: { tenantId: string; sessionId: string }): Promise<SessionRow | undefined> {
     const row = await this.db.get<RawSessionRow>(
       `SELECT *
@@ -163,6 +275,51 @@ export class SessionDal {
       [input.tenantId, input.sessionKey],
     );
     return row ? toSessionRow(row) : undefined;
+  }
+
+  async getWithDeliveryByKey(input: {
+    tenantId: string;
+    sessionKey: string;
+  }): Promise<SessionWithDelivery | undefined> {
+    const row = await this.db.get<RawSessionWithDeliveryRow>(
+      `SELECT
+         s.*,
+         ag.agent_key,
+         ws.workspace_key,
+         ca.connector_key,
+         ca.account_key,
+         ct.provider_thread_id,
+         ct.container_kind
+       FROM sessions s
+       JOIN agents ag
+         ON ag.tenant_id = s.tenant_id
+        AND ag.agent_id = s.agent_id
+       JOIN workspaces ws
+         ON ws.tenant_id = s.tenant_id
+        AND ws.workspace_id = s.workspace_id
+       JOIN channel_threads ct
+         ON ct.tenant_id = s.tenant_id
+        AND ct.workspace_id = s.workspace_id
+        AND ct.channel_thread_id = s.channel_thread_id
+       JOIN channel_accounts ca
+         ON ca.tenant_id = ct.tenant_id
+        AND ca.workspace_id = ct.workspace_id
+        AND ca.channel_account_id = ct.channel_account_id
+       WHERE s.tenant_id = ?
+         AND s.session_key = ?
+       LIMIT 1`,
+      [input.tenantId, input.sessionKey],
+    );
+    if (!row) return undefined;
+    return {
+      session: toSessionRow(row),
+      agent_key: row.agent_key,
+      workspace_key: row.workspace_key,
+      connector_key: row.connector_key,
+      account_key: row.account_key,
+      provider_thread_id: row.provider_thread_id,
+      container_kind: normalizeContainerKind(row.container_kind),
+    };
   }
 
   async getOrCreate(input: {
@@ -239,6 +396,143 @@ export class SessionDal {
       throw new Error("failed to create session");
     }
     return created;
+  }
+
+  async list(input: {
+    scopeKeys?: Partial<ScopeKeys>;
+    connectorKey?: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ sessions: SessionListRow[]; nextCursor: string | null }> {
+    const keys = normalizeScopeKeys(input.scopeKeys);
+    const scopeIds = await this.identityScopeDal.resolveScopeIds(keys);
+
+    const connectorKeyRaw = input.connectorKey?.trim();
+    const connectorKey = connectorKeyRaw ? normalizeConnectorId(connectorKeyRaw) : undefined;
+
+    const limit = Math.min(200, Math.max(1, Math.floor(input.limit ?? 50)));
+    const cursor = input.cursor ? SessionDal.decodeCursor(input.cursor) : undefined;
+    if (input.cursor && !cursor) {
+      throw new Error("invalid cursor");
+    }
+
+    const where: string[] = ["s.tenant_id = ?", "s.agent_id = ?", "s.workspace_id = ?"];
+    const params: unknown[] = [scopeIds.tenantId, scopeIds.agentId, scopeIds.workspaceId];
+
+    if (connectorKey) {
+      where.push("ca.connector_key = ?");
+      params.push(connectorKey);
+    }
+
+    if (cursor) {
+      where.push("(s.updated_at < ? OR (s.updated_at = ? AND s.session_id < ?))");
+      params.push(cursor.updated_at, cursor.updated_at, cursor.session_id);
+    }
+
+    const listSql =
+      this.db.kind === "sqlite"
+        ? `SELECT
+             s.session_id,
+             s.session_key,
+             ag.agent_key,
+             ca.connector_key,
+             ct.provider_thread_id,
+             s.summary,
+             s.created_at,
+             s.updated_at,
+             CASE
+               WHEN json_valid(s.turns_json)
+                 THEN json_array_length(s.turns_json)
+               ELSE 0
+             END AS turns_count,
+             CASE
+               WHEN json_valid(s.turns_json)
+                 THEN json_extract(s.turns_json, '$[#-1].role')
+               ELSE NULL
+             END AS last_turn_role,
+             CASE
+               WHEN json_valid(s.turns_json)
+                 THEN json_extract(s.turns_json, '$[#-1].content')
+               ELSE NULL
+             END AS last_turn_content
+           FROM sessions s
+           JOIN agents ag
+             ON ag.tenant_id = s.tenant_id
+            AND ag.agent_id = s.agent_id
+           JOIN channel_threads ct
+             ON ct.tenant_id = s.tenant_id
+            AND ct.workspace_id = s.workspace_id
+            AND ct.channel_thread_id = s.channel_thread_id
+           JOIN channel_accounts ca
+             ON ca.tenant_id = ct.tenant_id
+            AND ca.workspace_id = ct.workspace_id
+            AND ca.channel_account_id = ct.channel_account_id
+           WHERE ${where.join(" AND ")}
+           ORDER BY s.updated_at DESC, s.session_id DESC
+           LIMIT ?`
+        : `SELECT
+             session_id,
+             session_key,
+             agent_key,
+             connector_key,
+             provider_thread_id,
+             summary,
+             created_at,
+             updated_at,
+             CASE
+               WHEN jsonb_typeof(turns) = 'array' THEN jsonb_array_length(turns)
+               ELSE 0
+             END AS turns_count,
+             (turns -> -1 ->> 'role') AS last_turn_role,
+             (turns -> -1 ->> 'content') AS last_turn_content
+           FROM (
+             SELECT
+               s.session_id,
+               s.session_key,
+               ag.agent_key,
+               ca.connector_key,
+               ct.provider_thread_id,
+               s.summary,
+               s.created_at,
+               s.updated_at,
+               CASE
+                 WHEN pg_input_is_valid(s.turns_json, 'jsonb') THEN s.turns_json::jsonb
+                 ELSE '[]'::jsonb
+               END AS turns
+             FROM sessions s
+             JOIN agents ag
+               ON ag.tenant_id = s.tenant_id
+              AND ag.agent_id = s.agent_id
+             JOIN channel_threads ct
+               ON ct.tenant_id = s.tenant_id
+              AND ct.workspace_id = s.workspace_id
+              AND ct.channel_thread_id = s.channel_thread_id
+             JOIN channel_accounts ca
+               ON ca.tenant_id = ct.tenant_id
+              AND ca.workspace_id = ct.workspace_id
+              AND ca.channel_account_id = ct.channel_account_id
+             WHERE ${where.join(" AND ")}
+           ) sessions_with_turns
+           ORDER BY updated_at DESC, session_id DESC
+           LIMIT ?`;
+
+    const rows = await this.db.all<RawSessionListRow>(listSql, [...params, limit + 1]);
+    const selectedRows = rows.slice(0, limit);
+    const sessions = selectedRows.map(toSessionListRow);
+
+    const hasMore = rows.length > limit;
+    const last = selectedRows.at(-1);
+
+    return {
+      sessions,
+      nextCursor:
+        hasMore && last
+          ? SessionDal.encodeCursor({
+              updated_at: normalizeTime(last.updated_at),
+              session_id: last.session_id,
+            })
+          : null,
+    };
   }
 
   async reset(input: { tenantId: string; sessionId: string }): Promise<boolean> {

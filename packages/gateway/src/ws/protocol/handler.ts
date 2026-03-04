@@ -63,9 +63,8 @@ import { hasAnyRequiredScope } from "../../modules/auth/scopes.js";
 import { resolveWsRequestRequiredScopes } from "../../modules/authz/ws-scope-matrix.js";
 import { isSafeSuggestedOverridePattern } from "../../modules/policy/override-guardrails.js";
 import { SessionDal } from "../../modules/agent/session-dal.js";
-import { buildAgentTurnKey } from "../../modules/agent/turn-key.js";
 import { resolveStoredKeyLaneByChannelThread } from "../../modules/agent/stored-key-lane-resolution.js";
-import { resolveWorkspaceId } from "../../modules/workspace/id.js";
+import { resolveWorkspaceKey } from "../../modules/workspace/id.js";
 import { LaneQueueModeOverrideDal } from "../../modules/lanes/queue-mode-override-dal.js";
 import { SessionSendPolicyOverrideDal } from "../../modules/channels/send-policy-override-dal.js";
 import { ExecutionEngine } from "../../modules/execution/engine.js";
@@ -74,11 +73,22 @@ import { broadcastEvent, errorResponse } from "./helpers.js";
 import { handleWorkboardMessage } from "./workboard-handlers.js";
 import { handleSubagentMessage } from "./subagent-handlers.js";
 import { handleMemoryMessage } from "./memory-handlers.js";
-import { DEFAULT_TENANT_ID } from "../../modules/identity/scope.js";
+import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../modules/identity/scope.js";
+import { ChannelThreadDal } from "../../modules/channels/thread-dal.js";
 
 // ---------------------------------------------------------------------------
 // Client message handling
 // ---------------------------------------------------------------------------
+
+function createSessionDal(deps: ProtocolDeps): SessionDal {
+  if (!deps.db) {
+    throw new Error("missing db");
+  }
+  const identityScopeDal =
+    deps.identityScopeDal ?? new IdentityScopeDal(deps.db, { cacheTtlMs: 60_000 });
+  const channelThreadDal = new ChannelThreadDal(deps.db);
+  return new SessionDal(deps.db, identityScopeDal, channelThreadDal);
+}
 
 /**
  * Parse and dispatch a raw WebSocket message from a connected client.
@@ -896,16 +906,18 @@ export async function handleClientMessage(
       });
     }
 
-    const agentId = parsedReq.data.payload.agent_id ?? "default";
-    const channel = parsedReq.data.payload.channel ?? "ui";
+    const agentKey = parsedReq.data.payload.agent_id ?? "default";
+    const connectorKey = parsedReq.data.payload.channel ?? "ui";
     const limit = parsedReq.data.payload.limit ?? 50;
 
-    const sessionDal = new SessionDal(deps.db);
-    let listed: Awaited<ReturnType<typeof sessionDal.list>>;
+    const workspaceKey = resolveWorkspaceKey();
+
+    const sessionDal = createSessionDal(deps);
+    let listed: Awaited<ReturnType<SessionDal["list"]>>;
     try {
       listed = await sessionDal.list({
-        agentId,
-        channel,
+        scopeKeys: { agentKey, workspaceKey },
+        connectorKey,
         limit,
         cursor: parsedReq.data.payload.cursor,
       });
@@ -918,7 +930,7 @@ export async function handleClientMessage(
         request_id: msg.request_id,
         client_id: client.id,
         request_type: msg.type,
-        agent_id: agentId,
+        agent_id: agentKey,
         error: message,
       });
       return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
@@ -950,7 +962,7 @@ export async function handleClientMessage(
         request_id: msg.request_id,
         client_id: client.id,
         request_type: msg.type,
-        agent_id: agentId,
+        agent_id: agentKey,
         error: message,
       });
       return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
@@ -982,25 +994,28 @@ export async function handleClientMessage(
       });
     }
 
-    const agentId = parsedReq.data.payload.agent_id ?? "default";
-    const sessionDal = new SessionDal(deps.db);
-    const sessionId = parsedReq.data.payload.session_id;
+    const agentKey = parsedReq.data.payload.agent_id ?? "default";
+    const sessionDal = createSessionDal(deps);
+    const sessionKey = parsedReq.data.payload.session_id;
     try {
-      const session = await sessionDal.getById(sessionId, agentId);
-      if (!session) {
+      const looked = await sessionDal.getWithDeliveryByKey({
+        tenantId: DEFAULT_TENANT_ID,
+        sessionKey,
+      });
+      if (!looked || looked.agent_key !== agentKey) {
         return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
       }
 
       const result = WsSessionGetResult.parse({
         session: {
-          session_id: session.session_id,
-          agent_id: session.agent_id,
-          channel: session.channel,
-          thread_id: session.thread_id,
-          summary: session.summary ?? "",
-          turns: session.turns.map((turn) => ({ role: turn.role, content: turn.content })),
-          updated_at: session.updated_at,
-          created_at: session.created_at,
+          session_id: looked.session.session_key,
+          agent_id: looked.agent_key,
+          channel: looked.connector_key,
+          thread_id: looked.provider_thread_id,
+          summary: looked.session.summary ?? "",
+          turns: looked.session.turns.map((turn) => ({ role: turn.role, content: turn.content })),
+          updated_at: looked.session.updated_at,
+          created_at: looked.session.created_at,
         },
       });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
@@ -1010,8 +1025,8 @@ export async function handleClientMessage(
         request_id: msg.request_id,
         client_id: client.id,
         request_type: msg.type,
-        session_id: sessionId,
-        agent_id: agentId,
+        session_id: sessionKey,
+        agent_id: agentKey,
         error: message,
       });
       return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
@@ -1043,19 +1058,25 @@ export async function handleClientMessage(
       });
     }
 
-    const agentId = parsedReq.data.payload.agent_id ?? "default";
-    const channel = parsedReq.data.payload.channel ?? "ui";
-    const threadId = `${channel}-${crypto.randomUUID()}`;
+    const agentKey = parsedReq.data.payload.agent_id ?? "default";
+    const connectorKey = parsedReq.data.payload.channel ?? "ui";
+    const providerThreadId = `${connectorKey}-${crypto.randomUUID()}`;
+    const workspaceKey = resolveWorkspaceKey();
 
-    const sessionDal = new SessionDal(deps.db);
+    const sessionDal = createSessionDal(deps);
     try {
-      const session = await sessionDal.getOrCreate(channel, threadId, agentId);
+      const session = await sessionDal.getOrCreate({
+        scopeKeys: { agentKey, workspaceKey },
+        connectorKey,
+        providerThreadId,
+        containerKind: "channel",
+      });
 
       const result = WsSessionCreateResult.parse({
-        session_id: session.session_id,
-        agent_id: session.agent_id,
-        channel: session.channel,
-        thread_id: session.thread_id,
+        session_id: session.session_key,
+        agent_id: agentKey,
+        channel: connectorKey,
+        thread_id: providerThreadId,
       });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
@@ -1064,8 +1085,8 @@ export async function handleClientMessage(
         request_id: msg.request_id,
         client_id: client.id,
         request_type: msg.type,
-        agent_id: agentId,
-        channel,
+        agent_id: agentKey,
+        channel: connectorKey,
         error: message,
       });
       return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
@@ -1097,23 +1118,26 @@ export async function handleClientMessage(
       });
     }
 
-    const agentId = parsedReq.data.payload.agent_id ?? "default";
-    const sessionDal = new SessionDal(deps.db);
-    const sessionId = parsedReq.data.payload.session_id;
+    const agentKey = parsedReq.data.payload.agent_id ?? "default";
+    const sessionDal = createSessionDal(deps);
+    const sessionKey = parsedReq.data.payload.session_id;
     try {
-      const existing = await sessionDal.getById(sessionId, agentId);
-      if (!existing) {
+      const existing = await sessionDal.getWithDeliveryByKey({
+        tenantId: DEFAULT_TENANT_ID,
+        sessionKey,
+      });
+      if (!existing || existing.agent_key !== agentKey) {
         return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
       }
 
       const compacted = await sessionDal.compact({
-        sessionId,
-        agentId,
-        keepLastMessages: parsedReq.data.payload.keep_last_messages,
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: existing.session.session_id,
+        keepLastMessages: parsedReq.data.payload.keep_last_messages ?? 8,
       });
 
       const result = WsSessionCompactResult.parse({
-        session_id: sessionId,
+        session_id: sessionKey,
         dropped_messages: compacted.droppedMessages,
         kept_messages: compacted.keptMessages,
       });
@@ -1124,8 +1148,8 @@ export async function handleClientMessage(
         request_id: msg.request_id,
         client_id: client.id,
         request_type: msg.type,
-        session_id: sessionId,
-        agent_id: agentId,
+        session_id: sessionKey,
+        agent_id: agentKey,
         error: message,
       });
       return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
@@ -1157,42 +1181,39 @@ export async function handleClientMessage(
       });
     }
 
-    const agentId = parsedReq.data.payload.agent_id ?? "default";
-    const sessionDal = new SessionDal(deps.db);
-    let session: Awaited<ReturnType<typeof sessionDal.getById>>;
+    const agentKey = parsedReq.data.payload.agent_id ?? "default";
+    const sessionDal = createSessionDal(deps);
+    const sessionKey = parsedReq.data.payload.session_id;
+    let looked: Awaited<ReturnType<SessionDal["getWithDeliveryByKey"]>>;
     try {
-      session = await sessionDal.getById(parsedReq.data.payload.session_id, agentId);
+      looked = await sessionDal.getWithDeliveryByKey({
+        tenantId: DEFAULT_TENANT_ID,
+        sessionKey,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       deps.logger?.error("ws.session_delete_lookup_failed", {
         request_id: msg.request_id,
         client_id: client.id,
         request_type: msg.type,
-        session_id: parsedReq.data.payload.session_id,
-        agent_id: agentId,
+        session_id: sessionKey,
+        agent_id: agentKey,
         error: message,
       });
       return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
     }
-    if (!session) {
+    if (!looked || looked.agent_key !== agentKey) {
       return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
     }
 
     let key: string;
     let lane: string;
     try {
-      const fallbackKey = buildAgentTurnKey({
-        agentId,
-        workspaceId: resolveWorkspaceId(),
-        channel: session.channel,
-        containerKind: "channel",
-        threadId: session.thread_id,
-      });
       const keyLane = (await resolveStoredKeyLaneByChannelThread(deps.db, {
-        agentId,
-        channel: session.channel,
-        threadId: session.thread_id,
-      })) ?? { key: fallbackKey, lane: "main" };
+        agentId: agentKey,
+        channel: looked.connector_key,
+        threadId: looked.provider_thread_id,
+      })) ?? { key: looked.session.session_key, lane: "main" };
 
       key = keyLane.key;
       lane = keyLane.lane;
@@ -1202,8 +1223,8 @@ export async function handleClientMessage(
         request_id: msg.request_id,
         client_id: client.id,
         request_type: msg.type,
-        session_id: session.session_id,
-        agent_id: agentId,
+        session_id: looked.session.session_key,
+        agent_id: agentKey,
         error: message,
       });
       return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
@@ -1224,9 +1245,9 @@ export async function handleClientMessage(
       const activeRuns = await deps.db.all<{ run_id: string }>(
         `SELECT run_id
          FROM execution_runs
-         WHERE key = ? AND lane = ? AND status IN ('queued', 'running', 'paused')
+         WHERE tenant_id = ? AND key = ? AND lane = ? AND status IN ('queued', 'running', 'paused')
          ORDER BY created_at DESC`,
-        [key, lane],
+        [DEFAULT_TENANT_ID, key, lane],
       );
 
       for (const row of activeRuns) {
@@ -1242,8 +1263,8 @@ export async function handleClientMessage(
              processed_at = COALESCE(processed_at, ?),
              error = COALESCE(error, ?),
              reply_text = COALESCE(reply_text, '')
-         WHERE status = 'queued' AND key = ? AND lane = ?`,
-        [nowIso, "cancelled by session.delete", key, lane],
+         WHERE tenant_id = ? AND status = 'queued' AND key = ? AND lane = ?`,
+        [nowIso, "cancelled by session.delete", DEFAULT_TENANT_ID, key, lane],
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1251,8 +1272,8 @@ export async function handleClientMessage(
         request_id: msg.request_id,
         client_id: client.id,
         request_type: msg.type,
-        session_id: session.session_id,
-        agent_id: agentId,
+        session_id: sessionKey,
+        agent_id: agentKey,
         error: message,
       });
     }
@@ -1261,25 +1282,25 @@ export async function handleClientMessage(
       await deps.db.transaction(async (tx) => {
         await tx.run(
           `DELETE FROM session_model_overrides
-           WHERE agent_id = ? AND session_id = ?`,
-          [agentId, session.session_id],
+           WHERE tenant_id = ? AND session_id = ?`,
+          [DEFAULT_TENANT_ID, looked.session.session_id],
         );
         await tx.run(
           `DELETE FROM session_provider_pins
-           WHERE agent_id = ? AND session_id = ?`,
-          [agentId, session.session_id],
+           WHERE tenant_id = ? AND session_id = ?`,
+          [DEFAULT_TENANT_ID, looked.session.session_id],
         );
 
         const queueOverrideDal = new LaneQueueModeOverrideDal(tx);
-        await queueOverrideDal.clear({ key, lane });
+        await queueOverrideDal.clear({ tenant_id: DEFAULT_TENANT_ID, key, lane });
 
         const sendOverrideDal = new SessionSendPolicyOverrideDal(tx);
-        await sendOverrideDal.clear({ key });
+        await sendOverrideDal.clear({ tenant_id: DEFAULT_TENANT_ID, key });
 
         await tx.run(
           `DELETE FROM sessions
-           WHERE agent_id = ? AND session_id = ?`,
-          [agentId, session.session_id],
+           WHERE tenant_id = ? AND session_id = ?`,
+          [DEFAULT_TENANT_ID, looked.session.session_id],
         );
       });
     } catch (err) {
@@ -1288,15 +1309,15 @@ export async function handleClientMessage(
         request_id: msg.request_id,
         client_id: client.id,
         request_type: msg.type,
-        session_id: session.session_id,
-        agent_id: agentId,
+        session_id: sessionKey,
+        agent_id: agentKey,
         error: message,
       });
       return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
     }
 
     try {
-      const result = WsSessionDeleteResult.parse({ session_id: session.session_id });
+      const result = WsSessionDeleteResult.parse({ session_id: sessionKey });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1304,8 +1325,8 @@ export async function handleClientMessage(
         request_id: msg.request_id,
         client_id: client.id,
         request_type: msg.type,
-        session_id: session.session_id,
-        agent_id: agentId,
+        session_id: sessionKey,
+        agent_id: agentKey,
         error: message,
       });
       return errorResponse(msg.request_id, msg.type, "internal_error", "internal error");
