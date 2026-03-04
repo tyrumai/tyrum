@@ -52,7 +52,9 @@ function isSqliteBusyError(err: unknown): boolean {
 
 function encryptValue(masterKey: Buffer, plaintext: string): { nonce: Buffer; ciphertext: Buffer } {
   const nonce = randomBytes(DB_SECRET_NONCE_BYTES);
-  const cipher = createCipheriv(DB_SECRET_ALG, masterKey, nonce);
+  const cipher = createCipheriv(DB_SECRET_ALG, masterKey, nonce, {
+    authTagLength: DB_SECRET_AUTH_TAG_BYTES,
+  });
   const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return { nonce, ciphertext: Buffer.concat([encrypted, tag]) };
@@ -68,7 +70,9 @@ function decryptValue(masterKey: Buffer, nonce: Buffer, ciphertextAndTag: Buffer
     ciphertextAndTag.length - DB_SECRET_AUTH_TAG_BYTES,
   );
 
-  const decipher = createDecipheriv(DB_SECRET_ALG, masterKey, nonce);
+  const decipher = createDecipheriv(DB_SECRET_ALG, masterKey, nonce, {
+    authTagLength: DB_SECRET_AUTH_TAG_BYTES,
+  });
   decipher.setAuthTag(tag);
   const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   return decrypted.toString("utf8");

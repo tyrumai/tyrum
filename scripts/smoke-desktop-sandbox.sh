@@ -173,11 +173,11 @@ docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -
 
         const approval = db
           .prepare(
-            "SELECT id FROM approvals WHERE run_id = ? AND status = ? AND kind = ? ORDER BY id ASC LIMIT 1",
+            "SELECT approval_id FROM approvals WHERE run_id = ? AND status = ? AND kind = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
           )
           .get(runId, "pending", "policy");
-        const approvalId = approval?.id;
-        if (typeof approvalId !== "number") {
+        const approvalId = approval?.approval_id;
+        if (typeof approvalId !== "string" || approvalId.length === 0) {
           throw new Error(`[smoke] run ${runId} paused for policy but no pending approval found`);
         }
 
