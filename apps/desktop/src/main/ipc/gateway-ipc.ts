@@ -83,12 +83,12 @@ async function resolvePinnedGatewayFetchState(
   const tls = await import("node:tls");
 
   const agent = new undici.Agent({
-    connect: (
-      opts: { port?: unknown; hostname?: unknown; servername?: unknown },
-      callback: (err: Error | null, socket: unknown | null) => void,
-    ) => {
-      const port = Number.parseInt(String(opts.port ?? ""), 10);
-      const hostname = String(opts.hostname ?? "");
+    connect: (opts, callback) => {
+      const portRaw = opts.port;
+      const port =
+        typeof portRaw === "number" ? portRaw : Number.parseInt(String(portRaw ?? ""), 10);
+      const hostnameRaw = opts.hostname;
+      const hostname = typeof hostnameRaw === "string" ? hostnameRaw : String(hostnameRaw ?? "");
       const servername =
         typeof opts.servername === "string" && opts.servername.trim() ? opts.servername : hostname;
 
@@ -97,14 +97,19 @@ async function resolvePinnedGatewayFetchState(
         return;
       }
 
+      const rejectUnauthorized = !allowSelfSigned;
+
       let settled = false;
-      const done = (err: Error | null, socket: unknown | null) => {
+      const finishError = (err: Error): void => {
         if (settled) return;
         settled = true;
-        callback(err, socket);
+        callback(err, null);
       };
-
-      const rejectUnauthorized = !allowSelfSigned;
+      const finishSuccess = (socket: import("node:tls").TLSSocket): void => {
+        if (settled) return;
+        settled = true;
+        callback(null, socket);
+      };
 
       const socket = tls.connect({
         host: hostname,
@@ -116,7 +121,7 @@ async function resolvePinnedGatewayFetchState(
       socket.unref();
 
       socket.once("error", (err: Error) => {
-        done(err, null);
+        finishError(err);
       });
 
       socket.once("secureConnect", () => {
@@ -136,11 +141,11 @@ async function resolvePinnedGatewayFetchState(
             );
           }
 
-          done(null, socket);
+          finishSuccess(socket);
         } catch (err) {
           const error = err instanceof Error ? err : new Error(String(err));
           socket.destroy(error);
-          done(error, null);
+          finishError(error);
         }
       });
     },
@@ -148,7 +153,7 @@ async function resolvePinnedGatewayFetchState(
 
   pinnedGatewayFetchState = {
     key,
-    fetchImpl: undici.fetch as typeof fetch,
+    fetchImpl: fetch,
     dispatcher: agent,
   };
 
