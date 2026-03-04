@@ -7,6 +7,7 @@ import { Alert } from "../../ui/alert.js";
 import { Button } from "../../ui/button.js";
 import { Card, CardContent } from "../../ui/card.js";
 import { Input } from "../../ui/input.js";
+import { Switch } from "../../ui/switch.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs.js";
 import { ConnectPage } from "../connect-page.js";
 
@@ -52,6 +53,7 @@ function DesktopConnectionPage({ core, api }: { core: OperatorCore; api: Desktop
   const [remoteUrl, setRemoteUrl] = useState("ws://127.0.0.1:8788/ws");
   const [remoteToken, setRemoteToken] = useState("");
   const [remoteTlsCertFingerprint256, setRemoteTlsCertFingerprint256] = useState("");
+  const [remoteTlsAllowSelfSigned, setRemoteTlsAllowSelfSigned] = useState(false);
   const [hasSavedRemoteToken, setHasSavedRemoteToken] = useState(false);
   const [nodeStatus, setNodeStatus] = useState("disconnected");
   const [busy, setBusy] = useState(false);
@@ -75,6 +77,9 @@ function DesktopConnectionPage({ core, api }: { core: OperatorCore; api: Desktop
       if (typeof remote?.["tokenRef"] === "string") setHasSavedRemoteToken(true);
       if (typeof remote?.["tlsCertFingerprint256"] === "string") {
         setRemoteTlsCertFingerprint256(remote["tlsCertFingerprint256"] as string);
+      }
+      if (typeof remote?.["tlsAllowSelfSigned"] === "boolean") {
+        setRemoteTlsAllowSelfSigned(remote["tlsAllowSelfSigned"] as boolean);
       }
     });
 
@@ -153,6 +158,7 @@ function DesktopConnectionPage({ core, api }: { core: OperatorCore; api: Desktop
         setHasSavedRemoteToken(true);
       }
       remoteConfig["tlsCertFingerprint256"] = trimmedFingerprint;
+      remoteConfig["tlsAllowSelfSigned"] = remoteTlsAllowSelfSigned;
 
       await api.setConfig({ mode: "remote", remote: remoteConfig });
       const result = await api.node.connect();
@@ -204,9 +210,11 @@ function DesktopConnectionPage({ core, api }: { core: OperatorCore; api: Desktop
             disconnectNode={disconnectNode}
             hasSavedRemoteToken={hasSavedRemoteToken}
             nodeStatus={nodeStatus}
+            remoteTlsAllowSelfSigned={remoteTlsAllowSelfSigned}
             remoteTlsCertFingerprint256={remoteTlsCertFingerprint256}
             remoteToken={remoteToken}
             remoteUrl={remoteUrl}
+            setRemoteTlsAllowSelfSigned={setRemoteTlsAllowSelfSigned}
             setRemoteTlsCertFingerprint256={setRemoteTlsCertFingerprint256}
             setRemoteToken={setRemoteToken}
             setRemoteUrl={setRemoteUrl}
@@ -276,9 +284,11 @@ function RemoteNodeTab(props: {
   disconnectNode: () => Promise<void>;
   hasSavedRemoteToken: boolean;
   nodeStatus: string;
+  remoteTlsAllowSelfSigned: boolean;
   remoteTlsCertFingerprint256: string;
   remoteToken: string;
   remoteUrl: string;
+  setRemoteTlsAllowSelfSigned: (next: boolean) => void;
   setRemoteTlsCertFingerprint256: (next: string) => void;
   setRemoteToken: (next: string) => void;
   setRemoteUrl: (next: string) => void;
@@ -289,9 +299,11 @@ function RemoteNodeTab(props: {
     disconnectNode,
     hasSavedRemoteToken,
     nodeStatus,
+    remoteTlsAllowSelfSigned,
     remoteTlsCertFingerprint256,
     remoteToken,
     remoteUrl,
+    setRemoteTlsAllowSelfSigned,
     setRemoteTlsCertFingerprint256,
     setRemoteToken,
     setRemoteUrl,
@@ -328,6 +340,19 @@ function RemoteNodeTab(props: {
           onChange={(e) => setRemoteTlsCertFingerprint256(e.target.value)}
           placeholder="AA:BB:CC:…"
         />
+
+        <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-bg-card/40 px-3 py-2">
+          <div className="grid gap-0.5">
+            <div className="text-sm font-medium text-fg">Allow self-signed TLS</div>
+            <div className="text-xs text-fg-muted">
+              Requires fingerprint; skips CA verification.
+            </div>
+          </div>
+          <Switch
+            checked={remoteTlsAllowSelfSigned}
+            onCheckedChange={setRemoteTlsAllowSelfSigned}
+          />
+        </div>
 
         <div className="flex gap-2">
           {nodeStatus === "disconnected" || nodeStatus === "error" ? (

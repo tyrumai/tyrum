@@ -9,6 +9,7 @@ export type ResolvedTuiConfig = GatewayUrls & {
   token: string;
   deviceIdentityPath: string;
   tlsCertFingerprint256?: string;
+  tlsAllowSelfSigned: boolean;
   reconnect: boolean;
 };
 
@@ -72,6 +73,7 @@ export function resolveTuiConfig(input: {
   tyrumHome?: string;
   deviceIdentityPath?: string;
   tlsCertFingerprint256?: string;
+  tlsAllowSelfSigned?: boolean;
   reconnect?: boolean;
 }): ResolvedTuiConfig {
   const gatewayUrl = (input.gatewayUrl ?? "").trim() || input.defaults.gatewayUrl;
@@ -102,11 +104,17 @@ export function resolveTuiConfig(input: {
     return normalized;
   })();
 
+  const tlsAllowSelfSigned = Boolean(input.tlsAllowSelfSigned);
+  if (tlsAllowSelfSigned && !tlsCertFingerprint256) {
+    throw new Error("--tls-allow-self-signed requires --tls-fingerprint256.");
+  }
+
   return {
     ...urls,
     token,
     deviceIdentityPath,
     tlsCertFingerprint256,
+    tlsAllowSelfSigned,
     reconnect: input.reconnect ?? true,
   };
 }

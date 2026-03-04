@@ -26,6 +26,7 @@ export interface TyrumDesktopApi {
       httpBaseUrl: string;
       token: string;
       tlsCertFingerprint256: string;
+      tlsAllowSelfSigned: boolean;
     }>;
     httpFetch: (input: {
       url: string;

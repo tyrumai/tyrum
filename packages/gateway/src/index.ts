@@ -4,7 +4,9 @@
  * Creates the DI container, builds the Hono app, and starts the HTTP server.
  */
 
-import { createServer } from "node:http";
+import { X509Certificate } from "node:crypto";
+import { createServer as createHttpsServer } from "node:https";
+import { createServer as createHttpServer } from "node:http";
 import { mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
@@ -59,6 +61,7 @@ import { isRecord, parseJsonOrYaml } from "./utils/parse-json-or-yaml.js";
 import { loadLifecycleHooksFromHome } from "./modules/hooks/config.js";
 import { LifecycleHooksRuntime } from "./modules/hooks/runtime.js";
 import { loadConfigFromProcessEnv } from "./config.js";
+import { ensureSelfSignedTlsMaterial } from "./modules/tls/self-signed.js";
 
 // Re-export for library consumers
 export { VERSION } from "./version.js";
@@ -226,6 +229,7 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
   host: string;
   token: string | undefined;
   tlsReady?: boolean;
+  tlsSelfSigned?: boolean;
   allowInsecureHttp?: boolean;
 }): NonLoopbackTransportPolicy {
   const shouldRunEdge = input.role === "all" || input.role === "edge";
@@ -253,7 +257,8 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
   }
 
   const tlsReady = input.tlsReady ?? false;
-  if (tlsReady) return "tls";
+  const tlsSelfSigned = input.tlsSelfSigned ?? false;
+  if (tlsReady || tlsSelfSigned) return "tls";
 
   const allowInsecureHttp = input.allowInsecureHttp ?? false;
   if (allowInsecureHttp) return "insecure";
@@ -261,6 +266,7 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
   throw new Error(
     "Gateway is configured to bind to a non-loopback address. Remote operation requires TLS. " +
       "Set TYRUM_TLS_READY=1 after configuring TLS termination (recommended), " +
+      "or set TYRUM_TLS_SELF_SIGNED=1 to enable built-in self-signed TLS, " +
       "or set TYRUM_ALLOW_INSECURE_HTTP=1 to acknowledge and allow plaintext HTTP in a trusted network.",
   );
 }
@@ -268,6 +274,7 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
 type CliCommand =
   | { kind: "start"; role?: GatewayRole }
   | { kind: "check" }
+  | { kind: "tls_fingerprint" }
   | { kind: "toolrunner" }
   | { kind: "help" }
   | { kind: "version" }
@@ -309,6 +316,7 @@ function printCliHelp(): void {
 Usage:
   tyrum [start|edge|worker|scheduler]
   tyrum check
+  tyrum tls fingerprint
   tyrum toolrunner
   tyrum plugin install <dir> [--home <path>]
   tyrum update [--channel stable|beta|dev] [--version <version>]
@@ -362,6 +370,18 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   }
   if (first === "check") return { kind: "check" };
   if (first === "toolrunner") return { kind: "toolrunner" };
+  if (first === "tls") {
+    const [subcommand, ...args] = rest;
+    if (!subcommand) {
+      throw new Error("tls requires a subcommand (fingerprint)");
+    }
+    if (subcommand === "-h" || subcommand === "--help") return { kind: "help" };
+    if (args.length > 0) {
+      throw new Error(`unexpected tls arguments: ${args.join(" ")}`);
+    }
+    if (subcommand === "fingerprint") return { kind: "tls_fingerprint" };
+    throw new Error(`unknown tls command '${subcommand}'`);
+  }
 
   if (first === "plugin") {
     const [subcommand, ...args] = rest;
@@ -895,6 +915,27 @@ async function runGatewayCheck(): Promise<number> {
   }
 }
 
+async function runTlsFingerprint(): Promise<number> {
+  const tyrumHome = resolveTyrumHome();
+  const certPath = join(tyrumHome, "tls", "cert.pem");
+
+  try {
+    const certPem = await readFile(certPath, "utf-8");
+    const fingerprint256 = new X509Certificate(certPem).fingerprint256;
+    console.log(`fingerprint256=${fingerprint256}`);
+    console.log(`cert_path=${certPath}`);
+    return 0;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      `tls fingerprint: failed: ${message}. ` +
+        `Expected a certificate at ${certPath}. ` +
+        "Start the gateway with TYRUM_TLS_SELF_SIGNED=1 to generate one.",
+    );
+    return 1;
+  }
+}
+
 export async function runCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {
   let command: CliCommand;
   try {
@@ -918,6 +959,10 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
 
   if (command.kind === "check") {
     return await runGatewayCheck();
+  }
+
+  if (command.kind === "tls_fingerprint") {
+    return await runTlsFingerprint();
   }
 
   if (command.kind === "toolrunner") {
@@ -1006,6 +1051,7 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
     host,
     token,
     tlsReady: config.server.tlsReady,
+    tlsSelfSigned: config.server.tlsSelfSigned,
     allowInsecureHttp: config.server.allowInsecureHttp,
   });
 
@@ -1386,9 +1432,19 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
   // --- HTTP server with WS upgrade support ---
   const server =
     shouldRunEdge && app && wsHandler
-      ? (() => {
+      ? await (async () => {
           const listener = getRequestListener(app.fetch);
-          const s = createServer(listener);
+          const tlsSelfSigned = config.server.tlsSelfSigned ?? false;
+          const { server: s, tlsMaterial } = await (async () => {
+            if (!tlsSelfSigned) {
+              return { server: createHttpServer(listener), tlsMaterial: null };
+            }
+            const material = await ensureSelfSignedTlsMaterial({ home: tyrumHome });
+            return {
+              server: createHttpsServer({ key: material.keyPem, cert: material.certPem }, listener),
+              tlsMaterial: material,
+            };
+          })();
 
           s.on("upgrade", (req, socket, head) => {
             const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
@@ -1400,12 +1456,30 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
           });
 
           s.listen(port, host, () => {
+            const scheme = tlsSelfSigned ? "https" : "http";
             logger.info("gateway.listen", {
               host,
               port,
-              url: `http://${host}:${port}`,
+              url: `${scheme}://${host}:${port}`,
+              tls_self_signed: tlsSelfSigned,
+              tls_fingerprint256: tlsMaterial?.fingerprint256 ?? null,
             });
+
+            if (tlsSelfSigned && tlsMaterial) {
+              console.log("---");
+              console.log(
+                "TLS enabled (self-signed). Browsers will show a warning unless trusted.",
+              );
+              console.log(`TLS fingerprint (SHA-256): ${tlsMaterial.fingerprint256}`);
+              console.log(`TLS certificate: ${tlsMaterial.certPath}`);
+              console.log(`TLS key: ${tlsMaterial.keyPath}`);
+              console.log(`UI: https://${host}:${port}/ui`);
+              console.log(`WS: wss://${host}:${port}/ws`);
+              console.log("Verify the fingerprint out-of-band (e.g. SSH) before trusting.");
+              console.log("---");
+            }
           });
+
           return s;
         })()
       : undefined;

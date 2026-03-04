@@ -14,12 +14,154 @@ const sender = createWindowSender();
 let manager: GatewayManager | null = null;
 let ipcRegistered = false;
 
+function normalizeFingerprint256(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const colonMatch = trimmed.match(/[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){31}/);
+  if (colonMatch) return colonMatch[0].replace(/:/g, "").toLowerCase();
+
+  const hexMatch = trimmed.match(/[0-9A-Fa-f]{64}/);
+  if (hexMatch) return hexMatch[0].toLowerCase();
+
+  return null;
+}
+
+type PinnedGatewayFetchState = {
+  key: string;
+  fetchImpl: typeof fetch;
+  dispatcher: { destroy?: () => Promise<void> | void };
+};
+
+let pinnedGatewayFetchState: PinnedGatewayFetchState | null = null;
+
+async function resolvePinnedGatewayFetchState(
+  config: DesktopNodeConfig,
+): Promise<PinnedGatewayFetchState | null> {
+  const pinRaw =
+    config.mode === "remote" && typeof config.remote.tlsCertFingerprint256 === "string"
+      ? config.remote.tlsCertFingerprint256.trim()
+      : "";
+  const allowSelfSigned =
+    config.mode === "remote" ? Boolean(config.remote.tlsAllowSelfSigned) : false;
+
+  if (!pinRaw) {
+    if (allowSelfSigned) {
+      throw new Error("remote.tlsAllowSelfSigned requires remote.tlsCertFingerprint256.");
+    }
+    if (pinnedGatewayFetchState) {
+      try {
+        await pinnedGatewayFetchState.dispatcher.destroy?.();
+      } catch {
+        // ignore
+      }
+      pinnedGatewayFetchState = null;
+    }
+    return null;
+  }
+
+  const expectedFingerprint256 = normalizeFingerprint256(pinRaw);
+  if (!expectedFingerprint256) {
+    throw new Error("remote.tlsCertFingerprint256 must be a SHA-256 hex fingerprint.");
+  }
+
+  const key = `${expectedFingerprint256}:${allowSelfSigned ? "self" : "strict"}`;
+  if (pinnedGatewayFetchState?.key === key) {
+    return pinnedGatewayFetchState;
+  }
+
+  if (pinnedGatewayFetchState) {
+    try {
+      await pinnedGatewayFetchState.dispatcher.destroy?.();
+    } catch {
+      // ignore
+    }
+    pinnedGatewayFetchState = null;
+  }
+
+  const undici = await import("undici");
+  const tls = await import("node:tls");
+
+  const agent = new undici.Agent({
+    connect: (
+      opts: { port?: unknown; hostname?: unknown; servername?: unknown },
+      callback: (err: Error | null, socket: unknown | null) => void,
+    ) => {
+      const port = Number.parseInt(String(opts.port ?? ""), 10);
+      const hostname = String(opts.hostname ?? "");
+      const servername =
+        typeof opts.servername === "string" && opts.servername.trim() ? opts.servername : hostname;
+
+      if (!hostname || !Number.isFinite(port)) {
+        callback(new Error("Invalid TLS connector options"), null);
+        return;
+      }
+
+      let settled = false;
+      const done = (err: Error | null, socket: unknown | null) => {
+        if (settled) return;
+        settled = true;
+        callback(err, socket);
+      };
+
+      const rejectUnauthorized = !allowSelfSigned;
+
+      const socket = tls.connect({
+        host: hostname,
+        port,
+        servername,
+        rejectUnauthorized,
+      }) as import("node:tls").TLSSocket;
+
+      socket.unref();
+
+      socket.once("error", (err: Error) => {
+        done(err, null);
+      });
+
+      socket.once("secureConnect", () => {
+        try {
+          const cert = socket.getPeerCertificate();
+          const identityErr = tls.checkServerIdentity(servername, cert);
+          if (identityErr) throw identityErr;
+
+          const actualRaw = typeof cert.fingerprint256 === "string" ? cert.fingerprint256 : "";
+          const actual = normalizeFingerprint256(actualRaw);
+          if (!actual) {
+            throw new Error("TLS peer certificate missing fingerprint256.");
+          }
+          if (actual !== expectedFingerprint256) {
+            throw new Error(
+              `TLS certificate fingerprint mismatch (expected ${pinRaw}, got ${actualRaw}).`,
+            );
+          }
+
+          done(null, socket);
+        } catch (err) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          socket.destroy(error);
+          done(error, null);
+        }
+      });
+    },
+  });
+
+  pinnedGatewayFetchState = {
+    key,
+    fetchImpl: undici.fetch as typeof fetch,
+    dispatcher: agent,
+  };
+
+  return pinnedGatewayFetchState;
+}
+
 export interface OperatorConnectionInfo {
   mode: "embedded" | "remote";
   wsUrl: string;
   httpBaseUrl: string;
   token: string;
   tlsCertFingerprint256: string;
+  tlsAllowSelfSigned: boolean;
 }
 
 let startPromise: Promise<void> | null = null;
@@ -87,6 +229,7 @@ export function resolveOperatorConnection(config: DesktopNodeConfig): OperatorCo
       httpBaseUrl: resolveOperatorHttpBaseUrl(config),
       token,
       tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
     };
   }
 
@@ -95,12 +238,14 @@ export function resolveOperatorConnection(config: DesktopNodeConfig): OperatorCo
     typeof config.remote.tlsCertFingerprint256 === "string"
       ? config.remote.tlsCertFingerprint256
       : "";
+  const tlsAllowSelfSigned = Boolean(config.remote.tlsAllowSelfSigned);
   return {
     mode: "remote",
     wsUrl: config.remote.wsUrl,
     httpBaseUrl: resolveOperatorHttpBaseUrl(config),
     token,
     tlsCertFingerprint256,
+    tlsAllowSelfSigned,
   };
 }
 
@@ -264,7 +409,14 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
       };
 
       // The renderer always provides serializable primitives; ensure we pass plain objects through.
-      const res = await fetch(requestUrl.toString(), init);
+      const pinned =
+        requestUrl.protocol === "https:" ? await resolvePinnedGatewayFetchState(config) : null;
+      const res = pinned
+        ? await pinned.fetchImpl(requestUrl.toString(), {
+            ...(init as any),
+            dispatcher: pinned.dispatcher,
+          } as any)
+        : await fetch(requestUrl.toString(), init);
       const bodyText = await res.text();
       const responseHeaders: Record<string, string> = {};
       res.headers.forEach((value, key) => {

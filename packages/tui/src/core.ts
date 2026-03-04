@@ -9,6 +9,7 @@ import {
   createElevatedModeStore,
   createOperatorCore,
   createOperatorCoreManager,
+  httpAuthForAuth,
   wsTokenForAuth,
   type OperatorCore,
   type OperatorCoreFactory,
@@ -21,6 +22,7 @@ export type TuiCoreOptions = {
   token: string;
   deviceIdentityPath: string;
   tlsCertFingerprint256?: string;
+  tlsAllowSelfSigned?: boolean;
   reconnect?: boolean;
 };
 
@@ -43,6 +45,7 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
       url: coreOptions.wsUrl,
       token: wsTokenForAuth(coreOptions.auth),
       tlsCertFingerprint256: options.tlsCertFingerprint256,
+      tlsAllowSelfSigned: options.tlsAllowSelfSigned,
       reconnect: options.reconnect,
       capabilities: [],
       device: {
@@ -55,12 +58,19 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
       },
     });
 
+    const http = createTyrumHttpClient({
+      baseUrl: coreOptions.httpBaseUrl,
+      auth: httpAuthForAuth(coreOptions.auth),
+      tlsCertFingerprint256: options.tlsCertFingerprint256,
+      tlsAllowSelfSigned: options.tlsAllowSelfSigned,
+    });
+
     return createOperatorCore({
       wsUrl: coreOptions.wsUrl,
       httpBaseUrl: coreOptions.httpBaseUrl,
       auth: coreOptions.auth,
       elevatedModeStore: coreOptions.elevatedModeStore,
-      deps: { ws },
+      deps: { ws, http },
     });
   };
 
@@ -81,6 +91,8 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
     const http = createTyrumHttpClient({
       baseUrl: options.httpBaseUrl,
       auth: { type: "bearer", token },
+      tlsCertFingerprint256: options.tlsCertFingerprint256,
+      tlsAllowSelfSigned: options.tlsAllowSelfSigned,
     });
 
     const issued = await http.deviceTokens.issue({

@@ -18,6 +18,19 @@ import { parseDesktopNodeArgs } from "./args.js";
 
 export const VERSION = "0.1.0";
 
+function normalizeFingerprint256(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const colonMatch = trimmed.match(/[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){31}/);
+  if (colonMatch) return colonMatch[0].replace(/:/g, "").toLowerCase();
+
+  const hexMatch = trimmed.match(/[0-9A-Fa-f]{64}/);
+  if (hexMatch) return hexMatch[0].toLowerCase();
+
+  return null;
+}
+
 function resolveTyrumHome(override?: string): string {
   const raw = override ?? process.env["TYRUM_HOME"];
   const trimmed = raw?.trim();
@@ -30,6 +43,23 @@ function resolveGatewayWsUrl(override?: string): string {
   const trimmed = raw?.trim();
   if (trimmed) return trimmed;
   return "ws://127.0.0.1:8788/ws";
+}
+
+function resolveTlsFingerprint256(override?: string): string | undefined {
+  const raw = override ?? process.env["TYRUM_GATEWAY_TLS_FINGERPRINT256"];
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  const normalized = normalizeFingerprint256(trimmed);
+  if (!normalized) {
+    throw new Error("invalid --tls-fingerprint256 (expected a SHA-256 hex fingerprint)");
+  }
+  return normalized;
+}
+
+function resolveTlsAllowSelfSigned(override?: boolean): boolean {
+  if (override !== undefined) return override;
+  const raw = process.env["TYRUM_GATEWAY_TLS_ALLOW_SELF_SIGNED"]?.trim().toLowerCase();
+  return Boolean(raw && ["1", "true", "yes", "on"].includes(raw));
 }
 
 async function resolveGatewayToken(input: {
@@ -87,6 +117,7 @@ function printHelp(): void {
       "  tyrum-desktop-node --help",
       "  tyrum-desktop-node --version",
       "  tyrum-desktop-node [--ws-url <ws://.../ws>] [--token <token> | --token-path <path>]",
+      "                    [--tls-fingerprint256 <hex>] [--tls-allow-self-signed]",
       "                    [--home <dir>] [--label <label>] [--mode <mode>] [--takeover-url <url>]",
       "",
       "Environment:",
@@ -94,6 +125,8 @@ function printHelp(): void {
       "  TYRUM_GATEWAY_WS_URL      Defaults to ws://127.0.0.1:8788/ws",
       "  TYRUM_GATEWAY_TOKEN       Gateway admin/scoped token",
       "  TYRUM_GATEWAY_TOKEN_PATH  Path to token file (e.g. /gateway/.admin-token)",
+      "  TYRUM_GATEWAY_TLS_FINGERPRINT256       Gateway TLS cert SHA-256 fingerprint (wss:// only)",
+      "  TYRUM_GATEWAY_TLS_ALLOW_SELF_SIGNED    Allow self-signed TLS when fingerprint is set",
       "  TYRUM_NODE_LABEL          Optional node label (shown in pairing UI)",
       "  TYRUM_NODE_MODE           Optional node mode string (e.g. desktop-sandbox)",
       "  TYRUM_TAKEOVER_URL        Optional noVNC takeover URL to embed in label",
@@ -132,6 +165,11 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     tokenOverride: args.token,
     tokenPathOverride: args.tokenPath,
   });
+  const tlsCertFingerprint256 = resolveTlsFingerprint256(args.tlsFingerprint256);
+  const tlsAllowSelfSigned = resolveTlsAllowSelfSigned(args.tlsAllowSelfSigned);
+  if (tlsAllowSelfSigned && !tlsCertFingerprint256) {
+    throw new Error("--tls-allow-self-signed requires --tls-fingerprint256");
+  }
   const { label, takeoverUrl } = resolveNodeLabel({
     labelOverride: args.label,
     takeoverUrlOverride: args.takeoverUrl,
@@ -150,6 +188,8 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   const client = new TyrumClient({
     url: wsUrl,
     token,
+    tlsCertFingerprint256,
+    tlsAllowSelfSigned,
     capabilities: ["desktop"],
     role: "node",
     device: {

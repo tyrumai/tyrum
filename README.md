@@ -81,6 +81,7 @@ See `docs/install.md` for full details, version pinning, and update commands.
    - Singleton agent routes (`/agent/status`, `/agent/turn`) are enabled by default. Set `TYRUM_AGENT_ENABLED=0` to disable.
 7. **Open the operator UI:** `http://127.0.0.1:8788/ui`
    - The first visit prompts for your admin token and bootstraps a browser auth cookie via `POST /auth/session`.
+   - If you start the gateway with `TYRUM_TLS_SELF_SIGNED=1`, the UI is served over HTTPS: `https://127.0.0.1:8788/ui` (you’ll get a browser warning unless you install a CA).
 
 ### Localhost Safety Defaults
 
@@ -89,7 +90,8 @@ See `docs/install.md` for full details, version pinning, and update commands.
 - Gateway auth token is required on localhost and non-local interfaces (`GATEWAY_TOKEN` env or `${TYRUM_HOME}/.admin-token`, auto-generated if missing).
 - Non-loopback deployments require a hardened admin token (minimum 32 characters).
 - Binding to a non-loopback host requires an explicit transport posture:
-  - Recommended: configure TLS termination and set `TYRUM_TLS_READY=1`.
+  - Recommended (production): configure TLS termination and set `TYRUM_TLS_READY=1`.
+  - Simple (single gateway): serve HTTPS/WSS directly with `TYRUM_TLS_SELF_SIGNED=1` (self-signed cert; browsers warn unless trusted).
   - Dev/trusted networks only: set `TYRUM_ALLOW_INSECURE_HTTP=1` to acknowledge plaintext HTTP.
 - Device-bound tokens can be issued/revoked with authenticated HTTP routes:
   - `POST /auth/device-tokens/issue` with `{ device_id, role, scopes[], ttl_seconds? }`

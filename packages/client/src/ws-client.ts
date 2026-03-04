@@ -231,9 +231,18 @@ export interface TyrumClientOptions {
    * The value is the server certificate's SHA-256 fingerprint, as hex (with or
    * without `:`), case-insensitive. When set, the client will refuse to
    * connect if the remote certificate does not match. Standard TLS verification
-   * (CA trust + hostname) still applies.
+   * (CA trust + hostname) still applies by default.
    */
   tlsCertFingerprint256?: string;
+  /**
+   * When `true`, allows connecting to self-signed TLS certificates when
+   * `tlsCertFingerprint256` is configured, by skipping CA verification and
+   * relying on the configured fingerprint (plus hostname validation).
+   *
+   * This is intended for IP-only deployments where using a public CA isn't
+   * possible. Verify the fingerprint out-of-band before trusting it.
+   */
+  tlsAllowSelfSigned?: boolean;
   /**
    * Optional PEM-encoded CA certificate(s) used for Node.js `wss://` TLS
    * verification when `tlsCertFingerprint256` is enabled.
@@ -791,7 +800,11 @@ export class TyrumClient {
 
   private async createWebSocket(): Promise<WebSocket> {
     const pinRaw = this.opts.tlsCertFingerprint256?.trim();
+    const allowSelfSigned = Boolean(this.opts.tlsAllowSelfSigned);
     if (!pinRaw) {
+      if (allowSelfSigned) {
+        throw new Error("tlsAllowSelfSigned requires tlsCertFingerprint256.");
+      }
       return new WebSocket(this.opts.url, this.buildProtocols());
     }
 
@@ -849,12 +862,14 @@ export class TyrumClient {
           typeof this.opts.tlsCaCertPem === "string" ? this.opts.tlsCaCertPem : "";
         const caCertPemTrimmed = caCertPemRaw.trim();
         const caCertPem = caCertPemTrimmed.length ? caCertPemTrimmed : undefined;
+        const rejectUnauthorized = !(allowSelfSigned && caCertPem === undefined);
 
         const socket = tls.connect({
           host: hostname,
           port,
           servername,
           ca: caCertPem,
+          rejectUnauthorized,
         }) as import("node:tls").TLSSocket;
 
         socket.once("error", (err: Error) => {
@@ -890,9 +905,7 @@ export class TyrumClient {
       },
     });
 
-    const WebSocketCtor = (
-      globalThis as unknown as { WebSocket: new (...args: any[]) => WebSocket }
-    ).WebSocket;
+    const WebSocketCtor = undici.WebSocket as unknown as new (...args: any[]) => WebSocket;
     try {
       const ws = new WebSocketCtor(this.opts.url, {
         protocols: this.buildProtocols(),

@@ -74,6 +74,10 @@ describe("gateway CLI argument parsing", () => {
   it("parses check command", () => {
     expect(parseCliArgs(["check"])).toEqual({ kind: "check" });
   });
+
+  it("parses TLS fingerprint command", () => {
+    expect(parseCliArgs(["tls", "fingerprint"])).toEqual({ kind: "tls_fingerprint" });
+  });
 });
 
 describe("gateway CLI update target resolution", () => {

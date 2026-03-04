@@ -59,6 +59,8 @@ vi.mock("../src/main/config/store.js", () => ({
     remote: {
       wsUrl: testState.remoteWsUrl,
       tokenRef: "enc:remote-token",
+      tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
     },
   })),
   saveConfig: saveConfigMock,
@@ -160,6 +162,7 @@ describe("registerGatewayIpc handlers", () => {
       httpBaseUrl: "http://127.0.0.1:8788/",
       token: "token",
       tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
     });
   });
 
@@ -192,6 +195,7 @@ describe("registerGatewayIpc handlers", () => {
       httpBaseUrl: "http://127.0.0.1:8788/",
       token: "generated-token",
       tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
     });
     expect(generateTokenMock).toHaveBeenCalledTimes(1);
     expect(encryptTokenMock).toHaveBeenCalledWith("generated-token");
@@ -233,6 +237,7 @@ describe("registerGatewayIpc handlers", () => {
       httpBaseUrl: "https://remote.example/",
       token: "remote-token",
       tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
     });
   });
 

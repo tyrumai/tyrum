@@ -1044,6 +1044,7 @@ describe("MemoryInspector", () => {
       httpBaseUrl: "http://example.test/",
       token: "desktop-token",
       tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
     }));
 
     const previousDesktop = (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop;
@@ -1126,6 +1127,7 @@ describe("MemoryInspector", () => {
       httpBaseUrl: "http://example.test/",
       token: "",
       tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
     }));
 
     const previousDesktop = (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop;

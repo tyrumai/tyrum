@@ -42,11 +42,13 @@ export class WorkItemNotificationService {
         connection.tlsCertFingerprint256.trim().length > 0
           ? connection.tlsCertFingerprint256
           : undefined;
+      const tlsAllowSelfSigned = Boolean(connection.tlsAllowSelfSigned);
 
       const client = new TyrumClient({
         url: connection.wsUrl,
         token: connection.token,
         tlsCertFingerprint256,
+        tlsAllowSelfSigned,
         capabilities: [],
         reconnect: true,
         maxReconnectDelay: 10_000,

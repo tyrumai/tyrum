@@ -58,6 +58,29 @@ describe("config-ipc config:set allowlist", () => {
     );
   });
 
+  it("allows remote.tlsAllowSelfSigned via config:set", async () => {
+    const { registerConfigIpc } = await import("../src/main/ipc/config-ipc.js");
+    registerConfigIpc();
+
+    const handler = registeredHandlers.get("config:set");
+    expect(handler).toBeTypeOf("function");
+
+    const result = handler?.({}, { remote: { tlsAllowSelfSigned: true } });
+
+    expect(saveConfigMock).toHaveBeenCalledTimes(1);
+    expect(saveConfigMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remote: expect.objectContaining({ tlsAllowSelfSigned: true }),
+      }),
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        remote: expect.objectContaining({ tlsAllowSelfSigned: true }),
+      }),
+    );
+  });
+
   it("allows theme.source via config:set and updates nativeTheme.themeSource", async () => {
     const { registerConfigIpc } = await import("../src/main/ipc/config-ipc.js");
     registerConfigIpc();

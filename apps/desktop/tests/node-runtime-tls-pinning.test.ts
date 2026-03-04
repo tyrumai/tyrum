@@ -23,7 +23,7 @@ vi.mock("@tyrum/client", () => {
 });
 
 describe("NodeRuntime remote TLS pinning", () => {
-  it("passes remote.tlsCertFingerprint256 through to TyrumClient", async () => {
+  it("passes remote.tlsCertFingerprint256/tlsAllowSelfSigned through to TyrumClient", async () => {
     vi.resetModules();
 
     const { NodeRuntime } = await import("../src/main/node-runtime.js");
@@ -37,6 +37,7 @@ describe("NodeRuntime remote TLS pinning", () => {
         remote: {
           ...DEFAULT_CONFIG.remote,
           tlsCertFingerprint256: "AA:BB",
+          tlsAllowSelfSigned: true,
         },
       },
       resolvePermissions("balanced", {}),
@@ -53,6 +54,7 @@ describe("NodeRuntime remote TLS pinning", () => {
     expect(ctorSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         tlsCertFingerprint256: "AA:BB",
+        tlsAllowSelfSigned: true,
       }),
     );
   });
