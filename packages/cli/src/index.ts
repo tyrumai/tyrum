@@ -9,6 +9,7 @@ import {
   createNodeFileDeviceIdentityStorage,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
+  normalizeFingerprint256,
   type ActionPrimitive,
 } from "@tyrum/client";
 
@@ -24,7 +25,13 @@ function isWorkflowLane(value: string): value is WorkflowLane {
 type CliCommand =
   | { kind: "help" }
   | { kind: "version" }
-  | { kind: "config_set"; gateway_url: string; auth_token: string }
+  | {
+      kind: "config_set";
+      gateway_url: string;
+      auth_token: string;
+      tls_cert_fingerprint256?: string;
+      tls_allow_self_signed?: boolean;
+    }
   | { kind: "config_show" }
   | { kind: "identity_init" }
   | { kind: "identity_show" }
@@ -142,7 +149,7 @@ function printCliHelp(): void {
       "  tyrum-cli --help",
       "  tyrum-cli --version",
       "  tyrum-cli config show",
-      "  tyrum-cli config set --gateway-url <url> --token <token>",
+      "  tyrum-cli config set --gateway-url <url> --token <token> [--tls-fingerprint256 <hex>] [--tls-allow-self-signed]",
       "  tyrum-cli identity show",
       "  tyrum-cli identity init",
       "  tyrum-cli elevated-mode enter --elevated-token <token> [--ttl-seconds <n>]",
@@ -1277,6 +1284,8 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
 
     let gatewayUrl: string | undefined;
     let token: string | undefined;
+    let tlsFingerprint256: string | undefined;
+    let tlsAllowSelfSigned = false;
     for (let i = 2; i < argv.length; i += 1) {
       const arg = argv[i];
       if (!arg) continue;
@@ -1290,6 +1299,21 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
       if (arg === "--token") {
         token = argv[i + 1];
         i += 1;
+        continue;
+      }
+
+      if (arg === "--tls-fingerprint256") {
+        const value = argv[i + 1];
+        if (!value) {
+          throw new Error("--tls-fingerprint256 requires a value");
+        }
+        tlsFingerprint256 = value;
+        i += 1;
+        continue;
+      }
+
+      if (arg === "--tls-allow-self-signed") {
+        tlsAllowSelfSigned = true;
         continue;
       }
 
@@ -1307,10 +1331,24 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
     if (!normalizedGatewayUrl) throw new Error("config.set requires --gateway-url <url>");
     if (!normalizedToken) throw new Error("config.set requires --token <token>");
 
+    const tlsCertFingerprint256Raw = tlsFingerprint256?.trim() ?? "";
+    const tlsCertFingerprint256 =
+      tlsCertFingerprint256Raw.length > 0
+        ? normalizeFingerprint256(tlsCertFingerprint256Raw)
+        : null;
+    if (tlsCertFingerprint256Raw && !tlsCertFingerprint256) {
+      throw new Error("--tls-fingerprint256 must be a SHA-256 hex fingerprint");
+    }
+    if (tlsAllowSelfSigned && !tlsCertFingerprint256) {
+      throw new Error("--tls-allow-self-signed requires --tls-fingerprint256");
+    }
+
     return {
       kind: "config_set",
       gateway_url: normalizedGatewayUrl,
       auth_token: normalizedToken,
+      ...(tlsCertFingerprint256 ? { tls_cert_fingerprint256: tlsCertFingerprint256 } : {}),
+      ...(tlsAllowSelfSigned ? { tls_allow_self_signed: true } : {}),
     };
   }
 
@@ -1427,6 +1465,8 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
 async function loadOperatorConfig(path: string): Promise<{
   gateway_url?: string;
   auth_token?: string;
+  tls_cert_fingerprint256?: string;
+  tls_allow_self_signed?: boolean;
 }> {
   try {
     const raw = await readFile(path, "utf8");
@@ -1439,7 +1479,28 @@ async function loadOperatorConfig(path: string): Promise<{
       typeof asRecord.gateway_url === "string" ? asRecord.gateway_url.trim() : undefined;
     const authToken =
       typeof asRecord.auth_token === "string" ? asRecord.auth_token.trim() : undefined;
-    return { gateway_url: gatewayUrl, auth_token: authToken };
+    const tlsFingerprintRaw =
+      typeof asRecord.tls_cert_fingerprint256 === "string"
+        ? asRecord.tls_cert_fingerprint256.trim()
+        : "";
+    let tlsFingerprint: string | undefined;
+    if (tlsFingerprintRaw) {
+      const normalized = normalizeFingerprint256(tlsFingerprintRaw);
+      if (!normalized) {
+        throw new Error("config.tls_cert_fingerprint256 must be a SHA-256 hex fingerprint");
+      }
+      tlsFingerprint = normalized;
+    }
+    const tlsAllowSelfSigned =
+      typeof asRecord.tls_allow_self_signed === "boolean"
+        ? asRecord.tls_allow_self_signed
+        : undefined;
+    return {
+      gateway_url: gatewayUrl,
+      auth_token: authToken,
+      tls_cert_fingerprint256: tlsFingerprint,
+      tls_allow_self_signed: tlsAllowSelfSigned,
+    };
   } catch (error) {
     const asErr = error as NodeJS.ErrnoException;
     if (asErr?.code === "ENOENT") return {};
@@ -1449,7 +1510,12 @@ async function loadOperatorConfig(path: string): Promise<{
 
 async function saveOperatorConfig(
   path: string,
-  config: { gateway_url: string; auth_token: string },
+  config: {
+    gateway_url: string;
+    auth_token: string;
+    tls_cert_fingerprint256?: string;
+    tls_allow_self_signed?: boolean;
+  },
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   await writeFile(path, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
@@ -1543,9 +1609,12 @@ async function requireElevatedModeToken(
   );
 }
 
-async function requireOperatorConfig(
-  home: string,
-): Promise<{ gateway_url: string; auth_token: string }> {
+async function requireOperatorConfig(home: string): Promise<{
+  gateway_url: string;
+  auth_token: string;
+  tls_cert_fingerprint256?: string;
+  tls_allow_self_signed?: boolean;
+}> {
   const configPath = resolveOperatorConfigPath(home);
   const config = await loadOperatorConfig(configPath);
   const gatewayUrl = config.gateway_url?.trim();
@@ -1555,7 +1624,19 @@ async function requireOperatorConfig(
       `operator config is missing gateway_url/token: run 'tyrum-cli config set --gateway-url <url> --token <token>' path=${configPath}`,
     );
   }
-  return { gateway_url: gatewayUrl, auth_token: authToken };
+  const tlsCertFingerprint256 = config.tls_cert_fingerprint256;
+  const tlsAllowSelfSigned = Boolean(config.tls_allow_self_signed);
+  if (tlsAllowSelfSigned && !tlsCertFingerprint256) {
+    throw new Error(
+      `operator config is missing tls_cert_fingerprint256 required by tls_allow_self_signed: path=${configPath}`,
+    );
+  }
+  return {
+    gateway_url: gatewayUrl,
+    auth_token: authToken,
+    ...(tlsCertFingerprint256 ? { tls_cert_fingerprint256: tlsCertFingerprint256 } : {}),
+    ...(tlsAllowSelfSigned ? { tls_allow_self_signed: true } : {}),
+  };
 }
 
 async function requireOperatorDeviceIdentity(home: string): Promise<{
@@ -1631,6 +1712,10 @@ async function runOperatorWsCommand<T>(
         token: config.auth_token,
         reconnect: false,
         capabilities: ["cli"],
+        ...(config.tls_cert_fingerprint256
+          ? { tlsCertFingerprint256: config.tls_cert_fingerprint256 }
+          : {}),
+        ...(config.tls_allow_self_signed ? { tlsAllowSelfSigned: true } : {}),
         device: {
           deviceId: identity.deviceId,
           publicKey: identity.publicKey,
@@ -1662,6 +1747,10 @@ async function runOperatorHttpCommand<T>(
     const http = createTyrumHttpClient({
       baseUrl: config.gateway_url,
       auth: { type: "bearer", token },
+      ...(config.tls_cert_fingerprint256
+        ? { tlsCertFingerprint256: config.tls_cert_fingerprint256 }
+        : {}),
+      ...(config.tls_allow_self_signed ? { tlsAllowSelfSigned: true } : {}),
     });
     const result = await fn(http);
     console.log(JSON.stringify(result, null, 2));
@@ -2010,6 +2099,8 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
           `home=${tyrumHome}`,
           `gateway_url=${config.gateway_url ?? "[unset]"}`,
           `auth_token=${maskedToken}`,
+          `tls_cert_fingerprint256=${config.tls_cert_fingerprint256 ?? "[unset]"}`,
+          `tls_allow_self_signed=${config.tls_allow_self_signed ? "true" : "false"}`,
         ].join(" "),
       );
       return 0;
@@ -2026,6 +2117,10 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
       await saveOperatorConfig(configPath, {
         gateway_url: command.gateway_url,
         auth_token: command.auth_token,
+        ...(command.tls_cert_fingerprint256
+          ? { tls_cert_fingerprint256: command.tls_cert_fingerprint256 }
+          : {}),
+        ...(command.tls_allow_self_signed ? { tls_allow_self_signed: true } : {}),
       });
       console.log(`config.set: ok path=${configPath}`);
       return 0;

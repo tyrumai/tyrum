@@ -87,6 +87,19 @@ describe("non-loopback deployment guardrails", () => {
     ).toBe("tls");
   });
 
+  it("accepts self-signed TLS acknowledgement for non-loopback starts", () => {
+    expect(
+      assertNonLoopbackDeploymentGuardrails({
+        role: "edge",
+        host: "0.0.0.0",
+        token: "a".repeat(32),
+        tlsReady: false,
+        allowInsecureHttp: false,
+        tlsSelfSigned: true,
+      }),
+    ).toBe("tls");
+  });
+
   it("ignores env flags when explicit acknowledgements are omitted", () => {
     const prevTlsReady = process.env["TYRUM_TLS_READY"];
     const prevAllowInsecureHttp = process.env["TYRUM_ALLOW_INSECURE_HTTP"];

@@ -8,6 +8,7 @@ export type TuiCliCommand =
       tyrumHome?: string;
       deviceIdentityPath?: string;
       tlsCertFingerprint256?: string;
+      tlsAllowSelfSigned?: boolean;
       reconnect?: boolean;
     };
 
@@ -82,6 +83,11 @@ export function parseTuiCliArgs(argv: readonly string[]): TuiCliCommand {
       }
       command.tlsCertFingerprint256 = value;
       index += 1;
+      continue;
+    }
+
+    if (arg === "--tls-allow-self-signed") {
+      command.tlsAllowSelfSigned = true;
       continue;
     }
 

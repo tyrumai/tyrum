@@ -95,6 +95,13 @@ describe("loadConfig", () => {
         TYRUM_ALLOW_INSECURE_HTTP: "typo",
       }),
     ).toThrow(/TYRUM_ALLOW_INSECURE_HTTP/i);
+
+    expect(() =>
+      loadConfig({
+        GATEWAY_TOKEN: "test-token",
+        TYRUM_TLS_SELF_SIGNED: "typo",
+      }),
+    ).toThrow(/TYRUM_TLS_SELF_SIGNED/i);
   });
 
   it("parses optional string env vars and strict bool helpers", () => {

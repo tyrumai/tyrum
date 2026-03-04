@@ -20,8 +20,14 @@ export const DesktopNodeConfig = z.object({
       wsUrl: z.string().default("ws://127.0.0.1:8788/ws"),
       tokenRef: z.string().default(""),
       tlsCertFingerprint256: z.string().default(""),
+      tlsAllowSelfSigned: z.boolean().default(false),
     })
-    .default({ wsUrl: "ws://127.0.0.1:8788/ws", tokenRef: "", tlsCertFingerprint256: "" }),
+    .default({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      tokenRef: "",
+      tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
+    }),
   embedded: z
     .object({
       port: z.number().int().min(1024).max(65535).default(8788),

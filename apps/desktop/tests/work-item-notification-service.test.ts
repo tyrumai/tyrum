@@ -97,6 +97,7 @@ describe("WorkItemNotificationService", () => {
         httpBaseUrl: "http://127.0.0.1:8788/",
         token: "test-token",
         tlsCertFingerprint256: "",
+        tlsAllowSelfSigned: false,
       });
 
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -135,6 +136,7 @@ describe("WorkItemNotificationService", () => {
       httpBaseUrl: "http://127.0.0.1:8788/",
       token: "test-token",
       tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
     });
 
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});

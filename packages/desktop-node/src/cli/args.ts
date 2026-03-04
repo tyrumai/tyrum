@@ -2,6 +2,8 @@ export interface DesktopNodeArgs {
   wsUrl?: string;
   token?: string;
   tokenPath?: string;
+  tlsFingerprint256?: string;
+  tlsAllowSelfSigned?: boolean;
   takeoverUrl?: string;
   label?: string;
   mode?: string;
@@ -52,6 +54,17 @@ export function parseDesktopNodeArgs(argv: readonly string[]): DesktopNodeArgs {
     if (arg === "--token-path") {
       result.tokenPath = requireValue(arg, argv[i + 1]);
       i += 1;
+      continue;
+    }
+
+    if (arg === "--tls-fingerprint256") {
+      result.tlsFingerprint256 = requireValue(arg, argv[i + 1]);
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--tls-allow-self-signed") {
+      result.tlsAllowSelfSigned = true;
       continue;
     }
 

@@ -13,25 +13,21 @@ vi.mock("undici", () => {
     }
   }
 
-  return { Agent, __agents: agents };
+  class WebSocket {
+    constructor() {
+      throw new Error("ctor boom");
+    }
+  }
+
+  return { Agent, WebSocket, __agents: agents };
 });
 
 describe("TLS certificate pinning dispatcher cleanup", () => {
-  const originalWebSocket = globalThis.WebSocket;
-
   afterEach(() => {
-    globalThis.WebSocket = originalWebSocket;
     vi.restoreAllMocks();
   });
 
   it("destroys the undici Agent if the WebSocket constructor throws", async () => {
-    class ThrowingWebSocket {
-      constructor() {
-        throw new Error("ctor boom");
-      }
-    }
-    globalThis.WebSocket = ThrowingWebSocket as unknown as typeof WebSocket;
-
     const client = new TyrumClient({
       url: "wss://localhost:1234/ws",
       token: "test-token",

@@ -1,5 +1,7 @@
 import { z, type ZodType } from "zod";
 
+import { normalizeFingerprint256 } from "../tls/fingerprint.js";
+
 export const NonEmptyString = z.string().trim().min(1);
 const ErrorBodySchema = z
   .object({
@@ -29,6 +31,32 @@ export interface TyrumHttpClientOptions {
   fetch?: TyrumHttpFetch;
   headers?: HeadersInit;
   signal?: AbortSignal;
+  /**
+   * Optional TLS certificate pinning for `https://` connections (Node only).
+   *
+   * The value is the server certificate's SHA-256 fingerprint, as hex (with or
+   * without `:`), case-insensitive. When set, the client will refuse to
+   * connect if the remote certificate does not match. Standard TLS verification
+   * (CA trust + hostname) still applies by default.
+   */
+  tlsCertFingerprint256?: string;
+  /**
+   * When `true`, allows connecting to self-signed TLS certificates when
+   * `tlsCertFingerprint256` is configured, by skipping CA verification and
+   * relying on the configured fingerprint (plus hostname validation).
+   *
+   * This is intended for IP-only deployments where using a public CA isn't
+   * possible. Verify the fingerprint out-of-band before trusting it.
+   */
+  tlsAllowSelfSigned?: boolean;
+  /**
+   * Optional PEM-encoded CA certificate(s) used for Node.js `https://` TLS
+   * verification when `tlsCertFingerprint256` is enabled.
+   *
+   * Use this for private PKI / self-signed deployments, or configure your OS /
+   * Node trust store instead.
+   */
+  tlsCaCertPem?: string;
 }
 
 export interface TyrumRequestOptions {
@@ -148,6 +176,131 @@ function formatZodIssues(error: z.ZodError): string {
     .join("; ");
 }
 
+function isNodeRuntime(): boolean {
+  return (
+    typeof process !== "undefined" &&
+    typeof process.versions === "object" &&
+    typeof process.versions.node === "string"
+  );
+}
+
+function createPinnedNodeFetch(options: {
+  pinRaw: string;
+  expectedFingerprint256: string;
+  allowSelfSigned: boolean;
+  caCertPem?: string;
+}): TyrumHttpFetch {
+  const { expectedFingerprint256, pinRaw, allowSelfSigned } = options;
+  const caCertPem = options.caCertPem;
+
+  let initPromise:
+    | Promise<{
+        fetchImpl: (
+          input: RequestInfo | URL,
+          init?: RequestInit & { dispatcher?: unknown },
+        ) => Promise<Response>;
+        dispatcher: { destroy?: () => Promise<void> | void };
+      }>
+    | undefined;
+
+  async function init(): Promise<{
+    fetchImpl: (
+      input: RequestInfo | URL,
+      init?: RequestInit & { dispatcher?: unknown },
+    ) => Promise<Response>;
+    dispatcher: { destroy?: () => Promise<void> | void };
+  }> {
+    // Avoid bundlers eagerly resolving Node-only modules in browser builds.
+    const globalAny = globalThis as unknown as Record<PropertyKey, unknown>;
+    const undiciSpecifier = "undici" + String(globalAny[Symbol.for("tyrum:undici")] ?? "");
+    const tlsSpecifier = "node:tls" + String(globalAny[Symbol.for("tyrum:tls")] ?? "");
+
+    const undici = await import(undiciSpecifier);
+    const tls = await import(tlsSpecifier);
+
+    const agent = new undici.Agent({
+      connect: (
+        opts: { port?: unknown; hostname?: unknown; servername?: unknown },
+        callback: (err: Error | null, socket: unknown | null) => void,
+      ) => {
+        const port = Number.parseInt(String(opts.port ?? ""), 10);
+        const hostname = String(opts.hostname ?? "");
+        const servername =
+          typeof opts.servername === "string" && opts.servername.trim()
+            ? opts.servername
+            : hostname;
+
+        if (!hostname || !Number.isFinite(port)) {
+          callback(new Error("Invalid TLS connector options"), null);
+          return;
+        }
+
+        let settled = false;
+        const done = (err: Error | null, socket: unknown | null) => {
+          if (settled) return;
+          settled = true;
+          callback(err, socket);
+        };
+
+        const rejectUnauthorized = !(allowSelfSigned && caCertPem === undefined);
+
+        const socket = tls.connect({
+          host: hostname,
+          port,
+          servername,
+          ca: caCertPem,
+          rejectUnauthorized,
+        }) as import("node:tls").TLSSocket;
+
+        socket.unref();
+
+        socket.once("error", (err: Error) => {
+          done(err, null);
+        });
+
+        socket.once("secureConnect", () => {
+          try {
+            const cert = socket.getPeerCertificate();
+            const identityErr = tls.checkServerIdentity(servername, cert);
+            if (identityErr) throw identityErr;
+
+            const actualRaw = typeof cert.fingerprint256 === "string" ? cert.fingerprint256 : "";
+            const actual = normalizeFingerprint256(actualRaw);
+            if (!actual) {
+              throw new Error("TLS peer certificate missing fingerprint256.");
+            }
+            if (actual !== expectedFingerprint256) {
+              throw new Error(
+                `TLS certificate fingerprint mismatch (expected ${pinRaw}, got ${actualRaw}).`,
+              );
+            }
+
+            done(null, socket);
+          } catch (err) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            socket.destroy(error);
+            done(error, null);
+          }
+        });
+      },
+    });
+
+    const fetchImpl = undici.fetch as typeof fetch;
+    return { fetchImpl: fetchImpl as any, dispatcher: agent };
+  }
+
+  return async (input, initOptions) => {
+    if (!initPromise) {
+      initPromise = init();
+    }
+    const { fetchImpl, dispatcher } = await initPromise;
+    const initWithDispatcher = initOptions
+      ? ({ ...initOptions, dispatcher } as RequestInit & { dispatcher?: unknown })
+      : ({ dispatcher } as RequestInit & { dispatcher?: unknown });
+    return await fetchImpl(input, initWithDispatcher as any);
+  };
+}
+
 async function readJsonBody(response: Response): Promise<unknown> {
   if (response.status === 204) return undefined;
 
@@ -194,7 +347,66 @@ export class HttpTransport {
   constructor(options: TyrumHttpClientOptions) {
     this.baseUrl = normalizeBaseUrl(options.baseUrl);
     this.auth = options.auth ?? { type: "none" };
-    this.fetchImpl = options.fetch ?? fetch;
+    const pinRaw = (options.tlsCertFingerprint256 ?? "").trim();
+    const allowSelfSigned = Boolean(options.tlsAllowSelfSigned);
+    const caCertPemRaw = typeof options.tlsCaCertPem === "string" ? options.tlsCaCertPem : "";
+    const caCertPemTrimmed = caCertPemRaw.trim();
+    const caCertPem = caCertPemTrimmed.length ? caCertPemTrimmed : undefined;
+
+    if (options.fetch) {
+      if (pinRaw || allowSelfSigned || caCertPem !== undefined) {
+        throw new TyrumHttpClientError(
+          "request_invalid",
+          "TLS pinning options cannot be used with a custom fetch implementation.",
+        );
+      }
+      this.fetchImpl = options.fetch;
+    } else if (!pinRaw && !allowSelfSigned && caCertPem === undefined) {
+      this.fetchImpl = fetch;
+    } else {
+      if (!pinRaw) {
+        if (allowSelfSigned) {
+          throw new TyrumHttpClientError(
+            "request_invalid",
+            "tlsAllowSelfSigned requires tlsCertFingerprint256.",
+          );
+        }
+        throw new TyrumHttpClientError(
+          "request_invalid",
+          "tlsCaCertPem requires tlsCertFingerprint256.",
+        );
+      }
+
+      const expectedFingerprint256 = normalizeFingerprint256(pinRaw);
+      if (!expectedFingerprint256) {
+        throw new TyrumHttpClientError(
+          "request_invalid",
+          "Invalid tlsCertFingerprint256; expected a SHA-256 hex fingerprint.",
+        );
+      }
+
+      const url = new URL(this.baseUrl);
+      if (url.protocol !== "https:") {
+        throw new TyrumHttpClientError(
+          "request_invalid",
+          "tlsCertFingerprint256 requires an https:// baseUrl.",
+        );
+      }
+
+      if (!isNodeRuntime()) {
+        throw new TyrumHttpClientError(
+          "request_invalid",
+          "tlsCertFingerprint256 is supported only in Node.js clients.",
+        );
+      }
+
+      this.fetchImpl = createPinnedNodeFetch({
+        pinRaw,
+        expectedFingerprint256,
+        allowSelfSigned,
+        caCertPem,
+      });
+    }
     this.defaultHeaders = new Headers(options.headers);
     this.defaultSignal = options.signal;
   }

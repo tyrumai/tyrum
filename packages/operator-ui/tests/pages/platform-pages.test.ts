@@ -142,6 +142,7 @@ describe("Platform pages", () => {
           wsUrl: "wss://saved.example/ws",
           tokenRef: "saved-token",
           tlsCertFingerprint256: "AA:BB",
+          tlsAllowSelfSigned: false,
         },
       })),
       setConfig: vi.fn(async () => {}),
@@ -196,6 +197,7 @@ describe("Platform pages", () => {
           wsUrl: "  wss://edge.example/ws  ",
           tokenRef: "top-secret-token",
           tlsCertFingerprint256: "AB:CD:EF",
+          tlsAllowSelfSigned: false,
         },
       });
       expect(testRoot.container.textContent).toContain("Disconnect");
