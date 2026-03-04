@@ -63,10 +63,6 @@ CREATE INDEX IF NOT EXISTS plans_tenant_plan_key_idx ON plans (tenant_id, plan_k
 CREATE INDEX IF NOT EXISTS planner_events_tenant_plan_id_idx ON planner_events (tenant_id, plan_id);
 CREATE INDEX IF NOT EXISTS planner_events_replay_id_idx ON planner_events (replay_id);
 
-CREATE INDEX IF NOT EXISTS jobs_plan_id_idx ON jobs (tenant_id, plan_id);
-CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs (tenant_id, status);
-CREATE INDEX IF NOT EXISTS jobs_plan_step_idx ON jobs (tenant_id, plan_id, step_index);
-
 -- Watchers
 CREATE INDEX IF NOT EXISTS watchers_active_idx ON watchers (tenant_id, active);
 CREATE INDEX IF NOT EXISTS watchers_scope_idx ON watchers (tenant_id, agent_id, workspace_id);

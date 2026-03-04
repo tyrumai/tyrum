@@ -41,8 +41,7 @@ const DEFAULT_TABLES = [
   "watchers",
   "watcher_firings",
   "approvals",
-  // Plan runner job queue tables
-  "jobs",
+  // Canvas
   "canvas_artifacts",
   // Execution engine
   "execution_jobs",
@@ -81,7 +80,6 @@ const IMPORT_ORDER = [
   "watchers",
   "watcher_firings",
   "approvals",
-  "jobs",
   "canvas_artifacts",
   "policy_snapshots",
   "policy_overrides",

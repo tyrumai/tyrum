@@ -21,7 +21,6 @@ import type {
 import type { GatewayContainer } from "../container.js";
 import { evaluatePolicy } from "../modules/policy/engine.js";
 import { authorizeWithThresholds, defaultThresholds } from "../modules/wallet/authorization.js";
-import type { ExecutionRunner, StepExecutor } from "../modules/executor/runner.js";
 import { PlanDal } from "../modules/planner/plan-dal.js";
 import {
   DEFAULT_AGENT_ID,
@@ -287,12 +286,7 @@ function directiveToSpendContext(directive: SpendDirective): RiskSpendContext {
 // Route factory
 // ---------------------------------------------------------------------------
 
-export interface PlanRouteOptions {
-  executionRunner?: ExecutionRunner;
-  stepExecutor?: StepExecutor;
-}
-
-export function createPlanRoutes(container: GatewayContainer, opts?: PlanRouteOptions): Hono {
+export function createPlanRoutes(container: GatewayContainer): Hono {
   const plan = new Hono();
 
   plan.post("/plan", async (c) => {
@@ -462,18 +456,8 @@ export function createPlanRoutes(container: GatewayContainer, opts?: PlanRouteOp
       container.logger.warn("plan.audit_persist_failed", { plan_key: planKey, error: message });
     }
 
-    // --- Hand off to execution runner for async execution ---
-    if (outcome.status === "success" && opts?.executionRunner && opts?.stepExecutor) {
-      // Fire-and-forget: execution happens asynchronously
-      void opts.executionRunner.executePlan(planId, outcome.steps, opts.stepExecutor).catch(() => {
-        // Runner handles its own error reporting via event bus
-      });
-    } else if (outcome.status === "success") {
-      // No runner configured: emit completion immediately (legacy behavior)
-      container.eventBus.emit("plan:completed", {
-        planId,
-        stepsExecuted: outcome.steps.length,
-      });
+    if (outcome.status === "success") {
+      container.eventBus.emit("plan:completed", { planId, stepsExecuted: outcome.steps.length });
     }
 
     // --- Build response ---

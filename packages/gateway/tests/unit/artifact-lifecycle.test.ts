@@ -435,7 +435,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     expect(newRow?.bytes_deleted_at).toBeNull();
   });
 
-  it("treats empty sensitivity as normal for quota enforcement", async () => {
+  it("defaults sensitivity to normal for quota enforcement", async () => {
     const nowMs = Date.now();
     const olderIso = new Date(nowMs - 2 * 60 * 60 * 1000).toISOString();
     const newerIso = new Date(nowMs - 1 * 60 * 60 * 1000).toISOString();
@@ -482,9 +482,8 @@ describe("Artifact lifecycle (retention + quotas)", () => {
            sha256,
            labels_json,
 	           metadata_json,
-	           sensitivity,
 	           policy_snapshot_id
-	         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           DEFAULT_TENANT_ID,
           ref.artifact_id,
@@ -498,7 +497,6 @@ describe("Artifact lifecycle (retention + quotas)", () => {
           ref.sha256 ?? null,
           JSON.stringify(ref.labels ?? []),
           JSON.stringify(ref.metadata ?? {}),
-          "",
           snapshot.policy_snapshot_id,
         ],
       );

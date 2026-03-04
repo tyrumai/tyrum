@@ -14,7 +14,6 @@ import type { TelegramBot } from "./modules/ingress/telegram-bot.js";
 import type { ApprovalDal } from "./modules/approval/dal.js";
 import type { WatcherProcessor } from "./modules/watcher/processor.js";
 import type { CanvasDal } from "./modules/canvas/dal.js";
-import type { JobQueue } from "./modules/executor/job-queue.js";
 import type { PresenceDal } from "./modules/presence/dal.js";
 import type { PolicySnapshotDal } from "./modules/policy/snapshot-dal.js";
 import type { PolicyOverrideDal } from "./modules/policy/override-dal.js";
@@ -46,7 +45,6 @@ import { SessionDal as SessionDalImpl } from "./modules/agent/session-dal.js";
 import { TelegramBot as TelegramBotImpl } from "./modules/ingress/telegram-bot.js";
 import { WatcherProcessor as WatcherProcessorImpl } from "./modules/watcher/processor.js";
 import { CanvasDal as CanvasDalImpl } from "./modules/canvas/dal.js";
-import { JobQueue as JobQueueImpl } from "./modules/executor/job-queue.js";
 import { PresenceDal as PresenceDalImpl } from "./modules/presence/dal.js";
 import { PolicySnapshotDal as PolicySnapshotDalImpl } from "./modules/policy/snapshot-dal.js";
 import { PolicyOverrideDal as PolicyOverrideDalImpl } from "./modules/policy/override-dal.js";
@@ -104,7 +102,6 @@ export interface GatewayContainer {
   nodePairingDal: NodePairingDal;
   watcherProcessor: WatcherProcessor;
   canvasDal: CanvasDal;
-  jobQueue: JobQueue;
   redactionEngine: RedactionEngine;
   artifactStore: ArtifactStore;
   modelsDev: ModelsDevService;
@@ -170,7 +167,6 @@ function wireContainer(
   const nodePairingDal = new NodePairingDalImpl(db);
   const watcherProcessor = new WatcherProcessorImpl({ db, memoryV1Dal, eventBus });
   const canvasDal = new CanvasDalImpl(db);
-  const jobQueue = new JobQueueImpl(db);
 
   const tyrumHome =
     config.tyrumHome ?? opts?.gatewayConfig?.paths.home ?? join(homedir(), ".tyrum");
@@ -226,7 +222,6 @@ function wireContainer(
     nodePairingDal,
     watcherProcessor,
     canvasDal,
-    jobQueue,
     redactionEngine,
     artifactStore,
     modelsDev,
