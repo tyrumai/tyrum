@@ -5,6 +5,7 @@ type DesktopOperatorCoreState = {
   core: unknown | null;
   busy: boolean;
   errorMessage: string | null;
+  needsConfiguration: boolean;
   retry: () => void;
 };
 
@@ -66,6 +67,7 @@ const {
   CardContentMock,
   CardMock,
   ErrorBoundaryMock,
+  InputMock,
   OperatorUiAppMock,
   OperatorUiHostProviderMock,
   ThemeProviderMock,
@@ -86,6 +88,7 @@ const {
     core: null,
     busy: false,
     errorMessage: null,
+    needsConfiguration: false,
     retry: vi.fn(),
   };
   const setDesktopOperatorCoreState = (next: DesktopOperatorCoreState): void => {
@@ -105,6 +108,7 @@ const {
   const ButtonMock = vi.fn(() => null);
   const CardMock = vi.fn(() => null);
   const CardContentMock = vi.fn(() => null);
+  const InputMock = vi.fn(() => null);
 
   return {
     AlertMock,
@@ -112,6 +116,7 @@ const {
     CardContentMock,
     CardMock,
     ErrorBoundaryMock,
+    InputMock,
     OperatorUiAppMock,
     OperatorUiHostProviderMock,
     ThemeProviderMock,
@@ -134,6 +139,7 @@ vi.mock("@tyrum/operator-ui", () => ({
   Card: CardMock,
   CardContent: CardContentMock,
   ErrorBoundary: ErrorBoundaryMock,
+  Input: InputMock,
   OperatorUiApp: OperatorUiAppMock,
   OperatorUiHostProvider: OperatorUiHostProviderMock,
   ThemeProvider: ThemeProviderMock,
@@ -175,7 +181,13 @@ describe("desktop renderer main bootstrap", () => {
   it("boots OperatorUiApp in desktop mode when operator core is available", async () => {
     const retry = vi.fn();
     const core = { name: "core" };
-    setDesktopOperatorCoreState({ core, busy: false, errorMessage: null, retry });
+    setDesktopOperatorCoreState({
+      core,
+      busy: false,
+      errorMessage: null,
+      needsConfiguration: false,
+      retry,
+    });
 
     await import("../src/renderer/main.tsx");
 
@@ -198,7 +210,13 @@ describe("desktop renderer main bootstrap", () => {
 
   it("shows an error state and wires Retry to operatorCore.retry", async () => {
     const retry = vi.fn();
-    setDesktopOperatorCoreState({ core: null, busy: false, errorMessage: "boom", retry });
+    setDesktopOperatorCoreState({
+      core: null,
+      busy: false,
+      errorMessage: "boom",
+      needsConfiguration: false,
+      retry,
+    });
 
     await import("../src/renderer/main.tsx");
 
@@ -222,5 +240,26 @@ describe("desktop renderer main bootstrap", () => {
 
     (onClick as () => void)();
     expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the desktop setup wizard when configuration is missing", async () => {
+    const retry = vi.fn();
+    setDesktopOperatorCoreState({
+      core: null,
+      busy: false,
+      errorMessage: null,
+      needsConfiguration: true,
+      retry,
+    });
+
+    await import("../src/renderer/main.tsx");
+
+    const DesktopBootstrap = loadDesktopBootstrap();
+    const tree = DesktopBootstrap();
+
+    expect(isReactElementLike(tree)).toBe(true);
+    expect(typeof (tree as ReactElementLike).type).toBe("function");
+    expect(((tree as ReactElementLike).type as { name?: unknown }).name).toBe("DesktopSetupWizard");
+    expect((tree as ReactElementLike).props.onConfigured).toBe(retry);
   });
 });
