@@ -8,6 +8,7 @@ import {
   createNodeFileDeviceIdentityStorage,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
+  normalizeFingerprint256,
 } from "@tyrum/client";
 
 import { DesktopProvider } from "../providers/desktop-provider.js";
@@ -17,19 +18,6 @@ import { getTesseractOcrEngine } from "../providers/ocr/tesseract-engine.js";
 import { parseDesktopNodeArgs } from "./args.js";
 
 export const VERSION = "0.1.0";
-
-function normalizeFingerprint256(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const colonMatch = trimmed.match(/[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){31}/);
-  if (colonMatch) return colonMatch[0].replace(/:/g, "").toLowerCase();
-
-  const hexMatch = trimmed.match(/[0-9A-Fa-f]{64}/);
-  if (hexMatch) return hexMatch[0].toLowerCase();
-
-  return null;
-}
 
 function resolveTyrumHome(override?: string): string {
   const raw = override ?? process.env["TYRUM_HOME"];

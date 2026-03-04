@@ -9,6 +9,7 @@ import {
   createNodeFileDeviceIdentityStorage,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
+  normalizeFingerprint256,
   type ActionPrimitive,
 } from "@tyrum/client";
 
@@ -137,19 +138,6 @@ function resolveGatewayWsUrl(gatewayUrl: string): string {
   }
 
   return wsUrl.toString();
-}
-
-function normalizeFingerprint256(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const colonMatch = trimmed.match(/[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){31}/);
-  if (colonMatch) return colonMatch[0].replace(/:/g, "").toLowerCase();
-
-  const hexMatch = trimmed.match(/[0-9A-Fa-f]{64}/);
-  if (hexMatch) return hexMatch[0].toLowerCase();
-
-  return null;
 }
 
 function printCliHelp(): void {
@@ -1315,7 +1303,11 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
       }
 
       if (arg === "--tls-fingerprint256") {
-        tlsFingerprint256 = argv[i + 1];
+        const value = argv[i + 1];
+        if (!value) {
+          throw new Error("--tls-fingerprint256 requires a value");
+        }
+        tlsFingerprint256 = value;
         i += 1;
         continue;
       }

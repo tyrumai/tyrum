@@ -1,4 +1,5 @@
 import { ipcMain, type BrowserWindow } from "electron";
+import { normalizeFingerprint256 } from "@tyrum/operator-core";
 import { GatewayManager } from "../gateway-manager.js";
 import { loadConfig, saveConfig } from "../config/store.js";
 import { decryptToken, generateToken, encryptToken } from "../config/token-store.js";
@@ -13,19 +14,6 @@ const sender = createWindowSender();
 
 let manager: GatewayManager | null = null;
 let ipcRegistered = false;
-
-function normalizeFingerprint256(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const colonMatch = trimmed.match(/[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){31}/);
-  if (colonMatch) return colonMatch[0].replace(/:/g, "").toLowerCase();
-
-  const hexMatch = trimmed.match(/[0-9A-Fa-f]{64}/);
-  if (hexMatch) return hexMatch[0].toLowerCase();
-
-  return null;
-}
 
 type PinnedGatewayFetchState = {
   key: string;
@@ -153,7 +141,7 @@ async function resolvePinnedGatewayFetchState(
 
   pinnedGatewayFetchState = {
     key,
-    fetchImpl: fetch,
+    fetchImpl: undici.fetch as unknown as typeof fetch,
     dispatcher: agent,
   };
 
