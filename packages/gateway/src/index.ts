@@ -1374,6 +1374,8 @@ export async function main(
             decision_matches: decisionMatches,
           });
 
+          // Approval decisions are only produced by the edge WebSocket handler, so keep the
+          // run control on wsEngine even when the HTTP engine API is disabled.
           if (!row || !decisionMatches || !wsEngine) {
             return;
           }

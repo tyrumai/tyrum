@@ -11,6 +11,7 @@ describe("Auth middleware", () => {
   let db: SqliteDb;
   let authTokens: AuthTokenService;
   let adminToken: string;
+  let systemToken: string;
 
   beforeEach(async () => {
     db = openTestSqliteDb();
@@ -18,6 +19,13 @@ describe("Auth middleware", () => {
     adminToken = (
       await authTokens.issueToken({
         tenantId: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      })
+    ).token;
+    systemToken = (
+      await authTokens.issueToken({
+        tenantId: null,
         role: "admin",
         scopes: ["*"],
       })
@@ -41,6 +49,7 @@ describe("Auth middleware", () => {
     app.get("/appdata", (c) => c.json({ ok: true }));
     app.get("/api/data", (c) => c.json({ data: "secret" }));
     app.post("/api/action", (c) => c.json({ done: true }));
+    app.get("/system/tenants", (c) => c.json({ ok: true }));
     return app;
   }
 
@@ -109,6 +118,36 @@ describe("Auth middleware", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { data: string };
     expect(body.data).toBe("secret");
+  });
+
+  it("rejects system tokens on tenant-scoped routes", async () => {
+    const app = buildApp();
+    const res = await app.request("/api/data", {
+      headers: { Authorization: `Bearer ${systemToken}` },
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe("forbidden");
+    expect(body.message).toBe("system token is not valid for tenant routes");
+  });
+
+  it("allows system tokens on system routes", async () => {
+    const app = buildApp();
+    const res = await app.request("/system/tenants", {
+      headers: { Authorization: `Bearer ${systemToken}` },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects tenant tokens on system routes", async () => {
+    const app = buildApp();
+    const res = await app.request("/system/tenants", {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe("forbidden");
+    expect(body.message).toBe("system token required");
   });
 
   it("allows requests authenticated with a client device token", async () => {
