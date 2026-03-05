@@ -266,6 +266,50 @@ describe("registerGatewayIpc handlers", () => {
     );
   });
 
+  it("reports invalid embedded token format distinctly from decryption failures (ensure)", async () => {
+    decryptTokenMock.mockImplementationOnce(() => "not-a-token");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { ensureEmbeddedGatewayToken } = await import("../src/main/ipc/gateway-ipc.js");
+    const { loadConfig } = await import("../src/main/config/store.js");
+
+    expect(() => ensureEmbeddedGatewayToken(loadConfig())).toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/invalid embedded gateway token format/i),
+      expect.any(Error),
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it("reports invalid embedded token format distinctly from decryption failures (recover)", async () => {
+    decryptTokenMock.mockImplementationOnce(() => "not-a-token");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { registerGatewayIpc, resolveOperatorConnection } =
+      await import("../src/main/ipc/gateway-ipc.js");
+    const { loadConfig } = await import("../src/main/config/store.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    const mgr = registerGatewayIpc(windowStub) as unknown as { status: string };
+    mgr.status = "running";
+
+    expect(() => resolveOperatorConnection(loadConfig())).toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/invalid embedded gateway token format/i),
+      expect.any(Error),
+    );
+
+    warnSpy.mockRestore();
+  });
+
   it("does not rotate embedded token when the gateway is already running", async () => {
     const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
 
