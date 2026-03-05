@@ -10,6 +10,7 @@ import type { Emitter, Handler } from "mitt";
 import { createHash, randomUUID } from "node:crypto";
 import type { GatewayEvents } from "../../event-bus.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { sqlActiveWhereClause, sqlBoolParam } from "../../statestore/sql.js";
 import type { MemoryV1Dal } from "../memory/v1-dal.js";
 import { recordMemoryV1SystemEpisode } from "../memory/v1-episode-recorder.js";
 import { WatcherFiringDal } from "./firing-dal.js";
@@ -156,10 +157,6 @@ export class WatcherProcessor {
       }
       return Math.max(0, Math.floor(raw));
     })();
-  }
-
-  private activeWhereSql(): string {
-    return this.db.kind === "postgres" ? "active = true" : "active = 1";
   }
 
   // -----------------------------------------------------------------------
@@ -353,9 +350,10 @@ export class WatcherProcessor {
   }
 
   async listWatchers(tenantId: string = DEFAULT_TENANT_ID): Promise<WatcherRow[]> {
+    const activeWhere = sqlActiveWhereClause(this.db);
     const rows = await this.db.all<RawWatcherRow>(
-      `SELECT * FROM watchers WHERE tenant_id = ? AND ${this.activeWhereSql()} ORDER BY created_at DESC`,
-      [tenantId],
+      `SELECT * FROM watchers WHERE tenant_id = ? AND ${activeWhere.sql} ORDER BY created_at DESC`,
+      [tenantId, ...activeWhere.params],
     );
     return rows.map(parseRow);
   }
@@ -364,9 +362,10 @@ export class WatcherProcessor {
     watcherId: string,
     tenantId: string = DEFAULT_TENANT_ID,
   ): Promise<WatcherRow | null> {
+    const activeWhere = sqlActiveWhereClause(this.db);
     const row = await this.db.get<RawWatcherRow>(
-      `SELECT * FROM watchers WHERE tenant_id = ? AND watcher_id = ? AND ${this.activeWhereSql()}`,
-      [tenantId, watcherId],
+      `SELECT * FROM watchers WHERE tenant_id = ? AND watcher_id = ? AND ${activeWhere.sql}`,
+      [tenantId, watcherId, ...activeWhere.params],
     );
     return row ? parseRow(row) : null;
   }
@@ -375,9 +374,9 @@ export class WatcherProcessor {
     const nowIso = new Date().toISOString();
     await this.db.run(
       `UPDATE watchers
-       SET active = ${this.db.kind === "postgres" ? "false" : "0"}, updated_at = ?
+       SET active = ?, updated_at = ?
        WHERE tenant_id = ? AND watcher_id = ?`,
-      [nowIso, tenantId, watcherId],
+      [sqlBoolParam(this.db, false), nowIso, tenantId, watcherId],
     );
     this.webhookScheduledAtCursor.delete(watcherId);
   }
@@ -487,9 +486,10 @@ export class WatcherProcessor {
   // -----------------------------------------------------------------------
 
   private async getActiveWatchersForPlan(tenantId: string, planId: string): Promise<WatcherRow[]> {
+    const activeWhere = sqlActiveWhereClause(this.db);
     const rows = await this.db.all<RawWatcherRow>(
-      `SELECT * FROM watchers WHERE tenant_id = ? AND ${this.activeWhereSql()}`,
-      [tenantId],
+      `SELECT * FROM watchers WHERE tenant_id = ? AND ${activeWhere.sql}`,
+      [tenantId, ...activeWhere.params],
     );
     const parsed = rows.map(parseRow);
     return parsed.filter((watcher) => {

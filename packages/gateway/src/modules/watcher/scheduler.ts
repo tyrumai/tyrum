@@ -16,6 +16,7 @@ import type {
 } from "@tyrum/schemas";
 import { ActionPrimitive as ActionPrimitiveSchema, Lane, PolicyBundle } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { sqlActiveWhereClause } from "../../statestore/sql.js";
 import type { MemoryV1Dal } from "../memory/v1-dal.js";
 import { recordMemoryV1SystemEpisode } from "../memory/v1-episode-recorder.js";
 import type { Logger } from "../observability/logger.js";
@@ -141,6 +142,7 @@ export class WatcherScheduler {
   async tick(): Promise<void> {
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
+    const activeWhere = sqlActiveWhereClause(this.db);
 
     const watchers = await this.getActivePeriodicWatchers();
     for (const watcher of watchers) {
@@ -161,11 +163,9 @@ export class WatcherScheduler {
         await this.db.run(
           `UPDATE watchers
            SET last_fired_at_ms = ?, updated_at = ?
-           WHERE tenant_id = ? AND watcher_id = ? AND trigger_type = 'periodic' AND ${
-             this.db.kind === "postgres" ? "active = true" : "active = 1"
-           }
+           WHERE tenant_id = ? AND watcher_id = ? AND trigger_type = 'periodic' AND ${activeWhere.sql}
              AND (last_fired_at_ms IS NULL OR last_fired_at_ms < ?)`,
-          [slotMs, nowIso, watcher.tenant_id, watcher.watcher_id, slotMs],
+          [slotMs, nowIso, watcher.tenant_id, watcher.watcher_id, ...activeWhere.params, slotMs],
         );
 
         if (created.created) {
@@ -200,10 +200,12 @@ export class WatcherScheduler {
   }
 
   private async getActivePeriodicWatchers(): Promise<RawPeriodicWatcherRow[]> {
+    const activeWhere = sqlActiveWhereClause(this.db);
     return await this.db.all<RawPeriodicWatcherRow>(
       `SELECT *
        FROM watchers
-       WHERE trigger_type = 'periodic' AND ${this.db.kind === "postgres" ? "active = true" : "active = 1"}`,
+       WHERE trigger_type = 'periodic' AND ${activeWhere.sql}`,
+      activeWhere.params,
     );
   }
 
