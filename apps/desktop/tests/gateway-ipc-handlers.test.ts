@@ -12,6 +12,7 @@ const {
   generateTokenMock,
   encryptTokenMock,
   undiciFetchMock,
+  existsSyncMock,
 } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
   registeredHandlers: new Map<string, (...args: unknown[]) => unknown>(),
@@ -26,14 +27,24 @@ const {
       headers: { "content-type": "application/json" },
     });
   }),
+  existsSyncMock: vi.fn(),
   testState: {
     port: 8788,
     mode: "embedded" as "embedded" | "remote",
+    embeddedDbPath: "/tmp/test-gateway.db",
     remoteWsUrl: "ws://127.0.0.1:8788/ws",
     remoteTlsCertFingerprint256: "",
     remoteTlsAllowSelfSigned: false,
   },
 }));
+
+vi.mock("node:fs", async () => {
+  const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+  return {
+    ...actual,
+    existsSync: existsSyncMock,
+  };
+});
 
 vi.mock("electron", () => ({
   ipcMain: {
@@ -51,8 +62,10 @@ vi.mock("undici", () => {
 
 class MockGatewayManager extends EventEmitter {
   public status: "stopped" | "starting" | "running" | "error" = "stopped";
+  public lastStartOptions: unknown;
 
-  async start(): Promise<void> {
+  async start(opts?: unknown): Promise<void> {
+    this.lastStartOptions = opts;
     this.status = "running";
     this.emit("status-change", "running");
   }
@@ -80,7 +93,7 @@ vi.mock("../src/main/config/store.js", () => ({
     mode: testState.mode,
     embedded: {
       port: testState.port,
-      dbPath: "/tmp/test-gateway.db",
+      dbPath: testState.embeddedDbPath,
       tokenRef: "enc:token",
     },
     remote: {
@@ -108,6 +121,7 @@ describe("registerGatewayIpc handlers", () => {
     vi.resetModules();
     testState.port = 8788;
     testState.mode = "embedded";
+    testState.embeddedDbPath = "/tmp/test-gateway.db";
     testState.remoteWsUrl = "ws://127.0.0.1:8788/ws";
     testState.remoteTlsCertFingerprint256 = "";
     testState.remoteTlsAllowSelfSigned = false;
@@ -120,6 +134,8 @@ describe("registerGatewayIpc handlers", () => {
     generateTokenMock.mockImplementation(() => "generated-token");
     encryptTokenMock.mockReset();
     encryptTokenMock.mockImplementation((token: string) => `enc:${token}`);
+    existsSyncMock.mockReset();
+    existsSyncMock.mockImplementation(() => false);
     undiciFetchMock.mockReset();
     undiciFetchMock.mockImplementation(async () => {
       return new Response(JSON.stringify({ status: "ok" }), {
@@ -202,6 +218,42 @@ describe("registerGatewayIpc handlers", () => {
       tlsCertFingerprint256: "",
       tlsAllowSelfSigned: false,
     });
+  });
+
+  it("uses the legacy embedded gateway dbPath when it exists and no override is configured", async () => {
+    const prevHome = process.env["TYRUM_HOME"];
+    process.env["TYRUM_HOME"] = "/tmp/tyrum-home";
+    try {
+      testState.embeddedDbPath = "";
+      existsSyncMock.mockImplementation((path) => path === "/tmp/tyrum-home/gateway/gateway.db");
+
+      const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+      const windowStub = {
+        isDestroyed: () => false,
+        webContents: {
+          isDestroyed: () => false,
+          send: vi.fn(),
+        },
+      } as unknown as BrowserWindow;
+
+      const mgr = registerGatewayIpc(windowStub) as unknown as MockGatewayManager;
+
+      const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
+      expect(operatorConnectionHandler).toBeDefined();
+
+      await operatorConnectionHandler!({} as never);
+
+      expect(mgr.lastStartOptions).toEqual(
+        expect.objectContaining({ dbPath: "/tmp/tyrum-home/gateway/gateway.db" }),
+      );
+    } finally {
+      if (prevHome === undefined) {
+        delete process.env["TYRUM_HOME"];
+      } else {
+        process.env["TYRUM_HOME"] = prevHome;
+      }
+    }
   });
 
   it("rejects operator connection when the desktop is not configured yet", async () => {

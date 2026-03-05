@@ -71,6 +71,23 @@ describe("gateway CLI argument parsing", () => {
     expect(parseCliArgs(["scheduler"])).toEqual({ kind: "start", role: "scheduler" });
   });
 
+  it("parses boolean start flags", () => {
+    expect(
+      parseCliArgs([
+        "all",
+        "--allow-insecure-http",
+        "--enable-engine-api",
+        "--enable-snapshot-import",
+      ]),
+    ).toEqual({
+      kind: "start",
+      role: "all",
+      allowInsecureHttp: true,
+      engineApiEnabled: true,
+      snapshotImportEnabled: true,
+    });
+  });
+
   it("parses check command", () => {
     expect(parseCliArgs(["check"])).toEqual({ kind: "check" });
   });

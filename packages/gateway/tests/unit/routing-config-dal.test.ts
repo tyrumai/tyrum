@@ -81,14 +81,14 @@ describe("RoutingConfigDal", () => {
     expect(DateTimeSchema.safeParse(latest!.createdAt).success).toBe(true);
   });
 
-	  it("throws when a stored routing config revision is invalid", async () => {
-	    await db.run(
-	      "INSERT INTO routing_configs (tenant_id, config_json, created_by_json, reason) VALUES (?, ?, ?, ?)",
-	      [DEFAULT_TENANT_ID, "not-json", "{}", "corrupt"],
-	    );
+  it("throws when a stored routing config revision is invalid", async () => {
+    await db.run(
+      "INSERT INTO routing_configs (tenant_id, config_json, created_by_json, reason) VALUES (?, ?, ?, ?)",
+      [DEFAULT_TENANT_ID, JSON.stringify({ v: 0 }), "{}", "corrupt"],
+    );
 
-	    await expect(dal.getLatest(DEFAULT_TENANT_ID)).rejects.toThrow();
-	  });
+    await expect(dal.getLatest(DEFAULT_TENANT_ID)).rejects.toThrow();
+  });
 
   it("reverts to an earlier revision by creating a new revision", async () => {
     const initial = await dal.set({

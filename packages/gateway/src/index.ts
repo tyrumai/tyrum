@@ -270,6 +270,9 @@ type CliCommand =
       host?: string;
       port?: number;
       migrationsDir?: string;
+      allowInsecureHttp?: boolean;
+      engineApiEnabled?: boolean;
+      snapshotImportEnabled?: boolean;
     }
   | { kind: "check"; home?: string; db?: string; migrationsDir?: string }
   | { kind: "tls_fingerprint"; home?: string }
@@ -437,6 +440,9 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     let port: number | undefined;
     let role: GatewayRole | undefined;
     let migrationsDir: string | undefined;
+    let allowInsecureHttp: true | undefined;
+    let engineApiEnabled: true | undefined;
+    let snapshotImportEnabled: true | undefined;
 
     for (let index = 0; index < args.length; index += 1) {
       const arg = args[index];
@@ -492,10 +498,35 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
         continue;
       }
 
+      if (arg === "--allow-insecure-http") {
+        allowInsecureHttp = true;
+        continue;
+      }
+
+      if (arg === "--enable-engine-api") {
+        engineApiEnabled = true;
+        continue;
+      }
+
+      if (arg === "--enable-snapshot-import") {
+        snapshotImportEnabled = true;
+        continue;
+      }
+
       throw new Error(`unsupported start argument '${arg}'`);
     }
 
-    return { home, db, host, port, role, migrationsDir };
+    return {
+      home,
+      db,
+      host,
+      port,
+      role,
+      migrationsDir,
+      allowInsecureHttp,
+      engineApiEnabled,
+      snapshotImportEnabled,
+    };
   };
 
   const parseDbFlags = (
@@ -940,6 +971,9 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     host: command.host,
     port: command.port,
     migrationsDir: command.migrationsDir,
+    allowInsecureHttp: command.allowInsecureHttp,
+    engineApiEnabled: command.engineApiEnabled,
+    snapshotImportEnabled: command.snapshotImportEnabled,
   });
   return 0;
 }
@@ -962,6 +996,9 @@ export async function main(
         host?: string;
         port?: number;
         migrationsDir?: string;
+        allowInsecureHttp?: boolean;
+        engineApiEnabled?: boolean;
+        snapshotImportEnabled?: boolean;
       },
 ): Promise<void> {
   const params = typeof input === "string" ? { role: input } : (input ?? {});
@@ -994,6 +1031,24 @@ export async function main(
     createdBy: { kind: "bootstrap" },
     reason: "seed",
   });
+  const deploymentConfig = DeploymentConfig.parse({
+    ...deploymentRevision.config,
+    server: {
+      ...deploymentRevision.config.server,
+      allowInsecureHttp:
+        deploymentRevision.config.server.allowInsecureHttp || Boolean(params.allowInsecureHttp),
+    },
+    execution: {
+      ...deploymentRevision.config.execution,
+      engineApiEnabled:
+        deploymentRevision.config.execution.engineApiEnabled || Boolean(params.engineApiEnabled),
+    },
+    snapshots: {
+      ...deploymentRevision.config.snapshots,
+      importEnabled:
+        deploymentRevision.config.snapshots.importEnabled || Boolean(params.snapshotImportEnabled),
+    },
+  });
 
   const container = wireContainer(
     db,
@@ -1002,7 +1057,7 @@ export async function main(
       migrationsDir,
       tyrumHome,
     },
-    { deploymentConfig: deploymentRevision.config },
+    { deploymentConfig },
   );
   container.modelsDev.startBackgroundRefresh();
 
@@ -1052,9 +1107,9 @@ export async function main(
   const transportPolicy = assertNonLoopbackDeploymentGuardrails({
     role,
     host,
-    tlsReady: deploymentRevision.config.server.tlsReady,
-    tlsSelfSigned: deploymentRevision.config.server.tlsSelfSigned,
-    allowInsecureHttp: deploymentRevision.config.server.allowInsecureHttp,
+    tlsReady: deploymentConfig.server.tlsReady,
+    tlsSelfSigned: deploymentConfig.server.tlsSelfSigned,
+    allowInsecureHttp: deploymentConfig.server.allowInsecureHttp,
     hasTenantAdminToken: hasDefaultTenantAdminToken,
   });
 
@@ -1095,7 +1150,7 @@ export async function main(
           db: container.db,
           memoryV1Dal: container.memoryV1Dal,
           eventBus: container.eventBus,
-          automationEnabled: deploymentRevision.config.automation.enabled,
+          automationEnabled: deploymentConfig.automation.enabled,
           keepProcessAlive: role === "scheduler",
         })
       : undefined;
@@ -1146,13 +1201,13 @@ export async function main(
     serviceName: "tyrum-gateway",
     serviceVersion: VERSION,
     instanceId,
-    otel: deploymentRevision.config.otel,
+    otel: deploymentConfig.otel,
   });
   if (otel.enabled) {
     logger.info("otel.started");
   }
 
-  const engineApiEnabled = deploymentRevision.config.execution.engineApiEnabled;
+  const engineApiEnabled = deploymentConfig.execution.engineApiEnabled;
 
   const connectionManager = new ConnectionManager();
   const outboxDal = new OutboxDal(container.db, container.redactionEngine);
@@ -1342,7 +1397,7 @@ export async function main(
   protocolDeps.plugins = plugins;
 
   const agents =
-    shouldRunEdge && deploymentRevision.config.agent.enabled
+    shouldRunEdge && deploymentConfig.agent.enabled
       ? new AgentRegistry({
           container,
           baseHome: tyrumHome,
@@ -1357,8 +1412,8 @@ export async function main(
   protocolDeps.agents = agents;
   protocolDeps.memoryV1BudgetsProvider = createMemoryV1BudgetsProvider(container.db);
 
-  const authRateLimitWindowS = deploymentRevision.config.auth.rateLimit.windowSeconds;
-  const authRateLimitMax = deploymentRevision.config.auth.rateLimit.max;
+  const authRateLimitWindowS = deploymentConfig.auth.rateLimit.windowSeconds;
+  const authRateLimitMax = deploymentConfig.auth.rateLimit.max;
   const wsUpgradeRateLimitMax = Math.max(1, Math.floor(authRateLimitMax / 2));
 
   const authRateLimiter = shouldRunEdge
@@ -1405,7 +1460,7 @@ export async function main(
         connectionManager,
         protocolDeps,
         authTokens,
-        trustedProxies: deploymentRevision.config.server.trustedProxies,
+        trustedProxies: deploymentConfig.server.trustedProxies,
         upgradeRateLimiter: wsUpgradeRateLimiter,
         presenceDal: container.presenceDal,
         nodePairingDal: container.nodePairingDal,
@@ -1427,10 +1482,7 @@ export async function main(
   outboxPoller?.start();
 
   const telegramProcessor =
-    shouldRunEdge &&
-    agents &&
-    container.telegramBot &&
-    deploymentRevision.config.channels.pipelineEnabled
+    shouldRunEdge && agents && container.telegramBot && deploymentConfig.channels.pipelineEnabled
       ? new TelegramChannelProcessor({
           db: container.db,
           sessionDal: container.sessionDal,
@@ -1438,9 +1490,9 @@ export async function main(
           telegramBot: container.telegramBot,
           owner: instanceId,
           logger,
-          typingMode: deploymentRevision.config.channels.typingMode,
-          typingRefreshMs: deploymentRevision.config.channels.typingRefreshMs,
-          typingAutomationEnabled: deploymentRevision.config.channels.typingAutomationEnabled,
+          typingMode: deploymentConfig.channels.typingMode,
+          typingRefreshMs: deploymentConfig.channels.typingRefreshMs,
+          typingAutomationEnabled: deploymentConfig.channels.typingAutomationEnabled,
           memoryV1Dal: container.memoryV1Dal,
           approvalDal: container.approvalDal,
           approvalNotifier,
@@ -1453,7 +1505,7 @@ export async function main(
     shouldRunEdge && app && wsHandler
       ? await (async () => {
           const listener = getRequestListener(app.fetch);
-          const tlsSelfSigned = deploymentRevision.config.server.tlsSelfSigned ?? false;
+          const tlsSelfSigned = deploymentConfig.server.tlsSelfSigned ?? false;
           const { server: s, tlsMaterial } = await (async () => {
             if (!tlsSelfSigned) {
               return { server: createHttpServer(listener), tlsMaterial: null };
@@ -1530,7 +1582,7 @@ export async function main(
         });
 
         const resolveExecutor = (): ExecutionStepExecutor => {
-          const toolrunner = deploymentRevision.config.execution.toolrunner;
+          const toolrunner = deploymentConfig.execution.toolrunner;
           if (toolrunner.launcher === "kubernetes") {
             if (!isPostgresDbUri(dbPath)) {
               throw new Error(
@@ -1543,7 +1595,7 @@ export async function main(
               workspacePvcClaim: toolrunner.workspacePvcClaim,
               tyrumHome,
               dbPath,
-              hardeningProfile: deploymentRevision.config.toolrunner.hardeningProfile,
+              hardeningProfile: deploymentConfig.toolrunner.hardeningProfile,
               logger,
               jobTtlSeconds: 300,
             });

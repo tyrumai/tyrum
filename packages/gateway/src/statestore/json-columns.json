@@ -1,5 +1,19 @@
 [
   {
+    "table": "agent_configs",
+    "column": "config_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "agent_configs",
+    "column": "created_by_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
     "table": "agent_state_kv",
     "column": "provenance_json",
     "shape": "any",
@@ -35,8 +49,64 @@
     "default": "{}"
   },
   {
+    "table": "auth_tokens",
+    "column": "created_by_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "auth_tokens",
+    "column": "scopes_json",
+    "shape": "array",
+    "nullable": false,
+    "default": null
+  },
+  {
     "table": "canvas_artifacts",
     "column": "metadata_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "catalog_model_overrides",
+    "column": "headers_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "catalog_model_overrides",
+    "column": "limit_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "catalog_model_overrides",
+    "column": "modalities_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "catalog_model_overrides",
+    "column": "options_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "catalog_provider_overrides",
+    "column": "headers_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "catalog_provider_overrides",
+    "column": "options_json",
     "shape": "object",
     "nullable": false,
     "default": "{}"
@@ -75,6 +145,20 @@
     "shape": "object",
     "nullable": false,
     "default": null
+  },
+  {
+    "table": "deployment_configs",
+    "column": "config_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "deployment_configs",
+    "column": "created_by_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
   },
   {
     "table": "execution_artifacts",
@@ -203,6 +287,13 @@
     "default": null
   },
   {
+    "table": "migration_state",
+    "column": "value_json",
+    "shape": "any",
+    "nullable": false,
+    "default": null
+  },
+  {
     "table": "node_pairings",
     "column": "capabilities_json",
     "shape": "array",
@@ -236,6 +327,27 @@
     "shape": "object",
     "nullable": false,
     "default": null
+  },
+  {
+    "table": "oauth_provider_configs",
+    "column": "extra_authorize_params_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "oauth_provider_configs",
+    "column": "extra_token_params_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "oauth_provider_configs",
+    "column": "scopes_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
   },
   {
     "table": "outbox",
@@ -306,6 +418,20 @@
     "shape": "array",
     "nullable": false,
     "default": "[]"
+  },
+  {
+    "table": "tenant_configs",
+    "column": "config_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "tenant_configs",
+    "column": "created_by_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
   },
   {
     "table": "vector_metadata",

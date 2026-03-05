@@ -1,6 +1,7 @@
 -- Indexes for DB-backed config/tokens.
 
 CREATE INDEX IF NOT EXISTS tenants_status_idx ON tenants (status);
+CREATE INDEX IF NOT EXISTS tenants_tenant_key_idx ON tenants (tenant_key);
 
 CREATE INDEX IF NOT EXISTS auth_tokens_tenant_role_idx ON auth_tokens (tenant_id, role);
 CREATE INDEX IF NOT EXISTS auth_tokens_revoked_at_idx ON auth_tokens (tenant_id, revoked_at);
@@ -20,6 +21,9 @@ ON agent_configs (tenant_id, agent_id, revision DESC);
 
 CREATE INDEX IF NOT EXISTS oauth_provider_configs_tenant_provider_idx
 ON oauth_provider_configs (tenant_id, provider_id);
+
+CREATE INDEX IF NOT EXISTS catalog_provider_overrides_tenant_provider_idx
+ON catalog_provider_overrides (tenant_id, provider_id);
 
 CREATE INDEX IF NOT EXISTS catalog_model_overrides_tenant_provider_idx
 ON catalog_model_overrides (tenant_id, provider_id);

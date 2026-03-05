@@ -274,19 +274,19 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     // autoExecute handles it, runs the provider, sends task_result back.
     // The WS handler calls handleClientMessage which invokes onTaskResult
     // from the protocolDeps wired in startServer -- captured in srv.taskResults.
-	    const taskId = await dispatchTask(
-	      {
-	        type: "Desktop",
-	        args: { op: "screenshot", display: "primary", format: "png" },
-	      },
-	      {
-	        tenantId: DEFAULT_TENANT_ID,
-	        runId: randomUUID(),
-	        stepId: randomUUID(),
-	        attemptId: randomUUID(),
-	      },
-	      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
-	    );
+    const taskId = await dispatchTask(
+      {
+        type: "Desktop",
+        args: { op: "screenshot", display: "primary", format: "png" },
+      },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        runId: randomUUID(),
+        stepId: randomUUID(),
+        attemptId: randomUUID(),
+      },
+      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
+    );
 
     // Wait for the round-trip
     await delay(300);
@@ -313,19 +313,19 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     );
     autoExecute(client, [desktopProvider]);
 
-	    const taskId = await dispatchTask(
-	      {
-	        type: "Desktop",
-	        args: { op: "mouse", action: "click", x: 100, y: 200 },
-	      },
-	      {
-	        tenantId: DEFAULT_TENANT_ID,
-	        runId: randomUUID(),
-	        stepId: randomUUID(),
-	        attemptId: randomUUID(),
-	      },
-	      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
-	    );
+    const taskId = await dispatchTask(
+      {
+        type: "Desktop",
+        args: { op: "mouse", action: "click", x: 100, y: 200 },
+      },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        runId: randomUUID(),
+        stepId: randomUUID(),
+        attemptId: randomUUID(),
+      },
+      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
+    );
 
     await delay(300);
 
@@ -346,19 +346,19 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     const cliProvider = new CliProvider(["echo"], ["/tmp"]);
     autoExecute(client, [cliProvider]);
 
-	    const taskId = await dispatchTask(
-	      {
-	        type: "CLI",
-	        args: { cmd: "rm", args: ["-rf", "/"] },
-	      },
-	      {
-	        tenantId: DEFAULT_TENANT_ID,
-	        runId: randomUUID(),
-	        stepId: randomUUID(),
-	        attemptId: randomUUID(),
-	      },
-	      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
-	    );
+    const taskId = await dispatchTask(
+      {
+        type: "CLI",
+        args: { cmd: "rm", args: ["-rf", "/"] },
+      },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        runId: randomUUID(),
+        stepId: randomUUID(),
+        attemptId: randomUUID(),
+      },
+      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
+    );
 
     await delay(300);
 
@@ -379,19 +379,19 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     const cliProvider = new CliProvider(["echo"], ["/tmp"]);
     autoExecute(client, [cliProvider]);
 
-	    const taskId = await dispatchTask(
-	      {
-	        type: "CLI",
-	        args: { cmd: "echo", args: ["hello", "world"] },
-	      },
-	      {
-	        tenantId: DEFAULT_TENANT_ID,
-	        runId: randomUUID(),
-	        stepId: randomUUID(),
-	        attemptId: randomUUID(),
-	      },
-	      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
-	    );
+    const taskId = await dispatchTask(
+      {
+        type: "CLI",
+        args: { cmd: "echo", args: ["hello", "world"] },
+      },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        runId: randomUUID(),
+        stepId: randomUUID(),
+        attemptId: randomUUID(),
+      },
+      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
+    );
 
     await delay(500);
 

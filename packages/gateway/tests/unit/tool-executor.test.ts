@@ -444,6 +444,14 @@ describe("ToolExecutor", () => {
         role: "node",
         deviceId: "node-1",
         protocolRev: 2,
+        authClaims: {
+          token_kind: "device",
+          token_id: "token-node-1",
+          tenant_id: DEFAULT_TENANT_ID,
+          role: "node",
+          device_id: "node-1",
+          scopes: ["*"],
+        },
       });
 
       const deps = {
@@ -474,27 +482,32 @@ describe("ToolExecutor", () => {
         },
       };
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        new NodeDispatchService(deps as never),
-      );
+      const db = openTestSqliteDb();
+      try {
+        const executor = new ToolExecutor(
+          homeDir,
+          stubMcpManager(),
+          new Map(),
+          fetch,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { db, tenantId: DEFAULT_TENANT_ID, workspaceId: DEFAULT_WORKSPACE_ID },
+          new NodeDispatchService(deps as never),
+        );
 
-      const result = await executor.execute("tool.node.dispatch", "call-7", {
-        capability: "tyrum.desktop",
-        action: "Desktop",
-      });
+        const result = await executor.execute("tool.node.dispatch", "call-7", {
+          capability: "tyrum.desktop",
+          action: "Desktop",
+        });
 
-      expect(result.error).toBeUndefined();
-      expect(result.output).toContain('"ok":false');
-      expect(result.output).toContain('"code":"policy_denied"');
+        expect(result.error).toBeUndefined();
+        expect(result.output).toContain('"ok":false');
+        expect(result.output).toContain('"code":"policy_denied"');
+      } finally {
+        await db.close();
+      }
     });
 
     it("tool.node.dispatch omits oversized evidence to keep output bounded", async () => {

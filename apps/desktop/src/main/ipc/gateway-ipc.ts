@@ -3,6 +3,7 @@ import { normalizeFingerprint256 } from "@tyrum/operator-core";
 import { GatewayManager } from "../gateway-manager.js";
 import { configExists, loadConfig, saveConfig } from "../config/store.js";
 import { decryptToken, encryptToken } from "../config/token-store.js";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { createWindowSender } from "./window-sender.js";
@@ -209,6 +210,28 @@ function persistEmbeddedGatewayToken(config: DesktopNodeConfig, token: string): 
   embeddedGatewayAccessToken = token;
 }
 
+function resolveEmbeddedGatewayDbPath(config: DesktopNodeConfig, tyrumHome: string): string {
+  const configured = config.embedded.dbPath.trim();
+  if (configured) return configured;
+
+  const currentPath = join(tyrumHome, "gateway.db");
+  const legacyPath = join(tyrumHome, "gateway", "gateway.db");
+
+  try {
+    if (existsSync(currentPath)) return currentPath;
+  } catch {
+    // ignore
+  }
+
+  try {
+    if (existsSync(legacyPath)) return legacyPath;
+  } catch {
+    // ignore
+  }
+
+  return currentPath;
+}
+
 function loadEmbeddedGatewayAccessToken(
   config: DesktopNodeConfig,
   messages: {
@@ -360,7 +383,7 @@ async function startEmbeddedGatewayWithConfig(
   }
 
   const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
-  const dbPath = config.embedded.dbPath || join(tyrumHome, "gateway.db");
+  const dbPath = resolveEmbeddedGatewayDbPath(config, tyrumHome);
   const gatewayBin = resolveGatewayBinPath();
 
   const starter = mgr.start({

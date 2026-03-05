@@ -10,19 +10,6 @@ if [[ -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
   export COMPOSE_PROJECT_NAME="tyrum-smoke-sqlite-${RANDOM}"
 fi
 
-if [[ -z "${GATEWAY_TOKEN:-}" ]]; then
-  export GATEWAY_TOKEN
-  if command -v openssl >/dev/null 2>&1; then
-    GATEWAY_TOKEN="$(openssl rand -hex 32)"
-  else
-    GATEWAY_TOKEN="$(node -e 'console.log(require(\"node:crypto\").randomBytes(32).toString(\"hex\"))')"
-  fi
-  echo "[smoke] generated ephemeral GATEWAY_TOKEN for this run"
-fi
-
-# Snapshot import is intentionally disabled by default. Smoke tests enable it explicitly.
-export TYRUM_SNAPSHOT_IMPORT_ENABLED="${TYRUM_SNAPSHOT_IMPORT_ENABLED:-1}"
-
 cleanup() {
   if [[ "${TYRUM_SMOKE_KEEP_RUNNING:-}" == "1" ]]; then
     echo "[smoke] leaving containers running (TYRUM_SMOKE_KEEP_RUNNING=1)"
@@ -50,12 +37,19 @@ wait_for_healthz() {
   return 1
 }
 
-read_admin_token() {
+read_bootstrap_token() {
+  local label="$1"
   local token=""
-  for _ in $(seq 1 40); do
+  local pattern=""
+
+  pattern="tyrum-token\\.v1\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+"
+
+  for _ in $(seq 1 80); do
     token="$(
-      docker compose exec -T tyrum sh -lc 'cat /var/lib/tyrum/.admin-token 2>/dev/null || true' \
-        | tr -d '\r\n'
+      docker compose logs --no-color tyrum 2>/dev/null \
+        | grep -Eo "${label}: ${pattern}" \
+        | tail -n 1 \
+        | sed -E "s/^${label}: //"
     )"
     if [[ -n "$token" ]]; then
       echo "$token"
@@ -63,20 +57,22 @@ read_admin_token() {
     fi
     sleep 0.5
   done
-  echo "[smoke] unable to read /var/lib/tyrum/.admin-token" >&2
+
+  echo "[smoke] unable to read bootstrap token '${label}' from tyrum logs" >&2
+  docker compose logs tyrum || true
   return 1
 }
 
 enqueue_and_wait_sqlite_run() {
-  docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -e '
+  local token="$1"
+  docker compose exec -T -e "SMOKE_ADMIN_TOKEN=${token}" -w /app/packages/gateway tyrum node --input-type=module -e '
     import Database from "better-sqlite3";
-    import { readFileSync } from "node:fs";
     import { randomUUID } from "node:crypto";
 
     const dbPath = process.env.GATEWAY_DB_PATH;
     if (!dbPath) throw new Error("GATEWAY_DB_PATH is not set in tyrum service");
-    const token = readFileSync("/var/lib/tyrum/.admin-token", "utf-8").trim();
-    if (!token) throw new Error("admin token is empty");
+    const token = process.env.SMOKE_ADMIN_TOKEN;
+    if (!token) throw new Error("SMOKE_ADMIN_TOKEN is missing");
 
     const workflowRes = await fetch("http://127.0.0.1:8788/workflow/run", {
       method: "POST",
@@ -246,9 +242,9 @@ echo "[smoke] starting single-host (SQLite) reference deployment"
 docker compose up -d --build tyrum
 wait_for_healthz
 
-source_token="$(read_admin_token)"
+source_token="$(read_bootstrap_token "default-tenant-admin")"
 echo "[smoke] enqueueing one execution run via workflow API (and polling SQLite)"
-run_line="$(enqueue_and_wait_sqlite_run | tail -n 1)"
+run_line="$(enqueue_and_wait_sqlite_run "$source_token" | tail -n 1)"
 source_run_id="${run_line#SMOKE_RUN_ID=}"
 if [[ -z "${source_run_id}" || "${source_run_id}" == "${run_line}" ]]; then
   echo "[smoke] unable to parse SMOKE_RUN_ID from: ${run_line}"
@@ -263,10 +259,10 @@ docker compose down -v >/dev/null 2>&1 || true
 docker compose up -d --build tyrum
 wait_for_healthz
 
-target_token="$(read_admin_token)"
+target_token="$(read_bootstrap_token "default-tenant-admin")"
 build_import_request "$snapshot_bundle" "$import_req"
 
-echo "[smoke] importing snapshot bundle (requires TYRUM_SNAPSHOT_IMPORT_ENABLED=1)"
+echo "[smoke] importing snapshot bundle"
 import_snapshot "$target_token" "$import_req" "$import_res"
 
 echo "[smoke] verifying restored state is present"
