@@ -51,5 +51,8 @@ export function parseJsonArray(raw: string | undefined, flag: string): unknown[]
 }
 
 export function parseElevatedToken(raw: string | undefined): string {
-  return parseNonEmptyString(raw, "--elevated-token");
+  if (!raw) throw new Error("--elevated-token requires a value");
+  const trimmed = raw.trim();
+  if (!trimmed) throw new Error("--elevated-token requires a non-empty value");
+  return trimmed;
 }
