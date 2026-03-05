@@ -265,6 +265,7 @@ export class AgentRuntime {
     config: AgentConfigT;
     tenantId: string;
     sessionId: string;
+    executionProfileId?: ExecutionProfileId;
     profileModelId?: string;
     fetchImpl?: typeof fetch;
   }): Promise<LanguageModelV3> {
@@ -1372,6 +1373,7 @@ export class AgentRuntime {
       config: ctx.config,
       tenantId: session.tenant_id,
       sessionId: session.session_id,
+      executionProfileId: executionProfile.id,
       profileModelId: executionProfile.profile.model_id,
       fetchImpl: this.fetchImpl,
     });

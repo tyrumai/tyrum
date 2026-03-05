@@ -4,9 +4,10 @@ import { PageHeader } from "../layout/page-header.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
+import { AdminHttpModelsPanel } from "./admin-http-models.js";
+import { AdminHttpProvidersPanel } from "./admin-http-providers.js";
 import { useAdminMutationAccess } from "./admin-http-shared.js";
 import { DeviceTokensCard } from "./admin-http-device-tokens.js";
-import { AdminHttpModelsRefreshPanel } from "./admin-http-models-refresh.js";
 import { PluginsCard } from "./admin-http-plugins.js";
 import { AdminHttpPolicyAuthPanels } from "./admin-http-policy-auth-panels.js";
 import { AdminHttpRoutingConfigPanel } from "./admin-http-routing-config.js";
@@ -57,10 +58,16 @@ export function ConfigurePage({ core }: ConfigurePageProps) {
         />
       ) : null}
 
-      <Tabs defaultValue="policy-auth" className="grid gap-3">
+      <Tabs defaultValue="policy" className="grid gap-3">
         <TabsList aria-label="Configure sections">
-          <TabsTrigger value="policy-auth" data-testid="admin-http-tab-policy-auth">
-            Policy + Auth
+          <TabsTrigger value="policy" data-testid="admin-http-tab-policy">
+            Policy
+          </TabsTrigger>
+          <TabsTrigger value="providers" data-testid="admin-http-tab-providers">
+            Providers
+          </TabsTrigger>
+          <TabsTrigger value="models" data-testid="admin-http-tab-models">
+            Models
           </TabsTrigger>
           <TabsTrigger value="audit" data-testid="admin-http-tab-audit">
             Audit
@@ -77,16 +84,21 @@ export function ConfigurePage({ core }: ConfigurePageProps) {
           <TabsTrigger value="device-tokens" data-testid="admin-http-tab-gateway">
             Device tokens
           </TabsTrigger>
-          <TabsTrigger value="models-refresh" data-testid="admin-http-tab-models-refresh">
-            Models refresh
-          </TabsTrigger>
           <TabsTrigger value="commands" data-testid="admin-ws-tab-commands">
             Commands
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="policy-auth">
+        <TabsContent value="policy">
           <AdminHttpPolicyAuthPanels core={core} />
+        </TabsContent>
+
+        <TabsContent value="providers">
+          <AdminHttpProvidersPanel core={core} />
+        </TabsContent>
+
+        <TabsContent value="models">
+          <AdminHttpModelsPanel core={core} />
         </TabsContent>
 
         <TabsContent value="audit">
@@ -107,10 +119,6 @@ export function ConfigurePage({ core }: ConfigurePageProps) {
 
         <TabsContent value="device-tokens">
           <DeviceTokensCard core={core} />
-        </TabsContent>
-
-        <TabsContent value="models-refresh">
-          <AdminHttpModelsRefreshPanel core={core} />
         </TabsContent>
 
         <TabsContent value="commands">

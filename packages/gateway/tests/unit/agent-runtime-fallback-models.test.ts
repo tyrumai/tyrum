@@ -5,6 +5,8 @@ import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
 import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
+import { ConfiguredModelPresetDal } from "../../src/modules/models/configured-model-preset-dal.js";
+import { ExecutionProfileModelAssignmentDal } from "../../src/modules/models/execution-profile-model-assignment-dal.js";
 import { SessionModelOverrideDal } from "../../src/modules/models/session-model-override-dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
@@ -82,6 +84,23 @@ describe("AgentRuntime model fallbacks", () => {
     });
 
     return secretProvider;
+  }
+
+  async function createConfiguredPreset(input: {
+    presetKey: string;
+    displayName: string;
+    providerKey: string;
+    modelId: string;
+    options?: Record<string, unknown>;
+  }) {
+    return await new ConfiguredModelPresetDal(container!.db).create({
+      tenantId: DEFAULT_TENANT_ID,
+      presetKey: input.presetKey,
+      displayName: input.displayName,
+      providerKey: input.providerKey,
+      modelId: input.modelId,
+      options: input.options ?? {},
+    });
   }
 
   it("tries configured fallback models after a primary model invocation fails", async () => {
@@ -360,6 +379,257 @@ describe("AgentRuntime model fallbacks", () => {
       },
       tenantId: DEFAULT_TENANT_ID,
       sessionId: session.session_id,
+      fetchImpl,
+    });
+
+    const res = await model.doGenerate({} as any);
+    expect((res as any).text).toBe("ok");
+    expect(seenProviders).toEqual(["anthropic"]);
+  });
+
+  it("uses execution-profile preset assignments before legacy profile defaults", async () => {
+    container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const cacheDal = new ModelsDevCacheDal(container.db);
+    const nowIso = new Date().toISOString();
+    await cacheDal.upsert({
+      fetchedAt: nowIso,
+      etag: null,
+      sha256: "sha",
+      json: JSON.stringify({
+        openai: {
+          id: "openai",
+          name: "OpenAI",
+          env: ["OPENAI_API_KEY"],
+          npm: "@ai-sdk/openai",
+          models: { "gpt-4.1": { id: "gpt-4.1", name: "GPT-4.1" } },
+        },
+        anthropic: {
+          id: "anthropic",
+          name: "Anthropic",
+          env: ["ANTHROPIC_API_KEY"],
+          npm: "@ai-sdk/anthropic",
+          models: { "claude-3.5-sonnet": { id: "claude-3.5-sonnet", name: "Claude 3.5 Sonnet" } },
+        },
+      }),
+      source: "remote",
+      lastError: null,
+      nowIso,
+    });
+
+    const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
+
+    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+    const secretProvider = await seedAuthProfiles();
+    await createConfiguredPreset({
+      presetKey: "anthropic-interaction",
+      displayName: "Anthropic Interaction",
+      providerKey: "anthropic",
+      modelId: "claude-3.5-sonnet",
+      options: { reasoning_effort: "high" },
+    });
+    await new ExecutionProfileModelAssignmentDal(container.db).upsertMany({
+      tenantId: DEFAULT_TENANT_ID,
+      assignments: [{ executionProfileId: "interaction", presetKey: "anthropic-interaction" }],
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      agentId: "agent-1",
+      secretProvider,
+      fetchImpl,
+    });
+
+    const model = await (
+      runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }
+    ).resolveSessionModel({
+      config: {
+        model: {
+          model: "openai/gpt-4.1",
+          fallback: [],
+          options: {},
+        },
+      },
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: "session-profile-assigned",
+      executionProfileId: "interaction",
+      profileModelId: "openai/gpt-4.1",
+      fetchImpl,
+    });
+
+    const res = await model.doGenerate({} as any);
+    expect((res as any).text).toBe("ok");
+    expect(seenProviders).toEqual(["anthropic"]);
+  });
+
+  it("uses session preset overrides before execution-profile assignments", async () => {
+    container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const cacheDal = new ModelsDevCacheDal(container.db);
+    const nowIso = new Date().toISOString();
+    await cacheDal.upsert({
+      fetchedAt: nowIso,
+      etag: null,
+      sha256: "sha",
+      json: JSON.stringify({
+        openai: {
+          id: "openai",
+          name: "OpenAI",
+          env: ["OPENAI_API_KEY"],
+          npm: "@ai-sdk/openai",
+          models: { "gpt-4.1": { id: "gpt-4.1", name: "GPT-4.1" } },
+        },
+        anthropic: {
+          id: "anthropic",
+          name: "Anthropic",
+          env: ["ANTHROPIC_API_KEY"],
+          npm: "@ai-sdk/anthropic",
+          models: { "claude-3.5-sonnet": { id: "claude-3.5-sonnet", name: "Claude 3.5 Sonnet" } },
+        },
+      }),
+      source: "remote",
+      lastError: null,
+      nowIso,
+    });
+
+    const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
+
+    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+    const secretProvider = await seedAuthProfiles();
+    await createConfiguredPreset({
+      presetKey: "anthropic-session",
+      displayName: "Anthropic Session",
+      providerKey: "anthropic",
+      modelId: "claude-3.5-sonnet",
+      options: { reasoning_effort: "medium" },
+    });
+    const runtime = new AgentRuntime({
+      container,
+      agentId: "agent-1",
+      secretProvider,
+      fetchImpl,
+    });
+
+    const session = await container.sessionDal.getOrCreate({
+      scopeKeys: { tenantKey: "default", agentKey: "agent-1", workspaceKey: "default" },
+      connectorKey: "ui",
+      providerThreadId: "thread-preset",
+      containerKind: "dm",
+    });
+
+    await new SessionModelOverrideDal(container.db).upsert({
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: session.session_id,
+      modelId: "anthropic/claude-3.5-sonnet",
+      presetKey: "anthropic-session",
+    });
+
+    const model = await (
+      runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }
+    ).resolveSessionModel({
+      config: {
+        model: {
+          model: "openai/gpt-4.1",
+          fallback: [],
+          options: {},
+        },
+      },
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: session.session_id,
+      executionProfileId: "interaction",
+      profileModelId: "openai/gpt-4.1",
+      fetchImpl,
+    });
+
+    const res = await model.doGenerate({} as any);
+    expect((res as any).text).toBe("ok");
+    expect(seenProviders).toEqual(["anthropic"]);
+  });
+
+  it("uses configured execution-profile model assignments before legacy defaults", async () => {
+    container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const cacheDal = new ModelsDevCacheDal(container.db);
+    const nowIso = new Date().toISOString();
+    await cacheDal.upsert({
+      fetchedAt: nowIso,
+      etag: null,
+      sha256: "sha",
+      json: JSON.stringify({
+        openai: {
+          id: "openai",
+          name: "OpenAI",
+          env: ["OPENAI_API_KEY"],
+          npm: "@ai-sdk/openai",
+          models: { "gpt-4.1": { id: "gpt-4.1", name: "GPT-4.1" } },
+        },
+        anthropic: {
+          id: "anthropic",
+          name: "Anthropic",
+          env: ["ANTHROPIC_API_KEY"],
+          npm: "@ai-sdk/anthropic",
+          models: { "claude-3.5-sonnet": { id: "claude-3.5-sonnet", name: "Claude 3.5 Sonnet" } },
+        },
+      }),
+      source: "remote",
+      lastError: null,
+      nowIso,
+    });
+
+    const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
+
+    const presetDal = new ConfiguredModelPresetDal(container.db);
+    await presetDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      presetKey: "anthropic-default",
+      displayName: "Anthropic Default",
+      providerKey: "anthropic",
+      modelId: "claude-3.5-sonnet",
+      options: { reasoning_effort: "high" },
+    });
+    await new ExecutionProfileModelAssignmentDal(container.db).upsertMany({
+      tenantId: DEFAULT_TENANT_ID,
+      assignments: [{ executionProfileId: "interaction", presetKey: "anthropic-default" }],
+    });
+
+    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+    const secretProvider = await seedAuthProfiles();
+    const runtime = new AgentRuntime({
+      container,
+      agentId: "agent-1",
+      secretProvider,
+      fetchImpl,
+    });
+
+    const model = await (
+      runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }
+    ).resolveSessionModel({
+      config: {
+        model: {
+          model: "openai/gpt-4.1",
+          fallback: [],
+          options: {},
+        },
+      },
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: "session-assigned",
+      executionProfileId: "interaction",
+      profileModelId: "openai/gpt-4.1",
       fetchImpl,
     });
 

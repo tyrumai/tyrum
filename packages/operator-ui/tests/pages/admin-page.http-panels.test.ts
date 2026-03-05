@@ -13,6 +13,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const EXECUTION_PROFILE_IDS = [
+  "interaction",
+  "explorer_ro",
+  "reviewer_ro",
+  "planner",
+  "jury",
+  "executor_rw",
+  "integrator",
+] as const;
+
 async function switchAdminTab(container: HTMLElement, testId: string): Promise<void> {
   const tab = container.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
   expect(tab).not.toBeNull();
@@ -61,6 +71,41 @@ function createCore(activeAdminMode: boolean): {
         list: vi.fn(async () => ({ status: "ok", pins: [] })),
         set: vi.fn(async () => ({ status: "ok" })),
       },
+      providerConfig: {
+        listRegistry: vi.fn(async () => ({
+          status: "ok",
+          providers: [
+            {
+              provider_key: "openai",
+              name: "OpenAI",
+              doc: null,
+              supported: true,
+              methods: [
+                {
+                  method_key: "api_key",
+                  label: "API key",
+                  type: "api_key",
+                  fields: [
+                    {
+                      key: "api_key",
+                      label: "API key",
+                      description: null,
+                      kind: "secret",
+                      input: "password",
+                      required: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        })),
+        listProviders: vi.fn(async () => ({ status: "ok", providers: [] })),
+        createAccount: vi.fn(async () => ({ status: "ok" })),
+        updateAccount: vi.fn(async () => ({ status: "ok" })),
+        deleteAccount: vi.fn(async () => ({ status: "ok" })),
+        deleteProvider: vi.fn(async () => ({ status: "ok" })),
+      },
       audit: {
         exportReceiptBundle: vi.fn(async () => ({ status: "ok" })),
         verify: vi.fn(async () => ({ status: "ok" })),
@@ -84,6 +129,38 @@ function createCore(activeAdminMode: boolean): {
       deviceTokens: {
         issue: vi.fn(async () => ({ status: "ok" })),
         revoke: vi.fn(async () => ({ status: "ok" })),
+      },
+      modelConfig: {
+        listPresets: vi.fn(async () => ({ status: "ok", presets: [] })),
+        listAvailable: vi.fn(async () => ({
+          status: "ok",
+          models: [
+            {
+              provider_key: "openai",
+              provider_name: "OpenAI",
+              model_id: "gpt-4.1",
+              model_name: "GPT-4.1",
+              family: null,
+              reasoning: true,
+              tool_call: true,
+              modalities: { output: ["text"] },
+            },
+          ],
+        })),
+        createPreset: vi.fn(async () => ({ status: "ok" })),
+        updatePreset: vi.fn(async () => ({ status: "ok" })),
+        deletePreset: vi.fn(async () => ({ status: "ok" })),
+        listAssignments: vi.fn(async () => ({
+          status: "ok",
+          assignments: EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
+            execution_profile_id,
+            preset_key: "preset-default",
+            preset_display_name: "Default",
+            provider_key: "openai",
+            model_id: "gpt-4.1",
+          })),
+        })),
+        updateAssignments: vi.fn(async () => ({ status: "ok", assignments: [] })),
       },
       models: {
         refresh: vi.fn(async () => ({ status: "ok" })),
@@ -111,7 +188,13 @@ describe("ConfigurePage (strict admin tabs)", () => {
       expect(testRoot.container.querySelector("[data-testid='admin-tab-ws']")).toBeNull();
 
       expect(
-        testRoot.container.querySelector("[data-testid='admin-http-tab-policy-auth']"),
+        testRoot.container.querySelector("[data-testid='admin-http-tab-policy']"),
+      ).not.toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-http-tab-providers']"),
+      ).not.toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-http-tab-models']"),
       ).not.toBeNull();
       expect(
         testRoot.container.querySelector("[data-testid='admin-http-tab-audit']"),
@@ -127,9 +210,6 @@ describe("ConfigurePage (strict admin tabs)", () => {
       ).not.toBeNull();
       expect(
         testRoot.container.querySelector("[data-testid='admin-http-tab-gateway']"),
-      ).not.toBeNull();
-      expect(
-        testRoot.container.querySelector("[data-testid='admin-http-tab-models-refresh']"),
       ).not.toBeNull();
       expect(
         testRoot.container.querySelector("[data-testid='admin-ws-tab-commands']"),
@@ -173,14 +253,21 @@ describe("ConfigurePage (strict admin tabs)", () => {
       expect(issueButton).not.toBeNull();
       expect(issueButton?.disabled).toBe(true);
 
-      await switchAdminTab(testRoot.container, "admin-http-tab-models-refresh");
-      const refreshButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-http-models-refresh-open']",
+      await switchAdminTab(testRoot.container, "admin-http-tab-providers");
+      const addProviderButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='providers-add-open']",
       );
-      expect(refreshButton).not.toBeNull();
-      expect(refreshButton?.disabled).toBe(true);
+      expect(addProviderButton).not.toBeNull();
+      expect(addProviderButton?.disabled).toBe(true);
 
-      await switchAdminTab(testRoot.container, "admin-http-tab-policy-auth");
+      await switchAdminTab(testRoot.container, "admin-http-tab-models");
+      const addModelButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='models-add-open']",
+      );
+      expect(addModelButton).not.toBeNull();
+      expect(addModelButton?.disabled).toBe(true);
+
+      await switchAdminTab(testRoot.container, "admin-http-tab-policy");
       const createOverrideButton = testRoot.container.querySelector<HTMLButtonElement>(
         "[data-testid='admin-policy-override-create']",
       );
@@ -210,12 +297,19 @@ describe("ConfigurePage (strict admin tabs)", () => {
       expect(issueButton).not.toBeNull();
       expect(issueButton?.disabled).toBe(false);
 
-      await switchAdminTab(testRoot.container, "admin-http-tab-models-refresh");
-      const refreshButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-http-models-refresh-open']",
+      await switchAdminTab(testRoot.container, "admin-http-tab-providers");
+      const addProviderButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='providers-add-open']",
       );
-      expect(refreshButton).not.toBeNull();
-      expect(refreshButton?.disabled).toBe(false);
+      expect(addProviderButton).not.toBeNull();
+      expect(addProviderButton?.disabled).toBe(false);
+
+      await switchAdminTab(testRoot.container, "admin-http-tab-models");
+      const addModelButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='models-add-open']",
+      );
+      expect(addModelButton).not.toBeNull();
+      expect(addModelButton?.disabled).toBe(false);
     } finally {
       cleanupTestRoot(testRoot);
     }

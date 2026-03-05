@@ -8,6 +8,7 @@ import { Input } from "../ui/input.js";
 import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
 
 type SecretsApi = OperatorCore["http"]["secrets"];
+const MANAGED_PROVIDER_SECRET_PREFIX = "provider-account:";
 
 function normalizeAgentKey(agentKeyRaw: string): { agent_key?: string } | undefined {
   const agentKey = agentKeyRaw.trim();
@@ -91,7 +92,17 @@ function SecretsListCard({
     setResult(undefined);
     setError(undefined);
     try {
-      setResult(await api.list(agentQuery));
+      const next = await api.list(agentQuery);
+      if (Array.isArray(next.handles)) {
+        setResult({
+          ...next,
+          handles: next.handles.filter(
+            (handle) => !handle.handle_id.startsWith(MANAGED_PROVIDER_SECRET_PREFIX),
+          ),
+        });
+      } else {
+        setResult(next);
+      }
     } catch (e) {
       setError(e);
     } finally {

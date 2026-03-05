@@ -91,6 +91,19 @@ describe("createTyrumHttpClient", () => {
     expect(typeof client.models.listProviders).toBe("function");
     expect(typeof client.models.getProvider).toBe("function");
     expect(typeof client.models.listProviderModels).toBe("function");
+    expect(typeof client.providerConfig.listRegistry).toBe("function");
+    expect(typeof client.providerConfig.listProviders).toBe("function");
+    expect(typeof client.providerConfig.createAccount).toBe("function");
+    expect(typeof client.providerConfig.updateAccount).toBe("function");
+    expect(typeof client.providerConfig.deleteAccount).toBe("function");
+    expect(typeof client.providerConfig.deleteProvider).toBe("function");
+    expect(typeof client.modelConfig.listPresets).toBe("function");
+    expect(typeof client.modelConfig.listAvailable).toBe("function");
+    expect(typeof client.modelConfig.createPreset).toBe("function");
+    expect(typeof client.modelConfig.updatePreset).toBe("function");
+    expect(typeof client.modelConfig.deletePreset).toBe("function");
+    expect(typeof client.modelConfig.listAssignments).toBe("function");
+    expect(typeof client.modelConfig.updateAssignments).toBe("function");
     expect(typeof client.status.get).toBe("function");
     expect(typeof client.usage.get).toBe("function");
     expect(typeof client.presence.list).toBe("function");
@@ -218,6 +231,87 @@ describe("createTyrumHttpClient", () => {
     ];
     expect(getHeader(init, "authorization")).toBeNull();
     expect(init.credentials).toBeUndefined();
+  });
+
+  it("lists configured providers and validates the response", async () => {
+    const fetch = makeFetchMock(async () =>
+      jsonResponse({
+        status: "ok",
+        providers: [
+          {
+            provider_key: "openai",
+            name: "OpenAI",
+            doc: "https://platform.openai.com/docs",
+            supported: true,
+            accounts: [
+              {
+                account_id: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+                account_key: "openai-primary",
+                provider_key: "openai",
+                display_name: "Primary OpenAI",
+                method_key: "api_key",
+                type: "api_key",
+                status: "active",
+                config: {},
+                configured_secret_keys: ["api_key"],
+                created_at: "2026-02-25T00:00:00.000Z",
+                updated_at: "2026-02-25T00:00:00.000Z",
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const client = createTyrumHttpClient({
+      baseUrl: "https://gateway.example",
+      auth: { type: "bearer", token: "root-token" },
+      fetch,
+    });
+
+    const result = await client.providerConfig.listProviders();
+
+    expect(result.providers).toHaveLength(1);
+    expect(result.providers[0]?.provider_key).toBe("openai");
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://gateway.example/config/providers");
+    expect(init.method).toBe("GET");
+  });
+
+  it("returns structured delete-preset conflicts for replacement-required flows", async () => {
+    const fetch = makeFetchMock(async () =>
+      jsonResponse(
+        {
+          error: "assignment_required",
+          message: "replacement preset assignments are required before deleting this preset",
+          required_execution_profile_ids: ["interaction", "planner"],
+        },
+        409,
+      ),
+    );
+    const client = createTyrumHttpClient({
+      baseUrl: "https://gateway.example",
+      auth: { type: "bearer", token: "root-token" },
+      fetch,
+    });
+
+    const result = await client.modelConfig.deletePreset("interaction-default");
+
+    expect(result).toEqual({
+      error: "assignment_required",
+      message: "replacement preset assignments are required before deleting this preset",
+      required_execution_profile_ids: ["interaction", "planner"],
+    });
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://gateway.example/config/models/presets/interaction-default");
+    expect(init.method).toBe("DELETE");
   });
 
   it("validates requests before network calls", async () => {

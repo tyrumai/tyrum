@@ -4,6 +4,7 @@ export interface SessionModelOverrideRow {
   tenant_id: string;
   session_id: string;
   model_id: string;
+  preset_key: string | null;
   pinned_at: string;
   updated_at: string;
 }
@@ -12,6 +13,7 @@ interface RawSessionModelOverrideRow {
   tenant_id: string;
   session_id: string;
   model_id: string;
+  preset_key: string | null;
   pinned_at: string | Date;
   updated_at: string | Date;
 }
@@ -25,6 +27,7 @@ function toRow(raw: RawSessionModelOverrideRow): SessionModelOverrideRow {
     tenant_id: raw.tenant_id,
     session_id: raw.session_id,
     model_id: raw.model_id,
+    preset_key: raw.preset_key,
     pinned_at: normalizeTime(raw.pinned_at),
     updated_at: normalizeTime(raw.updated_at),
   };
@@ -50,17 +53,26 @@ export class SessionModelOverrideDal {
     tenantId: string;
     sessionId: string;
     modelId: string;
+    presetKey?: string | null;
   }): Promise<SessionModelOverrideRow> {
     const nowIso = new Date().toISOString();
 
     await this.db.run(
-      `INSERT INTO session_model_overrides (tenant_id, session_id, model_id, pinned_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO session_model_overrides (
+         tenant_id,
+         session_id,
+         model_id,
+         preset_key,
+         pinned_at,
+         updated_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT (tenant_id, session_id) DO UPDATE SET
          model_id = excluded.model_id,
+         preset_key = excluded.preset_key,
          pinned_at = excluded.pinned_at,
          updated_at = excluded.updated_at`,
-      [input.tenantId, input.sessionId, input.modelId, nowIso, nowIso],
+      [input.tenantId, input.sessionId, input.modelId, input.presetKey ?? null, nowIso, nowIso],
     );
 
     const row = await this.get({ tenantId: input.tenantId, sessionId: input.sessionId });

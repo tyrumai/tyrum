@@ -9,8 +9,11 @@ export interface AuthProfileRow {
   auth_profile_id: string;
   auth_profile_key: string;
   provider_key: string;
+  display_name: string;
+  method_key: string;
   type: AuthProfileType;
   status: AuthProfileStatus;
+  config: Record<string, unknown>;
   secret_keys: Record<string, string>;
   labels: Record<string, unknown>;
   created_at: string;
@@ -22,8 +25,11 @@ interface RawAuthProfileRow {
   auth_profile_id: string;
   auth_profile_key: string;
   provider_key: string;
+  display_name: string | null;
+  method_key: string | null;
   type: string;
   status: string;
+  config_json: unknown;
   labels_json: unknown;
   created_at: string | Date;
   updated_at: string | Date;
@@ -87,6 +93,22 @@ function normalizeSlotKey(value: string): string {
   return trimmed;
 }
 
+function normalizeDisplayName(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error("display_name is required");
+  }
+  return trimmed;
+}
+
+function normalizeMethodKey(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error("method_key is required");
+  }
+  return trimmed;
+}
+
 async function loadSecretKeysByProfileId(db: SqlDb, tenantId: string, authProfileIds: string[]) {
   const mapping = new Map<string, Record<string, string>>();
   for (const id of authProfileIds) mapping.set(id, {});
@@ -120,8 +142,11 @@ function toRow(raw: RawAuthProfileRow, secretKeys: Record<string, string>): Auth
     auth_profile_id: raw.auth_profile_id,
     auth_profile_key: raw.auth_profile_key,
     provider_key: raw.provider_key,
+    display_name: raw.display_name?.trim() || raw.auth_profile_key,
+    method_key: raw.method_key?.trim() || normalizeAuthProfileType(raw.type),
     type: normalizeAuthProfileType(raw.type),
     status: normalizeAuthProfileStatus(raw.status),
+    config: parseJson(raw.config_json, {}),
     secret_keys: secretKeys,
     labels: parseJson(raw.labels_json, {}),
     created_at: normalizeTime(raw.created_at) ?? new Date().toISOString(),
@@ -187,13 +212,19 @@ export class AuthProfileDal {
     tenantId: string;
     authProfileKey: string;
     providerKey: string;
+    displayName?: string;
+    methodKey?: string;
     type: AuthProfileType;
+    config?: Record<string, unknown>;
     secretKeys?: Record<string, string>;
     labels?: Record<string, unknown>;
   }): Promise<AuthProfileRow> {
     const nowIso = new Date().toISOString();
     const authProfileId = randomUUID();
     const labelsJson = JSON.stringify(input.labels ?? {});
+    const configJson = JSON.stringify(input.config ?? {});
+    const displayName = normalizeDisplayName(input.displayName ?? input.authProfileKey);
+    const methodKey = normalizeMethodKey(input.methodKey ?? input.type);
 
     const desiredSecretKeys = Object.entries(input.secretKeys ?? {}).map(
       ([slotKey, secretKey]) => ({
@@ -210,18 +241,24 @@ export class AuthProfileDal {
            auth_profile_id,
            auth_profile_key,
            provider_key,
+           display_name,
+           method_key,
            type,
            status,
+           config_json,
            labels_json,
            created_at,
            updated_at
-         ) VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)`,
         [
           input.tenantId,
           authProfileId,
           input.authProfileKey,
           input.providerKey,
+          displayName,
+          methodKey,
           input.type,
+          configJson,
           labelsJson,
           nowIso,
           nowIso,
@@ -274,6 +311,9 @@ export class AuthProfileDal {
   async updateByKey(input: {
     tenantId: string;
     authProfileKey: string;
+    displayName?: string;
+    methodKey?: string;
+    config?: Record<string, unknown>;
     labels?: Record<string, unknown>;
     secretKeys?: Record<string, string>;
   }): Promise<AuthProfileRow | undefined> {
@@ -297,21 +337,32 @@ export class AuthProfileDal {
       );
       if (!existing) return;
 
-      if (input.labels !== undefined) {
-        await tx.run(
-          `UPDATE auth_profiles
-           SET labels_json = ?, updated_at = ?
-           WHERE tenant_id = ? AND auth_profile_id = ?`,
-          [JSON.stringify(input.labels), nowIso, input.tenantId, existing.auth_profile_id],
-        );
-      } else {
-        await tx.run(
-          `UPDATE auth_profiles
-           SET updated_at = ?
-           WHERE tenant_id = ? AND auth_profile_id = ?`,
-          [nowIso, input.tenantId, existing.auth_profile_id],
-        );
+      const updates: string[] = ["updated_at = ?"];
+      const values: unknown[] = [nowIso];
+
+      if (input.displayName !== undefined) {
+        updates.push("display_name = ?");
+        values.push(normalizeDisplayName(input.displayName));
       }
+      if (input.methodKey !== undefined) {
+        updates.push("method_key = ?");
+        values.push(normalizeMethodKey(input.methodKey));
+      }
+      if (input.config !== undefined) {
+        updates.push("config_json = ?");
+        values.push(JSON.stringify(input.config));
+      }
+      if (input.labels !== undefined) {
+        updates.push("labels_json = ?");
+        values.push(JSON.stringify(input.labels));
+      }
+
+      await tx.run(
+        `UPDATE auth_profiles
+         SET ${updates.join(", ")}
+         WHERE tenant_id = ? AND auth_profile_id = ?`,
+        [...values, input.tenantId, existing.auth_profile_id],
+      );
 
       if (desiredSecretKeys === undefined) return;
 
@@ -384,5 +435,14 @@ export class AuthProfileDal {
       [nowIso, input.tenantId, input.authProfileKey],
     );
     return await this.getByKey(input);
+  }
+
+  async deleteByKey(input: { tenantId: string; authProfileKey: string }): Promise<boolean> {
+    const res = await this.db.run(
+      `DELETE FROM auth_profiles
+       WHERE tenant_id = ? AND auth_profile_key = ?`,
+      [input.tenantId, input.authProfileKey],
+    );
+    return res.changes === 1;
   }
 }

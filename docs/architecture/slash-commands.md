@@ -30,9 +30,10 @@ Commands are handled by the gateway (not by the model). This keeps control-plane
 
 ### Models and auth
 
-- `/model` — show the current model and available options.
-- `/model <provider/model>` — set the model for the current session.
-- `/model <provider/model>@<profile>` — pin an auth profile for the session.
+- `/model` — show the current session model preset and available options.
+- `/model <preset_key>` — set the configured model preset for the current session.
+- `/model <provider/model>` — set the model when exactly one configured preset targets that underlying model.
+- `/model <provider/model>@<profile>` — advanced compatibility form that pins a specific provider account for the session.
 
 ### Messaging behavior
 

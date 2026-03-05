@@ -28,7 +28,13 @@ export interface AuthProfileRouteDeps {
 }
 
 function toContractProfile(row: AuthProfileRow) {
-  const { tenant_id: _tenantId, ...rest } = row;
+  const {
+    tenant_id: _tenantId,
+    display_name: _displayName,
+    method_key: _methodKey,
+    config: _config,
+    ...rest
+  } = row;
   return AuthProfile.parse(rest);
 }
 

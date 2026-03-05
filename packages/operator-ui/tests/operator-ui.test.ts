@@ -49,6 +49,16 @@ async function openConfigureTab(
   });
 }
 
+const EXECUTION_PROFILE_IDS = [
+  "interaction",
+  "explorer_ro",
+  "reviewer_ro",
+  "planner",
+  "jury",
+  "executor_rw",
+  "integrator",
+] as const;
+
 function setControlledInputValue(input: HTMLInputElement, value: string): void {
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set as
     | ((this: HTMLInputElement, value: string) => void)
@@ -394,6 +404,7 @@ function createFakeHttpClient(): {
   pairingsRevoke: ReturnType<typeof vi.fn>;
   agentListGet: ReturnType<typeof vi.fn>;
   agentStatusGet: ReturnType<typeof vi.fn>;
+  modelAssignmentsUpdate: ReturnType<typeof vi.fn>;
 } {
   const statusGet = vi.fn(async () => sampleStatusResponse());
   const usageGet = vi.fn(async () => sampleUsageResponse());
@@ -412,6 +423,16 @@ function createFakeHttpClient(): {
   );
   const agentListGet = vi.fn(async () => ({ agents: [{ agent_key: "default" }] }) as const);
   const agentStatusGet = vi.fn(async () => ({ status: "ok" }) as const);
+  const modelAssignmentsUpdate = vi.fn(async () => ({
+    status: "ok",
+    assignments: EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
+      execution_profile_id,
+      preset_key: "preset-default",
+      preset_display_name: "Default",
+      provider_key: "openai",
+      model_id: "gpt-4.1",
+    })),
+  }));
 
   const http: OperatorHttpClient = {
     status: { get: statusGet },
@@ -424,6 +445,110 @@ function createFakeHttpClient(): {
       approve: pairingsApprove,
       deny: pairingsDeny,
       revoke: pairingsRevoke,
+    },
+    providerConfig: {
+      listRegistry: vi.fn(async () => ({
+        status: "ok",
+        providers: [
+          {
+            provider_key: "openai",
+            name: "OpenAI",
+            doc: null,
+            supported: true,
+            methods: [
+              {
+                method_key: "api_key",
+                label: "API key",
+                type: "api_key",
+                fields: [
+                  {
+                    key: "api_key",
+                    label: "API key",
+                    description: null,
+                    kind: "secret",
+                    input: "password",
+                    required: true,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      })),
+      listProviders: vi.fn(async () => ({
+        status: "ok",
+        providers: [],
+      })),
+      createAccount: vi.fn(async () => ({ status: "ok" })),
+      updateAccount: vi.fn(async () => ({ status: "ok" })),
+      deleteAccount: vi.fn(async () => ({ status: "ok" })),
+      deleteProvider: vi.fn(async () => ({ status: "ok" })),
+    },
+    modelConfig: {
+      listPresets: vi.fn(async () => ({
+        status: "ok",
+        presets: [
+          {
+            preset_id: "c2d1f6c6-f541-46a8-9f47-8a2d0ff3c9e5",
+            preset_key: "preset-default",
+            display_name: "Default",
+            provider_key: "openai",
+            model_id: "gpt-4.1",
+            options: {},
+            created_at: "2026-03-01T00:00:00.000Z",
+            updated_at: "2026-03-01T00:00:00.000Z",
+          },
+          {
+            preset_id: "d5c709e9-4585-426e-81ed-7904f7fbbe1b",
+            preset_key: "preset-review",
+            display_name: "Review",
+            provider_key: "openai",
+            model_id: "gpt-4.1-mini",
+            options: { reasoning_effort: "medium" },
+            created_at: "2026-03-01T00:00:00.000Z",
+            updated_at: "2026-03-01T00:00:00.000Z",
+          },
+        ],
+      })),
+      listAvailable: vi.fn(async () => ({
+        status: "ok",
+        models: [
+          {
+            provider_key: "openai",
+            provider_name: "OpenAI",
+            model_id: "gpt-4.1",
+            model_name: "GPT-4.1",
+            family: null,
+            reasoning: true,
+            tool_call: true,
+            modalities: { output: ["text"] },
+          },
+          {
+            provider_key: "openai",
+            provider_name: "OpenAI",
+            model_id: "gpt-4.1-mini",
+            model_name: "GPT-4.1 Mini",
+            family: null,
+            reasoning: true,
+            tool_call: true,
+            modalities: { output: ["text"] },
+          },
+        ],
+      })),
+      createPreset: vi.fn(async () => ({ status: "ok" })),
+      updatePreset: vi.fn(async () => ({ status: "ok" })),
+      deletePreset: vi.fn(async () => ({ status: "ok" })),
+      listAssignments: vi.fn(async () => ({
+        status: "ok",
+        assignments: EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
+          execution_profile_id,
+          preset_key: "preset-default",
+          preset_display_name: "Default",
+          provider_key: "openai",
+          model_id: "gpt-4.1",
+        })),
+      })),
+      updateAssignments: modelAssignmentsUpdate,
     },
   };
 
@@ -438,6 +563,7 @@ function createFakeHttpClient(): {
     pairingsRevoke,
     agentListGet,
     agentStatusGet,
+    modelAssignmentsUpdate,
   };
 }
 
@@ -726,7 +852,9 @@ describe("operator-ui", () => {
       expect(container.querySelector("[data-testid='configure-page']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-tab-http']")).toBeNull();
       expect(container.querySelector("[data-testid='admin-tab-ws']")).toBeNull();
-      expect(container.querySelector("[data-testid='admin-http-tab-policy-auth']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-http-tab-policy']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-http-tab-providers']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-http-tab-models']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-http-tab-audit']")).not.toBeNull();
       expect(
         container.querySelector("[data-testid='admin-http-tab-routing-config']"),
@@ -734,9 +862,6 @@ describe("operator-ui", () => {
       expect(container.querySelector("[data-testid='admin-http-tab-secrets']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-http-tab-plugins']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-http-tab-gateway']")).not.toBeNull();
-      expect(
-        container.querySelector("[data-testid='admin-http-tab-models-refresh']"),
-      ).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-ws-tab-commands']")).not.toBeNull();
       expect(container.querySelector("[data-testid='configure-read-only-notice']")).not.toBeNull();
     } finally {
@@ -777,8 +902,11 @@ describe("operator-ui", () => {
       await openConfigureTab(container, "admin-http-tab-plugins");
       expect(container.querySelector("[data-testid='admin-http-plugins']")).not.toBeNull();
 
-      await openConfigureTab(container, "admin-http-tab-models-refresh");
-      expect(container.querySelector("[data-testid='admin-http-models-refresh']")).not.toBeNull();
+      await openConfigureTab(container, "admin-http-tab-providers");
+      expect(container.querySelector("[data-testid='admin-http-providers']")).not.toBeNull();
+
+      await openConfigureTab(container, "admin-http-tab-models");
+      expect(container.querySelector("[data-testid='admin-http-models']")).not.toBeNull();
     } finally {
       act(() => {
         root?.unmount();
@@ -1151,7 +1279,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("disables Configure models refresh action while a request is in flight", async () => {
+  it("disables Configure model assignment save while a request is in flight", async () => {
     const refreshDeferred = createDeferred<Response>();
 
     const ws = new FakeWsClient();
@@ -1181,30 +1309,28 @@ describe("operator-ui", () => {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
 
-      await openConfigureTab(container, "admin-http-tab-models-refresh");
-      const openButton = container.querySelector<HTMLButtonElement>(
-        '[data-testid="admin-http-models-refresh-open"]',
+      await openConfigureTab(container, "admin-http-tab-models");
+      const selects = Array.from(container.querySelectorAll<HTMLSelectElement>("select"));
+      expect(selects.length).toBeGreaterThan(0);
+      const saveButton = container.querySelector<HTMLButtonElement>(
+        '[data-testid="models-assignments-save"]',
       );
-      expect(openButton).not.toBeNull();
-      expect(openButton?.disabled).toBe(false);
+      expect(saveButton).not.toBeNull();
+      expect(saveButton?.disabled).toBe(true);
 
       act(() => {
-        openButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        const select = selects[0];
+        if (!select) return;
+        const setValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")
+          ?.set as ((this: HTMLSelectElement, value: string) => void) | undefined;
+        setValue?.call(select, "preset-review");
+        select.dispatchEvent(new Event("change", { bubbles: true }));
       });
 
-      const checkbox = document.body.querySelector('[data-testid="confirm-danger-checkbox"]');
-      expect(checkbox).not.toBeNull();
-      act(() => {
-        checkbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
-      const confirmButton = document.body.querySelector<HTMLButtonElement>(
-        '[data-testid="confirm-danger-confirm"]',
-      );
-      expect(confirmButton).not.toBeNull();
+      expect(saveButton?.disabled).toBe(false);
 
       await act(async () => {
-        confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
         await Promise.resolve();
       });
 
@@ -1212,29 +1338,36 @@ describe("operator-ui", () => {
       const [input, init] = fetchMock.mock.calls[0] ?? [];
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-      expect(url).toBe("http://example.test/models/refresh");
-      expect(init?.method).toBe("POST");
+      expect(url).toBe("http://example.test/config/models/assignments");
+      expect(init?.method).toBe("PUT");
       const headers = new Headers(init?.headers);
       expect(headers.get("authorization")).toBe("Bearer elevated-test-token");
-
-      const confirmButtonDuringRequest = document.body.querySelector<HTMLButtonElement>(
-        '[data-testid="confirm-danger-confirm"]',
-      );
-      expect(confirmButtonDuringRequest).not.toBeNull();
-      expect(confirmButtonDuringRequest?.disabled).toBe(true);
-      expect(openButton?.disabled).toBe(false);
+      expect(saveButton?.disabled).toBe(true);
 
       refreshDeferred.resolve(
-        new Response(JSON.stringify({ status: "ok", models_dev: {} }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
+        new Response(
+          JSON.stringify({
+            status: "ok",
+            assignments: EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
+              execution_profile_id,
+              preset_key:
+                execution_profile_id === "interaction" ? "preset-review" : "preset-default",
+              preset_display_name: execution_profile_id === "interaction" ? "Review" : "Default",
+              provider_key: "openai",
+              model_id: execution_profile_id === "interaction" ? "gpt-4.1-mini" : "gpt-4.1",
+            })),
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
       );
       await act(async () => {
         await Promise.resolve();
       });
 
-      expect(openButton?.disabled).toBe(false);
+      expect(saveButton?.disabled).toBe(true);
     } finally {
       act(() => {
         root?.unmount();
@@ -1353,7 +1486,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("requires confirmation before refreshing models from Configure", async () => {
+  it("requires confirmation before removing a model preset from Configure", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -1385,15 +1518,17 @@ describe("operator-ui", () => {
         root = createRoot(container);
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
-      await openConfigureTab(container, "admin-http-tab-models-refresh");
+      await openConfigureTab(container, "admin-http-tab-models");
 
-      const refreshButton = container.querySelector<HTMLButtonElement>(
-        '[data-testid="admin-http-models-refresh-open"]',
-      );
-      expect(refreshButton).not.toBeNull();
+      const removeButtons = Array.from(
+        container.querySelectorAll<HTMLButtonElement>("button"),
+      ).filter((button) => button.textContent?.trim() === "Remove");
+      expect(removeButtons.length).toBeGreaterThanOrEqual(2);
+      const removeButton = removeButtons[1];
+      expect(removeButton).not.toBeUndefined();
 
       act(() => {
-        refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        removeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
 
       expect(fetchMock).toHaveBeenCalledTimes(0);
@@ -1421,8 +1556,8 @@ describe("operator-ui", () => {
       const [input, init] = fetchMock.mock.calls[0] ?? [];
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-      expect(url).toBe("http://example.test/models/refresh");
-      expect(init?.method).toBe("POST");
+      expect(url).toBe("http://example.test/config/models/presets/preset-review");
+      expect(init?.method).toBe("DELETE");
       const headers = new Headers(init?.headers);
       expect(headers.get("authorization")).toBe("Bearer elevated-test-token");
     } finally {

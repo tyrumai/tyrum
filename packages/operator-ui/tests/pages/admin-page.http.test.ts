@@ -12,6 +12,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const EXECUTION_PROFILE_IDS = [
+  "interaction",
+  "explorer_ro",
+  "reviewer_ro",
+  "planner",
+  "jury",
+  "executor_rw",
+  "integrator",
+] as const;
+
 async function switchHttpTab(
   container: HTMLElement,
   tabTestId: string,
@@ -25,9 +35,9 @@ async function switchHttpTab(
   return button!;
 }
 
-function openPolicyAuthTab(container: HTMLElement): void {
+function openPolicyTab(container: HTMLElement): void {
   const trigger = container.querySelector<HTMLButtonElement>(
-    "[data-testid='admin-http-tab-policy-auth']",
+    "[data-testid='admin-http-tab-policy']",
   );
   expect(trigger).not.toBeNull();
 
@@ -77,6 +87,41 @@ function createTestCore(): {
         list: vi.fn(async () => ({ status: "ok", pins: [] }) as unknown),
         set: vi.fn(async () => ({ status: "ok" }) as unknown),
       },
+      providerConfig: {
+        listRegistry: vi.fn(async () => ({
+          status: "ok",
+          providers: [
+            {
+              provider_key: "openai",
+              name: "OpenAI",
+              doc: null,
+              supported: true,
+              methods: [
+                {
+                  method_key: "api_key",
+                  label: "API key",
+                  type: "api_key",
+                  fields: [
+                    {
+                      key: "api_key",
+                      label: "API key",
+                      description: null,
+                      kind: "secret",
+                      input: "password",
+                      required: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        })),
+        listProviders: vi.fn(async () => ({ status: "ok", providers: [] }) as unknown),
+        createAccount: vi.fn(async () => ({ status: "ok" }) as unknown),
+        updateAccount: vi.fn(async () => ({ status: "ok" }) as unknown),
+        deleteAccount: vi.fn(async () => ({ status: "ok" }) as unknown),
+        deleteProvider: vi.fn(async () => ({ status: "ok" }) as unknown),
+      },
       routingConfig: {
         get: vi.fn(async () => ({ revision: 0, config: { v: 1 } }) as unknown),
         update: routingConfigUpdate,
@@ -87,6 +132,27 @@ function createTestCore(): {
         list: vi.fn(async () => ({ handles: [] }) as unknown),
         rotate: secretsRotate,
         revoke: vi.fn(async () => ({ revoked: true }) as unknown),
+      },
+      modelConfig: {
+        listPresets: vi.fn(async () => ({ status: "ok", presets: [] }) as unknown),
+        listAvailable: vi.fn(async () => ({ status: "ok", models: [] }) as unknown),
+        createPreset: vi.fn(async () => ({ status: "ok" }) as unknown),
+        updatePreset: vi.fn(async () => ({ status: "ok" }) as unknown),
+        deletePreset: vi.fn(async () => ({ status: "ok" }) as unknown),
+        listAssignments: vi.fn(
+          async () =>
+            ({
+              status: "ok",
+              assignments: EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
+                execution_profile_id,
+                preset_key: "preset-default",
+                preset_display_name: "Default",
+                provider_key: "openai",
+                model_id: "gpt-4.1",
+              })),
+            }) as unknown,
+        ),
+        updateAssignments: vi.fn(async () => ({ status: "ok", assignments: [] }) as unknown),
       },
     },
   } as unknown as OperatorCore;
@@ -293,8 +359,8 @@ describe("ConfigurePage (HTTP) secrets", () => {
   });
 });
 
-describe("ConfigurePage (HTTP) policy + auth", () => {
-  it("renders Policy + Auth panels when Elevated Mode is active", async () => {
+describe("ConfigurePage (HTTP) policy + config", () => {
+  it("renders Policy, Providers, and Models panels when Elevated Mode is active", async () => {
     const { core } = createTestCore();
 
     const { container, root } = renderIntoDocument(
@@ -303,11 +369,15 @@ describe("ConfigurePage (HTTP) policy + auth", () => {
       ]),
     );
 
-    await switchHttpTab(container, "admin-http-tab-policy-auth");
+    await switchHttpTab(container, "admin-http-tab-policy");
 
     expect(container.querySelector("[data-testid='admin-http-policy']")).not.toBeNull();
-    expect(container.querySelector("[data-testid='admin-http-auth-profiles']")).not.toBeNull();
-    expect(container.querySelector("[data-testid='admin-http-auth-pins']")).not.toBeNull();
+
+    await switchHttpTab(container, "admin-http-tab-providers");
+    expect(container.querySelector("[data-testid='admin-http-providers']")).not.toBeNull();
+
+    await switchHttpTab(container, "admin-http-tab-models");
+    expect(container.querySelector("[data-testid='admin-http-models']")).not.toBeNull();
 
     cleanupTestRoot({ container, root });
   });
@@ -332,7 +402,7 @@ describe("ConfigurePage (HTTP) policy + auth", () => {
       }),
     );
 
-    openPolicyAuthTab(container);
+    openPolicyTab(container);
 
     const jsonTextarea = container.querySelector<HTMLTextAreaElement>(
       "[data-testid='admin-policy-override-create-json']",
@@ -354,36 +424,22 @@ describe("ConfigurePage (HTTP) policy + auth", () => {
     elevatedModeStore.dispose();
   });
 
-  it("disables auth profile updates when profile id is missing", () => {
-    const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
-    elevatedModeStore.enter({
-      elevatedToken: "elevated",
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-    });
-
-    const core = {
-      httpBaseUrl: "http://example.test",
-      elevatedModeStore,
-    } as unknown as OperatorCore;
+  it("disables model creation when no provider models are available", async () => {
+    const { core } = createTestCore();
 
     const { container, root } = renderIntoDocument(
-      React.createElement(ElevatedModeProvider, {
-        core,
-        mode: "web",
-        children: React.createElement(ConfigurePage, { core }),
-      }),
+      React.createElement(ElevatedModeProvider, { core, mode: "web" }, [
+        React.createElement(ConfigurePage, { key: "page", core }),
+      ]),
     );
 
-    openPolicyAuthTab(container);
+    await switchHttpTab(container, "admin-http-tab-models");
 
-    const updateButton = container.querySelector<HTMLButtonElement>(
-      "[data-testid='admin-auth-profiles-update']",
-    );
-    expect(updateButton).not.toBeNull();
-    expect(updateButton?.disabled).toBe(true);
+    const addButton = container.querySelector<HTMLButtonElement>("[data-testid='models-add-open']");
+    expect(addButton).not.toBeNull();
+    expect(addButton?.disabled).toBe(true);
 
     cleanupTestRoot({ container, root });
-    elevatedModeStore.dispose();
   });
 
   it("requires confirmation before creating policy overrides", async () => {
@@ -426,7 +482,7 @@ describe("ConfigurePage (HTTP) policy + auth", () => {
       ]),
     );
 
-    await switchHttpTab(container, "admin-http-tab-policy-auth");
+    await switchHttpTab(container, "admin-http-tab-policy");
 
     const jsonTextarea = container.querySelector<HTMLTextAreaElement>(
       "[data-testid='admin-policy-override-create-json']",
