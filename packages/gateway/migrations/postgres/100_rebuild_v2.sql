@@ -950,7 +950,7 @@ CREATE TABLE peer_identity_links (
 );
 
 -- ---------------------------------------------------------------------------
--- Routing configs (tenant-scoped; default tenant for legacy callers)
+-- Routing configs (tenant-scoped; require explicit tenant_id)
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE routing_configs (
