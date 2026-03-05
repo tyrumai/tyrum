@@ -366,6 +366,56 @@ describe("Platform pages", () => {
     }
   });
 
+  it("keeps restrictive fallback capabilities when config omits capabilities", async () => {
+    const setConfig = vi.fn(async () => {});
+    const desktopApi = {
+      getConfig: vi.fn(async () => ({
+        permissions: { profile: "balanced" },
+        cli: { allowedCommands: [], allowedWorkingDirs: [] },
+        web: { allowedDomains: [], headless: true },
+      })),
+      setConfig,
+      gateway: {
+        getStatus: vi.fn(async () => ({ status: "stopped", port: 8788 })),
+        start: vi.fn(async () => ({ status: "running", port: 8788 })),
+        stop: vi.fn(async () => ({ status: "stopped" })),
+      },
+      node: {
+        connect: vi.fn(async () => ({ status: "connected" })),
+        disconnect: vi.fn(async () => ({ status: "disconnected" })),
+      },
+      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
+    } satisfies DesktopApi;
+
+    const testRoot = renderWithHost(
+      { kind: "desktop", api: desktopApi },
+      React.createElement(PlatformPermissionsPage),
+    );
+    try {
+      await flushEffects();
+      expect(testRoot.container.textContent).not.toContain("CLI allowlist is active and empty");
+      expect(testRoot.container.textContent).not.toContain("Domain allowlist is active and empty");
+
+      await act(async () => {
+        clickButton(testRoot.container, "Save Permissions");
+        await Promise.resolve();
+      });
+
+      expect(desktopApi.setConfig).toHaveBeenCalledTimes(1);
+      expect(desktopApi.setConfig.mock.calls[0]?.[0]).toMatchObject({
+        permissions: { profile: "balanced" },
+        capabilities: {
+          desktop: true,
+          playwright: false,
+          cli: false,
+          http: false,
+        },
+      });
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
   it("shows log-panel fallback states for non-desktop, missing api, and missing stream", () => {
     const webRoot = renderWithHost({ kind: "web" }, React.createElement(PlatformLogsPanel));
     try {

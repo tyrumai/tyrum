@@ -48,6 +48,32 @@ interface WebConfig {
   headless: boolean;
 }
 
+const DEFAULT_PROFILE: Profile = "balanced";
+// Preserve the historical restrictive fallback until the stored config provides capabilities.
+const DEFAULT_CAPABILITIES = capabilitiesForProfile("safe");
+const DEFAULT_CLI_CONFIG: CliConfig = { allowedCommands: [], allowedWorkingDirs: [] };
+const DEFAULT_WEB_CONFIG: WebConfig = { allowedDomains: [], headless: true };
+const CAPABILITY_OPTIONS = [
+  ["desktop", "Desktop (screenshot & input)"],
+  ["playwright", "Playwright (web automation)"],
+  ["cli", "CLI (command execution)"],
+  ["http", "HTTP (network requests)"],
+] as const satisfies ReadonlyArray<readonly [keyof CapFlags, string]>;
+const CLI_COMMAND_NOTES = [
+  "- Use one rule per line.",
+  "- `*` allows all commands.",
+  "- Subcommand rules are prefix matches. `git status` allows `git status -sb`, but does not allow `git push`.",
+  "- A bare command (for example `git`) allows all its subcommands.",
+];
+const CLI_DIRECTORY_NOTES = [
+  "- `*` allows any working directory when CLI allowlist enforcement is active.",
+];
+const WEB_DOMAIN_NOTES = [
+  "- Use one domain per line.",
+  "- Subdomains are allowed automatically.",
+  "- `*` allows all domains.",
+];
+
 export function PlatformPermissionsPage() {
   const host = useHostApi();
   if (host.kind !== "desktop") {
@@ -77,21 +103,225 @@ export function PlatformPermissionsPage() {
 }
 
 function DesktopPermissionsPage({ api }: { api: DesktopApi }) {
-  const [profile, setProfile] = useState<Profile>("balanced");
-  const [capabilities, setCapabilities] = useState<CapFlags>({
-    desktop: true,
-    playwright: false,
-    cli: false,
-    http: false,
-  });
-  const [cli, setCli] = useState<CliConfig>({
-    allowedCommands: [],
-    allowedWorkingDirs: [],
-  });
-  const [web, setWeb] = useState<WebConfig>({
-    allowedDomains: [],
-    headless: true,
-  });
+  const model = useDesktopPermissionsModel(api);
+
+  return (
+    <div className="grid gap-6">
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Permissions</h1>
+      <SecurityProfileCard profile={model.profile} onProfileChange={model.applyProfile} />
+      <CapabilitiesCard
+        capabilities={model.capabilities}
+        onCapabilityChange={model.setCapability}
+      />
+      <CliAllowlistCard
+        cli={model.cli}
+        cliAllowlistActive={model.cliAllowlistActive}
+        onCommandsChange={(value) => model.updateCliField("allowedCommands", value)}
+        onWorkingDirsChange={(value) => model.updateCliField("allowedWorkingDirs", value)}
+      />
+      <WebAllowlistCard
+        web={model.web}
+        webAllowlistActive={model.webAllowlistActive}
+        onDomainsChange={model.updateWebDomains}
+        onHeadlessChange={model.setHeadless}
+      />
+      <SavePermissionsActions saved={model.saved} saveError={model.saveError} onSave={model.save} />
+    </div>
+  );
+}
+
+function SecurityProfileCard(props: {
+  profile: Profile;
+  onProfileChange: (profile: Profile) => void;
+}) {
+  return (
+    <Card>
+      <CardContent className="grid gap-4 pt-6">
+        <div className="text-sm font-semibold text-fg">Security Profile</div>
+        <RadioGroup
+          value={props.profile}
+          onValueChange={(value) => props.onProfileChange(value as Profile)}
+        >
+          {PROFILES.map((profile) => (
+            <SecurityProfileOption
+              key={profile.id}
+              profile={profile}
+              active={props.profile === profile.id}
+            />
+          ))}
+        </RadioGroup>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SecurityProfileOption(props: {
+  profile: { id: Profile; label: string; description: string };
+  active: boolean;
+}) {
+  const radioId = `permission-profile-${props.profile.id}`;
+  return (
+    <div
+      className={[
+        "flex items-start gap-3 rounded-md border p-3",
+        props.active ? "border-primary bg-primary-dim" : "border-border bg-bg-card",
+      ].join(" ")}
+    >
+      <RadioGroupItem id={radioId} value={props.profile.id} />
+      <div className="grid gap-1">
+        <Label htmlFor={radioId} className="text-sm font-medium text-fg">
+          {props.profile.label}
+        </Label>
+        <div className="text-sm text-fg-muted">{props.profile.description}</div>
+      </div>
+    </div>
+  );
+}
+
+function CapabilitiesCard(props: {
+  capabilities: CapFlags;
+  onCapabilityChange: (key: keyof CapFlags, nextEnabled: boolean) => void;
+}) {
+  return (
+    <Card>
+      <CardContent className="grid gap-4 pt-6">
+        <div className="text-sm font-semibold text-fg">Capabilities</div>
+        <div className="text-sm text-fg-muted">
+          Switching profile applies recommended capability defaults for that profile. You can still
+          adjust these before saving.
+        </div>
+        <div className="grid gap-3">
+          {CAPABILITY_OPTIONS.map(([key, label]) => (
+            <div
+              key={key}
+              className="flex items-center justify-between gap-4 border-b border-border py-2 last:border-b-0"
+            >
+              <div className="text-sm text-fg">{label}</div>
+              <Switch
+                checked={props.capabilities[key]}
+                onCheckedChange={(checked) => props.onCapabilityChange(key, checked)}
+              />
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CliAllowlistCard(props: {
+  cli: CliConfig;
+  cliAllowlistActive: boolean;
+  onCommandsChange: (value: string) => void;
+  onWorkingDirsChange: (value: string) => void;
+}) {
+  return (
+    <Card>
+      <CardContent className="grid gap-4 pt-6">
+        <AllowlistHeader title="CLI Allowlist" active={props.cliAllowlistActive} />
+        <Textarea
+          label="Allowed Commands (one per line)"
+          value={joinAllowlistLines(props.cli.allowedCommands)}
+          disabled={!props.cliAllowlistActive}
+          onChange={(event) => props.onCommandsChange(event.target.value)}
+          placeholder={"git status\nnode --version\n*"}
+        />
+        <FieldNotes notes={CLI_COMMAND_NOTES} />
+        {props.cliAllowlistActive && props.cli.allowedCommands.length === 0 ? (
+          <Alert
+            variant="warning"
+            title="CLI allowlist is active and empty"
+            description="Command execution is default deny until you add at least one rule (or '*')."
+          />
+        ) : null}
+        <Textarea
+          label="Allowed Working Directories (one per line)"
+          value={joinAllowlistLines(props.cli.allowedWorkingDirs)}
+          disabled={!props.cliAllowlistActive}
+          onChange={(event) => props.onWorkingDirsChange(event.target.value)}
+          placeholder={"/home/user/projects\n*"}
+        />
+        <FieldNotes notes={CLI_DIRECTORY_NOTES} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function WebAllowlistCard(props: {
+  web: WebConfig;
+  webAllowlistActive: boolean;
+  onDomainsChange: (value: string) => void;
+  onHeadlessChange: (headless: boolean) => void;
+}) {
+  return (
+    <Card>
+      <CardContent className="grid gap-4 pt-6">
+        <AllowlistHeader title="Web / Playwright" active={props.webAllowlistActive} />
+        <Textarea
+          label="Allowed Domains (one per line)"
+          value={joinAllowlistLines(props.web.allowedDomains)}
+          disabled={!props.webAllowlistActive}
+          onChange={(event) => props.onDomainsChange(event.target.value)}
+          placeholder={"example.com\ndocs.example.com\n*"}
+        />
+        <FieldNotes notes={WEB_DOMAIN_NOTES} />
+        {props.webAllowlistActive && props.web.allowedDomains.length === 0 ? (
+          <Alert
+            variant="warning"
+            title="Domain allowlist is active and empty"
+            description="Web navigation is default deny until you add at least one domain (or '*')."
+          />
+        ) : null}
+        <div className="flex items-center justify-between gap-4 border-b border-border py-2">
+          <div className="text-sm text-fg">Headless mode</div>
+          <Switch checked={props.web.headless} onCheckedChange={props.onHeadlessChange} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SavePermissionsActions(props: {
+  saved: boolean;
+  saveError: string | null;
+  onSave: () => void;
+}) {
+  return (
+    <div className="grid gap-3">
+      <Button onClick={props.onSave}>{props.saved ? "Saved!" : "Save Permissions"}</Button>
+      {props.saveError ? (
+        <Alert variant="error" title="Save failed" description={props.saveError} />
+      ) : null}
+    </div>
+  );
+}
+
+function AllowlistHeader(props: { title: string; active: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="text-sm font-semibold text-fg">{props.title}</div>
+      <Badge variant={props.active ? "danger" : "success"}>
+        {props.active ? "active (default deny)" : "inactive (default allow)"}
+      </Badge>
+    </div>
+  );
+}
+
+function FieldNotes({ notes }: { notes: string[] }) {
+  return (
+    <div className="grid gap-1 text-sm text-fg-muted">
+      {notes.map((note) => (
+        <div key={note}>{note}</div>
+      ))}
+    </div>
+  );
+}
+
+function useDesktopPermissionsModel(api: DesktopApi) {
+  const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  const [capabilities, setCapabilities] = useState<CapFlags>(DEFAULT_CAPABILITIES);
+  const [cli, setCli] = useState<CliConfig>(DEFAULT_CLI_CONFIG);
+  const [web, setWeb] = useState<WebConfig>(DEFAULT_WEB_CONFIG);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -99,25 +329,26 @@ function DesktopPermissionsPage({ api }: { api: DesktopApi }) {
     () => getAllowlistMode(profile, capabilities),
     [profile, capabilities],
   );
-  const cliAllowlistActive = allowlistMode.cli === "active";
-  const webAllowlistActive = allowlistMode.web === "active";
 
   useEffect(() => {
     let disposed = false;
-    void api.getConfig().then((cfg) => {
-      if (disposed) return;
-      const c = cfg as Record<string, unknown>;
-      const perms = c?.["permissions"] as Record<string, unknown> | undefined;
-      if (typeof perms?.["profile"] === "string") setProfile(perms["profile"] as Profile);
-
-      const caps = c?.["capabilities"] as CapFlags | undefined;
-      if (caps) setCapabilities(caps);
-
-      const cliCfg = c?.["cli"] as CliConfig | undefined;
-      if (cliCfg) setCli(cliCfg);
-
-      const webCfg = c?.["web"] as WebConfig | undefined;
-      if (webCfg) setWeb(webCfg);
+    void api.getConfig().then((config) => {
+      if (disposed) {
+        return;
+      }
+      const loaded = readPermissionConfig(config);
+      if (loaded.profile) {
+        setProfile(loaded.profile);
+      }
+      if (loaded.capabilities) {
+        setCapabilities(loaded.capabilities);
+      }
+      if (loaded.cli) {
+        setCli(loaded.cli);
+      }
+      if (loaded.web) {
+        setWeb(loaded.web);
+      }
     });
     return () => {
       disposed = true;
@@ -137,195 +368,58 @@ function DesktopPermissionsPage({ api }: { api: DesktopApi }) {
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
       })
-      .catch((error: unknown) => {
-        setSaveError(formatErrorMessage(error));
-      });
+      .catch((error: unknown) => setSaveError(formatErrorMessage(error)));
   };
 
-  const applyProfile = (nextProfile: Profile) => {
-    setProfile(nextProfile);
-    setCapabilities(capabilitiesForProfile(nextProfile));
+  return {
+    profile,
+    capabilities,
+    cli,
+    web,
+    saved,
+    saveError,
+    cliAllowlistActive: allowlistMode.cli === "active",
+    webAllowlistActive: allowlistMode.web === "active",
+    applyProfile: (nextProfile: Profile) => {
+      setProfile(nextProfile);
+      setCapabilities(capabilitiesForProfile(nextProfile));
+    },
+    setCapability: (key: keyof CapFlags, nextEnabled: boolean) => {
+      setCapabilities((current) => ({ ...current, [key]: nextEnabled }));
+    },
+    updateCliField: (field: keyof CliConfig, value: string) => {
+      setCli((current) => ({ ...current, [field]: splitAllowlistLines(value) }));
+    },
+    updateWebDomains: (value: string) => {
+      setWeb((current) => ({ ...current, allowedDomains: splitAllowlistLines(value) }));
+    },
+    setHeadless: (headless: boolean) => {
+      setWeb((current) => ({ ...current, headless }));
+    },
+    save,
   };
+}
 
-  const setCapability = (key: keyof CapFlags, nextEnabled: boolean) => {
-    setCapabilities((prev) => ({ ...prev, [key]: nextEnabled }));
-  };
+function readPermissionConfig(config: unknown): {
+  profile?: Profile;
+  capabilities?: CapFlags;
+  cli?: CliConfig;
+  web?: WebConfig;
+} {
+  const parsed = config as Record<string, unknown>;
+  const permissions = parsed?.["permissions"] as Record<string, unknown> | undefined;
+  const profile =
+    typeof permissions?.["profile"] === "string" ? (permissions["profile"] as Profile) : undefined;
+  const capabilities = parsed?.["capabilities"] as CapFlags | undefined;
+  const cli = parsed?.["cli"] as CliConfig | undefined;
+  const web = parsed?.["web"] as WebConfig | undefined;
+  return { profile, capabilities, cli, web };
+}
 
-  return (
-    <div className="grid gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-fg">Permissions</h1>
+function joinAllowlistLines(lines: string[]): string {
+  return lines.join("\n");
+}
 
-      <Card>
-        <CardContent className="grid gap-4 pt-6">
-          <div className="text-sm font-semibold text-fg">Security Profile</div>
-          <RadioGroup value={profile} onValueChange={(value) => applyProfile(value as Profile)}>
-            {PROFILES.map((p) => {
-              const radioId = `permission-profile-${p.id}`;
-              const active = profile === p.id;
-              return (
-                <div
-                  key={p.id}
-                  className={[
-                    "flex items-start gap-3 rounded-md border p-3",
-                    active ? "border-primary bg-primary-dim" : "border-border bg-bg-card",
-                  ].join(" ")}
-                >
-                  <RadioGroupItem id={radioId} value={p.id} />
-                  <div className="grid gap-1">
-                    <Label htmlFor={radioId} className="text-sm font-medium text-fg">
-                      {p.label}
-                    </Label>
-                    <div className="text-sm text-fg-muted">{p.description}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </RadioGroup>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="grid gap-4 pt-6">
-          <div className="text-sm font-semibold text-fg">Capabilities</div>
-          <div className="text-sm text-fg-muted">
-            Switching profile applies recommended capability defaults for that profile. You can
-            still adjust these before saving.
-          </div>
-          <div className="grid gap-3">
-            {(
-              [
-                ["desktop", "Desktop (screenshot & input)"],
-                ["playwright", "Playwright (web automation)"],
-                ["cli", "CLI (command execution)"],
-                ["http", "HTTP (network requests)"],
-              ] as const
-            ).map(([key, label]) => (
-              <div
-                key={key}
-                className="flex items-center justify-between gap-4 border-b border-border py-2 last:border-b-0"
-              >
-                <div className="text-sm text-fg">{label}</div>
-                <Switch
-                  checked={capabilities[key]}
-                  onCheckedChange={(checked) => setCapability(key, checked)}
-                />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="grid gap-4 pt-6">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm font-semibold text-fg">CLI Allowlist</div>
-            <Badge variant={cliAllowlistActive ? "danger" : "success"}>
-              {cliAllowlistActive ? "active (default deny)" : "inactive (default allow)"}
-            </Badge>
-          </div>
-
-          <Textarea
-            label="Allowed Commands (one per line)"
-            value={cli.allowedCommands.join("\n")}
-            disabled={!cliAllowlistActive}
-            onChange={(e) =>
-              setCli((prev) => ({
-                ...prev,
-                allowedCommands: e.target.value.split("\n").filter(Boolean),
-              }))
-            }
-            placeholder={"git status\nnode --version\n*"}
-          />
-
-          <div className="grid gap-1 text-sm text-fg-muted">
-            <div>- Use one rule per line.</div>
-            <div>- `*` allows all commands.</div>
-            <div>
-              - Subcommand rules are prefix matches. `git status` allows `git status -sb`, but does
-              not allow `git push`.
-            </div>
-            <div>- A bare command (for example `git`) allows all its subcommands.</div>
-          </div>
-
-          {cliAllowlistActive && cli.allowedCommands.length === 0 ? (
-            <Alert
-              variant="warning"
-              title="CLI allowlist is active and empty"
-              description="Command execution is default deny until you add at least one rule (or '*')."
-            />
-          ) : null}
-
-          <Textarea
-            label="Allowed Working Directories (one per line)"
-            value={cli.allowedWorkingDirs.join("\n")}
-            disabled={!cliAllowlistActive}
-            onChange={(e) =>
-              setCli((prev) => ({
-                ...prev,
-                allowedWorkingDirs: e.target.value.split("\n").filter(Boolean),
-              }))
-            }
-            placeholder={"/home/user/projects\n*"}
-          />
-
-          <div className="grid gap-1 text-sm text-fg-muted">
-            <div>- `*` allows any working directory when CLI allowlist enforcement is active.</div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="grid gap-4 pt-6">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm font-semibold text-fg">Web / Playwright</div>
-            <Badge variant={webAllowlistActive ? "danger" : "success"}>
-              {webAllowlistActive ? "active (default deny)" : "inactive (default allow)"}
-            </Badge>
-          </div>
-
-          <Textarea
-            label="Allowed Domains (one per line)"
-            value={web.allowedDomains.join("\n")}
-            disabled={!webAllowlistActive}
-            onChange={(e) =>
-              setWeb((prev) => ({
-                ...prev,
-                allowedDomains: e.target.value.split("\n").filter(Boolean),
-              }))
-            }
-            placeholder={"example.com\ndocs.example.com\n*"}
-          />
-
-          <div className="grid gap-1 text-sm text-fg-muted">
-            <div>- Use one domain per line.</div>
-            <div>- Subdomains are allowed automatically.</div>
-            <div>- `*` allows all domains.</div>
-          </div>
-
-          {webAllowlistActive && web.allowedDomains.length === 0 ? (
-            <Alert
-              variant="warning"
-              title="Domain allowlist is active and empty"
-              description="Web navigation is default deny until you add at least one domain (or '*')."
-            />
-          ) : null}
-
-          <div className="flex items-center justify-between gap-4 border-b border-border py-2">
-            <div className="text-sm text-fg">Headless mode</div>
-            <Switch
-              checked={web.headless}
-              onCheckedChange={(checked) => {
-                setWeb((prev) => ({ ...prev, headless: checked }));
-              }}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-3">
-        <Button onClick={save}>{saved ? "Saved!" : "Save Permissions"}</Button>
-        {saveError ? <Alert variant="error" title="Save failed" description={saveError} /> : null}
-      </div>
-    </div>
-  );
+function splitAllowlistLines(value: string): string[] {
+  return value.split("\n").filter(Boolean);
 }
