@@ -1,40 +1,87 @@
-import { readFile } from "node:fs/promises";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createAdminWsClient, serializeWsRequest } from "../helpers/ws-protocol-test-helpers.js";
 
 describe("memory and subagent WS handler extraction", () => {
-  let handlerSource = "";
+  const { handleMemoryMessageMock, handleSubagentMessageMock } = vi.hoisted(() => ({
+    handleMemoryMessageMock: vi.fn(async (_client: unknown, msg: unknown) => {
+      const type = (msg as { type?: string }).type;
+      const requestId = (msg as { request_id?: string }).request_id;
+      if (!type?.startsWith("memory.")) return undefined;
+      return {
+        request_id: requestId ?? "missing",
+        type,
+        ok: true as const,
+        result: { mocked: true },
+      };
+    }),
+    handleSubagentMessageMock: vi.fn(async (_client: unknown, msg: unknown) => {
+      const type = (msg as { type?: string }).type;
+      const requestId = (msg as { request_id?: string }).request_id;
+      if (!type?.startsWith("subagent.")) return undefined;
+      return {
+        request_id: requestId ?? "missing",
+        type,
+        ok: true as const,
+        result: { mocked: true },
+      };
+    }),
+  }));
 
-  beforeAll(async () => {
-    handlerSource = await readFile(new URL("../../src/ws/protocol/handler.ts", import.meta.url), {
-      encoding: "utf8",
+  vi.mock("../../src/ws/protocol/memory-handlers.js", () => {
+    return { handleMemoryMessage: handleMemoryMessageMock };
+  });
+  vi.mock("../../src/ws/protocol/subagent-handlers.js", () => {
+    return { handleSubagentMessage: handleSubagentMessageMock };
+  });
+
+  afterEach(() => {
+    handleMemoryMessageMock.mockClear();
+    handleSubagentMessageMock.mockClear();
+    vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  it("routes memory.* requests through memory-handlers", async () => {
+    const client = createAdminWsClient();
+    const deps = {};
+    const raw = serializeWsRequest({ type: "memory.search" });
+
+    const { handleClientMessage } = await import("../../src/ws/protocol/handler.js");
+    const res = await handleClientMessage(client, raw, deps);
+
+    expect(handleMemoryMessageMock).toHaveBeenCalledTimes(1);
+    expect(handleMemoryMessageMock).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({ request_id: "req-1", type: "memory.search" }),
+      deps,
+    );
+    expect(res).toEqual({
+      request_id: "req-1",
+      type: "memory.search",
+      ok: true,
+      result: { mocked: true },
     });
   });
 
-  it("extracts memory.* handlers into a dedicated module", async () => {
-    expect(handlerSource).toContain("handleMemoryMessage(");
-    const inlineCheckExample = 'if (msg.type === "memory.search") {';
-    expect(inlineCheckExample).toMatch(/msg\.type === "memory\./);
-    expect(handlerSource).not.toMatch(/msg\.type === "memory\./);
+  it("routes subagent.* requests through subagent-handlers", async () => {
+    const client = createAdminWsClient();
+    const deps = {};
+    const raw = serializeWsRequest({ type: "subagent.spawn" });
 
-    const memorySource = await readFile(
-      new URL("../../src/ws/protocol/memory-handlers.ts", import.meta.url),
-      { encoding: "utf8" },
+    const { handleClientMessage } = await import("../../src/ws/protocol/handler.js");
+    const res = await handleClientMessage(client, raw, deps);
+
+    expect(handleSubagentMessageMock).toHaveBeenCalledTimes(1);
+    expect(handleSubagentMessageMock).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({ request_id: "req-1", type: "subagent.spawn" }),
+      deps,
     );
-    expect(memorySource).toContain("handleMemoryMessage");
-    expect(memorySource).toContain('"memory.search"');
-  });
-
-  it("extracts subagent.* handlers into a dedicated module", async () => {
-    expect(handlerSource).toContain("handleSubagentMessage(");
-    const inlineCheckExample = 'if (msg.type === "subagent.spawn") {';
-    expect(inlineCheckExample).toMatch(/msg\.type === "subagent\./);
-    expect(handlerSource).not.toMatch(/msg\.type === "subagent\./);
-
-    const subagentSource = await readFile(
-      new URL("../../src/ws/protocol/subagent-handlers.ts", import.meta.url),
-      { encoding: "utf8" },
-    );
-    expect(subagentSource).toContain("handleSubagentMessage");
-    expect(subagentSource).toContain('"subagent.spawn"');
+    expect(res).toEqual({
+      request_id: "req-1",
+      type: "subagent.spawn",
+      ok: true,
+      result: { mocked: true },
+    });
   });
 });

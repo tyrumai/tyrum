@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { findAppliedMigrationAlias } from "./migration-aliases.js";
 
 const DISABLE_FOREIGN_KEYS_MARKER = "-- tyrum:disable_foreign_keys";
 
@@ -40,6 +41,12 @@ export function migrate(db: Database.Database, migrationsDir: string): void {
 
   for (const file of files) {
     if (applied.has(file)) continue;
+    const alias = findAppliedMigrationAlias(file, applied);
+    if (alias) {
+      insertMigration.run(file);
+      applied.add(file);
+      continue;
+    }
     const sql = readFileSync(join(migrationsDir, file), "utf-8");
     if (sql.includes(DISABLE_FOREIGN_KEYS_MARKER)) {
       db.exec("PRAGMA foreign_keys = OFF");
