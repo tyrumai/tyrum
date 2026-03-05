@@ -16,9 +16,115 @@ import { useState } from "react";
 import { toErrorMessage } from "./lib/errors.js";
 import { useDesktopOperatorCore } from "./lib/desktop-operator-core.js";
 
+type SetupMode = "embedded" | "remote";
+
+type RemoteSetupConfig = {
+  wsUrl: string;
+  tokenRef: string;
+};
+
+function validateRemoteSetupConfig({ wsUrl, token }: { wsUrl: string; token: string }):
+  | { ok: true; config: RemoteSetupConfig }
+  | {
+      ok: false;
+      errorMessage:
+        | "Remote WebSocket URL is required."
+        | "Remote WebSocket URL must be a valid ws:// or wss:// URL."
+        | "A gateway token is required for remote mode.";
+    } {
+  const trimmedWsUrl = wsUrl.trim();
+  const trimmedToken = token.trim();
+
+  if (!trimmedWsUrl) {
+    return { ok: false, errorMessage: "Remote WebSocket URL is required." };
+  }
+  try {
+    const parsed = new URL(trimmedWsUrl);
+    if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
+      throw new Error("invalid protocol");
+    }
+  } catch {
+    return {
+      ok: false,
+      errorMessage: "Remote WebSocket URL must be a valid ws:// or wss:// URL.",
+    };
+  }
+  if (!trimmedToken) {
+    return { ok: false, errorMessage: "A gateway token is required for remote mode." };
+  }
+
+  return { ok: true, config: { wsUrl: trimmedWsUrl, tokenRef: trimmedToken } };
+}
+
+function SetupModeButtons({
+  mode,
+  busy,
+  onModeChange,
+}: {
+  mode: SetupMode;
+  busy: boolean;
+  onModeChange: (mode: SetupMode) => void;
+}) {
+  return (
+    <div className="flex gap-2">
+      <Button
+        variant={mode === "embedded" ? "primary" : "secondary"}
+        disabled={busy}
+        onClick={() => onModeChange("embedded")}
+      >
+        Embedded
+      </Button>
+      <Button
+        variant={mode === "remote" ? "primary" : "secondary"}
+        disabled={busy}
+        onClick={() => onModeChange("remote")}
+      >
+        Remote
+      </Button>
+    </div>
+  );
+}
+
+function RemoteModeFields({
+  wsUrl,
+  token,
+  busy,
+  onWsUrlChange,
+  onTokenChange,
+}: {
+  wsUrl: string;
+  token: string;
+  busy: boolean;
+  onWsUrlChange: (wsUrl: string) => void;
+  onTokenChange: (token: string) => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <Input
+        label="Gateway WebSocket URL"
+        type="text"
+        value={wsUrl}
+        onChange={(e) => onWsUrlChange(e.target.value)}
+        placeholder="wss://host:port/ws"
+        disabled={busy}
+        required
+      />
+      <Input
+        label="Gateway token"
+        type="password"
+        value={token}
+        onChange={(e) => onTokenChange(e.target.value)}
+        placeholder="Bearer token"
+        disabled={busy}
+        required
+      />
+    </div>
+  );
+}
+
 function DesktopSetupWizard({ onConfigured }: { onConfigured: () => void }) {
   const api = window.tyrumDesktop;
-  const [mode, setMode] = useState<"embedded" | "remote">("embedded");
+  const [mode, setMode] = useState<SetupMode>("embedded");
   const [remoteWsUrl, setRemoteWsUrl] = useState("ws://127.0.0.1:8788/ws");
   const [remoteToken, setRemoteToken] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,28 +139,12 @@ function DesktopSetupWizard({ onConfigured }: { onConfigured: () => void }) {
       if (mode === "embedded") {
         await api.setConfig({ mode: "embedded" });
       } else {
-        const wsUrl = remoteWsUrl.trim();
-        const token = remoteToken.trim();
-
-        if (!wsUrl) {
-          setErrorMessage("Remote WebSocket URL is required.");
+        const result = validateRemoteSetupConfig({ wsUrl: remoteWsUrl, token: remoteToken });
+        if (!result.ok) {
+          setErrorMessage(result.errorMessage);
           return;
         }
-        try {
-          const parsed = new URL(wsUrl);
-          if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
-            throw new Error("invalid protocol");
-          }
-        } catch {
-          setErrorMessage("Remote WebSocket URL must be a valid ws:// or wss:// URL.");
-          return;
-        }
-        if (!token) {
-          setErrorMessage("A gateway token is required for remote mode.");
-          return;
-        }
-
-        await api.setConfig({ mode: "remote", remote: { wsUrl, tokenRef: token } });
+        await api.setConfig({ mode: "remote", remote: result.config });
       }
 
       onConfigured();
@@ -74,44 +164,16 @@ function DesktopSetupWizard({ onConfigured }: { onConfigured: () => void }) {
             description="Choose Embedded or Remote mode to continue."
           />
 
-          <div className="flex gap-2">
-            <Button
-              variant={mode === "embedded" ? "primary" : "secondary"}
-              disabled={busy}
-              onClick={() => setMode("embedded")}
-            >
-              Embedded
-            </Button>
-            <Button
-              variant={mode === "remote" ? "primary" : "secondary"}
-              disabled={busy}
-              onClick={() => setMode("remote")}
-            >
-              Remote
-            </Button>
-          </div>
+          <SetupModeButtons mode={mode} busy={busy} onModeChange={setMode} />
 
           {mode === "remote" ? (
-            <div className="grid gap-4">
-              <Input
-                label="Gateway WebSocket URL"
-                type="text"
-                value={remoteWsUrl}
-                onChange={(e) => setRemoteWsUrl(e.target.value)}
-                placeholder="wss://host:port/ws"
-                disabled={busy}
-                required
-              />
-              <Input
-                label="Gateway token"
-                type="password"
-                value={remoteToken}
-                onChange={(e) => setRemoteToken(e.target.value)}
-                placeholder="Bearer token"
-                disabled={busy}
-                required
-              />
-            </div>
+            <RemoteModeFields
+              wsUrl={remoteWsUrl}
+              token={remoteToken}
+              busy={busy}
+              onWsUrlChange={setRemoteWsUrl}
+              onTokenChange={setRemoteToken}
+            />
           ) : (
             <div className="text-sm text-fg-muted">
               Embedded mode runs an Operator gateway locally on this machine.
