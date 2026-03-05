@@ -11,6 +11,7 @@ overrides:
   dbus-next>xml2js: 0.5.0
   fast-xml-parser: 5.3.8
   file-loader>schema-utils: 4.3.3
+  dompurify: 3.3.2
   immutable: 4.3.8
   minimatch: 10.2.4
   null-loader>schema-utils: 4.3.3
@@ -29,9 +30,6 @@ patchedDependencies:
   dmg-license@1.0.11:
     hash: 9de5625782d661750c4261c2f5575c217222758f9f5aac99b523818484696f82
     path: patches/dmg-license@1.0.11.patch
-  dompurify@3.3.1:
-    hash: 2ed861327bf9311297e355f38063aef952767d6184174457e5fcb760a417b5a2
-    path: patches/dompurify@3.3.1.patch
 
 importers:
 
@@ -6271,8 +6269,9 @@ packages:
     resolution: {integrity: sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w==}
     engines: {node: '>= 4'}
 
-  dompurify@3.3.1:
-    resolution: {integrity: sha512-qkdCKzLNtrgPFP1Vo+98FRzJnBRGe4ffyCea9IwHB1fyxPOeNTHpLKYGd4Uk9xvNoH0ZoOjwZxNptyMwqrId1Q==}
+  dompurify@3.3.2:
+    resolution: {integrity: sha512-6obghkliLdmKa56xdbLOpUZ43pAR6xFy1uOrxBaIDjT+yaRuuybLjGS9eVBoSR/UPU5fq3OXClEHLJNGvbxKpQ==}
+    engines: {node: '>=20'}
 
   domutils@2.8.0:
     resolution: {integrity: sha512-w96Cjofp72M5IIhpjgobBimYEfoPjx1Vx0BSX9P30WBdZW2WIKU0T1Bd0kz2eNZ9ikjKgHbEyKx8BB6H1L3h3A==}
@@ -18427,7 +18426,7 @@ snapshots:
     dependencies:
       domelementtype: 2.3.0
 
-  dompurify@3.3.1(patch_hash=2ed861327bf9311297e355f38063aef952767d6184174457e5fcb760a417b5a2):
+  dompurify@3.3.2:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
@@ -20474,7 +20473,7 @@ snapshots:
       d3-sankey: 0.12.3
       dagre-d3-es: 7.0.13
       dayjs: 1.11.19
-      dompurify: 3.3.1(patch_hash=2ed861327bf9311297e355f38063aef952767d6184174457e5fcb760a417b5a2)
+      dompurify: 3.3.2
       katex: 0.16.28
       khroma: 2.1.0
       lodash-es: 4.17.23
