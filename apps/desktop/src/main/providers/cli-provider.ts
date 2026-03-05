@@ -52,6 +52,228 @@ function formatCommand(cmd: string, cmdArgs: string[]): string {
   return [cmd, ...cmdArgs].join(" ").trim();
 }
 
+type ParsedCliActionArgs = {
+  cmd: string;
+  cmdArgs: string[];
+  cwd: string | undefined;
+  stdin: string | undefined;
+  outputKind: OutputKind | undefined;
+  timeoutMs: number;
+};
+
+type SpawnedProcessOutput = {
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+};
+
+function parseCliActionArgs(action: ActionPrimitive): ParsedCliActionArgs | TaskResult {
+  const args = action.args as Record<string, unknown>;
+  const cmd = args["cmd"] as string | undefined;
+  const cmdArgs = (args["args"] as string[] | undefined) ?? [];
+  const cwd = args["cwd"] as string | undefined;
+  const stdin = args["stdin"] as string | undefined;
+  const outputKind = outputKindFromArgs(args);
+  const timeoutMs = (args["timeout_ms"] as number | undefined) ?? DEFAULT_TIMEOUT_MS;
+
+  if (!cmd) {
+    return { success: false, error: "Missing 'cmd' in CLI action args" };
+  }
+
+  return {
+    cmd,
+    cmdArgs,
+    cwd,
+    stdin,
+    outputKind,
+    timeoutMs,
+  };
+}
+
+function checkCommandAllowlist(options: {
+  allowlistEnforced: boolean;
+  allowedCommands: string[];
+  cmd: string;
+  cmdArgs: string[];
+}): TaskResult | null {
+  if (!options.allowlistEnforced) return null;
+  if (isCommandAllowed(options.allowedCommands, options.cmd, options.cmdArgs)) return null;
+
+  const normalizedAllowlist = normalizeLines(options.allowedCommands);
+  const shownAllowlist =
+    normalizedAllowlist.length > 0 ? normalizedAllowlist.join(", ") : "(empty: default deny)";
+  return {
+    success: false,
+    error:
+      `CLI allowlist is active (default deny). ` +
+      `Command "${formatCommand(options.cmd, options.cmdArgs)}" is not in the allowlist. ` +
+      `Allowed: ${shownAllowlist}. ` +
+      `Use "*" to allow everything.`,
+  };
+}
+
+function checkWorkingDirAllowlist(options: {
+  allowlistEnforced: boolean;
+  allowedWorkingDirs: string[];
+  cwd: string | undefined;
+}): TaskResult | null {
+  if (!options.allowlistEnforced) return null;
+  if (!options.cwd) return null;
+
+  const normalizedAllowedDirs = normalizeLines(options.allowedWorkingDirs);
+  if (normalizedAllowedDirs.length === 0) {
+    return {
+      success: false,
+      error:
+        `CLI working-directory allowlist is active (default deny) and empty. ` +
+        `Either add allowed directories or use "*" to allow all directories.`,
+    };
+  }
+
+  const resolvedCwd = resolve(options.cwd);
+  const allowed = normalizedAllowedDirs.some((dir) => {
+    if (dir === "*") return true;
+    const allowedDir = resolve(dir);
+    const rel = relative(allowedDir, resolvedCwd);
+    return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  });
+  if (allowed) return null;
+
+  return {
+    success: false,
+    error: `Working directory "${options.cwd}" is not in the allowlist`,
+  };
+}
+
+function appendOutput(current: string, data: Buffer): string {
+  if (current.length < MAX_OUTPUT_BYTES) {
+    return current + data.toString();
+  }
+  return current;
+}
+
+function writeChildStdin(child: ReturnType<typeof spawn>, stdin: string | undefined): void {
+  const stdinStream = child.stdin;
+  // Child may exit before consuming stdin; ignore resulting pipe stream errors.
+  stdinStream?.on("error", () => undefined);
+
+  if (stdin !== undefined) {
+    stdinStream?.write(stdin);
+  }
+  stdinStream?.end();
+}
+
+function spawnCommand(options: {
+  cmd: string;
+  cmdArgs: string[];
+  cwd: string | undefined;
+  stdin: string | undefined;
+  timeoutMs: number;
+}): Promise<SpawnedProcessOutput> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const start = Date.now();
+    const child = spawn(options.cmd, options.cmdArgs, {
+      cwd: options.cwd,
+      timeout: options.timeoutMs,
+      env: { ...process.env },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    writeChildStdin(child, options.stdin);
+
+    child.stdout?.on("data", (data: Buffer) => {
+      stdout = appendOutput(stdout, data);
+    });
+
+    child.stderr?.on("data", (data: Buffer) => {
+      stderr = appendOutput(stderr, data);
+    });
+
+    child.once("close", (code) => {
+      resolvePromise({
+        exitCode: code,
+        stdout,
+        stderr,
+        durationMs: Date.now() - start,
+      });
+    });
+
+    child.once("error", (err) => {
+      rejectPromise(err);
+    });
+  });
+}
+
+function evaluateProcessOutput(options: {
+  output: SpawnedProcessOutput;
+  outputKind: OutputKind | undefined;
+  postcondition: ActionPrimitive["postcondition"];
+}): TaskResult {
+  const evidence: Record<string, unknown> = {
+    exit_code: options.output.exitCode,
+    stdout: options.output.stdout.slice(0, MAX_OUTPUT_BYTES),
+    stderr: options.output.stderr.slice(0, MAX_OUTPUT_BYTES),
+    duration_ms: options.output.durationMs,
+  };
+
+  // If the command itself failed, skip postcondition evaluation
+  if (options.output.exitCode !== 0) {
+    return {
+      success: false,
+      evidence,
+      error: `Process exited with code ${options.output.exitCode}`,
+    };
+  }
+
+  // Output contract enforcement (json output must parse).
+  let jsonContext: unknown;
+  let jsonParseError: string | undefined;
+  try {
+    jsonContext = JSON.parse(options.output.stdout);
+  } catch (err) {
+    jsonParseError = err instanceof Error ? err.message : String(err);
+  }
+
+  if (options.outputKind === "json") {
+    if (jsonParseError) {
+      evidence.json_parse_error = jsonParseError;
+      return {
+        success: false,
+        evidence,
+        error: `Output contract violated: expected JSON stdout`,
+      };
+    }
+    evidence.json = jsonContext;
+  }
+
+  // Evaluate postcondition if present
+  if (options.postcondition != null) {
+    const evalContext: EvaluationContext = {
+      json: jsonParseError ? undefined : jsonContext,
+    };
+
+    const postcondResult = checkPostcondition(options.postcondition, evalContext);
+    if (postcondResult.report) {
+      evidence.postcondition = postcondResult.report;
+    }
+
+    if (!postcondResult.passed) {
+      evidence.postcondition ??= { passed: false, error: postcondResult.error };
+      return {
+        success: false,
+        evidence,
+        error: postcondResult.error ?? "postcondition failed",
+      };
+    }
+  }
+
+  return { success: true, evidence };
+}
+
 export class CliProvider implements CapabilityProvider {
   readonly capability: ClientCapability = "cli";
 
@@ -62,159 +284,41 @@ export class CliProvider implements CapabilityProvider {
   ) {}
 
   async execute(action: ActionPrimitive): Promise<TaskResult> {
-    const args = action.args as Record<string, unknown>;
-    const cmd = args["cmd"] as string | undefined;
-    const cmdArgs = (args["args"] as string[] | undefined) ?? [];
-    const cwd = args["cwd"] as string | undefined;
-    const stdin = args["stdin"] as string | undefined;
-    const outputKind = outputKindFromArgs(args);
-    const timeoutMs = (args["timeout_ms"] as number | undefined) ?? DEFAULT_TIMEOUT_MS;
-
-    if (!cmd) {
-      return { success: false, error: "Missing 'cmd' in CLI action args" };
-    }
+    const parsed = parseCliActionArgs(action);
+    if (!("cmd" in parsed)) return parsed;
 
     // Allowlist enforcement
-    if (this.allowlistEnforced && !isCommandAllowed(this.allowedCommands, cmd, cmdArgs)) {
-      const normalizedAllowlist = normalizeLines(this.allowedCommands);
-      const shownAllowlist =
-        normalizedAllowlist.length > 0 ? normalizedAllowlist.join(", ") : "(empty: default deny)";
-      return {
-        success: false,
-        error:
-          `CLI allowlist is active (default deny). ` +
-          `Command "${formatCommand(cmd, cmdArgs)}" is not in the allowlist. ` +
-          `Allowed: ${shownAllowlist}. ` +
-          `Use "*" to allow everything.`,
-      };
-    }
-
-    if (this.allowlistEnforced && cwd) {
-      const normalizedAllowedDirs = normalizeLines(this.allowedWorkingDirs);
-      if (normalizedAllowedDirs.length === 0) {
-        return {
-          success: false,
-          error:
-            `CLI working-directory allowlist is active (default deny) and empty. ` +
-            `Either add allowed directories or use "*" to allow all directories.`,
-        };
-      }
-
-      const resolvedCwd = resolve(cwd);
-      const allowed = normalizedAllowedDirs.some((dir) => {
-        if (dir === "*") return true;
-        const allowedDir = resolve(dir);
-        const rel = relative(allowedDir, resolvedCwd);
-        return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
-      });
-      if (!allowed) {
-        return {
-          success: false,
-          error: `Working directory "${cwd}" is not in the allowlist`,
-        };
-      }
-    }
-
-    return new Promise<TaskResult>((resolveResult) => {
-      const start = Date.now();
-      const child = spawn(cmd, cmdArgs, {
-        cwd,
-        timeout: timeoutMs,
-        env: { ...process.env },
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-
-      let stdout = "";
-      let stderr = "";
-
-      const stdinStream = child.stdin;
-      // Child may exit before consuming stdin; ignore resulting pipe stream errors.
-      stdinStream?.on("error", () => undefined);
-
-      if (stdin !== undefined) {
-        stdinStream?.write(stdin);
-      }
-      stdinStream?.end();
-
-      child.stdout?.on("data", (data: Buffer) => {
-        if (stdout.length < MAX_OUTPUT_BYTES) stdout += data.toString();
-      });
-
-      child.stderr?.on("data", (data: Buffer) => {
-        if (stderr.length < MAX_OUTPUT_BYTES) stderr += data.toString();
-      });
-
-      child.on("close", (code) => {
-        const evidence: Record<string, unknown> = {
-          exit_code: code,
-          stdout: stdout.slice(0, MAX_OUTPUT_BYTES),
-          stderr: stderr.slice(0, MAX_OUTPUT_BYTES),
-          duration_ms: Date.now() - start,
-        };
-
-        // If the command itself failed, skip postcondition evaluation
-        if (code !== 0) {
-          resolveResult({
-            success: false,
-            evidence,
-            error: `Process exited with code ${code}`,
-          });
-          return;
-        }
-
-        // Output contract enforcement (json output must parse).
-        let jsonContext: unknown;
-        let jsonParseError: string | undefined;
-        try {
-          jsonContext = JSON.parse(stdout);
-        } catch (err) {
-          jsonParseError = err instanceof Error ? err.message : String(err);
-        }
-
-        if (outputKind === "json") {
-          if (jsonParseError) {
-            evidence.json_parse_error = jsonParseError;
-            resolveResult({
-              success: false,
-              evidence,
-              error: `Output contract violated: expected JSON stdout`,
-            });
-            return;
-          }
-          evidence.json = jsonContext;
-        }
-
-        // Evaluate postcondition if present
-        if (action.postcondition != null) {
-          const evalContext: EvaluationContext = {
-            json: jsonParseError ? undefined : jsonContext,
-          };
-
-          const postcondResult = checkPostcondition(action.postcondition, evalContext);
-          if (postcondResult.report) {
-            evidence.postcondition = postcondResult.report;
-          }
-
-          if (!postcondResult.passed) {
-            evidence.postcondition ??= { passed: false, error: postcondResult.error };
-            resolveResult({
-              success: false,
-              evidence,
-              error: postcondResult.error ?? "postcondition failed",
-            });
-            return;
-          }
-        }
-
-        resolveResult({ success: true, evidence });
-      });
-
-      child.on("error", (err) => {
-        resolveResult({
-          success: false,
-          error: err.message,
-        });
-      });
+    const allowlistError = checkCommandAllowlist({
+      allowlistEnforced: this.allowlistEnforced,
+      allowedCommands: this.allowedCommands,
+      cmd: parsed.cmd,
+      cmdArgs: parsed.cmdArgs,
     });
+    if (allowlistError) return allowlistError;
+
+    const workingDirError = checkWorkingDirAllowlist({
+      allowlistEnforced: this.allowlistEnforced,
+      allowedWorkingDirs: this.allowedWorkingDirs,
+      cwd: parsed.cwd,
+    });
+    if (workingDirError) return workingDirError;
+
+    try {
+      const output = await spawnCommand({
+        cmd: parsed.cmd,
+        cmdArgs: parsed.cmdArgs,
+        cwd: parsed.cwd,
+        stdin: parsed.stdin,
+        timeoutMs: parsed.timeoutMs,
+      });
+      return evaluateProcessOutput({
+        output,
+        outputKind: parsed.outputKind,
+        postcondition: action.postcondition,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error: error.message };
+    }
   }
 }

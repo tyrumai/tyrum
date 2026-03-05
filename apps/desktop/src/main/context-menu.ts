@@ -56,7 +56,7 @@ export function registerContextMenus(deps: {
   shell: Pick<typeof import("electron").shell, "openExternal">;
 }): void {
   deps.app.on("web-contents-created", (_event, contents) => {
-    contents.on("context-menu", (_event, params) => {
+    contents.on("context-menu", (_contextMenuEvent, params) => {
       const template = buildContextMenuTemplate(params, {
         onOpenLinkInBrowser: (url) => {
           void deps.shell.openExternal(url);

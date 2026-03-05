@@ -12,16 +12,8 @@ export interface BuildApplicationMenuTemplateOptions {
   onShowAbout: () => void;
 }
 
-export function buildApplicationMenuTemplate(
-  options: BuildApplicationMenuTemplateOptions,
-): MenuItemConstructorOptions[] {
-  const isMac = options.platform === "darwin";
-
-  const requestOpenSettings = (): void => {
-    options.onRequestNavigate({ pageId: "connection" });
-  };
-
-  const editMenu: MenuItemConstructorOptions = {
+function buildEditMenu(): MenuItemConstructorOptions {
+  return {
     label: "Edit",
     submenu: [
       { role: "undo" },
@@ -34,8 +26,10 @@ export function buildApplicationMenuTemplate(
       { role: "selectAll" },
     ],
   };
+}
 
-  const viewSubmenu: MenuItemConstructorOptions[] = [
+function buildViewMenu(isDev: boolean): MenuItemConstructorOptions {
+  const submenu: MenuItemConstructorOptions[] = [
     { role: "resetZoom" },
     { role: "zoomIn" },
     { role: "zoomOut" },
@@ -43,8 +37,8 @@ export function buildApplicationMenuTemplate(
     { role: "togglefullscreen" },
   ];
 
-  if (options.isDev) {
-    viewSubmenu.push(
+  if (isDev) {
+    submenu.push(
       { type: "separator" },
       { role: "reload" },
       { role: "forceReload" },
@@ -52,47 +46,69 @@ export function buildApplicationMenuTemplate(
     );
   }
 
-  const viewMenu: MenuItemConstructorOptions = {
+  return {
     label: "View",
-    submenu: viewSubmenu,
+    submenu,
   };
+}
 
-  if (isMac) {
-    const appMenu: MenuItemConstructorOptions = {
-      label: options.appName,
-      submenu: [
-        { role: "about" },
-        { type: "separator" },
-        {
-          label: "Preferences…",
-          accelerator: "CmdOrCtrl+,",
-          click: requestOpenSettings,
-        },
-        { type: "separator" },
-        { role: "services" },
-        { type: "separator" },
-        { role: "hide" },
-        { role: "hideOthers" },
-        { role: "unhide" },
-        { type: "separator" },
-        { role: "quit" },
-      ],
-    };
+function buildMacAppMenu(options: {
+  appName: string;
+  requestOpenSettings: () => void;
+}): MenuItemConstructorOptions {
+  return {
+    label: options.appName,
+    submenu: [
+      { role: "about" },
+      { type: "separator" },
+      {
+        label: "Preferences…",
+        accelerator: "CmdOrCtrl+,",
+        click: options.requestOpenSettings,
+      },
+      { type: "separator" },
+      { role: "services" },
+      { type: "separator" },
+      { role: "hide" },
+      { role: "hideOthers" },
+      { role: "unhide" },
+      { type: "separator" },
+      { role: "quit" },
+    ],
+  };
+}
 
-    const fileMenu: MenuItemConstructorOptions = {
-      label: "File",
-      submenu: [{ role: "close" }],
-    };
+function buildMacWindowMenu(): MenuItemConstructorOptions {
+  return {
+    label: "Window",
+    submenu: [{ role: "minimize" }, { role: "zoom" }, { type: "separator" }, { role: "front" }],
+  };
+}
 
-    const windowMenu: MenuItemConstructorOptions = {
-      label: "Window",
-      submenu: [{ role: "minimize" }, { role: "zoom" }, { type: "separator" }, { role: "front" }],
-    };
+function buildNonMacFileMenu(options: {
+  requestOpenSettings: () => void;
+}): MenuItemConstructorOptions {
+  return {
+    label: "File",
+    submenu: [
+      { role: "close" },
+      { type: "separator" },
+      {
+        label: "Settings…",
+        accelerator: "CmdOrCtrl+,",
+        click: options.requestOpenSettings,
+      },
+      { type: "separator" },
+      { role: "quit", label: "Exit" },
+    ],
+  };
+}
 
-    return [appMenu, fileMenu, editMenu, viewMenu, windowMenu];
-  }
-
-  const helpMenu: MenuItemConstructorOptions = {
+function buildNonMacHelpMenu(options: {
+  appName: string;
+  onShowAbout: () => void;
+}): MenuItemConstructorOptions {
+  return {
     label: "Help",
     submenu: [
       {
@@ -101,21 +117,33 @@ export function buildApplicationMenuTemplate(
       },
     ],
   };
+}
 
-  const fileMenu: MenuItemConstructorOptions = {
-    label: "File",
-    submenu: [
-      { role: "close" },
-      { type: "separator" },
-      {
-        label: "Settings…",
-        accelerator: "CmdOrCtrl+,",
-        click: requestOpenSettings,
-      },
-      { type: "separator" },
-      { role: "quit", label: "Exit" },
-    ],
+export function buildApplicationMenuTemplate(
+  options: BuildApplicationMenuTemplateOptions,
+): MenuItemConstructorOptions[] {
+  const requestOpenSettings = (): void => {
+    options.onRequestNavigate({ pageId: "connection" });
   };
 
-  return [fileMenu, editMenu, viewMenu, helpMenu];
+  const editMenu = buildEditMenu();
+  const viewMenu = buildViewMenu(options.isDev);
+
+  if (options.platform === "darwin") {
+    const fileMenu: MenuItemConstructorOptions = { label: "File", submenu: [{ role: "close" }] };
+    return [
+      buildMacAppMenu({ appName: options.appName, requestOpenSettings }),
+      fileMenu,
+      editMenu,
+      viewMenu,
+      buildMacWindowMenu(),
+    ];
+  }
+
+  return [
+    buildNonMacFileMenu({ requestOpenSettings }),
+    editMenu,
+    viewMenu,
+    buildNonMacHelpMenu({ appName: options.appName, onShowAbout: options.onShowAbout }),
+  ];
 }
