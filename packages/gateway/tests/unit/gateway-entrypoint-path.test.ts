@@ -15,6 +15,16 @@ describe("resolveGatewayEntrypointPath", () => {
     expect(resolved).toBe("/app/packages/gateway/dist/index.mjs");
   });
 
+  it("prefers the running gateway cli launcher when available", () => {
+    const resolved = resolveGatewayEntrypointPath(
+      "/app/packages/gateway/bin/tyrum.mjs",
+      runtimeModuleUrl,
+      (path) => path === "/app/packages/gateway/bin/tyrum.mjs",
+    );
+
+    expect(resolved).toBe("/app/packages/gateway/bin/tyrum.mjs");
+  });
+
   it("prefers the packaged dist entrypoint when present", () => {
     const resolved = resolveGatewayEntrypointPath(undefined, runtimeModuleUrl, (path) => {
       return path.endsWith("/index.mjs");

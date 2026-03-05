@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentConfig, DeploymentConfig } from "@tyrum/schemas";
 import type { GatewayContainer } from "../container.js";
@@ -89,10 +89,13 @@ export function resolveDefaultMigrationsDirForBaseDir(
   pathExists: (path: string) => boolean = existsSync,
 ): string {
   const dialectDir = isPostgresDbUri(dbPath) ? "postgres" : "sqlite";
-  const candidates = [
-    join(baseDir, "../migrations", dialectDir),
-    join(baseDir, "../../migrations", dialectDir),
-  ];
+  const candidateRelativePaths =
+    basename(baseDir) === "bootstrap"
+      ? ["../../migrations", "../migrations"]
+      : ["../migrations", "../../migrations"];
+  const candidates = candidateRelativePaths.map((relativePath) =>
+    join(baseDir, relativePath, dialectDir),
+  );
 
   for (const candidate of candidates) {
     if (pathExists(candidate)) {

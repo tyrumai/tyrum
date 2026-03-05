@@ -11,9 +11,9 @@ describe("resolveGatewayMigrationsDir", () => {
     expect(resolved).toMatch(/packages\/gateway\/migrations\/sqlite$/);
   });
 
-  it("prefers ../migrations for bundled dist layout", () => {
+  it("prefers ../../migrations for bundled bootstrap layout", () => {
     const resolved = resolveDefaultMigrationsDirForBaseDir(
-      "/app/packages/gateway/dist",
+      "/app/packages/gateway/dist/bootstrap",
       ":memory:",
       (path) => path === "/app/packages/gateway/migrations/sqlite",
     );
@@ -29,5 +29,15 @@ describe("resolveGatewayMigrationsDir", () => {
     );
 
     expect(resolved).toBe("/app/packages/gateway/migrations/postgres");
+  });
+
+  it("falls back to the package migrations dir when neither bootstrap candidate exists", () => {
+    const resolved = resolveDefaultMigrationsDirForBaseDir(
+      "/app/packages/gateway/src/bootstrap",
+      ":memory:",
+      () => false,
+    );
+
+    expect(resolved).toBe("/app/packages/gateway/migrations/sqlite");
   });
 });
