@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { DeploymentConfig } from "@tyrum/schemas";
 
 describe("gateway approval engine action fallback", () => {
   afterEach(() => {
@@ -8,7 +9,7 @@ describe("gateway approval engine action fallback", () => {
   });
 
   it("passes policyService to the worker approval-engine fallback", async () => {
-    vi.stubEnv("GATEWAY_DB_PATH", "postgres://user:pass@localhost:5432/test");
+    vi.resetModules();
 
     const logger = {
       child: () => logger,
@@ -16,6 +17,7 @@ describe("gateway approval engine action fallback", () => {
       warn: vi.fn(),
       error: vi.fn(),
     };
+
     const db = {
       kind: "postgres" as const,
       get: async () => undefined,
@@ -25,50 +27,61 @@ describe("gateway approval engine action fallback", () => {
       transaction: async <T>(fn: (tx: typeof db) => Promise<T>) => await fn(db),
       close: vi.fn(async () => {}),
     };
+
     const policyService = { isEnabled: vi.fn(() => false) };
     const redactionEngine = { redact: vi.fn((value: string) => value) };
     const executionEngineOptions: unknown[] = [];
 
-    vi.doMock("../../src/container.js", () => ({
-      createContainer: vi.fn(),
-      createContainerAsync: async () =>
-        ({
-          db,
-          logger,
-          modelsDev: { startBackgroundRefresh: vi.fn(), stopBackgroundRefresh: vi.fn() },
-          policyService,
-          policySnapshotDal: {},
-          approvalDal: { resolveWithEngineAction: vi.fn() },
-          presenceDal: {},
-          policyOverrideDal: {},
-          nodePairingDal: {},
-          contextReportDal: {},
-          memoryV1Dal: {},
-          eventBus: {},
-          watcherProcessor: { start: vi.fn(), stop: vi.fn() },
-          artifactStore: {},
-          redactionEngine,
-          telegramBot: undefined,
-          sessionDal: {},
-          eventLog: {},
-          config: {
-            dbPath: "postgres://user:pass@localhost:5432/test",
-            migrationsDir: "/dev/null",
-            tyrumHome: "/tmp",
-          },
-        }) as any,
+    vi.doMock("../../src/statestore/postgres.js", () => ({
+      PostgresDb: {
+        open: vi.fn(async () => db),
+      },
     }));
 
-    vi.doMock("../../src/modules/auth/token-store.js", () => ({
-      TokenStore: class TokenStore {
-        async initialize(): Promise<string> {
-          return "x".repeat(32);
+    vi.doMock("../../src/modules/config/deployment-config-dal.js", () => ({
+      DeploymentConfigDal: class {
+        async ensureSeeded(): Promise<{ config: unknown }> {
+          return { config: DeploymentConfig.parse({}) };
+        }
+      },
+    }));
+
+    vi.doMock("../../src/modules/config/agent-config-dal.js", () => ({
+      AgentConfigDal: class {
+        async ensureSeeded(): Promise<{ config: unknown }> {
+          return { config: {} };
+        }
+      },
+    }));
+
+    vi.doMock("../../src/modules/auth/auth-token-service.js", () => ({
+      AuthTokenService: class {
+        async countActiveSystemTokens(): Promise<number> {
+          return 1;
+        }
+
+        async countActiveTenantAdminTokens(): Promise<number> {
+          return 1;
+        }
+
+        async issueToken(): Promise<{ token: string }> {
+          return { token: "test-token" };
         }
       },
     }));
 
     vi.doMock("../../src/modules/secret/create-secret-provider.js", () => ({
-      createDbSecretProvider: async () => ({ secretProvider: true }),
+      createDbSecretProviderFactory: vi.fn(async () => ({
+        keyId: "test",
+        secretProviderForTenant: () => ({
+          list: async () => [],
+          resolve: async () => null,
+          store: async () => {
+            throw new Error("not implemented");
+          },
+          revoke: async () => false,
+        }),
+      })),
     }));
 
     vi.doMock("../../src/modules/hooks/config.js", () => ({
@@ -80,6 +93,52 @@ describe("gateway approval engine action fallback", () => {
         enabled: false,
         shutdown: async () => {},
       }),
+    }));
+
+    vi.doMock("../../src/container.js", () => ({
+      wireContainer: () =>
+        ({
+          db,
+          identityScopeDal: {
+            resolveScopeIds: async () => ({
+              tenantId: "00000000-0000-4000-8000-000000000001",
+              agentId: "00000000-0000-4000-8000-000000000002",
+              workspaceId: "00000000-0000-4000-8000-000000000003",
+            }),
+          },
+          channelThreadDal: {},
+          memoryV1Dal: {},
+          contextReportDal: {},
+          secretResolutionAuditDal: {},
+          eventLog: {},
+          discoveryPipeline: {},
+          riskClassifier: {},
+          sessionDal: {},
+          eventBus: {},
+          telegramBot: undefined,
+          approvalDal: { resolveWithEngineAction: vi.fn() },
+          presenceDal: {},
+          policySnapshotDal: {},
+          policyOverrideDal: {},
+          policyService,
+          nodePairingDal: {},
+          watcherProcessor: { start: vi.fn(), stop: vi.fn() },
+          canvasDal: {},
+          redactionEngine,
+          artifactStore: {},
+          modelsDev: { startBackgroundRefresh: vi.fn(), stopBackgroundRefresh: vi.fn() },
+          oauthPendingDal: {},
+          oauthRefreshLeaseDal: {},
+          oauthProviderRegistry: {},
+          modelCatalog: {},
+          logger,
+          config: {
+            dbPath: "postgres://user:pass@localhost:5432/test",
+            migrationsDir: "/dev/null",
+            tyrumHome: "/tmp",
+          },
+          deploymentConfig: DeploymentConfig.parse({}),
+        }) as any,
     }));
 
     vi.doMock("../../src/modules/execution/engine.js", () => ({
@@ -132,13 +191,13 @@ describe("gateway approval engine action fallback", () => {
     }));
 
     const { main } = await import("../../src/index.js");
-    await main("worker");
+    await main({ role: "worker", db: "postgres://user:pass@localhost:5432/test" });
 
     const approvalFallback = executionEngineOptions.find(
       (opts) =>
         typeof opts === "object" &&
         opts !== null &&
-        !("secretProvider" in opts) &&
+        !("secretProviderForTenant" in opts) &&
         "redactionEngine" in opts,
     );
 
