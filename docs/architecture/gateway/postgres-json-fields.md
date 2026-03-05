@@ -30,6 +30,11 @@ As an immediate integrity win, enforce that these “high-value” `TEXT` JSON c
 - SQLite: `CHECK (json_valid(...))`
 - Postgres: `CHECK (pg_input_is_valid(..., 'jsonb'))`
 
+## Notes
+
+- The JSON-validity `CHECK` constraints are implemented in the v2 rebuild migrations (`100_rebuild_v2.sql`), so existing databases that already applied v2 migrations will not pick them up unless rebuilt.
+- The Postgres checks rely on `pg_input_is_valid` and are validated against the repo’s development baseline (`docker-compose.yml` uses `postgres:16`).
+
 ## Revisit criteria
 
 Re-evaluate a `JSONB`-native column (or generated columns) when:
