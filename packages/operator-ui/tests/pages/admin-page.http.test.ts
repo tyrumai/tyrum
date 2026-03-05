@@ -178,6 +178,92 @@ describe("ConfigurePage (HTTP)", () => {
 
     cleanupTestRoot({ container, root });
   });
+
+  it("enables saving the first execution-profile assignment set", async () => {
+    const { core } = createTestCore();
+    const modelConfig = core.http.modelConfig as {
+      listPresets: ReturnType<typeof vi.fn>;
+      listAvailable: ReturnType<typeof vi.fn>;
+      listAssignments: ReturnType<typeof vi.fn>;
+    };
+    modelConfig.listPresets = vi.fn(async () => ({
+      status: "ok",
+      presets: [
+        {
+          preset_id: "c2d1f6c6-f541-46a8-9f47-8a2d0ff3c9e5",
+          preset_key: "preset-default",
+          display_name: "Default",
+          provider_key: "openai",
+          model_id: "gpt-4.1",
+          options: {},
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-01T00:00:00.000Z",
+        },
+        {
+          preset_id: "d5c709e9-4585-426e-81ed-7904f7fbbe1b",
+          preset_key: "preset-review",
+          display_name: "Review",
+          provider_key: "openai",
+          model_id: "gpt-4.1-mini",
+          options: {},
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+    }));
+    modelConfig.listAvailable = vi.fn(async () => ({
+      status: "ok",
+      models: [
+        {
+          provider_key: "openai",
+          provider_name: "OpenAI",
+          model_id: "gpt-4.1",
+          model_name: "GPT-4.1",
+          family: null,
+          reasoning: true,
+          tool_call: true,
+          modalities: { output: ["text"] },
+        },
+      ],
+    }));
+    modelConfig.listAssignments = vi.fn(async () => ({
+      status: "ok",
+      assignments: [],
+    }));
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(ElevatedModeProvider, { core, mode: "web" }, [
+        React.createElement(ConfigurePage, { key: "page", core }),
+      ]),
+    );
+
+    await switchHttpTab(container, "admin-http-tab-models");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const selects = Array.from(container.querySelectorAll<HTMLSelectElement>("select"));
+    expect(selects.length).toBe(EXECUTION_PROFILE_IDS.length);
+
+    const saveButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="models-assignments-save"]',
+    );
+    expect(saveButton).not.toBeNull();
+    expect(saveButton?.disabled).toBe(true);
+
+    for (const select of selects) {
+      act(() => {
+        const setValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")
+          ?.set as ((this: HTMLSelectElement, value: string) => void) | undefined;
+        setValue?.call(select, "preset-review");
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    }
+
+    expect(saveButton?.disabled).toBe(false);
+
+    cleanupTestRoot({ container, root });
+  });
 });
 
 describe("ConfigurePage (HTTP) routing config", () => {

@@ -1038,7 +1038,10 @@ export async function executeCommand(
         };
       }
       return directPreset
-        ? { output: `Invalid model preset '${modelSelectorRaw}'.`, data: null }
+        ? {
+            output: `Configured model preset '${modelSelectorRaw}' is misconfigured.`,
+            data: null,
+          }
         : { output: `Configured model preset '${modelSelectorRaw}' not found.`, data: null };
     }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createTestApp } from "./helpers.js";
 
 const EXECUTION_PROFILE_IDS = [
@@ -32,15 +33,15 @@ describe("provider + model config routes", () => {
   it("lists registry entries and supports provider account CRUD", async () => {
     const { app, container } = await createTestApp();
     await seedCatalog(new ModelsDevCacheDal(container.db), {
-      openai: {
-        id: "openai",
-        name: "OpenAI",
-        env: ["OPENAI_API_KEY"],
-        npm: "@ai-sdk/openai",
-        api: "https://api.openai.com/v1",
-        doc: "https://platform.openai.com/docs",
+      anthropic: {
+        id: "anthropic",
+        name: "Anthropic",
+        env: ["ANTHROPIC_API_KEY"],
+        npm: "@ai-sdk/anthropic",
+        api: "https://api.anthropic.com/v1",
+        doc: "https://docs.anthropic.com",
         models: {
-          "gpt-4.1": { id: "gpt-4.1", name: "GPT-4.1" },
+          "claude-3.5-sonnet": { id: "claude-3.5-sonnet", name: "Claude 3.5 Sonnet" },
         },
       },
       unsupported: {
@@ -61,11 +62,11 @@ describe("provider + model config routes", () => {
         methods: Array<{ method_key: string }>;
       }>;
     };
-    expect(registryBody.providers.some((provider) => provider.provider_key === "openai")).toBe(
+    expect(registryBody.providers.some((provider) => provider.provider_key === "anthropic")).toBe(
       true,
     );
     expect(
-      registryBody.providers.find((provider) => provider.provider_key === "openai")?.methods,
+      registryBody.providers.find((provider) => provider.provider_key === "anthropic")?.methods,
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -81,8 +82,8 @@ describe("provider + model config routes", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        provider_key: "openai",
-        display_name: "Primary OpenAI",
+        provider_key: "anthropic",
+        display_name: "Primary Anthropic",
         method_key: "api_key",
         config: {},
         secrets: {
@@ -99,7 +100,7 @@ describe("provider + model config routes", () => {
       };
     };
     expect(created.account.account_key).toBeTypeOf("string");
-    expect(created.account.display_name).toBe("Primary OpenAI");
+    expect(created.account.display_name).toBe("Primary Anthropic");
     expect(created.account.configured_secret_keys).toEqual(["api_key"]);
 
     const listRes = await app.request("/config/providers");
@@ -117,11 +118,11 @@ describe("provider + model config routes", () => {
     expect(listed.providers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          provider_key: "openai",
+          provider_key: "anthropic",
           accounts: [
             expect.objectContaining({
               account_key: created.account.account_key,
-              display_name: "Primary OpenAI",
+              display_name: "Primary Anthropic",
               configured_secret_keys: ["api_key"],
             }),
           ],
@@ -135,7 +136,7 @@ describe("provider + model config routes", () => {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          display_name: "Renamed OpenAI",
+          display_name: "Renamed Anthropic",
           config: { baseURL: "https://example.test/v1" },
         }),
       },
@@ -144,7 +145,7 @@ describe("provider + model config routes", () => {
     const updated = (await updateRes.json()) as {
       account: { display_name: string; config: Record<string, unknown> };
     };
-    expect(updated.account.display_name).toBe("Renamed OpenAI");
+    expect(updated.account.display_name).toBe("Renamed Anthropic");
     expect(updated.account.config["baseURL"]).toBe("https://example.test/v1");
 
     const deleteRes = await app.request(
@@ -289,5 +290,141 @@ describe("provider + model config routes", () => {
         (assignment) => assignment.preset_key === presetB.preset.preset_key,
       ),
     ).toBe(true);
+  });
+
+  it("blocks deleting the last provider account while presets still reference the provider", async () => {
+    const { app, container } = await createTestApp();
+    await seedCatalog(new ModelsDevCacheDal(container.db), {
+      openai: {
+        id: "openai",
+        name: "OpenAI",
+        env: ["OPENAI_API_KEY"],
+        npm: "@ai-sdk/openai",
+        api: "https://api.openai.com/v1",
+        doc: "https://platform.openai.com/docs",
+        models: {
+          "gpt-4.1": {
+            id: "gpt-4.1",
+            name: "GPT-4.1",
+            modalities: { output: ["text"] },
+          },
+        },
+      },
+    });
+
+    const accountRes = await app.request("/config/providers/accounts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        provider_key: "openai",
+        display_name: "Primary OpenAI",
+        method_key: "api_key",
+        config: {},
+        secrets: {
+          api_key: "sk-test-last-account",
+        },
+      }),
+    });
+    expect(accountRes.status).toBe(201);
+    const created = (await accountRes.json()) as {
+      account: { account_key: string };
+    };
+
+    const presetRes = await app.request("/config/models/presets", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        display_name: "Interaction Default",
+        provider_key: "openai",
+        model_id: "gpt-4.1",
+        options: {},
+      }),
+    });
+    expect(presetRes.status).toBe(201);
+
+    const deleteRes = await app.request(
+      `/config/providers/accounts/${encodeURIComponent(created.account.account_key)}`,
+      {
+        method: "DELETE",
+      },
+    );
+    expect(deleteRes.status).toBe(409);
+    const deleteBody = (await deleteRes.json()) as { message: string };
+    expect(deleteBody.message).toContain("last provider account");
+
+    const remaining = await container.db.get<{ count: number }>(
+      `SELECT COUNT(*) AS count
+       FROM auth_profiles
+       WHERE tenant_id = ? AND provider_key = ?`,
+      [DEFAULT_TENANT_ID, "openai"],
+    );
+    expect(remaining?.count).toBe(1);
+  });
+
+  it("removes direct session model overrides when deleting a provider", async () => {
+    const { app, container } = await createTestApp();
+    await seedCatalog(new ModelsDevCacheDal(container.db), {
+      anthropic: {
+        id: "anthropic",
+        name: "Anthropic",
+        env: ["ANTHROPIC_API_KEY"],
+        npm: "@ai-sdk/anthropic",
+        api: "https://api.anthropic.com/v1",
+        doc: "https://docs.anthropic.com",
+        models: {
+          "claude-3.5-sonnet": {
+            id: "claude-3.5-sonnet",
+            name: "Claude 3.5 Sonnet",
+            modalities: { output: ["text"] },
+          },
+        },
+      },
+    });
+
+    const accountRes = await app.request("/config/providers/accounts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        provider_key: "anthropic",
+        display_name: "Primary Anthropic",
+        method_key: "api_key",
+        config: {},
+        secrets: {
+          api_key: "sk-test-direct-override",
+        },
+      }),
+    });
+    expect(accountRes.status).toBe(201);
+
+    const session = await container.sessionDal.getOrCreate({
+      scopeKeys: { tenantKey: "default", agentKey: "default", workspaceKey: "default" },
+      connectorKey: "ui",
+      providerThreadId: "thread-direct",
+      containerKind: "dm",
+    });
+    await container.db.run(
+      `INSERT INTO session_model_overrides (
+         tenant_id,
+         session_id,
+         model_id,
+         preset_key,
+         pinned_at,
+         updated_at
+       ) VALUES (?, ?, ?, NULL, datetime('now'), datetime('now'))`,
+      [DEFAULT_TENANT_ID, session.session_id, "anthropic/claude-3.5-sonnet"],
+    );
+
+    const deleteRes = await app.request("/config/providers/anthropic", {
+      method: "DELETE",
+    });
+    expect(deleteRes.status).toBe(200);
+
+    const override = await container.db.get<{ count: number }>(
+      `SELECT COUNT(*) AS count
+       FROM session_model_overrides
+       WHERE tenant_id = ? AND model_id = ?`,
+      [DEFAULT_TENANT_ID, "anthropic/claude-3.5-sonnet"],
+    );
+    expect(override?.count).toBe(0);
   });
 });

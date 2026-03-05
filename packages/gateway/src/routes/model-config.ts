@@ -27,6 +27,7 @@ import {
   type ExecutionProfileModelAssignmentRow,
 } from "../modules/models/execution-profile-model-assignment-dal.js";
 import { coerceRecord, coerceString } from "../modules/util/coerce.js";
+import { createUniqueKey, slugifyKey } from "./config-key-utils.js";
 
 const EXECUTION_PROFILE_IDS = ConfiguredExecutionProfileId.options;
 
@@ -54,25 +55,6 @@ type CatalogProviderRecord = {
   name: string;
   models?: Record<string, CatalogModelRecord>;
 };
-
-function slugifyKey(raw: string, fallback: string): string {
-  const normalized = raw
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64);
-  return normalized || fallback;
-}
-
-function createUniqueKey(base: string, existing: Set<string>): string {
-  if (!existing.has(base)) return base;
-  for (let index = 2; index <= 999; index += 1) {
-    const candidate = `${base}-${String(index)}`;
-    if (!existing.has(candidate)) return candidate;
-  }
-  return `${base}-${Date.now().toString(36)}`;
-}
 
 function isLanguageModel(model: Record<string, unknown>): boolean {
   const modalities = coerceRecord(model["modalities"]);

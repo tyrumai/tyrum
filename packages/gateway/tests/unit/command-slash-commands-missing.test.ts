@@ -412,6 +412,43 @@ describe("missing slash commands", () => {
     });
   });
 
+  it("reports misconfigured configured presets without blaming user input", async () => {
+    db = openTestSqliteDb();
+    const nowIso = new Date().toISOString();
+
+    await db.run(
+      `INSERT INTO configured_model_presets (
+         tenant_id,
+         preset_id,
+         preset_key,
+         display_name,
+         provider_key,
+         model_id,
+         options_json,
+         created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, '{}', ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        randomUUID(),
+        "broken-preset",
+        "Broken preset",
+        "",
+        "gpt-4.1",
+        nowIso,
+        nowIso,
+      ],
+    );
+
+    const result = await executeCommand("/model broken-preset", {
+      db,
+      commandContext: { agentId: "default", channel: "ui", threadId: "thread-broken-preset" },
+    });
+
+    expect(result.data).toBeNull();
+    expect(result.output).toBe("Configured model preset 'broken-preset' is misconfigured.");
+  });
+
   it("resolves /model <provider/model> to a unique configured preset", async () => {
     db = openTestSqliteDb();
     await createConfiguredPreset({

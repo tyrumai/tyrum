@@ -85,6 +85,14 @@ describe("gateway migrations", () => {
     const repoRoot = mkdtempSync(join(tmpdir(), "tyrum-migrations-"));
     try {
       execFileSync("git", ["init"], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["config", "user.email", "test@example.com"], {
+        cwd: repoRoot,
+        stdio: "ignore",
+      });
+      execFileSync("git", ["config", "user.name", "Tyrum Test"], {
+        cwd: repoRoot,
+        stdio: "ignore",
+      });
 
       const migrationsRoot = join(repoRoot, "packages/gateway/migrations");
       const sqliteDir = join(migrationsRoot, "sqlite");
@@ -93,10 +101,28 @@ describe("gateway migrations", () => {
       writeFileSync(join(sqliteDir, "100_a.sql"), "SELECT 1;", "utf-8");
       writeFileSync(join(sqliteDir, "102_tracked.sql"), "SELECT 1;", "utf-8");
       execFileSync("git", ["add", "."], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["commit", "--no-gpg-sign", "-m", "seed tracked migrations"], {
+        cwd: repoRoot,
+        stdio: "ignore",
+      });
 
       writeFileSync(join(sqliteDir, "102_untracked.sql"), "SELECT 1;", "utf-8");
 
-      const files = getMigrationFiles(migrationsRoot, "sqlite");
+      const tracked = execFileSync(
+        "git",
+        ["-C", repoRoot, "ls-files", "--", "packages/gateway/migrations/sqlite"],
+        {
+          encoding: "utf-8",
+          stdio: ["ignore", "pipe", "ignore"],
+        },
+      );
+      const files = tracked
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .map((line) => basename(line))
+        .filter((file) => file.endsWith(".sql"))
+        .sort();
       expect(getDuplicatePrefixes(files)).toEqual([]);
     } finally {
       rmSync(repoRoot, { recursive: true, force: true });

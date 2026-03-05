@@ -94,36 +94,33 @@ export async function resolveSessionModel(
   };
 
   const candidateInputs: CandidateInput[] = (() => {
+    const baseCandidates = [
+      input.profileModelId,
+      input.config.model.model,
+      ...(input.config.model.fallback ?? []),
+    ]
+      .filter((value): value is string => typeof value === "string")
+      .map((rawModelId) => ({ rawModelId }));
+    const presetCandidate = (
+      preset: NonNullable<typeof sessionPreset> | NonNullable<typeof assignedPreset>,
+    ): CandidateInput => ({
+      rawModelId: `${preset.provider_key}/${preset.model_id}`,
+      optionsOverride: preset.options,
+    });
+
     if (sessionPreset) {
-      return [
-        {
-          rawModelId: `${sessionPreset.provider_key}/${sessionPreset.model_id}`,
-          optionsOverride: sessionPreset.options,
-        },
-      ];
+      return [presetCandidate(sessionPreset), ...baseCandidates];
     }
 
     if (overrideModelId) {
-      return [
-        { rawModelId: overrideModelId },
-        ...[input.profileModelId, input.config.model.model, ...(input.config.model.fallback ?? [])]
-          .filter((value): value is string => typeof value === "string")
-          .map((rawModelId) => ({ rawModelId })),
-      ];
+      return [{ rawModelId: overrideModelId }, ...baseCandidates];
     }
 
     if (assignedPreset) {
-      return [
-        {
-          rawModelId: `${assignedPreset.provider_key}/${assignedPreset.model_id}`,
-          optionsOverride: assignedPreset.options,
-        },
-      ];
+      return [presetCandidate(assignedPreset), ...baseCandidates];
     }
 
-    return [input.profileModelId, input.config.model.model, ...(input.config.model.fallback ?? [])]
-      .filter((value): value is string => typeof value === "string")
-      .map((rawModelId) => ({ rawModelId }));
+    return baseCandidates;
   })();
 
   const rawCandidateIds = candidateInputs
@@ -248,15 +245,14 @@ export async function resolveSessionModel(
         if (!variant || !variants) return {};
         return coerceRecord(variants[variant]) ?? {};
       })();
-      return chosen.optionsOverride
-        ? Object.assign({}, providerOptions, modelOptions, variantOptions, chosen.optionsOverride)
-        : Object.assign(
-            {},
-            providerOptions,
-            modelOptions,
-            variantOptions,
-            input.config.model.options,
-          );
+      return Object.assign(
+        {},
+        providerOptions,
+        modelOptions,
+        variantOptions,
+        input.config.model.options,
+        chosen.optionsOverride ?? {},
+      );
     })();
 
     const providerHeaders =

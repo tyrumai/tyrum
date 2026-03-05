@@ -467,6 +467,86 @@ describe("AgentRuntime model fallbacks", () => {
     expect(seenProviders).toEqual(["anthropic"]);
   });
 
+  it("tries configured fallback models after an execution-profile preset invocation fails", async () => {
+    container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const cacheDal = new ModelsDevCacheDal(container.db);
+    const nowIso = new Date().toISOString();
+    await cacheDal.upsert({
+      fetchedAt: nowIso,
+      etag: null,
+      sha256: "sha",
+      json: JSON.stringify({
+        openai: {
+          id: "openai",
+          name: "OpenAI",
+          env: ["OPENAI_API_KEY"],
+          npm: "@ai-sdk/openai",
+          models: { "gpt-4.1": { id: "gpt-4.1", name: "GPT-4.1" } },
+        },
+        anthropic: {
+          id: "anthropic",
+          name: "Anthropic",
+          env: ["ANTHROPIC_API_KEY"],
+          npm: "@ai-sdk/anthropic",
+          models: { "claude-3.5-sonnet": { id: "claude-3.5-sonnet", name: "Claude 3.5 Sonnet" } },
+        },
+      }),
+      source: "remote",
+      lastError: null,
+      nowIso,
+    });
+
+    const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
+
+    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+    const secretProvider = await seedAuthProfiles();
+    await createConfiguredPreset({
+      presetKey: "openai-interaction",
+      displayName: "OpenAI Interaction",
+      providerKey: "openai",
+      modelId: "gpt-4.1",
+      options: {},
+    });
+    await new ExecutionProfileModelAssignmentDal(container.db).upsertMany({
+      tenantId: DEFAULT_TENANT_ID,
+      assignments: [{ executionProfileId: "interaction", presetKey: "openai-interaction" }],
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      agentId: "agent-1",
+      secretProvider,
+      fetchImpl,
+    });
+
+    const model = await (
+      runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }
+    ).resolveSessionModel({
+      config: {
+        model: {
+          model: "openai/gpt-4.1",
+          fallback: ["anthropic/claude-3.5-sonnet"],
+          options: {},
+        },
+      },
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: "session-assigned-fallback",
+      executionProfileId: "interaction",
+      profileModelId: "openai/gpt-4.1",
+      fetchImpl,
+    });
+
+    const res = await model.doGenerate({} as any);
+    expect((res as any).text).toBe("ok");
+    expect(seenProviders).toEqual(["openai", "anthropic"]);
+  });
+
   it("uses session preset overrides before execution-profile assignments", async () => {
     container = createContainer({
       dbPath: ":memory:",

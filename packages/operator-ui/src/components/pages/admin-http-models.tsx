@@ -398,8 +398,12 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
     void refresh();
   }, [refresh]);
 
-  const assignmentChanged = assignments.some(
-    (assignment) => assignmentDraft[assignment.execution_profile_id] !== assignment.preset_key,
+  const assignmentPresetKeys = new Map(
+    assignments.map((assignment) => [assignment.execution_profile_id, assignment.preset_key]),
+  );
+  const assignmentChanged = EXECUTION_PROFILE_IDS.some(
+    (profileId) =>
+      (assignmentDraft[profileId] ?? "") !== (assignmentPresetKeys.get(profileId) ?? ""),
   );
 
   const saveAssignments = async (): Promise<void> => {

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import {
   ConfiguredProviderAccount,
@@ -26,6 +25,7 @@ import {
 } from "../modules/models/provider-config-registry.js";
 import type { SecretProvider } from "../modules/secret/provider.js";
 import { coerceString } from "../modules/util/coerce.js";
+import { createUniqueKey, slugifyKey } from "./config-key-utils.js";
 
 type ReplacementAssignments = Record<string, string>;
 
@@ -36,25 +36,6 @@ export interface ProviderConfigRouteDeps {
   secretProviderForTenant: (tenantId: string) => SecretProvider;
   configuredModelPresetDal: ConfiguredModelPresetDal;
   executionProfileModelAssignmentDal: ExecutionProfileModelAssignmentDal;
-}
-
-function slugifyKey(raw: string, fallback: string): string {
-  const normalized = raw
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64);
-  return normalized || fallback;
-}
-
-function createUniqueKey(base: string, existing: Set<string>): string {
-  if (!existing.has(base)) return base;
-  for (let index = 2; index <= 999; index += 1) {
-    const candidate = `${base}-${String(index)}`;
-    if (!existing.has(candidate)) return candidate;
-  }
-  return `${base}-${randomUUID().replaceAll("-", "").slice(0, 8)}`;
 }
 
 function toContractAccount(row: AuthProfileRow) {
@@ -507,6 +488,40 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
       return c.json({ error: "not_found", message: "provider account not found" }, 404);
     }
 
+    const providerAccounts = await deps.authProfileDal.list({
+      tenantId,
+      providerKey: existing.provider_key,
+      limit: 2,
+    });
+    if (providerAccounts.length === 1) {
+      const resolved = await resolveProviderDeletionRequirements({
+        presetDal: deps.configuredModelPresetDal,
+        assignmentDal: deps.executionProfileModelAssignmentDal,
+        tenantId,
+        deletedProviderKey: existing.provider_key,
+      });
+      if ("conflict" in resolved) {
+        return c.json(
+          {
+            ...resolved.conflict,
+            message:
+              "cannot delete the last provider account while configured model presets or execution-profile assignments still reference this provider; delete the provider instead",
+          },
+          409,
+        );
+      }
+      if (resolved.deletedPresetKeys.size > 0) {
+        return c.json(
+          {
+            error: "invalid_request",
+            message:
+              "cannot delete the last provider account while configured model presets still reference this provider; delete the provider instead",
+          },
+          409,
+        );
+      }
+    }
+
     await deps.db.transaction(async (tx) => {
       await tx.run(
         `DELETE FROM session_provider_pins
@@ -585,6 +600,12 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
             [tenantId, providerKey],
           );
         }
+        await tx.run(
+          `DELETE FROM session_model_overrides
+           WHERE tenant_id = ?
+             AND model_id LIKE ?`,
+          [tenantId, `${providerKey}/%`],
+        );
         if (profileIds.length > 0) {
           const profilePlaceholders = profileIds.map(() => "?").join(", ");
           await tx.run(
