@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createTestApp } from "./helpers.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
+import { seedPausedExecutionRun } from "../helpers/execution-fixtures.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 describe("snapshot routes", () => {
   it("exports and imports a snapshot bundle (empty-db import)", async () => {
@@ -58,6 +64,109 @@ describe("snapshot routes", () => {
       sessionId: seededSession.session_id,
     });
     expect(nextApproval.approval_id).not.toBe(approval.approval_id);
+
+    await container.db.close();
+    await container2.db.close();
+  });
+
+  it("imports approvals that reference execution runs, steps, and attempts", async () => {
+    const { app, container } = await createTestApp({
+      deploymentConfig: { snapshots: { importEnabled: true } },
+    });
+
+    const runId = "run-snapshot-linked";
+    const stepId = "step-snapshot-linked";
+    const attemptId = "attempt-snapshot-linked";
+    await seedPausedExecutionRun({ db: container.db, jobId: "job-snapshot-linked", runId });
+    await container.db.run(
+      `INSERT INTO execution_steps (
+         tenant_id,
+         step_id,
+         run_id,
+         step_index,
+         status,
+         action_json
+       )
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        stepId,
+        runId,
+        0,
+        "paused",
+        JSON.stringify({ type: "CLI", args: { cmd: "echo", args: ["snapshot-linked"] } }),
+      ],
+    );
+    await container.db.run(
+      `INSERT INTO execution_attempts (
+         tenant_id,
+         attempt_id,
+         step_id,
+         attempt,
+         status,
+         metadata_json
+       )
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, attemptId, stepId, 1, "running", "{}"],
+    );
+
+    const approval = await container.approvalDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: "snapshot-linked:0",
+      prompt: "approve snapshot-linked run",
+      kind: "policy",
+      runId,
+      stepId,
+      attemptId,
+    });
+    await container.db.run(
+      `UPDATE execution_steps
+       SET approval_id = ?
+       WHERE tenant_id = ? AND step_id = ?`,
+      [approval.approval_id, DEFAULT_TENANT_ID, stepId],
+    );
+
+    const exportRes = await app.request("/snapshot/export");
+    expect(exportRes.status).toBe(200);
+    const bundle = (await exportRes.json()) as Record<string, unknown>;
+
+    const { app: app2, container: container2 } = await createTestApp({
+      deploymentConfig: { snapshots: { importEnabled: true } },
+    });
+    const importRes = await app2.request("/snapshot/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ confirm: "IMPORT", bundle }),
+    });
+    expect(importRes.status).toBe(200);
+
+    const importedApproval = await container2.db.get<{
+      approval_id: string;
+      run_id: string | null;
+      step_id: string | null;
+      attempt_id: string | null;
+    }>(
+      `SELECT approval_id, run_id, step_id, attempt_id
+       FROM approvals
+       WHERE approval_id = ?`,
+      [approval.approval_id],
+    );
+    expect(importedApproval).toEqual({
+      approval_id: approval.approval_id,
+      run_id: runId,
+      step_id: stepId,
+      attempt_id: attemptId,
+    });
+
+    const importedStep = await container2.db.get<{ approval_id: string | null }>(
+      `SELECT approval_id
+       FROM execution_steps
+       WHERE tenant_id = ? AND step_id = ?`,
+      [DEFAULT_TENANT_ID, stepId],
+    );
+    expect(importedStep).toEqual({ approval_id: approval.approval_id });
 
     await container.db.close();
     await container2.db.close();

@@ -100,6 +100,16 @@ const IMPORT_ORDER = [
   "resume_tokens",
 ] as const;
 
+const DEFERRED_APPROVAL_EXECUTION_REF_COLUMNS = ["run_id", "step_id", "attempt_id"] as const;
+
+interface DeferredApprovalExecutionRefPatch {
+  tenantId: unknown;
+  approvalId: unknown;
+  runId: unknown;
+  stepId: unknown;
+  attemptId: unknown;
+}
+
 function quoteIdent(name: string): string {
   return `"${name.replaceAll(`"`, `""`)}"`;
 }
@@ -111,6 +121,11 @@ function parseTablesParam(raw: string | undefined): string[] | undefined {
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
   return parts.length > 0 ? parts : undefined;
+}
+
+function rowValue(row: Record<string, unknown>, column: string): unknown {
+  const value = row[column];
+  return typeof value === "undefined" ? null : value;
 }
 
 async function tableExists(db: SqlDb, table: string): Promise<boolean> {
@@ -210,14 +225,68 @@ async function importTable(db: SqlDb, table: string, data: SnapshotTableT): Prom
 
   let inserted = 0;
   for (const row of data.rows) {
-    const values = cols.map((col) => {
-      const v = row[col];
-      return typeof v === "undefined" ? null : v;
-    });
+    const values = cols.map((col) => rowValue(row, col));
     const res = await db.run(sql, values);
     inserted += res.changes;
   }
   return inserted;
+}
+
+function prepareApprovalImportWithDeferredExecutionRefs(data: SnapshotTableT): {
+  data: SnapshotTableT;
+  deferredPatches: DeferredApprovalExecutionRefPatch[];
+} {
+  const deferredColumns = DEFERRED_APPROVAL_EXECUTION_REF_COLUMNS.filter((column) =>
+    data.columns.includes(column),
+  );
+  if (deferredColumns.length === 0) {
+    return { data, deferredPatches: [] };
+  }
+
+  if (!data.columns.includes("tenant_id") || !data.columns.includes("approval_id")) {
+    throw new Error("snapshot import: approvals rows require tenant_id and approval_id");
+  }
+
+  return {
+    data: {
+      columns: data.columns,
+      rows: data.rows.map((row) => {
+        const sanitizedRow: Record<string, unknown> = { ...row };
+        for (const column of deferredColumns) {
+          sanitizedRow[column] = null;
+        }
+        return sanitizedRow;
+      }),
+    },
+    deferredPatches: data.rows.map((row) => ({
+      tenantId: rowValue(row, "tenant_id"),
+      approvalId: rowValue(row, "approval_id"),
+      runId: rowValue(row, "run_id"),
+      stepId: rowValue(row, "step_id"),
+      attemptId: rowValue(row, "attempt_id"),
+    })),
+  };
+}
+
+async function applyDeferredApprovalExecutionRefPatches(
+  db: SqlDb,
+  patches: DeferredApprovalExecutionRefPatch[],
+): Promise<void> {
+  // approvals.step_id and execution_steps.approval_id form a cycle, so restore
+  // the approvals-side execution refs only after both tables are populated.
+  for (const patch of patches) {
+    const res = await db.run(
+      `UPDATE approvals
+       SET run_id = ?, step_id = ?, attempt_id = ?
+       WHERE tenant_id = ? AND approval_id = ?`,
+      [patch.runId, patch.stepId, patch.attemptId, patch.tenantId, patch.approvalId],
+    );
+    if (res.changes !== 1) {
+      throw new Error(
+        `snapshot import: failed to restore approvals execution refs for approval '${String(patch.approvalId)}'`,
+      );
+    }
+  }
 }
 
 async function repairSqliteAutoincrement(db: SqlDb, tables: string[]): Promise<void> {
@@ -337,9 +406,17 @@ export function createSnapshotRoutes(deps: SnapshotRouteDeps): Hono {
       }
 
       const insertedByTable: Record<string, number> = {};
+      const deferredApprovalExecutionRefPatches: DeferredApprovalExecutionRefPatch[] = [];
       for (const table of importTables) {
-        insertedByTable[table] = await importTable(tx, table, bundle.tables[table]!);
+        let tableData = bundle.tables[table]!;
+        if (table === "approvals") {
+          const prepared = prepareApprovalImportWithDeferredExecutionRefs(tableData);
+          tableData = prepared.data;
+          deferredApprovalExecutionRefPatches.push(...prepared.deferredPatches);
+        }
+        insertedByTable[table] = await importTable(tx, table, tableData);
       }
+      await applyDeferredApprovalExecutionRefPatches(tx, deferredApprovalExecutionRefPatches);
 
       await repairPostgresSequences(tx, importTables);
       await repairSqliteAutoincrement(tx, importTables);
