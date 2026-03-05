@@ -30,94 +30,96 @@ const {
   captureWindowStateMock,
   ensureVisibleBoundsMock,
 } = vi.hoisted(() => {
-  const appHandlers = new Map<string, (...args: unknown[]) => void>();
-  const ipcMainHandlers = new Map<string, (...args: unknown[]) => unknown>();
-  const readyToShowHandlers: Array<() => void> = [];
+  const appHandlersInner = new Map<string, (...args: unknown[]) => void>();
+  const ipcMainHandlersInner = new Map<string, (...args: unknown[]) => unknown>();
+  const readyToShowHandlersInner: Array<() => void> = [];
 
-  const appOnMock = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-    appHandlers.set(event, handler);
+  const appOnMockInner = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+    appHandlersInner.set(event, handler);
   });
-  const appWhenReadyMock = vi.fn(() => Promise.resolve());
-  const appRequestSingleInstanceLockMock = vi.fn(() => true);
-  const appGetPathMock = vi.fn(() => "/tmp/tyrum-desktop-tests");
-  const appSetAppUserModelIdMock = vi.fn();
+  const appWhenReadyMockInner = vi.fn(() => Promise.resolve());
+  const appRequestSingleInstanceLockMockInner = vi.fn(() => true);
+  const appGetPathMockInner = vi.fn(() => "/tmp/tyrum-desktop-tests");
+  const appSetAppUserModelIdMockInner = vi.fn();
 
-  const webContentsSendMock = vi.fn();
-  const browserWindowFocusMock = vi.fn();
-  const browserWindowOnceMock = vi.fn((event: string, handler: () => void) => {
+  const webContentsSendMockInner = vi.fn();
+  const browserWindowFocusMockInner = vi.fn();
+  const browserWindowOnceMockInner = vi.fn((event: string, handler: () => void) => {
     if (event === "ready-to-show") {
-      readyToShowHandlers.push(handler);
+      readyToShowHandlersInner.push(handler);
     }
   });
 
-  const browserWindowMock = vi.fn(function MockBrowserWindow() {
+  const browserWindowMockInner = vi.fn(function MockBrowserWindow() {
     return {
       loadURL: vi.fn(),
       loadFile: vi.fn(),
       on: vi.fn(),
       isMinimized: vi.fn(() => false),
       restore: vi.fn(),
-      once: browserWindowOnceMock,
+      once: browserWindowOnceMockInner,
       show: vi.fn(),
-      focus: browserWindowFocusMock,
+      focus: browserWindowFocusMockInner,
       isDestroyed: vi.fn(() => false),
       webContents: {
         on: vi.fn(),
         isDestroyed: vi.fn(() => false),
-        send: webContentsSendMock,
+        send: webContentsSendMockInner,
         setWindowOpenHandler: vi.fn(),
       },
     };
   });
 
-  const ipcMainHandleMock = vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
-    ipcMainHandlers.set(channel, handler);
-  });
+  const ipcMainHandleMockInner = vi.fn(
+    (channel: string, handler: (...args: unknown[]) => unknown) => {
+      ipcMainHandlersInner.set(channel, handler);
+    },
+  );
 
-  const menuBuildFromTemplateMock = vi.fn(() => ({}));
-  const menuSetApplicationMenuMock = vi.fn();
-  const nativeThemeOnMock = vi.fn();
+  const menuBuildFromTemplateMockInner = vi.fn(() => ({}));
+  const menuSetApplicationMenuMockInner = vi.fn();
+  const nativeThemeOnMockInner = vi.fn();
 
-  const registerConfigIpcMock = vi.fn();
-  const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
-  const registerNodeIpcMock = vi.fn();
-  const registerUpdateIpcMock = vi.fn();
+  const registerConfigIpcMockInner = vi.fn();
+  const registerGatewayIpcMockInner = vi.fn(() => ({ stop: vi.fn() }));
+  const registerNodeIpcMockInner = vi.fn();
+  const registerUpdateIpcMockInner = vi.fn();
 
-  const configExistsMock = vi.fn(() => true);
-  const loadConfigMock = vi.fn(() => ({ mode: "remote" }));
+  const configExistsMockInner = vi.fn(() => true);
+  const loadConfigMockInner = vi.fn(() => ({ mode: "remote" }));
 
-  const loadWindowStateMock = vi.fn(() => null);
-  const saveWindowStateMock = vi.fn();
-  const captureWindowStateMock = vi.fn();
-  const ensureVisibleBoundsMock = vi.fn((bounds: unknown) => bounds);
+  const loadWindowStateMockInner = vi.fn(() => null);
+  const saveWindowStateMockInner = vi.fn();
+  const captureWindowStateMockInner = vi.fn();
+  const ensureVisibleBoundsMockInner = vi.fn((bounds: unknown) => bounds);
 
   return {
-    appHandlers,
-    appOnMock,
-    appWhenReadyMock,
-    appRequestSingleInstanceLockMock,
-    appGetPathMock,
-    appSetAppUserModelIdMock,
-    browserWindowMock,
-    browserWindowOnceMock,
-    browserWindowFocusMock,
-    ipcMainHandlers,
-    ipcMainHandleMock,
-    readyToShowHandlers,
-    webContentsSendMock,
-    menuBuildFromTemplateMock,
-    menuSetApplicationMenuMock,
-    nativeThemeOnMock,
-    registerConfigIpcMock,
-    registerGatewayIpcMock,
-    registerNodeIpcMock,
-    registerUpdateIpcMock,
-    configExistsMock,
-    loadConfigMock,
-    loadWindowStateMock,
-    saveWindowStateMock,
-    captureWindowStateMock,
-    ensureVisibleBoundsMock,
+    appHandlers: appHandlersInner,
+    appOnMock: appOnMockInner,
+    appWhenReadyMock: appWhenReadyMockInner,
+    appRequestSingleInstanceLockMock: appRequestSingleInstanceLockMockInner,
+    appGetPathMock: appGetPathMockInner,
+    appSetAppUserModelIdMock: appSetAppUserModelIdMockInner,
+    browserWindowMock: browserWindowMockInner,
+    browserWindowOnceMock: browserWindowOnceMockInner,
+    browserWindowFocusMock: browserWindowFocusMockInner,
+    ipcMainHandlers: ipcMainHandlersInner,
+    ipcMainHandleMock: ipcMainHandleMockInner,
+    readyToShowHandlers: readyToShowHandlersInner,
+    webContentsSendMock: webContentsSendMockInner,
+    menuBuildFromTemplateMock: menuBuildFromTemplateMockInner,
+    menuSetApplicationMenuMock: menuSetApplicationMenuMockInner,
+    nativeThemeOnMock: nativeThemeOnMockInner,
+    registerConfigIpcMock: registerConfigIpcMockInner,
+    registerGatewayIpcMock: registerGatewayIpcMockInner,
+    registerNodeIpcMock: registerNodeIpcMockInner,
+    registerUpdateIpcMock: registerUpdateIpcMockInner,
+    configExistsMock: configExistsMockInner,
+    loadConfigMock: loadConfigMockInner,
+    loadWindowStateMock: loadWindowStateMockInner,
+    saveWindowStateMock: saveWindowStateMockInner,
+    captureWindowStateMock: captureWindowStateMockInner,
+    ensureVisibleBoundsMock: ensureVisibleBoundsMockInner,
   };
 });
 

@@ -24,23 +24,23 @@ const {
   loadConfigMock,
   startEmbeddedGatewayFromConfigMock,
 } = vi.hoisted(() => {
-  const ipcMainHandleMock = vi.fn();
+  const ipcMainHandleMockInner = vi.fn();
 
   let nativeThemeUpdatedCallback: (() => void) | undefined;
-  const nativeThemeOnMock = vi.fn((event: string, cb: () => void) => {
+  const nativeThemeOnMockInner = vi.fn((event: string, cb: () => void) => {
     if (event === "updated") {
       nativeThemeUpdatedCallback = cb;
     }
   });
 
-  const menuBuildFromTemplateMock = vi.fn(() => ({}) as never);
-  const menuSetApplicationMenuMock = vi.fn();
+  const menuBuildFromTemplateMockInner = vi.fn(() => ({}) as never);
+  const menuSetApplicationMenuMockInner = vi.fn();
 
   const webContentsOnMock = vi.fn();
   const setWindowOpenHandlerMock = vi.fn();
-  const webContentsSendMock = vi.fn();
+  const webContentsSendMockInner = vi.fn();
 
-  const browserWindowMock = vi.fn(function MockBrowserWindow() {
+  const browserWindowMockInner = vi.fn(function MockBrowserWindow() {
     return {
       loadURL: vi.fn(),
       loadFile: vi.fn(),
@@ -50,7 +50,7 @@ const {
       focus: vi.fn(),
       isDestroyed: vi.fn(() => false),
       webContents: {
-        send: webContentsSendMock,
+        send: webContentsSendMockInner,
         isDestroyed: vi.fn(() => false),
         on: webContentsOnMock,
         setWindowOpenHandler: setWindowOpenHandlerMock,
@@ -58,46 +58,46 @@ const {
     };
   });
 
-  const appWhenReadyMock = vi.fn(() => Promise.resolve());
-  const appOnMock = vi.fn();
-  const appQuitMock = vi.fn();
-  const appRequestSingleInstanceLockMock = vi.fn(() => true);
-  const appSetAppUserModelIdMock = vi.fn();
-  const appGetPathMock = vi.fn(() => "/tmp/tyrum-desktop-tests");
+  const appWhenReadyMockInner = vi.fn(() => Promise.resolve());
+  const appOnMockInner = vi.fn();
+  const appQuitMockInner = vi.fn();
+  const appRequestSingleInstanceLockMockInner = vi.fn(() => true);
+  const appSetAppUserModelIdMockInner = vi.fn();
+  const appGetPathMockInner = vi.fn(() => "/tmp/tyrum-desktop-tests");
 
-  const registerConfigIpcMock = vi.fn();
-  const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
-  const registerNodeIpcMock = vi.fn();
-  const registerUpdateIpcMock = vi.fn();
+  const registerConfigIpcMockInner = vi.fn();
+  const registerGatewayIpcMockInner = vi.fn(() => ({ stop: vi.fn() }));
+  const registerNodeIpcMockInner = vi.fn();
+  const registerUpdateIpcMockInner = vi.fn();
 
-  const configExistsMock = vi.fn(() => true);
-  const loadConfigMock = vi.fn(() => ({ mode: "remote" }));
-  const startEmbeddedGatewayFromConfigMock = vi.fn(async () => ({
+  const configExistsMockInner = vi.fn(() => true);
+  const loadConfigMockInner = vi.fn(() => ({ mode: "remote" }));
+  const startEmbeddedGatewayFromConfigMockInner = vi.fn(async () => ({
     status: "running",
     port: 8788,
   }));
 
   return {
-    appGetPathMock,
-    appOnMock,
-    appQuitMock,
-    appRequestSingleInstanceLockMock,
-    appSetAppUserModelIdMock,
-    appWhenReadyMock,
-    browserWindowMock,
-    ipcMainHandleMock,
-    nativeThemeOnMock,
-    menuBuildFromTemplateMock,
-    menuSetApplicationMenuMock,
-    registerConfigIpcMock,
-    registerGatewayIpcMock,
-    registerNodeIpcMock,
-    registerUpdateIpcMock,
-    webContentsSendMock,
+    appGetPathMock: appGetPathMockInner,
+    appOnMock: appOnMockInner,
+    appQuitMock: appQuitMockInner,
+    appRequestSingleInstanceLockMock: appRequestSingleInstanceLockMockInner,
+    appSetAppUserModelIdMock: appSetAppUserModelIdMockInner,
+    appWhenReadyMock: appWhenReadyMockInner,
+    browserWindowMock: browserWindowMockInner,
+    ipcMainHandleMock: ipcMainHandleMockInner,
+    nativeThemeOnMock: nativeThemeOnMockInner,
+    menuBuildFromTemplateMock: menuBuildFromTemplateMockInner,
+    menuSetApplicationMenuMock: menuSetApplicationMenuMockInner,
+    registerConfigIpcMock: registerConfigIpcMockInner,
+    registerGatewayIpcMock: registerGatewayIpcMockInner,
+    registerNodeIpcMock: registerNodeIpcMockInner,
+    registerUpdateIpcMock: registerUpdateIpcMockInner,
+    webContentsSendMock: webContentsSendMockInner,
     getNativeThemeUpdatedCallback: () => nativeThemeUpdatedCallback,
-    configExistsMock,
-    loadConfigMock,
-    startEmbeddedGatewayFromConfigMock,
+    configExistsMock: configExistsMockInner,
+    loadConfigMock: loadConfigMockInner,
+    startEmbeddedGatewayFromConfigMock: startEmbeddedGatewayFromConfigMockInner,
   };
 });
 
