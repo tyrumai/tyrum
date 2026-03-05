@@ -29,6 +29,7 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(__dirname, "../..");
 const REPO_ROOT = resolve(PACKAGE_ROOT, "../..");
+const GATEWAY_BIN = resolve(PACKAGE_ROOT, "bin/tyrum.mjs");
 const GATEWAY_ENTRYPOINT = resolve(PACKAGE_ROOT, "dist/index.mjs");
 const GATEWAY_MIGRATIONS_DIR = resolve(PACKAGE_ROOT, "migrations/sqlite");
 const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
@@ -275,7 +276,7 @@ describe("gateway startup process", () => {
         const child = spawn(
           process.execPath,
           [
-            GATEWAY_ENTRYPOINT,
+            GATEWAY_BIN,
             "start",
             "--host",
             "127.0.0.1",
@@ -359,7 +360,7 @@ describe("gateway startup process", () => {
         const child = spawn(
           process.execPath,
           [
-            GATEWAY_ENTRYPOINT,
+            GATEWAY_BIN,
             "start",
             "--host",
             "127.0.0.1",
@@ -576,7 +577,7 @@ describe("gateway startup process", () => {
         const child = spawn(
           process.execPath,
           [
-            GATEWAY_ENTRYPOINT,
+            GATEWAY_BIN,
             "start",
             "--host",
             "127.0.0.1",
@@ -796,7 +797,7 @@ describe("gateway startup process", () => {
         const child = spawn(
           process.execPath,
           [
-            GATEWAY_ENTRYPOINT,
+            GATEWAY_BIN,
             "start",
             "--host",
             "127.0.0.1",
@@ -911,7 +912,7 @@ describe("gateway startup process", () => {
         const child = spawn(
           process.execPath,
           [
-            GATEWAY_ENTRYPOINT,
+            GATEWAY_BIN,
             "start",
             "--host",
             "127.0.0.1",
