@@ -1,5 +1,6 @@
 import type { OperatorHttpClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
+import { toErrorMessage } from "../to-error-message.js";
 
 export interface AgentStatusState {
   agentKey: string;
@@ -12,10 +13,6 @@ export interface AgentStatusState {
 export interface AgentStatusStore extends ExternalStore<AgentStatusState> {
   setAgentKey(agentKey: string): void;
   refresh(): Promise<void>;
-}
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 export function createAgentStatusStore(http: OperatorHttpClient): { store: AgentStatusStore } {

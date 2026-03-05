@@ -1,3 +1,5 @@
+import { toErrorMessage } from "./to-error-message.js";
+
 export type OperatorCoreErrorKind = "ws" | "http" | "unknown";
 
 export type OperatorCoreError = {
@@ -6,10 +8,6 @@ export type OperatorCoreError = {
   code: string | null;
   message: string;
 };
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export function toOperatorCoreError(
   kind: OperatorCoreErrorKind,

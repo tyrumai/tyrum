@@ -1,5 +1,6 @@
 import type { ExternalStore } from "./store.js";
 import { createStore } from "./store.js";
+import { toErrorMessage } from "./to-error-message.js";
 
 export type AutoSyncTask = {
   id: string;
@@ -30,16 +31,6 @@ export type AutoSyncManager = {
   syncAllNow: () => Promise<void>;
   dispose: () => void;
 };
-
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message || error.name || "Error";
-  if (typeof error === "string") return error;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-}
 
 export function createAutoSyncManager(params: {
   intervalMs: number;
@@ -269,7 +260,6 @@ export function createAutoSyncManager(params: {
     setState((prev) => ({
       ...prev,
       lastManualAtMs: now,
-      lastRunAtMs: now,
     }));
     await runAllEligible({ ignoreBackoff: true });
   };

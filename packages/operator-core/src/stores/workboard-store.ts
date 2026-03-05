@@ -1,6 +1,7 @@
 import type { WorkItem } from "@tyrum/schemas";
 import type { OperatorWsClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
+import { toErrorMessage } from "../to-error-message.js";
 import {
   applyWorkTaskEvent,
   upsertWorkItem,
@@ -28,10 +29,6 @@ const DEFAULT_SCOPE = {
   agent_id: "default",
   workspace_id: "default",
 } as const;
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function isUnsupportedRequestForWorkList(errorMessage: string): boolean {
   return errorMessage.includes("work.list failed: unsupported_request");
