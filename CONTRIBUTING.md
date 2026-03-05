@@ -61,6 +61,11 @@ pnpm lint
 pnpm format:check
 ```
 
+If your PR changes database migrations under `packages/gateway/migrations/*`, also verify:
+
+- Naming conventions are followed (PK/FK/timestamps): `docs/architecture/db-naming-conventions.md`
+- SQLite and Postgres stay aligned: `pnpm test packages/gateway/tests/contract/schema-contract.test.ts`
+
 ### Coverage (optional locally, enforced in CI)
 
 CI runs `pnpm test` with coverage enabled and enforces both global and per-component minimums.

@@ -1317,7 +1317,7 @@ CREATE TABLE memory_item_embeddings (
 );
 
 CREATE TABLE vector_metadata (
-  id BIGSERIAL PRIMARY KEY,
+  vector_metadata_id BIGSERIAL PRIMARY KEY,
   tenant_id UUID NOT NULL,
   agent_id  UUID NOT NULL,
   embedding_id TEXT NOT NULL,

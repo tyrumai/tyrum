@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { newDb } from "pg-mem";
 import { migratePostgres } from "../../src/migrate-postgres.js";
+import { createPgMemDb } from "../helpers/pg-mem.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const postgresMigrationsDir = join(__dirname, "../../migrations/postgres");
@@ -23,7 +23,7 @@ async function getPostgresColumnUdtName(
 
 describe("Memory v1 migrations (postgres)", () => {
   it("stores memory_tombstones.deleted_at as timestamptz", async () => {
-    const mem = newDb();
+    const mem = createPgMemDb();
     const { Client } = mem.adapters.createPg();
     const pg = new Client();
     await pg.connect();
