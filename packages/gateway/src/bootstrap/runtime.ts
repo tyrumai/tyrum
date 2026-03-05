@@ -743,7 +743,7 @@ function createWorkerLoop(
     }
 
     return createToolRunnerStepExecutor({
-      entrypoint: resolveGatewayEntrypointPath(),
+      entrypoint: resolveGatewayEntrypointPath(process.argv[1]),
       home: context.tyrumHome,
       dbPath: context.dbPath,
       migrationsDir: context.migrationsDir,

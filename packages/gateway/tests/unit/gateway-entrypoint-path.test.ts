@@ -5,8 +5,18 @@ import { resolveGatewayEntrypointPath } from "../../src/bootstrap/entrypoint-pat
 const runtimeModuleUrl = new URL("../../src/bootstrap/runtime.ts", import.meta.url).href;
 
 describe("resolveGatewayEntrypointPath", () => {
+  it("prefers the running gateway process entrypoint when available", () => {
+    const resolved = resolveGatewayEntrypointPath(
+      "/app/packages/gateway/dist/index.mjs",
+      runtimeModuleUrl,
+      (path) => path === "/app/packages/gateway/dist/index.mjs",
+    );
+
+    expect(resolved).toBe("/app/packages/gateway/dist/index.mjs");
+  });
+
   it("prefers the packaged dist entrypoint when present", () => {
-    const resolved = resolveGatewayEntrypointPath(runtimeModuleUrl, (path) => {
+    const resolved = resolveGatewayEntrypointPath(undefined, runtimeModuleUrl, (path) => {
       return path.endsWith("/index.mjs");
     });
 
@@ -14,7 +24,7 @@ describe("resolveGatewayEntrypointPath", () => {
   });
 
   it("falls back to the source entrypoint when only TypeScript sources exist", () => {
-    const resolved = resolveGatewayEntrypointPath(runtimeModuleUrl, (path) => {
+    const resolved = resolveGatewayEntrypointPath(undefined, runtimeModuleUrl, (path) => {
       return path.endsWith("/index.ts");
     });
 

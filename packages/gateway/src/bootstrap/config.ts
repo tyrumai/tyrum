@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -83,10 +83,28 @@ export function resolveGatewayPort(portOverride?: number): number {
   return 8788;
 }
 
+export function resolveDefaultMigrationsDirForBaseDir(
+  baseDir: string,
+  dbPath: string,
+  pathExists: (path: string) => boolean = existsSync,
+): string {
+  const dialectDir = isPostgresDbUri(dbPath) ? "postgres" : "sqlite";
+  const candidates = [
+    join(baseDir, "../migrations", dialectDir),
+    join(baseDir, "../../migrations", dialectDir),
+  ];
+
+  for (const candidate of candidates) {
+    if (pathExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  return candidates[0]!;
+}
+
 function resolveDefaultMigrationsDir(dbPath: string): string {
-  return isPostgresDbUri(dbPath)
-    ? join(__dirname, "../../migrations/postgres")
-    : join(__dirname, "../../migrations/sqlite");
+  return resolveDefaultMigrationsDirForBaseDir(__dirname, dbPath);
 }
 
 export function resolveGatewayMigrationsDir(dbPath: string, override?: string): string {
