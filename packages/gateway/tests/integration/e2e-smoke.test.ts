@@ -14,10 +14,10 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getRequestListener } from "@hono/node-server";
+import { getRequestListener as honoGetRequestListener } from "@hono/node-server";
 import type { Hono } from "hono";
 import { createTestApp, minimalPlanRequest } from "./helpers.js";
 import { createWsHandler } from "../../src/routes/ws.js";
@@ -32,6 +32,8 @@ import {
 } from "@tyrum/schemas";
 import { waitForCondition } from "../helpers/wait-for.js";
 import { pathExists } from "../helpers/path-exists.js";
+
+let getRequestListener: typeof honoGetRequestListener = honoGetRequestListener;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,43 +75,50 @@ async function startServer(app: Hono): Promise<{
   const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-e2e-test-"));
   let tokenStore: TokenStore;
   let adminToken: string;
+  let stopHeartbeat: (() => void) | undefined;
+  let server: Server | undefined;
   try {
     tokenStore = new TokenStore(tokenHome);
     adminToken = await tokenStore.initialize();
+
+    const wsHandler = createWsHandler({
+      connectionManager,
+      protocolDeps,
+      tokenStore,
+    });
+    stopHeartbeat = wsHandler.stopHeartbeat;
+
+    const requestListener = getRequestListener(app.fetch);
+    server = createServer(requestListener);
+
+    server.on("upgrade", (req, socket, head) => {
+      wsHandler.handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr !== null ? addr.port : 0);
+      });
+    });
+
+    return {
+      server,
+      port,
+      adminToken,
+      tokenHome,
+      connectionManager,
+      stopHeartbeat,
+      taskResults,
+    };
   } catch (error) {
+    stopHeartbeat?.();
+    if (server) {
+      await new Promise<void>((resolve) => server!.close(() => resolve())).catch(() => undefined);
+    }
     await rm(tokenHome, { recursive: true, force: true }).catch(() => undefined);
     throw error;
   }
-
-  const { handleUpgrade, stopHeartbeat } = createWsHandler({
-    connectionManager,
-    protocolDeps,
-    tokenStore,
-  });
-
-  const requestListener = getRequestListener(app.fetch);
-  const server = createServer(requestListener);
-
-  server.on("upgrade", (req, socket, head) => {
-    handleUpgrade(req, socket, head);
-  });
-
-  const port = await new Promise<number>((resolve) => {
-    server.listen(0, "127.0.0.1", () => {
-      const addr = server.address();
-      resolve(typeof addr === "object" && addr !== null ? addr.port : 0);
-    });
-  });
-
-  return {
-    server,
-    port,
-    adminToken,
-    tokenHome,
-    connectionManager,
-    stopHeartbeat,
-    taskResults,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -138,6 +147,32 @@ describe("E2E smoke test", () => {
       await rm(home, { recursive: true, force: true });
       expect(await pathExists(home)).toBe(false);
     }
+  });
+
+  it("removes tokenHome when server setup throws", async () => {
+    const before = new Set(
+      (await readdir(tmpdir())).filter((entry) => entry.startsWith("tyrum-e2e-test-")),
+    );
+
+    const originalGetRequestListener = getRequestListener;
+    getRequestListener = () => {
+      throw new Error("test setup failed");
+    };
+    try {
+      const { app } = await createTestApp();
+      await expect(startServer(app)).rejects.toThrow("test setup failed");
+    } finally {
+      getRequestListener = originalGetRequestListener;
+    }
+
+    const after = (await readdir(tmpdir())).filter((entry) => entry.startsWith("tyrum-e2e-test-"));
+    const leaked = after.filter((entry) => !before.has(entry));
+
+    await Promise.all(
+      leaked.map((entry) => rm(join(tmpdir(), entry), { recursive: true, force: true })),
+    );
+
+    expect(leaked).toHaveLength(0);
   });
 
   it("full plan → dispatch → result → healthz flow", async () => {
