@@ -1,34 +1,32 @@
-import type { Context } from "hono";
+/**
+ * Device token routes (tenant-scoped; DB-backed).
+ *
+ * Backwards-compatible surface for issuing short-lived, device-bound tokens
+ * used by operator tooling (TUI/Desktop) without relying on legacy TokenStore.
+ */
+
 import { Hono } from "hono";
-import { getCookie } from "hono/cookie";
 import {
   DeviceTokenIssueRequest,
   DeviceTokenIssueResponse,
   DeviceTokenRevokeRequest,
   DeviceTokenRevokeResponse,
+  MAX_DEVICE_TOKEN_TTL_SECONDS,
 } from "@tyrum/schemas";
-import type { TokenStore } from "../modules/auth/token-store.js";
-import { AUTH_COOKIE_NAME, extractBearerToken } from "../modules/auth/http.js";
+import type { AuthTokenService } from "../modules/auth/auth-token-service.js";
+import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
 
 export interface DeviceTokenRouteDeps {
-  tokenStore: TokenStore;
-}
-
-function extractAuthToken(c: Context): string | undefined {
-  return extractBearerToken(c.req.header("authorization")) ?? getCookie(c, AUTH_COOKIE_NAME);
-}
-
-function isAdminRequest(c: Context, tokenStore: TokenStore): boolean {
-  const token = extractAuthToken(c);
-  if (!token) return false;
-  return tokenStore.validate(token);
+  authTokens: AuthTokenService;
 }
 
 export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
   const app = new Hono();
 
   app.post("/auth/device-tokens/issue", async (c) => {
-    if (!isAdminRequest(c, deps.tokenStore)) {
+    const tenantId = requireTenantId(c);
+    const claims = requireAuthClaims(c);
+    if (claims.role !== "admin") {
       return c.json({ error: "forbidden", message: "admin token required" }, 403);
     }
 
@@ -39,27 +37,49 @@ export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
       void err;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
+
     const parsed = DeviceTokenIssueRequest.safeParse(body);
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    try {
-      const issued = await deps.tokenStore.issueDeviceToken({
-        deviceId: parsed.data.device_id,
-        role: parsed.data.role,
-        scopes: parsed.data.scopes,
-        ttlSeconds: parsed.data.ttl_seconds,
-      });
-      return c.json(DeviceTokenIssueResponse.parse(issued), 201);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return c.json({ error: "invalid_request", message }, 400);
+    const ttlSeconds = parsed.data.ttl_seconds ?? MAX_DEVICE_TOKEN_TTL_SECONDS;
+    const issued = await deps.authTokens.issueToken({
+      tenantId,
+      role: parsed.data.role,
+      scopes: parsed.data.scopes,
+      deviceId: parsed.data.device_id,
+      ttlSeconds,
+      createdByJson: JSON.stringify({
+        kind: "http.device_token.issue",
+        issued_by: claims.token_id,
+      }),
+    });
+
+    const expiresAt = issued.row.expires_at;
+    if (!expiresAt) {
+      throw new Error("issued device token unexpectedly missing expires_at");
     }
+
+    return c.json(
+      DeviceTokenIssueResponse.parse({
+        token_kind: "device",
+        token: issued.token,
+        token_id: issued.row.token_id,
+        device_id: issued.row.device_id ?? parsed.data.device_id,
+        role: issued.row.role,
+        scopes: JSON.parse(issued.row.scopes_json) as unknown,
+        issued_at: issued.row.issued_at,
+        expires_at: expiresAt,
+      }),
+      201,
+    );
   });
 
   app.post("/auth/device-tokens/revoke", async (c) => {
-    if (!isAdminRequest(c, deps.tokenStore)) {
+    const tenantId = requireTenantId(c);
+    const claims = requireAuthClaims(c);
+    if (claims.role !== "admin") {
       return c.json({ error: "forbidden", message: "admin token required" }, 403);
     }
 
@@ -70,20 +90,26 @@ export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
       void err;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
+
     const parsed = DeviceTokenRevokeRequest.safeParse(body);
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    const claims = deps.tokenStore.inspectDeviceToken(parsed.data.token);
-    const revoked = await deps.tokenStore.revokeDeviceToken(parsed.data.token);
-    if (!revoked) {
-      return c.json({ error: "not_found", message: "token not found or already revoked" }, 404);
+    const tokenClaims = await deps.authTokens.authenticate(parsed.data.token).catch(() => null);
+    if (!tokenClaims || tokenClaims.tenant_id !== tenantId) {
+      return c.json(DeviceTokenRevokeResponse.parse({ revoked: false }), 200);
     }
+
+    if (tokenClaims.role === "admin") {
+      return c.json({ error: "invalid_request", message: "cannot revoke admin tokens here" }, 400);
+    }
+
+    const revoked = await deps.authTokens.revokeToken(tokenClaims.token_id);
     return c.json(
       DeviceTokenRevokeResponse.parse({
-        revoked: true,
-        token_id: claims?.token_id,
+        revoked,
+        token_id: revoked ? tokenClaims.token_id : undefined,
       }),
       200,
     );

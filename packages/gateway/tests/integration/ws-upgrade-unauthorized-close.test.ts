@@ -1,14 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:http";
 import { WebSocket } from "ws";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { AuthAudit } from "../../src/modules/auth/audit.js";
 import type { NodePairingDal } from "../../src/modules/node/pairing-dal.js";
 import { createWsHandler } from "../../src/routes/ws.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 function waitForClose(ws: WebSocket, timeoutMs = 1_000): Promise<{ code: number; reason: Buffer }> {
   return new Promise((resolve, reject) => {
@@ -34,13 +33,13 @@ function waitForClose(ws: WebSocket, timeoutMs = 1_000): Promise<{ code: number;
 
 async function startWsServer(params: {
   authAudit: AuthAudit;
-  tokenStore: TokenStore;
+  authTokens: AuthTokenService;
   nodePairingDal?: NodePairingDal;
 }): Promise<{ server: Server; port: number; stopHeartbeat: () => void }> {
   const connectionManager = new ConnectionManager();
   const { handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
-    tokenStore: params.tokenStore,
+    authTokens: params.authTokens,
     nodePairingDal: params.nodePairingDal,
     protocolDeps: {
       connectionManager,
@@ -70,7 +69,7 @@ async function startWsServer(params: {
 describe("WS upgrade auth failure handling", () => {
   let server: Server | undefined;
   let stopHeartbeat: (() => void) | undefined;
-  let tokenHome: string | undefined;
+  let db: SqliteDb | undefined;
 
   afterEach(async () => {
     stopHeartbeat?.();
@@ -81,16 +80,13 @@ describe("WS upgrade auth failure handling", () => {
       server = undefined;
     }
 
-    if (tokenHome) {
-      await rm(tokenHome, { recursive: true, force: true });
-      tokenHome = undefined;
-    }
+    await db?.close();
+    db = undefined;
   });
 
   it("closes unauthenticated sockets even when auth audit throws", async () => {
-    tokenHome = await mkdtemp(join(tmpdir(), "tyrum-ws-upgrade-unauth-"));
-    const tokenStore = new TokenStore(tokenHome);
-    await tokenStore.initialize();
+    db = openTestSqliteDb();
+    const authTokens = new AuthTokenService(db);
 
     const authAudit = {
       recordAuthFailed: async () => {
@@ -98,7 +94,7 @@ describe("WS upgrade auth failure handling", () => {
       },
     } as unknown as AuthAudit;
 
-    const started = await startWsServer({ authAudit, tokenStore });
+    const started = await startWsServer({ authAudit, authTokens });
     server = started.server;
     stopHeartbeat = started.stopHeartbeat;
 
@@ -108,9 +104,8 @@ describe("WS upgrade auth failure handling", () => {
   });
 
   it("closes unauthenticated sockets when resolveAuth rejects and audit throws", async () => {
-    tokenHome = await mkdtemp(join(tmpdir(), "tyrum-ws-upgrade-unauth-"));
-    const tokenStore = new TokenStore(tokenHome);
-    await tokenStore.initialize();
+    db = openTestSqliteDb();
+    const authTokens = new AuthTokenService(db);
 
     const authAudit = {
       recordAuthFailed: async () => {
@@ -124,7 +119,7 @@ describe("WS upgrade auth failure handling", () => {
       },
     } as unknown as NodePairingDal;
 
-    const started = await startWsServer({ authAudit, tokenStore, nodePairingDal });
+    const started = await startWsServer({ authAudit, authTokens, nodePairingDal });
     server = started.server;
     stopHeartbeat = started.stopHeartbeat;
 

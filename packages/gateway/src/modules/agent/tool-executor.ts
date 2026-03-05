@@ -313,6 +313,7 @@ export type ToolResultMeta = {
 type WorkspaceLeaseConfig = {
   db: SqlDb;
   tenantId: string;
+  agentId: string | null;
   workspaceId: string;
   ownerPrefix?: string;
 };
@@ -487,6 +488,7 @@ export class ToolExecutor {
     audit?: {
       execution_run_id?: string;
       execution_step_id?: string;
+      policy_snapshot_id?: string;
     },
   ): Promise<ToolResult> {
     const parsed = args as Record<string, unknown> | null;
@@ -578,9 +580,13 @@ export class ToolExecutor {
 
     let serializedPayload: string;
     try {
+      const tenantId = this.workspaceLease?.tenantId;
+      if (!tenantId) {
+        throw new Error("tenantId is required for node dispatch");
+      }
       const { taskId, result } = await this.nodeDispatchService!.dispatchAndWait(
         action,
-        { runId, stepId, attemptId },
+        { tenantId, runId, stepId, attemptId },
         { timeoutMs },
       );
 
@@ -589,6 +595,7 @@ export class ToolExecutor {
         result.evidence,
         result.result,
         { runId, stepId },
+        audit?.policy_snapshot_id,
       );
 
       const payload = {
@@ -649,11 +656,22 @@ export class ToolExecutor {
     evidence: unknown,
     result: unknown,
     scope: { runId: string; stepId: string },
+    policySnapshotId?: string,
   ): Promise<unknown> {
     if (actionKind !== "Desktop" && actionKind !== "Browser") return evidence;
     if (!this.artifactStore) return evidence;
-    const db = this.workspaceLease?.db;
+    const lease = this.workspaceLease;
+    const db = lease?.db;
     if (!db) return evidence;
+
+    const fallbackScope = lease
+      ? {
+          tenantId: lease.tenantId,
+          workspaceId: lease.workspaceId,
+          agentId: lease.agentId,
+          policySnapshotId: policySnapshotId?.trim() || null,
+        }
+      : undefined;
 
     if (actionKind === "Desktop") {
       const sensitivity = await resolveDesktopEvidenceSensitivity(db, scope);
@@ -662,7 +680,8 @@ export class ToolExecutor {
         artifactStore: this.artifactStore,
         runId: scope.runId,
         stepId: scope.stepId,
-        workspaceId: this.workspaceLease?.workspaceId,
+        workspaceId: lease?.workspaceId,
+        fallbackScope,
         evidence,
         result,
         sensitivity,
@@ -676,7 +695,8 @@ export class ToolExecutor {
       artifactStore: this.artifactStore,
       runId: scope.runId,
       stepId: scope.stepId,
-      workspaceId: this.workspaceLease?.workspaceId,
+      workspaceId: lease?.workspaceId,
+      fallbackScope,
       evidence,
       result,
       sensitivity,

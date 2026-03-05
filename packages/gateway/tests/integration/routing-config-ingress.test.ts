@@ -7,6 +7,7 @@ import { createIngressRoutes } from "../../src/routes/ingress.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("routing config (durable) + ingress", () => {
   let db: SqliteDb;
@@ -36,6 +37,7 @@ describe("routing config (durable) + ingress", () => {
   it("routes telegram updates using durable routing config state", async () => {
     const routing = new RoutingConfigDal(db);
     await routing.set({
+      tenantId: DEFAULT_TENANT_ID,
       config: {
         v: 1,
         telegram: {
@@ -57,6 +59,7 @@ describe("routing config (durable) + ingress", () => {
       "/",
       createIngressRoutes({
         telegramBot: {} as never,
+        telegramWebhookSecret: "test-secret",
         agents: {} as never,
         telegramQueue: {
           enqueue: async (_normalized, opts) => {
@@ -133,6 +136,7 @@ describe("routing config (durable) + ingress", () => {
         "/",
         createIngressRoutes({
           telegramBot: {} as never,
+          telegramWebhookSecret: "test-secret",
           agents: {} as never,
           telegramQueue: {
             enqueue: async (_normalized, opts) => {

@@ -16,22 +16,30 @@ import {
   deviceIdFromSha256Digest,
   type CapabilityDescriptor,
   type ClientCapability,
+  type AuthTokenClaims,
   type WsPeerRole,
   type WsResponseEnvelope,
+  type WsEventEnvelope,
 } from "@tyrum/schemas";
 import { createHash, createPublicKey, randomBytes, verify } from "node:crypto";
 import type { ConnectionManager } from "../ws/connection-manager.js";
-import { authenticateWsToken } from "../ws/auth.js";
 import { rawDataToUtf8 } from "../ws/raw-data.js";
 import { handleClientMessage } from "../ws/protocol.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
-import type { TokenStore } from "../modules/auth/token-store.js";
+import { broadcastWsEvent } from "../ws/broadcast.js";
+import type { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "../modules/auth/http.js";
 import { createTrustedProxyAllowlistFromEnv, resolveClientIp } from "../modules/auth/client-ip.js";
 import type { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import type { PresenceDal } from "../modules/presence/dal.js";
 import type { NodePairingDal } from "../modules/node/pairing-dal.js";
+import type { WsBroadcastAudience } from "../ws/audience.js";
+
+const PAIRING_REQUESTED_AUDIENCE: WsBroadcastAudience = {
+  roles: ["client"],
+  required_scopes: ["operator.pairing"],
+};
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -243,7 +251,7 @@ function selectWsSubprotocol(protocols: Set<string>): string | false {
 export interface WsRouteOptions {
   connectionManager: ConnectionManager;
   protocolDeps: ProtocolDeps;
-  tokenStore: TokenStore;
+  authTokens: AuthTokenService;
   trustedProxies?: string;
   upgradeRateLimiter?: SlidingWindowRateLimiter;
   presenceDal?: PresenceDal;
@@ -270,7 +278,7 @@ export function createWsHandler(opts: WsRouteOptions): {
   handleUpgrade: (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
   stopHeartbeat: () => void;
 } {
-  const { connectionManager, protocolDeps, tokenStore } = opts;
+  const { connectionManager, protocolDeps, authTokens } = opts;
   const upgradeRateLimiter = opts.upgradeRateLimiter;
   const trustedProxies = upgradeRateLimiter
     ? createTrustedProxyAllowlistFromEnv(opts.trustedProxies)
@@ -293,8 +301,11 @@ export function createWsHandler(opts: WsRouteOptions): {
     if (cluster) {
       const nowMs = Date.now();
       for (const client of connectionManager.allClients()) {
+        const tenantId = client.auth_claims?.tenant_id;
+        if (!tenantId) continue;
         void cluster.connectionDirectory
           .touchConnection({
+            tenantId,
             connectionId: client.id,
             nowMs,
             ttlMs: connectionTtlMs,
@@ -333,18 +344,6 @@ export function createWsHandler(opts: WsRouteOptions): {
                 // ignore
               }
             }
-
-            if (protocolDeps.cluster) {
-              void protocolDeps.cluster.outboxDal
-                .enqueue("ws.broadcast", {
-                  source_edge_id: protocolDeps.cluster.edgeId,
-                  skip_local: true,
-                  message: evt,
-                })
-                .catch(() => {
-                  // ignore
-                });
-            }
           }
         })
         .catch(() => {
@@ -367,9 +366,8 @@ export function createWsHandler(opts: WsRouteOptions): {
   wss.on("connection", (ws, req) => {
     const tokenInfo = extractWsTokenWithTransport(req);
     const token = tokenInfo.token;
-    const upgradeClaims = authenticateWsToken(token, tokenStore);
 
-    type UpgradeClaims = NonNullable<typeof upgradeClaims>;
+    type UpgradeClaims = AuthTokenClaims;
     type AuthState =
       | { kind: "claims"; claims: UpgradeClaims }
       | { kind: "scoped_node"; expectedNodeId: string };
@@ -379,9 +377,7 @@ export function createWsHandler(opts: WsRouteOptions): {
 
     const earlyMessages: string[] = [];
     let earlyMessageBytes = 0;
-    let authState: AuthState | undefined = upgradeClaims
-      ? { kind: "claims", claims: upgradeClaims }
-      : undefined;
+    let authState: AuthState | undefined = undefined;
 
     // Mutable slot: filled once the hello handshake completes.
     let clientId: string | undefined;
@@ -428,7 +424,16 @@ export function createWsHandler(opts: WsRouteOptions): {
 
     const resolveAuth = async (): Promise<AuthState | undefined> => {
       if (authState) return authState;
-      if (!token || !nodePairingDal) return undefined;
+      if (!token) return undefined;
+
+      const claims = await authTokens.authenticate(token).catch(() => null);
+      if (claims) {
+        // System tokens are HTTP-only (/system/*) and are not valid for WS surfaces.
+        if (claims.tenant_id === null) return undefined;
+        return { kind: "claims", claims };
+      }
+
+      if (!nodePairingDal) return undefined;
       const nodeId = await nodePairingDal.getNodeIdForScopedToken(token).catch(() => undefined);
       return nodeId ? { kind: "scoped_node", expectedNodeId: nodeId } : undefined;
     };
@@ -569,13 +574,14 @@ export function createWsHandler(opts: WsRouteOptions): {
             role: pendingInit.role,
             deviceId,
             protocolRev: pendingInit.protocolRev,
-            authClaims: upgradeClaims ?? undefined,
+            authClaims: claims ?? undefined,
           });
 
           if (cluster) {
             const nowMs = Date.now();
             void cluster.connectionDirectory
               .upsertConnection({
+                tenantId: claims?.tenant_id ?? undefined,
                 connectionId: clientId,
                 edgeId: cluster.instanceId,
                 role: pendingInit.role,
@@ -640,18 +646,6 @@ export function createWsHandler(opts: WsRouteOptions): {
                     // ignore
                   }
                 }
-                // Cluster broadcast.
-                if (protocolDeps.cluster) {
-                  void protocolDeps.cluster.outboxDal
-                    .enqueue("ws.broadcast", {
-                      source_edge_id: protocolDeps.cluster.edgeId,
-                      skip_local: true,
-                      message: evt,
-                    })
-                    .catch(() => {
-                      // ignore
-                    });
-                }
               })
               .catch(() => {
                 // ignore presence errors
@@ -690,27 +684,16 @@ export function createWsHandler(opts: WsRouteOptions): {
                       type: "pairing.requested",
                       occurred_at: new Date().toISOString(),
                       payload: { pairing },
-                    };
+                    } satisfies WsEventEnvelope;
 
-                    for (const peer of connectionManager.allClients()) {
-                      try {
-                        peer.ws.send(JSON.stringify(evt));
-                      } catch (err) {
-                        void err;
-                        // ignore
-                      }
-                    }
-
-                    if (protocolDeps.cluster) {
-                      void protocolDeps.cluster.outboxDal
-                        .enqueue("ws.broadcast", {
-                          source_edge_id: protocolDeps.cluster.edgeId,
-                          skip_local: true,
-                          message: evt,
-                        })
-                        .catch(() => {
-                          // ignore
-                        });
+                    const tenantId = claims?.tenant_id;
+                    if (tenantId) {
+                      broadcastWsEvent(
+                        tenantId,
+                        evt,
+                        { connectionManager, cluster: protocolDeps.cluster },
+                        PAIRING_REQUESTED_AUDIENCE,
+                      );
                     }
                   });
               })
@@ -739,7 +722,12 @@ export function createWsHandler(opts: WsRouteOptions): {
             }
             connectionManager.removeClient(clientId!);
             if (cluster) {
-              void cluster.connectionDirectory.removeConnection(clientId!).catch(() => {});
+              const tenantId = claims?.tenant_id;
+              if (tenantId) {
+                void cluster.connectionDirectory
+                  .removeConnection({ tenantId, connectionId: clientId! })
+                  .catch(() => {});
+              }
             }
             if (presenceDal && deviceId) {
               void presenceDal

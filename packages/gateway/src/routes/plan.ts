@@ -22,11 +22,8 @@ import type { GatewayContainer } from "../container.js";
 import { evaluatePolicy } from "../modules/policy/engine.js";
 import { authorizeWithThresholds, defaultThresholds } from "../modules/wallet/authorization.js";
 import { PlanDal } from "../modules/planner/plan-dal.js";
-import {
-  DEFAULT_AGENT_ID,
-  DEFAULT_TENANT_ID,
-  DEFAULT_WORKSPACE_ID,
-} from "../modules/identity/scope.js";
+import { DEFAULT_AGENT_KEY, DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -426,14 +423,22 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
       outcome_status: outcome.status,
     };
 
-    const tenantId = DEFAULT_TENANT_ID;
+    const tenantId = requireTenantId(c);
     const planKey = planId;
+
+    const agentId = await container.identityScopeDal.ensureAgentId(tenantId, DEFAULT_AGENT_KEY);
+    const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+    await container.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+
     try {
       await new PlanDal(container.db).ensurePlanId({
         tenantId,
         planKey,
-        agentId: DEFAULT_AGENT_ID,
-        workspaceId: DEFAULT_WORKSPACE_ID,
+        agentId,
+        workspaceId,
         kind: "planner",
         status: outcome.status,
       });

@@ -5,6 +5,7 @@ import { createHttpScopeAuthorizationMiddleware } from "../../src/modules/authz/
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage, type ProtocolDeps } from "../../src/ws/protocol.js";
 import type { ConnectedClient } from "../../src/ws/connection-manager.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("scope normalization", () => {
   it("HTTP scope middleware trims token scopes before comparison", async () => {
@@ -12,6 +13,8 @@ describe("scope normalization", () => {
     app.use("*", async (c, next) => {
       c.set("authClaims", {
         token_kind: "device",
+        token_id: "test-token",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         scopes: [" operator.approvals "],
       });
@@ -42,6 +45,8 @@ describe("scope normalization", () => {
       role: "client",
       auth_claims: {
         token_kind: "device",
+        token_id: "test-token",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         scopes: [" operator.approvals "],
       },
@@ -64,6 +69,6 @@ describe("scope normalization", () => {
     );
 
     expect(response).toBeUndefined();
-    expect(onApprovalDecision).toHaveBeenCalledWith(approvalId, true, undefined);
+    expect(onApprovalDecision).toHaveBeenCalledWith(DEFAULT_TENANT_ID, approvalId, true, undefined);
   });
 });

@@ -175,6 +175,7 @@ export class ToolSetBuilder {
         }
 
         const evaluation = await policy.evaluateToolCall({
+          tenantId: this.deps.tenantId,
           agentId,
           workspaceId,
           toolId: input.toolDesc.id,

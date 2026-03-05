@@ -5,8 +5,12 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import { createDbSecretProvider } from "../../src/modules/secret/create-secret-provider.js";
-import { createTestApp, createTestContainer } from "./helpers.js";
+import {
+  createTestApp,
+  createTestAuthAndSecrets,
+  createTestContainer,
+  decorateAppWithDefaultAuth,
+} from "./helpers.js";
 
 describe("usage routes", () => {
   it("rolls up attempt costs across execution attempts", async () => {
@@ -379,11 +383,6 @@ describe("usage routes", () => {
   });
 
   it("includes cached provider usage when auth profiles are enabled and a profile is pinned", async () => {
-    const prevAuthProfilesEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
-    const prevOpenRouterKey = process.env["OPENROUTER_API_KEY"];
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
-    process.env["OPENROUTER_API_KEY"] = "test-openrouter-key";
-
     const fetchMock = vi.fn(async () => {
       return new Response(JSON.stringify({ data: { label: "test-key", usage: 123, limit: 456 } }), {
         status: 200,
@@ -394,12 +393,11 @@ describe("usage routes", () => {
 
     try {
       const container = await createTestContainer();
-      const secretProvider = await createDbSecretProvider({
-        db: container.db,
-        dbPath: ":memory:",
-        tyrumHome: process.cwd(),
-      });
-      const app = createApp(container, { secretProvider });
+      const { authTokens, tenantAdminToken, secretProviderForTenant } =
+        await createTestAuthAndSecrets(container);
+      const secretProvider = secretProviderForTenant(DEFAULT_TENANT_ID);
+      const app = createApp(container, { authTokens, secretProviderForTenant });
+      decorateAppWithDefaultAuth(app, tenantAdminToken);
       const handle = await secretProvider.store("OPENROUTER_API_KEY", "ignored-by-env-provider");
 
       const authProfileId = "auth-profile-openrouter-1";
@@ -506,19 +504,12 @@ describe("usage routes", () => {
 
       await container.db.close();
     } finally {
-      process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevAuthProfilesEnabled;
-      process.env["OPENROUTER_API_KEY"] = prevOpenRouterKey;
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
     }
   });
 
   it("returns structured provider errors and caches failures", async () => {
-    const prevAuthProfilesEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
-    const prevOpenRouterKey = process.env["OPENROUTER_API_KEY"];
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
-    process.env["OPENROUTER_API_KEY"] = "test-openrouter-key";
-
     const fetchMock = vi.fn(async () => {
       return new Response("rate limited", {
         status: 429,
@@ -529,12 +520,11 @@ describe("usage routes", () => {
 
     try {
       const container = await createTestContainer();
-      const secretProvider = await createDbSecretProvider({
-        db: container.db,
-        dbPath: ":memory:",
-        tyrumHome: process.cwd(),
-      });
-      const app = createApp(container, { secretProvider });
+      const { authTokens, tenantAdminToken, secretProviderForTenant } =
+        await createTestAuthAndSecrets(container);
+      const secretProvider = secretProviderForTenant(DEFAULT_TENANT_ID);
+      const app = createApp(container, { authTokens, secretProviderForTenant });
+      decorateAppWithDefaultAuth(app, tenantAdminToken);
       const handle = await secretProvider.store("OPENROUTER_API_KEY", "ignored-by-env-provider");
 
       const authProfileId = "auth-profile-openrouter-error-1";
@@ -643,8 +633,6 @@ describe("usage routes", () => {
 
       await container.db.close();
     } finally {
-      process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevAuthProfilesEnabled;
-      process.env["OPENROUTER_API_KEY"] = prevOpenRouterKey;
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
     }

@@ -55,6 +55,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     const freshIso = new Date(nowMs - 6 * 60 * 60 * 1000).toISOString();
 
     const snapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
         artifacts: {
@@ -165,6 +166,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
       const createdAt = "2026-02-24 00:00:00"; // SQLite `datetime('now')` format (UTC).
 
       const snapshot = await snapshotDal.getOrCreate(
+        DEFAULT_TENANT_ID,
         PolicyBundle.parse({
           v: 1,
           artifacts: {
@@ -251,6 +253,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     const newerIso = new Date(nowMs - 1 * 60 * 60 * 1000).toISOString();
 
     const snapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
         artifacts: {
@@ -347,6 +350,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     const newerIso = new Date(nowMs - 1 * 60 * 60 * 1000).toISOString();
 
     const snapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
         artifacts: {
@@ -450,6 +454,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     const newerIso = new Date(nowMs - 1 * 60 * 60 * 1000).toISOString();
 
     const snapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
         artifacts: {
@@ -532,6 +537,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     const newerIso = new Date(nowMs - 1 * 60 * 60 * 1000).toISOString();
 
     const smallSnapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
         artifacts: {
@@ -543,6 +549,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
       }),
     );
     const largeSnapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
         artifacts: {
@@ -660,6 +667,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     const oldIso = new Date(nowMs - 2 * 24 * 60 * 60 * 1000).toISOString();
 
     const snapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
         artifacts: {
@@ -738,6 +746,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     const newerIso = new Date(nowMs - 1 * 60 * 60 * 1000).toISOString();
 
     const snapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
         artifacts: {

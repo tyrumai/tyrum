@@ -5,6 +5,7 @@ import { createAuditRoutes } from "../../src/routes/audit.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
 
 describe("Audit routes", () => {
   let db: SqliteDb;
@@ -18,7 +19,24 @@ describe("Audit routes", () => {
     didOpenDb = true;
     eventLog = new EventLog(db);
     app = new Hono();
-    app.route("/", createAuditRoutes({ db, eventLog }));
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "test-token",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
+    app.route(
+      "/",
+      createAuditRoutes({
+        db,
+        eventLog,
+        identityScopeDal: new IdentityScopeDal(db),
+      }),
+    );
   });
 
   afterEach(async () => {

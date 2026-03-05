@@ -19,12 +19,13 @@ import {
 import type { SecretProvider } from "../modules/secret/provider.js";
 import type { SqlDb } from "../statestore/types.js";
 import { safeDetail } from "../utils/safe-detail.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface UsageRouteDeps {
   db: SqlDb;
   authProfileDal?: AuthProfileDal;
   pinDal?: SessionProviderPinDal;
-  secretProvider?: SecretProvider;
+  secretProviderForTenant?: (tenantId: string) => SecretProvider;
   logger?: Logger;
 }
 
@@ -52,14 +53,10 @@ function newTotals(): UsageTotals {
 
 export function createUsageRoutes(deps: UsageRouteDeps): Hono {
   const app = new Hono();
-  const providerUsagePoller = new ProviderUsagePoller({
-    authProfileDal: deps.authProfileDal,
-    pinDal: deps.pinDal,
-    secretProvider: deps.secretProvider,
-    logger: deps.logger,
-  });
+  const providerUsagePollers = new Map<string, ProviderUsagePoller>();
 
   app.get("/usage", async (c) => {
+    const tenantId = requireTenantId(c);
     const runId = c.req.query("run_id")?.trim() || undefined;
     const key = c.req.query("key")?.trim() || undefined;
     const agentKey = c.req.query("agent_key")?.trim() || undefined;
@@ -84,37 +81,52 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
       rows = await deps.db.all<{ cost_json: string | null }>(
         `SELECT a.cost_json
          FROM execution_attempts a
-         JOIN execution_steps s ON s.step_id = a.step_id
-         WHERE s.run_id = ?
+         JOIN execution_steps s
+           ON s.tenant_id = a.tenant_id
+          AND s.step_id = a.step_id
+         WHERE s.tenant_id = ?
+           AND s.run_id = ?
            AND a.cost_json IS NOT NULL`,
-        [runId],
+        [tenantId, runId],
       );
     } else if (key) {
       rows = await deps.db.all<{ cost_json: string | null }>(
         `SELECT a.cost_json
          FROM execution_attempts a
-         JOIN execution_steps s ON s.step_id = a.step_id
-         JOIN execution_runs r ON r.run_id = s.run_id
-         WHERE r.key = ?
+         JOIN execution_steps s
+           ON s.tenant_id = a.tenant_id
+          AND s.step_id = a.step_id
+         JOIN execution_runs r
+           ON r.tenant_id = s.tenant_id
+          AND r.run_id = s.run_id
+         WHERE r.tenant_id = ?
+           AND r.key = ?
            AND a.cost_json IS NOT NULL`,
-        [key],
+        [tenantId, key],
       );
     } else if (agentKey) {
       const keyPrefix = `agent:${agentKey}:`;
       rows = await deps.db.all<{ cost_json: string | null }>(
         `SELECT a.cost_json
          FROM execution_attempts a
-         JOIN execution_steps s ON s.step_id = a.step_id
-         JOIN execution_runs r ON r.run_id = s.run_id
-         WHERE substr(r.key, 1, length(?)) = ?
+         JOIN execution_steps s
+           ON s.tenant_id = a.tenant_id
+          AND s.step_id = a.step_id
+         JOIN execution_runs r
+           ON r.tenant_id = s.tenant_id
+          AND r.run_id = s.run_id
+         WHERE r.tenant_id = ?
+           AND substr(r.key, 1, length(?)) = ?
            AND a.cost_json IS NOT NULL`,
-        [keyPrefix, keyPrefix],
+        [tenantId, keyPrefix, keyPrefix],
       );
     } else {
       rows = await deps.db.all<{ cost_json: string | null }>(
         `SELECT cost_json
          FROM execution_attempts
-         WHERE cost_json IS NOT NULL`,
+         WHERE tenant_id = ?
+           AND cost_json IS NOT NULL`,
+        [tenantId],
       );
     }
 
@@ -148,8 +160,23 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
 
     const provider: ProviderUsageResult | null = isAuthProfilesEnabled()
       ? await (async () => {
+          const poller =
+            providerUsagePollers.get(tenantId) ??
+            (() => {
+              const created = new ProviderUsagePoller({
+                tenantId,
+                authProfileDal: deps.authProfileDal,
+                pinDal: deps.pinDal,
+                secretProviderGetter: deps.secretProviderForTenant
+                  ? async () => deps.secretProviderForTenant!(tenantId)
+                  : undefined,
+                logger: deps.logger,
+              });
+              providerUsagePollers.set(tenantId, created);
+              return created;
+            })();
           try {
-            return await providerUsagePoller.pollLatestPinned();
+            return await poller.pollLatestPinned();
           } catch (err) {
             const detail = safeDetail(err);
             deps.logger?.warn("usage.provider_poll_unhandled", {

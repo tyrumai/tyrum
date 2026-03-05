@@ -61,9 +61,6 @@ describe("AgentRuntime OAuth refresh", () => {
     await container?.db.close();
     container = undefined;
     seenApiKeys.length = 0;
-    delete process.env["TYRUM_AUTH_PROFILES_ENABLED"];
-    delete process.env["OAUTH_TEST_CLIENT_ID"];
-    delete process.env["OAUTH_TEST_CLIENT_SECRET"];
   });
 
   async function seedCatalog(): Promise<void> {
@@ -94,10 +91,6 @@ describe("AgentRuntime OAuth refresh", () => {
   }
 
   it("refreshes an OAuth profile on 401 and reuses the refreshed access token", async () => {
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
-    process.env["OAUTH_TEST_CLIENT_ID"] = "client-id";
-    process.env["OAUTH_TEST_CLIENT_SECRET"] = "client-secret";
-
     container = createContainer({
       dbPath: ":memory:",
       migrationsDir,
@@ -114,6 +107,27 @@ describe("AgentRuntime OAuth refresh", () => {
     const refreshKey = "oauth:openai:refresh";
     const accessHandle = await secretProvider.store(accessKey, "OLD_ACCESS");
     const refreshHandle = await secretProvider.store(refreshKey, "REFRESH_TOKEN");
+    await secretProvider.store("oauth:openai:client_secret", "client-secret");
+
+    await container.db.run(
+      `INSERT INTO oauth_provider_configs (
+         tenant_id,
+         provider_id,
+         token_endpoint,
+         scopes_json,
+         client_id,
+         client_secret_key,
+         token_endpoint_basic_auth
+       ) VALUES (?, ?, ?, ?, ?, ?, 1)`,
+      [
+        DEFAULT_TENANT_ID,
+        "openai",
+        "https://oauth.example/token",
+        "[]",
+        "client-id",
+        "oauth:openai:client_secret",
+      ],
+    );
 
     const authProfileDal = new AuthProfileDal(container.db);
     await authProfileDal.create({
@@ -126,26 +140,6 @@ describe("AgentRuntime OAuth refresh", () => {
         refresh_token: refreshKey,
       },
     });
-
-    (container as any).oauthProviderRegistry = {
-      async get(providerId: string) {
-        if (providerId !== "openai") return undefined;
-        return {
-          provider_id: "openai",
-          token_endpoint: "https://oauth.example/token",
-          scopes: [],
-          client_id_env: "OAUTH_TEST_CLIENT_ID",
-          client_secret_env: "OAUTH_TEST_CLIENT_SECRET",
-          token_endpoint_basic_auth: true,
-        };
-      },
-      async list() {
-        return [];
-      },
-      async reload() {
-        // no-op
-      },
-    };
 
     const fetchImpl: typeof fetch = async (input, init) => {
       const url = String(input);
@@ -188,10 +182,6 @@ describe("AgentRuntime OAuth refresh", () => {
   });
 
   it("keeps the existing refresh token when the refresh response omits refresh_token", async () => {
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
-    process.env["OAUTH_TEST_CLIENT_ID"] = "client-id";
-    process.env["OAUTH_TEST_CLIENT_SECRET"] = "client-secret";
-
     container = createContainer({
       dbPath: ":memory:",
       migrationsDir,
@@ -208,6 +198,27 @@ describe("AgentRuntime OAuth refresh", () => {
     const refreshKey = "oauth:openai:refresh";
     await secretProvider.store(accessKey, "OLD_ACCESS");
     const refreshHandle = await secretProvider.store(refreshKey, "REFRESH_TOKEN");
+    await secretProvider.store("oauth:openai:client_secret", "client-secret");
+
+    await container.db.run(
+      `INSERT INTO oauth_provider_configs (
+         tenant_id,
+         provider_id,
+         token_endpoint,
+         scopes_json,
+         client_id,
+         client_secret_key,
+         token_endpoint_basic_auth
+       ) VALUES (?, ?, ?, ?, ?, ?, 1)`,
+      [
+        DEFAULT_TENANT_ID,
+        "openai",
+        "https://oauth.example/token",
+        "[]",
+        "client-id",
+        "oauth:openai:client_secret",
+      ],
+    );
 
     const authProfileDal = new AuthProfileDal(container.db);
     await authProfileDal.create({
@@ -220,26 +231,6 @@ describe("AgentRuntime OAuth refresh", () => {
         refresh_token: refreshKey,
       },
     });
-
-    (container as any).oauthProviderRegistry = {
-      async get(providerId: string) {
-        if (providerId !== "openai") return undefined;
-        return {
-          provider_id: "openai",
-          token_endpoint: "https://oauth.example/token",
-          scopes: [],
-          client_id_env: "OAUTH_TEST_CLIENT_ID",
-          client_secret_env: "OAUTH_TEST_CLIENT_SECRET",
-          token_endpoint_basic_auth: true,
-        };
-      },
-      async list() {
-        return [];
-      },
-      async reload() {
-        // no-op
-      },
-    };
 
     const fetchImpl: typeof fetch = async (input) => {
       const url = String(input);
@@ -275,8 +266,6 @@ describe("AgentRuntime OAuth refresh", () => {
   });
 
   it("disables an OAuth profile when refresh fails and rotates to the next profile", async () => {
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
-
     container = createContainer({
       dbPath: ":memory:",
       migrationsDir,
@@ -310,18 +299,6 @@ describe("AgentRuntime OAuth refresh", () => {
       type: "api_key",
       secretKeys: { api_key: "api-key:openai:good" },
     });
-
-    (container as any).oauthProviderRegistry = {
-      async get() {
-        return undefined;
-      },
-      async list() {
-        return [];
-      },
-      async reload() {
-        // no-op
-      },
-    };
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 

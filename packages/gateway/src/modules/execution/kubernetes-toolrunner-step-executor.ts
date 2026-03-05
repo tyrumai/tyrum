@@ -2,10 +2,7 @@ import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
 import { BatchV1Api, CoreV1Api, KubeConfig } from "@kubernetes/client-node";
 import { randomUUID } from "node:crypto";
 import type { Logger } from "../observability/logger.js";
-import {
-  resolveSandboxHardeningProfile,
-  type SandboxHardeningProfile,
-} from "../sandbox/hardening.js";
+import type { SandboxHardeningProfile } from "../sandbox/hardening.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
 
 function sleep(ms: number): Promise<void> {
@@ -20,26 +17,6 @@ export function sanitizeDnsLabelSuffix(raw: string): string {
 function unwrapBody<T>(res: unknown): T {
   const anyRes = res as { body?: T };
   return (anyRes && typeof anyRes === "object" && "body" in anyRes ? anyRes.body : res) as T;
-}
-
-export function buildEnv(
-  base: NodeJS.ProcessEnv,
-  overrides: Record<string, string>,
-): Array<{ name: string; value: string }> {
-  const out = new Map<string, string>();
-
-  for (const [name, value] of Object.entries(base)) {
-    if (typeof value !== "string") continue;
-    // Avoid huge env payloads; Kubernetes rejects very large objects.
-    if (value.length > 32_000) continue;
-    out.set(name, value);
-  }
-
-  for (const [name, value] of Object.entries(overrides)) {
-    out.set(name, value);
-  }
-
-  return [...out.entries()].map(([name, value]) => ({ name, value }));
 }
 
 export function parseStepResultFromLogs(raw: string): StepResult | null {
@@ -67,7 +44,8 @@ export interface KubernetesToolRunnerStepExecutorOptions {
   image: string;
   workspacePvcClaim: string;
   tyrumHome: string;
-  env?: NodeJS.ProcessEnv;
+  dbPath: string;
+  hardeningProfile: SandboxHardeningProfile;
   logger?: Logger;
   /**
    * Whether to delete the job after reading logs.
@@ -91,7 +69,8 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
   private readonly image: string;
   private readonly workspacePvcClaim: string;
   private readonly tyrumHome: string;
-  private readonly env: NodeJS.ProcessEnv;
+  private readonly dbPath: string;
+  private readonly hardeningProfile: SandboxHardeningProfile;
   private readonly logger?: Logger;
   private readonly deleteJobAfter: boolean;
   private readonly jobTtlSeconds?: number;
@@ -105,7 +84,8 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
     this.image = opts.image;
     this.workspacePvcClaim = opts.workspacePvcClaim;
     this.tyrumHome = opts.tyrumHome;
-    this.env = opts.env ?? process.env;
+    this.dbPath = opts.dbPath;
+    this.hardeningProfile = opts.hardeningProfile;
     this.logger = opts.logger;
     this.deleteJobAfter = opts.deleteJobAfter ?? true;
     this.jobTtlSeconds = opts.jobTtlSeconds;
@@ -128,7 +108,7 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
     timeoutMs: number,
     context: StepExecutionContext,
   ): Promise<StepResult> {
-    const hardeningProfile: SandboxHardeningProfile = resolveSandboxHardeningProfile();
+    const hardeningProfile = this.hardeningProfile;
     const suffix = sanitizeDnsLabelSuffix(randomUUID().replace(/-/g, "").slice(0, 10));
     const jobName = `tyrum-toolrunner-${suffix}`.slice(0, 63);
 
@@ -138,12 +118,16 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
       timeout_ms: timeoutMs,
       action,
     });
-
-    const env = buildEnv(this.env, {
-      TYRUM_HOME: this.tyrumHome,
-      TYRUM_LOG_LEVEL: "silent",
-      TYRUM_TOOLRUNNER_PAYLOAD: payload,
-    });
+    const payloadB64 = Buffer.from(payload, "utf-8").toString("base64url");
+    const args = [
+      "toolrunner",
+      "--home",
+      this.tyrumHome,
+      "--db",
+      this.dbPath,
+      "--payload-b64",
+      payloadB64,
+    ];
 
     const podSecurityContext = {
       runAsNonRoot: true,
@@ -221,8 +205,7 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
               {
                 name: "toolrunner",
                 image: this.image,
-                args: ["toolrunner"],
-                env,
+                args,
                 securityContext: containerSecurityContext,
                 volumeMounts,
               },

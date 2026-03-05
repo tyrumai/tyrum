@@ -7,7 +7,8 @@ export const ModelsHttpProviderSummary = z
     name: z.string().trim().min(1),
     npm: z.string().trim().min(1).nullable(),
     api: z.string().trim().min(1).nullable(),
-    env: z.array(z.string().trim().min(1)),
+    enabled: z.boolean().default(true),
+    env: z.array(z.string().trim().min(1)).default([]),
     doc: z.string().trim().min(1).nullable(),
     model_count: z.number().int().nonnegative(),
   })
@@ -18,6 +19,7 @@ export const ModelsHttpModelSummary = z
   .object({
     id: z.string().trim().min(1),
     name: z.string().trim().min(1),
+    enabled: z.boolean().default(true),
     family: z.string().trim().min(1).nullable(),
     release_date: z.string().trim().min(1).nullable(),
     last_updated: z.string().trim().min(1).nullable(),

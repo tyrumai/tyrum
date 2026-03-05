@@ -10,6 +10,7 @@ import type { ConnectionDirectoryDal } from "../modules/backplane/connection-dir
 import { emitPairingApprovedEvent } from "../ws/pairing-approved.js";
 import { CapabilityDescriptor, NodePairingTrustLevel, type WsEventEnvelope } from "@tyrum/schemas";
 import { getClientIp } from "../modules/auth/client-ip.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface PairingRouteDeps {
   nodePairingDal: NodePairingDal;
@@ -23,12 +24,14 @@ export interface PairingRouteDeps {
   };
 }
 
-function emitEvent(deps: PairingRouteDeps, evt: WsEventEnvelope): void {
+function emitEvent(deps: PairingRouteDeps, tenantId: string, evt: WsEventEnvelope): void {
   const ws = deps.ws;
   if (!ws) return;
 
   const payload = JSON.stringify(evt);
   for (const client of ws.connectionManager.allClients()) {
+    const clientTenantId = client.auth_claims?.tenant_id ?? null;
+    if (clientTenantId !== tenantId) continue;
     try {
       client.ws.send(payload);
     } catch (err) {
@@ -39,7 +42,7 @@ function emitEvent(deps: PairingRouteDeps, evt: WsEventEnvelope): void {
 
   if (ws.cluster) {
     void ws.cluster.outboxDal
-      .enqueue("ws.broadcast", {
+      .enqueue(tenantId, "ws.broadcast", {
         source_edge_id: ws.cluster.edgeId,
         skip_local: true,
         message: evt,
@@ -54,6 +57,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
   const app = new Hono();
 
   app.get("/pairings", async (c) => {
+    const tenantId = requireTenantId(c);
     const statusRaw = c.req.query("status")?.trim();
     const status =
       statusRaw === "pending" ||
@@ -62,11 +66,12 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       statusRaw === "revoked"
         ? statusRaw
         : undefined;
-    const rows = await deps.nodePairingDal.list({ status });
+    const rows = await deps.nodePairingDal.list({ tenantId, status });
     return c.json({ status: "ok", pairings: rows });
   });
 
   app.post("/pairings/:id/approve", async (c) => {
+    const tenantId = requireTenantId(c);
     const id = Number.parseInt(c.req.param("id"), 10);
     if (!Number.isInteger(id) || id <= 0) {
       return c.json({ error: "invalid_request", message: "id must be a positive integer" }, 400);
@@ -103,6 +108,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     }
 
     const resolved = await deps.nodePairingDal.resolve({
+      tenantId,
       pairingId: id,
       decision: "approved",
       reason,
@@ -120,10 +126,14 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     const { pairing, scopedToken } = resolved;
 
     if (scopedToken && deps.ws) {
-      emitPairingApprovedEvent(deps.ws, { pairing, nodeId: pairing.node.node_id, scopedToken });
+      emitPairingApprovedEvent(deps.ws, tenantId, {
+        pairing,
+        nodeId: pairing.node.node_id,
+        scopedToken,
+      });
     }
 
-    emitEvent(deps, {
+    emitEvent(deps, tenantId, {
       event_id: crypto.randomUUID(),
       type: "pairing.resolved",
       occurred_at: new Date().toISOString(),
@@ -134,6 +144,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
   });
 
   app.post("/pairings/:id/deny", async (c) => {
+    const tenantId = requireTenantId(c);
     const id = Number.parseInt(c.req.param("id"), 10);
     if (!Number.isInteger(id) || id <= 0) {
       return c.json({ error: "invalid_request", message: "id must be a positive integer" }, 400);
@@ -141,6 +152,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     const body = (await c.req.json()) as { reason?: string };
 
     const resolved = await deps.nodePairingDal.resolve({
+      tenantId,
       pairingId: id,
       decision: "denied",
       reason: typeof body.reason === "string" ? body.reason : undefined,
@@ -155,7 +167,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     }
     const { pairing } = resolved;
 
-    emitEvent(deps, {
+    emitEvent(deps, tenantId, {
       event_id: crypto.randomUUID(),
       type: "pairing.resolved",
       occurred_at: new Date().toISOString(),
@@ -166,6 +178,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
   });
 
   app.post("/pairings/:id/revoke", async (c) => {
+    const tenantId = requireTenantId(c);
     const id = Number.parseInt(c.req.param("id"), 10);
     if (!Number.isInteger(id) || id <= 0) {
       return c.json({ error: "invalid_request", message: "id must be a positive integer" }, 400);
@@ -173,6 +186,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     const body = (await c.req.json()) as { reason?: string };
 
     const pairing = await deps.nodePairingDal.revoke({
+      tenantId,
       pairingId: id,
       reason: typeof body.reason === "string" ? body.reason : undefined,
       resolvedBy: {
@@ -185,7 +199,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       return c.json({ error: "not_found", message: "pairing not found or not approved" }, 404);
     }
 
-    emitEvent(deps, {
+    emitEvent(deps, tenantId, {
       event_id: crypto.randomUUID(),
       type: "pairing.resolved",
       occurred_at: new Date().toISOString(),

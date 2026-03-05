@@ -1,13 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer, request as httpRequest, type Server } from "node:http";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { SlidingWindowRateLimiter } from "../../src/modules/auth/rate-limiter.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 async function startServer(server: Server): Promise<number> {
   return await new Promise<number>((resolve) => {
@@ -61,8 +60,8 @@ async function attemptUpgrade(port: number): Promise<{
 
 describe("WS upgrade rate limiting", () => {
   let server: Server | undefined;
-  let tokenHome: string | undefined;
   let stopHeartbeat: (() => void) | undefined;
+  let db: SqliteDb | undefined;
 
   afterEach(async () => {
     stopHeartbeat?.();
@@ -73,16 +72,13 @@ describe("WS upgrade rate limiting", () => {
       server = undefined;
     }
 
-    if (tokenHome) {
-      await rm(tokenHome, { recursive: true, force: true });
-      tokenHome = undefined;
-    }
+    await db?.close();
+    db = undefined;
   });
 
   it("rejects the 11th upgrade attempt within a minute per IP", async () => {
-    tokenHome = await mkdtemp(join(tmpdir(), "tyrum-ws-upgrade-rate-limit-"));
-    const tokenStore = new TokenStore(tokenHome);
-    await tokenStore.initialize();
+    db = openTestSqliteDb();
+    const authTokens = new AuthTokenService(db);
 
     const upgradeRateLimiter = new SlidingWindowRateLimiter({
       windowMs: 60_000,
@@ -94,7 +90,7 @@ describe("WS upgrade rate limiting", () => {
     const handler = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
       upgradeRateLimiter,
     });
     stopHeartbeat = handler.stopHeartbeat;

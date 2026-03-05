@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { createSecretRoutes } from "../../src/routes/secret.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { createDbSecretProvider } from "../../src/modules/secret/create-secret-provider.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("Secret routes (integration)", () => {
   let tempDir: string;
@@ -24,12 +25,27 @@ describe("Secret routes (integration)", () => {
 
   async function setup() {
     const db = openTestSqliteDb(dbPath);
-    const provider = await createDbSecretProvider({ db, dbPath, tyrumHome });
+    const provider = await createDbSecretProvider({
+      db,
+      dbPath,
+      tyrumHome,
+      tenantId: DEFAULT_TENANT_ID,
+    });
     const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "test-token",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
     app.route(
       "/",
       createSecretRoutes({
-        secretProviderForAgent: async () => provider,
+        secretProviderForTenant: () => provider,
       }),
     );
     return { app, provider, db };

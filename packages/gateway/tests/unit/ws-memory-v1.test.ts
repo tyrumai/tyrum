@@ -8,6 +8,7 @@ import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { FsArtifactStore } from "../../src/modules/artifact/store.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -34,6 +35,8 @@ function makeClient(
     opts?.authClaims ??
     ({
       token_kind: "admin",
+      token_id: "token-1",
+      tenant_id: DEFAULT_TENANT_ID,
       role: "admin",
       scopes: ["*"],
     } as const);
@@ -89,6 +92,8 @@ describe("WS memory v1 handlers", () => {
     const { ws: otherOperatorWs } = makeClient(cm, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-op-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_1",
         scopes: ["operator.read"],
@@ -97,6 +102,8 @@ describe("WS memory v1 handlers", () => {
     const { ws: pairingOnlyWs } = makeClient(cm, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-pair-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_2",
         scopes: ["operator.pairing"],
@@ -263,6 +270,8 @@ describe("WS memory v1 handlers", () => {
     const { id } = makeClient(cm, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-scoped-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_1",
         scopes: ["operator.read"],
@@ -301,6 +310,8 @@ describe("WS memory v1 handlers", () => {
     const { ws: otherOperatorWs } = makeClient(cm, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-op-2",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_1",
         scopes: ["operator.read"],
@@ -309,6 +320,8 @@ describe("WS memory v1 handlers", () => {
     const { ws: pairingOnlyWs } = makeClient(cm, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-pair-2",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_2",
         scopes: ["operator.pairing"],
@@ -377,6 +390,8 @@ describe("WS memory v1 handlers", () => {
     const { ws: otherOperatorWs } = makeClient(cm, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-op-3",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_1",
         scopes: ["operator.read"],
@@ -385,6 +400,8 @@ describe("WS memory v1 handlers", () => {
     const { ws: pairingOnlyWs } = makeClient(cm, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-pair-3",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_2",
         scopes: ["operator.pairing"],

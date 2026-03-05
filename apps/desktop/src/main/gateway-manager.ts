@@ -7,7 +7,12 @@ export interface GatewayManagerOptions {
   gatewayBin: string;
   port: number;
   dbPath: string;
-  accessToken: string;
+  home?: string;
+  /**
+   * Deprecated: the gateway no longer accepts an externally-provided token at startup.
+   * Use bootstrap tokens issued by the gateway and persist them in the desktop config.
+   */
+  accessToken?: string;
   host?: string;
 }
 
@@ -47,6 +52,9 @@ const STARTUP_NOISE_PATTERNS = [
 ];
 
 const STARTUP_LOG_BUFFER_LIMIT = 80;
+
+const BOOTSTRAP_TOKEN_LINE_PATTERN =
+  /^(?<label>system|default-tenant-admin):\s*(?<token>tyrum-token\.v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\s*$/;
 
 function isStartupNoiseLine(line: string): boolean {
   return STARTUP_NOISE_PATTERNS.some((pattern) => pattern.test(line));
@@ -93,14 +101,54 @@ function appendStartupLogLines(buffer: string[], rawOutput: string): void {
   }
 }
 
+function captureBootstrapTokensFromOutput(tokens: Map<string, string>, rawOutput: string): void {
+  for (const rawLine of rawOutput.split(/\r?\n/g)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const match = BOOTSTRAP_TOKEN_LINE_PATTERN.exec(line);
+    const label = match?.groups?.["label"];
+    const token = match?.groups?.["token"];
+    if (!label || !token) continue;
+    tokens.set(label, token);
+  }
+}
+
+function redactBootstrapTokens(rawOutput: string): string {
+  const lines = rawOutput.split(/\r?\n/g);
+  let changed = false;
+  const redactedLines = lines.map((rawLine) => {
+    const line = rawLine.trim();
+    const match = BOOTSTRAP_TOKEN_LINE_PATTERN.exec(line);
+    const label = match?.groups?.["label"];
+    if (!label) return rawLine;
+    changed = true;
+    return `${label}: [REDACTED]`;
+  });
+  return changed ? redactedLines.join("\n") : rawOutput;
+}
+
+function inferHomeFromDbPath(dbPath: string): string | undefined {
+  if (!dbPath || dbPath.includes("://")) return undefined;
+  try {
+    return dirname(dbPath);
+  } catch {
+    return undefined;
+  }
+}
+
 export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
   private process: ChildProcess | null = null;
   private stoppingProcess: ChildProcess | null = null;
   private healthTimer: ReturnType<typeof setInterval> | null = null;
   private _status: GatewayStatus = "stopped";
+  private bootstrapTokens = new Map<string, string>();
 
   get status(): GatewayStatus {
     return this._status;
+  }
+
+  getBootstrapToken(label: string): string | undefined {
+    return this.bootstrapTokens.get(label);
   }
 
   private setStatus(status: GatewayStatus): void {
@@ -111,8 +159,10 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
   async start(opts: GatewayManagerOptions): Promise<void> {
     if (this.process) throw new Error("Gateway already running");
     this.setStatus("starting");
+    this.bootstrapTokens.clear();
 
     const host = opts.host ?? "127.0.0.1";
+    const home = opts.home ?? inferHomeFromDbPath(opts.dbPath);
     const gatewayDir = dirname(opts.gatewayBin);
     const migrationsDir = (() => {
       const alongsideGateway = join(gatewayDir, "migrations");
@@ -132,34 +182,40 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     })();
     const startupLogLines: string[] = [];
 
-    const proc = spawn(process.execPath, [opts.gatewayBin], {
+    const args: string[] = [opts.gatewayBin, "start", "--host", host, "--port", String(opts.port)];
+    if (home) args.push("--home", home);
+    args.push("--db", opts.dbPath);
+    if (migrationsDir) args.push("--migrations-dir", migrationsDir);
+
+    const proc = spawn(process.execPath, args, {
       env: {
         ...process.env,
         ELECTRON_RUN_AS_NODE: "1",
-        GATEWAY_PORT: String(opts.port),
-        GATEWAY_HOST: host,
-        GATEWAY_DB_PATH: opts.dbPath,
-        GATEWAY_TOKEN: opts.accessToken,
-        ...(migrationsDir ? { GATEWAY_MIGRATIONS_DIR: migrationsDir } : {}),
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
     this.process = proc;
 
     proc.stdout?.on("data", (data: Buffer) => {
-      appendStartupLogLines(startupLogLines, data.toString());
+      const output = data.toString();
+      captureBootstrapTokensFromOutput(this.bootstrapTokens, output);
+      const redacted = redactBootstrapTokens(output);
+      appendStartupLogLines(startupLogLines, redacted);
       this.emit("log", {
         level: "info",
-        message: data.toString().trimEnd(),
+        message: redacted.trimEnd(),
         timestamp: new Date().toISOString(),
       });
     });
 
     proc.stderr?.on("data", (data: Buffer) => {
-      appendStartupLogLines(startupLogLines, data.toString());
+      const output = data.toString();
+      captureBootstrapTokensFromOutput(this.bootstrapTokens, output);
+      const redacted = redactBootstrapTokens(output);
+      appendStartupLogLines(startupLogLines, redacted);
       this.emit("log", {
         level: "error",
-        message: data.toString().trimEnd(),
+        message: redacted.trimEnd(),
         timestamp: new Date().toISOString(),
       });
     });

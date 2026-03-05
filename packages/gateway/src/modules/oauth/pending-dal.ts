@@ -80,6 +80,14 @@ export class OauthPendingDal {
     return row ? toRow(row) : undefined;
   }
 
+  async getByState(state: string): Promise<OauthPendingRow | undefined> {
+    const row = await this.db.get<RawOauthPendingRow>(
+      "SELECT * FROM oauth_pending WHERE state = ? LIMIT 1",
+      [state],
+    );
+    return row ? toRow(row) : undefined;
+  }
+
   /**
    * Atomically "consume" a pending OAuth request so duplicate callbacks can't
    * process the same state concurrently.
@@ -95,6 +103,23 @@ export class OauthPendingDal {
       const res = await tx.run("DELETE FROM oauth_pending WHERE tenant_id = ? AND state = ?", [
         input.tenantId,
         input.state,
+      ]);
+      if (res.changes !== 1) return undefined;
+      return toRow(row);
+    });
+  }
+
+  async consumeByState(state: string): Promise<OauthPendingRow | undefined> {
+    return await this.db.transaction(async (tx) => {
+      const row = await tx.get<RawOauthPendingRow>(
+        "SELECT * FROM oauth_pending WHERE state = ? LIMIT 1",
+        [state],
+      );
+      if (!row) return undefined;
+
+      const res = await tx.run("DELETE FROM oauth_pending WHERE tenant_id = ? AND state = ?", [
+        row.tenant_id,
+        state,
       ]);
       if (res.changes !== 1) return undefined;
       return toRow(row);

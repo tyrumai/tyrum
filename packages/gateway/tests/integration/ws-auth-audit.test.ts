@@ -1,18 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:http";
 import { WebSocket } from "ws";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { AuthAudit, GATEWAY_AUTH_AUDIT_PLAN_ID } from "../../src/modules/auth/audit.js";
 import { AUTH_COOKIE_NAME } from "../../src/modules/auth/http.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { EventLog } from "../../src/modules/planner/event-log.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 
 function waitForClose(ws: WebSocket): Promise<{ code: number; reason: Buffer }> {
   return new Promise((resolve) => {
@@ -22,12 +19,12 @@ function waitForClose(ws: WebSocket): Promise<{ code: number; reason: Buffer }> 
 
 async function startWsServer(params: {
   authAudit: AuthAudit;
-  tokenStore: TokenStore;
+  authTokens: AuthTokenService;
 }): Promise<{ server: Server; port: number; stopHeartbeat: () => void }> {
   const connectionManager = new ConnectionManager();
   const { handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
-    tokenStore: params.tokenStore,
+    authTokens: params.authTokens,
     protocolDeps: {
       connectionManager,
       authAudit: params.authAudit,
@@ -56,7 +53,6 @@ async function startWsServer(params: {
 describe("WS auth audit events", () => {
   let server: Server | undefined;
   let stopHeartbeat: (() => void) | undefined;
-  let tokenHome: string | undefined;
   let db: SqliteDb | undefined;
 
   afterEach(async () => {
@@ -68,11 +64,6 @@ describe("WS auth audit events", () => {
       server = undefined;
     }
 
-    if (tokenHome) {
-      await rm(tokenHome, { recursive: true, force: true });
-      tokenHome = undefined;
-    }
-
     await db?.close();
     db = undefined;
   });
@@ -80,6 +71,7 @@ describe("WS auth audit events", () => {
   it("records auth.failed on missing WS upgrade token (rate-limited)", async () => {
     db = openTestSqliteDb();
     const eventLog = new EventLog(db);
+    const authTokens = new AuthTokenService(db);
 
     let nowMs = 0;
     const authAudit = new AuthAudit({
@@ -88,11 +80,7 @@ describe("WS auth audit events", () => {
       failedAuthWindowMs: 10_000,
     });
 
-    tokenHome = await mkdtemp(join(tmpdir(), "tyrum-ws-auth-audit-token-"));
-    const tokenStore = new TokenStore(tokenHome);
-    await tokenStore.initialize();
-
-    const started = await startWsServer({ authAudit, tokenStore });
+    const started = await startWsServer({ authAudit, authTokens });
     server = started.server;
     stopHeartbeat = started.stopHeartbeat;
 
@@ -136,6 +124,7 @@ describe("WS auth audit events", () => {
   it("records token_transport cookie when an auth cookie is present but rejected cross-origin", async () => {
     db = openTestSqliteDb();
     const eventLog = new EventLog(db);
+    const authTokens = new AuthTokenService(db);
 
     const authAudit = new AuthAudit({
       eventLog,
@@ -143,14 +132,11 @@ describe("WS auth audit events", () => {
       failedAuthWindowMs: 10_000,
     });
 
-    tokenHome = await mkdtemp(join(tmpdir(), "tyrum-ws-auth-audit-token-"));
-    const tokenStore = new TokenStore(tokenHome);
-    const adminToken = await tokenStore.initialize();
-
-    const started = await startWsServer({ authAudit, tokenStore });
+    const started = await startWsServer({ authAudit, authTokens });
     server = started.server;
     stopHeartbeat = started.stopHeartbeat;
 
+    const adminToken = "tyrum-test-token";
     const ws = new WebSocket(`ws://127.0.0.1:${started.port}/ws`, ["tyrum-v1"], {
       headers: {
         cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(adminToken)}`,

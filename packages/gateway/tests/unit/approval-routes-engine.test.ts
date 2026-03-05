@@ -39,8 +39,19 @@ describe("approval respond engine actions", () => {
       cancelRun: vi.fn(async () => "cancelled" as const),
     } as unknown as ExecutionEngine;
 
+    const routes = createApprovalRoutes({ approvalDal, engine });
     const app = new Hono();
-    app.route("/", createApprovalRoutes({ approvalDal, engine }));
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      return await next();
+    });
+    app.route("/", routes);
 
     const approveRes = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",
@@ -85,8 +96,19 @@ describe("approval respond engine actions", () => {
       cancelRun: vi.fn(async () => "cancelled" as const),
     } as unknown as ExecutionEngine;
 
+    const routes = createApprovalRoutes({ approvalDal, engine });
     const app = new Hono();
-    app.route("/", createApprovalRoutes({ approvalDal, engine }));
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      return await next();
+    });
+    app.route("/", routes);
 
     const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",

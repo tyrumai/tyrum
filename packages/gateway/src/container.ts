@@ -23,11 +23,13 @@ import type { ContextReportDal } from "./modules/context/report-dal.js";
 import type { SecretResolutionAuditDal } from "./modules/secret/resolution-audit-dal.js";
 import type { SqlDb } from "./statestore/types.js";
 import type { ModelsDevService } from "./modules/models/models-dev-service.js";
+import type { ModelCatalogService } from "./modules/models/model-catalog-service.js";
 import type { OauthPendingDal } from "./modules/oauth/pending-dal.js";
 import type { OauthRefreshLeaseDal } from "./modules/oauth/refresh-lease-dal.js";
 import type { OAuthProviderRegistry } from "./modules/oauth/provider-registry.js";
 import type { IdentityScopeDal } from "./modules/identity/scope.js";
 import type { ChannelThreadDal } from "./modules/channels/thread-dal.js";
+import { DeploymentConfig, type DeploymentConfig as DeploymentConfigT } from "@tyrum/schemas";
 
 import { createEventBus } from "./event-bus.js";
 import { MemoryV1Dal as MemoryV1DalImpl } from "./modules/memory/v1-dal.js";
@@ -54,10 +56,7 @@ import { ContextReportDal as ContextReportDalImpl } from "./modules/context/repo
 import { SecretResolutionAuditDal as SecretResolutionAuditDalImpl } from "./modules/secret/resolution-audit-dal.js";
 import { RedactionEngine } from "./modules/redaction/engine.js";
 import type { ArtifactStore } from "./modules/artifact/store.js";
-import {
-  createArtifactStore,
-  createArtifactStoreFromEnv,
-} from "./modules/artifact/create-artifact-store.js";
+import { createArtifactStore } from "./modules/artifact/create-artifact-store.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Logger } from "./modules/observability/logger.js";
@@ -67,12 +66,12 @@ import { isPostgresDbUri } from "./statestore/db-uri.js";
 import { ModelsDevCacheDal } from "./modules/models/models-dev-cache-dal.js";
 import { ModelsDevRefreshLeaseDal } from "./modules/models/models-dev-refresh-lease-dal.js";
 import { ModelsDevService as ModelsDevServiceImpl } from "./modules/models/models-dev-service.js";
+import { ModelCatalogService as ModelCatalogServiceImpl } from "./modules/models/model-catalog-service.js";
 import { OauthPendingDal as OauthPendingDalImpl } from "./modules/oauth/pending-dal.js";
 import { OauthRefreshLeaseDal as OauthRefreshLeaseDalImpl } from "./modules/oauth/refresh-lease-dal.js";
 import { OAuthProviderRegistry as OAuthProviderRegistryImpl } from "./modules/oauth/provider-registry.js";
 import { IdentityScopeDal as IdentityScopeDalImpl } from "./modules/identity/scope.js";
 import { ChannelThreadDal as ChannelThreadDalImpl } from "./modules/channels/thread-dal.js";
-import type { GatewayConfig as GatewayRuntimeConfig } from "./config.js";
 
 export interface GatewayContainerConfig {
   dbPath: string;
@@ -105,17 +104,18 @@ export interface GatewayContainer {
   redactionEngine: RedactionEngine;
   artifactStore: ArtifactStore;
   modelsDev: ModelsDevService;
+  modelCatalog: ModelCatalogService;
   oauthPendingDal: OauthPendingDal;
   oauthRefreshLeaseDal: OauthRefreshLeaseDal;
   oauthProviderRegistry: OAuthProviderRegistry;
   logger: Logger;
   config: GatewayContainerConfig;
-  gatewayConfig?: GatewayRuntimeConfig;
+  deploymentConfig: DeploymentConfigT;
 }
 
 export function createContainer(
   config: GatewayContainerConfig,
-  opts?: { redactionEngine?: RedactionEngine; gatewayConfig?: GatewayRuntimeConfig },
+  opts?: { redactionEngine?: RedactionEngine; deploymentConfig?: unknown },
 ): GatewayContainer {
   if (isPostgresDbUri(config.dbPath)) {
     throw new Error(
@@ -130,7 +130,7 @@ export function createContainer(
 
 export async function createContainerAsync(
   config: GatewayContainerConfig,
-  opts?: { redactionEngine?: RedactionEngine; gatewayConfig?: GatewayRuntimeConfig },
+  opts?: { redactionEngine?: RedactionEngine; deploymentConfig?: unknown },
 ): Promise<GatewayContainer> {
   const db = isPostgresDbUri(config.dbPath)
     ? await PostgresDb.open({ dbUri: config.dbPath, migrationsDir: config.migrationsDir })
@@ -139,17 +139,21 @@ export async function createContainerAsync(
   return wireContainer(db, config, opts);
 }
 
-function wireContainer(
+export function wireContainer(
   db: SqlDb,
   config: GatewayContainerConfig,
-  opts?: { redactionEngine?: RedactionEngine; gatewayConfig?: GatewayRuntimeConfig },
+  opts?: { redactionEngine?: RedactionEngine; deploymentConfig?: unknown },
 ): GatewayContainer {
+  const deploymentConfig = DeploymentConfig.parse(opts?.deploymentConfig ?? {});
   const identityScopeDal = new IdentityScopeDalImpl(db);
   const channelThreadDal = new ChannelThreadDalImpl(db);
   const memoryV1Dal = new MemoryV1DalImpl(db);
   const contextReportDal = new ContextReportDalImpl(db);
   const redactionEngine = opts?.redactionEngine ?? new RedactionEngine();
-  const logger = new Logger({ base: { service: "tyrum-gateway" } });
+  const logger = new Logger({
+    level: deploymentConfig.logging.level ?? "info",
+    base: { service: "tyrum-gateway" },
+  });
   const secretResolutionAuditDal = new SecretResolutionAuditDalImpl(db, logger);
   const eventLog = new EventLogImpl(db, redactionEngine, logger);
   const connectorCache = new InMemoryConnectorCache();
@@ -158,7 +162,7 @@ function wireContainer(
   const sessionDal = new SessionDalImpl(db, identityScopeDal, channelThreadDal);
   const eventBus = createEventBus();
 
-  const telegramToken = opts?.gatewayConfig?.channels.telegramBotToken;
+  const telegramToken = deploymentConfig.channels.telegramBotToken;
   const telegramBot = telegramToken ? new TelegramBotImpl(telegramToken) : undefined;
   const approvalDal = new ApprovalDalImpl(db);
   const presenceDal = new PresenceDalImpl(db);
@@ -168,16 +172,29 @@ function wireContainer(
   const watcherProcessor = new WatcherProcessorImpl({ db, memoryV1Dal, eventBus });
   const canvasDal = new CanvasDalImpl(db);
 
-  const tyrumHome =
-    config.tyrumHome ?? opts?.gatewayConfig?.paths.home ?? join(homedir(), ".tyrum");
-  const artifactStore = opts?.gatewayConfig
-    ? createArtifactStore(opts.gatewayConfig.artifacts, redactionEngine)
-    : createArtifactStoreFromEnv(tyrumHome, redactionEngine);
+  const tyrumHome = config.tyrumHome ?? join(homedir(), ".tyrum");
+  const resolvedConfig: GatewayContainerConfig = { ...config, tyrumHome };
+  const artifactStore = createArtifactStore(
+    {
+      ...deploymentConfig.artifacts,
+      dir: deploymentConfig.artifacts.dir ?? join(tyrumHome, "artifacts"),
+      s3: {
+        ...deploymentConfig.artifacts.s3,
+        bucket: deploymentConfig.artifacts.s3.bucket ?? "tyrum-artifacts",
+        region: deploymentConfig.artifacts.s3.region ?? "us-east-1",
+        forcePathStyle:
+          deploymentConfig.artifacts.s3.forcePathStyle ??
+          Boolean(deploymentConfig.artifacts.s3.endpoint),
+      },
+    },
+    redactionEngine,
+  );
   const policyService = new PolicyServiceImpl({
     home: tyrumHome,
     snapshotDal: policySnapshotDal,
     overrideDal: policyOverrideDal,
     logger,
+    deploymentPolicy: deploymentConfig.policy,
   });
 
   const modelsDevCacheDal = new ModelsDevCacheDal(db);
@@ -186,20 +203,13 @@ function wireContainer(
     cacheDal: modelsDevCacheDal,
     leaseDal: modelsDevRefreshLeaseDal,
     logger,
-    modelsDev: opts?.gatewayConfig?.modelsDev,
-    instanceOwner: opts?.gatewayConfig?.runtime.instanceId,
+    modelsDev: deploymentConfig.modelsDev,
   });
+  const modelCatalog = new ModelCatalogServiceImpl({ db, modelsDev });
 
   const oauthPendingDal = new OauthPendingDalImpl(db);
   const oauthRefreshLeaseDal = new OauthRefreshLeaseDalImpl(db);
-  const oauthProviderRegistry = new OAuthProviderRegistryImpl({
-    configPaths: [
-      join(tyrumHome, "oauth-providers.yml"),
-      join(tyrumHome, "oauth_providers.yml"),
-      join(process.cwd(), "config", "oauth-providers.yml"),
-      join(process.cwd(), "config", "oauth_providers.yml"),
-    ],
-  });
+  const oauthProviderRegistry = new OAuthProviderRegistryImpl(db);
 
   return {
     db,
@@ -225,11 +235,12 @@ function wireContainer(
     redactionEngine,
     artifactStore,
     modelsDev,
+    modelCatalog,
     oauthPendingDal,
     oauthRefreshLeaseDal,
     oauthProviderRegistry,
     logger,
-    config,
-    gatewayConfig: opts?.gatewayConfig,
+    config: resolvedConfig,
+    deploymentConfig,
   };
 }

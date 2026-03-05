@@ -323,6 +323,7 @@ export class SessionDal {
   }
 
   async getOrCreate(input: {
+    tenantId?: string;
     scopeKeys?: Partial<ScopeKeys>;
     connectorKey: string;
     accountKey?: string;
@@ -330,20 +331,24 @@ export class SessionDal {
     containerKind: NormalizedContainerKind;
   }): Promise<SessionRow> {
     const keys = normalizeScopeKeys(input.scopeKeys);
-    const scopeIds = await this.identityScopeDal.resolveScopeIds(keys);
+    const tenantId =
+      input.tenantId?.trim() || (await this.identityScopeDal.ensureTenantId(keys.tenantKey));
+    const agentId = await this.identityScopeDal.ensureAgentId(tenantId, keys.agentKey);
+    const workspaceId = await this.identityScopeDal.ensureWorkspaceId(tenantId, keys.workspaceKey);
+    await this.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
 
     const connectorKey = normalizeConnectorId(input.connectorKey);
     const accountKey = normalizeAccountId(input.accountKey);
 
     const channelAccountId = await this.channelThreadDal.ensureChannelAccountId({
-      tenantId: scopeIds.tenantId,
-      workspaceId: scopeIds.workspaceId,
+      tenantId,
+      workspaceId,
       connectorKey,
       accountKey,
     });
     const channelThreadId = await this.channelThreadDal.ensureChannelThreadId({
-      tenantId: scopeIds.tenantId,
-      workspaceId: scopeIds.workspaceId,
+      tenantId,
+      workspaceId,
       channelAccountId,
       providerThreadId: input.providerThreadId,
       containerKind: input.containerKind,
@@ -358,7 +363,7 @@ export class SessionDal {
       deliveryAccount: accountKey === DEFAULT_CHANNEL_ACCOUNT_ID ? undefined : accountKey,
     });
 
-    const existing = await this.getByKey({ tenantId: scopeIds.tenantId, sessionKey });
+    const existing = await this.getByKey({ tenantId, sessionKey });
     if (existing) return existing;
 
     const nowIso = new Date().toISOString();
@@ -377,21 +382,12 @@ export class SessionDal {
        )
        VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?)
        ON CONFLICT (tenant_id, session_key) DO NOTHING
-       RETURNING *`,
-      [
-        scopeIds.tenantId,
-        randomUUID(),
-        sessionKey,
-        scopeIds.agentId,
-        scopeIds.workspaceId,
-        channelThreadId,
-        nowIso,
-        nowIso,
-      ],
+      RETURNING *`,
+      [tenantId, randomUUID(), sessionKey, agentId, workspaceId, channelThreadId, nowIso, nowIso],
     );
     if (inserted) return toSessionRow(inserted);
 
-    const created = await this.getByKey({ tenantId: scopeIds.tenantId, sessionKey });
+    const created = await this.getByKey({ tenantId, sessionKey });
     if (!created) {
       throw new Error("failed to create session");
     }

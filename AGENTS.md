@@ -28,11 +28,12 @@
 - Prereqs: Node `24` (see `.nvmrc` / `.node-version`) + pnpm `10` (CI uses pnpm/action-setup).
 - Install: `pnpm install`
 - Optional (container/split smoke): Docker + `docker compose`.
-- Useful env vars when running gateway:
-  - `GATEWAY_HOST`, `GATEWAY_PORT`
-  - `GATEWAY_DB_PATH` (SQLite path or `postgres://...` for split roles)
-  - `GATEWAY_TOKEN` (required for HTTP/WS auth)
-  - `TYRUM_HOME`; set `TYRUM_AGENT_ENABLED=0` to disable agent routes
+- Gateway configuration is DB-backed (no runtime env config). Bootstrapping uses defaults + CLI flags:
+  - `--home` (default: `~/.tyrum`)
+  - `--db` (default: `<home>/gateway.db`, or `postgres://...` for split roles)
+  - `--host` (default: `127.0.0.1`)
+  - `--port` (default: `8788`)
+  - `--role` (`all|edge|worker|scheduler`)
 
 ## Common commands
 
@@ -42,7 +43,7 @@
 - Test: `pnpm test` (coverage: `pnpm test:coverage`, watch: `pnpm test:watch`)
 - Build all workspace packages: `pnpm build`
 - Start gateway: `pnpm --filter @tyrum/gateway start`
-- Start gateway (agents disabled): `TYRUM_AGENT_ENABLED=0 pnpm --filter @tyrum/gateway start`
+- Gateway prints bootstrap tokens (system + default tenant admin) once on first run — capture them for API/WS access.
 - Docs site: `pnpm --filter @tyrum/docs start` / `pnpm --filter @tyrum/docs build`
 - Docs public-content gate (CI): `pnpm docs:public-check` (or `bash scripts/check-public-docs.sh`)
 - Split-role + Postgres smoke test: `bash scripts/smoke-postgres-split.sh`
@@ -60,7 +61,7 @@
 
 - Generated/ignored (see `.gitignore`): `dist/`, `node_modules/`, `coverage/`, `apps/docs/build/`, `apps/docs/.docusaurus/`, `apps/desktop/release/`, `*.tsbuildinfo`, `*.db`.
 - `pnpm-lock.yaml` should only change with dependency updates; `patches/` must continue to apply after upgrades.
-- Network/auth defaults matter: gateway is designed to require `GATEWAY_TOKEN`; be cautious changing auth or bind-address behavior.
+- Network/auth defaults matter: tokens are tenant-scoped and enforced for HTTP/WS; be cautious changing auth or bind-address behavior.
 
 ## PR / commit expectations
 

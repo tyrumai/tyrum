@@ -1,32 +1,29 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadAllPlaybooks } from "../../src/modules/playbook/loader.js";
 import { createApp } from "../../src/app.js";
-import { createTestContainer } from "./helpers.js";
+import { createTestContainer, decorateAppWithDefaultAuth } from "./helpers.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(__dirname, "../fixtures/playbooks");
 
 describe("POST /playbooks/:id/execute", () => {
-  const originalFlag = process.env["TYRUM_ENGINE_API_ENABLED"];
-
-  beforeEach(() => {
-    process.env["TYRUM_ENGINE_API_ENABLED"] = "1";
-  });
-
-  afterEach(() => {
-    if (originalFlag === undefined) {
-      delete process.env["TYRUM_ENGINE_API_ENABLED"];
-    } else {
-      process.env["TYRUM_ENGINE_API_ENABLED"] = originalFlag;
-    }
-  });
-
   it("enqueues playbook steps into the durable execution engine", async () => {
-    const container = await createTestContainer();
+    const container = await createTestContainer({
+      deploymentConfig: { execution: { engineApiEnabled: true } },
+    });
+    const authTokens = new AuthTokenService(container.db);
+    const tenantToken = await authTokens.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "admin",
+      scopes: ["*"],
+    });
     const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
-    const app = createApp(container, { playbooks });
+    const app = createApp(container, { playbooks, authTokens });
+    decorateAppWithDefaultAuth(app, tenantToken.token);
 
     const res = await app.request("/playbooks/test-playbook/execute", {
       method: "POST",

@@ -128,7 +128,7 @@ describe("GatewayManager", () => {
     expect(statuses).toEqual(["starting", "running", "stopped"]);
   });
 
-  it("sets GATEWAY_TOKEN when starting gateway", async () => {
+  it("passes CLI flags when starting gateway", async () => {
     const gm = new GatewayManager();
     const proc = mockProc();
     proc.kill.mockImplementation((signal?: string) => {
@@ -147,9 +147,21 @@ describe("GatewayManager", () => {
       accessToken: "local-token-123",
     });
 
-    const [, , options] = spawnMock.mock.calls[0] ?? [];
+    const [, args, options] = spawnMock.mock.calls[0] ?? [];
+    expect(args).toEqual([
+      "/nonexistent",
+      "start",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "7788",
+      "--home",
+      "/tmp",
+      "--db",
+      "/tmp/test.db",
+    ]);
     const env = (options as { env?: Record<string, string> }).env;
-    expect(env?.["GATEWAY_TOKEN"]).toBe("local-token-123");
+    expect(env?.["ELECTRON_RUN_AS_NODE"]).toBe("1");
 
     await gm.stop();
   });

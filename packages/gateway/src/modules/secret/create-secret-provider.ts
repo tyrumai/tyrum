@@ -1,9 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join, resolve as resolvePath } from "node:path";
+import { dirname, join } from "node:path";
 import type { SqlDb } from "../../statestore/types.js";
-import { isPostgresDbUri } from "../../statestore/db-uri.js";
-import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { DbSecretProvider } from "./provider.js";
 
 function isFsErrorCode(error: unknown, code: string): boolean {
@@ -16,15 +14,14 @@ function isFsErrorCode(error: unknown, code: string): boolean {
 }
 
 function resolveMasterKeyPath(params: { dbPath: string; tyrumHome: string }): string {
-  const override = process.env["TYRUM_SECRETS_MASTER_KEY_PATH"]?.trim();
-  if (override) return override;
-
   const dbPath = params.dbPath.trim();
-  if (isPostgresDbUri(dbPath) || dbPath === ":memory:") {
-    return join(params.tyrumHome, "secrets.master.key");
+  if (dbPath === ":memory:") {
+    return join(params.tyrumHome, "master.key");
   }
 
-  return `${resolvePath(dbPath)}.secrets.key`;
+  // Server deployments: store master key under the gateway home directory.
+  // (Desktop keychain support is intentionally out of scope for this helper.)
+  return join(params.tyrumHome, "master.key");
 }
 
 async function loadOrCreateMasterKey(keyPath: string): Promise<Buffer> {
@@ -72,21 +69,40 @@ export async function createDbSecretProvider(params: {
   db: SqlDb;
   dbPath: string;
   tyrumHome: string;
-  tenantId?: string;
+  tenantId: string;
 }): Promise<DbSecretProvider> {
-  const dbPath = params.dbPath.trim();
-  const override = process.env["TYRUM_SECRETS_MASTER_KEY_PATH"]?.trim();
+  const factory = await createDbSecretProviderFactory({
+    db: params.db,
+    dbPath: params.dbPath,
+    tyrumHome: params.tyrumHome,
+  });
 
-  const masterKey = override
-    ? await loadOrCreateMasterKey(override)
-    : dbPath === ":memory:"
+  return factory.secretProviderForTenant(params.tenantId);
+}
+
+export async function createDbSecretProviderFactory(params: {
+  db: SqlDb;
+  dbPath: string;
+  tyrumHome: string;
+}): Promise<{
+  secretProviderForTenant: (tenantId: string) => DbSecretProvider;
+  keyId: string;
+}> {
+  const dbPath = params.dbPath.trim();
+
+  const masterKey =
+    dbPath === ":memory:"
       ? randomBytes(32)
       : await loadOrCreateMasterKey(resolveMasterKeyPath({ dbPath, tyrumHome: params.tyrumHome }));
   const keyId = keyIdForMasterKey(masterKey);
 
-  return new DbSecretProvider(params.db, {
-    tenantId: params.tenantId ?? DEFAULT_TENANT_ID,
-    masterKey,
+  return {
+    secretProviderForTenant: (tenantId: string) =>
+      new DbSecretProvider(params.db, {
+        tenantId,
+        masterKey,
+        keyId,
+      }),
     keyId,
-  });
+  };
 }

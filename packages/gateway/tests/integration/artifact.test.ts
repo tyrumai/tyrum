@@ -4,14 +4,17 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createApp } from "../../src/app.js";
 import { S3ArtifactStore } from "../../src/modules/artifact/store.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
 import { GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
-import { createTestContainer } from "./helpers.js";
+import {
+  createTestAuthAndSecrets,
+  createTestContainer,
+  decorateAppWithDefaultAuth,
+} from "./helpers.js";
 
 type SqlRunner = {
   run(sql: string, params?: unknown[]): Promise<unknown>;
@@ -94,9 +97,22 @@ describe("artifact routes", () => {
     }
   });
 
+  async function setup(container?: GatewayContainer) {
+    const resolvedContainer = container ?? (await createTestContainer({ tyrumHome: homeDir }));
+    const { authTokens, tenantAdminToken, secretProviderForTenant } =
+      await createTestAuthAndSecrets(resolvedContainer, { tyrumHome: homeDir });
+    const app = createApp(resolvedContainer, { authTokens, secretProviderForTenant });
+    const { requestUnauthenticated } = decorateAppWithDefaultAuth(app, tenantAdminToken);
+    return {
+      app,
+      container: resolvedContainer,
+      tenantAdminToken,
+      requestUnauthenticated,
+    };
+  }
+
   it("GET /artifacts/:id rejects bare artifact_id-only fetch paths", async () => {
-    const container = await createTestContainer();
-    const app = createApp(container);
+    const { app, container } = await setup();
 
     const ref = await container.artifactStore.put({
       kind: "log",
@@ -116,8 +132,7 @@ describe("artifact routes", () => {
   });
 
   it("GET /runs/:runId/artifacts/:id streams bytes for stored artifacts with metadata", async () => {
-    const container = await createTestContainer();
-    const app = createApp(container);
+    const { app, container } = await setup();
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-1",
       runId: "run-artifacts-1",
@@ -191,10 +206,7 @@ describe("artifact routes", () => {
   });
 
   it("GET /runs/:runId/artifacts/:id emits artifact.fetched with requester identity and policy snapshot refs", async () => {
-    const container = await createTestContainer();
-    const tokenStore = new TokenStore(homeDir!);
-    const token = await tokenStore.initialize();
-    const app = createApp(container, { tokenStore });
+    const { container, requestUnauthenticated, tenantAdminToken } = await setup();
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-request-id",
       runId: "run-artifacts-request-id",
@@ -259,9 +271,9 @@ describe("artifact routes", () => {
     );
 
     const requestId = "req-artifacts-123";
-    const res = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`, {
+    const res = await requestUnauthenticated(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`, {
       headers: {
-        authorization: `Bearer ${token}`,
+        authorization: `Bearer ${tenantAdminToken}`,
         "x-request-id": requestId,
       },
     });
@@ -364,7 +376,7 @@ describe("artifact routes", () => {
       getSignedUrl: vi.fn(async () => signedUrl),
     };
 
-    const app = createApp(container);
+    const { app } = await setup(container);
     const res = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(signedUrl);
@@ -474,7 +486,7 @@ describe("artifact routes", () => {
 
     container.artifactStore = store;
 
-    const app = createApp(container);
+    const { app } = await setup(container);
     const res = await app.request(`/runs/${scope.runId}/artifacts/${artifactId}`);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(signedUrl);
@@ -552,7 +564,7 @@ describe("artifact routes", () => {
       getSignedUrl: vi.fn(async () => signedUrl),
     };
 
-    const app = createApp(container);
+    const { app } = await setup(container);
     const res = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(signedUrl);
@@ -562,8 +574,7 @@ describe("artifact routes", () => {
   });
 
   it("GET /runs/:runId/artifacts/:id denies unlinked artifacts that lack durable execution scope", async () => {
-    const container = await createTestContainer();
-    const app = createApp(container);
+    const { container, app } = await setup();
 
     const ref = await container.artifactStore.put({
       kind: "log",
@@ -627,8 +638,7 @@ describe("artifact routes", () => {
   });
 
   it("GET /runs/:runId/artifacts/:id denies artifacts with inconsistent execution linkage", async () => {
-    const container = await createTestContainer();
-    const app = createApp(container);
+    const { container, app } = await setup();
     const scopeA: ExecutionScopeIds = {
       jobId: "job-artifacts-a",
       runId: "run-artifacts-a",
@@ -706,8 +716,7 @@ describe("artifact routes", () => {
   });
 
   it("GET /runs/:runId/artifacts/:id denies scope mismatches (runId does not match artifact scope)", async () => {
-    const container = await createTestContainer();
-    const app = createApp(container);
+    const { container, app } = await setup();
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-scope",
       runId: "run-artifacts-scope",

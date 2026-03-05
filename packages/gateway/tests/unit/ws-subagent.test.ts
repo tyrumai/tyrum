@@ -3,6 +3,7 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -33,6 +34,8 @@ function makeClient(
     opts?.authClaims ??
     ({
       token_kind: "admin",
+      token_id: "token-1",
+      tenant_id: DEFAULT_TENANT_ID,
       role: "admin",
       scopes: ["*"],
     } as const);

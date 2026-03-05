@@ -28,7 +28,7 @@ import type { ProtocolDeps } from "./types.js";
  */
 export function dispatchTask(
   action: ActionPrimitive,
-  scope: { runId: string; stepId: string; attemptId: string },
+  scope: { tenantId: string; runId: string; stepId: string; attemptId: string },
   deps: ProtocolDeps,
 ): Promise<string> {
   const capability = requiredCapability(action.type);
@@ -41,6 +41,7 @@ export function dispatchTask(
   const policyEnabled = deps.policyService?.isEnabled() ?? false;
   const policyEvalPromise = policyEnabled
     ? deps.policyService!.evaluateToolCall({
+        tenantId: scope.tenantId,
         agentId: "default",
         toolId: "tool.node.dispatch",
         toolMatchTarget,
@@ -50,7 +51,7 @@ export function dispatchTask(
   const isNodeAuthorizedForDispatch = async (nodeId: string): Promise<boolean> => {
     if (!deps.nodePairingDal) return false;
 
-    const pairing = await deps.nodePairingDal.getByNodeId(nodeId);
+    const pairing = await deps.nodePairingDal.getByNodeId(nodeId, scope.tenantId);
     if (pairing?.status !== "approved") return false;
     const allowlist = pairing.capability_allowlist ?? [];
     return allowlist.some(
@@ -61,6 +62,7 @@ export function dispatchTask(
 
   const localCandidates: ConnectedClient[] = [];
   for (const c of deps.connectionManager.allClients()) {
+    if (c.auth_claims?.tenant_id !== scope.tenantId) continue;
     if (c.protocol_rev >= 2 && c.capabilities.includes(capability)) {
       localCandidates.push(c);
     }
@@ -95,6 +97,7 @@ export function dispatchTask(
           : undefined;
 
       const candidates = await cluster.connectionDirectory.listConnectionsForCapability(
+        scope.tenantId,
         capability,
         nowMs,
       );
@@ -156,6 +159,7 @@ export function dispatchTask(
       };
 
       await cluster.outboxDal.enqueue(
+        scope.tenantId,
         "ws.direct",
         { connection_id: target.connection_id, message },
         { targetEdgeId: target.edge_id },
@@ -225,6 +229,7 @@ export function dispatchTask(
 
       const nowMs = Date.now();
       const candidates = await cluster.connectionDirectory.listConnectionsForCapability(
+        scope.tenantId,
         capability,
         nowMs,
       );
@@ -286,6 +291,7 @@ export function dispatchTask(
       };
 
       await cluster.outboxDal.enqueue(
+        scope.tenantId,
         "ws.direct",
         { connection_id: target.connection_id, message },
         { targetEdgeId: target.edge_id },

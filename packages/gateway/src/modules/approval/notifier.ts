@@ -27,6 +27,7 @@ export class WsNotifier implements ApprovalNotifier {
 
   notify(approval: ApprovalRow): void {
     requestApproval(
+      approval.tenant_id,
       {
         approval_id: approval.approval_id,
         approval_key: approval.approval_key,

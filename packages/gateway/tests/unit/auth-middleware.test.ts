@@ -1,30 +1,36 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Hono } from "hono";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import { createAuthMiddleware } from "../../src/modules/auth/middleware.js";
 import { AUTH_COOKIE_NAME } from "../../src/modules/auth/http.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("Auth middleware", () => {
-  let tempDir: string;
-  let tokenStore: TokenStore;
+  let db: SqliteDb;
+  let authTokens: AuthTokenService;
   let adminToken: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "tyrum-auth-mw-test-"));
-    tokenStore = new TokenStore(tempDir);
-    adminToken = await tokenStore.initialize();
+    db = openTestSqliteDb();
+    authTokens = new AuthTokenService(db);
+    adminToken = (
+      await authTokens.issueToken({
+        tenantId: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      })
+    ).token;
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    await db.close();
   });
 
   function buildApp(): Hono {
     const app = new Hono();
-    app.use("*", createAuthMiddleware(tokenStore));
+    app.use("*", createAuthMiddleware(authTokens));
     app.get("/healthz", (c) => c.json({ status: "ok" }));
     app.post("/auth/session", (c) => c.json({ ok: true }));
     app.post("/auth/logout", (c) => c.json({ ok: true }));
@@ -53,7 +59,7 @@ describe("Auth middleware", () => {
   it("allows OAuth callback without token under a base path prefix", async () => {
     const app = new Hono();
     const sub = new Hono();
-    sub.use("*", createAuthMiddleware(tokenStore));
+    sub.use("*", createAuthMiddleware(authTokens));
     sub.get("/providers/:provider/oauth/callback", (c) => c.json({ ok: true }));
     app.route("/prefix", sub);
 
@@ -107,9 +113,10 @@ describe("Auth middleware", () => {
 
   it("allows requests authenticated with a client device token", async () => {
     const app = buildApp();
-    const issued = await tokenStore.issueDeviceToken({
-      deviceId: "dev_client_1",
+    const issued = await authTokens.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
       role: "client",
+      deviceId: "dev_client_1",
       scopes: ["operator.read"],
       ttlSeconds: 300,
     });

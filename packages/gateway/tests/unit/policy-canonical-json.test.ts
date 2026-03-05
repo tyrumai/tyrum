@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { stableJsonStringify } from "../../src/modules/policy/canonical-json.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("stableJsonStringify", () => {
   it("sorts object keys recursively", () => {
@@ -59,8 +60,8 @@ describe("PolicySnapshotDal canonical hashing", () => {
       v: 1 as const,
     };
 
-    const s1 = await dal.getOrCreate(bundleA);
-    const s2 = await dal.getOrCreate(bundleB);
+    const s1 = await dal.getOrCreate(DEFAULT_TENANT_ID, bundleA);
+    const s2 = await dal.getOrCreate(DEFAULT_TENANT_ID, bundleB);
 
     expect(s2.policy_snapshot_id).toBe(s1.policy_snapshot_id);
     expect(s2.sha256).toBe(s1.sha256);

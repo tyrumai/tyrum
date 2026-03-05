@@ -24,6 +24,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+const TEST_TELEGRAM_WEBHOOK_SECRET = "test-telegram-secret";
+
 function makeSessionDal(db: SqliteDb): SessionDal {
   return new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
 }
@@ -76,7 +78,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
   const originalTypingAutomationEnabled = process.env["TYRUM_CHANNEL_TYPING_AUTOMATION_ENABLED"];
 
   beforeEach(() => {
-    process.env["TELEGRAM_WEBHOOK_SECRET"] = "test-telegram-secret";
+    process.env["TELEGRAM_WEBHOOK_SECRET"] = TEST_TELEGRAM_WEBHOOK_SECRET;
     delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
     delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
     delete process.env["TYRUM_CHANNEL_TYPING_MODE"];
@@ -163,6 +165,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       "/",
       createIngressRoutes({
         telegramBot: bot,
+        telegramWebhookSecret: TEST_TELEGRAM_WEBHOOK_SECRET,
         agents: makeAgents(mockRuntime),
         telegramQueue: queue,
       }),
@@ -258,6 +261,8 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         owner: "test-owner",
         debounceMs: 0,
         maxBatch: 1,
+        typingMode: "instant",
+        typingRefreshMs: 1,
       });
 
       const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
@@ -315,6 +320,8 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         owner: "test-owner",
         debounceMs: 0,
         maxBatch: 1,
+        typingMode: "message",
+        typingRefreshMs: 1,
       });
 
       const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
@@ -379,6 +386,8 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         owner: "test-owner",
         debounceMs: 0,
         maxBatch: 1,
+        typingMode: "thinking",
+        typingRefreshMs: 1,
       });
 
       const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
@@ -430,6 +439,8 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         owner: "test-owner",
         debounceMs: 0,
         maxBatch: 1,
+        typingMode: "never",
+        typingRefreshMs: 1,
       });
 
       const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
@@ -481,6 +492,9 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         owner: "test-owner",
         debounceMs: 0,
         maxBatch: 1,
+        typingMode: "instant",
+        typingRefreshMs: 1,
+        typingAutomationEnabled: false,
       });
 
       const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
@@ -533,6 +547,9 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         owner: "test-owner",
         debounceMs: 0,
         maxBatch: 1,
+        typingMode: "instant",
+        typingRefreshMs: 1,
+        typingAutomationEnabled: true,
       });
 
       const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
@@ -583,6 +600,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       "/",
       createIngressRoutes({
         telegramBot: bot,
+        telegramWebhookSecret: TEST_TELEGRAM_WEBHOOK_SECRET,
         agents: makeAgents(mockRuntime),
         telegramQueue: queue,
       }),
@@ -638,6 +656,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       "/",
       createIngressRoutes({
         telegramBot: bot,
+        telegramWebhookSecret: TEST_TELEGRAM_WEBHOOK_SECRET,
         agents: makeAgents({}),
         telegramQueue: queue,
       }),
@@ -1300,6 +1319,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
         "/",
         createIngressRoutes({
           telegramBot: bot,
+          telegramWebhookSecret: TEST_TELEGRAM_WEBHOOK_SECRET,
           agents: makeAgents(mockRuntime),
           telegramQueue: queue,
         }),
@@ -1407,6 +1427,16 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       const matchTarget = "telegram:work:123";
 
       const approvalsApp = new Hono();
+      approvalsApp.use("*", async (c, next) => {
+        c.set("authClaims", {
+          token_kind: "admin",
+          token_id: "test-token",
+          tenant_id: DEFAULT_TENANT_ID,
+          role: "admin",
+          scopes: ["*"],
+        });
+        await next();
+      });
       approvalsApp.route("/", createApprovalRoutes({ approvalDal, policyOverrideDal }));
 
       const respondRes = await approvalsApp.request(
@@ -1424,7 +1454,11 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       expect(respondRes.status).toBe(200);
 
       expect(
-        await policyOverrideDal.list({ agentId: approvalAgentId, toolId: "connector.send" }),
+        await policyOverrideDal.list({
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: approvalAgentId,
+          toolId: "connector.send",
+        }),
       ).toHaveLength(1);
 
       await processor.tick();

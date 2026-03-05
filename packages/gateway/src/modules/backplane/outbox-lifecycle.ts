@@ -12,10 +12,6 @@ const DEFAULT_RETENTION_MS = 24 * 60 * 60_000;
 const DEFAULT_BATCH_SIZE = 10_000;
 const DEFAULT_MAX_BATCHES_PER_TICK = 10;
 
-const OUTBOX_RETENTION_ENV = "TYRUM_OUTBOX_RETENTION_MS";
-const OUTBOX_TICK_ENV = "TYRUM_OUTBOX_COMPACTION_TICK_MS";
-const OUTBOX_BATCH_ENV = "TYRUM_OUTBOX_COMPACTION_BATCH_SIZE";
-
 const PG_COMPACTION_LOCK_KEY1 = 1959359839; // "tyru" as int-ish
 const PG_COMPACTION_LOCK_KEY2 = 1868961640; // "obxc" as int-ish
 
@@ -49,15 +45,11 @@ export class OutboxLifecycleScheduler {
   constructor(opts: OutboxLifecycleSchedulerOptions) {
     this.db = opts.db;
     this.logger = opts.logger;
-    const tickMs = resolvePositiveInt(opts.tickMs, OUTBOX_TICK_ENV, DEFAULT_TICK_MS);
-    this.retentionMs = resolvePositiveInt(
-      opts.retentionMs,
-      OUTBOX_RETENTION_ENV,
-      DEFAULT_RETENTION_MS,
-    );
+    const tickMs = resolvePositiveInt(opts.tickMs, DEFAULT_TICK_MS);
+    this.retentionMs = resolvePositiveInt(opts.retentionMs, DEFAULT_RETENTION_MS);
     this.batchSize = Math.max(
       1,
-      Math.min(1_000_000, resolvePositiveInt(opts.batchSize, OUTBOX_BATCH_ENV, DEFAULT_BATCH_SIZE)),
+      Math.min(1_000_000, resolvePositiveInt(opts.batchSize, DEFAULT_BATCH_SIZE)),
     );
     this.maxBatchesPerTick = Math.max(
       1,

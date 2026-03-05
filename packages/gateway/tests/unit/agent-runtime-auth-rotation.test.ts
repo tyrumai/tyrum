@@ -67,13 +67,9 @@ describe("AgentRuntime auth profile rotation", () => {
     await container?.db.close();
     container = undefined;
     usedApiKeys.length = 0;
-    delete process.env["TYRUM_AUTH_PROFILES_ENABLED"];
-    delete process.env["OPENAI_API_KEY"];
   });
 
   it("reloads eligible auth profiles across multiple model invocations", async () => {
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
-
     container = createContainer({
       dbPath: ":memory:",
       migrationsDir,
@@ -157,10 +153,7 @@ describe("AgentRuntime auth profile rotation", () => {
     expect(usedApiKeys).toEqual(["KEY1", "KEY2", "KEY2"]);
   });
 
-  it("tries env API key fallback when profiles fail with 402", async () => {
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
-    process.env["OPENAI_API_KEY"] = "ENV_KEY";
-
+  it("does not use env API key fallback when profiles fail with 402", async () => {
     container = createContainer({
       dbPath: ":memory:",
       migrationsDir,
@@ -236,8 +229,7 @@ describe("AgentRuntime auth profile rotation", () => {
       fetchImpl,
     });
 
-    await model.doGenerate({} as any);
-
-    expect(usedApiKeys).toEqual(["PAYMENT1", "PAYMENT2", "ENV_KEY"]);
+    await expect(model.doGenerate({} as any)).rejects.toThrow("payment required");
+    expect(usedApiKeys).toEqual(["PAYMENT1", "PAYMENT2"]);
   });
 });

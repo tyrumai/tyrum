@@ -12,6 +12,7 @@ import type { PolicyService } from "../modules/policy/service.js";
 import type { ModelsDevService } from "../modules/models/models-dev-service.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import { buildStatusDetails } from "../modules/observability/status-details.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface StatusRouteDeps {
   version: string;
@@ -31,8 +32,10 @@ export function createStatusRoutes(deps: StatusRouteDeps): Hono {
   const app = new Hono();
 
   app.get("/status", async (c) => {
+    const tenantId = requireTenantId(c);
     const policy = deps.policyService ? await deps.policyService.getStatus() : null;
     const details = await buildStatusDetails({
+      tenantId,
       db: deps.db,
       policyService: deps.policyService,
       policyStatus: policy

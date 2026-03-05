@@ -17,7 +17,7 @@ const {
   registeredHandlers: new Map<string, (...args: unknown[]) => unknown>(),
   saveConfigMock: vi.fn(),
   configExistsMock: vi.fn(() => true),
-  decryptTokenMock: vi.fn(() => "token"),
+  decryptTokenMock: vi.fn(() => "tyrum-token.v1.embedded.token"),
   generateTokenMock: vi.fn(() => "generated-token"),
   encryptTokenMock: vi.fn((token: string) => `enc:${token}`),
   undiciFetchMock: vi.fn(async () => {
@@ -60,6 +60,13 @@ class MockGatewayManager extends EventEmitter {
   async stop(): Promise<void> {
     this.status = "stopped";
     this.emit("status-change", "stopped");
+  }
+
+  getBootstrapToken(label: string): string | undefined {
+    if (label === "default-tenant-admin") {
+      return "tyrum-token.v1.bootstrap.token";
+    }
+    return undefined;
   }
 }
 
@@ -108,7 +115,7 @@ describe("registerGatewayIpc handlers", () => {
     configExistsMock.mockReset();
     configExistsMock.mockReturnValue(true);
     decryptTokenMock.mockReset();
-    decryptTokenMock.mockImplementation(() => "token");
+    decryptTokenMock.mockImplementation(() => "tyrum-token.v1.embedded.token");
     generateTokenMock.mockReset();
     generateTokenMock.mockImplementation(() => "generated-token");
     encryptTokenMock.mockReset();
@@ -191,7 +198,7 @@ describe("registerGatewayIpc handlers", () => {
       mode: "embedded",
       wsUrl: "ws://127.0.0.1:8788/ws",
       httpBaseUrl: "http://127.0.0.1:8788/",
-      token: "token",
+      token: "tyrum-token.v1.embedded.token",
       tlsCertFingerprint256: "",
       tlsAllowSelfSigned: false,
     });
@@ -244,16 +251,16 @@ describe("registerGatewayIpc handlers", () => {
       mode: "embedded",
       wsUrl: "ws://127.0.0.1:8788/ws",
       httpBaseUrl: "http://127.0.0.1:8788/",
-      token: "generated-token",
+      token: "tyrum-token.v1.bootstrap.token",
       tlsCertFingerprint256: "",
       tlsAllowSelfSigned: false,
     });
-    expect(generateTokenMock).toHaveBeenCalledTimes(1);
-    expect(encryptTokenMock).toHaveBeenCalledWith("generated-token");
+    expect(generateTokenMock).not.toHaveBeenCalled();
+    expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.bootstrap.token");
     expect(saveConfigMock).toHaveBeenCalledWith(
       expect.objectContaining({
         embedded: expect.objectContaining({
-          tokenRef: "enc:generated-token",
+          tokenRef: "enc:tyrum-token.v1.bootstrap.token",
         }),
       }),
     );
@@ -280,7 +287,7 @@ describe("registerGatewayIpc handlers", () => {
       mode: "embedded",
       wsUrl: "ws://127.0.0.1:8788/ws",
       httpBaseUrl: "http://127.0.0.1:8788/",
-      token: "token",
+      token: "tyrum-token.v1.embedded.token",
       tlsCertFingerprint256: "",
       tlsAllowSelfSigned: false,
     });
@@ -322,7 +329,7 @@ describe("registerGatewayIpc handlers", () => {
     });
 
     const connection = resolveOperatorConnection(loadConfig());
-    expect(connection.token).toBe("token");
+    expect(connection.token).toBe("tyrum-token.v1.embedded.token");
 
     expect(generateTokenMock).not.toHaveBeenCalled();
     expect(saveConfigMock).not.toHaveBeenCalled();
@@ -332,7 +339,9 @@ describe("registerGatewayIpc handlers", () => {
     testState.mode = "remote";
     testState.remoteWsUrl = "wss://remote.example/ws";
     decryptTokenMock.mockImplementation((tokenRef: string) =>
-      tokenRef === "enc:remote-token" ? "remote-token" : "token",
+      tokenRef === "enc:remote-token"
+        ? "tyrum-token.v1.remote.token"
+        : "tyrum-token.v1.embedded.token",
     );
 
     const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
@@ -355,7 +364,7 @@ describe("registerGatewayIpc handlers", () => {
       mode: "remote",
       wsUrl: "wss://remote.example/ws",
       httpBaseUrl: "https://remote.example/",
-      token: "remote-token",
+      token: "tyrum-token.v1.remote.token",
       tlsCertFingerprint256: "",
       tlsAllowSelfSigned: false,
     });

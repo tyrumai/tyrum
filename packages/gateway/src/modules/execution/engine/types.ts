@@ -54,6 +54,7 @@ export interface ExecutionClock {
 export type ClockFn = () => ExecutionClock;
 
 export interface EnqueuePlanInput {
+  tenantId: string;
   key: string;
   lane: string;
   /** Workspace identifier used for workspace leases and audit scoping (default: "default"). */

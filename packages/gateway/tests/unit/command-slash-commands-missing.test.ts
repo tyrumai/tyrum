@@ -98,6 +98,7 @@ describe("missing slash commands", () => {
     const policyOverrideDal = new PolicyOverrideDal(db);
 
     const created = await policyOverrideDal.create({
+      tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
       toolId: "tool.exec",
       pattern: "git status*",
@@ -203,9 +204,9 @@ describe("missing slash commands", () => {
         status: "ok",
         provider_key: "openrouter",
         auth_profile_key: "profile-openrouter-1",
-        cached: true,
+        cached: false,
       });
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     } finally {
       process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevEnabled;
     }

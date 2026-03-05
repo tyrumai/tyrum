@@ -20,12 +20,6 @@ import type { PolicySnapshotDal, PolicySnapshotRow } from "./snapshot-dal.js";
 import type { PolicyOverrideDal } from "./override-dal.js";
 import { sha256HexFromString, stableJsonStringify } from "./canonical-json.js";
 
-function isFalsyEnvFlag(value: string | undefined): boolean {
-  if (!value) return false;
-  const v = value.trim().toLowerCase();
-  return v.length > 0 && ["0", "false", "off", "no"].includes(v);
-}
-
 async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -88,17 +82,20 @@ export class PolicyService {
       snapshotDal: PolicySnapshotDal;
       overrideDal: PolicyOverrideDal;
       logger?: Logger;
+      deploymentPolicy?: {
+        enabled?: boolean;
+        mode?: string;
+        bundlePath?: string;
+      };
     },
   ) {}
 
   isEnabled(): boolean {
-    const raw = process.env["TYRUM_POLICY_ENABLED"];
-    if (isFalsyEnvFlag(raw)) return false;
-    return true;
+    return this.opts.deploymentPolicy?.enabled ?? true;
   }
 
   isObserveOnly(): boolean {
-    const mode = process.env["TYRUM_POLICY_MODE"]?.trim().toLowerCase();
+    const mode = this.opts.deploymentPolicy?.mode?.trim().toLowerCase();
     if (mode === "observe" || mode === "observe-only") return true;
     if (mode === "enforce") return false;
     return false; // default: enforce
@@ -132,11 +129,12 @@ export class PolicyService {
     };
   }
 
-  async getOrCreateSnapshot(bundle: PolicyBundleT): Promise<PolicySnapshotRow> {
-    return await this.opts.snapshotDal.getOrCreate(bundle);
+  async getOrCreateSnapshot(tenantId: string, bundle: PolicyBundleT): Promise<PolicySnapshotRow> {
+    return await this.opts.snapshotDal.getOrCreate(tenantId, bundle);
   }
 
   async evaluateToolCall(params: {
+    tenantId: string;
     agentId: string;
     workspaceId?: string;
     toolId: string;
@@ -147,8 +145,9 @@ export class PolicyService {
     inputProvenance?: { source: string; trusted: boolean };
   }): Promise<PolicyEvaluation> {
     const effective = await this.loadEffectiveBundle({ playbookBundle: params.playbookBundle });
-    const snapshot = await this.getOrCreateSnapshot(effective.bundle);
+    const snapshot = await this.getOrCreateSnapshot(params.tenantId, effective.bundle);
     return await this.evaluateToolCallAgainstBundle({
+      tenantId: params.tenantId,
       bundle: effective.bundle,
       snapshot,
       agentId: params.agentId,
@@ -162,6 +161,7 @@ export class PolicyService {
   }
 
   async evaluateToolCallFromSnapshot(params: {
+    tenantId: string;
     policySnapshotId: string;
     agentId: string;
     workspaceId?: string;
@@ -171,7 +171,7 @@ export class PolicyService {
     secretScopes?: string[];
     inputProvenance?: { source: string; trusted: boolean };
   }): Promise<PolicyEvaluation> {
-    const snapshot = await this.opts.snapshotDal.getById(params.policySnapshotId);
+    const snapshot = await this.opts.snapshotDal.getById(params.tenantId, params.policySnapshotId);
     if (!snapshot) {
       const record: PolicyDecisionT = {
         decision: "require_approval",
@@ -192,6 +192,7 @@ export class PolicyService {
     }
 
     return await this.evaluateToolCallAgainstBundle({
+      tenantId: params.tenantId,
       bundle: snapshot.bundle,
       snapshot,
       agentId: params.agentId,
@@ -205,6 +206,7 @@ export class PolicyService {
   }
 
   async evaluateSecretsFromSnapshot(params: {
+    tenantId: string;
     policySnapshotId: string | null;
     secretScopes: readonly string[];
   }): Promise<PolicyEvaluation> {
@@ -238,7 +240,7 @@ export class PolicyService {
       };
     }
 
-    const snapshot = await this.opts.snapshotDal.getById(id);
+    const snapshot = await this.opts.snapshotDal.getById(params.tenantId, id);
     if (!snapshot) {
       const record: PolicyDecisionT = {
         decision: "require_approval",
@@ -285,6 +287,7 @@ export class PolicyService {
   }
 
   private async evaluateToolCallAgainstBundle(params: {
+    tenantId: string;
     bundle: PolicyBundleT;
     snapshot: PolicySnapshotRow;
     agentId: string;
@@ -356,6 +359,7 @@ export class PolicyService {
     const appliedOverrides: string[] = [];
     if (decision === "require_approval" && toolDecision === "require_approval") {
       const overrides = await this.opts.overrideDal.listActiveForTool({
+        tenantId: params.tenantId,
         agentId: params.agentId,
         workspaceId: params.workspaceId,
         toolId: params.toolId,
@@ -390,13 +394,14 @@ export class PolicyService {
   }
 
   async evaluateConnectorAction(params: {
+    tenantId: string;
     agentId: string;
     workspaceId?: string;
     matchTarget: string;
     playbookBundle?: PolicyBundleT;
   }): Promise<PolicyEvaluation> {
     const effective = await this.loadEffectiveBundle({ playbookBundle: params.playbookBundle });
-    const snapshot = await this.getOrCreateSnapshot(effective.bundle);
+    const snapshot = await this.getOrCreateSnapshot(params.tenantId, effective.bundle);
 
     const connectorsDomain = normalizeDomain(effective.bundle.connectors, "require_approval");
     let decision = evaluateDomain(connectorsDomain, params.matchTarget);
@@ -404,6 +409,7 @@ export class PolicyService {
     const appliedOverrides: string[] = [];
     if (decision === "require_approval") {
       const overrides = await this.opts.overrideDal.listActiveForTool({
+        tenantId: params.tenantId,
         agentId: params.agentId,
         workspaceId: params.workspaceId,
         toolId: "connector.send",
@@ -451,7 +457,7 @@ export class PolicyService {
     bundle: PolicyBundleT;
     sha256: string;
   }> {
-    const path = process.env["TYRUM_POLICY_BUNDLE_PATH"]?.trim() || null;
+    const path = this.opts.deploymentPolicy?.bundlePath?.trim() || null;
     if (this.deploymentBundleCache && this.deploymentBundleCache.path === path) {
       return this.deploymentBundleCache;
     }

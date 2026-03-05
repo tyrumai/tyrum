@@ -6,6 +6,7 @@ import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { TelegramChannelQueue } from "../../src/modules/channels/telegram.js";
 import { WsEventEnvelope, WsEvent } from "@tyrum/schemas";
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 function makeNormalizedTextMessage(input: {
   threadId: string;
@@ -170,9 +171,6 @@ class InjectingOverflowDb implements SqlDb {
 }
 
 describe("Channel inbox queue overflow policies", () => {
-  const originalCap = process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"];
-  const originalOverflow = process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"];
-
   let db: SqliteDb;
   let didOpenDb = false;
   let inbox: ChannelInboxDal;
@@ -185,26 +183,16 @@ describe("Channel inbox queue overflow policies", () => {
   });
 
   afterEach(async () => {
-    if (originalCap === undefined) {
-      delete process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"];
-    } else {
-      process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = originalCap;
-    }
-
-    if (originalOverflow === undefined) {
-      delete process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"];
-    } else {
-      process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = originalOverflow;
-    }
-
     if (!didOpenDb) return;
     didOpenDb = false;
     await db.close();
   });
 
   it("drop_oldest drops the oldest queued rows when cap is exceeded", async () => {
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "2";
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "drop_oldest";
+    inbox = new ChannelInboxDal(db, undefined, {
+      inboundQueueCap: 2,
+      inboundQueueOverflowPolicy: "drop_oldest",
+    });
 
     const key = "agent:default:telegram:default:dm:chat-1";
 
@@ -249,8 +237,10 @@ describe("Channel inbox queue overflow policies", () => {
   });
 
   it("drop_newest drops the newest queued rows when cap is exceeded", async () => {
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "2";
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "drop_newest";
+    inbox = new ChannelInboxDal(db, undefined, {
+      inboundQueueCap: 2,
+      inboundQueueOverflowPolicy: "drop_newest",
+    });
 
     const key = "agent:default:telegram:default:dm:chat-1";
 
@@ -295,9 +285,6 @@ describe("Channel inbox queue overflow policies", () => {
   });
 
   it("enforces cap when the queue grows during trimming (simulated concurrency)", async () => {
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "1";
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "drop_oldest";
-
     const key = "agent:default:telegram:default:dm:chat-1";
     const lane = "main";
 
@@ -315,7 +302,10 @@ describe("Channel inbox queue overflow policies", () => {
       }),
     });
 
-    inbox = new ChannelInboxDal(injectingDb);
+    inbox = new ChannelInboxDal(injectingDb, undefined, {
+      inboundQueueCap: 1,
+      inboundQueueOverflowPolicy: "drop_oldest",
+    });
 
     await inbox.enqueue({
       source: "telegram:default",
@@ -349,8 +339,10 @@ describe("Channel inbox queue overflow policies", () => {
   });
 
   it("summarize_dropped includes attachment counts for legacy media placeholders without envelopes", async () => {
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "1";
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "summarize_dropped";
+    inbox = new ChannelInboxDal(db, undefined, {
+      inboundQueueCap: 1,
+      inboundQueueOverflowPolicy: "summarize_dropped",
+    });
 
     const key = "agent:default:telegram:default:dm:chat-1";
 
@@ -396,8 +388,10 @@ describe("Channel inbox queue overflow policies", () => {
   });
 
   it("summarize_dropped replaces overflow with a synthetic follow-up message", async () => {
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "2";
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "summarize_dropped";
+    inbox = new ChannelInboxDal(db, undefined, {
+      inboundQueueCap: 2,
+      inboundQueueOverflowPolicy: "summarize_dropped",
+    });
 
     const key = "agent:default:telegram:default:dm:chat-1";
 
@@ -456,8 +450,10 @@ describe("Channel inbox queue overflow policies", () => {
   });
 
   it("summarize_dropped derives delivery identity from the dropped rows", async () => {
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "2";
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "summarize_dropped";
+    inbox = new ChannelInboxDal(db, undefined, {
+      inboundQueueCap: 2,
+      inboundQueueOverflowPolicy: "summarize_dropped",
+    });
 
     const key = "agent:default:telegram:work:dm:chat-1";
 
@@ -520,13 +516,12 @@ describe("Channel inbox queue overflow policies", () => {
   });
 
   it("emits a WS event when overflow occurs (telegram queue)", async () => {
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "1";
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "drop_newest";
-
     const send = vi.fn();
     const ws = {
       connectionManager: {
-        allClients: () => [{ ws: { send } }],
+        allClients: () => [
+          { role: "client", auth_claims: { tenant_id: DEFAULT_TENANT_ID }, ws: { send } },
+        ],
       },
     };
 
@@ -535,6 +530,10 @@ describe("Channel inbox queue overflow policies", () => {
       accountId: "default",
       lane: "main",
       dmScope: "per_account_channel_peer",
+      inboxConfig: {
+        inboundQueueCap: 1,
+        inboundQueueOverflowPolicy: "drop_newest",
+      },
       ws,
     });
 
@@ -557,13 +556,12 @@ describe("Channel inbox queue overflow policies", () => {
   });
 
   it("normalizes invalid lane values so overflow events are not dropped", async () => {
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "1";
-    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "drop_newest";
-
     const send = vi.fn();
     const ws = {
       connectionManager: {
-        allClients: () => [{ ws: { send } }],
+        allClients: () => [
+          { role: "client", auth_claims: { tenant_id: DEFAULT_TENANT_ID }, ws: { send } },
+        ],
       },
     };
 
@@ -572,6 +570,10 @@ describe("Channel inbox queue overflow policies", () => {
       accountId: "default",
       lane: "not-a-real-lane",
       dmScope: "per_account_channel_peer",
+      inboxConfig: {
+        inboundQueueCap: 1,
+        inboundQueueOverflowPolicy: "drop_newest",
+      },
       ws,
     });
 

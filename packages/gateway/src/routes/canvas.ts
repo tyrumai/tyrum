@@ -4,16 +4,22 @@
 
 import { Hono } from "hono";
 import type { CanvasDal } from "../modules/canvas/dal.js";
-import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../modules/identity/scope.js";
+import type { IdentityScopeDal } from "../modules/identity/scope.js";
+import { DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 const CSP_HEADER = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'";
 const ALLOWED_CONTENT_TYPES = new Set(["text/html", "text/plain"]);
 
-export function createCanvasRoutes(canvasDal: CanvasDal): Hono {
+export function createCanvasRoutes(deps: {
+  canvasDal: CanvasDal;
+  identityScopeDal: IdentityScopeDal;
+}): Hono {
   const app = new Hono();
 
   /** Publish a new canvas artifact. */
   app.post("/canvas/publish", async (c) => {
+    const tenantId = requireTenantId(c);
     const body = (await c.req.json()) as {
       title?: string;
       content_type?: string;
@@ -59,9 +65,14 @@ export function createCanvasRoutes(canvasDal: CanvasDal): Hono {
         return [];
       }) ?? [];
 
-    const artifact = await canvasDal.publish({
-      tenantId: DEFAULT_TENANT_ID,
-      workspaceId: DEFAULT_WORKSPACE_ID,
+    const workspaceId = await deps.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+
+    const artifact = await deps.canvasDal.publish({
+      tenantId,
+      workspaceId,
       title: body.title,
       contentType: body.content_type,
       content: body.content,
@@ -77,9 +88,10 @@ export function createCanvasRoutes(canvasDal: CanvasDal): Hono {
 
   /** Serve the artifact HTML with CSP headers. */
   app.get("/canvas/:id", async (c) => {
+    const tenantId = requireTenantId(c);
     const id = c.req.param("id");
-    const artifact = await canvasDal.getById({
-      tenantId: DEFAULT_TENANT_ID,
+    const artifact = await deps.canvasDal.getById({
+      tenantId,
       canvasArtifactId: id,
     });
 
@@ -94,9 +106,10 @@ export function createCanvasRoutes(canvasDal: CanvasDal): Hono {
 
   /** Metadata-only endpoint. */
   app.get("/canvas/:id/meta", async (c) => {
+    const tenantId = requireTenantId(c);
     const id = c.req.param("id");
-    const artifact = await canvasDal.getById({
-      tenantId: DEFAULT_TENANT_ID,
+    const artifact = await deps.canvasDal.getById({
+      tenantId,
       canvasArtifactId: id,
     });
 

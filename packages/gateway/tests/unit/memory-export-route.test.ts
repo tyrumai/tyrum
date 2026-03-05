@@ -3,39 +3,43 @@ import { Hono } from "hono";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import { createAuthMiddleware } from "../../src/modules/auth/middleware.js";
 import { createHttpScopeAuthorizationMiddleware } from "../../src/modules/authz/http-scope-middleware.js";
 import { FsArtifactStore } from "../../src/modules/artifact/store.js";
 import { createMemoryExportRoutes } from "../../src/routes/memory-export.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("Memory export routes", () => {
-  let tempDir: string;
+  let db: SqliteDb;
   let artifactsDir: string;
-  let tokenStore: TokenStore;
+  let authTokens: AuthTokenService;
   let operatorReadToken: string;
   let pairingOnlyToken: string;
   let artifactStore: FsArtifactStore;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "tyrum-memory-export-route-test-"));
+    db = openTestSqliteDb();
     artifactsDir = await mkdtemp(join(tmpdir(), "tyrum-memory-export-artifacts-test-"));
-    tokenStore = new TokenStore(tempDir);
-    await tokenStore.initialize();
+    authTokens = new AuthTokenService(db);
 
     operatorReadToken = (
-      await tokenStore.issueDeviceToken({
-        deviceId: "dev_client_1",
+      await authTokens.issueToken({
+        tenantId: DEFAULT_TENANT_ID,
         role: "client",
+        deviceId: "dev_client_1",
         scopes: ["operator.read"],
         ttlSeconds: 15 * 60,
       })
     ).token;
 
     pairingOnlyToken = (
-      await tokenStore.issueDeviceToken({
-        deviceId: "dev_client_2",
+      await authTokens.issueToken({
+        tenantId: DEFAULT_TENANT_ID,
         role: "client",
+        deviceId: "dev_client_2",
         scopes: ["operator.pairing"],
         ttlSeconds: 15 * 60,
       })
@@ -45,13 +49,13 @@ describe("Memory export routes", () => {
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    await db.close();
     await rm(artifactsDir, { recursive: true, force: true });
   });
 
   function buildApp(): Hono {
     const app = new Hono();
-    app.use("*", createAuthMiddleware(tokenStore));
+    app.use("*", createAuthMiddleware(authTokens));
     app.use("*", createHttpScopeAuthorizationMiddleware());
     app.route("/", createMemoryExportRoutes({ artifactStore }));
     return app;

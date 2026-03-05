@@ -9,12 +9,16 @@ import {
   parseTyrumKey,
   resolveDmScope,
 } from "@tyrum/schemas";
-import type { NormalizedMessageEnvelope, NormalizedThreadMessage } from "@tyrum/schemas";
+import type {
+  NormalizedMessageEnvelope,
+  NormalizedThreadMessage,
+  WsEventEnvelope,
+} from "@tyrum/schemas";
 import type { DmScope } from "@tyrum/schemas";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
-import { ChannelInboxDal, type ChannelInboxRow } from "./inbox-dal.js";
+import { ChannelInboxDal, type ChannelInboxConfig, type ChannelInboxRow } from "./inbox-dal.js";
 import { ChannelOutboxDal } from "./outbox-dal.js";
 import { LaneQueueInterruptError, LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
 import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
@@ -44,12 +48,10 @@ import { randomUUID } from "node:crypto";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
 import { SessionSendPolicyOverrideDal } from "./send-policy-override-dal.js";
 import { coerceRecord } from "../util/coerce.js";
-
-function isTruthyEnvFlag(value: string | undefined): boolean {
-  const trimmed = value?.trim().toLowerCase();
-  if (!trimmed) return false;
-  return !["0", "false", "off", "no"].includes(trimmed);
-}
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
+import { broadcastWsEvent } from "../../ws/broadcast.js";
+import type { ConnectionManager } from "../../ws/connection-manager.js";
+import type { OutboxDal } from "../backplane/outbox-dal.js";
 
 function normalizeLane(raw: string | undefined): "main" | "cron" | "subagent" {
   const normalized = raw?.trim().toLowerCase();
@@ -65,29 +67,6 @@ const CHANNEL_TYPING_REFRESH_DEFAULT_MS = 4000;
 const CHANNEL_TYPING_REFRESH_MIN_MS = 1000;
 const CHANNEL_TYPING_REFRESH_MAX_MS = 10_000;
 const CHANNEL_TYPING_MESSAGE_START_DELAY_MS = 250;
-
-function resolveChannelTypingMode(): ChannelTypingMode {
-  const raw = process.env["TYRUM_CHANNEL_TYPING_MODE"]?.trim().toLowerCase();
-  if (raw === "never" || raw === "message" || raw === "thinking" || raw === "instant") {
-    return raw;
-  }
-  return "never";
-}
-
-function resolveChannelTypingRefreshMs(): number {
-  const raw = process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"]?.trim();
-  if (!raw) return CHANNEL_TYPING_REFRESH_DEFAULT_MS;
-  if (!/^-?[0-9]+$/.test(raw)) return CHANNEL_TYPING_REFRESH_DEFAULT_MS;
-  const parsed = Number(raw);
-  if (!Number.isSafeInteger(parsed)) return CHANNEL_TYPING_REFRESH_DEFAULT_MS;
-  if (parsed <= 0) return 0;
-  return Math.min(CHANNEL_TYPING_REFRESH_MAX_MS, Math.max(CHANNEL_TYPING_REFRESH_MIN_MS, parsed));
-}
-
-function isChannelTypingEnabledForLane(lane: string): boolean {
-  if (lane === "main") return true;
-  return isTruthyEnvFlag(process.env["TYRUM_CHANNEL_TYPING_AUTOMATION_ENABLED"]);
-}
 
 function extractMessageText(normalized: NormalizedThreadMessage): string {
   const content = normalized.message.content;
@@ -120,8 +99,8 @@ function mergeInboundEnvelopes(
   };
 }
 
-function agentIdFromEnv(): string {
-  return process.env["TYRUM_AGENT_ID"]?.trim() || "default";
+function defaultAgentId(): string {
+  return "default";
 }
 
 function toTelegramParseMode(
@@ -178,7 +157,7 @@ export function telegramThreadKey(
     peerId?: string;
   },
 ): string {
-  const agentId = opts?.agentId?.trim() || agentIdFromEnv();
+  const agentId = opts?.agentId?.trim() || defaultAgentId();
   const accountId =
     opts?.accountId?.trim() || opts?.channelKey?.trim() || telegramAccountIdFromEnv();
 
@@ -295,13 +274,11 @@ async function tryAcquireLaneLease(
   });
 }
 
-type WsBroadcastClient = { ws: { send: (payload: string) => void } };
-
 type WsBroadcastDeps = {
-  connectionManager: { allClients: () => Iterable<WsBroadcastClient> };
+  connectionManager: ConnectionManager;
   cluster?: {
     edgeId: string;
-    outboxDal: { enqueue: (kind: string, payload: unknown) => Promise<unknown> };
+    outboxDal: OutboxDal;
   };
 };
 
@@ -314,12 +291,12 @@ export class TelegramChannelQueue {
   private readonly lane: string;
   private readonly dmScope: DmScope;
   private readonly ws?: WsBroadcastDeps;
-  private readonly logger?: Logger;
 
   constructor(
     db: SqlDb,
     opts: {
       sessionDal: SessionDal;
+      inboxConfig?: ChannelInboxConfig;
       agentId?: string;
       accountId?: string;
       channelKey?: string;
@@ -330,47 +307,20 @@ export class TelegramChannelQueue {
     },
   ) {
     this.db = db;
-    this.inbox = new ChannelInboxDal(db, opts.sessionDal);
+    this.inbox = new ChannelInboxDal(db, opts.sessionDal, opts.inboxConfig);
     this.peerIdentityLinks = new PeerIdentityLinkDal(db);
-    this.agentId = opts?.agentId?.trim() || agentIdFromEnv();
+    this.agentId = opts?.agentId?.trim() || defaultAgentId();
     this.accountId =
       opts?.accountId?.trim() || opts?.channelKey?.trim() || telegramAccountIdFromEnv();
     this.lane = normalizeLane(opts?.lane);
     this.dmScope = resolveDmScope({ configured: opts?.dmScope ?? "per_account_channel_peer" });
     this.ws = opts?.ws;
-    this.logger = opts?.logger;
   }
 
-  private emitWsEvent(evt: unknown): void {
+  private emitWsEvent(tenantId: string, evt: WsEventEnvelope): void {
     const ws = this.ws;
     if (!ws) return;
-
-    const payload = JSON.stringify(evt);
-    for (const client of ws.connectionManager.allClients()) {
-      try {
-        client.ws.send(payload);
-      } catch (err) {
-        // Intentional: clients can disconnect between enumeration and send.
-        void err;
-      }
-    }
-
-    const cluster = ws.cluster;
-    if (cluster) {
-      void cluster.outboxDal
-        .enqueue("ws.broadcast", {
-          source_edge_id: cluster.edgeId,
-          skip_local: true,
-          message: evt,
-        })
-        .catch((err) => {
-          const message = err instanceof Error ? err.message : String(err);
-          this.logger?.warn("channels.ws_broadcast_enqueue_failed", {
-            edge_id: cluster.edgeId,
-            error: message,
-          });
-        });
-    }
+    broadcastWsEvent(tenantId, evt, ws);
   }
 
   async enqueue(
@@ -490,7 +440,7 @@ export class TelegramChannelQueue {
       };
       const parsed = WsChannelQueueOverflowEvent.safeParse(candidate);
       if (parsed.success) {
-        this.emitWsEvent(parsed.data);
+        this.emitWsEvent(row.tenant_id, parsed.data);
       }
     }
 
@@ -545,6 +495,9 @@ export class TelegramChannelProcessor {
   private readonly memoryV1Dal?: MemoryV1Dal;
   private readonly approvalDal?: ApprovalDal;
   private readonly approvalNotifier?: ApprovalNotifier;
+  private readonly typingMode: ChannelTypingMode;
+  private readonly typingRefreshMs: number;
+  private readonly typingAutomationEnabled: boolean;
   private readonly pollIntervalMs: number;
   private readonly inboxLeaseTtlMs: number;
   private readonly outboxLeaseTtlMs: number;
@@ -557,6 +510,7 @@ export class TelegramChannelProcessor {
   constructor(opts: {
     db: SqlDb;
     sessionDal: SessionDal;
+    inboxConfig?: ChannelInboxConfig;
     agents: AgentRegistry;
     telegramBot: TelegramBot;
     owner: string;
@@ -564,6 +518,9 @@ export class TelegramChannelProcessor {
     memoryV1Dal?: MemoryV1Dal;
     approvalDal?: ApprovalDal;
     approvalNotifier?: ApprovalNotifier;
+    typingMode?: ChannelTypingMode;
+    typingRefreshMs?: number;
+    typingAutomationEnabled?: boolean;
     egressConnectors?: ChannelEgressConnector[];
     pollIntervalMs?: number;
     inboxLeaseTtlMs?: number;
@@ -573,7 +530,7 @@ export class TelegramChannelProcessor {
     maxBatch?: number;
   }) {
     this.db = opts.db;
-    this.inbox = new ChannelInboxDal(opts.db, opts.sessionDal);
+    this.inbox = new ChannelInboxDal(opts.db, opts.sessionDal, opts.inboxConfig);
     this.outbox = new ChannelOutboxDal(opts.db);
     this.agents = opts.agents;
     this.egressConnectors = new Map(
@@ -586,6 +543,19 @@ export class TelegramChannelProcessor {
     this.memoryV1Dal = opts.memoryV1Dal;
     this.approvalDal = opts.approvalDal;
     this.approvalNotifier = opts.approvalNotifier;
+    this.typingMode = opts.typingMode ?? "never";
+    const rawTypingRefreshMs =
+      typeof opts.typingRefreshMs === "number" && Number.isFinite(opts.typingRefreshMs)
+        ? Math.floor(opts.typingRefreshMs)
+        : CHANNEL_TYPING_REFRESH_DEFAULT_MS;
+    this.typingRefreshMs =
+      rawTypingRefreshMs <= 0
+        ? 0
+        : Math.min(
+            CHANNEL_TYPING_REFRESH_MAX_MS,
+            Math.max(CHANNEL_TYPING_REFRESH_MIN_MS, rawTypingRefreshMs),
+          );
+    this.typingAutomationEnabled = opts.typingAutomationEnabled ?? false;
     this.pollIntervalMs = opts.pollIntervalMs ?? 250;
     this.inboxLeaseTtlMs = opts.inboxLeaseTtlMs ?? 10 * 60 * 1000;
     this.outboxLeaseTtlMs = opts.outboxLeaseTtlMs ?? 60 * 1000;
@@ -872,7 +842,7 @@ export class TelegramChannelProcessor {
       }
 
       try {
-        await enqueueWsBroadcastMessage(this.db, parsed.data);
+        await enqueueWsBroadcastMessage(this.db, inbox.tenant_id, parsed.data);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.logger?.warn("channels.egress.delivery_receipt.enqueue_failed", {
@@ -980,11 +950,11 @@ export class TelegramChannelProcessor {
     const sourceKey = buildChannelSourceKey(address);
     const connector =
       this.egressConnectors.get(sourceKey) ?? this.egressConnectors.get(connectorId);
-    const typingMode = resolveChannelTypingMode();
-    const typingRefreshMs = resolveChannelTypingRefreshMs();
+    const typingMode = this.typingMode;
+    const typingRefreshMs = this.typingRefreshMs;
     const typingEnabled =
       typingMode !== "never" &&
-      isChannelTypingEnabledForLane(leader.lane) &&
+      (leader.lane === "main" || this.typingAutomationEnabled) &&
       typeof connector?.sendTyping === "function";
 
     let typingTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -1043,7 +1013,10 @@ export class TelegramChannelProcessor {
         void err;
       }
 
-      const runtime = await this.agents.getRuntime(agentId);
+      const runtime = await this.agents.getRuntime({
+        tenantId: DEFAULT_TENANT_ID,
+        agentKey: agentId,
+      });
 
       if (typingMode === "instant" || typingMode === "thinking") startTyping();
       else if (typingMode === "message") {
@@ -1189,6 +1162,7 @@ export class TelegramChannelProcessor {
           : `${source}:${accountId}:${leader.thread_id}`;
       try {
         const evalRes = await policyService.evaluateConnectorAction({
+          tenantId: leader.tenant_id,
           agentId: sessionScope.agent_id,
           workspaceId: sessionScope.workspace_id,
           matchTarget: connectorMatchTarget,

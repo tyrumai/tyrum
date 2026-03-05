@@ -16,6 +16,7 @@ import type { ExecutionEngine } from "../modules/execution/engine.js";
 import type { PolicyService } from "../modules/policy/service.js";
 import type { ApprovalDal } from "../modules/approval/dal.js";
 import type { SqlDb } from "../statestore/types.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface PlaybookRouteDeps {
   playbooks: Playbook[];
@@ -118,10 +119,11 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
   /**
    * Execute a playbook durably via the execution engine.
    *
-   * This is feature-gated by `TYRUM_ENGINE_API_ENABLED`, since the engine
-   * instance is only wired when enabled in `createApp(...)`.
+   * This is feature-gated by deployment config `execution.engineApiEnabled`,
+   * since the engine instance is only wired when enabled in `createApp(...)`.
    */
   app.post("/playbooks/:id/execute", async (c) => {
+    const tenantId = requireTenantId(c);
     if (!deps.engine || !deps.policyService) {
       return c.json({ error: "unsupported", message: "execution engine API is not enabled" }, 400);
     }
@@ -166,9 +168,10 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
     const effectivePolicy = await deps.policyService.loadEffectiveBundle({
       playbookBundle,
     });
-    const snapshot = await deps.policyService.getOrCreateSnapshot(effectivePolicy.bundle);
+    const snapshot = await deps.policyService.getOrCreateSnapshot(tenantId, effectivePolicy.bundle);
 
     const res = await deps.engine.enqueuePlan({
+      tenantId,
       key,
       lane,
       planId,

@@ -12,20 +12,13 @@ import {
 
 describe("StateStoreLifecycleScheduler", () => {
   let db: SqliteDb | undefined;
-  const originalSessionsTtlDays = process.env["TYRUM_SESSIONS_TTL_DAYS"];
 
   afterEach(async () => {
     await db?.close();
     db = undefined;
-    if (typeof originalSessionsTtlDays === "undefined") {
-      delete process.env["TYRUM_SESSIONS_TTL_DAYS"];
-    } else {
-      process.env["TYRUM_SESSIONS_TTL_DAYS"] = originalSessionsTtlDays;
-    }
   });
 
   it("prunes expired sessions and TTL-derived tables", async () => {
-    process.env["TYRUM_SESSIONS_TTL_DAYS"] = "1";
     db = openTestSqliteDb();
 
     const now = new Date("2026-02-24T00:00:00.000Z");
@@ -204,6 +197,7 @@ describe("StateStoreLifecycleScheduler", () => {
     const scheduler = new StateStoreLifecycleScheduler({
       db,
       clock: () => ({ nowIso: now.toISOString(), nowMs }),
+      sessionsTtlDays: 1,
     });
 
     await scheduler.tick();
@@ -246,7 +240,6 @@ describe("StateStoreLifecycleScheduler", () => {
   });
 
   it("does not orphan context reports when session pruning order has timestamp ties", async () => {
-    process.env["TYRUM_SESSIONS_TTL_DAYS"] = "1";
     db = openTestSqliteDb();
 
     const now = new Date("2026-02-24T00:00:00.000Z");
@@ -434,6 +427,7 @@ describe("StateStoreLifecycleScheduler", () => {
       db: new UnstableSessionTieBreakDb(db),
       clock: () => ({ nowIso: now.toISOString(), nowMs }),
       batchSize: 1,
+      sessionsTtlDays: 1,
     });
 
     await scheduler.tick();
@@ -448,7 +442,6 @@ describe("StateStoreLifecycleScheduler", () => {
   });
 
   it("avoids datetime(updated_at) in SQLite session pruning queries (index-friendly)", async () => {
-    process.env["TYRUM_SESSIONS_TTL_DAYS"] = "1";
     db = openTestSqliteDb();
 
     const now = new Date("2026-02-24T00:00:00.000Z");
@@ -492,6 +485,7 @@ describe("StateStoreLifecycleScheduler", () => {
     const scheduler = new StateStoreLifecycleScheduler({
       db: new RecordingDb(db),
       clock: () => ({ nowIso: now.toISOString(), nowMs }),
+      sessionsTtlDays: 1,
     });
 
     await scheduler.tick();
@@ -501,7 +495,6 @@ describe("StateStoreLifecycleScheduler", () => {
   });
 
   it("does not floor fractional session TTL days to zero (data-loss guard)", async () => {
-    process.env["TYRUM_SESSIONS_TTL_DAYS"] = "0.5";
     db = openTestSqliteDb();
 
     const now = new Date("2026-02-24T00:00:00.000Z");
@@ -552,6 +545,7 @@ describe("StateStoreLifecycleScheduler", () => {
     const scheduler = new StateStoreLifecycleScheduler({
       db,
       clock: () => ({ nowIso: now.toISOString(), nowMs }),
+      sessionsTtlDays: 0.5,
     });
 
     await scheduler.tick();

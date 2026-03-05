@@ -83,6 +83,8 @@ function makeClient(
     opts?.authClaims ??
     ({
       token_kind: "admin",
+      token_id: "token-1",
+      tenant_id: DEFAULT_TENANT_ID,
       role: "admin",
       scopes: ["*"],
     } as const);
@@ -916,7 +918,7 @@ describe("handleClientMessage", () => {
     );
 
     expect(result).toBeUndefined();
-    expect(onApprovalDecision).toHaveBeenCalledWith(approvalId, true, undefined);
+    expect(onApprovalDecision).toHaveBeenCalledWith(DEFAULT_TENANT_ID, approvalId, true, undefined);
   });
 
   it("dispatches approval.request rejection with reason", async () => {
@@ -938,7 +940,12 @@ describe("handleClientMessage", () => {
       deps,
     );
 
-    expect(onApprovalDecision).toHaveBeenCalledWith(approvalId, false, "too risky");
+    expect(onApprovalDecision).toHaveBeenCalledWith(
+      DEFAULT_TENANT_ID,
+      approvalId,
+      false,
+      "too risky",
+    );
   });
 
   it("forbids approval.request decisions when scoped device token lacks operator.approvals", async () => {
@@ -1603,6 +1610,8 @@ describe("handleClientMessage", () => {
     const client = cm.getClient(id)! as unknown as { auth_claims?: unknown };
     client.auth_claims = {
       token_kind: "device",
+      token_id: "token-device-1",
+      tenant_id: DEFAULT_TENANT_ID,
       role: "client",
       device_id: "dev_client_1",
       scopes: ["operator.read"],
@@ -1627,6 +1636,8 @@ describe("handleClientMessage", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-device-2",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_1",
         scopes: ["operator.admin"],
@@ -1655,6 +1666,8 @@ describe("handleClientMessage", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-device-3",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_1",
         scopes: ["operator.admin"],
@@ -1682,6 +1695,8 @@ describe("handleClientMessage", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_1",
         scopes: [],
@@ -1765,6 +1780,8 @@ describe("handleClientMessage", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_1",
         scopes: [],
@@ -1844,6 +1861,7 @@ describe("dispatchTask", () => {
     const taskId = await dispatchTask(
       action,
       {
+        tenantId: DEFAULT_TENANT_ID,
         runId: "550e8400-e29b-41d4-a716-446655440000",
         stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -1874,6 +1892,14 @@ describe("dispatchTask", () => {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "node",
+        device_id: "dev_test",
+        scopes: [],
+      },
     });
 
     const deps = makeDeps(cm, {
@@ -1899,6 +1925,7 @@ describe("dispatchTask", () => {
     const taskId = await dispatchTask(
       action,
       {
+        tenantId: DEFAULT_TENANT_ID,
         runId: "550e8400-e29b-41d4-a716-446655440000",
         stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -1982,6 +2009,14 @@ describe("dispatchTask", () => {
         role: "node",
         deviceId: "dev_test",
         protocolRev: 2,
+        authClaims: {
+          token_kind: "device",
+          token_id: "token-node-1",
+          tenant_id: DEFAULT_TENANT_ID,
+          role: "node",
+          device_id: "dev_test",
+          scopes: [],
+        },
       });
 
       const deps = makeDeps(cm, {
@@ -2003,6 +2038,7 @@ describe("dispatchTask", () => {
       await dispatchTask(
         { type: "CLI", args: { command: "echo hi" } },
         {
+          tenantId: DEFAULT_TENANT_ID,
           runId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2086,6 +2122,7 @@ describe("dispatchTask", () => {
       dispatchTask(
         action,
         {
+          tenantId: DEFAULT_TENANT_ID,
           runId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2163,6 +2200,7 @@ describe("dispatchTask", () => {
     await dispatchTask(
       action,
       {
+        tenantId: DEFAULT_TENANT_ID,
         runId: "550e8400-e29b-41d4-a716-446655440000",
         stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2171,7 +2209,7 @@ describe("dispatchTask", () => {
     );
 
     expect(outboxDal.enqueue).toHaveBeenCalledOnce();
-    const payload = outboxDal.enqueue.mock.calls[0]![1] as {
+    const payload = outboxDal.enqueue.mock.calls[0]![2] as {
       connection_id: string;
     };
     expect(payload.connection_id).toBe("conn-v2");
@@ -2185,6 +2223,14 @@ describe("dispatchTask", () => {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "node",
+        device_id: "dev_test",
+        scopes: [],
+      },
     });
 
     const deps = makeDeps(cm, {
@@ -2202,6 +2248,7 @@ describe("dispatchTask", () => {
       dispatchTask(
         action,
         {
+          tenantId: DEFAULT_TENANT_ID,
           runId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2220,6 +2267,14 @@ describe("dispatchTask", () => {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "node",
+        device_id: "dev_test",
+        scopes: [],
+      },
     });
 
     const outboxDal = { enqueue: vi.fn(async () => undefined) };
@@ -2242,6 +2297,7 @@ describe("dispatchTask", () => {
       dispatchTask(
         { type: "Desktop", args: {} },
         {
+          tenantId: DEFAULT_TENANT_ID,
           runId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2261,6 +2317,14 @@ describe("dispatchTask", () => {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "node",
+        device_id: "dev_test",
+        scopes: [],
+      },
     });
     const { ws: legacyWs } = makeClient(cm, ["cli"]);
 
@@ -2306,6 +2370,7 @@ describe("dispatchTask", () => {
     const taskId = await dispatchTask(
       action,
       {
+        tenantId: DEFAULT_TENANT_ID,
         runId: "550e8400-e29b-41d4-a716-446655440000",
         stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2325,6 +2390,14 @@ describe("dispatchTask", () => {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "node",
+        device_id: "dev_test",
+        scopes: [],
+      },
     });
     const { ws: clientWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
 
@@ -2352,6 +2425,7 @@ describe("dispatchTask", () => {
       dispatchTask(
         action,
         {
+          tenantId: DEFAULT_TENANT_ID,
           runId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2371,6 +2445,14 @@ describe("dispatchTask", () => {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "node",
+        device_id: "dev_test",
+        scopes: [],
+      },
     });
     const { ws: clientWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
 
@@ -2398,6 +2480,7 @@ describe("dispatchTask", () => {
       dispatchTask(
         action,
         {
+          tenantId: DEFAULT_TENANT_ID,
           runId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2417,6 +2500,14 @@ describe("dispatchTask", () => {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "node",
+        device_id: "dev_test",
+        scopes: [],
+      },
     });
 
     const deps = makeDeps(cm, {
@@ -2471,6 +2562,7 @@ describe("dispatchTask", () => {
       dispatchTask(
         action,
         {
+          tenantId: DEFAULT_TENANT_ID,
           runId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2489,6 +2581,14 @@ describe("dispatchTask", () => {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "node",
+        device_id: "dev_test",
+        scopes: [],
+      },
     });
 
     const deps = makeDeps(cm, {
@@ -2542,6 +2642,7 @@ describe("dispatchTask", () => {
     const taskId = await dispatchTask(
       action,
       {
+        tenantId: DEFAULT_TENANT_ID,
         runId: "550e8400-e29b-41d4-a716-446655440000",
         stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2566,6 +2667,14 @@ describe("dispatchTask", () => {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "node",
+        device_id: "dev_test",
+        scopes: [],
+      },
     });
     const { ws: legacyWs } = makeClient(cm, ["cli"]);
 
@@ -2584,6 +2693,7 @@ describe("dispatchTask", () => {
       dispatchTask(
         action,
         {
+          tenantId: DEFAULT_TENANT_ID,
           runId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2609,6 +2719,7 @@ describe("dispatchTask", () => {
       dispatchTask(
         action,
         {
+          tenantId: DEFAULT_TENANT_ID,
           runId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2631,6 +2742,7 @@ describe("dispatchTask", () => {
       dispatchTask(
         action,
         {
+          tenantId: DEFAULT_TENANT_ID,
           runId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2655,6 +2767,7 @@ describe("dispatchTask", () => {
       dispatchTask(
         action,
         {
+          tenantId: DEFAULT_TENANT_ID,
           runId: "550e8400-e29b-41d4-a716-446655440000",
           stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -2676,10 +2789,11 @@ describe("requestApproval", () => {
     const deps = makeDeps(cm);
 
     requestApproval(
+      DEFAULT_TENANT_ID,
       {
-        approval_id: 7,
-        plan_id: "plan-1",
-        step_index: 2,
+        approval_id: "7",
+        approval_key: "approval-7",
+        kind: "tool.exec",
         prompt: "Approve payment?",
         context: { amount: 100 },
         expires_at: null,
@@ -2693,9 +2807,9 @@ describe("requestApproval", () => {
       request_id: "approval-7",
       type: "approval.request",
       payload: {
-        approval_id: 7,
-        plan_id: "plan-1",
-        step_index: 2,
+        approval_id: "7",
+        approval_key: "approval-7",
+        kind: "tool.exec",
         prompt: "Approve payment?",
         context: { amount: 100 },
         expires_at: null,
@@ -2721,10 +2835,11 @@ describe("requestApproval", () => {
     const deps = makeDeps(cm);
 
     requestApproval(
+      DEFAULT_TENANT_ID,
       {
-        approval_id: 7,
-        plan_id: "plan-1",
-        step_index: 2,
+        approval_id: "7",
+        approval_key: "approval-7",
+        kind: "tool.exec",
         prompt: "Approve payment?",
         context: { amount: 100 },
         expires_at: null,
@@ -2744,6 +2859,8 @@ describe("requestApproval", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-device-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_1",
         scopes: ["operator.read"],
@@ -2753,10 +2870,11 @@ describe("requestApproval", () => {
     const deps = makeDeps(cm);
 
     requestApproval(
+      DEFAULT_TENANT_ID,
       {
-        approval_id: 7,
-        plan_id: "plan-1",
-        step_index: 2,
+        approval_id: "7",
+        approval_key: "approval-7",
+        kind: "tool.exec",
         prompt: "Approve payment?",
         context: { amount: 100 },
         expires_at: null,
@@ -2774,10 +2892,11 @@ describe("requestApproval", () => {
 
     // Should not throw.
     requestApproval(
+      DEFAULT_TENANT_ID,
       {
-        approval_id: 1,
-        plan_id: "plan-1",
-        step_index: 0,
+        approval_id: "1",
+        approval_key: "approval-1",
+        kind: "tool.exec",
         prompt: "Approve?",
         context: null,
         expires_at: null,
@@ -2798,7 +2917,7 @@ describe("sendPlanUpdate", () => {
     const { ws: ws2 } = makeClient(cm, ["cli"]);
     const deps = makeDeps(cm);
 
-    sendPlanUpdate("plan-1", "executing", deps, "step 2 of 5");
+    sendPlanUpdate(DEFAULT_TENANT_ID, "plan-1", "executing", deps, "step 2 of 5");
 
     expect(ws1.send).toHaveBeenCalledOnce();
     expect(ws2.send).toHaveBeenCalledOnce();
@@ -2819,7 +2938,7 @@ describe("sendPlanUpdate", () => {
     const { ws } = makeClient(cm, ["playwright"]);
     const deps = makeDeps(cm);
 
-    sendPlanUpdate("plan-1", "completed", deps);
+    sendPlanUpdate(DEFAULT_TENANT_ID, "plan-1", "completed", deps);
 
     const sent = JSON.parse(ws.send.mock.calls[0]![0] as string) as Record<string, unknown>;
     expect(sent["type"]).toBe("plan.update");

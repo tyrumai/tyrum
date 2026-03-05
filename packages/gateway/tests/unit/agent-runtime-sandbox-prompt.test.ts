@@ -14,7 +14,6 @@ const migrationsDir = join(__dirname, "../../migrations/sqlite");
 describe("AgentRuntime system prompt sandbox section", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
-  const originalHardeningProfile = process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"];
 
   afterEach(async () => {
     await container?.db.close();
@@ -24,22 +23,21 @@ describe("AgentRuntime system prompt sandbox section", () => {
       await rm(homeDir, { recursive: true, force: true });
       homeDir = undefined;
     }
-
-    if (originalHardeningProfile === undefined) {
-      delete process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"];
-    } else {
-      process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"] = originalHardeningProfile;
-    }
   });
 
   it("includes hardening profile and elevated execution availability", async () => {
-    process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"] = "hardened";
-
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-sandbox-prompt-"));
-    container = createContainer({
-      dbPath: ":memory:",
-      migrationsDir,
-    });
+    container = createContainer(
+      {
+        dbPath: ":memory:",
+        migrationsDir,
+      },
+      {
+        deploymentConfig: {
+          toolrunner: { hardeningProfile: "hardened" },
+        },
+      },
+    );
 
     let capturedSystem: string | undefined;
     const model = new MockLanguageModelV3({

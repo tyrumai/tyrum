@@ -18,9 +18,11 @@ import type { MemoryV1Dal } from "../modules/memory/v1-dal.js";
 import { recordMemoryV1SystemEpisode } from "../modules/memory/v1-episode-recorder.js";
 import type { Logger } from "../modules/observability/logger.js";
 import { safeDetail } from "../utils/safe-detail.js";
+import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 
 export interface IngressDeps {
   telegramBot?: TelegramBot;
+  telegramWebhookSecret?: string;
   agents?: AgentRegistry;
   telegramQueue?: TelegramChannelQueue;
   routingConfigDal?: RoutingConfigDal;
@@ -37,12 +39,12 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
   ingressRouter.post("/ingress/telegram", async (c) => {
     // When Telegram integration is enabled, require Telegram webhook secret validation.
     if (deps.telegramBot) {
-      const expectedSecret = process.env["TELEGRAM_WEBHOOK_SECRET"]?.trim();
+      const expectedSecret = deps.telegramWebhookSecret?.trim();
       if (!expectedSecret) {
         return c.json(
           {
             error: "misconfigured",
-            message: "TELEGRAM_WEBHOOK_SECRET must be set when Telegram ingress is enabled.",
+            message: "Telegram webhook secret must be configured when Telegram ingress is enabled.",
           },
           503,
         );
@@ -82,11 +84,11 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       return c.json({ ok: true });
     }
 
-    const home = deps.home?.trim() || process.env["TYRUM_HOME"]?.trim() || undefined;
+    const home = deps.home?.trim() || undefined;
     let durable;
     if (deps.routingConfigDal) {
       try {
-        durable = await deps.routingConfigDal.getLatest();
+        durable = await deps.routingConfigDal.getLatest(DEFAULT_TENANT_ID);
       } catch (err) {
         deps.logger?.warn("ingress.telegram.routing_config_load_failed", {
           error: safeDetail(err) ?? "unknown_error",
@@ -123,7 +125,10 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
     }
 
     try {
-      const runtime = await deps.agents.getRuntime(routedAgentId);
+      const runtime = await deps.agents.getRuntime({
+        tenantId: DEFAULT_TENANT_ID,
+        agentKey: routedAgentId,
+      });
       const patchedEnvelope = {
         ...envelope,
         delivery: {

@@ -16,7 +16,7 @@ import type { ExecutionEngine } from "../modules/execution/engine.js";
 import { toApprovalContract } from "../modules/approval/to-contract.js";
 import { isSafeSuggestedOverridePattern } from "../modules/policy/override-guardrails.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
-import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>([
   "pending",
@@ -39,12 +39,14 @@ export interface ApprovalRouteDeps {
   };
 }
 
-function emitEvent(deps: ApprovalRouteDeps, evt: WsEventEnvelope): void {
+function emitEvent(deps: ApprovalRouteDeps, tenantId: string, evt: WsEventEnvelope): void {
   const ws = deps.ws;
   if (!ws) return;
 
   const payload = JSON.stringify(evt);
   for (const client of ws.connectionManager.allClients()) {
+    const clientTenantId = client.auth_claims?.tenant_id ?? null;
+    if (clientTenantId !== tenantId) continue;
     try {
       client.ws.send(payload);
     } catch (err) {
@@ -55,7 +57,7 @@ function emitEvent(deps: ApprovalRouteDeps, evt: WsEventEnvelope): void {
 
   if (ws.cluster) {
     void ws.cluster.outboxDal
-      .enqueue("ws.broadcast", {
+      .enqueue(tenantId, "ws.broadcast", {
         source_edge_id: ws.cluster.edgeId,
         skip_local: true,
         message: evt,
@@ -109,6 +111,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
 
   /** List approvals. Defaults to pending; use ?status= to filter. */
   app.get("/approvals", async (c) => {
+    const tenantId = requireTenantId(c);
     const status = c.req.query("status") as ApprovalStatus | undefined;
 
     if (status && !VALID_STATUSES.has(status)) {
@@ -122,7 +125,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
     }
 
     const approvals = await deps.approvalDal.getByStatus({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       status: status ?? "pending",
     });
     return c.json({ approvals });
@@ -130,6 +133,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
 
   /** Get a single approval by id. */
   app.get("/approvals/:id", async (c) => {
+    const tenantId = requireTenantId(c);
     const id = c.req.param("id");
     const parsedId = UuidSchema.safeParse(id);
     if (!parsedId.success) {
@@ -137,7 +141,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
     }
 
     const approval = await deps.approvalDal.getById({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       approvalId: parsedId.data,
     });
     if (!approval) {
@@ -149,6 +153,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
 
   /** Respond to a pending approval (approve or deny). */
   app.post("/approvals/:id/respond", async (c) => {
+    const tenantId = requireTenantId(c);
     const id = c.req.param("id");
     const parsedId = UuidSchema.safeParse(id);
     if (!parsedId.success) {
@@ -176,7 +181,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
     }
 
     const existing = await deps.approvalDal.getById({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       approvalId: parsedId.data,
     });
     if (!existing) {
@@ -261,7 +266,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
     }
 
     const updated = await deps.approvalDal.respond({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       approvalId: parsedId.data,
       decision,
       reason: body.reason,
@@ -315,6 +320,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
 
       for (const sel of selectedNormalized) {
         const row = await overrideDalForRequest.create({
+          tenantId,
           agentId,
           workspaceId: sel.workspace_id,
           toolId: sel.tool_id,
@@ -331,7 +337,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
           occurred_at: new Date().toISOString(),
           payload: { override: row },
         };
-        emitEvent(deps, evt);
+        emitEvent(deps, tenantId, evt);
       }
     }
 
@@ -343,7 +349,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
         occurred_at: new Date().toISOString(),
         payload: { approval: contract },
       };
-      emitEvent(deps, approvalResolvedEvt);
+      emitEvent(deps, tenantId, approvalResolvedEvt);
     }
 
     return c.json({
@@ -354,6 +360,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
 
   /** Preview the context of a pending approval. */
   app.get("/approvals/:id/preview", async (c) => {
+    const tenantId = requireTenantId(c);
     const id = c.req.param("id");
     const parsedId = UuidSchema.safeParse(id);
     if (!parsedId.success) {
@@ -361,7 +368,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
     }
 
     const approval = await deps.approvalDal.getById({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       approvalId: parsedId.data,
     });
     if (!approval) {

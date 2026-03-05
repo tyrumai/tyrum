@@ -14,37 +14,33 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { getRequestListener as honoGetRequestListener } from "@hono/node-server";
+import { getRequestListener } from "@hono/node-server";
 import type { Hono } from "hono";
 import { createTestApp, minimalPlanRequest } from "./helpers.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { dispatchTask, type ProtocolDeps } from "../../src/ws/protocol.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { generateKeyPairSync } from "node:crypto";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
 } from "@tyrum/schemas";
 import { waitForCondition } from "../helpers/wait-for.js";
-import { pathExists } from "../helpers/path-exists.js";
-
-let getRequestListener: typeof honoGetRequestListener = honoGetRequestListener;
+import type { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 /** Start a real HTTP server + WebSocket on a random port. */
-async function startServer(app: Hono): Promise<{
+async function startServer(
+  app: Hono,
+  opts: { authTokens: AuthTokenService; adminToken: string },
+): Promise<{
   server: Server;
   port: number;
   adminToken: string;
-  tokenHome: string;
   connectionManager: ConnectionManager;
   stopHeartbeat: () => void;
   taskResults: Array<{
@@ -71,54 +67,34 @@ async function startServer(app: Hono): Promise<{
     },
   };
 
-  // Use a real token store to enforce WS authentication.
-  const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-e2e-test-"));
-  let tokenStore: TokenStore;
-  let adminToken: string;
-  let stopHeartbeat: (() => void) | undefined;
-  let server: Server | undefined;
-  try {
-    tokenStore = new TokenStore(tokenHome);
-    adminToken = await tokenStore.initialize();
+  const { handleUpgrade, stopHeartbeat } = createWsHandler({
+    connectionManager,
+    protocolDeps,
+    authTokens: opts.authTokens,
+  });
 
-    const wsHandler = createWsHandler({
-      connectionManager,
-      protocolDeps,
-      tokenStore,
+  const requestListener = getRequestListener(app.fetch);
+  const server = createServer(requestListener);
+
+  server.on("upgrade", (req, socket, head) => {
+    handleUpgrade(req, socket, head);
+  });
+
+  const port = await new Promise<number>((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      resolve(typeof addr === "object" && addr !== null ? addr.port : 0);
     });
-    stopHeartbeat = wsHandler.stopHeartbeat;
+  });
 
-    const requestListener = getRequestListener(app.fetch);
-    server = createServer(requestListener);
-
-    server.on("upgrade", (req, socket, head) => {
-      wsHandler.handleUpgrade(req, socket, head);
-    });
-
-    const port = await new Promise<number>((resolve) => {
-      server!.listen(0, "127.0.0.1", () => {
-        const addr = server!.address();
-        resolve(typeof addr === "object" && addr !== null ? addr.port : 0);
-      });
-    });
-
-    return {
-      server,
-      port,
-      adminToken,
-      tokenHome,
-      connectionManager,
-      stopHeartbeat,
-      taskResults,
-    };
-  } catch (error) {
-    stopHeartbeat?.();
-    if (server) {
-      await new Promise<void>((resolve) => server!.close(() => resolve())).catch(() => undefined);
-    }
-    await rm(tokenHome, { recursive: true, force: true }).catch(() => undefined);
-    throw error;
-  }
+  return {
+    server,
+    port,
+    adminToken: opts.adminToken,
+    connectionManager,
+    stopHeartbeat,
+    taskResults,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +105,6 @@ describe("E2E smoke test", () => {
   let httpServer: Server | undefined;
   let client: TyrumClient | undefined;
   let stopHeartbeat: (() => void) | undefined;
-  let tokenHome: string | undefined;
 
   afterEach(async () => {
     client?.disconnect();
@@ -140,47 +115,16 @@ describe("E2E smoke test", () => {
       await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
       httpServer = undefined;
     }
-
-    if (tokenHome) {
-      const home = tokenHome;
-      tokenHome = undefined;
-      await rm(home, { recursive: true, force: true });
-      expect(await pathExists(home)).toBe(false);
-    }
-  });
-
-  it("removes tokenHome when server setup throws", async () => {
-    const before = new Set(
-      (await readdir(tmpdir())).filter((entry) => entry.startsWith("tyrum-e2e-test-")),
-    );
-
-    const originalGetRequestListener = getRequestListener;
-    getRequestListener = () => {
-      throw new Error("test setup failed");
-    };
-    try {
-      const { app } = await createTestApp();
-      await expect(startServer(app)).rejects.toThrow("test setup failed");
-    } finally {
-      getRequestListener = originalGetRequestListener;
-    }
-
-    const after = (await readdir(tmpdir())).filter((entry) => entry.startsWith("tyrum-e2e-test-"));
-    const leaked = after.filter((entry) => !before.has(entry));
-
-    await Promise.all(
-      leaked.map((entry) => rm(join(tmpdir(), entry), { recursive: true, force: true })),
-    );
-
-    expect(leaked).toHaveLength(0);
   });
 
   it("full plan → dispatch → result → healthz flow", async () => {
-    const { app } = await createTestApp();
-    const srv = await startServer(app);
+    const { app, auth, container } = await createTestApp();
+    const srv = await startServer(app, {
+      authTokens: auth.authTokens,
+      adminToken: auth.tenantAdminToken,
+    });
     httpServer = srv.server;
     stopHeartbeat = srv.stopHeartbeat;
-    tokenHome = srv.tokenHome;
 
     const baseUrl = `http://127.0.0.1:${srv.port}`;
 
@@ -239,6 +183,7 @@ describe("E2E smoke test", () => {
     const taskId = await dispatchTask(
       { type: "Http", args: { url: "https://example.com" } },
       {
+        tenantId: auth.tenantId,
         runId,
         stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -288,7 +233,10 @@ describe("E2E smoke test", () => {
     const planBody = minimalPlanRequest({ tags: ["spend:0:USD"] });
     const planRes = await fetch(`${baseUrl}/plan`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${auth.tenantAdminToken}`,
+      },
       body: JSON.stringify(planBody),
     });
     expect(planRes.status).toBe(200);
@@ -298,5 +246,7 @@ describe("E2E smoke test", () => {
     };
     expect(planJson.plan_id).toMatch(/^plan-/);
     expect(planJson.status).toBe("success");
+
+    await container.db.close();
   });
 });

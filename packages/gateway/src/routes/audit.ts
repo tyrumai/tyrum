@@ -9,16 +9,15 @@ import { verifyChain, exportReceiptBundle, computeEventHash } from "../modules/a
 import type { ChainableEvent } from "../modules/audit/hash-chain.js";
 import type { SqlDb } from "../statestore/types.js";
 import { AuditForgetRequest, type AuditForgetDecision } from "@tyrum/schemas";
-import {
-  DEFAULT_AGENT_ID,
-  DEFAULT_TENANT_ID,
-  DEFAULT_WORKSPACE_ID,
-} from "../modules/identity/scope.js";
+import { DEFAULT_AGENT_KEY, DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
 import { PlanDal } from "../modules/planner/plan-dal.js";
+import type { IdentityScopeDal } from "../modules/identity/scope.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface AuditRouteDeps {
   db: SqlDb;
   eventLog: EventLog;
+  identityScopeDal: IdentityScopeDal;
 }
 
 export function createAuditRoutes(deps: AuditRouteDeps): Hono {
@@ -26,9 +25,10 @@ export function createAuditRoutes(deps: AuditRouteDeps): Hono {
 
   /** Export a receipt bundle for a plan. */
   audit.get("/audit/export/:planKey", async (c) => {
+    const tenantId = requireTenantId(c);
     const planKey = c.req.param("planKey");
     const events = await deps.eventLog.getEventsForVerification({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       planKey,
     });
 
@@ -60,6 +60,7 @@ export function createAuditRoutes(deps: AuditRouteDeps): Hono {
 
   /** Forget (delete) events matching an entity, preserving chain continuity. */
   audit.post("/audit/forget", async (c) => {
+    const tenantId = requireTenantId(c);
     const body = (await c.req.json()) as unknown;
     const parsed = AuditForgetRequest.safeParse(body);
     if (!parsed.success) {
@@ -68,8 +69,21 @@ export function createAuditRoutes(deps: AuditRouteDeps): Hono {
 
     const { entity_type, entity_id, decision } = parsed.data;
 
+    const agentId = await deps.identityScopeDal.ensureAgentId(tenantId, DEFAULT_AGENT_KEY);
+    const workspaceId = await deps.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+    await deps.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+
     // We treat entity_id as a plan_id for planner_events
-    const result = await forgetEvents(deps, entity_type, entity_id, decision);
+    const result = await forgetEvents(
+      deps,
+      { tenantId, agentId, workspaceId },
+      entity_type,
+      entity_id,
+      decision,
+    );
     return c.json(result);
   });
 
@@ -78,6 +92,7 @@ export function createAuditRoutes(deps: AuditRouteDeps): Hono {
 
 async function forgetEvents(
   deps: AuditRouteDeps,
+  scope: { tenantId: string; agentId: string; workspaceId: string },
   entityType: string,
   entityId: string,
   decision: AuditForgetDecision,
@@ -85,13 +100,13 @@ async function forgetEvents(
   const occurredAt = new Date().toISOString();
 
   return await deps.db.transaction(async (tx) => {
-    const tenantId = DEFAULT_TENANT_ID;
+    const tenantId = scope.tenantId;
     const planKey = entityId;
     const planId = await new PlanDal(tx).ensurePlanId({
       tenantId,
       planKey,
-      agentId: DEFAULT_AGENT_ID,
-      workspaceId: DEFAULT_WORKSPACE_ID,
+      agentId: scope.agentId,
+      workspaceId: scope.workspaceId,
       kind: "audit",
       status: "active",
     });

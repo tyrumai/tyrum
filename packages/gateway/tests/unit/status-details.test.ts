@@ -1,20 +1,12 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { buildStatusDetails } from "../../src/modules/observability/status-details.js";
 
 describe("status details sandbox summary", () => {
-  const originalHardeningProfile = process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"];
-
-  afterEach(() => {
-    if (originalHardeningProfile === undefined) {
-      delete process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"];
-    } else {
-      process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"] = originalHardeningProfile;
-    }
-  });
+  const tenantId = "00000000-0000-0000-0000-000000000000";
 
   it("derives elevated execution availability when tools arrays are missing", async () => {
-    delete process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"];
     const details = await buildStatusDetails({
+      tenantId,
       policyService: {
         getStatus: async () => ({
           enabled: true,
@@ -42,9 +34,9 @@ describe("status details sandbox summary", () => {
   });
 
   it("reports hardened profile when configured", async () => {
-    process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"] = "hardened";
-
     const details = await buildStatusDetails({
+      tenantId,
+      toolrunnerHardeningProfile: "hardened",
       policyService: {
         getStatus: async () => ({
           enabled: true,

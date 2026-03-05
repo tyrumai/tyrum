@@ -3,7 +3,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestApp } from "./helpers.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { GATEWAY_AUTH_AUDIT_PLAN_ID } from "../../src/modules/auth/audit.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
@@ -19,12 +18,12 @@ describe("Auth audit request_id correlation", () => {
   });
 
   it("persists generated request_id for auth.failed when x-request-id is missing", async () => {
-    const tokenStore = new TokenStore(tempDir);
-    await tokenStore.initialize();
-
-    const { app, container } = await createTestApp({ tokenStore, isLocalOnly: false });
+    const { container, requestUnauthenticated } = await createTestApp({
+      tyrumHome: tempDir,
+      isLocalOnly: false,
+    });
     try {
-      const res = await app.request("/status");
+      const res = await requestUnauthenticated("/status");
       expect(res.status).toBe(401);
       const requestId = res.headers.get("x-request-id");
       expect(requestId).toMatch(/^req-/);
@@ -48,19 +47,20 @@ describe("Auth audit request_id correlation", () => {
   });
 
   it("persists generated request_id for authz.denied when x-request-id is missing", async () => {
-    const tokenStore = new TokenStore(tempDir);
-    await tokenStore.initialize();
-
-    const issued = await tokenStore.issueDeviceToken({
-      deviceId: "dev_client_1",
-      role: "client",
-      scopes: ["operator.read"],
-      ttlSeconds: 300,
+    const { container, requestUnauthenticated, auth } = await createTestApp({
+      tyrumHome: tempDir,
+      isLocalOnly: false,
     });
-
-    const { app, container } = await createTestApp({ tokenStore, isLocalOnly: false });
     try {
-      const res = await app.request("/watchers", {
+      const issued = await auth.authTokens.issueToken({
+        tenantId: DEFAULT_TENANT_ID,
+        role: "client",
+        scopes: ["operator.read"],
+        deviceId: "dev_client_1",
+        ttlSeconds: 300,
+      });
+
+      const res = await requestUnauthenticated("/watchers", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${issued.token}`,

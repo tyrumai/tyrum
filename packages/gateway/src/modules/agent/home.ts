@@ -14,18 +14,10 @@ function fileExists(path: string): Promise<boolean> {
 }
 
 export function resolveTyrumHome(): string {
-  const fromEnv = process.env["TYRUM_HOME"]?.trim();
-  if (fromEnv && fromEnv.length > 0) {
-    return fromEnv;
-  }
   return join(homedir(), ".tyrum");
 }
 
 export function resolveUserTyrumHome(): string {
-  const fromEnv = process.env["TYRUM_USER_HOME"]?.trim();
-  if (fromEnv && fromEnv.length > 0) {
-    return fromEnv;
-  }
   return join(homedir(), ".tyrum");
 }
 
@@ -95,64 +87,6 @@ export function resolveMemoryDir(home = resolveTyrumHome()): string {
   return join(home, "memory");
 }
 
-const DEFAULT_AGENT_YAML = `model:
-  model: openai/gpt-4.1
-skills:
-  enabled: []
-  workspace_trusted: false
-mcp:
-  enabled: []
-tools:
-  allow:
-    - tool.fs.read
-sessions:
-  ttl_days: 30
-  max_turns: 20
-  loop_detection:
-    within_turn:
-      enabled: true
-      consecutive_repeat_limit: 3
-      cycle_repeat_limit: 3
-    cross_turn:
-      enabled: true
-      window_assistant_messages: 3
-      similarity_threshold: 0.97
-      min_chars: 120
-      cooldown_assistant_messages: 6
-memory:
-  markdown_enabled: true
-  v1:
-    enabled: true
-    allow_sensitivities:
-      - public
-      - private
-    structured:
-      fact_keys: []
-      tags: []
-    keyword:
-      enabled: true
-      limit: 60
-    semantic:
-      enabled: false
-      limit: 20
-    budgets:
-      max_total_items: 12
-      max_total_chars: 2400
-      per_kind:
-        fact:
-          max_items: 6
-          max_chars: 800
-        note:
-          max_items: 4
-          max_chars: 1200
-        procedure:
-          max_items: 3
-          max_chars: 1200
-        episode:
-          max_items: 2
-          max_chars: 800
-`;
-
 const DEFAULT_IDENTITY_MD = `---
 name: Tyrum
 description: Local single-user assistant identity.
@@ -180,11 +114,6 @@ export async function ensureWorkspaceInitialized(home = resolveTyrumHome()): Pro
   await mkdir(skillsDir, { recursive: true });
   await mkdir(mcpDir, { recursive: true });
   await mkdir(memoryDir, { recursive: true });
-
-  const agentConfigPath = resolveAgentConfigPath(home);
-  if (!(await fileExists(agentConfigPath))) {
-    await writeFile(agentConfigPath, DEFAULT_AGENT_YAML, "utf-8");
-  }
 
   const identityPath = resolveIdentityPath(home);
   if (!(await fileExists(identityPath))) {

@@ -267,31 +267,36 @@ describe("ToolExecutor", () => {
         }),
       };
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        nodeDispatchService,
-      );
+      const db = openTestSqliteDb();
+      try {
+        const executor = new ToolExecutor(
+          homeDir,
+          stubMcpManager(),
+          new Map(),
+          fetch,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { db, tenantId: DEFAULT_TENANT_ID, workspaceId: DEFAULT_WORKSPACE_ID },
+          nodeDispatchService as never,
+        );
 
-      const result = await executor.execute("tool.node.dispatch", "call-7", {
-        capability: "tyrum.desktop",
-        action: "Desktop",
-        args: { x: 1 },
-      });
+        const result = await executor.execute("tool.node.dispatch", "call-7", {
+          capability: "tyrum.desktop",
+          action: "Desktop",
+          args: { x: 1 },
+        });
 
-      expect(result.error).toBeUndefined();
-      expect(nodeDispatchService.dispatchAndWait).toHaveBeenCalledOnce();
-      expect(result.output).toContain('<data source="tool">');
-      expect(result.output).toContain('"ok":true');
-      expect(result.output).toContain('"task_id":"task-123"');
-      expect(result.output).toContain('"foo":"bar"');
+        expect(result.error).toBeUndefined();
+        expect(nodeDispatchService.dispatchAndWait).toHaveBeenCalledOnce();
+        expect(result.output).toContain('<data source="tool">');
+        expect(result.output).toContain('"ok":true');
+        expect(result.output).toContain('"task_id":"task-123"');
+        expect(result.output).toContain('"foo":"bar"');
+      } finally {
+        await db.close();
+      }
     });
 
     it("tool.node.dispatch returns a structured, retryable timeout error", async () => {
@@ -303,29 +308,34 @@ describe("ToolExecutor", () => {
         }),
       };
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        nodeDispatchService,
-      );
+      const db = openTestSqliteDb();
+      try {
+        const executor = new ToolExecutor(
+          homeDir,
+          stubMcpManager(),
+          new Map(),
+          fetch,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { db, tenantId: DEFAULT_TENANT_ID, workspaceId: DEFAULT_WORKSPACE_ID },
+          nodeDispatchService as never,
+        );
 
-      const result = await executor.execute("tool.node.dispatch", "call-7", {
-        capability: "tyrum.desktop",
-        action: "Desktop",
-        args: { x: 1 },
-      });
+        const result = await executor.execute("tool.node.dispatch", "call-7", {
+          capability: "tyrum.desktop",
+          action: "Desktop",
+          args: { x: 1 },
+        });
 
-      expect(result.error).toBeUndefined();
-      expect(result.output).toContain('"ok":false');
-      expect(result.output).toContain('"code":"timeout"');
-      expect(result.output).toContain('"retryable":true');
+        expect(result.error).toBeUndefined();
+        expect(result.output).toContain('"ok":false');
+        expect(result.output).toContain('"code":"timeout"');
+        expect(result.output).toContain('"retryable":true');
+      } finally {
+        await db.close();
+      }
     });
 
     it("tool.node.dispatch returns a structured no_capable_node error when no desktop node is connected", async () => {
@@ -336,27 +346,32 @@ describe("ToolExecutor", () => {
         taskResults: new TaskResultRegistry(),
       };
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        new NodeDispatchService(deps as never),
-      );
+      const db = openTestSqliteDb();
+      try {
+        const executor = new ToolExecutor(
+          homeDir,
+          stubMcpManager(),
+          new Map(),
+          fetch,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { db, tenantId: DEFAULT_TENANT_ID, workspaceId: DEFAULT_WORKSPACE_ID },
+          new NodeDispatchService(deps as never),
+        );
 
-      const result = await executor.execute("tool.node.dispatch", "call-7", {
-        capability: "tyrum.desktop",
-        action: "Desktop",
-      });
+        const result = await executor.execute("tool.node.dispatch", "call-7", {
+          capability: "tyrum.desktop",
+          action: "Desktop",
+        });
 
-      expect(result.error).toBeUndefined();
-      expect(result.output).toContain('"ok":false');
-      expect(result.output).toContain('"code":"no_capable_node"');
+        expect(result.error).toBeUndefined();
+        expect(result.output).toContain('"ok":false');
+        expect(result.output).toContain('"code":"no_capable_node"');
+      } finally {
+        await db.close();
+      }
     });
 
     it("tool.node.dispatch returns a structured not_paired error when a desktop node is connected but not paired", async () => {
@@ -370,6 +385,14 @@ describe("ToolExecutor", () => {
         role: "node",
         deviceId: "node-1",
         protocolRev: 2,
+        authClaims: {
+          token_kind: "device",
+          token_id: "token-node-1",
+          tenant_id: DEFAULT_TENANT_ID,
+          role: "node",
+          device_id: "node-1",
+          scopes: ["*"],
+        },
       });
 
       const deps = {
@@ -382,27 +405,32 @@ describe("ToolExecutor", () => {
         },
       };
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        new NodeDispatchService(deps as never),
-      );
+      const db = openTestSqliteDb();
+      try {
+        const executor = new ToolExecutor(
+          homeDir,
+          stubMcpManager(),
+          new Map(),
+          fetch,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { db, tenantId: DEFAULT_TENANT_ID, workspaceId: DEFAULT_WORKSPACE_ID },
+          new NodeDispatchService(deps as never),
+        );
 
-      const result = await executor.execute("tool.node.dispatch", "call-7", {
-        capability: "tyrum.desktop",
-        action: "Desktop",
-      });
+        const result = await executor.execute("tool.node.dispatch", "call-7", {
+          capability: "tyrum.desktop",
+          action: "Desktop",
+        });
 
-      expect(result.error).toBeUndefined();
-      expect(result.output).toContain('"ok":false');
-      expect(result.output).toContain('"code":"not_paired"');
+        expect(result.error).toBeUndefined();
+        expect(result.output).toContain('"ok":false');
+        expect(result.output).toContain('"code":"not_paired"');
+      } finally {
+        await db.close();
+      }
     });
 
     it("tool.node.dispatch returns a structured policy_denied error when policy denies node dispatch", async () => {
@@ -482,28 +510,33 @@ describe("ToolExecutor", () => {
         }),
       };
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        nodeDispatchService,
-      );
+      const db = openTestSqliteDb();
+      try {
+        const executor = new ToolExecutor(
+          homeDir,
+          stubMcpManager(),
+          new Map(),
+          fetch,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { db, tenantId: DEFAULT_TENANT_ID, workspaceId: DEFAULT_WORKSPACE_ID },
+          nodeDispatchService as never,
+        );
 
-      const result = await executor.execute("tool.node.dispatch", "call-7", {
-        capability: "tyrum.desktop",
-        action: "Desktop",
-      });
+        const result = await executor.execute("tool.node.dispatch", "call-7", {
+          capability: "tyrum.desktop",
+          action: "Desktop",
+        });
 
-      expect(result.error).toBeUndefined();
-      expect(result.output).toContain('"truncated":true');
-      expect(result.output).toContain("evidence too large");
-      expect(result.output).not.toContain(huge.slice(0, 200));
+        expect(result.error).toBeUndefined();
+        expect(result.output).toContain('"truncated":true');
+        expect(result.output).toContain("evidence too large");
+        expect(result.output).not.toContain(huge.slice(0, 200));
+      } finally {
+        await db.close();
+      }
     });
 
     it("unknown tool returns error", async () => {

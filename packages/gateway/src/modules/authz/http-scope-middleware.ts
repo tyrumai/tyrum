@@ -9,7 +9,7 @@
  */
 
 import type { Context, Next } from "hono";
-import type { AuthTokenClaims } from "../auth/token-store.js";
+import type { AuthTokenClaims } from "@tyrum/schemas";
 import { hasAnyRequiredScope } from "../auth/scopes.js";
 import { matchesPathPrefixSegment } from "../../app-path.js";
 import type { AuthAudit } from "../auth/audit.js";
@@ -67,12 +67,14 @@ export function resolveHttpRouteRequiredScopes(input: {
   if (
     matchesPathPrefixSegment(routePath, "/auth") ||
     matchesPathPrefixSegment(routePath, "/audit") ||
+    matchesPathPrefixSegment(routePath, "/config") ||
     matchesPathPrefixSegment(routePath, "/policy") ||
     matchesPathPrefixSegment(routePath, "/routing") ||
     matchesPathPrefixSegment(routePath, "/plugins") ||
     matchesPathPrefixSegment(routePath, "/providers") ||
     matchesPathPrefixSegment(routePath, "/secrets") ||
     matchesPathPrefixSegment(routePath, "/snapshot") ||
+    matchesPathPrefixSegment(routePath, "/models/overrides") ||
     routePath === "/models/refresh"
   ) {
     return ["operator.admin"];

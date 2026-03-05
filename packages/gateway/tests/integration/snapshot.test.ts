@@ -4,10 +4,9 @@ import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.
 
 describe("snapshot routes", () => {
   it("exports and imports a snapshot bundle (empty-db import)", async () => {
-    const originalFlag = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
-    process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
-
-    const { app, container } = await createTestApp();
+    const { app, container } = await createTestApp({
+      deploymentConfig: { snapshots: { importEnabled: true } },
+    });
 
     const seededSession = await container.sessionDal.getOrCreate({
       connectorKey: "telegram",
@@ -27,7 +26,9 @@ describe("snapshot routes", () => {
     expect(exportRes.status).toBe(200);
     const bundle = (await exportRes.json()) as Record<string, unknown>;
 
-    const { app: app2, container: container2 } = await createTestApp();
+    const { app: app2, container: container2 } = await createTestApp({
+      deploymentConfig: { snapshots: { importEnabled: true } },
+    });
     const importRes = await app2.request("/snapshot/import", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -60,23 +61,16 @@ describe("snapshot routes", () => {
 
     await container.db.close();
     await container2.db.close();
-
-    if (originalFlag === undefined) {
-      delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
-    } else {
-      process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = originalFlag;
-    }
   });
 
   it("rejects snapshot bundles containing legacy v1 memory tables", async () => {
-    const originalFlag = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
-    process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
-
     let container: Awaited<ReturnType<typeof createTestApp>>["container"] | undefined;
     let container2: Awaited<ReturnType<typeof createTestApp>>["container"] | undefined;
 
     try {
-      const app1 = await createTestApp();
+      const app1 = await createTestApp({
+        deploymentConfig: { snapshots: { importEnabled: true } },
+      });
       container = app1.container;
 
       await container.sessionDal.getOrCreate({
@@ -99,7 +93,9 @@ describe("snapshot routes", () => {
       tables["pam_profiles"] = legacyEmptyTable;
       tables["pvp_profiles"] = legacyEmptyTable;
 
-      const app2 = await createTestApp();
+      const app2 = await createTestApp({
+        deploymentConfig: { snapshots: { importEnabled: true } },
+      });
       container2 = app2.container;
 
       const importRes = await app2.app.request("/snapshot/import", {
@@ -114,20 +110,13 @@ describe("snapshot routes", () => {
     } finally {
       await container?.db.close();
       await container2?.db.close();
-
-      if (originalFlag === undefined) {
-        delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
-      } else {
-        process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = originalFlag;
-      }
     }
   });
 
   it("rejects v1 snapshot bundles", async () => {
-    const originalFlag = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
-    process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
-
-    const { app, container } = await createTestApp();
+    const { app, container } = await createTestApp({
+      deploymentConfig: { snapshots: { importEnabled: true } },
+    });
 
     await container.sessionDal.getOrCreate({
       connectorKey: "telegram",
@@ -142,7 +131,9 @@ describe("snapshot routes", () => {
     const bundle = { ...exported, format: "tyrum.snapshot.v1" } as Record<string, unknown>;
     delete bundle["artifacts"];
 
-    const { app: app2, container: container2 } = await createTestApp();
+    const { app: app2, container: container2 } = await createTestApp({
+      deploymentConfig: { snapshots: { importEnabled: true } },
+    });
     const importRes = await app2.request("/snapshot/import", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -154,21 +145,15 @@ describe("snapshot routes", () => {
 
     await container.db.close();
     await container2.db.close();
-
-    if (originalFlag === undefined) {
-      delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
-    } else {
-      process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = originalFlag;
-    }
   });
 
   it("includes routing config revisions in snapshot bundles", async () => {
-    const originalFlag = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
-    process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
-
-    const { app, container } = await createTestApp();
+    const { app, container, auth } = await createTestApp({
+      deploymentConfig: { snapshots: { importEnabled: true } },
+    });
 
     await new RoutingConfigDal(container.db).set({
+      tenantId: auth.tenantId,
       config: {
         v: 1,
         telegram: {
@@ -186,7 +171,13 @@ describe("snapshot routes", () => {
     expect(exportRes.status).toBe(200);
     const bundle = (await exportRes.json()) as Record<string, unknown>;
 
-    const { app: app2, container: container2 } = await createTestApp();
+    const {
+      app: app2,
+      container: container2,
+      auth: auth2,
+    } = await createTestApp({
+      deploymentConfig: { snapshots: { importEnabled: true } },
+    });
     const importRes = await app2.request("/snapshot/import", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -199,19 +190,13 @@ describe("snapshot routes", () => {
     );
     expect(imported?.revision).toBeGreaterThan(0);
 
-    const latest = await new RoutingConfigDal(container2.db).getLatest();
+    const latest = await new RoutingConfigDal(container2.db).getLatest(auth2.tenantId);
     expect(latest?.config).toMatchObject({
       telegram: { threads: { "123": "agent-b" } },
     });
 
     await container.db.close();
     await container2.db.close();
-
-    if (originalFlag === undefined) {
-      delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
-    } else {
-      process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = originalFlag;
-    }
   });
 
   it("declares artifact byte inclusion policy and retention metadata in snapshot bundles", async () => {

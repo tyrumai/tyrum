@@ -4,11 +4,10 @@ import { WebSocket } from "ws";
 import { Hono } from "hono";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { AUTH_COOKIE_NAME } from "../../src/modules/auth/http.js";
 import { createTestContainer } from "./helpers.js";
 import { createPairingRoutes } from "../../src/routes/pairing.js";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateKeyPairSync, sign } from "node:crypto";
@@ -17,6 +16,9 @@ import {
   descriptorIdForClientCapability,
 } from "@tyrum/schemas";
 import { buildTranscript, completeHandshake, computeDeviceId } from "./ws-handshake.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
+import type { GatewayContainer } from "../../src/container.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
@@ -131,10 +133,45 @@ function waitForJsonMessageMatching(
   });
 }
 
+async function createAuthTokens(tyrumHome: string): Promise<{
+  container: GatewayContainer;
+  authTokens: AuthTokenService;
+  tenantAdminToken: string;
+}> {
+  const container = await createTestContainer({ tyrumHome });
+  const authTokens = new AuthTokenService(container.db);
+  const issued = await authTokens.issueToken({
+    tenantId: DEFAULT_TENANT_ID,
+    role: "admin",
+    scopes: ["*"],
+  });
+  return { container, authTokens, tenantAdminToken: issued.token };
+}
+
+async function issueDeviceToken(
+  authTokens: AuthTokenService,
+  input: {
+    deviceId: string;
+    role: "client" | "node";
+    scopes: string[];
+    ttlSeconds: number;
+  },
+): Promise<string> {
+  const issued = await authTokens.issueToken({
+    tenantId: DEFAULT_TENANT_ID,
+    role: input.role,
+    scopes: input.scopes,
+    deviceId: input.deviceId,
+    ttlSeconds: input.ttlSeconds,
+  });
+  return issued.token;
+}
+
 describe("WS handler integration", () => {
   let server: Server | undefined;
   let homeDir: string | undefined;
   let clients: WebSocket[] = [];
+  let containers: GatewayContainer[] = [];
 
   afterEach(async () => {
     for (const ws of clients) {
@@ -151,6 +188,11 @@ describe("WS handler integration", () => {
       server = undefined;
     }
 
+    for (const container of containers) {
+      await container.db.close();
+    }
+    containers = [];
+
     if (homeDir) {
       await rm(homeDir, { recursive: true, force: true });
       homeDir = undefined;
@@ -159,14 +201,14 @@ describe("WS handler integration", () => {
 
   it("accepts connection, completes connect.init/connect.proof handshake, and registers client", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    const adminToken = await tokenStore.initialize();
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -208,14 +250,14 @@ describe("WS handler integration", () => {
 
   it("rejects legacy connect handshake requests", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    const adminToken = await tokenStore.initialize();
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -252,14 +294,14 @@ describe("WS handler integration", () => {
 
   it("accepts connection authenticated via Authorization header during upgrade", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    const adminToken = await tokenStore.initialize();
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -297,14 +339,14 @@ describe("WS handler integration", () => {
 
   it("accepts connection authenticated via cookie during upgrade", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    const adminToken = await tokenStore.initialize();
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -345,16 +387,14 @@ describe("WS handler integration", () => {
 
   it("accepts cookie-authenticated upgrade when token contains '=' characters", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const adminToken = "tyrum-test-token==with=equals==";
-    await writeFile(join(homeDir, ".admin-token"), adminToken + "\n", { mode: 0o600 });
-    const tokenStore = new TokenStore(homeDir);
-    expect(await tokenStore.initialize()).toBe(adminToken);
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -371,7 +411,7 @@ describe("WS handler integration", () => {
 
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, ["tyrum-v1"], {
       headers: {
-        Cookie: `${AUTH_COOKIE_NAME}=${adminToken}`,
+        Cookie: `${AUTH_COOKIE_NAME}=${adminToken}; other=tyrum-test-token==with=equals==`,
         Origin: `http://127.0.0.1:${port}`,
       },
     });
@@ -393,14 +433,14 @@ describe("WS handler integration", () => {
 
   it("rejects cookie-authenticated upgrade without Origin header", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    const adminToken = await tokenStore.initialize();
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -430,14 +470,14 @@ describe("WS handler integration", () => {
 
   it("rejects cookie-authenticated upgrade when Origin does not match Host", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    const adminToken = await tokenStore.initialize();
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -468,14 +508,14 @@ describe("WS handler integration", () => {
 
   it("rejects cookie-authenticated upgrade when Origin port does not match default Host port", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    const adminToken = await tokenStore.initialize();
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -507,14 +547,14 @@ describe("WS handler integration", () => {
 
   it("rejects connection with invalid token", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    await tokenStore.initialize();
+    const { container, authTokens } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -541,14 +581,14 @@ describe("WS handler integration", () => {
 
   it("supports connect.init/connect.proof with device identity proof", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    const adminToken = await tokenStore.initialize();
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -637,14 +677,14 @@ describe("WS handler integration", () => {
 
   it("rejects connect.init when protocol_rev is unsupported", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    const adminToken = await tokenStore.initialize();
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -695,10 +735,9 @@ describe("WS handler integration", () => {
 
   it("rejects legacy connect handshake when using a device token", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    await tokenStore.initialize();
-
-    const issued = await tokenStore.issueDeviceToken({
+    const { container, authTokens } = await createAuthTokens(homeDir);
+    containers.push(container);
+    const token = await issueDeviceToken(authTokens, {
       deviceId: "dev_client_legacy",
       role: "client",
       scopes: ["operator.read"],
@@ -709,7 +748,7 @@ describe("WS handler integration", () => {
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -724,7 +763,7 @@ describe("WS handler integration", () => {
       });
     });
 
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(issued.token));
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(token));
     clients.push(ws);
     await waitForOpen(ws);
 
@@ -751,13 +790,13 @@ describe("WS handler integration", () => {
 
   it("rejects connect.init when device token device_id does not match the proved device identity", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    await tokenStore.initialize();
+    const { container, authTokens } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const { publicKey: publicKeyA } = generateKeyPairSync("ed25519");
     const pubkeyDerA = publicKeyA.export({ format: "der", type: "spki" }) as Buffer;
     const deviceIdA = computeDeviceId(pubkeyDerA);
-    const tokenA = await tokenStore.issueDeviceToken({
+    const tokenA = await issueDeviceToken(authTokens, {
       deviceId: deviceIdA,
       role: "client",
       scopes: ["operator.read"],
@@ -768,7 +807,7 @@ describe("WS handler integration", () => {
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -783,7 +822,7 @@ describe("WS handler integration", () => {
       });
     });
 
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(tokenA.token));
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(tokenA));
     clients.push(ws);
     await waitForOpen(ws);
 
@@ -823,14 +862,14 @@ describe("WS handler integration", () => {
 
   it("rejects connect.init when device token role does not match the declared WS role", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    await tokenStore.initialize();
+    const { container, authTokens } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const { publicKey } = generateKeyPairSync("ed25519");
     const pubkeyDer = publicKey.export({ format: "der", type: "spki" }) as Buffer;
     const pubkeyB64Url = pubkeyDer.toString("base64url");
     const deviceId = computeDeviceId(pubkeyDer);
-    const token = await tokenStore.issueDeviceToken({
+    const token = await issueDeviceToken(authTokens, {
       deviceId,
       role: "client",
       scopes: ["operator.read"],
@@ -841,7 +880,7 @@ describe("WS handler integration", () => {
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
 
     server = createServer();
@@ -856,7 +895,7 @@ describe("WS handler integration", () => {
       });
     });
 
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(token.token));
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(token));
     clients.push(ws);
     await waitForOpen(ws);
 
@@ -891,15 +930,14 @@ describe("WS handler integration", () => {
 
   it("creates a pairing request when a node connects and allows WS approval", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    const adminToken = await tokenStore.initialize();
-    const container = await createTestContainer();
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager, nodePairingDal: container.nodePairingDal },
-      tokenStore,
+      authTokens,
       nodePairingDal: container.nodePairingDal,
     });
 
@@ -1029,15 +1067,14 @@ describe("WS handler integration", () => {
 
   it("issues a node-scoped token on approval and invalidates it on revocation", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    const adminToken = await tokenStore.initialize();
-    const container = await createTestContainer();
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager, nodePairingDal: container.nodePairingDal },
-      tokenStore,
+      authTokens,
       nodePairingDal: container.nodePairingDal,
     });
 
@@ -1253,15 +1290,14 @@ describe("WS handler integration", () => {
 
   it("emits pairing.approved to the node when approval is done via HTTP routes", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    const adminToken = await tokenStore.initialize();
-    const container = await createTestContainer();
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager, nodePairingDal: container.nodePairingDal },
-      tokenStore,
+      authTokens,
       nodePairingDal: container.nodePairingDal,
     });
 
@@ -1346,6 +1382,16 @@ describe("WS handler integration", () => {
     );
 
     const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "test-token",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
     app.route(
       "/",
       createPairingRoutes({ nodePairingDal: container.nodePairingDal, ws: { connectionManager } }),

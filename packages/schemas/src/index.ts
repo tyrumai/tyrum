@@ -86,6 +86,33 @@ export {
 } from "./routing.js";
 
 export {
+  DeploymentConfigServer,
+  DeploymentConfigAuthRateLimit,
+  DeploymentConfigAuth,
+  DeploymentConfigOtel,
+  DeploymentConfigArtifactsS3,
+  DeploymentConfigArtifacts,
+  DeploymentConfigToolRunner,
+  DeploymentConfigExecutionToolRunner,
+  DeploymentConfigExecution,
+  DeploymentConfigChannels,
+  DeploymentConfigModelsDev,
+  DeploymentConfigPolicy,
+  DeploymentConfigAgent,
+  DeploymentConfigAutomation,
+  DeploymentConfigSnapshots,
+  DeploymentConfigContext,
+  DeploymentConfigLogging,
+  DeploymentConfig,
+  DeploymentConfigRevisionNumber,
+  DeploymentConfigGetResponse,
+  DeploymentConfigUpdateRequest,
+  DeploymentConfigUpdateResponse,
+  DeploymentConfigRevertRequest,
+  DeploymentConfigRevertResponse,
+} from "./deployment-config.js";
+
+export {
   SnapshotFormatV2,
   SnapshotFormat,
   SnapshotTable,
@@ -743,6 +770,14 @@ export {
 } from "./secret.js";
 
 export {
+  TenantStatus,
+  Tenant,
+  TenantListResponse,
+  TenantCreateRequest,
+  TenantCreateResponse,
+} from "./tenants.js";
+
+export {
   DeviceTokenIssueRequest,
   DeviceTokenIssueResponse,
   DeviceTokenRevokeRequest,
@@ -750,6 +785,16 @@ export {
   DeviceTokenClaims,
   MAX_DEVICE_TOKEN_TTL_SECONDS,
 } from "./device-token.js";
+
+export {
+  AuthTokenRole,
+  AuthTokenClaims,
+  MAX_AUTH_TOKEN_TTL_SECONDS,
+  AuthTokenIssueRequest,
+  AuthTokenIssueResponse,
+  AuthTokenRevokeRequest,
+  AuthTokenRevokeResponse,
+} from "./auth-token.js";
 
 export {
   AuthProfileId,

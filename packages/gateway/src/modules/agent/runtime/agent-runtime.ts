@@ -14,6 +14,7 @@ import type {
   WorkScope,
 } from "@tyrum/schemas";
 import {
+  AgentConfig,
   AgentKey,
   AgentStatusResponse,
   AgentTurnResponse,
@@ -58,7 +59,6 @@ import {
   buildProviderResolutionSetup,
   listOrderedEligibleProfilesForProvider,
   parseProviderModelId,
-  resolveEnvApiKey,
   resolveProfileApiKey,
   resolveProviderBaseURL,
 } from "./provider-resolution.js";
@@ -74,12 +74,12 @@ import {
 import { MarkdownMemoryStore } from "../markdown-memory.js";
 import { SessionDal, type SessionRow } from "../session-dal.js";
 import {
-  loadAgentConfig,
   loadEnabledMcpServers,
   loadEnabledSkills,
   loadIdentity,
   type LoadedSkillManifest,
 } from "../workspace.js";
+import { AgentConfigDal } from "../../config/agent-config-dal.js";
 import { isToolAllowed, selectToolDirectory } from "../tools.js";
 import { getExecutionProfile, normalizeExecutionProfileId } from "../execution-profiles.js";
 import type { ExecutionProfile, ExecutionProfileId } from "../execution-profiles.js";
@@ -114,11 +114,17 @@ import { LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
 import { resolveWorkspaceKey } from "../../workspace/id.js";
 import { WorkboardDal } from "../../workboard/dal.js";
 import { parseChannelSourceKey } from "../../channels/interface.js";
+import { DEFAULT_TENANT_ID } from "../../identity/scope.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
 const DEFAULT_APPROVAL_POLL_MS = 500;
 const MAX_TURN_ENGINE_WAIT_MS = 60_000;
+
+const DEFAULT_AGENT_CONFIG: AgentConfigT = AgentConfig.parse({
+  model: { model: "openai/gpt-4.1" },
+  tools: { allow: ["tool.fs.read"] },
+});
 
 const WITHIN_TURN_LOOP_STOP_REPLY =
   "Loop detected (repeated tool calls); stopping to avoid runaway execution. " +
@@ -181,6 +187,7 @@ export class AgentRuntime {
   private readonly home: string;
   private readonly sessionDal: SessionDal;
   private readonly fetchImpl: typeof fetch;
+  private readonly tenantId: string;
   private readonly agentId: string;
   private readonly workspaceId: string;
   private readonly instanceOwner: string;
@@ -247,6 +254,7 @@ export class AgentRuntime {
     this.home = opts.home ?? resolveTyrumHome();
     this.sessionDal = opts.sessionDal ?? opts.container.sessionDal;
     this.fetchImpl = opts.fetchImpl ?? fetch;
+    this.tenantId = opts.tenantId?.trim() || DEFAULT_TENANT_ID;
 
     const agentIdCandidate = opts.agentId?.trim() || resolveAgentId();
     const parsedAgentId = AgentKey.safeParse(agentIdCandidate);
@@ -263,11 +271,8 @@ export class AgentRuntime {
       );
     }
     this.workspaceId = parsedWorkspaceId.data;
-    const configuredInstanceOwner = opts.container.gatewayConfig?.runtime.instanceId?.trim();
-    this.instanceOwner =
-      configuredInstanceOwner ||
-      process.env["TYRUM_INSTANCE_ID"]?.trim() ||
-      `instance-${randomUUID()}`;
+    const configuredInstanceOwner = opts.instanceOwner?.trim();
+    this.instanceOwner = configuredInstanceOwner || `instance-${randomUUID()}`;
     this.languageModelOverride = opts.languageModel;
     this.mcpManager = opts.mcpManager ?? new McpManager({ logger: opts.container.logger });
     this.plugins = opts.plugins;
@@ -294,9 +299,22 @@ export class AgentRuntime {
     await this.mcpManager.shutdown();
   }
 
-  private async loadContext(): Promise<AgentLoadedContext> {
+  private async loadAgentConfigFromDb(scope: {
+    tenantId: string;
+    agentId: string;
+  }): Promise<AgentConfigT> {
+    const revision = await new AgentConfigDal(this.opts.container.db).ensureSeeded({
+      tenantId: scope.tenantId,
+      agentId: scope.agentId,
+      defaultConfig: DEFAULT_AGENT_CONFIG,
+      createdBy: { kind: "agent-runtime" },
+      reason: "seed",
+    });
+    return revision.config;
+  }
+
+  private async loadContext(config: AgentConfigT): Promise<AgentLoadedContext> {
     await ensureWorkspaceInitialized(this.home);
-    const config = await loadAgentConfig(this.home);
     const identity = await loadIdentity(this.home);
     const skills = await loadEnabledSkills(this.home, config, {
       logger: this.opts.container.logger,
@@ -316,12 +334,12 @@ export class AgentRuntime {
     };
   }
 
-  private maybeCleanupSessions(ttlDays: number): void {
+  private maybeCleanupSessions(ttlDays: number, agentKey: string): void {
     const now = Date.now();
     if (now < this.cleanupAtMs) {
       return;
     }
-    void this.sessionDal.deleteExpired(ttlDays, this.agentId);
+    void this.sessionDal.deleteExpired(ttlDays, agentKey);
     this.cleanupAtMs = now + 60 * 60 * 1000;
   }
 
@@ -365,7 +383,24 @@ export class AgentRuntime {
       });
     }
 
-    const ctx = await this.loadContext();
+    const agentId = await this.opts.container.identityScopeDal.ensureAgentId(
+      this.tenantId,
+      this.agentId,
+    );
+    const workspaceId = await this.opts.container.identityScopeDal.ensureWorkspaceId(
+      this.tenantId,
+      this.workspaceId,
+    );
+    await this.opts.container.identityScopeDal.ensureMembership(
+      this.tenantId,
+      agentId,
+      workspaceId,
+    );
+    const config = await this.loadAgentConfigFromDb({
+      tenantId: this.tenantId,
+      agentId,
+    });
+    const ctx = await this.loadContext(config);
     const status = {
       enabled: true,
       home: this.home,
@@ -402,8 +437,9 @@ export class AgentRuntime {
   private prepareLaneQueueStep(
     laneQueue: LaneQueueState | undefined,
     messages: Array<ModelMessage>,
+    contextPruning: AgentConfigT["sessions"]["context_pruning"] | undefined,
   ): { messages: Array<ModelMessage> } {
-    return prepareLaneQueueStepBridge(laneQueue, messages);
+    return prepareLaneQueueStepBridge(laneQueue, messages, contextPruning);
   }
 
   private createStopWhenWithWithinTurnLoopDetection(input: {
@@ -555,7 +591,8 @@ export class AgentRuntime {
       ],
       tools: toolSet,
       stopWhen,
-      prepareStep: ({ messages }) => this.prepareLaneQueueStep(laneQueue, messages),
+      prepareStep: ({ messages }) =>
+        this.prepareLaneQueueStep(laneQueue, messages, ctx.config.sessions.context_pruning),
     });
 
     const finalize = async (): Promise<AgentTurnResponseT> => {
@@ -850,7 +887,8 @@ export class AgentRuntime {
       messages,
       tools: toolSet,
       stopWhen,
-      prepareStep: ({ messages }) => this.prepareLaneQueueStep(laneQueue, messages),
+      prepareStep: ({ messages }) =>
+        this.prepareLaneQueueStep(laneQueue, messages, ctx.config.sessions.context_pruning),
       abortSignal,
     });
     const stepsUsedAfterCall = stepsUsedSoFar + result.steps.length;
@@ -938,6 +976,7 @@ export class AgentRuntime {
 
   private async turnViaExecutionEngine(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
     const deps = {
+      tenantId: this.tenantId,
       agentKey: this.agentId,
       workspaceKey: this.workspaceId,
       identityScopeDal: this.opts.container.identityScopeDal,
@@ -997,7 +1036,7 @@ export class AgentRuntime {
     agentId: string,
   ): Promise<EmbeddingPipeline | undefined> {
     try {
-      const loaded = await this.opts.container.modelsDev.ensureLoaded();
+      const loaded = await this.opts.container.modelCatalog.getEffectiveCatalog({ tenantId });
       const catalog = loaded.catalog;
 
       type ProviderEntry = (typeof catalog)[string];
@@ -1024,19 +1063,28 @@ export class AgentRuntime {
       ): ResolvedEmbeddingCandidate | undefined => {
         const provider = catalog[providerId];
         if (!provider) return undefined;
+        const providerEnabled = (provider as { enabled?: boolean }).enabled ?? true;
+        if (!providerEnabled) return undefined;
 
         const models = provider.models ?? {};
         const preferredIds = ["text-embedding-3-small", "text-embedding-3-large"];
         let embeddingModelId: string | undefined;
         for (const id of preferredIds) {
-          if (Object.hasOwn(models, id)) {
+          const candidate = models[id];
+          const candidateEnabled = candidate
+            ? ((candidate as { enabled?: boolean }).enabled ?? true)
+            : false;
+          if (candidate && candidateEnabled) {
             embeddingModelId = id;
             break;
           }
         }
         if (!embeddingModelId) {
           const candidateIds = Object.entries(models)
-            .filter(([id, model]) => isEmbeddingModel(id, model))
+            .filter(
+              ([id, model]) =>
+                ((model as { enabled?: boolean }).enabled ?? true) && isEmbeddingModel(id, model),
+            )
             .map(([id]) => id)
             .sort((a, b) => a.localeCompare(b));
           embeddingModelId = candidateIds[0];
@@ -1075,7 +1123,10 @@ export class AgentRuntime {
       const addProvider = (id: string | undefined): void => {
         const trimmed = id?.trim();
         if (!trimmed) return;
-        if (!catalog[trimmed]) return;
+        const provider = catalog[trimmed];
+        if (!provider) return;
+        const enabled = (provider as { enabled?: boolean }).enabled ?? true;
+        if (!enabled) return;
         if (seen.has(trimmed)) return;
         seen.add(trimmed);
         orderedProviderIds.push(trimmed);
@@ -1103,10 +1154,7 @@ export class AgentRuntime {
         fetchImpl: this.fetchImpl,
       });
 
-      const resolveProviderApiKey = async (
-        providerId: string,
-        provider: ProviderEntry,
-      ): Promise<string | undefined> => {
+      const resolveProviderApiKey = async (providerId: string): Promise<string | undefined> => {
         const orderedProfiles = await listOrderedEligibleProfilesForProvider({
           tenantId,
           sessionId,
@@ -1128,23 +1176,21 @@ export class AgentRuntime {
           if (apiKey) return apiKey;
         }
 
-        return resolveEnvApiKey(provider.env);
+        return undefined;
       };
 
       for (const providerId of orderedProviderIds) {
         const candidate = resolveEmbeddingCandidate(providerId);
         if (!candidate) continue;
 
-        const apiKey = await resolveProviderApiKey(candidate.providerId, candidate.provider);
-        if (!apiKey) {
-          const hasApiKeyHint = (candidate.provider.env ?? []).some((key) =>
-            /(_API_KEY|_TOKEN)$/i.test(key),
-          );
-          if (hasApiKeyHint) continue;
-        }
+        const apiKey = await resolveProviderApiKey(candidate.providerId);
+        const providerEnv = (candidate.provider as { env?: unknown }).env;
+        const providerRequiresApiKey = Array.isArray(providerEnv)
+          ? providerEnv.some((entry) => typeof entry === "string" && entry.trim().length > 0)
+          : true;
+        if (!apiKey && providerRequiresApiKey) continue;
 
         const baseURL = resolveProviderBaseURL({
-          providerEnv: candidate.provider.env,
           providerApi: candidate.api,
         });
 
@@ -1199,14 +1245,31 @@ export class AgentRuntime {
     systemPrompt: string;
     resolved: ResolvedAgentTurnInput;
   }> {
-    const ctx = await this.loadContext();
-    this.maybeCleanupSessions(ctx.config.sessions.ttl_days);
-
     const resolved = resolveAgentTurnInput(input);
     const laneQueueScope = resolveLaneQueueScope(resolved.metadata);
     const agentKey = input.agent_key?.trim() || this.agentId;
     const workspaceKey = input.workspace_key?.trim() || this.workspaceId;
-    const tenantKey = input.tenant_key?.trim();
+
+    const agentId = await this.opts.container.identityScopeDal.ensureAgentId(
+      this.tenantId,
+      agentKey,
+    );
+    const workspaceId = await this.opts.container.identityScopeDal.ensureWorkspaceId(
+      this.tenantId,
+      workspaceKey,
+    );
+    await this.opts.container.identityScopeDal.ensureMembership(
+      this.tenantId,
+      agentId,
+      workspaceId,
+    );
+
+    const config = await this.loadAgentConfigFromDb({
+      tenantId: this.tenantId,
+      agentId,
+    });
+    const ctx = await this.loadContext(config);
+    this.maybeCleanupSessions(ctx.config.sessions.ttl_days, agentKey);
 
     const containerKind: NormalizedContainerKind =
       input.container_kind ?? resolved.envelope?.container.kind ?? "channel";
@@ -1216,8 +1279,8 @@ export class AgentRuntime {
     const accountKey = resolved.envelope?.delivery.account ?? parsedChannel.accountId;
 
     const session = await this.sessionDal.getOrCreate({
+      tenantId: this.tenantId,
       scopeKeys: {
-        ...(tenantKey ? { tenantKey } : {}),
         agentKey,
         workspaceKey,
       },
@@ -1360,6 +1423,7 @@ export class AgentRuntime {
       {
         db: this.opts.container.db,
         tenantId: session.tenant_id,
+        agentId: session.agent_id,
         workspaceId: session.workspace_id,
         ownerPrefix: this.instanceOwner,
       },
@@ -1380,7 +1444,9 @@ export class AgentRuntime {
     const identityPrompt = formatIdentityPrompt(ctx.identity);
     const safetyPrompt = DATA_TAG_SAFETY_PROMPT;
 
-    const hardeningProfile = resolveSandboxHardeningProfile();
+    const hardeningProfile = resolveSandboxHardeningProfile(
+      this.opts.container.deploymentConfig.toolrunner.hardeningProfile,
+    );
     const elevatedExecutionAvailable = await deriveElevatedExecutionAvailable(this.policyService);
     const sandboxPrompt = [
       "Sandbox:",

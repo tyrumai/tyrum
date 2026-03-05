@@ -38,7 +38,6 @@ import { WorkboardDal } from "../../workboard/dal.js";
 import { sha256HexFromString, stableJsonStringify } from "../../policy/canonical-json.js";
 import { defaultClock } from "./clock.js";
 import { normalizePositiveInt } from "../normalize-positive-int.js";
-import { parseConcurrencyLimitsFromEnv } from "./concurrency.js";
 import { ExecutionEngineArtifactRecorder } from "./artifact-recorder.js";
 import {
   executeWithTimeout as executeWithTimeoutFn,
@@ -127,7 +126,7 @@ export class ExecutionEngine {
   private readonly db: SqlDb;
   private readonly clock: ClockFn;
   private readonly redactionEngine?: RedactionEngine;
-  private readonly secretProvider?: SecretProvider;
+  private readonly secretProviderForTenant?: (tenantId: string) => SecretProvider;
   private readonly logger?: Logger;
   private readonly policyService?: PolicyService;
   private readonly eventsEnabled: boolean;
@@ -139,7 +138,7 @@ export class ExecutionEngine {
     db: SqlDb;
     clock?: ClockFn;
     redactionEngine?: RedactionEngine;
-    secretProvider?: SecretProvider;
+    secretProviderForTenant?: (tenantId: string) => SecretProvider;
     logger?: Logger;
     policyService?: PolicyService;
     eventsEnabled?: boolean;
@@ -148,11 +147,11 @@ export class ExecutionEngine {
     this.db = opts.db;
     this.clock = opts.clock ?? defaultClock;
     this.redactionEngine = opts.redactionEngine;
-    this.secretProvider = opts.secretProvider;
+    this.secretProviderForTenant = opts.secretProviderForTenant;
     this.logger = opts.logger;
     this.policyService = opts.policyService;
     this.eventsEnabled = opts.eventsEnabled ?? true;
-    this.concurrencyLimits = opts.concurrencyLimits ?? parseConcurrencyLimitsFromEnv(opts.logger);
+    this.concurrencyLimits = opts.concurrencyLimits;
     this.eventEmitter = new ExecutionEngineEventEmitter({
       clock: this.clock,
       eventsEnabled: this.eventsEnabled,
@@ -172,18 +171,20 @@ export class ExecutionEngine {
   }
 
   private async resolveSecretScopesFromArgs(
+    tenantId: string,
     args: unknown,
     context?: { runId?: string; stepId?: string; attemptId?: string },
   ): Promise<string[]> {
     const handleIds = collectSecretHandleIds(args);
     if (handleIds.length === 0) return [];
 
-    if (!this.secretProvider) {
+    const secretProvider = this.secretProviderForTenant?.(tenantId);
+    if (!secretProvider) {
       return handleIds;
     }
 
     try {
-      const handles = await this.secretProvider.list();
+      const handles = await secretProvider.list();
       const byId = new Map(handles.map((h) => [h.handle_id, h]));
       const scopes = new Set<string>();
 
@@ -200,6 +201,7 @@ export class ExecutionEngine {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger?.warn("execution.secret_provider_list_failed", {
+        tenant_id: tenantId,
         run_id: context?.runId,
         step_id: context?.stepId,
         attempt_id: context?.attemptId,
@@ -225,13 +227,14 @@ export class ExecutionEngine {
 
   private async enqueueWsMessage(
     tx: SqlDb,
+    tenantId: string,
     message: WsEventEnvelopeT | WsRequestEnvelopeT,
   ): Promise<void> {
-    await this.eventEmitter.enqueueWsMessage(tx, message);
+    await this.eventEmitter.enqueueWsMessage(tx, tenantId, message);
   }
 
-  private async enqueueWsEvent(tx: SqlDb, evt: WsEventEnvelopeT): Promise<void> {
-    await this.eventEmitter.enqueueWsEvent(tx, evt);
+  private async enqueueWsEvent(tx: SqlDb, tenantId: string, evt: WsEventEnvelopeT): Promise<void> {
+    await this.eventEmitter.enqueueWsEvent(tx, tenantId, evt);
   }
 
   private async emitRunUpdatedTx(tx: SqlDb, runId: string): Promise<void> {
@@ -311,6 +314,10 @@ export class ExecutionEngine {
   async enqueuePlanInTx(tx: SqlDb, input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
     const jobId = randomUUID();
     const runId = randomUUID();
+    const tenantId = input.tenantId.trim();
+    if (!tenantId) {
+      throw new Error("tenantId is required to enqueue execution plans");
+    }
     const workspaceKey = normalizeWorkspaceKey(input.workspaceId);
 
     let agentKey = "default";
@@ -323,17 +330,17 @@ export class ExecutionEngine {
       // ignore; treat as default agent
     }
 
-    const scopeIds = await new IdentityScopeDal(tx).resolveScopeIds({
-      agentKey,
-      workspaceKey,
-    });
+    const identityScopeDal = new IdentityScopeDal(tx);
+    const agentId = await identityScopeDal.ensureAgentId(tenantId, agentKey);
+    const workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, workspaceKey);
+    await identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
 
     const baseMetadata = {
       plan_id: input.planId,
       request_id: input.requestId,
-      tenant_id: scopeIds.tenantId,
-      agent_id: scopeIds.agentId,
-      workspace_id: scopeIds.workspaceId,
+      tenant_id: tenantId,
+      agent_id: agentId,
+      workspace_id: workspaceId,
     };
 
     const normalizeTriggerKind = (value: unknown): ExecutionTriggerT["kind"] => {
@@ -403,10 +410,10 @@ export class ExecutionEngine {
        )
        VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
       [
-        scopeIds.tenantId,
+        tenantId,
         jobId,
-        scopeIds.agentId,
-        scopeIds.workspaceId,
+        agentId,
+        workspaceId,
         input.key,
         input.lane,
         triggerJson,
@@ -430,7 +437,7 @@ export class ExecutionEngine {
        )
        VALUES (?, ?, ?, ?, ?, 'queued', 1, ?, ?)`,
       [
-        scopeIds.tenantId,
+        tenantId,
         runId,
         jobId,
         input.key,
@@ -455,7 +462,7 @@ export class ExecutionEngine {
            postcondition_json
          ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)`,
         [
-          scopeIds.tenantId,
+          tenantId,
           stepId,
           runId,
           idx,
@@ -470,7 +477,7 @@ export class ExecutionEngine {
     await this.emitRunQueuedTx(tx, runId);
     const stepIds = await tx.all<{ step_id: string }>(
       "SELECT step_id FROM execution_steps WHERE tenant_id = ? AND run_id = ? ORDER BY step_index ASC",
-      [scopeIds.tenantId, runId],
+      [tenantId, runId],
     );
     for (const row of stepIds) {
       await this.emitStepUpdatedTx(tx, row.step_id);
@@ -484,6 +491,7 @@ export class ExecutionEngine {
     });
 
     this.logger?.info("execution.enqueue", {
+      tenant_id: input.tenantId,
       request_id: input.requestId,
       plan_id: input.planId,
       job_id: res.jobId,
@@ -1089,6 +1097,7 @@ export class ExecutionEngine {
 
             if (this.policyService?.isEnabled()) {
               const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
+                tenantId: run.tenant_id,
                 policySnapshotId,
                 agentId: run.agent_id,
                 workspaceId: run.workspace_id,
@@ -1352,14 +1361,19 @@ export class ExecutionEngine {
         parsedAction &&
         (actionType === "CLI" || actionType === "Http")
       ) {
-        const secretScopes = await this.resolveSecretScopesFromArgs(parsedAction.args ?? {}, {
-          runId: run.run_id,
-          stepId: next.step_id,
-        });
+        const secretScopes = await this.resolveSecretScopesFromArgs(
+          next.tenant_id,
+          parsedAction.args ?? {},
+          {
+            runId: run.run_id,
+            stepId: next.step_id,
+          },
+        );
 
         if (secretScopes.length > 0) {
           const secretsDecision = (
             await policy.evaluateSecretsFromSnapshot({
+              tenantId: next.tenant_id,
               policySnapshotId: run.policy_snapshot_id,
               secretScopes,
             })
@@ -2156,12 +2170,17 @@ export class ExecutionEngine {
 
     if (!this.policyService?.isEnabled()) return;
 
-    const secretScopes = await this.resolveSecretScopesFromArgs(opts.action.args ?? {}, {
-      runId: opts.runId,
-      stepId: opts.stepId,
-      attemptId: opts.attemptId,
-    });
+    const secretScopes = await this.resolveSecretScopesFromArgs(
+      opts.tenantId,
+      opts.action.args ?? {},
+      {
+        runId: opts.runId,
+        stepId: opts.stepId,
+        attemptId: opts.attemptId,
+      },
+    );
     const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
+      tenantId: opts.tenantId,
       policySnapshotId,
       agentId: opts.agentId,
       workspaceId: opts.workspaceId,
@@ -2645,7 +2664,7 @@ export class ExecutionEngine {
         scope: { kind: "run", run_id: opts.runId },
         payload: { approval: approvalContract },
       };
-      await this.enqueueWsEvent(tx, approvalRequestedEvt);
+      await this.enqueueWsEvent(tx, opts.tenantId, approvalRequestedEvt);
     }
 
     const approvalRequest: WsRequestEnvelopeT = {
@@ -2660,7 +2679,7 @@ export class ExecutionEngine {
         expires_at: approval.expires_at,
       },
     };
-    await this.enqueueWsMessage(tx, approvalRequest);
+    await this.enqueueWsMessage(tx, opts.tenantId, approvalRequest);
 
     return { approvalId: approval.approval_id, resumeToken };
   }

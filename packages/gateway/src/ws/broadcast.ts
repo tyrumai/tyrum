@@ -9,12 +9,19 @@ export interface WsBroadcastClusterDeps {
 }
 
 export function broadcastWsEvent(
+  tenantId: string,
   evt: WsEventEnvelope,
   deps: { connectionManager: ConnectionManager; cluster?: WsBroadcastClusterDeps },
   audience?: WsBroadcastAudience,
 ): void {
+  const normalizedTenantId = tenantId.trim();
+  if (normalizedTenantId.length === 0) {
+    throw new Error("tenantId is required");
+  }
+
   const payload = JSON.stringify(evt);
   for (const peer of deps.connectionManager.allClients()) {
+    if (peer.auth_claims?.tenant_id !== normalizedTenantId) continue;
     if (!shouldDeliverToWsAudience(peer, audience)) continue;
     try {
       peer.ws.send(payload);
@@ -25,7 +32,7 @@ export function broadcastWsEvent(
   }
   if (deps.cluster) {
     void deps.cluster.outboxDal
-      .enqueue("ws.broadcast", {
+      .enqueue(normalizedTenantId, "ws.broadcast", {
         source_edge_id: deps.cluster.edgeId,
         skip_local: true,
         message: evt,

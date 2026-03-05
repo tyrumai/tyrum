@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { setCookie } from "hono/cookie";
-import type { TokenStore } from "../modules/auth/token-store.js";
+import type { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import { AUTH_COOKIE_NAME } from "../modules/auth/http.js";
 
 export interface AuthSessionRouteDeps {
-  tokenStore: TokenStore;
+  authTokens: AuthTokenService;
 }
 
 function isHttpsRequest(url: string): boolean {
@@ -37,9 +37,16 @@ export function createAuthSessionRoutes(deps: AuthSessionRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: "token is required" }, 400);
     }
 
-    const claims = deps.tokenStore.authenticate(token);
+    const claims = await deps.authTokens.authenticate(token);
     if (!claims) {
       return c.json({ error: "unauthorized", message: "invalid token" }, 401);
+    }
+
+    if (claims.tenant_id === null) {
+      return c.json({ error: "forbidden", message: "system tokens cannot start sessions" }, 403);
+    }
+    if (claims.role !== "admin") {
+      return c.json({ error: "forbidden", message: "admin token required" }, 403);
     }
 
     setCookie(c, AUTH_COOKIE_NAME, token, {

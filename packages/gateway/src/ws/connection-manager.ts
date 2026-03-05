@@ -7,7 +7,7 @@
 
 import type { WebSocket } from "ws";
 import type { ClientCapability, WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
-import type { AuthTokenClaims } from "../modules/auth/token-store.js";
+import type { AuthTokenClaims } from "@tyrum/schemas";
 import { gatewayMetrics, type MetricsRegistry } from "../modules/observability/metrics.js";
 
 // ---------------------------------------------------------------------------

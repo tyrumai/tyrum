@@ -1,22 +1,10 @@
 import type { SqlDb } from "../../statestore/types.js";
 
-export function readPositiveIntFromEnv(name: string): number | undefined {
-  const raw = process.env[name]?.trim();
-  if (!raw) return undefined;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
-  return Math.floor(parsed);
-}
-
-export function resolvePositiveInt(
-  explicit: number | undefined,
-  envName: string,
-  defaultValue: number,
-): number {
+export function resolvePositiveInt(explicit: number | undefined, defaultValue: number): number {
   if (typeof explicit === "number" && Number.isFinite(explicit) && explicit > 0) {
     return Math.floor(explicit);
   }
-  return readPositiveIntFromEnv(envName) ?? defaultValue;
+  return defaultValue;
 }
 
 export async function tryAcquirePostgresXactLock(

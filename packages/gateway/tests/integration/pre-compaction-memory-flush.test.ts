@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,9 @@ import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { maybeRunPreCompactionMemoryFlush } from "../../src/modules/agent/runtime/pre-compaction-memory-flush.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
-import { DEFAULT_AGENT_ID } from "../../src/modules/identity/scope.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -46,6 +48,29 @@ function createSequencedTextLanguageModel(texts: readonly string[]): MockLanguag
   });
 }
 
+async function seedAgentConfig(
+  container: GatewayContainer,
+  opts?: { maxTurns?: number },
+): Promise<{ tenantId: string; agentId: string }> {
+  const tenantId = DEFAULT_TENANT_ID;
+  const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
+  await new AgentConfigDal(container.db).set({
+    tenantId,
+    agentId,
+    config: AgentConfig.parse({
+      model: { model: "openai/gpt-4.1" },
+      skills: { enabled: [] },
+      mcp: { enabled: [] },
+      tools: { allow: [] },
+      sessions: { ttl_days: 30, max_turns: opts?.maxTurns ?? 1 },
+      memory: { markdown_enabled: false, v1: { enabled: true } },
+    }),
+    createdBy: { kind: "test" },
+    reason: "pre-compaction flush test",
+  });
+  return { tenantId, agentId };
+}
+
 describe("Pre-compaction memory flush", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
@@ -62,29 +87,8 @@ describe("Pre-compaction memory flush", () => {
 
   it("runs a silent flush turn before session compaction", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow: []",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 1",
-        "memory:",
-        "  markdown_enabled: false",
-        "  v1:",
-        "    enabled: true",
-      ].join("\n"),
-      "utf-8",
-    );
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const { agentId } = await seedAgentConfig(container, { maxTurns: 1 });
 
     const languageModel = createSequencedTextLanguageModel(["a1", "FLUSH_OK", "a2"]);
 
@@ -143,13 +147,13 @@ describe("Pre-compaction memory flush", () => {
     expect(session.summary).not.toContain("FLUSH_OK");
 
     const memory = new MemoryV1Dal(container.db);
-    const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, DEFAULT_AGENT_ID);
+    const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, agentId);
     expect(search.hits.length).toBeGreaterThan(0);
     const hit = search.hits[0];
     if (!hit) {
       throw new Error("expected memory v1 search hit");
     }
-    const item = await memory.getById(hit.memory_item_id, DEFAULT_AGENT_ID);
+    const item = await memory.getById(hit.memory_item_id, agentId);
     expect(item?.kind).toBe("note");
     expect(item?.provenance.session_id).toBe(session.session_id);
     expect(item?.provenance.channel).toBeUndefined();
@@ -161,29 +165,8 @@ describe("Pre-compaction memory flush", () => {
     const secret = "sk-123456789012345678901234567890";
 
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-secret-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow: []",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 1",
-        "memory:",
-        "  markdown_enabled: false",
-        "  v1:",
-        "    enabled: true",
-      ].join("\n"),
-      "utf-8",
-    );
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    await seedAgentConfig(container, { maxTurns: 1 });
 
     const languageModel = createSequencedTextLanguageModel(["a1", "FLUSH_OK", "a2"]);
 
@@ -235,29 +218,8 @@ describe("Pre-compaction memory flush", () => {
     const secret = "ghp_123456789012345678901234567890";
 
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-secret-out-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow: []",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 1",
-        "memory:",
-        "  markdown_enabled: false",
-        "  v1:",
-        "    enabled: true",
-      ].join("\n"),
-      "utf-8",
-    );
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const { tenantId, agentId } = await seedAgentConfig(container, { maxTurns: 1 });
 
     const languageModel = createSequencedTextLanguageModel([
       "a1",
@@ -295,7 +257,7 @@ describe("Pre-compaction memory flush", () => {
     expect(second.reply).toBe("a2");
 
     const memory = new MemoryV1Dal(container.db);
-    const list = await memory.list({ agentId: DEFAULT_AGENT_ID, limit: 50 });
+    const list = await memory.list({ tenantId, agentId, limit: 50 });
     const notes = list.items.filter((item) => item.kind === "note");
     expect(notes).toHaveLength(1);
     const item = notes[0];
@@ -310,29 +272,8 @@ describe("Pre-compaction memory flush", () => {
     const longMessage = `prefix ${"x".repeat(10_000)} ${tail}`;
 
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-truncate-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow: []",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 1",
-        "memory:",
-        "  markdown_enabled: false",
-        "  v1:",
-        "    enabled: true",
-      ].join("\n"),
-      "utf-8",
-    );
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    await seedAgentConfig(container, { maxTurns: 1 });
 
     const languageModel = createSequencedTextLanguageModel(["a1", "NOOP", "a2"]);
 
@@ -383,29 +324,8 @@ describe("Pre-compaction memory flush", () => {
 
   it("only triggers the flush when the next append would compact (threshold behavior)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-threshold-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow: []",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 2",
-        "memory:",
-        "  markdown_enabled: false",
-        "  v1:",
-        "    enabled: true",
-      ].join("\n"),
-      "utf-8",
-    );
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const { agentId } = await seedAgentConfig(container, { maxTurns: 2 });
 
     const languageModel = createSequencedTextLanguageModel(["a1", "a2", "FLUSH_OK", "a3"]);
 
@@ -449,35 +369,14 @@ describe("Pre-compaction memory flush", () => {
     expect(languageModel.doGenerateCalls).toHaveLength(4);
 
     const memory = new MemoryV1Dal(container.db);
-    const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, DEFAULT_AGENT_ID);
+    const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, agentId);
     expect(search.hits.length).toBeGreaterThan(0);
   });
 
   it("is idempotent for the same dropped turns (no duplicate flush calls)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-idempotent-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow: []",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 1",
-        "memory:",
-        "  markdown_enabled: false",
-        "  v1:",
-        "    enabled: true",
-      ].join("\n"),
-      "utf-8",
-    );
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const { tenantId, agentId } = await seedAgentConfig(container, { maxTurns: 1 });
 
     const languageModel = createSequencedTextLanguageModel(["FLUSH_OK"]);
 
@@ -523,7 +422,7 @@ describe("Pre-compaction memory flush", () => {
       systemPrompt: typeof prepared.systemPrompt;
     }) =>
       maybeRunPreCompactionMemoryFlush(
-        { db: container.db, logger: container.logger, agentId: DEFAULT_AGENT_ID },
+        { db: container.db, logger: container.logger, agentId },
         input,
       );
 
@@ -536,7 +435,7 @@ describe("Pre-compaction memory flush", () => {
     expect(languageModel.doGenerateCalls).toHaveLength(1);
 
     const memory = new MemoryV1Dal(container.db);
-    const firstList = await memory.list({ agentId: DEFAULT_AGENT_ID, limit: 50 });
+    const firstList = await memory.list({ tenantId, agentId, limit: 50 });
     expect(firstList.items).toHaveLength(1);
 
     await flush({
@@ -547,35 +446,14 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(languageModel.doGenerateCalls).toHaveLength(1);
 
-    const secondList = await memory.list({ agentId: DEFAULT_AGENT_ID, limit: 50 });
+    const secondList = await memory.list({ tenantId, agentId, limit: 50 });
     expect(secondList.items).toHaveLength(1);
   });
 
   it("bounds pre-compaction flush timeout to a slice of the turn timeout", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-timeout-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow: []",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 1",
-        "memory:",
-        "  markdown_enabled: false",
-        "  v1:",
-        "    enabled: true",
-      ].join("\n"),
-      "utf-8",
-    );
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    await seedAgentConfig(container, { maxTurns: 1 });
 
     let callCount = 0;
     const languageModel = new MockLanguageModelV3({

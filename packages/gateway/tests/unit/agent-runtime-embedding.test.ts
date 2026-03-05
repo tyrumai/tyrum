@@ -48,7 +48,6 @@ describe("AgentRuntime embedding pipeline selection", () => {
     container = undefined;
     createdPipelines.length = 0;
     seenProviderInputs.length = 0;
-    delete process.env["TYRUM_AUTH_PROFILES_ENABLED"];
   });
 
   it("allows embeddings for providers without API keys", async () => {
@@ -113,8 +112,6 @@ describe("AgentRuntime embedding pipeline selection", () => {
   });
 
   it("uses auth profiles and can fall back to OpenAI embeddings for non-OpenAI primary models", async () => {
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
-
     container = createContainer({
       dbPath: ":memory:",
       migrationsDir,

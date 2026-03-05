@@ -3,10 +3,7 @@ import type { ModelsDevService } from "../models/models-dev-service.js";
 import type { PolicyService } from "../policy/service.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SqlDb } from "../../statestore/types.js";
-import {
-  resolveSandboxHardeningProfile,
-  type SandboxHardeningProfile,
-} from "../sandbox/hardening.js";
+import type { SandboxHardeningProfile } from "../sandbox/hardening.js";
 import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../sandbox/elevated-execution.js";
 
 type StatusCountMap = Record<string, number>;
@@ -92,9 +89,11 @@ export interface StatusDetails {
 }
 
 export interface StatusDetailsDeps {
+  tenantId: string;
   db?: SqlDb;
   policyService?: PolicyService;
   policyStatus?: { enabled: boolean; observe_only: boolean; effective_sha256: string };
+  toolrunnerHardeningProfile?: SandboxHardeningProfile;
   agents?: AgentRegistry;
   modelsDev?: ModelsDevService;
 }
@@ -153,6 +152,7 @@ function parseCatalogCounts(rawJson: string): { providerCount: number; modelCoun
 
 async function countByStatus(
   db: SqlDb,
+  tenantId: string,
   table:
     | "execution_runs"
     | "execution_jobs"
@@ -166,9 +166,10 @@ async function countByStatus(
   const rows = await db.all<{ status: string; count: number | string }>(
     `SELECT status, COUNT(*) AS count
      FROM ${table}
-     WHERE status IN (${placeholders})
+     WHERE tenant_id = ?
+       AND status IN (${placeholders})
      GROUP BY status`,
-    statuses,
+    [tenantId, ...statuses],
   );
   for (const row of rows) {
     if (Object.prototype.hasOwnProperty.call(counts, row.status)) {
@@ -180,11 +181,12 @@ async function countByStatus(
 
 async function loadActiveModel(
   agents: AgentRegistry | undefined,
+  tenantId: string,
 ): Promise<ActiveModelStatus | null> {
   if (!agents) return null;
 
   try {
-    const runtime = await agents.getRuntime("default");
+    const runtime = await agents.getRuntime({ tenantId, agentKey: "default" });
     const status = await runtime.status(true);
     const modelId = status.model.model;
     const slash = modelId.indexOf("/");
@@ -202,7 +204,10 @@ async function loadActiveModel(
   }
 }
 
-async function loadAuthProfileHealth(db: SqlDb | undefined): Promise<AuthProfilesStatus | null> {
+async function loadAuthProfileHealth(
+  db: SqlDb | undefined,
+  tenantId: string,
+): Promise<AuthProfilesStatus | null> {
   if (!db) return null;
 
   const normalizeTime = (value: string | Date): string =>
@@ -217,8 +222,10 @@ async function loadAuthProfileHealth(db: SqlDb | undefined): Promise<AuthProfile
     profiles = await db.all<{ provider_key: string; type: string; status: string }>(
       `SELECT provider_key, type, status
        FROM auth_profiles
+       WHERE tenant_id = ?
        ORDER BY updated_at DESC, auth_profile_id DESC
        LIMIT 500`,
+      [tenantId],
     );
   } catch (err) {
     if (isMissingTableError(err)) return null;
@@ -239,8 +246,10 @@ async function loadAuthProfileHealth(db: SqlDb | undefined): Promise<AuthProfile
        JOIN sessions s
          ON s.tenant_id = p.tenant_id
         AND s.session_id = p.session_id
+       WHERE p.tenant_id = ?
        ORDER BY p.pinned_at DESC
        LIMIT 1`,
+      [tenantId],
     );
     if (pin) {
       selected = {
@@ -364,7 +373,10 @@ async function loadCatalogFreshness(
   };
 }
 
-async function loadSessionLanes(db: SqlDb | undefined): Promise<SessionLaneStatus[]> {
+async function loadSessionLanes(
+  db: SqlDb | undefined,
+  tenantId: string,
+): Promise<SessionLaneStatus[]> {
   if (!db) return [];
 
   const nowMs = Date.now();
@@ -393,15 +405,19 @@ async function loadSessionLanes(db: SqlDb | undefined): Promise<SessionLaneStatu
     }>(
       `SELECT key, lane, run_id, status, created_at
        FROM execution_runs
-       WHERE status IN ('queued', 'running', 'paused')
+       WHERE tenant_id = ?
+         AND status IN ('queued', 'running', 'paused')
        ORDER BY created_at DESC, run_id DESC
        LIMIT 500`,
+      [tenantId],
     );
     queuedRows = await db.all<{ key: string; lane: string; queued_runs: number | string }>(
       `SELECT key, lane, COUNT(*) AS queued_runs
        FROM execution_runs
-       WHERE status = 'queued'
+       WHERE tenant_id = ?
+         AND status = 'queued'
        GROUP BY key, lane`,
+      [tenantId],
     );
   } catch (err) {
     if (!isMissingTableError(err)) throw err;
@@ -415,7 +431,9 @@ async function loadSessionLanes(db: SqlDb | undefined): Promise<SessionLaneStatu
       lease_expires_at_ms: number;
     }>(
       `SELECT key, lane, lease_owner, lease_expires_at_ms
-       FROM lane_leases`,
+       FROM lane_leases
+       WHERE tenant_id = ?`,
+      [tenantId],
     );
   } catch (err) {
     if (!isMissingTableError(err)) throw err;
@@ -476,18 +494,21 @@ async function loadSessionLanes(db: SqlDb | undefined): Promise<SessionLaneStatu
   });
 }
 
-async function loadQueueDepth(db: SqlDb | undefined): Promise<QueueDepthStatus | null> {
+async function loadQueueDepth(
+  db: SqlDb | undefined,
+  tenantId: string,
+): Promise<QueueDepthStatus | null> {
   if (!db) return null;
 
   const emptyCounts = (statuses: readonly string[]): StatusCountMap =>
     Object.fromEntries(statuses.map((status) => [status, 0])) as StatusCountMap;
 
   const loadCounts = async (
-    table: Parameters<typeof countByStatus>[1],
+    table: Parameters<typeof countByStatus>[2],
     statuses: readonly string[],
   ): Promise<{ counts: StatusCountMap; available: boolean }> => {
     try {
-      return { counts: await countByStatus(db, table, statuses), available: true };
+      return { counts: await countByStatus(db, tenantId, table, statuses), available: true };
     } catch (err) {
       if (isMissingTableError(err)) return { counts: emptyCounts(statuses), available: false };
       throw err;
@@ -557,10 +578,11 @@ async function loadQueueDepth(db: SqlDb | undefined): Promise<QueueDepthStatus |
 async function loadSandboxStatus(
   policyService: PolicyService | undefined,
   policyStatus?: { enabled: boolean; observe_only: boolean; effective_sha256: string },
+  toolrunnerHardeningProfile: SandboxHardeningProfile = "baseline",
 ): Promise<SandboxStatus | null> {
   if (!policyService) return null;
 
-  const hardeningProfile = resolveSandboxHardeningProfile();
+  const hardeningProfile = toolrunnerHardeningProfile;
   const status = policyStatus ?? (await policyService.getStatus());
   const mode: SandboxStatus["mode"] = !status.enabled
     ? "disabled"
@@ -588,14 +610,19 @@ async function loadSandboxStatus(
 }
 
 export async function buildStatusDetails(deps: StatusDetailsDeps): Promise<StatusDetails> {
+  const tenantId = deps.tenantId.trim();
   const [activeModel, authProfiles, catalog, sessionLanes, queueDepth, sandbox] = await Promise.all(
     [
-      loadActiveModel(deps.agents),
-      loadAuthProfileHealth(deps.db),
+      loadActiveModel(deps.agents, tenantId),
+      loadAuthProfileHealth(deps.db, tenantId),
       loadCatalogFreshness(deps.db, deps.modelsDev),
-      loadSessionLanes(deps.db),
-      loadQueueDepth(deps.db),
-      loadSandboxStatus(deps.policyService, deps.policyStatus),
+      loadSessionLanes(deps.db, tenantId),
+      loadQueueDepth(deps.db, tenantId),
+      loadSandboxStatus(
+        deps.policyService,
+        deps.policyStatus,
+        deps.toolrunnerHardeningProfile ?? "baseline",
+      ),
     ],
   );
 

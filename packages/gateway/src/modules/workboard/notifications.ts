@@ -93,6 +93,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
           ? `${parsedSource.connector}:${route.thread_id}`
           : `${parsedSource.connector}:${parsedSource.accountId}:${route.thread_id}`;
       const evalRes = await policyService.evaluateConnectorAction({
+        tenantId,
         agentId: input.scope.agent_id,
         workspaceId: input.scope.workspace_id,
         matchTarget,

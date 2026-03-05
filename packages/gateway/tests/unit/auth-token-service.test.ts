@@ -1,0 +1,108 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+
+describe("AuthTokenService", () => {
+  let db: SqliteDb;
+
+  beforeEach(() => {
+    db = openTestSqliteDb();
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it("issues and authenticates a tenant-scoped admin token", async () => {
+    const svc = new AuthTokenService(db);
+    const issued = await svc.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "admin",
+      scopes: ["*"],
+    });
+
+    expect(issued.token).toMatch(/^tyrum-token\.v1\./);
+    const claims = await svc.authenticate(issued.token);
+    expect(claims).toEqual(
+      expect.objectContaining({
+        token_kind: "admin",
+        token_id: issued.row.token_id,
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      }),
+    );
+  });
+
+  it("issues and authenticates a tenant-scoped device token with device binding", async () => {
+    const svc = new AuthTokenService(db);
+    const issued = await svc.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "client",
+      deviceId: "dev_client_1",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+
+    const claims = await svc.authenticate(issued.token);
+    expect(claims).toEqual(
+      expect.objectContaining({
+        token_kind: "device",
+        token_id: issued.row.token_id,
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "client",
+        device_id: "dev_client_1",
+        scopes: ["operator.read"],
+      }),
+    );
+
+    expect(await svc.authenticate(issued.token, { expectedDeviceId: "dev_client_2" })).toBeNull();
+    expect(await svc.authenticate(issued.token, { expectedRole: "admin" })).toBeNull();
+  });
+
+  it("rejects malformed or unknown tokens", async () => {
+    const svc = new AuthTokenService(db);
+    expect(await svc.authenticate(undefined)).toBeNull();
+    expect(await svc.authenticate("")).toBeNull();
+    expect(await svc.authenticate("tyrum-token.v0.x.y")).toBeNull();
+    expect(await svc.authenticate("not-a-token")).toBeNull();
+
+    // Unknown token id.
+    expect(await svc.authenticate("tyrum-token.v1.unknown.secret")).toBeNull();
+  });
+
+  it("rejects revoked and expired tokens", async () => {
+    const svc = new AuthTokenService(db);
+    const issued = await svc.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "client",
+      deviceId: "dev_client_1",
+      scopes: [],
+      ttlSeconds: 1,
+    });
+
+    const expiresAt = issued.row.expires_at;
+    expect(expiresAt).toBeTruthy();
+
+    // Revoke path.
+    expect(await svc.authenticate(issued.token)).not.toBeNull();
+    expect(await svc.revokeToken(issued.row.token_id)).toBe(true);
+    expect(await svc.authenticate(issued.token)).toBeNull();
+
+    // Expiry path (new token).
+    const issued2 = await svc.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "client",
+      scopes: [],
+      ttlSeconds: 1,
+    });
+    const expiresAt2 = issued2.row.expires_at;
+    expect(expiresAt2).toBeTruthy();
+    const expiredSvc = new AuthTokenService(db, {
+      nowMs: () => Date.parse(expiresAt2!) + 1000,
+    });
+    expect(await expiredSvc.authenticate(issued2.token)).toBeNull();
+  });
+});

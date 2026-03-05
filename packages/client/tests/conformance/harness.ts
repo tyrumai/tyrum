@@ -18,13 +18,14 @@ import { getRequestListener } from "@hono/node-server";
 import { createTestApp } from "../../../gateway/tests/integration/helpers.js";
 import { createWsHandler } from "../../../gateway/src/routes/ws.js";
 import { ConnectionManager } from "../../../gateway/src/ws/connection-manager.js";
-import { TokenStore } from "../../../gateway/src/modules/auth/token-store.js";
 import { dispatchTask } from "../../../gateway/src/ws/protocol.js";
 import type { ProtocolDeps } from "../../../gateway/src/ws/protocol.js";
 
 export interface GatewayHarness {
   /** Random port the gateway listens on. */
   port: number;
+  /** Tenant id used for authenticated requests. */
+  tenantId: string;
   /** Admin token for authenticated requests. */
   adminToken: string;
   /** Full HTTP base URL, e.g. `http://127.0.0.1:<port>`. */
@@ -51,14 +52,11 @@ export async function startGateway(
   protocolDepsFactory?: (cm: ConnectionManager) => Partial<ProtocolDeps>,
 ): Promise<GatewayHarness> {
   const connectionManager = new ConnectionManager();
-  const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-conformance-"));
-  const tokenStore = new TokenStore(tokenHome);
-  const adminToken = await tokenStore.initialize();
+  const tyrumHome = await mkdtemp(join(tmpdir(), "tyrum-conformance-"));
 
-  const { app, container, agents } = await createTestApp({
-    tokenStore,
+  const { app, container, agents, auth } = await createTestApp({
     isLocalOnly: false,
-    tyrumHome: tokenHome,
+    tyrumHome,
   });
 
   const baseDeps: ProtocolDeps = {
@@ -90,7 +88,7 @@ export async function startGateway(
   const { handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
     protocolDeps,
-    tokenStore,
+    authTokens: auth.authTokens,
   });
 
   const requestListener = getRequestListener(app.fetch);
@@ -119,7 +117,8 @@ export async function startGateway(
 
   return {
     port,
-    adminToken,
+    tenantId: auth.tenantId,
+    adminToken: auth.tenantAdminToken,
     baseUrl: `http://127.0.0.1:${port}`,
     wsUrl: `ws://127.0.0.1:${port}/ws`,
     connectionManager,
@@ -130,7 +129,7 @@ export async function startGateway(
       await closeServer(server, sockets);
       await agents?.shutdown().catch(() => {});
       await container.db.close().catch(() => {});
-      await rm(tokenHome, { recursive: true, force: true });
+      await rm(tyrumHome, { recursive: true, force: true });
     },
   };
 }

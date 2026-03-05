@@ -7,36 +7,14 @@ import { createTestApp, createTestContainer } from "./helpers.js";
 import { createStubLanguageModel } from "../unit/stub-language-model.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
+import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 
 async function writeWorkspace(home: string): Promise<void> {
   await mkdir(home, { recursive: true });
   await mkdir(join(home, "skills/file-reader"), { recursive: true });
   await mkdir(join(home, "mcp/calendar"), { recursive: true });
   await mkdir(join(home, "memory"), { recursive: true });
-
-  await writeFile(
-    join(home, "agent.yml"),
-    `model:
-  model: openai/gpt-4.1
-skills:
-  enabled:
-    - file-reader
-  workspace_trusted: true
-mcp:
-  enabled:
-    - calendar
-tools:
-  allow:
-    - tool.fs.read
-    - mcp.*
-sessions:
-  ttl_days: 30
-  max_turns: 20
-memory:
-  markdown_enabled: true
-`,
-    "utf-8",
-  );
 
   await writeFile(
     join(home, "IDENTITY.md"),
@@ -111,7 +89,22 @@ describe("agent routes", () => {
   });
 
   it("returns singleton status from local workspace", async () => {
-    const { app, agents, container } = await createTestApp({ tyrumHome: homeDir });
+    const { app, agents, container, auth } = await createTestApp({ tyrumHome: homeDir });
+    const agentId = await container.identityScopeDal.ensureAgentId(auth.tenantId, "default");
+    await new AgentConfigDal(container.db).set({
+      tenantId: auth.tenantId,
+      agentId,
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: ["file-reader"], workspace_trusted: true },
+        mcp: { enabled: ["calendar"] },
+        tools: { allow: ["tool.fs.read", "mcp.*"] },
+        sessions: { ttl_days: 30, max_turns: 20 },
+        memory: { markdown_enabled: true },
+      }),
+      createdBy: { kind: "test" },
+      reason: "agent status test",
+    });
     const res = await app.request("/agent/status");
 
     expect(res.status).toBe(200);
@@ -169,7 +162,10 @@ describe("agent routes", () => {
     const getRuntimeSpy = vi.spyOn(agents!, "getRuntime");
     const res = await app.request("/agent/status?agent_key=agent-2");
     expect(res.status).toBe(200);
-    expect(getRuntimeSpy).toHaveBeenCalledWith("agent-2");
+    expect(getRuntimeSpy).toHaveBeenCalledWith({
+      tenantId: DEFAULT_TENANT_ID,
+      agentKey: "agent-2",
+    });
 
     await agents?.shutdown();
     await container.db.close();

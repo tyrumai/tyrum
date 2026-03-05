@@ -29,7 +29,7 @@ interface WebhookTriggerConfig {
 }
 
 export interface WatcherRouteDeps {
-  secretProviderForAgent?: (agentKey: string) => Promise<SecretProvider>;
+  secretProviderForTenant?: (tenantId: string) => SecretProvider;
 }
 
 function parseTimestampMs(value: string): number | null {
@@ -234,7 +234,7 @@ export function createWatcherRoutes(
       );
     }
 
-    if (!deps.secretProviderForAgent) {
+    if (!deps.secretProviderForTenant) {
       return c.json(
         {
           error: "misconfigured",
@@ -266,13 +266,7 @@ export function createWatcherRoutes(
       );
     }
 
-    let secretProvider: SecretProvider;
-    try {
-      secretProvider = await deps.secretProviderForAgent(webhookConfig.agent_key);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return c.json({ error: "invalid_request", message }, 400);
-    }
+    const secretProvider = deps.secretProviderForTenant(watcherRow.tenant_id);
 
     const secret = await secretProvider.resolve(webhookConfig.secret_handle);
     if (!secret || secret.trim().length === 0) {

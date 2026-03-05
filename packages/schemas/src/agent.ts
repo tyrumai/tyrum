@@ -70,6 +70,12 @@ export const AgentSessionConfig = z.object({
   ttl_days: z.number().int().min(1).max(365).default(30),
   max_turns: z.number().int().min(1).max(500).default(20),
   loop_detection: AgentSessionLoopDetectionConfig.prefault({}),
+  context_pruning: z
+    .object({
+      max_messages: z.number().int().min(8).max(2000).default(32),
+      tool_prune_keep_last_messages: z.number().int().min(2).max(2000).default(4),
+    })
+    .prefault({}),
 });
 export type AgentSessionConfig = z.infer<typeof AgentSessionConfig>;
 

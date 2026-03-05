@@ -2,7 +2,7 @@ import { ipcMain, type BrowserWindow } from "electron";
 import { normalizeFingerprint256 } from "@tyrum/operator-core";
 import { GatewayManager } from "../gateway-manager.js";
 import { configExists, loadConfig, saveConfig } from "../config/store.js";
-import { decryptToken, generateToken, encryptToken } from "../config/token-store.js";
+import { decryptToken, encryptToken } from "../config/token-store.js";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { createWindowSender } from "./window-sender.js";
@@ -187,6 +187,18 @@ const EMBEDDED_GATEWAY_TOKEN_RECOVERY_MESSAGES: Record<
   },
 };
 
+const TYRUM_TOKEN_PATTERN = /^tyrum-token\.v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
+function isValidEmbeddedGatewayToken(token: string): boolean {
+  return TYRUM_TOKEN_PATTERN.test(token.trim());
+}
+
+function persistEmbeddedGatewayToken(config: DesktopNodeConfig, token: string): void {
+  config.embedded.tokenRef = encryptToken(token);
+  saveConfig(config);
+  embeddedGatewayAccessToken = token;
+}
+
 function recoverEmbeddedGatewayAccessToken(
   config: DesktopNodeConfig,
   context: EmbeddedGatewayTokenRecoveryContext,
@@ -200,33 +212,41 @@ function recoverEmbeddedGatewayAccessToken(
   }
 
   try {
-    embeddedGatewayAccessToken = decryptToken(tokenRef);
-    return embeddedGatewayAccessToken;
+    const decrypted = decryptToken(tokenRef);
+    if (!isValidEmbeddedGatewayToken(decrypted)) {
+      throw new Error("Invalid embedded gateway token format");
+    }
+    embeddedGatewayAccessToken = decrypted;
+    return decrypted;
   } catch (error) {
     console.warn(messages.decryptWarn, error);
     throw new Error(messages.decryptFailError);
   }
 }
 
-function createAndStoreEmbeddedGatewayToken(config: DesktopNodeConfig): string {
-  const token = generateToken();
-  config.embedded.tokenRef = encryptToken(token);
-  saveConfig(config);
-  return token;
-}
-
 export function ensureEmbeddedGatewayToken(config: DesktopNodeConfig): string {
-  const existingTokenRef = config.embedded.tokenRef;
-  if (existingTokenRef) {
-    try {
-      return decryptToken(existingTokenRef);
-    } catch (error) {
-      console.warn("Failed to decrypt embedded gateway token; rotating token.", error);
-      return createAndStoreEmbeddedGatewayToken(config);
-    }
+  if (embeddedGatewayAccessToken) return embeddedGatewayAccessToken;
+
+  const tokenRef = config.embedded.tokenRef;
+  if (!tokenRef) {
+    throw new Error(
+      "Embedded gateway token is missing. Start the embedded gateway from the Desktop app to bootstrap a token.",
+    );
   }
 
-  return createAndStoreEmbeddedGatewayToken(config);
+  try {
+    const decrypted = decryptToken(tokenRef);
+    if (!isValidEmbeddedGatewayToken(decrypted)) {
+      throw new Error("Invalid embedded gateway token format");
+    }
+    embeddedGatewayAccessToken = decrypted;
+    return decrypted;
+  } catch (error) {
+    console.warn("Failed to decrypt embedded gateway token; restart the embedded gateway.", error);
+    throw new Error(
+      "Embedded gateway token could not be decrypted. Restart the embedded gateway from the Desktop app.",
+    );
+  }
 }
 
 function toHttpBaseUrlFromWsUrl(rawUrl: string): string | null {
@@ -309,24 +329,31 @@ async function startEmbeddedGatewayWithConfig(
   config: DesktopNodeConfig,
 ): Promise<string> {
   if (mgr.status === "running") {
-    return recoverEmbeddedGatewayAccessToken(config, "running");
+    try {
+      return ensureEmbeddedGatewayToken(config);
+    } catch {
+      const bootstrap = mgr.getBootstrapToken("default-tenant-admin");
+      if (bootstrap && isValidEmbeddedGatewayToken(bootstrap)) {
+        persistEmbeddedGatewayToken(config, bootstrap);
+        return bootstrap;
+      }
+      return recoverEmbeddedGatewayAccessToken(config, "running");
+    }
   }
   if (startPromise) {
     await startPromise;
     return recoverEmbeddedGatewayAccessToken(config, "started");
   }
 
-  const accessToken = ensureEmbeddedGatewayToken(config);
-  embeddedGatewayAccessToken = accessToken;
   const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
-  const dbPath = config.embedded.dbPath || join(tyrumHome, "gateway", "gateway.db");
+  const dbPath = config.embedded.dbPath || join(tyrumHome, "gateway.db");
   const gatewayBin = resolveGatewayBinPath();
 
   const starter = mgr.start({
     gatewayBin,
     port: config.embedded.port,
     dbPath,
-    accessToken,
+    home: tyrumHome,
     host: "127.0.0.1",
   });
   startPromise = starter;
@@ -338,7 +365,19 @@ async function startEmbeddedGatewayWithConfig(
     }
   }
 
-  return accessToken;
+  try {
+    return ensureEmbeddedGatewayToken(config);
+  } catch {
+    const bootstrap = mgr.getBootstrapToken("default-tenant-admin");
+    if (bootstrap && isValidEmbeddedGatewayToken(bootstrap)) {
+      persistEmbeddedGatewayToken(config, bootstrap);
+      return bootstrap;
+    }
+  }
+
+  throw new Error(
+    "Embedded gateway started but no bootstrap token was captured. Delete the embedded gateway database or issue a new token, then restart the embedded gateway.",
+  );
 }
 
 export async function startEmbeddedGatewayFromConfig(): Promise<{

@@ -13,11 +13,11 @@ class AlwaysNotFoundSecretProvider implements SecretProvider {
     return null;
   }
 
-  async store(scope: string, _value: string): Promise<SecretHandle> {
+  async store(secretKey: string, _value: string): Promise<SecretHandle> {
     return {
-      handle_id: randomUUID(),
-      provider: "file",
-      scope,
+      handle_id: secretKey,
+      provider: "db",
+      scope: secretKey,
       created_at: new Date().toISOString(),
     };
   }
@@ -47,10 +47,20 @@ describe("secret revoke convergence (integration)", () => {
     });
 
     const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: randomUUID(),
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
     app.route(
       "/",
       createSecretRoutes({
-        secretProviderForAgent: async () => new AlwaysNotFoundSecretProvider(),
+        secretProviderForTenant: () => new AlwaysNotFoundSecretProvider(),
       }),
     );
 

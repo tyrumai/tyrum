@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { createSecretRoutes } from "../../src/routes/secret.js";
 import type { SecretHandle } from "@tyrum/schemas";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 class TrackingSecretProvider implements SecretProvider {
   revokedHandleIds: string[] = [];
@@ -15,7 +16,7 @@ class TrackingSecretProvider implements SecretProvider {
   async store(_scope: string, _value: string): Promise<SecretHandle> {
     return {
       handle_id: randomUUID(),
-      provider: "file",
+      provider: "db",
       scope: "SCOPE",
       created_at: new Date().toISOString(),
     };
@@ -36,28 +37,26 @@ describe("secret revoke disable failure handling (integration)", () => {
     const secretProvider = new TrackingSecretProvider();
     const handleId = "h-1";
 
-    let legacyHookCalls = 0;
     const routeDeps = {
-      secretProviderForAgent: async () => secretProvider,
-      authProfileDal: {
-        async listByAgentAfter(): Promise<unknown[]> {
-          legacyHookCalls += 1;
-          return [];
-        },
-        async disableProfile(): Promise<void> {
-          legacyHookCalls += 1;
-          throw new Error("db write failed");
-        },
-      },
+      secretProviderForTenant: () => secretProvider,
     } as unknown as Parameters<typeof createSecretRoutes>[0];
 
     const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "test-token",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
     app.route("/", createSecretRoutes(routeDeps));
 
     const res = await app.request(`/secrets/${handleId}`, { method: "DELETE" });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ revoked: true });
     expect(secretProvider.revokedHandleIds).toEqual([handleId]);
-    expect(legacyHookCalls).toBe(0);
   });
 });

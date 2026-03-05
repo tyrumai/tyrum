@@ -18,6 +18,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -153,6 +154,72 @@ async function waitForPendingApproval(
   throw new Error("Timed out waiting for pending approval");
 }
 
+async function seedAgentConfig(
+  container: GatewayContainer,
+  params: {
+    agentKey?: string;
+    workspaceKey?: string;
+    config: {
+      model?: { model?: string };
+      skills?: { enabled?: string[] };
+      mcp?: { enabled?: string[] };
+      tools: { allow: string[] };
+      sessions?: {
+        ttl_days?: number;
+        max_turns?: number;
+        loop_detection?: {
+          within_turn?: { enabled?: boolean };
+          cross_turn?: { enabled?: boolean };
+        };
+        context_pruning?: { max_messages?: number; tool_prune_keep_last_messages?: number };
+      };
+      memory?: { markdown_enabled?: boolean };
+    };
+  },
+): Promise<{ tenantId: string; agentId: string; workspaceId: string }> {
+  const ids = await container.identityScopeDal.resolveScopeIds({
+    agentKey: params.agentKey,
+    workspaceKey: params.workspaceKey,
+  });
+  const dal = new AgentConfigDal(container.db);
+  await dal.set({
+    tenantId: ids.tenantId,
+    agentId: ids.agentId,
+    config: {
+      model: { model: "openai/gpt-4.1", ...params.config.model },
+      skills: { enabled: [], ...params.config.skills },
+      mcp: { enabled: [], ...params.config.mcp },
+      tools: params.config.tools,
+      sessions: {
+        ttl_days: 30,
+        max_turns: 20,
+        ...params.config.sessions,
+        loop_detection: {
+          within_turn: { enabled: true, ...params.config.sessions?.loop_detection?.within_turn },
+          cross_turn: { enabled: true, ...params.config.sessions?.loop_detection?.cross_turn },
+        },
+      },
+      memory: { markdown_enabled: false, ...params.config.memory },
+    },
+    createdBy: { kind: "test" },
+    reason: "test seed",
+  });
+  return ids;
+}
+
+function stubTenantAuth(app: Hono, tenantId = DEFAULT_TENANT_ID): void {
+  app.use("*", async (c, next) => {
+    c.set("authClaims", {
+      token_kind: "admin",
+      token_id: "test-token",
+      tenant_id: tenantId,
+      role: "admin",
+      scopes: ["*"],
+    });
+    await next();
+  });
+}
+
 describe("Tool execution loop", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
@@ -170,31 +237,10 @@ describe("Tool execution loop", () => {
   it("executes tool calls and returns the final reply", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
+    await seedAgentConfig(container, { config: { tools: { allow: ["tool.fs.read"] } } });
 
     // Create a file for tool.fs.read to read
     await writeFile(join(homeDir, "notes.txt"), "important notes", "utf-8");
-
-    // Write agent config that allows tool.fs.read
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.fs.read",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
 
     const languageModel = createToolLoopLanguageModel({
       toolCalls: [
@@ -235,31 +281,11 @@ describe("Tool execution loop", () => {
   it("prunes older tool results from the model prompt deterministically", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
+    await seedAgentConfig(container, { config: { tools: { allow: ["tool.fs.read"] } } });
 
     await writeFile(join(homeDir, "one.txt"), "FIRST_TOOL_OUTPUT_123", "utf-8");
     await writeFile(join(homeDir, "two.txt"), "SECOND_TOOL_OUTPUT_456", "utf-8");
     await writeFile(join(homeDir, "three.txt"), "THIRD_TOOL_OUTPUT_789", "utf-8");
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.fs.read",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
 
     const languageModel = createSequencedToolLoopLanguageModel([
       {
@@ -328,38 +354,18 @@ describe("Tool execution loop", () => {
   it("does not orphan tool call/result pairs when truncating history", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    const prevMaxMessages = process.env["TYRUM_CONTEXT_MAX_MESSAGES"];
-    const prevKeepLast = process.env["TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES"];
-    process.env["TYRUM_CONTEXT_MAX_MESSAGES"] = "8";
-    process.env["TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES"] = "7";
+    await seedAgentConfig(container, {
+      config: {
+        tools: { allow: ["tool.fs.read"] },
+        sessions: { context_pruning: { max_messages: 8, tool_prune_keep_last_messages: 7 } },
+      },
+    });
 
     try {
       await writeFile(join(homeDir, "one.txt"), "FIRST_TOOL_OUTPUT_123", "utf-8");
       await writeFile(join(homeDir, "two.txt"), "SECOND_TOOL_OUTPUT_456", "utf-8");
       await writeFile(join(homeDir, "three.txt"), "THIRD_TOOL_OUTPUT_789", "utf-8");
       await writeFile(join(homeDir, "four.txt"), "FOURTH_TOOL_OUTPUT_000", "utf-8");
-
-      await writeFile(
-        join(homeDir, "agent.yml"),
-        [
-          "model:",
-          "  model: openai/gpt-4.1",
-          "skills:",
-          "  enabled: []",
-          "mcp:",
-          "  enabled: []",
-          "tools:",
-          "  allow:",
-          "    - tool.fs.read",
-          "sessions:",
-          "  ttl_days: 30",
-          "  max_turns: 20",
-          "memory:",
-          "  markdown_enabled: false",
-        ].join("\n"),
-        "utf-8",
-      );
 
       const languageModel = createSequencedToolLoopLanguageModel([
         {
@@ -457,44 +463,18 @@ describe("Tool execution loop", () => {
         expect(toolCallIds.has(toolCallId)).toBe(true);
       }
     } finally {
-      if (prevMaxMessages === undefined) {
-        delete process.env["TYRUM_CONTEXT_MAX_MESSAGES"];
-      } else {
-        process.env["TYRUM_CONTEXT_MAX_MESSAGES"] = prevMaxMessages;
-      }
-
-      if (prevKeepLast === undefined) {
-        delete process.env["TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES"];
-      } else {
-        process.env["TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES"] = prevKeepLast;
-      }
+      // no-op: config is DB-backed in tests now
     }
   });
 
   it("queues high-risk tool calls and resumes after approval", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.exec",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    const ids = await seedAgentConfig(container, {
+      agentKey: "agent-test",
+      workspaceKey: "ws-test",
+      config: { tools: { allow: ["tool.exec"] } },
+    });
 
     const languageModel = createToolLoopLanguageModel({
       toolCalls: [
@@ -535,10 +515,6 @@ describe("Tool execution loop", () => {
     const pending = await waitForPendingApproval(container);
     expect(pending.prompt).toContain("tool.exec");
     expect(pending.kind).toBe("workflow_step");
-    const ids = await container.identityScopeDal.resolveScopeIds({
-      agentKey: "agent-test",
-      workspaceKey: "ws-test",
-    });
     expect(pending.agent_id).toBe(ids.agentId);
     expect(pending.workspace_id).toBe(ids.workspaceId);
     expect(pending.run_id).not.toBeNull();
@@ -547,6 +523,7 @@ describe("Tool execution loop", () => {
 
     const approvalEngine = new ExecutionEngine({ db: container.db });
     const approvalApp = new Hono();
+    stubTenantAuth(approvalApp);
     approvalApp.route(
       "/",
       createApprovalRoutes({
@@ -570,27 +547,9 @@ describe("Tool execution loop", () => {
   it("does not re-request approval when an engine step already has an approved stepApprovalId", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.exec",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    await seedAgentConfig(container, {
+      config: { tools: { allow: ["tool.exec"] } },
+    });
 
     const toolCallId = "tc-already-approved";
     const command = "echo approved";
@@ -661,31 +620,12 @@ describe("Tool execution loop", () => {
   it("preserves multi-step tool messages when pausing for approval", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
+    await seedAgentConfig(container, {
+      config: { tools: { allow: ["tool.fs.read", "tool.exec"] } },
+    });
 
     const safeOutput = "SAFE_TOOL_OUTPUT_123";
     await writeFile(join(homeDir, "safe.txt"), safeOutput, "utf-8");
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.fs.read",
-        "    - tool.exec",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
 
     const languageModel = createSequencedToolLoopLanguageModel([
       {
@@ -739,6 +679,7 @@ describe("Tool execution loop", () => {
 
     const approvalEngine = new ExecutionEngine({ db: container.db });
     const approvalApp = new Hono();
+    stubTenantAuth(approvalApp);
     approvalApp.route(
       "/",
       createApprovalRoutes({
@@ -764,33 +705,9 @@ describe("Tool execution loop", () => {
 
   it("requires approval for tool.exec when driven by untrusted tool output", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    // Avoid relying on real DNS in CI by using an IP literal (still tagged as untrusted web content).
     const fetchUrl = "https://93.184.216.34";
 
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.http.fetch",
-        "    - tool.exec",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
-
+    // Avoid relying on real DNS in CI by using an IP literal (still tagged as untrusted web content).
     const bundlePath = join(homeDir, "policy.yml");
     await writeFile(
       bundlePath,
@@ -815,9 +732,13 @@ describe("Tool execution loop", () => {
       ].join("\n"),
       "utf-8",
     );
-
-    const prevBundlePath = process.env["TYRUM_POLICY_BUNDLE_PATH"];
-    process.env["TYRUM_POLICY_BUNDLE_PATH"] = bundlePath;
+    container = await createContainer(
+      { dbPath: ":memory:", migrationsDir },
+      { deploymentConfig: { policy: { bundlePath } } },
+    );
+    await seedAgentConfig(container, {
+      config: { tools: { allow: ["tool.http.fetch", "tool.exec"] } },
+    });
 
     try {
       const languageModel = createSequencedToolLoopLanguageModel([
@@ -881,6 +802,7 @@ describe("Tool execution loop", () => {
 
       const approvalEngine = new ExecutionEngine({ db: container.db });
       const approvalApp = new Hono();
+      stubTenantAuth(approvalApp);
       approvalApp.route(
         "/",
         createApprovalRoutes({
@@ -901,38 +823,14 @@ describe("Tool execution loop", () => {
       expect(result.used_tools).toContain("tool.http.fetch");
       expect(result.used_tools).toContain("tool.exec");
     } finally {
-      if (prevBundlePath === undefined) {
-        delete process.env["TYRUM_POLICY_BUNDLE_PATH"];
-      } else {
-        process.env["TYRUM_POLICY_BUNDLE_PATH"] = prevBundlePath;
-      }
+      // no-op: policy bundle path is container-scoped now
     }
   }, 10_000);
 
   it("does not execute high-risk tool when approval is denied", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.fs.write",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    await seedAgentConfig(container, { config: { tools: { allow: ["tool.fs.write"] } } });
 
     const languageModel = createToolLoopLanguageModel({
       toolCalls: [
@@ -971,6 +869,7 @@ describe("Tool execution loop", () => {
     const pending = await waitForPendingApproval(container);
     const approvalEngine = new ExecutionEngine({ db: container.db });
     const approvalApp = new Hono();
+    stubTenantAuth(approvalApp);
     approvalApp.route(
       "/",
       createApprovalRoutes({
@@ -997,30 +896,10 @@ describe("Tool execution loop", () => {
   it("does not corrupt tool approval resume state via redaction", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
+    await seedAgentConfig(container, { config: { tools: { allow: ["tool.fs.write"] } } });
 
     const secret = "sk-test-secret-token-12345678901234567890";
     container.redactionEngine.registerSecrets([secret]);
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.fs.write",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
 
     const languageModel = createToolLoopLanguageModel({
       toolCalls: [
@@ -1043,6 +922,7 @@ describe("Tool execution loop", () => {
       db: container.db,
       dbPath: ":memory:",
       tyrumHome: homeDir,
+      tenantId: DEFAULT_TENANT_ID,
     });
 
     const runtime = new AgentRuntime({
@@ -1069,6 +949,7 @@ describe("Tool execution loop", () => {
 
     const approvalEngine = new ExecutionEngine({ db: container.db });
     const approvalApp = new Hono();
+    stubTenantAuth(approvalApp);
     approvalApp.route(
       "/",
       createApprovalRoutes({
@@ -1094,27 +975,7 @@ describe("Tool execution loop", () => {
   it("supports approve-always by creating a policy override that skips future approvals", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.exec",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    await seedAgentConfig(container, { config: { tools: { allow: ["tool.exec"] } } });
 
     const toolCalls = [
       {
@@ -1155,6 +1016,7 @@ describe("Tool execution loop", () => {
     expect(pending.prompt).toContain("tool.exec");
 
     const approvalApp = new Hono();
+    stubTenantAuth(approvalApp);
     const approvalEngine = new ExecutionEngine({ db: container.db });
     approvalApp.route(
       "/",
@@ -1199,6 +1061,7 @@ describe("Tool execution loop", () => {
     expect(result1.used_tools).toContain("tool.exec");
 
     const overrides = await container.policyOverrideDal.list({
+      tenantId: DEFAULT_TENANT_ID,
       agentId: pending.agent_id,
       toolId: "tool.exec",
     });
@@ -1268,30 +1131,11 @@ describe("Tool execution loop", () => {
   it("populates used_tools across multiple tool calls", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
+    await seedAgentConfig(container, {
+      config: { tools: { allow: ["tool.fs.read", "tool.http.fetch"] } },
+    });
 
     await writeFile(join(homeDir, "a.txt"), "file A", "utf-8");
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.fs.read",
-        "    - tool.http.fetch",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
 
     const languageModel = createToolLoopLanguageModel({
       toolCalls: [
@@ -1374,27 +1218,7 @@ describe("Tool execution loop", () => {
   it("queues approval requests even when maxSteps is exhausted", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.exec",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    await seedAgentConfig(container, { config: { tools: { allow: ["tool.exec"] } } });
 
     const languageModel = createToolLoopLanguageModel({
       toolCalls: [
@@ -1437,6 +1261,7 @@ describe("Tool execution loop", () => {
 
     const approvalEngine = new ExecutionEngine({ db: container.db });
     const approvalApp = new Hono();
+    stubTenantAuth(approvalApp);
     approvalApp.route(
       "/",
       createApprovalRoutes({
@@ -1459,33 +1284,18 @@ describe("Tool execution loop", () => {
   it("respects maxSteps and stops looping", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
+    await seedAgentConfig(container, {
+      config: {
+        tools: { allow: ["tool.fs.read"] },
+        sessions: {
+          loop_detection: {
+            within_turn: { enabled: false },
+            cross_turn: { enabled: false },
+          },
+        },
+      },
+    });
     await writeFile(join(homeDir, "loop.txt"), "loop", "utf-8");
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.fs.read",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "  loop_detection:",
-        "    within_turn:",
-        "      enabled: false",
-        "    cross_turn:",
-        "      enabled: false",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
 
     const languageModel = createToolLoopLanguageModel({
       toolCalls: [
@@ -1528,29 +1338,9 @@ describe("Tool execution loop", () => {
   it("detects and stops a within-turn tool loop (consecutive)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
+    await seedAgentConfig(container, { config: { tools: { allow: ["tool.fs.read"] } } });
 
     await writeFile(join(homeDir, "notes.txt"), "important notes", "utf-8");
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.fs.read",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
 
     const languageModel = createToolLoopLanguageModel({
       toolCalls: [
@@ -1593,30 +1383,10 @@ describe("Tool execution loop", () => {
   it("detects and stops a within-turn tool loop (cycle)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
+    await seedAgentConfig(container, { config: { tools: { allow: ["tool.fs.read"] } } });
 
     await writeFile(join(homeDir, "a.txt"), "A", "utf-8");
     await writeFile(join(homeDir, "b.txt"), "B", "utf-8");
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.fs.read",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
 
     const steps: ToolLoopStep[] = [
       {

@@ -1,14 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
-import { WsEvent } from "@tyrum/schemas";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { WsEventEnvelope } from "@tyrum/schemas";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { EventLog } from "../../src/modules/planner/event-log.js";
 import { createAuthMiddleware } from "../../src/modules/auth/middleware.js";
 import { createHttpScopeAuthorizationMiddleware } from "../../src/modules/authz/http-scope-middleware.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import { AuthAudit, GATEWAY_AUTH_AUDIT_PLAN_ID } from "../../src/modules/auth/audit.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
@@ -50,14 +47,14 @@ describe("auth audit events", () => {
       failedAuthWindowMs: 10_000,
     });
 
-    const tokenStore = { authenticate: () => null } as unknown as TokenStore;
+    const authTokens = { authenticate: async () => null } as unknown as AuthTokenService;
 
     const app = new Hono();
     app.use("*", async (c, next) => {
       c.set("clientIp", "203.0.113.10");
       await next();
     });
-    app.use("*", createAuthMiddleware(tokenStore, { audit }));
+    app.use("*", createAuthMiddleware(authTokens, { audit }));
     app.get("/api/data", (c) => c.json({ ok: true }));
 
     const res = await app.request(`/api/data?token=${encodeURIComponent(secret)}`);
@@ -71,19 +68,13 @@ describe("auth audit events", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.action_json).not.toContain(secret);
 
+    // Without a known tenant_id (missing token), auth failures are persisted to the audit log
+    // but are not broadcast over WS.
     const outbox = await db.get<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC LIMIT 1",
       ["ws.broadcast"],
     );
-    expect(outbox).toBeDefined();
-    expect(outbox!.payload_json).not.toContain(secret);
-
-    const payload = JSON.parse(outbox!.payload_json) as { message?: unknown };
-    const parsedEvent = WsEvent.safeParse(payload.message);
-    expect(parsedEvent.success).toBe(true);
-    if (parsedEvent.success) {
-      expect(parsedEvent.data.type).toBe("auth.failed");
-    }
+    expect(outbox).toBeUndefined();
   });
 
   it("rate-limits repeated auth failures by client IP", async () => {
@@ -95,14 +86,14 @@ describe("auth audit events", () => {
       failedAuthWindowMs: 10_000,
     });
 
-    const tokenStore = { authenticate: () => null } as unknown as TokenStore;
+    const authTokens = { authenticate: async () => null } as unknown as AuthTokenService;
 
     const app = new Hono();
     app.use("*", async (c, next) => {
       c.set("clientIp", "203.0.113.10");
       await next();
     });
-    app.use("*", createAuthMiddleware(tokenStore, { audit }));
+    app.use("*", createAuthMiddleware(authTokens, { audit }));
     app.get("/api/data", (c) => c.json({ ok: true }));
 
     expect((await app.request("/api/data")).status).toBe(401);
@@ -166,42 +157,36 @@ describe("auth audit events", () => {
       nowMs: () => 0,
     });
 
-    const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-auth-audit-token-"));
-    try {
-      const tokenStore = new TokenStore(tokenHome);
-      await tokenStore.initialize();
+    const authTokens = new AuthTokenService(db);
+    const deviceToken = await authTokens.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "client",
+      deviceId: "dev_client_1",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
 
-      const deviceToken = await tokenStore.issueDeviceToken({
-        deviceId: "dev_client_1",
-        role: "client",
-        scopes: ["operator.read"],
-        ttlSeconds: 300,
-      });
+    const app = new Hono();
+    app.use("*", createAuthMiddleware(authTokens, { audit }));
+    app.use("*", createHttpScopeAuthorizationMiddleware({ audit }));
+    app.post("/watchers", (c) => c.json({ ok: true }));
 
-      const app = new Hono();
-      app.use("*", createAuthMiddleware(tokenStore, { audit }));
-      app.use("*", createHttpScopeAuthorizationMiddleware({ audit }));
-      app.post("/watchers", (c) => c.json({ ok: true }));
+    const res = await app.request("/watchers", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${deviceToken.token}` },
+    });
+    expect(res.status).toBe(403);
 
-      const res = await app.request("/watchers", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${deviceToken.token}` },
-      });
-      expect(res.status).toBe(403);
+    const planId = await getAuthAuditPlanId(db);
+    const rows = await db.all<{ action_json: string }>(
+      "SELECT action_json FROM planner_events WHERE tenant_id = ? AND plan_id = ? ORDER BY step_index ASC",
+      [DEFAULT_TENANT_ID, planId],
+    );
+    expect(rows).toHaveLength(1);
 
-      const planId = await getAuthAuditPlanId(db);
-      const rows = await db.all<{ action_json: string }>(
-        "SELECT action_json FROM planner_events WHERE tenant_id = ? AND plan_id = ? ORDER BY step_index ASC",
-        [DEFAULT_TENANT_ID, planId],
-      );
-      expect(rows).toHaveLength(1);
-
-      const action = JSON.parse(rows[0]!.action_json) as Record<string, unknown>;
-      expect(action["type"]).toBe("authz.denied");
-      expect(action["required_scopes"]).toEqual(["operator.write"]);
-    } finally {
-      await rm(tokenHome, { recursive: true, force: true });
-    }
+    const action = JSON.parse(rows[0]!.action_json) as Record<string, unknown>;
+    expect(action["type"]).toBe("authz.denied");
+    expect(action["required_scopes"]).toEqual(["operator.write"]);
   });
 
   it("records authz.denied for WS approval.request when scoped token lacks operator.approvals", async () => {
@@ -227,6 +212,8 @@ describe("auth audit events", () => {
         protocolRev: 2,
         authClaims: {
           token_kind: "device",
+          token_id: "token-1",
+          tenant_id: DEFAULT_TENANT_ID,
           role: "client",
           device_id: "dev_client_1",
           scopes: ["operator.read"],
@@ -266,7 +253,7 @@ describe("auth audit events", () => {
     );
     expect(outbox).toBeDefined();
     const payload = JSON.parse(outbox!.payload_json) as { message?: { type?: string } };
-    const parsedEvent = WsEvent.safeParse(payload.message);
+    const parsedEvent = WsEventEnvelope.safeParse(payload.message);
     expect(parsedEvent.success).toBe(true);
     if (parsedEvent.success) {
       expect(parsedEvent.data.type).toBe("authz.denied");
@@ -296,6 +283,8 @@ describe("auth audit events", () => {
         protocolRev: 2,
         authClaims: {
           token_kind: "device",
+          token_id: "token-2",
+          tenant_id: DEFAULT_TENANT_ID,
           role: "client",
           device_id: "dev_client_1",
           scopes: ["operator.read"],
@@ -347,6 +336,8 @@ describe("auth audit events", () => {
         protocolRev: 2,
         authClaims: {
           token_kind: "device",
+          token_id: "token-3",
+          tenant_id: DEFAULT_TENANT_ID,
           role: "client",
           device_id: "dev_client_1",
           scopes: ["operator.read"],
@@ -378,54 +369,48 @@ describe("auth audit events", () => {
   });
 
   it("awaits auth.failed persistence before closing WS upgrade for unauthorized clients", async () => {
-    const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-ws-auth-audit-token-"));
-    try {
-      const tokenStore = new TokenStore(tokenHome);
-      await tokenStore.initialize();
+    const authTokens = new AuthTokenService(db);
 
-      let resolveAudit: (() => void) | undefined;
-      const auditPromise = new Promise<void>((resolve) => {
-        resolveAudit = resolve;
-      });
-      const authAudit = {
-        recordAuthFailed: vi.fn(async () => auditPromise),
-      } as unknown as AuthAudit;
+    let resolveAudit: (() => void) | undefined;
+    const auditPromise = new Promise<void>((resolve) => {
+      resolveAudit = resolve;
+    });
+    const authAudit = {
+      recordAuthFailed: vi.fn(async () => auditPromise),
+    } as unknown as AuthAudit;
 
-      const cm = new ConnectionManager();
-      const { wss, stopHeartbeat } = createWsHandler({
-        connectionManager: cm,
-        tokenStore,
-        protocolDeps: { connectionManager: cm, authAudit },
-      });
+    const cm = new ConnectionManager();
+    const { wss, stopHeartbeat } = createWsHandler({
+      connectionManager: cm,
+      authTokens,
+      protocolDeps: { connectionManager: cm, authAudit },
+    });
 
-      const ws = {
-        send: vi.fn(),
-        close: vi.fn(),
-        on: vi.fn(() => undefined as never),
-        once: vi.fn(() => undefined as never),
-        readyState: 1,
-      };
+    const ws = {
+      send: vi.fn(),
+      close: vi.fn(),
+      on: vi.fn(() => undefined as never),
+      once: vi.fn(() => undefined as never),
+      readyState: 1,
+    };
 
-      const req = {
-        method: "GET",
-        url: "/ws",
-        headers: {},
-        socket: { remoteAddress: "203.0.113.10" },
-      } as never;
+    const req = {
+      method: "GET",
+      url: "/ws",
+      headers: {},
+      socket: { remoteAddress: "203.0.113.10" },
+    } as never;
 
-      wss.emit("connection", ws as never, req);
+    wss.emit("connection", ws as never, req);
 
-      await Promise.resolve();
-      expect(authAudit.recordAuthFailed).toHaveBeenCalledTimes(1);
-      expect(ws.close).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(authAudit.recordAuthFailed).toHaveBeenCalledTimes(1);
+    expect(ws.close).not.toHaveBeenCalled();
 
-      resolveAudit?.();
-      await auditPromise;
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
-      expect(ws.close).toHaveBeenCalledWith(4001, "unauthorized");
-      stopHeartbeat();
-    } finally {
-      await rm(tokenHome, { recursive: true, force: true });
-    }
+    resolveAudit?.();
+    await auditPromise;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(ws.close).toHaveBeenCalledWith(4001, "unauthorized");
+    stopHeartbeat();
   });
 });

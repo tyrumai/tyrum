@@ -1,14 +1,19 @@
 import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
 import type { SqlDb } from "../statestore/types.js";
-import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 
 export async function enqueueWsBroadcastMessage(
   db: SqlDb,
+  tenantId: string,
   message: WsEventEnvelope | WsRequestEnvelope,
 ): Promise<void> {
+  const normalizedTenantId = tenantId.trim();
+  if (normalizedTenantId.length === 0) {
+    throw new Error("tenantId is required");
+  }
+
   await db.run(
     `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
      VALUES (?, ?, ?, ?)`,
-    [DEFAULT_TENANT_ID, "ws.broadcast", null, JSON.stringify({ message })],
+    [normalizedTenantId, "ws.broadcast", null, JSON.stringify({ message })],
   );
 }

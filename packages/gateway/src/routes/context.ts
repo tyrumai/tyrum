@@ -10,6 +10,7 @@
 import { Hono } from "hono";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { ContextReportDal } from "../modules/context/report-dal.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface ContextRouteDeps {
   agents: AgentRegistry;
@@ -20,10 +21,11 @@ export function createContextRoutes(deps: ContextRouteDeps): Hono {
   const app = new Hono();
 
   app.get("/context", async (c) => {
+    const tenantId = requireTenantId(c);
     const agentKey = c.req.query("agent_key")?.trim() || "default";
     let runtime;
     try {
-      runtime = await deps.agents.getRuntime(agentKey);
+      runtime = await deps.agents.getRuntime({ tenantId, agentKey });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);

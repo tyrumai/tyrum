@@ -20,6 +20,9 @@ import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { PolicyOverrideDal } from "../modules/policy/override-dal.js";
 import type { PolicyService } from "../modules/policy/service.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
+import { requireTenantId } from "../modules/auth/claims.js";
+import { broadcastWsEvent } from "../ws/broadcast.js";
+import type { WsBroadcastAudience } from "../ws/audience.js";
 
 export interface PolicyBundleRouteDeps {
   policyService: PolicyService;
@@ -33,31 +36,15 @@ export interface PolicyBundleRouteDeps {
   };
 }
 
-function emitEvent(deps: PolicyBundleRouteDeps, evt: WsEventEnvelope): void {
+const POLICY_WS_AUDIENCE: WsBroadcastAudience = {
+  roles: ["client"],
+  required_scopes: ["operator.admin"],
+};
+
+function emitEvent(deps: PolicyBundleRouteDeps, tenantId: string, evt: WsEventEnvelope): void {
   const ws = deps.ws;
   if (!ws) return;
-
-  const payload = JSON.stringify(evt);
-  for (const client of ws.connectionManager.allClients()) {
-    try {
-      client.ws.send(payload);
-    } catch (err) {
-      void err;
-      // ignore best-effort sends
-    }
-  }
-
-  if (ws.cluster) {
-    void ws.cluster.outboxDal
-      .enqueue("ws.broadcast", {
-        source_edge_id: ws.cluster.edgeId,
-        skip_local: true,
-        message: evt,
-      })
-      .catch(() => {
-        // ignore
-      });
-  }
+  broadcastWsEvent(tenantId, evt, ws, POLICY_WS_AUDIENCE);
 }
 
 export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
@@ -77,6 +64,7 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
   });
 
   app.get("/policy/overrides", async (c) => {
+    const tenantId = requireTenantId(c);
     const raw = {
       agent_id: c.req.query("agent_id")?.trim() || undefined,
       tool_id: c.req.query("tool_id")?.trim() || undefined,
@@ -89,8 +77,9 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    await deps.policyOverrideDal.expireStale();
+    await deps.policyOverrideDal.expireStale({ tenantId });
     const rows = await deps.policyOverrideDal.list({
+      tenantId,
       agentId: parsed.data.agent_id,
       toolId: parsed.data.tool_id,
       status: parsed.data.status,
@@ -101,6 +90,7 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
   });
 
   app.post("/policy/overrides", async (c) => {
+    const tenantId = requireTenantId(c);
     const body = (await c.req.json()) as unknown;
     const parsed = PolicyOverrideCreateRequest.safeParse(body);
     if (!parsed.success) {
@@ -114,6 +104,7 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
     };
 
     const row = await deps.policyOverrideDal.create({
+      tenantId,
       agentId: parsed.data.agent_id,
       workspaceId: parsed.data.workspace_id,
       toolId: parsed.data.tool_id,
@@ -130,13 +121,14 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
       occurred_at: new Date().toISOString(),
       payload: { override: row },
     };
-    emitEvent(deps, evt);
+    emitEvent(deps, tenantId, evt);
 
     const res = PolicyOverrideCreateResponse.parse({ override: row });
     return c.json(res, 201);
   });
 
   app.post("/policy/overrides/revoke", async (c) => {
+    const tenantId = requireTenantId(c);
     const body = (await c.req.json()) as unknown;
     const parsed = PolicyOverrideRevokeRequest.safeParse(body);
     if (!parsed.success) {
@@ -150,6 +142,7 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
     };
 
     const row = await deps.policyOverrideDal.revoke({
+      tenantId,
       policyOverrideId: parsed.data.policy_override_id,
       revokedBy,
       reason: parsed.data.reason,
@@ -164,7 +157,7 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
       occurred_at: new Date().toISOString(),
       payload: { override: row },
     };
-    emitEvent(deps, evt);
+    emitEvent(deps, tenantId, evt);
 
     const res = PolicyOverrideRevokeResponse.parse({ override: row });
     return c.json(res);

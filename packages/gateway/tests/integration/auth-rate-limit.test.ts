@@ -5,7 +5,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestApp } from "./helpers.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { SlidingWindowRateLimiter } from "../../src/modules/auth/rate-limiter.js";
 
 async function startServer(server: Server): Promise<number> {
@@ -35,8 +34,6 @@ describe("Auth rate limiting", () => {
 
   it("returns 429 Too Many Requests after 20 /auth/session requests per minute", async () => {
     tokenHome = await mkdtemp(join(tmpdir(), "tyrum-auth-rate-limit-"));
-    const tokenStore = new TokenStore(tokenHome);
-    const adminToken = await tokenStore.initialize();
 
     const limiter = new SlidingWindowRateLimiter({
       windowMs: 60_000,
@@ -44,11 +41,12 @@ describe("Auth rate limiting", () => {
       cleanupIntervalMs: 0,
     });
 
-    const { app, container } = await createTestApp({
-      tokenStore,
+    const { app, container, auth } = await createTestApp({
+      tyrumHome: tokenHome,
       isLocalOnly: true,
       authRateLimiter: limiter,
     });
+    const adminToken = auth.tenantAdminToken;
 
     const requestListener = getRequestListener(app.fetch);
     server = createServer(requestListener);

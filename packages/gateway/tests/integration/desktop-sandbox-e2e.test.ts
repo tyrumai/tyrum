@@ -20,7 +20,7 @@ import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import { NodeDispatchService } from "../../src/modules/agent/node-dispatch-service.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
@@ -221,7 +221,6 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
     { timeout: 15 * 60_000 },
     async () => {
       const tyrumHome = await mkdtemp(join(tmpdir(), "tyrum-desktop-sandbox-e2e-"));
-      const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-desktop-sandbox-token-"));
 
       let httpServer: Server | undefined;
       let stopHeartbeat: (() => void) | undefined;
@@ -244,15 +243,19 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
           assertDockerOk(build, "Failed to build desktop-sandbox image for e2e test.");
         }
 
-        const tokenStore = new TokenStore(tokenHome);
-        const adminToken = await tokenStore.initialize();
-
         const container = createContainer({
           dbPath: ":memory:",
           migrationsDir,
           tyrumHome,
         });
-        const app = createApp(container);
+        const authTokens = new AuthTokenService(container.db);
+        const issued = await authTokens.issueToken({
+          tenantId: DEFAULT_TENANT_ID,
+          role: "admin",
+          scopes: ["*"],
+        });
+        const adminToken = issued.token;
+        const app = createApp(container, { authTokens });
 
         const connectionManager = new ConnectionManager();
         const taskResults = new TaskResultRegistry();
@@ -277,7 +280,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
         const wsHandler = createWsHandler({
           connectionManager,
           protocolDeps,
-          tokenStore,
+          authTokens,
           nodePairingDal: container.nodePairingDal,
         });
         stopHeartbeat = wsHandler.stopHeartbeat;
@@ -409,6 +412,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             undefined,
             {
               db: container.db,
+              tenantId: DEFAULT_TENANT_ID,
               workspaceId: DEFAULT_WORKSPACE_ID,
               ownerPrefix: "test-tool",
             },
@@ -455,6 +459,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
 
           const artifactRes = await app.request(
             `/runs/${scope.runId}/artifacts/${artifactRow!.artifact_id}`,
+            { headers: { authorization: `Bearer ${adminToken}` } },
           );
           expect(artifactRes.status).toBe(200);
           expect(artifactRes.headers.get("content-type")).toBe("image/png");
@@ -474,6 +479,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
 
           const treeRes = await app.request(
             `/runs/${scope.runId}/artifacts/${treeRow!.artifact_id}`,
+            { headers: { authorization: `Bearer ${adminToken}` } },
           );
           expect(treeRes.status).toBe(200);
           expect(treeRes.headers.get("content-type")).toBe("application/json");
@@ -519,6 +525,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
                 },
               },
               {
+                tenantId: DEFAULT_TENANT_ID,
                 runId: scope.runId,
                 stepId: scope.stepId,
                 attemptId: scope.attemptId,
@@ -585,6 +592,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
                   },
                 },
                 {
+                  tenantId: DEFAULT_TENANT_ID,
                   runId: scope.runId,
                   stepId: scope.stepId,
                   attemptId: scope.attemptId,
@@ -611,6 +619,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
                   },
                 },
                 {
+                  tenantId: DEFAULT_TENANT_ID,
                   runId: scope.runId,
                   stepId: scope.stepId,
                   attemptId: scope.attemptId,
@@ -645,6 +654,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
                     },
                   },
                   {
+                    tenantId: DEFAULT_TENANT_ID,
                     runId: scope.runId,
                     stepId: scope.stepId,
                     attemptId: scope.attemptId,
@@ -698,6 +708,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
                     },
                   },
                   {
+                    tenantId: DEFAULT_TENANT_ID,
                     runId: scope.runId,
                     stepId: scope.stepId,
                     attemptId: scope.attemptId,
@@ -804,7 +815,6 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
           httpServer = undefined;
         }
 
-        await rm(tokenHome, { recursive: true, force: true }).catch(() => undefined);
         await rm(tyrumHome, { recursive: true, force: true }).catch(() => undefined);
       }
     },

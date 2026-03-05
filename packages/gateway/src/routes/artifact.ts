@@ -4,10 +4,10 @@
 
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
-import { ArtifactId, ArtifactKind, ArtifactRef, DeviceTokenClaims } from "@tyrum/schemas";
+import { ArtifactId, ArtifactKind, ArtifactRef, AuthTokenClaims } from "@tyrum/schemas";
 import type {
   ArtifactRef as ArtifactRefT,
-  DeviceTokenClaims as DeviceTokenClaimsT,
+  AuthTokenClaims as AuthTokenClaimsT,
   WsEventEnvelope,
 } from "@tyrum/schemas";
 import type { ArtifactStore } from "../modules/artifact/store.js";
@@ -18,6 +18,7 @@ import type { SqlDb } from "../statestore/types.js";
 import { normalizeDbDateTime } from "../utils/db-time.js";
 import { safeJsonParse } from "../utils/json.js";
 import { enqueueWsBroadcastMessage } from "../ws/outbox.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface ArtifactRouteDeps {
   db: SqlDb;
@@ -28,6 +29,7 @@ export interface ArtifactRouteDeps {
 }
 
 type ExecutionArtifactRow = {
+  tenant_id: string;
   artifact_id: string;
   workspace_id: string;
   agent_id: string | null;
@@ -127,12 +129,12 @@ function requestIdForAudit(c: {
   return undefined;
 }
 
-function authClaimsForAudit(c: { get?: (key: string) => unknown }): DeviceTokenClaimsT | undefined {
+function authClaimsForAudit(c: { get?: (key: string) => unknown }): AuthTokenClaimsT | undefined {
   const rawGet = c.get;
   if (typeof rawGet !== "function") return undefined;
   try {
     const raw = rawGet.call(c, "authClaims") as unknown;
-    const parsed = DeviceTokenClaims.safeParse(raw);
+    const parsed = AuthTokenClaims.safeParse(raw);
     return parsed.success ? parsed.data : undefined;
   } catch (err) {
     void err;
@@ -147,7 +149,7 @@ async function evaluateAccessDecision(
   const snapshotId = row.policy_snapshot_id;
   if (!snapshotId || !deps.policySnapshotDal) return "allow";
 
-  const snapshot = await deps.policySnapshotDal.getById(snapshotId);
+  const snapshot = await deps.policySnapshotDal.getById(row.tenant_id, snapshotId);
   if (!snapshot) return "allow";
 
   const decision = snapshot.bundle.artifacts?.default ?? "allow";
@@ -162,9 +164,10 @@ async function resolveDurableExecutionScope(
     const attemptScope = await deps.db.get<{ run_id: string; step_id: string }>(
       `SELECT s.run_id AS run_id, a.step_id AS step_id
        FROM execution_attempts a
-       JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE a.attempt_id = ?`,
-      [row.attempt_id],
+       JOIN execution_steps s ON s.tenant_id = a.tenant_id AND s.step_id = a.step_id
+       WHERE a.tenant_id = ?
+         AND a.attempt_id = ?`,
+      [row.tenant_id, row.attempt_id],
     );
     if (!attemptScope) return null;
     if (row.step_id && row.step_id !== attemptScope.step_id) return null;
@@ -178,8 +181,8 @@ async function resolveDurableExecutionScope(
 
   if (row.step_id) {
     const stepScope = await deps.db.get<{ run_id: string }>(
-      "SELECT run_id FROM execution_steps WHERE step_id = ?",
-      [row.step_id],
+      "SELECT run_id FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
+      [row.tenant_id, row.step_id],
     );
     if (!stepScope) return null;
     if (row.run_id && row.run_id !== stepScope.run_id) return null;
@@ -192,8 +195,8 @@ async function resolveDurableExecutionScope(
 
   if (row.run_id) {
     const runScope = await deps.db.get<{ run_id: string }>(
-      "SELECT run_id FROM execution_runs WHERE run_id = ?",
-      [row.run_id],
+      "SELECT run_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      [row.tenant_id, row.run_id],
     );
     if (!runScope) return null;
     return {
@@ -235,6 +238,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
     if (!runId) {
       return c.json({ error: "invalid_request", message: "invalid run id" }, 400);
     }
+    const tenantId = requireTenantId(c);
 
     const artifactId = c.req.param("id");
     const parsedId = ArtifactId.safeParse(artifactId);
@@ -243,8 +247,8 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
     }
 
     const row = await deps.db.get<ExecutionArtifactRow>(
-      "SELECT * FROM execution_artifacts WHERE artifact_id = ?",
-      [parsedId.data],
+      "SELECT * FROM execution_artifacts WHERE tenant_id = ? AND artifact_id = ?",
+      [tenantId, parsedId.data],
     );
     if (!row) {
       return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
@@ -308,6 +312,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
     if (!runId) {
       return c.json({ error: "invalid_request", message: "invalid run id" }, 400);
     }
+    const tenantId = requireTenantId(c);
 
     const artifactId = c.req.param("id");
     const parsedId = ArtifactId.safeParse(artifactId);
@@ -316,8 +321,8 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
     }
 
     const row = await deps.db.get<ExecutionArtifactRow>(
-      "SELECT * FROM execution_artifacts WHERE artifact_id = ?",
-      [parsedId.data],
+      "SELECT * FROM execution_artifacts WHERE tenant_id = ? AND artifact_id = ?",
+      [tenantId, parsedId.data],
     );
     if (!row) {
       return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
@@ -384,7 +389,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
             },
           },
         };
-        await enqueueWsBroadcastMessage(deps.db, evt);
+        await enqueueWsBroadcastMessage(deps.db, tenantId, evt);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         deps.logger?.warn("artifact.fetched_emit_failed", {
@@ -425,7 +430,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
           },
         },
       };
-      await enqueueWsBroadcastMessage(deps.db, evt);
+      await enqueueWsBroadcastMessage(deps.db, tenantId, evt);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       deps.logger?.warn("artifact.fetched_emit_failed", {

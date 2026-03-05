@@ -1,10 +1,12 @@
 import type { WsEventEnvelope } from "@tyrum/schemas";
 import type { ProtocolDeps } from "./types.js";
+import { broadcastEvent } from "./helpers.js";
 
 /**
  * Broadcast a `plan_update` to all connected clients.
  */
 export function sendPlanUpdate(
+  tenantId: string,
   planId: string,
   status: string,
   deps: ProtocolDeps,
@@ -20,25 +22,5 @@ export function sendPlanUpdate(
       detail,
     },
   };
-  const payload = JSON.stringify(message);
-
-  for (const client of deps.connectionManager.allClients()) {
-    client.ws.send(payload);
-  }
-
-  if (deps.cluster) {
-    void deps.cluster.outboxDal
-      .enqueue("ws.broadcast", {
-        source_edge_id: deps.cluster.edgeId,
-        skip_local: true,
-        message,
-      })
-      .catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        deps.logger?.error("outbox.enqueue_failed", {
-          topic: "ws.broadcast",
-          error: message,
-        });
-      });
-  }
+  broadcastEvent(tenantId, message, deps);
 }

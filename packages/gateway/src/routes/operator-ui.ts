@@ -4,7 +4,6 @@ import { realpathSync, statSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const OPERATOR_UI_ASSETS_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
 const OPERATOR_UI_PATH_PREFIX = "/ui";
 
 const INDEX_CACHE_CONTROL = "no-cache";
@@ -13,10 +12,13 @@ const OPERATOR_UI_CSP_POLICY =
   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; frame-ancestors 'none'";
 
 const applyOperatorUiSecurityHeaders: MiddlewareHandler = async (c, next) => {
-  await next();
-  c.header("content-security-policy", OPERATOR_UI_CSP_POLICY);
-  c.header("x-content-type-options", "nosniff");
-  c.header("x-frame-options", "DENY");
+  try {
+    await next();
+  } finally {
+    c.header("content-security-policy", OPERATOR_UI_CSP_POLICY);
+    c.header("x-content-type-options", "nosniff");
+    c.header("x-frame-options", "DENY");
+  }
 };
 
 function isFile(path: string): boolean {
@@ -29,12 +31,6 @@ function isFile(path: string): boolean {
 }
 
 function resolveOperatorUiAssetsDirFrom(startDir: string): string | undefined {
-  const fromEnv = process.env[OPERATOR_UI_ASSETS_DIR_ENV]?.trim();
-  if (fromEnv) {
-    const indexCandidate = resolve(fromEnv, "index.html");
-    if (isFile(indexCandidate)) return fromEnv;
-  }
-
   // Workspace dev: prefer the Vite build output when present so the operator UI
   // can be iterated on without rebuilding the gateway bundle.
   {

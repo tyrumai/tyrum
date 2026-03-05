@@ -216,8 +216,13 @@ export class WorkSignalScheduler {
     }
   }
 
-  private broadcastEvent(evt: WsEventEnvelope, audience: WsBroadcastAudience): void {
+  private broadcastEvent(
+    tenantId: string,
+    evt: WsEventEnvelope,
+    audience: WsBroadcastAudience,
+  ): void {
     broadcastWsEvent(
+      tenantId,
       evt,
       { connectionManager: this.connectionManager, cluster: this.cluster },
       audience,
@@ -413,6 +418,7 @@ export class WorkSignalScheduler {
       if (!result) return;
 
       this.broadcastEvent(
+        result.scope.tenant_id,
         {
           event_id: crypto.randomUUID(),
           type: "work.signal.fired",
