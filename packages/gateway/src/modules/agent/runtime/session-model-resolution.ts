@@ -65,6 +65,7 @@ export async function resolveSessionModel(
   const overrideModelId = override?.model_id?.trim();
   const presetDal = new ConfiguredModelPresetDal(deps.container.db);
   const assignmentDal = new ExecutionProfileModelAssignmentDal(deps.container.db);
+  const executionProfileId = input.executionProfileId;
   const sessionPreset =
     override?.preset_key != null
       ? await presetDal.getByKey({
@@ -73,12 +74,12 @@ export async function resolveSessionModel(
         })
       : undefined;
   const assignedPreset =
-    sessionPreset || !input.executionProfileId
+    sessionPreset || !executionProfileId
       ? undefined
       : await (async () => {
           const assignment = await assignmentDal.getByProfileId({
             tenantId: input.tenantId,
-            executionProfileId: input.executionProfileId,
+            executionProfileId,
           });
           if (!assignment) return undefined;
           return await presetDal.getByKey({
