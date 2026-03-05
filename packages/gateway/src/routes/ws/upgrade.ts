@@ -1,9 +1,11 @@
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import type { WebSocketServer } from "ws";
-import { resolveClientIp, type TrustedProxyAllowlist } from "../../modules/auth/client-ip.js";
+import {
+  resolveClientIpFromRequest,
+  type TrustedProxyAllowlist,
+} from "../../modules/auth/client-ip.js";
 import type { SlidingWindowRateLimiter } from "../../modules/auth/rate-limiter.js";
-import { toSingleHeaderValue } from "./auth.js";
 
 export interface CreateHandleUpgradeOptions {
   wss: WebSocketServer;
@@ -33,13 +35,7 @@ function rejectRateLimitedUpgrade(
 ): boolean {
   if (!upgradeRateLimiter) return false;
 
-  const clientIp = resolveClientIp({
-    remoteAddress: req.socket.remoteAddress,
-    forwardedHeader: toSingleHeaderValue(req.headers.forwarded),
-    xForwardedForHeader: toSingleHeaderValue(req.headers["x-forwarded-for"]),
-    xRealIpHeader: toSingleHeaderValue(req.headers["x-real-ip"]),
-    trustedProxies,
-  });
+  const { resolvedClientIp: clientIp } = resolveClientIpFromRequest(req, trustedProxies);
 
   if (!clientIp) return false;
 
