@@ -26,6 +26,7 @@ The protocol is the primary interface for:
 The protocol works across gateway restarts and multi-instance deployments:
 
 - **Reconnect is normal:** clients and nodes should tolerate disconnects and reconnect without violating safety invariants.
+- **Reconnect backoff should spread retries:** the canonical client SDK uses exponential backoff with jitter and stops retrying on terminal close codes (`4005`-`4008`, plus `4001` when a token is already configured).
 - **Events are at-least-once:** events may be delivered more than once (especially across reconnect). Deduplicate using `event_id`.
 - **Requests can be retried:** when a peer does not observe a response, it may retry by re-sending the request with the same `request_id` (subject to each request type’s idempotency contract).
 - **Durable state is the source of truth:** important state transitions must be backed by the StateStore and can be re-derived after reconnect; do not assume in-memory ordering guarantees across reconnects.
