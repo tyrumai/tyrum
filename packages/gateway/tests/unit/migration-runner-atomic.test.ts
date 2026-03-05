@@ -177,4 +177,80 @@ describe("migration runners", () => {
       },
     );
   });
+
+  it("treats renamed sqlite migrations as already applied", () => {
+    return withTempMigrations(
+      {
+        "103_vector_metadata_pk.sql": `
+          CREATE TABLE should_not_run (id INTEGER);
+        `,
+      },
+      (dir) => {
+        const sqlite = createDatabase(":memory:");
+        try {
+          sqlite.exec(`
+            CREATE TABLE IF NOT EXISTS _migrations (
+              name TEXT PRIMARY KEY,
+              applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+          `);
+          sqlite
+            .prepare("INSERT INTO _migrations (name) VALUES (?)")
+            .run("102_vector_metadata_pk.sql");
+
+          migrate(sqlite, dir);
+
+          const tableRes = sqlite
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+            .all("should_not_run") as Array<{ name: string }>;
+          expect(tableRes).toHaveLength(0);
+
+          const migRes = sqlite
+            .prepare("SELECT name FROM _migrations WHERE name = ?")
+            .all("103_vector_metadata_pk.sql") as Array<{ name: string }>;
+          expect(migRes).toHaveLength(1);
+        } finally {
+          sqlite.close();
+        }
+      },
+    );
+  });
+
+  it("treats renamed postgres migrations as already applied", async () => {
+    await withTempMigrations(
+      {
+        "103_vector_metadata_pk.sql": `
+          CREATE TABLE should_not_run (id INT);
+        `,
+      },
+      async (dir) => {
+        const calls: Array<{ text: string; params?: unknown[] }> = [];
+        const client = {
+          query: async (text: string, params?: unknown[]) => {
+            const trimmed = text.trim();
+            calls.push({ text: trimmed, params });
+
+            if (trimmed.startsWith("SELECT name FROM _migrations")) {
+              return { rows: [{ name: "102_vector_metadata_pk.sql" }] };
+            }
+
+            return { rows: [] };
+          },
+        };
+
+        await expect(migratePostgres(client as any, dir)).resolves.toBeUndefined();
+
+        expect(calls.some((c) => c.text.includes("should_not_run"))).toBe(false);
+        expect(calls.some((c) => c.text === "BEGIN")).toBe(false);
+        expect(
+          calls.some(
+            (c) =>
+              c.text.startsWith("INSERT INTO _migrations") &&
+              Array.isArray(c.params) &&
+              c.params[0] === "103_vector_metadata_pk.sql",
+          ),
+        ).toBe(true);
+      },
+    );
+  });
 });

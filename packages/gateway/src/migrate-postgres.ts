@@ -23,6 +23,20 @@ export async function migratePostgres(client: ClientBase, migrationsDir: string)
     .filter((f) => f.endsWith(".sql"))
     .sort();
 
+  const renamedMigrations = new Map<string, string>([
+    ["103_vector_metadata_pk.sql", "102_vector_metadata_pk.sql"],
+  ]);
+
+  for (const [current, legacy] of renamedMigrations) {
+    if (!files.includes(current)) continue;
+    if (applied.has(current)) continue;
+    if (!applied.has(legacy)) continue;
+    await client.query("INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING", [
+      current,
+    ]);
+    applied.add(current);
+  }
+
   for (const file of files) {
     if (applied.has(file)) continue;
     const alias = findAppliedMigrationAlias(file, applied);
