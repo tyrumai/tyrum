@@ -475,6 +475,7 @@ export class TyrumClient {
   /** Open the WebSocket connection and send the `hello` handshake. */
   connect(): void {
     this.intentionalClose = false;
+    this.reconnectAttempt = 0;
     this.openSocket();
   }
 

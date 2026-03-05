@@ -132,6 +132,18 @@ async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
+function waitForReconnectScheduled(
+  client: TyrumClient,
+): Promise<{ delayMs: number; nextRetryAtMs: number; attempt: number }> {
+  return new Promise((resolve) => {
+    const handler = (event: { delayMs: number; nextRetryAtMs: number; attempt: number }) => {
+      client.off("reconnect_scheduled", handler);
+      resolve(event);
+    };
+    client.on("reconnect_scheduled", handler);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -2497,24 +2509,11 @@ describe("TyrumClient", () => {
       maxReconnectDelay: 10,
     });
 
-    const nextReconnectScheduled = (): Promise<{
-      delayMs: number;
-      nextRetryAtMs: number;
-      attempt: number;
-    }> =>
-      new Promise((resolve) => {
-        const handler = (event: { delayMs: number; nextRetryAtMs: number; attempt: number }) => {
-          client!.off("reconnect_scheduled", handler);
-          resolve(event);
-        };
-        client!.on("reconnect_scheduled", handler);
-      });
-
     client.connect();
     const ws1 = await server.waitForClient();
     await acceptConnect(ws1);
 
-    const reconnect1 = nextReconnectScheduled();
+    const reconnect1 = waitForReconnectScheduled(client);
     ws1.close(1001, "gone");
     const reconnectSchedule1 = await withTimeout(reconnect1, 2_000, "reconnect_scheduled 1");
     expect(reconnectSchedule1.delayMs).toBe(2);
@@ -2522,7 +2521,7 @@ describe("TyrumClient", () => {
     expect(reconnectSchedule1.nextRetryAtMs).toBeGreaterThan(Date.now());
 
     const ws2 = await withTimeout(server.waitForClient(), 2_000, "ws2 reconnect");
-    const reconnect2 = nextReconnectScheduled();
+    const reconnect2 = waitForReconnectScheduled(client);
     ws2.close(1001, "gone again");
     const reconnectSchedule2 = await withTimeout(reconnect2, 2_000, "reconnect_scheduled 2");
     expect(reconnectSchedule2.delayMs).toBe(4);
@@ -2530,12 +2529,52 @@ describe("TyrumClient", () => {
     expect(reconnectSchedule2.nextRetryAtMs).toBeGreaterThan(Date.now());
 
     const ws3 = await withTimeout(server.waitForClient(), 2_000, "ws3 reconnect");
-    const reconnect3 = nextReconnectScheduled();
+    const reconnect3 = waitForReconnectScheduled(client);
     ws3.close(1001, "gone once more");
     const reconnectSchedule3 = await withTimeout(reconnect3, 2_000, "reconnect_scheduled 3");
     expect(reconnectSchedule3.delayMs).toBe(5);
     expect(reconnectSchedule3.attempt).toBe(3);
     expect(reconnectSchedule3.nextRetryAtMs).toBeGreaterThan(Date.now());
+  });
+
+  it("resets reconnect backoff after an intentional reconnect", async () => {
+    server = createTestServer();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: true,
+      reconnectBaseDelayMs: 20,
+      maxReconnectDelay: 100,
+    });
+
+    client.connect();
+    const ws1 = await server.waitForClient();
+    await acceptConnect(ws1);
+
+    const reconnect1 = waitForReconnectScheduled(client);
+    ws1.close(1001, "gone");
+    const reconnectSchedule1 = await withTimeout(reconnect1, 2_000, "reconnect_scheduled 1");
+    expect(reconnectSchedule1.delayMs).toBe(10);
+    expect(reconnectSchedule1.attempt).toBe(1);
+
+    const ws2 = await withTimeout(server.waitForClient(), 2_000, "ws2 reconnect");
+    const reconnect2 = waitForReconnectScheduled(client);
+    ws2.close(1001, "gone again");
+    const reconnectSchedule2 = await withTimeout(reconnect2, 2_000, "reconnect_scheduled 2");
+    expect(reconnectSchedule2.delayMs).toBe(20);
+    expect(reconnectSchedule2.attempt).toBe(2);
+
+    client.disconnect();
+    client.connect();
+
+    const ws3 = await withTimeout(server.waitForClient(), 2_000, "ws3 reconnect");
+    const reconnect3 = waitForReconnectScheduled(client);
+    ws3.close(1001, "gone after manual reconnect");
+    const reconnectSchedule3 = await withTimeout(reconnect3, 2_000, "reconnect_scheduled 3");
+    expect(reconnectSchedule3.delayMs).toBe(10);
+    expect(reconnectSchedule3.attempt).toBe(1);
   });
 
   it("does not reconnect after a terminal close code and emits an actionable transport error", async () => {
