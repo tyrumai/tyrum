@@ -1247,37 +1247,43 @@ describe("handleClientMessage", () => {
     const client = cm.getClient(id)!;
     const approvalId = "00000000-0000-4000-8000-0000000000ab";
 
+    const respond = vi.fn(async () => {
+      return {
+        tenant_id: DEFAULT_TENANT_ID,
+        approval_id: approvalId,
+        approval_key: `approval:${approvalId}`,
+        agent_id: DEFAULT_AGENT_ID,
+        workspace_id: DEFAULT_WORKSPACE_ID,
+        kind: "policy",
+        status: "approved",
+        prompt: "Ok?",
+        context: {},
+        created_at: "2026-02-20 22:00:00",
+        expires_at: null,
+        resolved_at: "2026-02-20 22:00:05",
+        resolution: {
+          decision: "approved",
+          resolved_at: "2026-02-20T22:00:05Z",
+          reason: "looks good",
+        },
+        session_id: null,
+        plan_id: null,
+        run_id: null,
+        step_id: null,
+        attempt_id: null,
+        work_item_id: null,
+        work_item_task_id: null,
+        resume_token: null,
+      };
+    });
+
     const approvalDal = {
       getPending: vi.fn(async () => []),
       getByStatus: vi.fn(async () => []),
-      respond: vi.fn(async () => {
-        return {
-          tenant_id: DEFAULT_TENANT_ID,
-          approval_id: approvalId,
-          approval_key: `approval:${approvalId}`,
-          agent_id: DEFAULT_AGENT_ID,
-          workspace_id: DEFAULT_WORKSPACE_ID,
-          kind: "policy",
-          status: "approved",
-          prompt: "Ok?",
-          context: {},
-          created_at: "2026-02-20 22:00:00",
-          expires_at: null,
-          resolved_at: "2026-02-20 22:00:05",
-          resolution: {
-            decision: "approved",
-            resolved_at: "2026-02-20T22:00:05Z",
-            reason: "looks good",
-          },
-          session_id: null,
-          plan_id: null,
-          run_id: null,
-          step_id: null,
-          attempt_id: null,
-          work_item_id: null,
-          work_item_task_id: null,
-          resume_token: null,
-        };
+      respond,
+      resolveWithEngineAction: vi.fn(async () => {
+        const approval = await respond();
+        return { approval, transitioned: true };
       }),
     };
 
@@ -1310,6 +1316,36 @@ describe("handleClientMessage", () => {
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const approvalId = "00000000-0000-4000-8000-0000000000ac";
+
+    const respond = vi.fn(async () => {
+      return {
+        tenant_id: DEFAULT_TENANT_ID,
+        approval_id: approvalId,
+        approval_key: `approval:${approvalId}`,
+        agent_id: DEFAULT_AGENT_ID,
+        workspace_id: DEFAULT_WORKSPACE_ID,
+        kind: "policy",
+        status: "denied",
+        prompt: "Ok?",
+        context: {},
+        created_at: "2026-02-20 22:00:00",
+        expires_at: null,
+        resolved_at: "2026-02-20 22:00:05",
+        resolution: {
+          decision: "denied",
+          resolved_at: "2026-02-20T22:00:05Z",
+          reason: "no",
+        },
+        session_id: null,
+        plan_id: null,
+        run_id: null,
+        step_id: null,
+        attempt_id: null,
+        work_item_id: null,
+        work_item_task_id: null,
+        resume_token: null,
+      };
+    });
 
     const approvalDal = {
       getPending: vi.fn(async () => []),
@@ -1351,34 +1387,10 @@ describe("handleClientMessage", () => {
           resume_token: null,
         };
       }),
-      respond: vi.fn(async () => {
-        return {
-          tenant_id: DEFAULT_TENANT_ID,
-          approval_id: approvalId,
-          approval_key: `approval:${approvalId}`,
-          agent_id: DEFAULT_AGENT_ID,
-          workspace_id: DEFAULT_WORKSPACE_ID,
-          kind: "policy",
-          status: "denied",
-          prompt: "Ok?",
-          context: {},
-          created_at: "2026-02-20 22:00:00",
-          expires_at: null,
-          resolved_at: "2026-02-20 22:00:05",
-          resolution: {
-            decision: "denied",
-            resolved_at: "2026-02-20T22:00:05Z",
-            reason: "no",
-          },
-          session_id: null,
-          plan_id: null,
-          run_id: null,
-          step_id: null,
-          attempt_id: null,
-          work_item_id: null,
-          work_item_task_id: null,
-          resume_token: null,
-        };
+      respond,
+      resolveWithEngineAction: vi.fn(async () => {
+        const approval = await respond();
+        return { approval, transitioned: true };
       }),
     };
 

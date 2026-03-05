@@ -7,6 +7,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
+import { ApprovalEngineActionDal } from "./engine-action-dal.js";
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "expired" | "cancelled";
 
@@ -155,6 +156,36 @@ export interface CreateApprovalParams {
 export class ApprovalDal {
   constructor(private readonly db: SqlDb) {}
 
+  protected createTxDal(tx: SqlDb): ApprovalDal {
+    return new ApprovalDal(tx);
+  }
+
+  async resolveWithEngineAction(input: {
+    tenantId: string;
+    approvalId: string;
+    decision: "approved" | "denied";
+    reason?: string;
+    resolvedBy?: unknown;
+  }): Promise<{ approval: ApprovalRow; transitioned: boolean } | undefined> {
+    return await this.db.transaction(async (tx) => {
+      const approvalDal = tx === this.db ? this : this.createTxDal(tx);
+      const actionDal = new ApprovalEngineActionDal(tx);
+
+      const res = await approvalDal.respondWithTransitionTx(input);
+      if (!res) return undefined;
+
+      if (res.transitioned) {
+        await actionDal.enqueueForResolvedApproval({
+          tenantId: input.tenantId,
+          approval: res.row,
+          reason: input.reason,
+        });
+      }
+
+      return { approval: res.row, transitioned: res.transitioned };
+    });
+  }
+
   /** Create a new pending approval request (idempotent on `approval_key`). */
   async create(params: CreateApprovalParams): Promise<ApprovalRow> {
     const tenantId = params.tenantId.trim();
@@ -277,6 +308,30 @@ export class ApprovalDal {
     reason?: string;
     resolvedBy?: unknown;
   }): Promise<ApprovalRow | undefined> {
+    const res = await this.respondWithTransition(input);
+    return res?.row;
+  }
+
+  async respondWithTransition(input: {
+    tenantId: string;
+    approvalId: string;
+    decision: "approved" | "denied";
+    reason?: string;
+    resolvedBy?: unknown;
+  }): Promise<{ row: ApprovalRow; transitioned: boolean } | undefined> {
+    return await this.db.transaction(async (tx) => {
+      const dal = tx === this.db ? this : new ApprovalDal(tx);
+      return await dal.respondWithTransitionTx(input);
+    });
+  }
+
+  async respondWithTransitionTx(input: {
+    tenantId: string;
+    approvalId: string;
+    decision: "approved" | "denied";
+    reason?: string;
+    resolvedBy?: unknown;
+  }): Promise<{ row: ApprovalRow; transitioned: boolean } | undefined> {
     const nowIso = isoNow();
     const resolution = {
       decision: input.decision,
@@ -286,39 +341,37 @@ export class ApprovalDal {
     };
     const resolutionJson = JSON.stringify(resolution);
 
-    return await this.db.transaction(async (tx) => {
-      const existing = await tx.get<RawApprovalRow>(
+    const existing = await this.db.get<RawApprovalRow>(
+      "SELECT * FROM approvals WHERE tenant_id = ? AND approval_id = ?",
+      [input.tenantId, input.approvalId],
+    );
+    if (!existing) return undefined;
+
+    if (existing.status !== "pending") {
+      return { row: toApprovalRow(existing), transitioned: false };
+    }
+
+    const status: ApprovalStatus = input.decision === "approved" ? "approved" : "denied";
+    const result = await this.db.run(
+      `UPDATE approvals
+       SET status = ?, resolved_at = ?, resolution_json = ?
+       WHERE tenant_id = ? AND approval_id = ? AND status = 'pending'`,
+      [status, nowIso, resolutionJson, input.tenantId, input.approvalId],
+    );
+
+    if (result.changes === 0) {
+      const current = await this.db.get<RawApprovalRow>(
         "SELECT * FROM approvals WHERE tenant_id = ? AND approval_id = ?",
         [input.tenantId, input.approvalId],
       );
-      if (!existing) return undefined;
+      return current ? { row: toApprovalRow(current), transitioned: false } : undefined;
+    }
 
-      if (existing.status !== "pending") {
-        return toApprovalRow(existing);
-      }
-
-      const status: ApprovalStatus = input.decision === "approved" ? "approved" : "denied";
-      const result = await tx.run(
-        `UPDATE approvals
-         SET status = ?, resolved_at = ?, resolution_json = ?
-         WHERE tenant_id = ? AND approval_id = ? AND status = 'pending'`,
-        [status, nowIso, resolutionJson, input.tenantId, input.approvalId],
-      );
-
-      if (result.changes === 0) {
-        const current = await tx.get<RawApprovalRow>(
-          "SELECT * FROM approvals WHERE tenant_id = ? AND approval_id = ?",
-          [input.tenantId, input.approvalId],
-        );
-        return current ? toApprovalRow(current) : undefined;
-      }
-
-      const updated = await tx.get<RawApprovalRow>(
-        "SELECT * FROM approvals WHERE tenant_id = ? AND approval_id = ?",
-        [input.tenantId, input.approvalId],
-      );
-      return updated ? toApprovalRow(updated) : undefined;
-    });
+    const updated = await this.db.get<RawApprovalRow>(
+      "SELECT * FROM approvals WHERE tenant_id = ? AND approval_id = ?",
+      [input.tenantId, input.approvalId],
+    );
+    return updated ? { row: toApprovalRow(updated), transitioned: true } : undefined;
   }
 
   /**

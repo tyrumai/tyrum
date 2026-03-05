@@ -27,6 +27,7 @@ Approvals are durable records in the StateStore and should behave correctly when
 
 - **Any gateway edge instance can serve the approval queue** (read from the StateStore) and accept resolution requests.
 - **Atomic resolution:** apply `pending → approved|denied|expired` transitions in a single durable write so double-submission is safe.
+- **Durable side effects:** engine resume/cancel is driven by a leased, durable action queue so retries and multi-instance deployments do not duplicate side effects.
 - **At-least-once events:** `approval.requested` / `approval.resolved` events may be delivered more than once; clients should dedupe using event ids.
 
 ## Interfaces

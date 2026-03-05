@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app.js";
-import { createTestContainer, decorateAppWithDefaultAuth } from "./helpers.js";
+import {
+  createTestContainer,
+  decorateAppWithDefaultAuth,
+  drainApprovalEngineActions,
+} from "./helpers.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -124,6 +128,8 @@ describe("approval routes (engine integration)", () => {
       body: JSON.stringify({ decision: "approved" }),
     });
     expect(res.status).toBe(200);
+
+    await drainApprovalEngineActions({ container });
 
     const run = await container.db.get<{ status: string; paused_reason: string | null }>(
       "SELECT status, paused_reason FROM execution_runs WHERE tenant_id = ? AND run_id = ?",

@@ -22,7 +22,7 @@ The gateway, clients, and nodes support these request types:
 - `workflow.resume` — resume a paused workflow run using a resume token (after an approval decision).
 - `workflow.cancel` — cancel a queued/running/paused run (subject to policy).
 - `approval.list` — list pending approvals.
-- `approval.resolve` — approve/deny an approval request (may resume/cancel a run).
+- `approval.resolve` — approve/deny an approval request (idempotent; enqueues a durable engine action to resume/cancel runs asynchronously).
 - `pairing.approve` / `pairing.deny` — resolve a node pairing request.
 - `capability.ready` — node reports capability readiness after pairing (payload includes `CapabilityDescriptor[]`).
 - `task.execute` — request a capability/tool execution for a specific attempt. Payload includes `run_id`, `step_id`, `attempt_id`, and the `ActionPrimitive`.
@@ -54,3 +54,9 @@ Distributed systems lose packets and drop connections; retries are expected. Tyr
 
 - **Transport-level retry (`request_id`):** if a peer does not observe a response, it may retry the same logical request by re-sending it with the same `request_id`. Servers should handle duplicate `request_id` safely according to the request type’s contract.
 - **Side-effect idempotency:** for state-changing operations, the request payload (or the workflow step) may also carry an explicit `idempotency_key` so that retries do not duplicate side effects even under at-least-once execution.
+
+### `approval.resolve` idempotency
+
+- Resolution is an atomic state transition on the durable approval record (`pending → approved|denied|expired`).
+- Only the first successful transition enqueues a durable engine action (resume/cancel). Duplicate resolve attempts for an already-resolved approval do not enqueue additional actions.
+- `approval.resolved` is emitted once per approval transition, but delivery is still at-least-once; consumers should dedupe using `event_id`.

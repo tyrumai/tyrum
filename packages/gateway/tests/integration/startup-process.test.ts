@@ -7,6 +7,7 @@ import {
   mkdirSync,
   mkdtempSync,
   openSync,
+  readdirSync,
   rmSync,
   statSync,
   unlinkSync,
@@ -33,7 +34,7 @@ const GATEWAY_BIN = resolve(PACKAGE_ROOT, "bin/tyrum.mjs");
 const GATEWAY_ENTRYPOINT = resolve(PACKAGE_ROOT, "dist/index.mjs");
 const GATEWAY_MIGRATIONS_DIR = resolve(PACKAGE_ROOT, "migrations/sqlite");
 const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
-const GATEWAY_SRC_ENTRYPOINT = resolve(PACKAGE_ROOT, "src/index.ts");
+const GATEWAY_SRC_DIR = resolve(PACKAGE_ROOT, "src");
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
 function delay(ms: number): Promise<void> {
@@ -137,13 +138,38 @@ function waitForGatewayBuildByAnotherWorker(timeoutMs: number): boolean {
   return existsSync(GATEWAY_ENTRYPOINT);
 }
 
+function latestMtimeInDir(rootDir: string): number {
+  let latest = 0;
+  const stack: string[] = [rootDir];
+
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    if (!dir) break;
+
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules" || entry.name === "dist") continue;
+        stack.push(fullPath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+
+      const mtimeMs = statSync(fullPath).mtimeMs;
+      if (mtimeMs > latest) latest = mtimeMs;
+    }
+  }
+
+  return latest;
+}
+
 function gatewayBuildIsStale(): boolean {
   if (!existsSync(GATEWAY_ENTRYPOINT)) return true;
 
   const gatewayMtime = statSync(GATEWAY_ENTRYPOINT).mtimeMs;
 
-  if (existsSync(GATEWAY_SRC_ENTRYPOINT)) {
-    const srcMtime = statSync(GATEWAY_SRC_ENTRYPOINT).mtimeMs;
+  if (existsSync(GATEWAY_SRC_DIR)) {
+    const srcMtime = latestMtimeInDir(GATEWAY_SRC_DIR);
     if (gatewayMtime < srcMtime) return true;
   }
 

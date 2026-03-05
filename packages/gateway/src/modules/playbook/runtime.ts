@@ -127,6 +127,45 @@ async function waitForRunToSettle(
   }
 }
 
+async function waitForRunToResumeOrCancel(
+  db: SqlDb,
+  runId: string,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + Math.max(1, timeoutMs);
+
+  for (;;) {
+    const row = await db.get<{ status: string }>(
+      "SELECT status FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    if (!row) {
+      throw new Error(`execution run '${runId}' not found`);
+    }
+
+    if (row.status !== "paused") return;
+
+    const pendingApproval = await db.get<{ n: number }>(
+      `SELECT 1 AS n
+       FROM approvals
+       WHERE tenant_id = ?
+         AND run_id = ?
+         AND status = 'pending'
+       LIMIT 1`,
+      [DEFAULT_TENANT_ID, runId],
+    );
+    if (pendingApproval) return;
+
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `execution run '${runId}' did not resume/cancel within ${String(timeoutMs)}ms`,
+      );
+    }
+
+    await sleep(25);
+  }
+}
+
 async function envelopeForRunStatus(
   db: SqlDb,
   runId: string,
@@ -328,13 +367,15 @@ export async function runPlaybookRuntimeEnvelope(
 
     const resolvedApproval =
       approval.status === "pending"
-        ? await deps.approvalDal.respond({
-            tenantId: DEFAULT_TENANT_ID,
-            approvalId: approval.approval_id,
-            decision: input.approve ? "approved" : "denied",
-            reason: input.reason,
-            resolvedBy: { kind: "playbook" },
-          })
+        ? (
+            await deps.approvalDal.resolveWithEngineAction({
+              tenantId: DEFAULT_TENANT_ID,
+              approvalId: approval.approval_id,
+              decision: input.approve ? "approved" : "denied",
+              reason: input.reason,
+              resolvedBy: { kind: "playbook" },
+            })
+          )?.approval
         : approval;
     if (!resolvedApproval) {
       return {
@@ -357,12 +398,16 @@ export async function runPlaybookRuntimeEnvelope(
       };
     }
 
-    if (resolvedApproval.status === "approved") {
-      // Best-effort; if already resumed, this may return undefined.
-      await deps.engine.resumeRun(input.token);
-    } else {
-      const reason = input.reason ?? "approval denied";
-      await deps.engine.cancelRun(runId, reason);
+    try {
+      await waitForRunToResumeOrCancel(deps.db, runId, timeoutMs);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        status: "error",
+        output: [],
+        error: { message, code: "timeout" },
+      };
     }
 
     return await envelopeForRunStatus(deps.db, runId, timeoutMs);

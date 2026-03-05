@@ -349,7 +349,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     createApprovalRoutes({
       approvalDal: container.approvalDal,
       policyOverrideDal: container.policyOverrideDal,
-      engine,
       ws: opts.connectionManager
         ? {
             connectionManager: opts.connectionManager,

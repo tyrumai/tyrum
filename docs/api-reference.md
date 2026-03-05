@@ -1055,6 +1055,7 @@ Client-sent events are rejected.
 - Scope (device tokens): `operator.approvals`
 - Schema: `WsApprovalResolveRequest` (payload parsed as `ApprovalResolveRequest`)
 - Result: `ApprovalResolveResponse`
+- Notes: Idempotent — resolving an already-resolved approval returns current state without re-triggering engine side effects; resume/cancel is performed asynchronously via a durable action processor.
 
 #### `approval.request`
 
