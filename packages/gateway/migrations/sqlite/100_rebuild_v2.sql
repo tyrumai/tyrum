@@ -909,12 +909,12 @@ CREATE TABLE peer_identity_links (
 );
 
 -- ---------------------------------------------------------------------------
--- Routing configs (tenant-scoped)
+-- Routing configs (tenant-scoped; require explicit tenant_id)
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE routing_configs (
   revision INTEGER PRIMARY KEY AUTOINCREMENT,
-  tenant_id TEXT NOT NULL DEFAULT '00000000-0000-4000-8000-000000000001',
+  tenant_id TEXT NOT NULL,
   config_json TEXT NOT NULL CHECK (json_valid(config_json)),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   created_by_json TEXT NOT NULL DEFAULT '{}',
@@ -924,28 +924,24 @@ CREATE TABLE routing_configs (
 );
 
 -- ---------------------------------------------------------------------------
--- Models dev cache (tenant-scoped)
+-- Models dev cache (global-by-design)
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE models_dev_cache (
   id INTEGER PRIMARY KEY CHECK (id = 1),
-  tenant_id TEXT NOT NULL DEFAULT '00000000-0000-4000-8000-000000000001',
   fetched_at TEXT NULL,
   etag TEXT NULL,
   sha256 TEXT NOT NULL,
   json TEXT NOT NULL,
   source TEXT NOT NULL,
   last_error TEXT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE models_dev_refresh_leases (
   key                 TEXT PRIMARY KEY,
-  tenant_id           TEXT NOT NULL DEFAULT '00000000-0000-4000-8000-000000000001',
   lease_owner         TEXT NOT NULL,
-  lease_expires_at_ms INTEGER NOT NULL,
-  FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE
+  lease_expires_at_ms INTEGER NOT NULL
 );
 
 -- ---------------------------------------------------------------------------

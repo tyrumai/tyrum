@@ -950,12 +950,12 @@ CREATE TABLE peer_identity_links (
 );
 
 -- ---------------------------------------------------------------------------
--- Routing configs (tenant-scoped; default tenant for legacy callers)
+-- Routing configs (tenant-scoped; require explicit tenant_id)
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE routing_configs (
   revision BIGSERIAL PRIMARY KEY,
-  tenant_id UUID NOT NULL DEFAULT '00000000-0000-4000-8000-000000000001',
+  tenant_id UUID NOT NULL,
   config_json TEXT NOT NULL CHECK (pg_input_is_valid(config_json, 'jsonb')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by_json TEXT NOT NULL DEFAULT '{}',
@@ -965,28 +965,24 @@ CREATE TABLE routing_configs (
 );
 
 -- ---------------------------------------------------------------------------
--- Models dev cache (default tenant for legacy callers)
+-- Models dev cache (global-by-design)
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE models_dev_cache (
   id INTEGER PRIMARY KEY CHECK (id = 1),
-  tenant_id UUID NOT NULL DEFAULT '00000000-0000-4000-8000-000000000001',
   fetched_at TIMESTAMPTZ NULL,
   etag TEXT NULL,
   sha256 TEXT NOT NULL,
   json TEXT NOT NULL,
   source TEXT NOT NULL,
   last_error TEXT NULL,
-  updated_at TIMESTAMPTZ NOT NULL,
-  CONSTRAINT models_dev_cache_tenant_fk FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE
+  updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE models_dev_refresh_leases (
   key TEXT PRIMARY KEY,
-  tenant_id UUID NOT NULL DEFAULT '00000000-0000-4000-8000-000000000001',
   lease_owner TEXT NOT NULL,
-  lease_expires_at_ms BIGINT NOT NULL,
-  CONSTRAINT models_dev_refresh_leases_tenant_fk FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE
+  lease_expires_at_ms BIGINT NOT NULL
 );
 
 -- ---------------------------------------------------------------------------

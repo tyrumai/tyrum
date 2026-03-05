@@ -3,6 +3,7 @@ import { VectorDal } from "../../src/modules/memory/vector-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { EmbeddingModel } from "ai";
+import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 const embedMock = vi.fn();
 
@@ -18,6 +19,7 @@ describe("EmbeddingPipeline", () => {
   let vectorDal: VectorDal;
   const embeddingModel = {} as unknown as EmbeddingModel;
   const embeddingModelId = "openai/text-embedding-3-small";
+  const scope = { tenantId: DEFAULT_TENANT_ID, agentId: DEFAULT_AGENT_ID };
 
   beforeEach(() => {
     didOpenDb = false;
@@ -38,7 +40,12 @@ describe("EmbeddingPipeline", () => {
       const mockVector = [0.1, 0.2, 0.3];
       embedMock.mockResolvedValueOnce({ embedding: mockVector });
 
-      const pipeline = new EmbeddingPipeline({ vectorDal, embeddingModel, embeddingModelId });
+      const pipeline = new EmbeddingPipeline({
+        vectorDal,
+        scope,
+        embeddingModel,
+        embeddingModelId,
+      });
 
       const result = await pipeline.embed("hello world");
       expect(result).toEqual(mockVector);
@@ -48,7 +55,12 @@ describe("EmbeddingPipeline", () => {
     it("throws when embedding is missing", async () => {
       embedMock.mockResolvedValueOnce({ embedding: "nope" });
 
-      const pipeline = new EmbeddingPipeline({ vectorDal, embeddingModel, embeddingModelId });
+      const pipeline = new EmbeddingPipeline({
+        vectorDal,
+        scope,
+        embeddingModel,
+        embeddingModelId,
+      });
 
       await expect(pipeline.embed("test")).rejects.toThrow(
         "Embedding result missing embedding array",
@@ -58,7 +70,12 @@ describe("EmbeddingPipeline", () => {
     it("throws when embedding contains non-numeric values", async () => {
       embedMock.mockResolvedValueOnce({ embedding: [1, "x"] });
 
-      const pipeline = new EmbeddingPipeline({ vectorDal, embeddingModel, embeddingModelId });
+      const pipeline = new EmbeddingPipeline({
+        vectorDal,
+        scope,
+        embeddingModel,
+        embeddingModelId,
+      });
 
       await expect(pipeline.embed("test")).rejects.toThrow(
         "Embedding result contains non-numeric values",
@@ -72,6 +89,7 @@ describe("EmbeddingPipeline", () => {
       embedMock.mockResolvedValueOnce({ embedding: mockVector });
       const pipeline = new EmbeddingPipeline({
         vectorDal,
+        scope,
         embeddingModel,
         embeddingModelId,
       });
@@ -79,7 +97,7 @@ describe("EmbeddingPipeline", () => {
       const id = await pipeline.embedAndStore("hello world", "greeting", { source: "test" });
       expect(id).toBeTruthy();
 
-      const row = await vectorDal.getById(id);
+      const row = await vectorDal.getById(id, scope);
       expect(row).toBeDefined();
       expect(row!.label).toBe("greeting");
       expect(row!.vector).toEqual(mockVector);
@@ -90,14 +108,15 @@ describe("EmbeddingPipeline", () => {
   describe("search", () => {
     it("embeds query and searches stored vectors", async () => {
       // Pre-store some vectors
-      await vectorDal.insertEmbedding("doc-a", [1, 0, 0], "test-model");
-      await vectorDal.insertEmbedding("doc-b", [0, 1, 0], "test-model");
-      await vectorDal.insertEmbedding("doc-c", [0.9, 0.1, 0], "test-model");
+      await vectorDal.insertEmbedding("doc-a", [1, 0, 0], "test-model", undefined, scope);
+      await vectorDal.insertEmbedding("doc-b", [0, 1, 0], "test-model", undefined, scope);
+      await vectorDal.insertEmbedding("doc-c", [0.9, 0.1, 0], "test-model", undefined, scope);
 
       // Mock embed returns [1, 0, 0] for the query
       embedMock.mockResolvedValueOnce({ embedding: [1, 0, 0] });
       const pipeline = new EmbeddingPipeline({
         vectorDal,
+        scope,
         embeddingModel,
         embeddingModelId,
       });
@@ -113,6 +132,7 @@ describe("EmbeddingPipeline", () => {
       embedMock.mockResolvedValueOnce({ embedding: [1, 0, 0] });
       const pipeline = new EmbeddingPipeline({
         vectorDal,
+        scope,
         embeddingModel,
         embeddingModelId,
       });
@@ -137,6 +157,7 @@ describe("EmbeddingPipeline", () => {
 
       const pipeline = new EmbeddingPipeline({
         vectorDal,
+        scope,
         embeddingModel,
         embeddingModelId,
       });

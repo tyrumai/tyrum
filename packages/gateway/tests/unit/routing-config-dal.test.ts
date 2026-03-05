@@ -3,7 +3,7 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
 import { DateTimeSchema } from "@tyrum/schemas";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
 
 describe("RoutingConfigDal", () => {
   let db: SqliteDb;
@@ -68,6 +68,41 @@ describe("RoutingConfigDal", () => {
       reason: "seed",
     });
     expect(action.config_sha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("scopes revisions to a tenant", async () => {
+    const identityScopeDal = new IdentityScopeDal(db);
+    const otherScopeIds = await identityScopeDal.resolveScopeIds({ tenantKey: "tenant-b" });
+
+    const defaultCreated = await dal.set({
+      tenantId: DEFAULT_TENANT_ID,
+      config: { v: 1 },
+      createdBy: { kind: "test" },
+      reason: "default",
+      occurredAtIso: "2026-02-24T00:00:00.000Z",
+    });
+
+    const otherCreated = await dal.set({
+      tenantId: otherScopeIds.tenantId,
+      config: {
+        v: 1,
+        telegram: {
+          default_agent_key: "agent-b",
+          threads: {
+            "123": "agent-b",
+          },
+        },
+      },
+      createdBy: { kind: "test" },
+      reason: "other",
+      occurredAtIso: "2026-02-24T00:01:00.000Z",
+    });
+
+    const latestDefault = await dal.getLatest(DEFAULT_TENANT_ID);
+    const latestOther = await dal.getLatest(otherScopeIds.tenantId);
+
+    expect(latestDefault?.revision).toBe(defaultCreated.revision);
+    expect(latestOther?.revision).toBe(otherCreated.revision);
   });
 
   it("normalizes sqlite routing config timestamps to ISO-8601", async () => {

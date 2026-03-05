@@ -11,6 +11,7 @@ export const MIGRATION_FILENAME_ALIASES: Readonly<Record<string, readonly string
     "105_db_config_and_tokens_indexes.sql",
     "106_db_config_and_tokens_indexes.sql",
   ],
+  "109_default_tenant_guardrails.sql": ["108_default_tenant_guardrails.sql"],
 };
 
 export function findAppliedMigrationAlias(

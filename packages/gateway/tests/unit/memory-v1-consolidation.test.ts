@@ -94,7 +94,7 @@ describe("Memory v1 consolidation pipeline", () => {
         [1, 0, 0, 0],
         "test-embedder",
         { memory_item_id: note.memory_item_id, kind: note.kind },
-        agentId,
+        { tenantId, agentId },
       );
       await db.run(
         `INSERT INTO memory_item_embeddings (
@@ -220,7 +220,7 @@ describe("Memory v1 consolidation pipeline", () => {
         [1, 0, 0, 0],
         "test-embedder",
         { memory_item_id: newNote.memory_item_id, kind: newNote.kind },
-        agentId,
+        { tenantId, agentId },
       );
       await db.run(
         `INSERT INTO memory_item_embeddings (
