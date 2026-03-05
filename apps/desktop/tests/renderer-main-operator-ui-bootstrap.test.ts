@@ -78,11 +78,11 @@ const {
   setDesktopOperatorCoreState,
   useDesktopOperatorCoreMock,
 } = vi.hoisted(() => {
-  const renderMock = vi.fn();
-  const createRootMock = vi.fn(() => ({ render: renderMock }));
+  const renderMockInner = vi.fn();
+  const createRootMockInner = vi.fn(() => ({ render: renderMockInner }));
 
-  const desktopApi = { kind: "desktop-api" as const };
-  const getDesktopApiMock = vi.fn(() => desktopApi);
+  const desktopApiInner = { kind: "desktop-api" as const };
+  const getDesktopApiMockInner = vi.fn(() => desktopApiInner);
 
   let operatorCoreState: DesktopOperatorCoreState = {
     core: null,
@@ -91,41 +91,41 @@ const {
     needsConfiguration: false,
     retry: vi.fn(),
   };
-  const setDesktopOperatorCoreState = (next: DesktopOperatorCoreState): void => {
+  const setDesktopOperatorCoreStateInner = (next: DesktopOperatorCoreState): void => {
     operatorCoreState = next;
   };
-  const useDesktopOperatorCoreMock = vi.fn(() => operatorCoreState);
+  const useDesktopOperatorCoreMockInner = vi.fn(() => operatorCoreState);
 
-  const ThemeProviderMock = vi.fn(({ children }: { children: unknown }) => children ?? null);
-  const ErrorBoundaryMock = vi.fn(({ children }: { children: unknown }) => children ?? null);
+  const ThemeProviderMockInner = vi.fn(({ children }: { children: unknown }) => children ?? null);
+  const ErrorBoundaryMockInner = vi.fn(({ children }: { children: unknown }) => children ?? null);
 
-  const OperatorUiHostProviderMock = vi.fn(
+  const OperatorUiHostProviderMockInner = vi.fn(
     ({ children }: { children: unknown }) => children ?? null,
   );
-  const OperatorUiAppMock = vi.fn(() => null);
+  const OperatorUiAppMockInner = vi.fn(() => null);
 
-  const AlertMock = vi.fn(() => null);
-  const ButtonMock = vi.fn(() => null);
-  const CardMock = vi.fn(() => null);
-  const CardContentMock = vi.fn(() => null);
-  const InputMock = vi.fn(() => null);
+  const AlertMockInner = vi.fn(() => null);
+  const ButtonMockInner = vi.fn(() => null);
+  const CardMockInner = vi.fn(() => null);
+  const CardContentMockInner = vi.fn(() => null);
+  const InputMockInner = vi.fn(() => null);
 
   return {
-    AlertMock,
-    ButtonMock,
-    CardContentMock,
-    CardMock,
-    ErrorBoundaryMock,
-    InputMock,
-    OperatorUiAppMock,
-    OperatorUiHostProviderMock,
-    ThemeProviderMock,
-    createRootMock,
-    desktopApi,
-    getDesktopApiMock,
-    renderMock,
-    setDesktopOperatorCoreState,
-    useDesktopOperatorCoreMock,
+    AlertMock: AlertMockInner,
+    ButtonMock: ButtonMockInner,
+    CardContentMock: CardContentMockInner,
+    CardMock: CardMockInner,
+    ErrorBoundaryMock: ErrorBoundaryMockInner,
+    InputMock: InputMockInner,
+    OperatorUiAppMock: OperatorUiAppMockInner,
+    OperatorUiHostProviderMock: OperatorUiHostProviderMockInner,
+    ThemeProviderMock: ThemeProviderMockInner,
+    createRootMock: createRootMockInner,
+    desktopApi: desktopApiInner,
+    getDesktopApiMock: getDesktopApiMockInner,
+    renderMock: renderMockInner,
+    setDesktopOperatorCoreState: setDesktopOperatorCoreStateInner,
+    useDesktopOperatorCoreMock: useDesktopOperatorCoreMockInner,
   };
 });
 

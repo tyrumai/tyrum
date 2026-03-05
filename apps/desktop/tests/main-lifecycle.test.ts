@@ -21,51 +21,51 @@ const {
   registerUpdateIpcMock,
   shutdownNodeResourcesMock,
 } = vi.hoisted(() => {
-  const appHandlers = new Map<string, (...args: unknown[]) => void>();
-  const ipcMainHandleMock = vi.fn();
-  const nativeThemeOnMock = vi.fn();
-  const appQuitMock = vi.fn();
-  const appRequestSingleInstanceLockMock = vi.fn(() => true);
-  const appSetAppUserModelIdMock = vi.fn();
-  const appOnMock = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-    appHandlers.set(event, handler);
+  const appHandlersInner = new Map<string, (...args: unknown[]) => void>();
+  const ipcMainHandleMockInner = vi.fn();
+  const nativeThemeOnMockInner = vi.fn();
+  const appQuitMockInner = vi.fn();
+  const appRequestSingleInstanceLockMockInner = vi.fn(() => true);
+  const appSetAppUserModelIdMockInner = vi.fn();
+  const appOnMockInner = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+    appHandlersInner.set(event, handler);
   });
-  const appWhenReadyMock = vi.fn(() => new Promise<void>(() => {}));
-  const browserWindowMock = vi.fn(() => ({
+  const appWhenReadyMockInner = vi.fn(() => new Promise<void>(() => {}));
+  const browserWindowMockInner = vi.fn(() => ({
     loadURL: vi.fn(),
     loadFile: vi.fn(),
     on: vi.fn(),
   }));
-  const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
-  const startEmbeddedGatewayFromConfigMock = vi.fn(async () => ({
+  const registerGatewayIpcMockInner = vi.fn(() => ({ stop: vi.fn() }));
+  const startEmbeddedGatewayFromConfigMockInner = vi.fn(async () => ({
     status: "running",
     port: 8788,
   }));
-  const configExistsMock = vi.fn(() => true);
-  const loadConfigMock = vi.fn(() => ({ mode: "embedded" }));
-  const registerNodeIpcMock = vi.fn();
-  const registerConfigIpcMock = vi.fn();
-  const registerUpdateIpcMock = vi.fn();
-  const shutdownNodeResourcesMock = vi.fn(async () => {});
+  const configExistsMockInner = vi.fn(() => true);
+  const loadConfigMockInner = vi.fn(() => ({ mode: "embedded" }));
+  const registerNodeIpcMockInner = vi.fn();
+  const registerConfigIpcMockInner = vi.fn();
+  const registerUpdateIpcMockInner = vi.fn();
+  const shutdownNodeResourcesMockInner = vi.fn(async () => {});
 
   return {
-    appHandlers,
-    appOnMock,
-    appQuitMock,
-    appRequestSingleInstanceLockMock,
-    appSetAppUserModelIdMock,
-    appWhenReadyMock,
-    browserWindowMock,
-    ipcMainHandleMock,
-    nativeThemeOnMock,
-    registerConfigIpcMock,
-    registerGatewayIpcMock,
-    startEmbeddedGatewayFromConfigMock,
-    configExistsMock,
-    loadConfigMock,
-    registerNodeIpcMock,
-    registerUpdateIpcMock,
-    shutdownNodeResourcesMock,
+    appHandlers: appHandlersInner,
+    appOnMock: appOnMockInner,
+    appQuitMock: appQuitMockInner,
+    appRequestSingleInstanceLockMock: appRequestSingleInstanceLockMockInner,
+    appSetAppUserModelIdMock: appSetAppUserModelIdMockInner,
+    appWhenReadyMock: appWhenReadyMockInner,
+    browserWindowMock: browserWindowMockInner,
+    ipcMainHandleMock: ipcMainHandleMockInner,
+    nativeThemeOnMock: nativeThemeOnMockInner,
+    registerConfigIpcMock: registerConfigIpcMockInner,
+    registerGatewayIpcMock: registerGatewayIpcMockInner,
+    startEmbeddedGatewayFromConfigMock: startEmbeddedGatewayFromConfigMockInner,
+    configExistsMock: configExistsMockInner,
+    loadConfigMock: loadConfigMockInner,
+    registerNodeIpcMock: registerNodeIpcMockInner,
+    registerUpdateIpcMock: registerUpdateIpcMockInner,
+    shutdownNodeResourcesMock: shutdownNodeResourcesMockInner,
   };
 });
 
