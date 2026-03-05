@@ -63,6 +63,7 @@ import { loadLifecycleHooksFromHome } from "./modules/hooks/config.js";
 import { LifecycleHooksRuntime } from "./modules/hooks/runtime.js";
 import { ensureSelfSignedTlsMaterial } from "./modules/tls/self-signed.js";
 import { DEFAULT_TENANT_ID } from "./modules/identity/scope.js";
+import { createMemoryV1BudgetsProvider } from "./modules/memory/v1-budgets-provider.js";
 
 // Re-export for library consumers
 export { VERSION } from "./version.js";
@@ -1342,19 +1343,7 @@ export async function main(
         })
       : undefined;
   protocolDeps.agents = agents;
-  protocolDeps.memoryV1BudgetsProvider = async (agentId?: string) => {
-    void agentId;
-    return {
-      max_total_items: 12,
-      max_total_chars: 2400,
-      per_kind: {
-        fact: { max_items: 6, max_chars: 800 },
-        note: { max_items: 4, max_chars: 1200 },
-        procedure: { max_items: 3, max_chars: 1200 },
-        episode: { max_items: 2, max_chars: 800 },
-      },
-    };
-  };
+  protocolDeps.memoryV1BudgetsProvider = createMemoryV1BudgetsProvider(container.db);
 
   const authRateLimitWindowS = deploymentRevision.config.auth.rateLimit.windowSeconds;
   const authRateLimitMax = deploymentRevision.config.auth.rateLimit.max;

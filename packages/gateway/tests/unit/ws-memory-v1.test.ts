@@ -685,7 +685,9 @@ describe("WS memory v1 handlers", () => {
     const deps = makeDeps(cm, { db, logger } as unknown as Partial<ProtocolDeps>);
     (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
     (
-      deps as unknown as { memoryV1BudgetsProvider: (agentId?: string) => Promise<unknown> }
+      deps as unknown as {
+        memoryV1BudgetsProvider: (tenantId: string, agentId?: string) => Promise<unknown>;
+      }
     ).memoryV1BudgetsProvider = async () => {
       throw new Error("boom");
     };

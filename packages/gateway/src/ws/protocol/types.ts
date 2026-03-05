@@ -39,7 +39,10 @@ export interface ProtocolDeps {
   identityScopeDal?: IdentityScopeDal;
   redactionEngine?: RedactionEngine;
   memoryV1Dal?: MemoryV1Dal;
-  memoryV1BudgetsProvider?: (agentId?: string) => Promise<AgentConfig["memory"]["v1"]["budgets"]>;
+  memoryV1BudgetsProvider?: (
+    tenantId: string,
+    agentId?: string,
+  ) => Promise<AgentConfig["memory"]["v1"]["budgets"]>;
   artifactStore?: ArtifactStore;
   contextReportDal?: ContextReportDal;
   runtime?: {

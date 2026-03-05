@@ -40,7 +40,7 @@ async function maybeRunMemoryV1BudgetConsolidation(params: {
   if (!params.deps.memoryV1BudgetsProvider) return;
   if (!params.deps.memoryV1Dal) return;
   try {
-    const budgets = await params.deps.memoryV1BudgetsProvider(params.agentId);
+    const budgets = await params.deps.memoryV1BudgetsProvider(params.tenantId, params.agentId);
     const consolidation = await params.deps.memoryV1Dal.consolidateToBudgets({
       tenantId: params.tenantId,
       budgets,
