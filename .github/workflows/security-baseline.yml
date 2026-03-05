@@ -69,9 +69,9 @@ jobs:
 
       - name: pnpm audit (workspace packages)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || steps.filter.outputs.deps == 'true'
-        # CVE-2026-0540 (DOMPurify) currently has no released patched version.
-        # We apply the upstream fix via pnpm patchedDependencies, but pnpm audit still reports it.
-        run: pnpm audit --ignore CVE-2026-0540
+        # CVE-2026-0540 (DOMPurify) has no released patched version yet.
+        # We apply the upstream fix via pnpm patchedDependencies and ignore it via pnpm auditConfig.
+        run: pnpm audit
 
       - name: Report failure for triage
         if: failure() && github.event_name == 'schedule'
