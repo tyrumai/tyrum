@@ -6,12 +6,24 @@ describe("migration-aliases exports", () => {
     expect("migrationIsApplied" in migrationAliases).toBe(false);
   });
 
-  it("treats the pre-rebase approval engine action migration as an alias", () => {
+  it("treats the pre-rebase approval engine action migration names as aliases", () => {
     expect(
       migrationAliases.findAppliedMigrationAlias(
-        "108_approval_engine_actions.sql",
+        "110_approval_engine_actions.sql",
         new Set(["106_approval_engine_actions.sql"]),
       ),
     ).toBe("106_approval_engine_actions.sql");
+    expect(
+      migrationAliases.findAppliedMigrationAlias(
+        "110_approval_engine_actions.sql",
+        new Set(["108_approval_engine_actions.sql"]),
+      ),
+    ).toBe("108_approval_engine_actions.sql");
+    expect(
+      migrationAliases.findAppliedMigrationAlias(
+        "110_approval_engine_actions.sql",
+        new Set(["109_approval_engine_actions.sql"]),
+      ),
+    ).toBe("109_approval_engine_actions.sql");
   });
 });
