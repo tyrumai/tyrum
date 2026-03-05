@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { VectorDal } from "../../src/modules/memory/vector-dal.js";
+import { VectorDal, type VectorScope } from "../../src/modules/memory/vector-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import {
@@ -34,7 +34,7 @@ describe("VectorDal", () => {
           "test-label",
           [1, 0, 0],
           "text-embedding-3",
-          undefined as unknown as Parameters<VectorDal["insertEmbedding"]>[3],
+          undefined as unknown as VectorScope,
         ),
       ).rejects.toThrow();
     });
