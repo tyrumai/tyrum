@@ -1513,6 +1513,7 @@ export async function main(
             new ExecutionEngine({
               db: container.db,
               redactionEngine: container.redactionEngine,
+              policyService: container.policyService,
               logger,
             }),
           owner: instanceId,

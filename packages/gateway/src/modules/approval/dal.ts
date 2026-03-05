@@ -320,7 +320,7 @@ export class ApprovalDal {
     resolvedBy?: unknown;
   }): Promise<{ row: ApprovalRow; transitioned: boolean } | undefined> {
     return await this.db.transaction(async (tx) => {
-      const dal = tx === this.db ? this : new ApprovalDal(tx);
+      const dal = tx === this.db ? this : this.createTxDal(tx);
       return await dal.respondWithTransitionTx(input);
     });
   }
