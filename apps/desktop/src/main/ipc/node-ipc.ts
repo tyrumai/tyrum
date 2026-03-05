@@ -14,6 +14,8 @@ import { CliProvider } from "../providers/cli-provider.js";
 import { RealPlaywrightBackend } from "../providers/backends/real-playwright-backend.js";
 import { createWindowSender } from "./window-sender.js";
 import { ensureEmbeddedGatewayToken, startEmbeddedGatewayFromConfig } from "./gateway-ipc.js";
+import type { DesktopNodeConfig } from "../config/schema.js";
+import type { ResolvedPermissions } from "../config/permissions.js";
 
 const sender = createWindowSender();
 
@@ -40,102 +42,125 @@ export async function shutdownNodeResources(): Promise<void> {
   await cleanupNodeResources();
 }
 
+function createRuntime(config: DesktopNodeConfig, permissions: ResolvedPermissions): NodeRuntime {
+  return new NodeRuntime(config, permissions, {
+    onStatusChange: (status) =>
+      sender.send("status:change", {
+        nodeStatus: toNodeStatusString(status),
+        node: status,
+      }),
+    onConsentRequest: (msg) => sender.send("consent:request", msg),
+    onPlanUpdate: (msg) => sender.send("plan:update", msg),
+    onLog: (entry) => sender.send("log:entry", { source: "node", ...entry }),
+  });
+}
+
+async function resolveNodeConnection(
+  config: DesktopNodeConfig,
+): Promise<{ wsUrl: string; token: string; config: DesktopNodeConfig }> {
+  if (config.mode === "embedded") {
+    await startEmbeddedGatewayFromConfig();
+    const nextConfig = loadConfig();
+    return {
+      config: nextConfig,
+      wsUrl: `ws://127.0.0.1:${nextConfig.embedded.port}/ws`,
+      token: ensureEmbeddedGatewayToken(nextConfig),
+    };
+  }
+
+  return {
+    config,
+    wsUrl: config.remote.wsUrl,
+    token: config.remote.tokenRef ? decryptToken(config.remote.tokenRef) : "",
+  };
+}
+
+function registerProviders(
+  nodeRuntime: NodeRuntime,
+  config: DesktopNodeConfig,
+  permissions: ResolvedPermissions,
+): void {
+  // Register providers based on capabilities and permissions
+  if (config.capabilities.desktop) {
+    const desktopBackend = new NutJsDesktopBackend();
+    const a11yBackend = process.platform === "linux" ? new AtSpiDesktopA11yBackend() : undefined;
+    nodeRuntime.registerProvider(
+      new DesktopProvider(
+        desktopBackend,
+        permissions,
+        async (_prompt: string) => {
+          // For V1: fail-closed - always require explicit approval through UI
+          return false;
+        },
+        getTesseractOcrEngine(),
+        a11yBackend,
+      ),
+    );
+  }
+  if (config.capabilities.playwright && permissions.playwright) {
+    playwrightBackend = new RealPlaywrightBackend({
+      headless: config.web.headless,
+    });
+    nodeRuntime.registerProvider(
+      new PlaywrightProvider(
+        {
+          allowedDomains: config.web.allowedDomains,
+          headless: config.web.headless,
+          domainRestricted: permissions.playwrightDomainRestricted,
+        },
+        playwrightBackend,
+      ),
+    );
+  }
+  if (config.capabilities.cli && permissions.cli) {
+    nodeRuntime.registerProvider(
+      new CliProvider(
+        config.cli.allowedCommands,
+        config.cli.allowedWorkingDirs,
+        permissions.cliAllowlistEnforced,
+      ),
+    );
+  }
+}
+
+async function handleNodeConnect(): Promise<{ status: "connecting" }> {
+  // Clean up any prior runtime/backends (e.g., if user clicks connect twice).
+  await cleanupNodeResources();
+
+  const config = loadConfig();
+  const permissions = resolvePermissions(config.permissions.profile, config.permissions.overrides);
+
+  runtime = createRuntime(config, permissions);
+
+  const { wsUrl, token, config: effectiveConfig } = await resolveNodeConnection(config);
+  registerProviders(runtime, effectiveConfig, permissions);
+  runtime.connect(wsUrl, token);
+
+  return { status: "connecting" };
+}
+
+async function handleNodeDisconnect(): Promise<{ status: "disconnected" }> {
+  await cleanupNodeResources();
+  sender.send("status:change", { nodeStatus: "disconnected" });
+  return { status: "disconnected" };
+}
+
+function handleConsentRespond(
+  _event: Electron.IpcMainInvokeEvent,
+  requestId: string,
+  approved: boolean,
+  reason?: string,
+): { status: "responded" } {
+  runtime?.respondToConsent(requestId, approved, reason);
+  return { status: "responded" };
+}
+
 export function registerNodeIpc(window: BrowserWindow): void {
   sender.setWindow(window);
   if (ipcRegistered) return;
   ipcRegistered = true;
 
-  ipcMain.handle("node:connect", async () => {
-    // Clean up any prior runtime/backends (e.g., if user clicks connect twice).
-    await cleanupNodeResources();
-
-    let config = loadConfig();
-    const permissions = resolvePermissions(
-      config.permissions.profile,
-      config.permissions.overrides,
-    );
-
-    runtime = new NodeRuntime(config, permissions, {
-      onStatusChange: (status) =>
-        sender.send("status:change", {
-          nodeStatus: toNodeStatusString(status),
-          node: status,
-        }),
-      onConsentRequest: (msg) => sender.send("consent:request", msg),
-      onPlanUpdate: (msg) => sender.send("plan:update", msg),
-      onLog: (entry) => sender.send("log:entry", { source: "node", ...entry }),
-    });
-
-    // Determine WS URL and token based on mode
-    let wsUrl: string;
-    let token: string;
-    if (config.mode === "embedded") {
-      await startEmbeddedGatewayFromConfig();
-      config = loadConfig();
-      wsUrl = `ws://127.0.0.1:${config.embedded.port}/ws`;
-      token = ensureEmbeddedGatewayToken(config);
-    } else {
-      wsUrl = config.remote.wsUrl;
-      token = config.remote.tokenRef ? decryptToken(config.remote.tokenRef) : "";
-    }
-
-    // Register providers based on capabilities and permissions
-    if (config.capabilities.desktop) {
-      const desktopBackend = new NutJsDesktopBackend();
-      const a11yBackend = process.platform === "linux" ? new AtSpiDesktopA11yBackend() : undefined;
-      runtime.registerProvider(
-        new DesktopProvider(
-          desktopBackend,
-          permissions,
-          async (_prompt: string) => {
-            // For V1: fail-closed - always require explicit approval through UI
-            return false;
-          },
-          getTesseractOcrEngine(),
-          a11yBackend,
-        ),
-      );
-    }
-    if (config.capabilities.playwright && permissions.playwright) {
-      playwrightBackend = new RealPlaywrightBackend({
-        headless: config.web.headless,
-      });
-      runtime.registerProvider(
-        new PlaywrightProvider(
-          {
-            allowedDomains: config.web.allowedDomains,
-            headless: config.web.headless,
-            domainRestricted: permissions.playwrightDomainRestricted,
-          },
-          playwrightBackend,
-        ),
-      );
-    }
-    if (config.capabilities.cli && permissions.cli) {
-      runtime.registerProvider(
-        new CliProvider(
-          config.cli.allowedCommands,
-          config.cli.allowedWorkingDirs,
-          permissions.cliAllowlistEnforced,
-        ),
-      );
-    }
-
-    runtime.connect(wsUrl, token);
-    return { status: "connecting" };
-  });
-
-  ipcMain.handle("node:disconnect", async () => {
-    await cleanupNodeResources();
-    sender.send("status:change", { nodeStatus: "disconnected" });
-    return { status: "disconnected" };
-  });
-
-  ipcMain.handle(
-    "consent:respond",
-    (_event, requestId: string, approved: boolean, reason?: string) => {
-      runtime?.respondToConsent(requestId, approved, reason);
-      return { status: "responded" };
-    },
-  );
+  ipcMain.handle("node:connect", handleNodeConnect);
+  ipcMain.handle("node:disconnect", handleNodeDisconnect);
+  ipcMain.handle("consent:respond", handleConsentRespond);
 }

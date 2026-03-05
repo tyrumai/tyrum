@@ -21,6 +21,7 @@ import {
   ensureVisibleBounds,
   loadWindowState,
   saveWindowState,
+  type WindowState,
 } from "./window-state.js";
 
 app.setName?.("Tyrum");
@@ -183,87 +184,78 @@ function registerNavigationGuardrails(window: BrowserWindow): void {
   });
 }
 
-function createWindow(): void {
-  const userDataPath = app.getPath("userData");
-  const persistedState = loadWindowState(userDataPath);
-
-  let restoredBounds: ReturnType<typeof ensureVisibleBounds> | null = null;
-  if (persistedState) {
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const displays = screen.getAllDisplays();
-    const orderedDisplays = [
-      primaryDisplay,
-      ...displays.filter((display) => display.id !== primaryDisplay.id),
-    ];
-    restoredBounds = ensureVisibleBounds(
-      persistedState.bounds,
-      orderedDisplays.map((display) => display.workArea),
-    );
+function resolveRestoredBounds(
+  persistedState: WindowState | null,
+): ReturnType<typeof ensureVisibleBounds> | null {
+  if (!persistedState) {
+    return null;
   }
 
-  const window = new BrowserWindow(
-    restoredBounds ? { ...MAIN_WINDOW_OPTIONS, ...restoredBounds } : MAIN_WINDOW_OPTIONS,
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const displays = screen.getAllDisplays();
+  const orderedDisplays = [
+    primaryDisplay,
+    ...displays.filter((display) => display.id !== primaryDisplay.id),
+  ];
+  return ensureVisibleBounds(
+    persistedState.bounds,
+    orderedDisplays.map((display) => display.workArea),
   );
-  mainWindow = window;
-  mainWindowReadyToShow = false;
-  mainWindowPendingFocus = false;
-  if (shouldFocusWindowOnCreate) {
-    shouldFocusWindowOnCreate = false;
-    mainWindowPendingFocus = true;
-  }
+}
 
-  let lastKnownIsMaximized = persistedState?.isMaximized ?? false;
+function installWindowStatePersistence(options: {
+  window: BrowserWindow;
+  userDataPath: string;
+  persistedState: WindowState | null;
+}): { cleanup: () => void } {
+  let lastKnownIsMaximized = options.persistedState?.isMaximized ?? false;
   if (lastKnownIsMaximized) {
-    window.maximize();
+    options.window.maximize();
   }
 
   let windowStateSaveTimer: NodeJS.Timeout | null = null;
-  const scheduleWindowStateSave = (): void => {
+
+  const cleanup = (): void => {
     if (windowStateSaveTimer) {
       clearTimeout(windowStateSaveTimer);
+      windowStateSaveTimer = null;
     }
+  };
 
+  const saveNow = (): void => {
+    saveWindowState(
+      options.userDataPath,
+      captureWindowState(options.window, { isMaximized: lastKnownIsMaximized }),
+    );
+  };
+
+  const scheduleWindowStateSave = (): void => {
+    cleanup();
     windowStateSaveTimer = setTimeout(() => {
       windowStateSaveTimer = null;
-      saveWindowState(
-        userDataPath,
-        captureWindowState(window, { isMaximized: lastKnownIsMaximized }),
-      );
+      saveNow();
     }, 500);
   };
 
-  window.on("move", scheduleWindowStateSave);
-  window.on("resize", scheduleWindowStateSave);
-  window.on("maximize", () => {
+  options.window.on("move", scheduleWindowStateSave);
+  options.window.on("resize", scheduleWindowStateSave);
+  options.window.on("maximize", () => {
     lastKnownIsMaximized = true;
     scheduleWindowStateSave();
   });
-  window.on("unmaximize", () => {
+  options.window.on("unmaximize", () => {
     lastKnownIsMaximized = false;
     scheduleWindowStateSave();
   });
-  window.on("close", () => {
-    if (windowStateSaveTimer) {
-      clearTimeout(windowStateSaveTimer);
-      windowStateSaveTimer = null;
-    }
-    saveWindowState(
-      userDataPath,
-      captureWindowState(window, { isMaximized: lastKnownIsMaximized }),
-    );
+  options.window.on("close", () => {
+    cleanup();
+    saveNow();
   });
 
-  window.once("ready-to-show", () => {
-    mainWindowReadyToShow = true;
-    window.show();
-    if (mainWindowPendingFocus) {
-      mainWindowPendingFocus = false;
-      window.focus();
-    }
-  });
+  return { cleanup };
+}
 
-  registerNavigationGuardrails(window);
-
+function registerMainWindowIpc(window: BrowserWindow): void {
   registerDeepLinkIpc();
   registerConfigIpc();
   gatewayManager = registerGatewayIpc(window);
@@ -280,25 +272,65 @@ function createWindow(): void {
     },
   });
   registerThemeIpc(window);
+}
 
-  if (process.env["VITE_DEV_SERVER_URL"]) {
-    window.loadURL(process.env["VITE_DEV_SERVER_URL"]);
-  } else {
-    window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
+function loadMainWindowContent(window: BrowserWindow): void {
+  const devServerUrl = process.env["VITE_DEV_SERVER_URL"];
+  if (devServerUrl) {
+    window.loadURL(devServerUrl);
+    return;
   }
+
+  window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
+}
+
+function ensureWorkItemNotifications(): void {
+  if (workItemNotificationService) return;
+  workItemNotificationService = new WorkItemNotificationService(handleDeepLink);
+  void workItemNotificationService.start();
+}
+
+function createWindow(): void {
+  const userDataPath = app.getPath("userData");
+  const persistedState = loadWindowState(userDataPath);
+
+  const restoredBounds = resolveRestoredBounds(persistedState);
+
+  const window = new BrowserWindow(
+    restoredBounds ? { ...MAIN_WINDOW_OPTIONS, ...restoredBounds } : MAIN_WINDOW_OPTIONS,
+  );
+  mainWindow = window;
+  mainWindowReadyToShow = false;
+  mainWindowPendingFocus = false;
+  if (shouldFocusWindowOnCreate) {
+    shouldFocusWindowOnCreate = false;
+    mainWindowPendingFocus = true;
+  }
+
+  const { cleanup: cleanupWindowStatePersistence } = installWindowStatePersistence({
+    window,
+    userDataPath,
+    persistedState,
+  });
+
+  window.once("ready-to-show", () => {
+    mainWindowReadyToShow = true;
+    window.show();
+    if (mainWindowPendingFocus) {
+      mainWindowPendingFocus = false;
+      window.focus();
+    }
+  });
+
+  registerNavigationGuardrails(window);
+  registerMainWindowIpc(window);
+  loadMainWindowContent(window);
 
   void maybeAutoStartEmbeddedGatewayOnLaunch();
-
-  if (!workItemNotificationService) {
-    workItemNotificationService = new WorkItemNotificationService(handleDeepLink);
-    void workItemNotificationService.start();
-  }
+  ensureWorkItemNotifications();
 
   window.on("closed", () => {
-    if (windowStateSaveTimer) {
-      clearTimeout(windowStateSaveTimer);
-      windowStateSaveTimer = null;
-    }
+    cleanupWindowStatePersistence();
     mainWindow = null;
   });
 }
