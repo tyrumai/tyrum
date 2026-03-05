@@ -3,14 +3,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { migrate } from "../../src/migrate.js";
 import { createDatabase } from "../../src/db.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 import { openTestPostgresDb } from "../helpers/postgres-db.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const sqliteMigrationsDir = join(__dirname, "../../migrations/sqlite");
-
-const DEFAULT_TENANT_ID = "00000000-0000-4000-8000-000000000001";
-const DEFAULT_AGENT_ID = "00000000-0000-4000-8000-000000000002";
-const DEFAULT_WORKSPACE_ID = "00000000-0000-4000-8000-000000000003";
 
 describe("JSON column integrity (sqlite vs postgres)", () => {
   it("rejects invalid JSON in high-value TEXT JSON columns", async () => {
