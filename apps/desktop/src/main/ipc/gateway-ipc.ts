@@ -209,13 +209,18 @@ function persistEmbeddedGatewayToken(config: DesktopNodeConfig, token: string): 
   embeddedGatewayAccessToken = token;
 }
 
-function recoverEmbeddedGatewayAccessToken(
+function loadEmbeddedGatewayAccessToken(
   config: DesktopNodeConfig,
-  context: EmbeddedGatewayTokenRecoveryContext,
+  messages: {
+    missingTokenRefError: string;
+    decryptWarn: string;
+    decryptFailError: string;
+    invalidFormatWarn: string;
+    invalidFormatFailError: string;
+  },
 ): string {
   if (embeddedGatewayAccessToken) return embeddedGatewayAccessToken;
 
-  const messages = EMBEDDED_GATEWAY_TOKEN_RECOVERY_MESSAGES[context];
   const tokenRef = config.embedded.tokenRef;
   if (!tokenRef) {
     throw new Error(messages.missingTokenRefError);
@@ -238,38 +243,24 @@ function recoverEmbeddedGatewayAccessToken(
   return decrypted;
 }
 
+function recoverEmbeddedGatewayAccessToken(
+  config: DesktopNodeConfig,
+  context: EmbeddedGatewayTokenRecoveryContext,
+): string {
+  return loadEmbeddedGatewayAccessToken(config, EMBEDDED_GATEWAY_TOKEN_RECOVERY_MESSAGES[context]);
+}
+
 export function ensureEmbeddedGatewayToken(config: DesktopNodeConfig): string {
-  if (embeddedGatewayAccessToken) return embeddedGatewayAccessToken;
-
-  const tokenRef = config.embedded.tokenRef;
-  if (!tokenRef) {
-    throw new Error(
+  return loadEmbeddedGatewayAccessToken(config, {
+    missingTokenRefError:
       "Embedded gateway token is missing. Start the embedded gateway from the Desktop app to bootstrap a token.",
-    );
-  }
-
-  let decrypted: string;
-  try {
-    decrypted = decryptToken(tokenRef);
-  } catch (error) {
-    console.warn("Failed to decrypt embedded gateway token; restart the embedded gateway.", error);
-    throw new Error(
+    decryptWarn: "Failed to decrypt embedded gateway token; restart the embedded gateway.",
+    decryptFailError:
       "Embedded gateway token could not be decrypted. Restart the embedded gateway from the Desktop app.",
-    );
-  }
-
-  if (!isValidEmbeddedGatewayToken(decrypted)) {
-    console.warn(
-      "Invalid embedded gateway token format; restart the embedded gateway.",
-      new Error("Invalid embedded gateway token format"),
-    );
-    throw new Error(
+    invalidFormatWarn: "Invalid embedded gateway token format; restart the embedded gateway.",
+    invalidFormatFailError:
       "Embedded gateway token has an invalid format. Restart the embedded gateway from the Desktop app.",
-    );
-  }
-
-  embeddedGatewayAccessToken = decrypted;
-  return decrypted;
+  });
 }
 
 function toHttpBaseUrlFromWsUrl(rawUrl: string): string | null {

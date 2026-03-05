@@ -114,17 +114,18 @@ function captureBootstrapTokensFromOutput(tokens: Map<string, string>, rawOutput
 }
 
 function redactBootstrapTokens(rawOutput: string): string {
-  const lines = rawOutput.split(/\r?\n/g);
+  const parts = rawOutput.split(/(\r?\n)/g);
   let changed = false;
-  const redactedLines = lines.map((rawLine) => {
+  for (let i = 0; i < parts.length; i += 2) {
+    const rawLine = parts[i] ?? "";
     const line = rawLine.trim();
     const match = BOOTSTRAP_TOKEN_LINE_PATTERN.exec(line);
     const label = match?.groups?.["label"];
-    if (!label) return rawLine;
+    if (!label) continue;
     changed = true;
-    return `${label}: [REDACTED]`;
-  });
-  return changed ? redactedLines.join("\n") : rawOutput;
+    parts[i] = `${label}: [REDACTED]`;
+  }
+  return changed ? parts.join("") : rawOutput;
 }
 
 function inferHomeFromDbPath(dbPath: string): string | undefined {
