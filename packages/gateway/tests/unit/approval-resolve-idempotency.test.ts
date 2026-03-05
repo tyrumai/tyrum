@@ -62,7 +62,12 @@ describe("WS approval.resolve idempotency", () => {
     const connectionId = cm.addClient(ws as unknown as never, [], {
       id: "test-client",
       role: "client",
-      authClaims: { token_kind: "admin", role: "admin", scopes: ["*"] },
+      authClaims: {
+        token_kind: "admin",
+        role: "admin",
+        scopes: ["*"],
+        tenant_id: DEFAULT_TENANT_ID,
+      },
       protocolRev: 1,
     });
     const client = cm.getClient(connectionId);
@@ -121,7 +126,12 @@ describe("WS approval.resolve idempotency", () => {
     const connectionId = cm.addClient(ws as unknown as never, [], {
       id: "test-client",
       role: "client",
-      authClaims: { token_kind: "admin", role: "admin", scopes: ["*"] },
+      authClaims: {
+        token_kind: "admin",
+        role: "admin",
+        scopes: ["*"],
+        tenant_id: DEFAULT_TENANT_ID,
+      },
       protocolRev: 1,
     });
     const client = cm.getClient(connectionId);
