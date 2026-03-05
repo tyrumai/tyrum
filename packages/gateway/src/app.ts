@@ -235,10 +235,12 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route(
     "/",
     createPairingRoutes({
+      logger: container.logger,
       nodePairingDal: container.nodePairingDal,
       ws: opts.connectionManager
         ? {
             connectionManager: opts.connectionManager,
+            maxBufferedBytes: wsMaxBufferedBytes,
             cluster:
               opts.wsCluster && opts.connectionDirectory
                 ? { ...opts.wsCluster, connectionDirectory: opts.connectionDirectory }
@@ -383,10 +385,12 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     "/",
     createApprovalRoutes({
       approvalDal: container.approvalDal,
+      logger: container.logger,
       policyOverrideDal: container.policyOverrideDal,
       ws: opts.connectionManager
         ? {
             connectionManager: opts.connectionManager,
+            maxBufferedBytes: wsMaxBufferedBytes,
             cluster: opts.wsCluster,
           }
         : undefined,

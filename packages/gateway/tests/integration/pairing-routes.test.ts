@@ -1,10 +1,31 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { NodePairingDal } from "../../src/modules/node/pairing-dal.js";
 import { createPairingRoutes } from "../../src/routes/pairing.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { ConnectionManager } from "../../src/ws/connection-manager.js";
+
+interface MockWebSocket {
+  bufferedAmount: number;
+  send: ReturnType<typeof vi.fn>;
+  close: ReturnType<typeof vi.fn>;
+  on: ReturnType<typeof vi.fn>;
+  readyState: number;
+  terminate: ReturnType<typeof vi.fn>;
+}
+
+function createMockWs(options?: { bufferedAmount?: number; readyState?: number }): MockWebSocket {
+  return {
+    bufferedAmount: options?.bufferedAmount ?? 0,
+    send: vi.fn(),
+    close: vi.fn(),
+    on: vi.fn(() => undefined as never),
+    readyState: options?.readyState ?? 1,
+    terminate: vi.fn(),
+  };
+}
 
 describe("Pairing routes", () => {
   let db: SqliteDb;
@@ -118,5 +139,76 @@ describe("Pairing routes", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(Object.prototype.hasOwnProperty.call(body, "scoped_token")).toBe(false);
+  });
+
+  it("evicts slow websocket consumers during pairing approval delivery", async () => {
+    const pairingId = await seedPendingPairing();
+    const connectionManager = new ConnectionManager();
+    const slowNodeWs = createMockWs({ bufferedAmount: 11 });
+    const healthyClientWs = createMockWs();
+
+    connectionManager.addClient(slowNodeWs as never, ["cli"] as never, {
+      id: "slow-node",
+      role: "node",
+      deviceId: "node-1",
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-node",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "node",
+        device_id: "node-1",
+        scopes: ["*"],
+      },
+    });
+    connectionManager.addClient(healthyClientWs as never, ["cli"] as never, {
+      id: "healthy-client",
+      role: "client",
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-client",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+
+    const wsApp = new Hono();
+    wsApp.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "test-token",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
+    wsApp.route(
+      "/",
+      createPairingRoutes({
+        logger: { warn: vi.fn() } as never,
+        nodePairingDal,
+        ws: { connectionManager, maxBufferedBytes: 10 },
+      }),
+    );
+
+    const res = await wsApp.request(`/pairings/${String(pairingId)}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reason: "ok",
+        trust_level: "remote",
+        capability_allowlist: [],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(slowNodeWs.send).not.toHaveBeenCalled();
+    expect(slowNodeWs.close).toHaveBeenCalledWith(1013, "slow consumer");
+    expect(connectionManager.getClient("slow-node")).toBeUndefined();
+    expect(healthyClientWs.send).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(healthyClientWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
+      type: "pairing.resolved",
+    });
   });
 });

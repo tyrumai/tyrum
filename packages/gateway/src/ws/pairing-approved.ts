@@ -3,10 +3,12 @@ import type { ConnectionDirectoryDal } from "../modules/backplane/connection-dir
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { ConnectionManager } from "./connection-manager.js";
+import { safeSendWs } from "./safe-send.js";
 
 export interface PairingApprovedDeliveryDeps {
   connectionManager: ConnectionManager;
   logger?: Logger;
+  maxBufferedBytes?: number;
   cluster?: {
     edgeId: string;
     outboxDal: OutboxDal;
@@ -38,16 +40,18 @@ export function emitPairingApprovedEvent(
     if (client.device_id !== input.nodeId) continue;
     if (client.auth_claims?.tenant_id && client.auth_claims.tenant_id !== normalizedTenantId)
       continue;
-    try {
-      client.ws.send(payload);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      deps.logger?.warn("ws.pairing_approved.delivery_failed", {
+    safeSendWs(client, payload, {
+      connectionManager: deps.connectionManager,
+      deliveryMode: "local_direct",
+      logFields: {
         node_id: input.nodeId,
         peer_id: client.id,
-        error: message,
-      });
-    }
+      },
+      logger: deps.logger,
+      maxBufferedBytes: deps.maxBufferedBytes,
+      sendFailureLogMessage: "ws.pairing_approved.delivery_failed",
+      topic: evt.type,
+    });
   }
 
   // Cluster, direct (best-effort).

@@ -280,22 +280,25 @@ export class OutboxPoller {
       if (!client) return;
       const clientTenantId = client.auth_claims?.tenant_id ?? null;
       if (clientTenantId !== null && clientTenantId !== row.tenant_id) return;
-      try {
-        client.ws.send(JSON.stringify(parsed.message));
-        if (client.role === "node") {
-          const attemptId = extractAttemptId(parsed.message);
-          if (attemptId) {
-            const nodeId = client.device_id ?? client.id;
-            this.connectionManager.recordDispatchedAttemptExecutor(attemptId, nodeId);
-          }
+      const delivered = safeSendWs(client, JSON.stringify(parsed.message), {
+        connectionManager: this.connectionManager,
+        deliveryMode: "cluster_direct",
+        logFields: {
+          outbox_id: row.id,
+          tenant_id: row.tenant_id,
+        },
+        logger: this.logger,
+        maxBufferedBytes: this.maxBufferedBytes,
+        metrics: this.metrics,
+        sendFailureLogMessage: "outbox.ws_send_failed",
+        topic: row.topic,
+      });
+      if (delivered && client.role === "node") {
+        const attemptId = extractAttemptId(parsed.message);
+        if (attemptId) {
+          const nodeId = client.device_id ?? client.id;
+          this.connectionManager.recordDispatchedAttemptExecutor(attemptId, nodeId);
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        this.logger?.warn("outbox.ws_send_failed", {
-          topic: row.topic,
-          connection_id: client.id,
-          error: message,
-        });
       }
       return;
     }
