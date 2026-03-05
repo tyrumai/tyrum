@@ -398,8 +398,11 @@ export async function runPlaybookRuntimeEnvelope(
       };
     }
 
+    const deadline = Date.now() + Math.max(1, timeoutMs);
+    const remainingTimeoutMs = () => Math.max(1, deadline - Date.now());
+
     try {
-      await waitForRunToResumeOrCancel(deps.db, runId, timeoutMs);
+      await waitForRunToResumeOrCancel(deps.db, runId, remainingTimeoutMs());
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return {
@@ -410,7 +413,7 @@ export async function runPlaybookRuntimeEnvelope(
       };
     }
 
-    return await envelopeForRunStatus(deps.db, runId, timeoutMs);
+    return await envelopeForRunStatus(deps.db, runId, remainingTimeoutMs());
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const code =
