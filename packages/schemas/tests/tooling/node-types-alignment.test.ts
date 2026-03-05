@@ -26,8 +26,9 @@ function listWorkspacePackages(rootDir: string): string[] {
   const packageJsonPaths: string[] = [];
   const groups = [resolve(rootDir, "packages"), resolve(rootDir, "apps")];
 
-  if (existsSync(ROOT_PACKAGE_JSON_PATH)) {
-    packageJsonPaths.push(ROOT_PACKAGE_JSON_PATH);
+  const rootPackageJsonPath = resolve(rootDir, "package.json");
+  if (existsSync(rootPackageJsonPath)) {
+    packageJsonPaths.push(rootPackageJsonPath);
   }
 
   for (const group of groups) {
