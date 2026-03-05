@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "../policy/service.js";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 export type LifecycleHookEvent = {
   event: string;
@@ -35,7 +36,10 @@ export class LifecycleHooksRuntime {
     if (matches.length === 0) return [];
 
     const effective = await this.opts.policyService.loadEffectiveBundle();
-    const snapshot = await this.opts.policyService.getOrCreateSnapshot(effective.bundle);
+    const snapshot = await this.opts.policyService.getOrCreateSnapshot(
+      DEFAULT_TENANT_ID,
+      effective.bundle,
+    );
 
     const runIds: string[] = [];
     for (const hook of matches) {
@@ -64,6 +68,7 @@ export class LifecycleHooksRuntime {
       };
 
       const { runId } = await this.opts.engine.enqueuePlan({
+        tenantId: DEFAULT_TENANT_ID,
         key: hook.hook_key,
         lane,
         planId,

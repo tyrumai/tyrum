@@ -87,6 +87,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
 
     const snapshotDal = new PolicySnapshotDal(container.db);
     const snapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
         tools: { default: "allow", allow: [], require_approval: [], deny: [] },
@@ -104,6 +105,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
     const { runId } = await engine.enqueuePlan({
       key: sessionKey,
       lane: "subagent",
+      tenantId: scope.tenant_id,
       workspaceId: scope.workspace_id,
       planId: "plan-intent-missing-1",
       requestId: "req-intent-missing-1",
@@ -175,6 +177,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
 
     const snapshotDal = new PolicySnapshotDal(container.db);
     const snapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
         tools: { default: "allow", allow: [], require_approval: ["tool.http.fetch"], deny: [] },
@@ -192,6 +195,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
     const { runId } = await engine.enqueuePlan({
       key: sessionKey,
       lane: "subagent",
+      tenantId: scope.tenant_id,
       workspaceId: scope.workspace_id,
       planId: "plan-intent-policy-1",
       requestId: "req-intent-policy-1",

@@ -37,6 +37,22 @@ function action(type: ActionPrimitive["type"], args?: Record<string, unknown>): 
   };
 }
 
+async function enqueuePlan(
+  engine: ExecutionEngine,
+  input: Record<string, unknown>,
+): Promise<{ jobId: string; runId: string }> {
+  const rawTenantId = input["tenantId"];
+  const tenantId =
+    typeof rawTenantId === "string" && rawTenantId.trim().length > 0
+      ? rawTenantId.trim()
+      : DEFAULT_TENANT_ID;
+  const { tenantId: _ignored, ...rest } = input;
+  return await ExecutionEngine.prototype.enqueuePlan.call(engine, {
+    tenantId,
+    ...(rest as Record<string, unknown>),
+  } as never);
+}
+
 async function drain(
   engine: ExecutionEngine,
   workerId: string,
@@ -125,7 +141,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { jobId, runId } = await engine.enqueuePlan({
+    const { jobId, runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-test-1",
@@ -156,7 +172,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-trigger-1",
@@ -182,7 +198,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-queued-1",
@@ -208,7 +224,14 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const runId = "550e8400-e29b-41d4-a716-446655440000";
+    const { runId } = await enqueuePlan(engine, {
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-run-events-1",
+      requestId: "req-run-events-1",
+      steps: [action("Research")],
+    });
+    await db.run("DELETE FROM outbox");
     const typesToEmit = [
       "run.queued",
       "run.started",
@@ -252,7 +275,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "heartbeat",
       planId: "plan-trigger-heartbeat-1",
@@ -278,7 +301,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "cron:webhook-1",
       lane: "cron",
       planId: "plan-trigger-webhook-1",
@@ -307,7 +330,7 @@ describe("ExecutionEngine (normalized)", () => {
       db,
       clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
     });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-run-events-succeeded-1",
@@ -350,7 +373,7 @@ describe("ExecutionEngine (normalized)", () => {
       [DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID, "other-worker", 60_000],
     );
 
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:default:test",
       lane: "main",
       planId: "plan-workspace-lease-main-1",
@@ -387,7 +410,7 @@ describe("ExecutionEngine (normalized)", () => {
       [DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID, "other-worker", 60_000],
     );
 
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:default:test",
       lane: "subagent",
       planId: "plan-workspace-lease-cli-1",
@@ -417,7 +440,7 @@ describe("ExecutionEngine (normalized)", () => {
       db,
       clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
     });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-run-events-failed-1",
@@ -456,7 +479,7 @@ describe("ExecutionEngine (normalized)", () => {
     const clock = () => ({ nowMs, nowIso: new Date(nowMs).toISOString() });
 
     const engine = new ExecutionEngine({ db, clock });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-resume-started-at-1",
@@ -519,7 +542,7 @@ describe("ExecutionEngine (normalized)", () => {
       db,
       clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
     });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-test-2",
@@ -549,7 +572,7 @@ describe("ExecutionEngine (normalized)", () => {
       db,
       clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
     });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-budget-1",
@@ -639,7 +662,7 @@ describe("ExecutionEngine (normalized)", () => {
       db,
       clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
     });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-budget-cancel-1",
@@ -707,7 +730,7 @@ describe("ExecutionEngine (normalized)", () => {
       db,
       clock: () => ({ nowMs: Date.parse(nowIso), nowIso }),
     });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-cancel-idempotent-1",
@@ -747,6 +770,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const snapshotDal = new PolicySnapshotDal(db);
     const snapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
         tools: { default: "allow", allow: [], require_approval: [], deny: [] },
@@ -758,7 +782,7 @@ describe("ExecutionEngine (normalized)", () => {
       db,
       clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
     });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "hook:550e8400-e29b-41d4-a716-446655440000",
       lane: "cron",
       planId: "plan-policy-1",
@@ -835,7 +859,7 @@ describe("ExecutionEngine (normalized)", () => {
     });
 
     const engine = new ExecutionEngine({ db });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:default:main",
       lane: "subagent",
       planId: "plan-intent-missing-1",
@@ -911,7 +935,7 @@ describe("ExecutionEngine (normalized)", () => {
     });
 
     const engine = new ExecutionEngine({ db });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:default:main",
       lane: "subagent",
       planId: "plan-intent-approved-1",
@@ -986,7 +1010,7 @@ describe("ExecutionEngine (normalized)", () => {
     });
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:default:main",
       lane: "subagent",
       planId: "plan-intent-evidence-failure-1",
@@ -1075,7 +1099,7 @@ describe("ExecutionEngine (normalized)", () => {
     });
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:default:main",
       lane: "subagent",
       planId: "plan-intent-stale-1",
@@ -1166,7 +1190,7 @@ describe("ExecutionEngine (normalized)", () => {
     });
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:default:main",
       lane: "subagent",
       planId: "plan-intent-ok-1",
@@ -1268,6 +1292,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const snapshotDal = new PolicySnapshotDal(db);
     const snapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
         tools: { default: "require_approval", allow: [], require_approval: [], deny: [] },
@@ -1276,7 +1301,7 @@ describe("ExecutionEngine (normalized)", () => {
     );
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:default:main",
       lane: "subagent",
       planId: "plan-intent-policy-bypass-1",
@@ -1391,6 +1416,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const snapshotDal = new PolicySnapshotDal(db);
     const snapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
         tools: { default: "allow", allow: [], require_approval: [], deny: ["tool.http.fetch"] },
@@ -1402,7 +1428,7 @@ describe("ExecutionEngine (normalized)", () => {
       db,
       clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
     });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-policy-deny-1",
@@ -1473,6 +1499,7 @@ describe("ExecutionEngine (normalized)", () => {
       );
 
       await overrideDal.create({
+        tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
         workspaceId: DEFAULT_WORKSPACE_ID,
         toolId: "tool.exec",
@@ -1481,7 +1508,7 @@ describe("ExecutionEngine (normalized)", () => {
       });
 
       const engine = new ExecutionEngine({ db, policyService });
-      await engine.enqueuePlan({
+      await enqueuePlan(engine, {
         key: "agent:default:telegram-1:group:thread-1",
         lane: "main",
         planId: "plan-policy-invalid-snapshot-1",
@@ -1528,7 +1555,7 @@ describe("ExecutionEngine (normalized)", () => {
         return { nowMs, nowIso: new Date(nowMs).toISOString() };
       },
     });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-finished-at-1",
@@ -1559,7 +1586,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-artifacts-1",
@@ -1633,7 +1660,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-artifacts-created-1",
@@ -1677,7 +1704,7 @@ describe("ExecutionEngine (normalized)", () => {
     redaction.registerSecrets(["secret-XYZ"]);
 
     const engine = new ExecutionEngine({ db, redactionEngine: redaction });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-redact-1",
@@ -1708,7 +1735,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-cost-1",
@@ -1742,7 +1769,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-cancel-1",
@@ -1771,12 +1798,13 @@ describe("ExecutionEngine (normalized)", () => {
     const overrideDal = new PolicyOverrideDal(db);
     const policyService = new PolicyService({ home, snapshotDal, overrideDal });
 
-    const snapshot = await snapshotDal.getOrCreate(defaultPolicyBundle());
+    const snapshot = await snapshotDal.getOrCreate(DEFAULT_TENANT_ID, defaultPolicyBundle());
     const scopeIds = await new IdentityScopeDal(db).resolveScopeIds({
       agentKey: "agent-1",
       workspaceKey: "default",
     });
     const override = await overrideDal.create({
+      tenantId: scopeIds.tenantId,
       agentId: scopeIds.agentId,
       workspaceId: scopeIds.workspaceId,
       toolId: "tool.exec",
@@ -1785,7 +1813,7 @@ describe("ExecutionEngine (normalized)", () => {
     });
 
     const engine = new ExecutionEngine({ db, policyService });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:agent-1:main",
       lane: "main",
       planId: "plan-policy-attempt-1",
@@ -1832,10 +1860,10 @@ describe("ExecutionEngine (normalized)", () => {
     const overrideDal = new PolicyOverrideDal(db);
     const policyService = new PolicyService({ home, snapshotDal, overrideDal });
 
-    const snapshot = await snapshotDal.getOrCreate(defaultPolicyBundle());
+    const snapshot = await snapshotDal.getOrCreate(DEFAULT_TENANT_ID, defaultPolicyBundle());
 
     const engine = new ExecutionEngine({ db, policyService });
-    await engine.enqueuePlan({
+    await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-secret-policy-1",
@@ -1905,12 +1933,12 @@ describe("ExecutionEngine (normalized)", () => {
       },
       secrets: {
         default: "deny",
-        allow: ["env:MY_API_KEY"],
+        allow: ["db:MY_API_KEY"],
         require_approval: [],
         deny: [],
       },
     });
-    const snapshot = await snapshotDal.getOrCreate(bundle);
+    const snapshot = await snapshotDal.getOrCreate(DEFAULT_TENANT_ID, bundle);
 
     const secretProvider: SecretProvider = {
       resolve: vi.fn(async () => null),
@@ -1921,15 +1949,19 @@ describe("ExecutionEngine (normalized)", () => {
       list: vi.fn(async () => [
         {
           handle_id: "h1",
-          provider: "env",
+          provider: "db",
           scope: "MY_API_KEY",
           created_at: new Date().toISOString(),
         },
       ]),
     };
 
-    const engine = new ExecutionEngine({ db, policyService, secretProvider });
-    await engine.enqueuePlan({
+    const engine = new ExecutionEngine({
+      db,
+      policyService,
+      secretProviderForTenant: () => secretProvider,
+    });
+    await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-secret-policy-2",
@@ -1968,6 +2000,7 @@ describe("ExecutionEngine (normalized)", () => {
       const policyService = new PolicyService({ home, snapshotDal, overrideDal });
 
       const snapshot = await snapshotDal.getOrCreate(
+        DEFAULT_TENANT_ID,
         PolicyBundle.parse({
           v: 1,
           tools: { default: "allow", allow: [], require_approval: [], deny: [] },
@@ -1976,7 +2009,7 @@ describe("ExecutionEngine (normalized)", () => {
       );
 
       const engine = new ExecutionEngine({ db, policyService });
-      await engine.enqueuePlan({
+      await enqueuePlan(engine, {
         key: "agent:agent-1:telegram-1:group:thread-1",
         lane: "main",
         planId: "plan-policy-action-1",
@@ -2021,7 +2054,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-retry-1",
@@ -2058,7 +2091,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-retry-approval-1",
@@ -2109,7 +2142,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-pause-1",
@@ -2179,7 +2212,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-resume-1",
@@ -2234,7 +2267,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-idem-1",
@@ -2280,7 +2313,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-idem-write-1",
@@ -2315,7 +2348,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = await engine.enqueuePlan({
+    const { runId } = await enqueuePlan(engine, {
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-takeover-1",
@@ -2365,7 +2398,7 @@ describe("ExecutionEngine (normalized)", () => {
       const engineA = new ExecutionEngine({ db: dbA, concurrencyLimits: { global: 1 } });
       const engineB = new ExecutionEngine({ db: dbB, concurrencyLimits: { global: 1 } });
 
-      const { runId: run1 } = await engineA.enqueuePlan({
+      const { runId: run1 } = await enqueuePlan(engineA, {
         key: "agent:default:ui:thread-1",
         lane: "main",
         planId: "plan-concurrency-1",
@@ -2373,7 +2406,7 @@ describe("ExecutionEngine (normalized)", () => {
         workspaceId: "ws-1",
         steps: [action("CLI")],
       });
-      await engineA.enqueuePlan({
+      await enqueuePlan(engineA, {
         key: "agent:default:ui:thread-2",
         lane: "main",
         planId: "plan-concurrency-2",

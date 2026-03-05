@@ -9,6 +9,7 @@ import { AgentKey, AgentTurnRequest } from "@tyrum/schemas";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 export function createAgentRoutes(agents: AgentRegistry): Hono {
   const agent = new Hono();
@@ -44,10 +45,11 @@ export function createAgentRoutes(agents: AgentRegistry): Hono {
   });
 
   agent.get("/agent/status", async (c) => {
+    const tenantId = requireTenantId(c);
     const agentKey = c.req.query("agent_key")?.trim() || "default";
     let runtime;
     try {
-      runtime = await agents.getRuntime(agentKey);
+      runtime = await agents.getRuntime({ tenantId, agentKey });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);
@@ -57,6 +59,7 @@ export function createAgentRoutes(agents: AgentRegistry): Hono {
   });
 
   agent.post("/agent/turn", async (c) => {
+    const tenantId = requireTenantId(c);
     const body: unknown = await c.req.json();
     const parsed = AgentTurnRequest.safeParse(body);
     if (!parsed.success) {
@@ -67,7 +70,7 @@ export function createAgentRoutes(agents: AgentRegistry): Hono {
       const agentId = parsed.data.agent_key ?? "default";
       let runtime;
       try {
-        runtime = await agents.getRuntime(agentId);
+        runtime = await agents.getRuntime({ tenantId, agentKey: agentId });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return c.json({ error: "invalid_request", message }, 400);

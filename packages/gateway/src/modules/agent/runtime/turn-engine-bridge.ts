@@ -8,7 +8,10 @@ import type {
   WorkScope,
 } from "@tyrum/schemas";
 import { AgentTurnRequest, AgentTurnResponse, SubagentSessionKey } from "@tyrum/schemas";
-import { applyDeterministicContextCompactionAndToolPruning } from "./context-pruning.js";
+import {
+  applyDeterministicContextCompactionAndToolPruning,
+  type ContextPruningConfig,
+} from "./context-pruning.js";
 import type { ExecutionProfile } from "../execution-profiles.js";
 import { buildAgentTurnKey } from "../turn-key.js";
 import type { ApprovalDal } from "../../approval/dal.js";
@@ -58,6 +61,7 @@ type ResolvedAgentTurnInput = {
 };
 
 export type TurnEngineBridgeDeps = {
+  tenantId: string;
   agentKey: string;
   workspaceKey: string;
   identityScopeDal: IdentityScopeDal;
@@ -88,6 +92,7 @@ export type TurnEngineBridgeDeps = {
 export function prepareLaneQueueStep(
   laneQueue: LaneQueueState | undefined,
   messages: Array<ModelMessage>,
+  contextPruning?: ContextPruningConfig,
 ): { messages: Array<ModelMessage> } {
   let preparedMessages = messages;
   if (laneQueue) {
@@ -110,7 +115,7 @@ export function prepareLaneQueueStep(
   }
 
   return {
-    messages: applyDeterministicContextCompactionAndToolPruning(preparedMessages),
+    messages: applyDeterministicContextCompactionAndToolPruning(preparedMessages, contextPruning),
   };
 }
 
@@ -310,6 +315,7 @@ export async function turnViaExecutionEngine(
   };
 
   const { runId } = await deps.executionEngine.enqueuePlan({
+    tenantId: deps.tenantId,
     key,
     lane,
     workspaceId: workspaceKey,

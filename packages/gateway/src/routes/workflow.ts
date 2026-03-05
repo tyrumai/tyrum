@@ -14,6 +14,7 @@ import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
 import type { ExecutionBudgets as ExecutionBudgetsT } from "@tyrum/schemas";
 import type { PolicyService } from "../modules/policy/service.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface WorkflowRouteDeps {
   engine: ExecutionEngine;
@@ -52,6 +53,7 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
   const app = new Hono();
 
   app.post("/workflow/run", async (c) => {
+    const tenantId = requireTenantId(c);
     const body = (await c.req.json()) as unknown;
     if (!isObject(body)) {
       return c.json({ error: "invalid_request", message: "body must be an object" }, 400);
@@ -91,9 +93,10 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
 
     const policy = deps.agents ? deps.agents.getPolicyService(agentId) : deps.policyService;
     const effectivePolicy = await policy.loadEffectiveBundle();
-    const snapshot = await policy.getOrCreateSnapshot(effectivePolicy.bundle);
+    const snapshot = await policy.getOrCreateSnapshot(tenantId, effectivePolicy.bundle);
 
     const res = await deps.engine.enqueuePlan({
+      tenantId,
       key,
       lane,
       planId,

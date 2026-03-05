@@ -10,13 +10,15 @@ import { createContainer } from "../../src/container.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { createApp } from "../../src/app.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { PolicyService } from "../../src/modules/policy/service.js";
 import { createStubLanguageModel } from "../unit/stub-language-model.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { createDbSecretProviderFactory } from "../../src/modules/secret/create-secret-provider.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -42,8 +44,18 @@ export async function startSmokeGateway(opts: { modelReply: string }): Promise<{
     tyrumHome,
   });
 
-  const tokenStore = new TokenStore(tyrumHome);
-  const adminToken = await tokenStore.initialize();
+  const authTokens = new AuthTokenService(container.db);
+  const issued = await authTokens.issueToken({
+    tenantId: DEFAULT_TENANT_ID,
+    role: "admin",
+    scopes: ["*"],
+  });
+  const adminToken = issued.token;
+  const secrets = await createDbSecretProviderFactory({
+    db: container.db,
+    dbPath: ":memory:",
+    tyrumHome,
+  });
 
   const connectionManager = new ConnectionManager();
 
@@ -72,11 +84,12 @@ export async function startSmokeGateway(opts: { modelReply: string }): Promise<{
   const wsHandler = createWsHandler({
     connectionManager,
     protocolDeps,
-    tokenStore,
+    authTokens,
   });
 
   const app = createApp(container, {
-    tokenStore,
+    authTokens,
+    secretProviderForTenant: secrets.secretProviderForTenant,
     connectionManager,
     engine,
     runtime: {

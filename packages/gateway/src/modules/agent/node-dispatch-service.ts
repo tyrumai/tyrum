@@ -8,7 +8,7 @@ export class NodeDispatchService {
 
   async dispatchAndWait(
     action: ActionPrimitive,
-    scope: { runId: string; stepId: string; attemptId: string },
+    scope: { tenantId: string; runId: string; stepId: string; attemptId: string },
     opts?: { timeoutMs?: number },
   ): Promise<{ taskId: string; result: TaskResult }> {
     const registry = this.deps.taskResults;

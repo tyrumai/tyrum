@@ -17,7 +17,6 @@ import { startExecutionWorkerLoop } from "../../src/modules/execution/worker-loo
 import { OutboxDal } from "../../src/modules/backplane/outbox-dal.js";
 import { ConnectionDirectoryDal } from "../../src/modules/backplane/connection-directory.js";
 import { OutboxPoller } from "../../src/modules/backplane/outbox-poller.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { dispatchTask } from "../../src/ws/protocol.js";
@@ -31,6 +30,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 
 function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
@@ -257,8 +257,11 @@ describe("Failure matrix (scaling-ha)", () => {
     const dbB = openTestSqliteDb(dbPath);
     dbs.push(dbA, dbB);
 
-    const tokenStore = new TokenStore(join(dir, "tokens"));
-    const token = await tokenStore.initialize();
+    const authTokensA = new AuthTokenService(dbA);
+    const authTokensB = new AuthTokenService(dbB);
+    const token = (
+      await authTokensA.issueToken({ tenantId: DEFAULT_TENANT_ID, role: "admin", scopes: ["*"] })
+    ).token;
 
     const cmA = new ConnectionManager();
     const cdA = new ConnectionDirectoryDal(dbA);
@@ -268,12 +271,12 @@ describe("Failure matrix (scaling-ha)", () => {
       outboxDal: outboxA,
       connectionManager: cmA,
     });
-    await outboxA.ensureConsumer("edge-a");
+    await outboxA.ensureConsumer(DEFAULT_TENANT_ID, "edge-a");
 
     const wsHandlerA = createWsHandler({
       connectionManager: cmA,
       protocolDeps: { connectionManager: cmA },
-      tokenStore,
+      authTokens: authTokensA,
       cluster: {
         instanceId: "edge-a",
         connectionDirectory: cdA,
@@ -293,12 +296,12 @@ describe("Failure matrix (scaling-ha)", () => {
       outboxDal: outboxB,
       connectionManager: cmB,
     });
-    await outboxB.ensureConsumer("edge-b");
+    await outboxB.ensureConsumer(DEFAULT_TENANT_ID, "edge-b");
 
     const wsHandlerB = createWsHandler({
       connectionManager: cmB,
       protocolDeps: { connectionManager: cmB },
-      tokenStore,
+      authTokens: authTokensB,
       cluster: {
         instanceId: "edge-b",
         connectionDirectory: cdB,
@@ -319,12 +322,13 @@ describe("Failure matrix (scaling-ha)", () => {
     sockets.push(clientA);
 
     // Verify directory registration for edge-a.
-    const listA1 = await cdA.listConnectionsForCapability("cli", Date.now());
+    const listA1 = await cdA.listConnectionsForCapability(DEFAULT_TENANT_ID, "cli", Date.now());
     expect(listA1.length).toBe(1);
     expect(listA1[0]!.edge_id).toBe("edge-a");
 
     // Directed routing: edge-b dispatches to the capable peer owned by edge-a via outbox.
     const taskScopeX = {
+      tenantId: DEFAULT_TENANT_ID,
       runId: "550e8400-e29b-41d4-a716-446655440000",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -369,11 +373,12 @@ describe("Failure matrix (scaling-ha)", () => {
     });
     sockets.push(clientB);
 
-    const listB = await cdB.listConnectionsForCapability("cli", Date.now());
+    const listB = await cdB.listConnectionsForCapability(DEFAULT_TENANT_ID, "cli", Date.now());
     expect(listB.length).toBe(1);
     expect(listB[0]!.edge_id).toBe("edge-b");
 
     const taskScopeZ = {
+      tenantId: DEFAULT_TENANT_ID,
       runId: "550e8400-e29b-41d4-a716-446655440002",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -399,24 +404,26 @@ describe("Failure matrix (scaling-ha)", () => {
     dirs.push(dir);
     const dbPath = join(dir, "gateway.db");
 
-    const tokenStore = new TokenStore(join(dir, "tokens"));
-    const token = await tokenStore.initialize();
-
     const dbA1 = openTestSqliteDb(dbPath);
     const dbB = openTestSqliteDb(dbPath);
     dbs.push(dbA1, dbB);
+    const authTokensA = new AuthTokenService(dbA1);
+    const authTokensB = new AuthTokenService(dbB);
+    const token = (
+      await authTokensA.issueToken({ tenantId: DEFAULT_TENANT_ID, role: "admin", scopes: ["*"] })
+    ).token;
 
     const startEdge = async (edgeId: string, db: SqliteDb) => {
       const connectionManager = new ConnectionManager();
       const connectionDirectory = new ConnectionDirectoryDal(db);
       const outboxDal = new OutboxDal(db);
       const outboxPoller = new OutboxPoller({ consumerId: edgeId, outboxDal, connectionManager });
-      await outboxDal.ensureConsumer(edgeId);
+      await outboxDal.ensureConsumer(DEFAULT_TENANT_ID, edgeId);
 
       const wsHandler = createWsHandler({
         connectionManager,
         protocolDeps: { connectionManager },
-        tokenStore,
+        authTokens: edgeId === "edge-a" ? authTokensA : authTokensB,
         cluster: { instanceId: edgeId, connectionDirectory, connectionTtlMs: connectionsTtlMs },
       });
       heartbeats.push(wsHandler.stopHeartbeat);
@@ -438,11 +445,16 @@ describe("Failure matrix (scaling-ha)", () => {
     });
     sockets.push(clientA1);
 
-    const listA1 = await edgeA1.connectionDirectory.listConnectionsForCapability("cli", Date.now());
+    const listA1 = await edgeA1.connectionDirectory.listConnectionsForCapability(
+      DEFAULT_TENANT_ID,
+      "cli",
+      Date.now(),
+    );
     expect(listA1.length).toBe(1);
     expect(listA1[0]!.edge_id).toBe("edge-a");
 
     const taskScope1 = {
+      tenantId: DEFAULT_TENANT_ID,
       runId: "550e8400-e29b-41d4-a716-446655440010",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -497,11 +509,16 @@ describe("Failure matrix (scaling-ha)", () => {
     });
     sockets.push(clientA2);
 
-    const listA2 = await edgeA2.connectionDirectory.listConnectionsForCapability("cli", Date.now());
+    const listA2 = await edgeA2.connectionDirectory.listConnectionsForCapability(
+      DEFAULT_TENANT_ID,
+      "cli",
+      Date.now(),
+    );
     expect(listA2.length).toBe(1);
     expect(listA2[0]!.edge_id).toBe("edge-a");
 
     const taskScope2 = {
+      tenantId: DEFAULT_TENANT_ID,
       runId: "550e8400-e29b-41d4-a716-446655440011",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
@@ -545,6 +562,7 @@ describe("Failure matrix (scaling-ha)", () => {
     });
 
     const { runId } = await engine1.enqueuePlan({
+      tenantId: DEFAULT_TENANT_ID,
       key: "agent:default:ui:thread-worker-1",
       lane: "main",
       planId: "plan-worker-1",
@@ -637,6 +655,7 @@ describe("Failure matrix (scaling-ha)", () => {
     const lane = "main";
 
     const run1 = await engine1.enqueuePlan({
+      tenantId: DEFAULT_TENANT_ID,
       key,
       lane,
       planId: "plan-lane-1",
@@ -644,6 +663,7 @@ describe("Failure matrix (scaling-ha)", () => {
       steps: [{ type: "CLI", args: {} }],
     });
     const run2 = await engine1.enqueuePlan({
+      tenantId: DEFAULT_TENANT_ID,
       key,
       lane,
       planId: "plan-lane-2",
@@ -839,14 +859,16 @@ describe("Failure matrix (scaling-ha)", () => {
     const db1 = openTestSqliteDb(dbPath);
     dbs.push(db1);
 
-    const tokenStore = new TokenStore(join(dir, "tokens"));
-    const token = await tokenStore.initialize();
+    const authTokens = new AuthTokenService(db1);
+    const token = (
+      await authTokens.issueToken({ tenantId: DEFAULT_TENANT_ID, role: "admin", scopes: ["*"] })
+    ).token;
 
     const connectionManager = new ConnectionManager();
     const wsHandler = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
-      tokenStore,
+      authTokens,
     });
     heartbeats.push(wsHandler.stopHeartbeat);
 
@@ -863,7 +885,7 @@ describe("Failure matrix (scaling-ha)", () => {
 
     const consumerId = "edge-db-restart";
     const outboxDal1 = new OutboxDal(db1);
-    await outboxDal1.ensureConsumer(consumerId);
+    await outboxDal1.ensureConsumer(DEFAULT_TENANT_ID, consumerId);
 
     const runId = "550e8400-e29b-41d4-a716-446655440020";
     const message = {
@@ -878,8 +900,12 @@ describe("Failure matrix (scaling-ha)", () => {
     };
 
     const row = await outboxDal1.enqueue(
+      DEFAULT_TENANT_ID,
       "ws.direct",
-      { connection_id: connectionId, message },
+      {
+        connection_id: connectionId,
+        message,
+      },
       { targetEdgeId: consumerId },
     );
 
@@ -889,11 +915,12 @@ describe("Failure matrix (scaling-ha)", () => {
     let didFailAck = false;
 
     const restartingOutboxDal = {
-      poll: async (id: string, batchSize?: number) => {
+      listActiveTenantIds: async () => [DEFAULT_TENANT_ID],
+      poll: async (tenantId: string, consumerId: string, batchSize?: number) => {
         if (didRestart) {
-          return await outboxDal2!.poll(id, batchSize);
+          return await outboxDal2!.poll(tenantId, consumerId, batchSize);
         }
-        const rows = await outboxDal1.poll(id, batchSize);
+        const rows = await outboxDal1.poll(tenantId, consumerId, batchSize);
 
         // Simulate DB restart after the poll but before the ack.
         await db1.close();
@@ -906,19 +933,19 @@ describe("Failure matrix (scaling-ha)", () => {
 
         return rows;
       },
-      ackConsumerCursor: async (id: string, lastOutboxId: number) => {
+      ackConsumerCursor: async (tenantId: string, consumerId: string, lastOutboxId: number) => {
         if (didRestart && !didFailAck) {
           didFailAck = true;
-          return await outboxDal1.ackConsumerCursor(id, lastOutboxId);
+          return await outboxDal1.ackConsumerCursor(tenantId, consumerId, lastOutboxId);
         }
-        return await outboxDal2!.ackConsumerCursor(id, lastOutboxId);
+        return await outboxDal2!.ackConsumerCursor(tenantId, consumerId, lastOutboxId);
       },
-      ensureConsumer: async (id: string) => {
+      ensureConsumer: async (tenantId: string, consumerId: string) => {
         if (didRestart) {
-          await outboxDal2!.ensureConsumer(id);
+          await outboxDal2!.ensureConsumer(tenantId, consumerId);
           return;
         }
-        await outboxDal1.ensureConsumer(id);
+        await outboxDal1.ensureConsumer(tenantId, consumerId);
       },
     } as unknown as OutboxDal;
 
@@ -951,8 +978,8 @@ describe("Failure matrix (scaling-ha)", () => {
     await replayMsgPromise;
 
     const cursor = await db2!.get<{ last_outbox_id: number }>(
-      "SELECT last_outbox_id FROM outbox_consumers WHERE consumer_id = ?",
-      [consumerId],
+      "SELECT last_outbox_id FROM outbox_consumers WHERE tenant_id = ? AND consumer_id = ?",
+      [DEFAULT_TENANT_ID, consumerId],
     );
     expect(cursor?.last_outbox_id).toBe(row.id);
   });
@@ -960,6 +987,7 @@ describe("Failure matrix (scaling-ha)", () => {
   it("tolerates transient DB failures in outbox polling (edge↔DB partition)", async () => {
     const connectionManager = new ConnectionManager();
     const failingOutboxDal = {
+      listActiveTenantIds: async () => [DEFAULT_TENANT_ID],
       poll: async () => {
         throw new Error("db down");
       },

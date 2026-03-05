@@ -14,7 +14,9 @@ import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
-import { shouldDeliverToWsAudience, type WsBroadcastAudience } from "../ws/audience.js";
+import type { WsBroadcastAudience } from "../ws/audience.js";
+import { broadcastWsEvent } from "../ws/broadcast.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface RoutingConfigRouteDeps {
   routingConfigDal: RoutingConfigDal;
@@ -32,33 +34,10 @@ const ROUTING_CONFIG_WS_AUDIENCE: WsBroadcastAudience = {
   required_scopes: ["operator.admin"],
 };
 
-function emitEvent(deps: RoutingConfigRouteDeps, evt: WsEventEnvelope): void {
+function emitEvent(deps: RoutingConfigRouteDeps, tenantId: string, evt: WsEventEnvelope): void {
   const ws = deps.ws;
   if (!ws) return;
-
-  const payload = JSON.stringify(evt);
-  for (const client of ws.connectionManager.allClients()) {
-    if (!shouldDeliverToWsAudience(client, ROUTING_CONFIG_WS_AUDIENCE)) continue;
-    try {
-      client.ws.send(payload);
-    } catch (err) {
-      void err;
-      // ignore best-effort sends
-    }
-  }
-
-  if (ws.cluster) {
-    void ws.cluster.outboxDal
-      .enqueue("ws.broadcast", {
-        source_edge_id: ws.cluster.edgeId,
-        skip_local: true,
-        message: evt,
-        audience: ROUTING_CONFIG_WS_AUDIENCE,
-      })
-      .catch(() => {
-        // ignore
-      });
-  }
+  broadcastWsEvent(tenantId, evt, ws, ROUTING_CONFIG_WS_AUDIENCE);
 }
 
 export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
@@ -66,7 +45,8 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
 
   app.get("/routing/config", async (c) => {
     try {
-      const latest = await deps.routingConfigDal.getLatest();
+      const tenantId = requireTenantId(c);
+      const latest = await deps.routingConfigDal.getLatest(tenantId);
       return c.json({
         revision: latest?.revision ?? 0,
         config: latest?.config ?? { v: 1 },
@@ -89,6 +69,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
   });
 
   app.put("/routing/config", async (c) => {
+    const tenantId = requireTenantId(c);
     const body = (await c.req.json()) as unknown;
     const parsed = RoutingConfigUpdateRequest.safeParse(body);
     if (!parsed.success) {
@@ -102,6 +83,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
     };
 
     const persisted = await deps.routingConfigDal.set({
+      tenantId,
       config: parsed.data.config,
       reason: parsed.data.reason,
       createdBy,
@@ -120,7 +102,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
     };
     const evt = WsRoutingConfigUpdatedEvent.safeParse(candidate);
     if (evt.success) {
-      emitEvent(deps, evt.data);
+      emitEvent(deps, tenantId, evt.data);
     }
 
     return c.json(
@@ -137,13 +119,14 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
   });
 
   app.post("/routing/config/revert", async (c) => {
+    const tenantId = requireTenantId(c);
     const body = (await c.req.json()) as unknown;
     const parsed = RoutingConfigRevertRequest.safeParse(body);
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    const target = await deps.routingConfigDal.getByRevision(parsed.data.revision);
+    const target = await deps.routingConfigDal.getByRevision(tenantId, parsed.data.revision);
     if (!target) {
       return c.json({ error: "not_found", message: "routing config revision not found" }, 404);
     }
@@ -155,6 +138,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
     };
 
     const persisted = await deps.routingConfigDal.set({
+      tenantId,
       config: target.config,
       reason: parsed.data.reason,
       createdBy,
@@ -175,7 +159,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
     };
     const evt = WsRoutingConfigUpdatedEvent.safeParse(candidate);
     if (evt.success) {
-      emitEvent(deps, evt.data);
+      emitEvent(deps, tenantId, evt.data);
     }
 
     return c.json(

@@ -3,6 +3,7 @@ import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { ExecutionEngineEventEmitter } from "../../src/modules/execution/engine/event-emitter.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("ExecutionEngineEventEmitter", () => {
   let db: SqliteDb | undefined;
@@ -17,6 +18,7 @@ describe("ExecutionEngineEventEmitter", () => {
     });
 
     const { runId } = await engine.enqueuePlan({
+      tenantId: DEFAULT_TENANT_ID,
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-emitter-1",

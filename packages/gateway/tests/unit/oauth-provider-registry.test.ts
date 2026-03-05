@@ -1,75 +1,54 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { OAuthProviderRegistry } from "../../src/modules/oauth/provider-registry.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("OAuthProviderRegistry config defaults", () => {
-  let tempDir: string | undefined;
+  let db: SqliteDb | undefined;
 
   afterEach(async () => {
-    if (tempDir) {
-      await rm(tempDir, { recursive: true, force: true });
-      tempDir = undefined;
-    }
-    delete process.env["TYRUM_OAUTH_PROVIDERS_CONFIG"];
+    await db?.close();
+    db = undefined;
   });
 
   it("defaults token_endpoint_basic_auth to false for public clients", async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "tyrum-oauth-registry-test-"));
-    const configPath = join(tempDir, "oauth-providers.yml");
-    await writeFile(
-      configPath,
-      [
-        "providers:",
-        "  - provider_id: public",
-        "    scopes: []",
-        "    client_id_env: TEST_CLIENT_ID",
-      ].join("\n"),
-      "utf-8",
+    db = openTestSqliteDb();
+    await db.run(
+      `INSERT INTO oauth_provider_configs (tenant_id, provider_id, client_id)
+       VALUES (?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "public", "client-public"],
     );
 
-    const registry = new OAuthProviderRegistry({ configPath });
-    const spec = await registry.get("public");
+    const registry = new OAuthProviderRegistry(db);
+    const spec = await registry.get({ tenantId: DEFAULT_TENANT_ID, providerId: "public" });
     expect(spec?.token_endpoint_basic_auth).toBe(false);
   });
 
-  it("defaults token_endpoint_basic_auth to false even when client_secret_env is configured", async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "tyrum-oauth-registry-test-"));
-    const configPath = join(tempDir, "oauth-providers.yml");
-    await writeFile(
-      configPath,
-      [
-        "providers:",
-        "  - provider_id: confidential",
-        "    scopes: []",
-        "    client_id_env: TEST_CLIENT_ID",
-        "    client_secret_env: TEST_CLIENT_SECRET",
-      ].join("\n"),
-      "utf-8",
+  it("defaults token_endpoint_basic_auth to false even when client_secret_key is configured", async () => {
+    db = openTestSqliteDb();
+    await db.run(
+      `INSERT INTO oauth_provider_configs (tenant_id, provider_id, client_id, client_secret_key)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "confidential", "client-confidential", "secret-key-1"],
     );
 
-    const registry = new OAuthProviderRegistry({ configPath });
-    const spec = await registry.get("confidential");
+    const registry = new OAuthProviderRegistry(db);
+    const spec = await registry.get({ tenantId: DEFAULT_TENANT_ID, providerId: "confidential" });
     expect(spec?.token_endpoint_basic_auth).toBe(false);
+    expect(spec?.client_secret_key).toBe("secret-key-1");
   });
 
-  it("fails fast when token_endpoint_basic_auth=true but client_secret_env is missing", async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "tyrum-oauth-registry-test-"));
-    const configPath = join(tempDir, "oauth-providers.yml");
-    await writeFile(
-      configPath,
-      [
-        "providers:",
-        "  - provider_id: broken",
-        "    scopes: []",
-        "    client_id_env: TEST_CLIENT_ID",
-        "    token_endpoint_basic_auth: true",
-      ].join("\n"),
-      "utf-8",
+  it("reports token_endpoint_basic_auth=true when configured", async () => {
+    db = openTestSqliteDb();
+    await db.run(
+      `INSERT INTO oauth_provider_configs (tenant_id, provider_id, client_id, token_endpoint_basic_auth)
+       VALUES (?, ?, ?, 1)`,
+      [DEFAULT_TENANT_ID, "basic-auth", "client-basic"],
     );
 
-    const registry = new OAuthProviderRegistry({ configPath });
-    await expect(registry.list()).rejects.toThrow("client_secret_env");
+    const registry = new OAuthProviderRegistry(db);
+    const spec = await registry.get({ tenantId: DEFAULT_TENANT_ID, providerId: "basic-auth" });
+    expect(spec?.token_endpoint_basic_auth).toBe(true);
   });
 });

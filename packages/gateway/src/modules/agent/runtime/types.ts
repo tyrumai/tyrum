@@ -11,12 +11,16 @@ import type { ProtocolDeps } from "../../../ws/protocol.js";
 
 export interface AgentRuntimeOptions {
   container: GatewayContainer;
+  /** Tenant identifier for DB scoping (default: default tenant). */
+  tenantId?: string;
   home?: string;
   sessionDal?: SessionDal;
   fetchImpl?: typeof fetch;
-  /** Stable agent identifier for routing/isolation (default: env TYRUM_AGENT_ID or "default"). */
+  /** Stable per-process instance owner identifier for OAuth leases and audit trails. */
+  instanceOwner?: string;
+  /** Stable agent identifier for routing/isolation (default: "default"). */
   agentId?: string;
-  /** Workspace identifier for leases/audit (default: env TYRUM_WORKSPACE_ID or "default"). */
+  /** Workspace identifier for leases/audit (default: "default"). */
   workspaceId?: string;
   /** Override the language model (useful for testing). */
   languageModel?: LanguageModel;

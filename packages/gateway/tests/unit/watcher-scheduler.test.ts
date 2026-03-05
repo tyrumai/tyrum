@@ -262,6 +262,7 @@ describe("WatcherScheduler", () => {
       eventBus,
       owner: "scheduler-1",
       firingLeaseTtlMs: 10_000,
+      automationEnabled: true,
       engine: {
         enqueuePlanInTx: async (tx, input) => {
           enqueuedInputs.push(input as unknown as Record<string, unknown>);
@@ -348,6 +349,7 @@ describe("WatcherScheduler", () => {
       eventBus,
       owner: "scheduler-1",
       firingLeaseTtlMs: 10_000,
+      automationEnabled: true,
       engine: {
         enqueuePlanInTx: async (tx, input) => {
           enqueuedInputs.push(input as unknown as Record<string, unknown>);
@@ -425,6 +427,7 @@ describe("WatcherScheduler", () => {
       eventBus,
       owner: "scheduler-1",
       firingLeaseTtlMs: 10_000,
+      automationEnabled: true,
       engine: {
         enqueuePlanInTx: async (tx, input) => {
           enqueuedInputs.push(input as unknown as Record<string, unknown>);

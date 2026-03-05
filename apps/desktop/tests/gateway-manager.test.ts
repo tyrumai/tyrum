@@ -128,7 +128,7 @@ describe("GatewayManager", () => {
     expect(statuses).toEqual(["starting", "running", "stopped"]);
   });
 
-  it("sets GATEWAY_TOKEN when starting gateway", async () => {
+  it("passes CLI flags when starting gateway", async () => {
     const gm = new GatewayManager();
     const proc = mockProc();
     proc.kill.mockImplementation((signal?: string) => {
@@ -147,9 +147,180 @@ describe("GatewayManager", () => {
       accessToken: "local-token-123",
     });
 
-    const [, , options] = spawnMock.mock.calls[0] ?? [];
+    const [, args, options] = spawnMock.mock.calls[0] ?? [];
+    expect(args).toEqual([
+      "/nonexistent",
+      "start",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "7788",
+      "--home",
+      "/tmp",
+      "--db",
+      "/tmp/test.db",
+    ]);
     const env = (options as { env?: Record<string, string> }).env;
-    expect(env?.["GATEWAY_TOKEN"]).toBe("local-token-123");
+    expect(env?.["ELECTRON_RUN_AS_NODE"]).toBe("1");
+
+    await gm.stop();
+  });
+
+  it("preserves CRLF line endings when redacting bootstrap tokens", async () => {
+    const gm = new GatewayManager();
+    const stdout = new EventEmitter();
+    const stderr = new EventEmitter();
+    const proc = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null,
+      signalCode: null as string | null,
+      kill: vi.fn((signal?: string) => {
+        if (signal === "SIGTERM") {
+          proc.signalCode = "SIGTERM";
+          queueMicrotask(() => proc.emit("exit", null));
+        }
+      }),
+      stdout,
+      stderr,
+      stdin: null,
+      pid: 12345,
+    });
+    spawnMock.mockReturnValue(proc as never);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
+
+    const logs: { level: string; message: string }[] = [];
+    gm.on("log", (entry) => logs.push(entry));
+
+    await gm.start({
+      gatewayBin: "/nonexistent",
+      port: 7788,
+      dbPath: "/tmp/test.db",
+      accessToken: "test-token",
+    });
+
+    stdout.emit("data", Buffer.from("system: tyrum-token.v1.abc.def\r\nhello\r\n"));
+
+    expect(logs.at(-1)?.message).toBe("system: [REDACTED]\r\nhello");
+
+    await gm.stop();
+  });
+
+  it("preserves original indentation and padding when redacting bootstrap tokens", async () => {
+    const gm = new GatewayManager();
+    const stdout = new EventEmitter();
+    const stderr = new EventEmitter();
+    const proc = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null,
+      signalCode: null as string | null,
+      kill: vi.fn((signal?: string) => {
+        if (signal === "SIGTERM") {
+          proc.signalCode = "SIGTERM";
+          queueMicrotask(() => proc.emit("exit", null));
+        }
+      }),
+      stdout,
+      stderr,
+      stdin: null,
+      pid: 12345,
+    });
+    spawnMock.mockReturnValue(proc as never);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
+
+    const logs: { level: string; message: string }[] = [];
+    gm.on("log", (entry) => logs.push(entry));
+
+    await gm.start({
+      gatewayBin: "/nonexistent",
+      port: 7788,
+      dbPath: "/tmp/test.db",
+      accessToken: "test-token",
+    });
+
+    stdout.emit("data", Buffer.from("\t  system: tyrum-token.v1.abc.def   \r\nhello\r\n"));
+
+    expect(logs.at(-1)?.message).toBe("\t  system: [REDACTED]   \r\nhello");
+
+    await gm.stop();
+  });
+
+  it("captures bootstrap tokens when log prefixes precede the label", async () => {
+    const gm = new GatewayManager();
+    const stdout = new EventEmitter();
+    const stderr = new EventEmitter();
+    const proc = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null,
+      signalCode: null as string | null,
+      kill: vi.fn((signal?: string) => {
+        if (signal === "SIGTERM") {
+          proc.signalCode = "SIGTERM";
+          queueMicrotask(() => proc.emit("exit", null));
+        }
+      }),
+      stdout,
+      stderr,
+      stdin: null,
+      pid: 12345,
+    });
+    spawnMock.mockReturnValue(proc as never);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
+
+    const logs: { level: string; message: string }[] = [];
+    gm.on("log", (entry) => logs.push(entry));
+
+    await gm.start({
+      gatewayBin: "/nonexistent",
+      port: 7788,
+      dbPath: "/tmp/test.db",
+      accessToken: "test-token",
+    });
+
+    stdout.emit("data", Buffer.from("[gateway] default-tenant-admin: tyrum-token.v1.abc.def\r\n"));
+
+    expect(gm.getBootstrapToken("default-tenant-admin")).toBe("tyrum-token.v1.abc.def");
+    expect(logs.at(-1)?.message).toBe("[gateway] default-tenant-admin: [REDACTED]");
+
+    await gm.stop();
+  });
+
+  it("captures bootstrap tokens split across stdout chunks without leaking them", async () => {
+    const gm = new GatewayManager();
+    const stdout = new EventEmitter();
+    const stderr = new EventEmitter();
+    const proc = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null,
+      signalCode: null as string | null,
+      kill: vi.fn((signal?: string) => {
+        if (signal === "SIGTERM") {
+          proc.signalCode = "SIGTERM";
+          queueMicrotask(() => proc.emit("exit", null));
+        }
+      }),
+      stdout,
+      stderr,
+      stdin: null,
+      pid: 12345,
+    });
+    spawnMock.mockReturnValue(proc as never);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
+
+    const logs: { level: string; message: string }[] = [];
+    gm.on("log", (entry) => logs.push(entry));
+
+    await gm.start({
+      gatewayBin: "/nonexistent",
+      port: 7788,
+      dbPath: "/tmp/test.db",
+      accessToken: "test-token",
+    });
+
+    stdout.emit("data", Buffer.from("system: tyrum-token.v1.abc."));
+    expect(logs.some((entry) => entry.message.includes("tyrum-token.v1."))).toBe(false);
+    expect(gm.getBootstrapToken("system")).toBeUndefined();
+
+    stdout.emit("data", Buffer.from("def\r\nhello\r\n"));
+
+    expect(gm.getBootstrapToken("system")).toBe("tyrum-token.v1.abc.def");
+    expect(logs.some((entry) => entry.message.includes("tyrum-token.v1."))).toBe(false);
+    expect(logs.at(-1)?.message).toBe("system: [REDACTED]\r\nhello");
 
     await gm.stop();
   });

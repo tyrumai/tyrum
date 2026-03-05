@@ -1,11 +1,8 @@
-import { readFile } from "node:fs/promises";
-import { access } from "node:fs/promises";
-import { constants } from "node:fs";
-import { join } from "node:path";
-import { parse as parseYaml } from "yaml";
-import { coerceNonEmptyStringRecord, coerceRecord, coerceString } from "../util/coerce.js";
+import type { SqlDb } from "../../statestore/types.js";
+import { safeJsonParse } from "../../utils/json.js";
 
 export interface OAuthProviderSpec {
+  tenant_id: string;
   provider_id: string;
   display_name?: string;
   issuer?: string;
@@ -13,149 +10,105 @@ export interface OAuthProviderSpec {
   token_endpoint?: string;
   device_authorization_endpoint?: string;
   scopes: string[];
-  client_id_env?: string;
-  client_secret_env?: string;
+  client_id: string;
+  client_secret_key?: string;
   token_endpoint_basic_auth: boolean;
   extra_authorize_params?: Record<string, string>;
   extra_token_params?: Record<string, string>;
 }
 
-export interface OAuthProviderConfigFile {
-  providers: OAuthProviderSpec[];
+interface RawOAuthProviderConfigRow {
+  tenant_id: string;
+  provider_id: string;
+  display_name: string | null;
+  issuer: string | null;
+  authorization_endpoint: string | null;
+  token_endpoint: string | null;
+  device_authorization_endpoint: string | null;
+  scopes_json: string;
+  client_id: string;
+  client_secret_key: string | null;
+  token_endpoint_basic_auth: number | boolean;
+  extra_authorize_params_json: string;
+  extra_token_params_json: string;
 }
 
-function coerceStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.map(coerceString).filter((v): v is string => Boolean(v));
+function parseScopesJson(raw: string | null | undefined): string[] {
+  const parsed = safeJsonParse<unknown>(raw, []);
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter((value) => value.length > 0);
 }
 
-function parseOAuthProviderSpec(value: unknown): OAuthProviderSpec {
-  const record = coerceRecord(value);
-  if (!record) {
-    throw new Error("oauth provider spec must be an object");
+function parseParamsJson(raw: string | null | undefined): Record<string, string> | undefined {
+  const parsed = safeJsonParse<unknown>(raw, {});
+  if (!parsed || typeof parsed !== "object") return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+    const key = k.trim();
+    if (key.length === 0) continue;
+    if (typeof v !== "string") continue;
+    const value = v.trim();
+    if (value.length === 0) continue;
+    out[key] = value;
   }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
 
-  const providerId = coerceString(record["provider_id"]);
-  if (!providerId) {
-    throw new Error("oauth provider spec missing provider_id");
-  }
+function normalizeOptionalString(raw: string | null | undefined): string | undefined {
+  const trimmed = raw?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
 
-  const clientSecretEnv = coerceString(record["client_secret_env"]);
-
-  const tokenEndpointBasicAuthRaw = record["token_endpoint_basic_auth"];
-  const tokenEndpointBasicAuth =
-    typeof tokenEndpointBasicAuthRaw === "boolean" ? tokenEndpointBasicAuthRaw : false;
-
-  if (tokenEndpointBasicAuth && !clientSecretEnv) {
-    throw new Error(
-      "oauth provider spec missing client_secret_env (required when token_endpoint_basic_auth=true)",
-    );
-  }
-
+function rowToSpec(row: RawOAuthProviderConfigRow): OAuthProviderSpec {
   return {
-    provider_id: providerId,
-    display_name: coerceString(record["display_name"]),
-    issuer: coerceString(record["issuer"]),
-    authorization_endpoint: coerceString(record["authorization_endpoint"]),
-    token_endpoint: coerceString(record["token_endpoint"]),
-    device_authorization_endpoint: coerceString(record["device_authorization_endpoint"]),
-    scopes: coerceStringArray(record["scopes"]),
-    client_id_env: coerceString(record["client_id_env"]),
-    client_secret_env: clientSecretEnv,
-    token_endpoint_basic_auth: tokenEndpointBasicAuth,
-    extra_authorize_params: coerceNonEmptyStringRecord(record["extra_authorize_params"]),
-    extra_token_params: coerceNonEmptyStringRecord(record["extra_token_params"]),
+    tenant_id: row.tenant_id,
+    provider_id: row.provider_id,
+    display_name: normalizeOptionalString(row.display_name),
+    issuer: normalizeOptionalString(row.issuer),
+    authorization_endpoint: normalizeOptionalString(row.authorization_endpoint),
+    token_endpoint: normalizeOptionalString(row.token_endpoint),
+    device_authorization_endpoint: normalizeOptionalString(row.device_authorization_endpoint),
+    scopes: parseScopesJson(row.scopes_json),
+    client_id: row.client_id,
+    client_secret_key: normalizeOptionalString(row.client_secret_key),
+    token_endpoint_basic_auth:
+      row.token_endpoint_basic_auth === true || row.token_endpoint_basic_auth === 1,
+    extra_authorize_params: parseParamsJson(row.extra_authorize_params_json),
+    extra_token_params: parseParamsJson(row.extra_token_params_json),
   };
 }
 
-function parseOAuthProviderConfigFile(value: unknown): OAuthProviderConfigFile {
-  const record = coerceRecord(value) ?? {};
-  const providersRaw = record["providers"];
-  const providers: OAuthProviderSpec[] = [];
-  if (Array.isArray(providersRaw)) {
-    for (const entry of providersRaw) {
-      providers.push(parseOAuthProviderSpec(entry));
-    }
-  }
-  return { providers };
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path, constants.F_OK);
-    return true;
-  } catch {
-    // Intentional: treat missing OAuth config files as absent.
-    return false;
-  }
-}
-
-function resolveDefaultConfigPaths(): string[] {
-  const fromEnv = process.env["TYRUM_OAUTH_PROVIDERS_CONFIG"]?.trim();
-  if (fromEnv) return [fromEnv];
-
-  const home = process.env["TYRUM_HOME"]?.trim();
-  if (home) {
-    return [join(home, "oauth-providers.yml"), join(home, "oauth_providers.yml")];
-  }
-
-  const configDir = join(process.cwd(), "config");
-  return [join(configDir, "oauth-providers.yml"), join(configDir, "oauth_providers.yml")];
-}
-
 export class OAuthProviderRegistry {
-  private cached: Map<string, OAuthProviderSpec> | undefined;
-  private cachedAtMs = 0;
+  constructor(private readonly db: SqlDb) {}
 
-  constructor(
-    private readonly opts?: { ttlMs?: number; configPath?: string; configPaths?: string[] },
-  ) {}
-
-  async get(providerId: string): Promise<OAuthProviderSpec | undefined> {
-    const specs = await this.load();
-    return specs.get(providerId);
+  async get(input: {
+    tenantId: string;
+    providerId: string;
+  }): Promise<OAuthProviderSpec | undefined> {
+    const row = await this.db.get<RawOAuthProviderConfigRow>(
+      `SELECT tenant_id, provider_id, display_name, issuer, authorization_endpoint, token_endpoint,
+              device_authorization_endpoint, scopes_json, client_id, client_secret_key,
+              token_endpoint_basic_auth, extra_authorize_params_json, extra_token_params_json
+         FROM oauth_provider_configs
+        WHERE tenant_id = ? AND provider_id = ?
+        LIMIT 1`,
+      [input.tenantId, input.providerId],
+    );
+    return row ? rowToSpec(row) : undefined;
   }
 
-  async list(): Promise<OAuthProviderSpec[]> {
-    return [...(await this.load()).values()];
-  }
-
-  async reload(): Promise<void> {
-    this.cached = undefined;
-    this.cachedAtMs = 0;
-    await this.load();
-  }
-
-  private async load(): Promise<Map<string, OAuthProviderSpec>> {
-    const ttlMs = this.opts?.ttlMs ?? 30_000;
-    const now = Date.now();
-    if (this.cached && now - this.cachedAtMs < ttlMs) return this.cached;
-
-    const fromEnv = process.env["TYRUM_OAUTH_PROVIDERS_CONFIG"]?.trim();
-    const paths = fromEnv
-      ? [fromEnv]
-      : this.opts?.configPaths && this.opts.configPaths.length > 0
-        ? this.opts.configPaths
-        : this.opts?.configPath
-          ? [this.opts.configPath]
-          : resolveDefaultConfigPaths();
-    const byId = new Map<string, OAuthProviderSpec>();
-
-    for (const path of paths) {
-      if (!path) continue;
-      if (!(await fileExists(path))) continue;
-
-      const raw = await readFile(path, "utf-8");
-      const parsed = parseYaml(raw) as unknown;
-      const cfg = parseOAuthProviderConfigFile(parsed ?? {});
-      for (const spec of cfg.providers) {
-        byId.set(spec.provider_id, spec);
-      }
-      break;
-    }
-
-    this.cached = byId;
-    this.cachedAtMs = now;
-    return byId;
+  async list(input: { tenantId: string }): Promise<OAuthProviderSpec[]> {
+    const rows = await this.db.all<RawOAuthProviderConfigRow>(
+      `SELECT tenant_id, provider_id, display_name, issuer, authorization_endpoint, token_endpoint,
+              device_authorization_endpoint, scopes_json, client_id, client_secret_key,
+              token_endpoint_basic_auth, extra_authorize_params_json, extra_token_params_json
+         FROM oauth_provider_configs
+        WHERE tenant_id = ?
+        ORDER BY provider_id ASC`,
+      [input.tenantId],
+    );
+    return rows.map(rowToSpec);
   }
 }

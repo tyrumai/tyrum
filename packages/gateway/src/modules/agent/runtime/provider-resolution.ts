@@ -55,18 +55,7 @@ export function getStopFallbackApiCallError(err: unknown): APICallError | undefi
   return undefined;
 }
 
-export function resolveEnvApiKey(providerEnv: readonly string[] | undefined): string | undefined {
-  for (const key of providerEnv ?? []) {
-    if (!/(_API_KEY|_TOKEN)$/i.test(key)) continue;
-    const raw = process.env[key];
-    const trimmed = typeof raw === "string" ? raw.trim() : "";
-    if (trimmed.length > 0) return trimmed;
-  }
-  return undefined;
-}
-
 export function resolveProviderBaseURL(input: {
-  providerEnv: readonly string[] | undefined;
   providerApi: string | undefined;
   options?: Record<string, unknown> | undefined;
 }): string | undefined {
@@ -77,14 +66,6 @@ export function resolveProviderBaseURL(input: {
     undefined;
   if (typeof raw === "string" && raw.trim().length > 0) {
     return raw.trim();
-  }
-
-  const endpointKey = (input.providerEnv ?? []).find((key) =>
-    /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key),
-  );
-  const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
-  if (endpoint && endpoint.length > 0) {
-    return endpoint;
   }
 
   const api = input.providerApi?.trim();
@@ -227,16 +208,20 @@ export async function resolveProfileApiKey(
       );
       if (!refreshToken) return null;
 
-      const spec = await deps.oauthProviderRegistry.get(profile.provider_key);
+      const spec = await deps.oauthProviderRegistry.get({
+        tenantId: deps.tenantId,
+        providerId: profile.provider_key,
+      });
       if (!spec) return null;
 
-      const clientIdEnv = spec.client_id_env?.trim();
-      if (!clientIdEnv) return null;
-      const clientId = process.env[clientIdEnv]?.trim();
+      const clientId = spec.client_id?.trim();
       if (!clientId) return null;
 
-      const clientSecretEnv = spec.client_secret_env?.trim();
-      const clientSecret = clientSecretEnv ? process.env[clientSecretEnv]?.trim() : undefined;
+      const clientSecretKey = spec.client_secret_key?.trim();
+      const clientSecret = clientSecretKey
+        ? await deps.secretProvider!.resolve(buildDbHandle(clientSecretKey))
+        : null;
+      if (spec.token_endpoint_basic_auth && !clientSecret) return null;
 
       const { tokenEndpoint } = await resolveOAuthEndpoints(spec, {
         fetchImpl: deps.fetchImpl,
@@ -248,7 +233,7 @@ export async function resolveProfileApiKey(
       const token = await refreshAccessToken({
         tokenEndpoint,
         clientId,
-        clientSecret,
+        clientSecret: clientSecret ?? undefined,
         tokenEndpointBasicAuth: spec.token_endpoint_basic_auth,
         refreshToken,
         scope: scope || undefined,

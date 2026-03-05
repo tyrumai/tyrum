@@ -3,6 +3,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
+import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
+import { createDbSecretProvider } from "../../src/modules/secret/create-secret-provider.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -40,24 +43,41 @@ vi.mock("../../src/modules/models/provider-factory.js", () => {
 
 describe("AgentRuntime baseURL resolution", () => {
   let container: GatewayContainer | undefined;
+  let tempDir: string | undefined;
 
   afterEach(async () => {
     await container?.db.close();
     container = undefined;
     seenBaseUrls.length = 0;
-    delete process.env["OPENAI_API_KEY"];
-    delete process.env["OPENAI_BASE_URL"];
-    delete process.env["TYRUM_AUTH_PROFILES_ENABLED"];
+    if (tempDir) {
+      const { rmSync } = await import("node:fs");
+      rmSync(tempDir, { recursive: true, force: true });
+      tempDir = undefined;
+    }
   });
 
-  it("prefers endpoint env vars over catalog api for language models", async () => {
-    process.env["OPENAI_API_KEY"] = "openai-key";
-    process.env["OPENAI_BASE_URL"] = "https://env.example";
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "0";
-
+  it("uses catalog api as baseURL when no model override is provided", async () => {
     container = createContainer({
       dbPath: ":memory:",
       migrationsDir,
+    });
+
+    tempDir = await (
+      await import("node:fs/promises")
+    ).mkdtemp(join((await import("node:os")).tmpdir(), "tyrum-baseurl-resolution-"));
+    const secretProvider = await createDbSecretProvider({
+      db: container.db,
+      dbPath: ":memory:",
+      tyrumHome: tempDir,
+      tenantId: DEFAULT_TENANT_ID,
+    });
+    await secretProvider.store("openai_api_key", "openai-key");
+    await new AuthProfileDal(container.db).create({
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: "profile-1",
+      providerKey: "openai",
+      type: "api_key",
+      secretKeys: { api_key: "openai_api_key" },
     });
 
     const cacheDal = new ModelsDevCacheDal(container.db);
@@ -87,7 +107,9 @@ describe("AgentRuntime baseURL resolution", () => {
     const runtime = new AgentRuntime({
       container,
       agentId: "agent-1",
+      tenantId: DEFAULT_TENANT_ID,
       fetchImpl,
+      secretProvider,
     });
 
     const model = await (
@@ -96,6 +118,7 @@ describe("AgentRuntime baseURL resolution", () => {
       }
     ).resolveSessionModel({
       config: { model: { model: "openai/gpt-4.1", options: {} } },
+      tenantId: DEFAULT_TENANT_ID,
       sessionId: "session-1",
       fetchImpl,
     });
@@ -103,6 +126,6 @@ describe("AgentRuntime baseURL resolution", () => {
     await model.doGenerate({} as any);
 
     expect(seenBaseUrls.length).toBeGreaterThan(0);
-    expect(seenBaseUrls.every((x) => x === "https://env.example")).toBe(true);
+    expect(seenBaseUrls.every((x) => x === "https://catalog.example")).toBe(true);
   });
 });

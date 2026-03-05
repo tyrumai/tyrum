@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { Hono } from "hono";
 import { createDatabase } from "../../src/db.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 import { buildStatusDetails } from "../../src/modules/observability/status-details.js";
 import { createStatusRoutes } from "../../src/routes/status.js";
+
+const TEST_TENANT_ID = "00000000-0000-0000-0000-000000000000";
 
 function openBareSqliteDb(): SqlDb {
   const raw = createDatabase(":memory:");
@@ -40,7 +43,7 @@ describe("status details missing tables", () => {
   it("does not throw when observability tables are missing", async () => {
     db = openBareSqliteDb();
 
-    const details = await buildStatusDetails({ db });
+    const details = await buildStatusDetails({ tenantId: TEST_TENANT_ID, db });
     expect(details.model_auth.auth_profiles).toBeNull();
     expect(details.session_lanes).toEqual([]);
     expect(details.queue_depth).toBeNull();
@@ -50,7 +53,7 @@ describe("status details missing tables", () => {
   it("GET /status returns ok when observability tables are missing", async () => {
     db = openBareSqliteDb();
 
-    const app = createStatusRoutes({
+    const routes = createStatusRoutes({
       version: "test-version",
       instanceId: "test-instance",
       role: "all",
@@ -59,6 +62,19 @@ describe("status details missing tables", () => {
       isLocalOnly: true,
       otelEnabled: false,
     });
+
+    const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: TEST_TENANT_ID,
+        role: "admin",
+        scopes: [],
+      });
+      return await next();
+    });
+    app.route("/", routes);
 
     const res = await app.request("/status");
     expect(res.status).toBe(200);
@@ -72,6 +88,7 @@ describe("status details missing tables", () => {
 
     await db.exec(
       `CREATE TABLE execution_runs (
+         tenant_id TEXT NOT NULL,
          key TEXT NOT NULL,
          lane TEXT NOT NULL,
          run_id TEXT NOT NULL,
@@ -80,14 +97,14 @@ describe("status details missing tables", () => {
        );`,
     );
     await db.exec(
-      `INSERT INTO execution_runs (key, lane, run_id, status, created_at) VALUES
-         ('agent:default:ui:main', 'main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
-         ('agent:default:ui:main', 'main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
-         ('agent:default:ui:main', 'main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
-         ('agent:default:ui:main', 'main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
+      `INSERT INTO execution_runs (tenant_id, key, lane, run_id, status, created_at) VALUES
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
     );
 
-    const details = await buildStatusDetails({ db });
+    const details = await buildStatusDetails({ tenantId: TEST_TENANT_ID, db });
 
     expect(details.queue_depth).not.toBeNull();
     expect(details.queue_depth?.execution_runs.queued).toBe(2);
@@ -106,6 +123,7 @@ describe("status details missing tables", () => {
 
     await db.exec(
       `CREATE TABLE execution_runs (
+         tenant_id TEXT NOT NULL,
          key TEXT NOT NULL,
          lane TEXT NOT NULL,
          run_id TEXT NOT NULL,
@@ -114,14 +132,14 @@ describe("status details missing tables", () => {
        );`,
     );
     await db.exec(
-      `INSERT INTO execution_runs (key, lane, run_id, status, created_at) VALUES
-         ('agent:default:ui:main', 'main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
-         ('agent:default:ui:main', 'main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
-         ('agent:default:ui:main', 'main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
-         ('agent:default:ui:main', 'main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
+      `INSERT INTO execution_runs (tenant_id, key, lane, run_id, status, created_at) VALUES
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
+         ('${TEST_TENANT_ID}', 'agent:default:ui:main', 'main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
     );
 
-    const details = await buildStatusDetails({ db });
+    const details = await buildStatusDetails({ tenantId: TEST_TENANT_ID, db });
 
     expect(details.session_lanes).toHaveLength(1);
     expect(details.session_lanes[0]).toEqual({
@@ -141,6 +159,7 @@ describe("status details missing tables", () => {
 
     await db.exec(
       `CREATE TABLE auth_profiles (
+         tenant_id TEXT NOT NULL,
          auth_profile_id TEXT NOT NULL,
          provider_key TEXT NOT NULL,
          type TEXT NOT NULL,
@@ -150,17 +169,18 @@ describe("status details missing tables", () => {
     );
     await db.exec(
       `INSERT INTO auth_profiles (
+         tenant_id,
          auth_profile_id,
          provider_key,
          type,
          status,
          updated_at
        ) VALUES
-         ('profile-1', 'openai', 'api_key', 'active', '2026-02-23T00:00:01.000Z'),
-         ('profile-2', 'openai', 'api_key', 'disabled', '2026-02-23T00:00:00.000Z');`,
+         ('${TEST_TENANT_ID}', 'profile-1', 'openai', 'api_key', 'active', '2026-02-23T00:00:01.000Z'),
+         ('${TEST_TENANT_ID}', 'profile-2', 'openai', 'api_key', 'disabled', '2026-02-23T00:00:00.000Z');`,
     );
 
-    const details = await buildStatusDetails({ db });
+    const details = await buildStatusDetails({ tenantId: TEST_TENANT_ID, db });
     const auth = details.model_auth.auth_profiles as NonNullable<
       typeof details.model_auth.auth_profiles
     >;

@@ -1,19 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { createIngressRoutes } from "../../src/routes/ingress.js";
 
 describe("Ingress routes", () => {
-  const prevSecret = process.env["TELEGRAM_WEBHOOK_SECRET"];
-
-  beforeEach(() => {
-    process.env["TELEGRAM_WEBHOOK_SECRET"] = "test-secret";
-  });
-
-  afterEach(() => {
-    if (prevSecret === undefined) delete process.env["TELEGRAM_WEBHOOK_SECRET"];
-    else process.env["TELEGRAM_WEBHOOK_SECRET"] = prevSecret;
-  });
-
   it("logs when durable routing config load fails", async () => {
     const logger = { warn: vi.fn() } as any;
     const routingConfigDal = {
@@ -35,6 +24,7 @@ describe("Ingress routes", () => {
       "/",
       createIngressRoutes({
         telegramBot,
+        telegramWebhookSecret: "test-secret",
         agents,
         telegramQueue,
         routingConfigDal,

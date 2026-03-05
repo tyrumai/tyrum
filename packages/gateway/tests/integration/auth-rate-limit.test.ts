@@ -5,7 +5,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestApp } from "./helpers.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { SlidingWindowRateLimiter } from "../../src/modules/auth/rate-limiter.js";
 
 async function startServer(server: Server): Promise<number> {
@@ -35,8 +34,6 @@ describe("Auth rate limiting", () => {
 
   it("returns 429 Too Many Requests after 20 /auth/session requests per minute", async () => {
     tokenHome = await mkdtemp(join(tmpdir(), "tyrum-auth-rate-limit-"));
-    const tokenStore = new TokenStore(tokenHome);
-    const adminToken = await tokenStore.initialize();
 
     const limiter = new SlidingWindowRateLimiter({
       windowMs: 60_000,
@@ -44,11 +41,12 @@ describe("Auth rate limiting", () => {
       cleanupIntervalMs: 0,
     });
 
-    const { app, container } = await createTestApp({
-      tokenStore,
+    const { app, container, auth } = await createTestApp({
+      tyrumHome: tokenHome,
       isLocalOnly: true,
       authRateLimiter: limiter,
     });
+    const adminToken = auth.tenantAdminToken;
 
     const requestListener = getRequestListener(app.fetch);
     server = createServer(requestListener);
@@ -77,6 +75,62 @@ describe("Auth rate limiting", () => {
     expect(Number.isFinite(retryAfterSeconds)).toBe(true);
     expect(retryAfterSeconds).toBeGreaterThanOrEqual(1);
     expect(retryAfterSeconds).toBeLessThanOrEqual(60);
+
+    limiter.stop();
+    await container.db.close();
+  });
+
+  it("returns 429 Too Many Requests after 2 /auth/device-tokens/issue requests per minute", async () => {
+    tokenHome = await mkdtemp(join(tmpdir(), "tyrum-auth-rate-limit-device-tokens-"));
+
+    const limiter = new SlidingWindowRateLimiter({
+      windowMs: 60_000,
+      max: 2,
+      cleanupIntervalMs: 0,
+    });
+
+    const { app, container, auth } = await createTestApp({
+      tyrumHome: tokenHome,
+      isLocalOnly: true,
+      authRateLimiter: limiter,
+    });
+    const adminToken = auth.tenantAdminToken;
+
+    const requestListener = getRequestListener(app.fetch);
+    server = createServer(requestListener);
+    const port = await startServer(server);
+    const url = `http://127.0.0.1:${String(port)}/auth/device-tokens/issue`;
+
+    for (let i = 0; i < 2; i += 1) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          device_id: `test-device-${String(i + 1)}`,
+          role: "client",
+          scopes: ["*"],
+        }),
+      });
+      expect(res.status).toBe(201);
+    }
+
+    const rateLimited = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        device_id: "test-device-3",
+        role: "client",
+        scopes: ["*"],
+      }),
+    });
+
+    expect(rateLimited.status).toBe(429);
 
     limiter.stop();
     await container.db.close();

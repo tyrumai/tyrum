@@ -71,27 +71,15 @@ describe("Watcher routes + scheduler integration", () => {
   let memoryV1Dal: MemoryV1Dal;
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
-  let secretProviders: Map<string, InMemorySecretProvider>;
+  let secretProvider: InMemorySecretProvider;
   let app: Hono;
-
-  function secretProviderFor(agentId: string): InMemorySecretProvider {
-    const trimmed = agentId.trim();
-    const existing = secretProviders.get(trimmed);
-    if (existing) return existing;
-    const created = new InMemorySecretProvider();
-    secretProviders.set(trimmed, created);
-    return created;
-  }
 
   async function createWebhookWatcher(
     secretValue: string,
     maxSkewMs = 60_000,
     agentId = "default",
   ): Promise<string> {
-    const handle = await secretProviderFor(agentId).store(
-      `watcher-webhook-${randomUUID()}`,
-      secretValue,
-    );
+    const handle = await secretProvider.store(`watcher-webhook-${randomUUID()}`, secretValue);
     const res = await app.request("/watchers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -117,12 +105,12 @@ describe("Watcher routes + scheduler integration", () => {
     memoryV1Dal = new MemoryV1Dal(db);
     eventBus = mitt<GatewayEvents>();
     processor = new WatcherProcessor({ db, memoryV1Dal, eventBus });
-    secretProviders = new Map([["default", new InMemorySecretProvider()]]);
+    secretProvider = new InMemorySecretProvider();
     app = new Hono();
     app.route(
       "/",
       createWatcherRoutes(processor, {
-        secretProviderForAgent: async (agentId) => secretProviderFor(agentId),
+        secretProviderForTenant: () => secretProvider,
       }),
     );
   });
@@ -356,8 +344,6 @@ describe("Watcher routes + scheduler integration", () => {
 
   it("POST /watchers/:id/trigger/webhook uses watcher-configured agent_key for secret resolution", async () => {
     const agentA = "agent-a";
-    const agentB = "agent-b";
-    void secretProviderFor(agentB);
 
     const secretA = "secret-a";
     const watcherId = await createWebhookWatcher(secretA, 120_000, agentA);

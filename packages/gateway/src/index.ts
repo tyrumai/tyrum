@@ -9,19 +9,21 @@ import { createServer as createHttpsServer } from "node:https";
 import { createServer as createHttpServer } from "node:http";
 import { mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { isIP } from "node:net";
+import { homedir } from "node:os";
 import { getRequestListener } from "@hono/node-server";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PluginManifest } from "@tyrum/schemas";
-import { createContainerAsync } from "./container.js";
+import { AgentConfig, DeploymentConfig } from "@tyrum/schemas";
+import { wireContainer } from "./container.js";
+import type { SqlDb } from "./statestore/types.js";
 import { createApp } from "./app.js";
 import { NodeDispatchService } from "./modules/agent/node-dispatch-service.js";
-import { TokenStore } from "./modules/auth/token-store.js";
+import { AuthTokenService } from "./modules/auth/auth-token-service.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
 import { WorkSignalScheduler } from "./modules/workboard/signal-scheduler.js";
-import { createDbSecretProvider } from "./modules/secret/create-secret-provider.js";
+import { createDbSecretProviderFactory } from "./modules/secret/create-secret-provider.js";
 import { ArtifactLifecycleScheduler } from "./modules/artifact/lifecycle.js";
 import { WsNotifier } from "./modules/approval/notifier.js";
 import { OutboxDal } from "./modules/backplane/outbox-dal.js";
@@ -47,30 +49,29 @@ import { createKubernetesToolRunnerStepExecutor } from "./modules/execution/kube
 import { createGatewayStepExecutor } from "./modules/execution/gateway-step-executor.js";
 import { createNodeDispatchStepExecutor } from "./modules/execution/node-dispatch-step-executor.js";
 import { runToolRunnerFromStdio } from "./toolrunner.js";
+import { DeploymentConfigDal } from "./modules/config/deployment-config-dal.js";
+import { AgentConfigDal } from "./modules/config/agent-config-dal.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
+import { SqliteDb } from "./statestore/sqlite.js";
+import { PostgresDb } from "./statestore/postgres.js";
 import { VERSION } from "./version.js";
-import { resolveTyrumHome, resolveUserTyrumHome } from "./modules/agent/home.js";
-import { loadAgentConfig } from "./modules/agent/workspace.js";
-import { PluginRegistry, resolveBundledPluginsDirFrom } from "./modules/plugins/registry.js";
+import { PluginRegistry } from "./modules/plugins/registry.js";
 import { installPluginFromDir } from "./modules/plugins/installer.js";
 import { AgentRegistry } from "./modules/agent/registry.js";
-import { isRecord, parseJsonOrYaml } from "./utils/parse-json-or-yaml.js";
+import { isRecord } from "./utils/parse-json-or-yaml.js";
 import { loadLifecycleHooksFromHome } from "./modules/hooks/config.js";
 import { LifecycleHooksRuntime } from "./modules/hooks/runtime.js";
-import { loadConfigFromProcessEnv } from "./config.js";
 import { ensureSelfSignedTlsMaterial } from "./modules/tls/self-signed.js";
 import { DEFAULT_TENANT_ID } from "./modules/identity/scope.js";
+import { createMemoryV1BudgetsProvider } from "./modules/memory/v1-budgets-provider.js";
 
 // Re-export for library consumers
 export { VERSION } from "./version.js";
 export { createContainer, createContainerAsync } from "./container.js";
 export type { GatewayContainer, GatewayContainerConfig } from "./container.js";
-export type { GatewayConfig } from "./config.js";
-export { GatewayConfigSchema, loadConfig } from "./config.js";
 export { createApp } from "./app.js";
 export { createEventBus } from "./event-bus.js";
 export type { GatewayEvents, EventBus } from "./event-bus.js";
-export { TokenStore } from "./modules/auth/token-store.js";
 export { createWsHandler } from "./routes/ws.js";
 export type { WsRouteOptions } from "./routes/ws.js";
 export { ConnectionManager } from "./ws/connection-manager.js";
@@ -225,10 +226,10 @@ export type NonLoopbackTransportPolicy = "local" | "tls" | "insecure";
 export function assertNonLoopbackDeploymentGuardrails(input: {
   role: GatewayRole;
   host: string;
-  token: string | undefined;
   tlsReady?: boolean;
   tlsSelfSigned?: boolean;
   allowInsecureHttp?: boolean;
+  hasTenantAdminToken?: boolean;
 }): NonLoopbackTransportPolicy {
   const shouldRunEdge = input.role === "all" || input.role === "edge";
   if (!shouldRunEdge) return "local";
@@ -238,19 +239,10 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
   const isLocalOnly = isLoopbackHost(hostForLoopback);
   if (isLocalOnly) return "local";
 
-  const token = input.token?.trim() ?? "";
-  if (token.length === 0) {
+  if (input.hasTenantAdminToken === false) {
     throw new Error(
-      "Gateway is exposed beyond loopback but no admin token is configured. " +
-        "Set GATEWAY_TOKEN (recommended) or provide a non-empty TYRUM_HOME/.admin-token file.",
-    );
-  }
-
-  const minTokenLength = 32;
-  if (token.length < minTokenLength) {
-    throw new Error(
-      `Gateway is exposed beyond loopback but the admin token is too short (${token.length}). ` +
-        `Set GATEWAY_TOKEN to a high-entropy secret of at least ${minTokenLength} characters.`,
+      "Gateway is configured to bind to a non-loopback address but no tenant admin tokens exist. " +
+        "Create a tenant admin token before exposing the gateway beyond loopback.",
     );
   }
 
@@ -263,17 +255,28 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
 
   throw new Error(
     "Gateway is configured to bind to a non-loopback address. Remote operation requires TLS. " +
-      "Set TYRUM_TLS_READY=1 after configuring TLS termination (recommended), " +
-      "or set TYRUM_TLS_SELF_SIGNED=1 to enable built-in self-signed TLS, " +
-      "or set TYRUM_ALLOW_INSECURE_HTTP=1 to acknowledge and allow plaintext HTTP in a trusted network.",
+      "Configure TLS termination and set deployment config server.tlsReady=true (recommended), " +
+      "or set deployment config server.tlsSelfSigned=true to enable built-in self-signed TLS, " +
+      "or set deployment config server.allowInsecureHttp=true to acknowledge and allow plaintext HTTP in a trusted network.",
   );
 }
 
 type CliCommand =
-  | { kind: "start"; role?: GatewayRole }
-  | { kind: "check" }
-  | { kind: "tls_fingerprint" }
-  | { kind: "toolrunner" }
+  | {
+      kind: "start";
+      role?: GatewayRole;
+      home?: string;
+      db?: string;
+      host?: string;
+      port?: number;
+      migrationsDir?: string;
+      allowInsecureHttp?: boolean;
+      engineApiEnabled?: boolean;
+      snapshotImportEnabled?: boolean;
+    }
+  | { kind: "check"; home?: string; db?: string; migrationsDir?: string }
+  | { kind: "tls_fingerprint"; home?: string }
+  | { kind: "toolrunner"; home?: string; db?: string; migrationsDir?: string; payloadB64?: string }
   | { kind: "help" }
   | { kind: "version" }
   | { kind: "update"; channel: UpdateChannel; version?: string }
@@ -283,7 +286,7 @@ export function assertSplitRoleUsesPostgres(role: GatewayRole, dbPath: string): 
   if (role === "all") return;
   if (isPostgresDbUri(dbPath)) return;
   throw new Error(
-    `role '${role}' requires Postgres (set GATEWAY_DB_PATH to a postgres:// URI). ` +
+    `role '${role}' requires Postgres (set --db to a postgres:// URI). ` +
       `Use 'all' for single-process SQLite deployments.`,
   );
 }
@@ -308,11 +311,118 @@ export function ensureDatabaseDirectory(dbPath: string): void {
   }
 }
 
+function resolveGatewayHome(homeOverride?: string): string {
+  const trimmed = homeOverride?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : join(homedir(), ".tyrum");
+}
+
+function resolveGatewayDbPath(home: string, dbOverride?: string): string {
+  const trimmed = dbOverride?.trim();
+  if (trimmed && trimmed.length > 0) return trimmed;
+  return join(home, "gateway.db");
+}
+
+function resolveGatewayHost(hostOverride?: string): string {
+  const trimmed = hostOverride?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : "127.0.0.1";
+}
+
+function resolveGatewayPort(portOverride?: number): number {
+  if (typeof portOverride === "number" && Number.isFinite(portOverride)) {
+    const parsed = Math.floor(portOverride);
+    if (parsed >= 1 && parsed <= 65535) return parsed;
+  }
+  return 8788;
+}
+
+function resolveDefaultMigrationsDir(dbPath: string): string {
+  return isPostgresDbUri(dbPath)
+    ? join(__dirname, "../migrations/postgres")
+    : join(__dirname, "../migrations/sqlite");
+}
+
+function resolveGatewayMigrationsDir(dbPath: string, override?: string): string {
+  const trimmed = override?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : resolveDefaultMigrationsDir(dbPath);
+}
+
+function resolveTruthyEnvFlag(name: string): boolean {
+  const raw = process.env[name];
+  if (typeof raw !== "string") return false;
+
+  switch (raw.trim().toLowerCase()) {
+    case "1":
+    case "true":
+    case "yes":
+    case "on":
+      return true;
+    default:
+      return false;
+  }
+}
+
+export function resolveSnapshotImportEnabled(snapshotImportOverride?: boolean): boolean {
+  return Boolean(snapshotImportOverride) || resolveTruthyEnvFlag("TYRUM_SNAPSHOT_IMPORT_ENABLED");
+}
+
+type StartCommandOverrides = Pick<
+  Extract<CliCommand, { kind: "start" }>,
+  "allowInsecureHttp" | "engineApiEnabled" | "snapshotImportEnabled"
+>;
+
+export function buildStartupDefaultDeploymentConfig(
+  overrides: StartCommandOverrides,
+): DeploymentConfig {
+  return DeploymentConfig.parse({
+    server: {
+      allowInsecureHttp: Boolean(overrides.allowInsecureHttp),
+    },
+    execution: {
+      engineApiEnabled: Boolean(overrides.engineApiEnabled),
+    },
+    snapshots: {
+      importEnabled: resolveSnapshotImportEnabled(overrides.snapshotImportEnabled),
+    },
+  });
+}
+
+export function applyStartCommandDeploymentOverrides(
+  deploymentConfig: DeploymentConfig,
+  overrides: StartCommandOverrides,
+): DeploymentConfig {
+  return DeploymentConfig.parse({
+    ...deploymentConfig,
+    server: {
+      ...deploymentConfig.server,
+      allowInsecureHttp:
+        deploymentConfig.server.allowInsecureHttp || Boolean(overrides.allowInsecureHttp),
+    },
+    execution: {
+      ...deploymentConfig.execution,
+      engineApiEnabled:
+        deploymentConfig.execution.engineApiEnabled || Boolean(overrides.engineApiEnabled),
+    },
+    snapshots: {
+      ...deploymentConfig.snapshots,
+      importEnabled:
+        deploymentConfig.snapshots.importEnabled || Boolean(overrides.snapshotImportEnabled),
+    },
+  });
+}
+
+async function openGatewayDb(params: { dbPath: string; migrationsDir: string }): Promise<SqlDb> {
+  const dbPath = params.dbPath.trim();
+  if (isPostgresDbUri(dbPath)) {
+    return await PostgresDb.open({ dbUri: dbPath, migrationsDir: params.migrationsDir });
+  }
+  return SqliteDb.open({ dbPath, migrationsDir: params.migrationsDir });
+}
+
 function printCliHelp(): void {
   console.log(`Tyrum gateway
 
 Usage:
-  tyrum [start|edge|worker|scheduler]
+  tyrum [start|edge|worker|scheduler] [--home <path>] [--db <path|postgres-uri>] [--host <host>] [--port <port>] [--role <role>]
   tyrum check
   tyrum tls fingerprint
   tyrum toolrunner
@@ -323,7 +433,6 @@ Usage:
 
 Notes:
   - Running without subcommands starts all roles (edge + worker + scheduler).
-  - You can also set TYRUM_ROLE=all|edge|worker|scheduler.
   - --version takes precedence over --channel for updates.
 `);
 }
@@ -359,26 +468,243 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   if (!first) return { kind: "start" };
 
   if (first === "-h" || first === "--help") return { kind: "help" };
-  if (first === "-v" || first === "--version" || first === "version") {
-    return { kind: "version" };
+  if (first === "-v" || first === "--version" || first === "version") return { kind: "version" };
+
+  const parsePortFlag = (value: string): number => {
+    const trimmed = value.trim();
+    if (!/^[0-9]+$/.test(trimmed)) {
+      throw new Error(`--port must be an integer between 1 and 65535 (got '${value}')`);
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535) {
+      throw new Error(`--port must be an integer between 1 and 65535 (got '${value}')`);
+    }
+    return parsed;
+  };
+
+  const parseRoleFlag = (value: string): GatewayRole => {
+    const normalized = value.trim().toLowerCase();
+    if (
+      normalized === "all" ||
+      normalized === "edge" ||
+      normalized === "worker" ||
+      normalized === "scheduler"
+    ) {
+      return normalized;
+    }
+    throw new Error(`--role must be one of all|edge|worker|scheduler (got '${value}')`);
+  };
+
+  type CommonDbFlags = { home?: string; db?: string; migrationsDir?: string };
+
+  const parseCommonDbFlag = (
+    args: readonly string[],
+    index: number,
+    target: CommonDbFlags,
+  ): { handled: boolean; nextIndex: number } => {
+    const arg = args[index];
+    if (!arg) return { handled: false, nextIndex: index };
+
+    if (arg === "--home") {
+      const value = args[index + 1];
+      if (!value) throw new Error("--home requires a value");
+      target.home = value;
+      return { handled: true, nextIndex: index + 1 };
+    }
+
+    if (arg === "--db") {
+      const value = args[index + 1];
+      if (!value) throw new Error("--db requires a value");
+      target.db = value;
+      return { handled: true, nextIndex: index + 1 };
+    }
+
+    if (arg === "--migrations-dir") {
+      const value = args[index + 1];
+      if (!value) throw new Error("--migrations-dir requires a value");
+      target.migrationsDir = value;
+      return { handled: true, nextIndex: index + 1 };
+    }
+
+    return { handled: false, nextIndex: index };
+  };
+
+  const parseStartFlags = (
+    args: readonly string[],
+  ): Omit<CliCommand & { kind: "start" }, "kind"> | { kind: "help" } => {
+    const common: CommonDbFlags = {};
+    let host: string | undefined;
+    let port: number | undefined;
+    let role: GatewayRole | undefined;
+    let allowInsecureHttp: true | undefined;
+    let engineApiEnabled: true | undefined;
+    let snapshotImportEnabled: true | undefined;
+
+    for (let index = 0; index < args.length; index += 1) {
+      const arg = args[index];
+      if (!arg) continue;
+
+      if (arg === "-h" || arg === "--help") return { kind: "help" };
+
+      const commonFlag = parseCommonDbFlag(args, index, common);
+      if (commonFlag.handled) {
+        index = commonFlag.nextIndex;
+        continue;
+      }
+
+      if (arg === "--host") {
+        const value = args[index + 1];
+        if (!value) throw new Error("--host requires a value");
+        host = value;
+        index += 1;
+        continue;
+      }
+
+      if (arg === "--port") {
+        const value = args[index + 1];
+        if (!value) throw new Error("--port requires a value");
+        port = parsePortFlag(value);
+        index += 1;
+        continue;
+      }
+
+      if (arg === "--role") {
+        const value = args[index + 1];
+        if (!value) throw new Error("--role requires a value");
+        role = parseRoleFlag(value);
+        index += 1;
+        continue;
+      }
+
+      if (arg === "--allow-insecure-http") {
+        allowInsecureHttp = true;
+        continue;
+      }
+
+      if (arg === "--enable-engine-api") {
+        engineApiEnabled = true;
+        continue;
+      }
+
+      if (arg === "--enable-snapshot-import") {
+        snapshotImportEnabled = true;
+        continue;
+      }
+
+      throw new Error(`unsupported start argument '${arg}'`);
+    }
+
+    return {
+      home: common.home,
+      db: common.db,
+      host,
+      port,
+      role,
+      migrationsDir: common.migrationsDir,
+      allowInsecureHttp,
+      engineApiEnabled,
+      snapshotImportEnabled,
+    };
+  };
+
+  const parseDbFlags = (
+    args: readonly string[],
+  ): { home?: string; db?: string; migrationsDir?: string } | { kind: "help" } => {
+    const common: CommonDbFlags = {};
+
+    for (let index = 0; index < args.length; index += 1) {
+      const arg = args[index];
+      if (!arg) continue;
+
+      if (arg === "-h" || arg === "--help") return { kind: "help" };
+
+      const commonFlag = parseCommonDbFlag(args, index, common);
+      if (commonFlag.handled) {
+        index = commonFlag.nextIndex;
+        continue;
+      }
+
+      throw new Error(`unsupported argument '${arg}'`);
+    }
+
+    return { home: common.home, db: common.db, migrationsDir: common.migrationsDir };
+  };
+
+  const parseToolrunnerFlags = (
+    args: readonly string[],
+  ):
+    | { home?: string; db?: string; migrationsDir?: string; payloadB64?: string }
+    | { kind: "help" } => {
+    const common: CommonDbFlags = {};
+    let payloadB64: string | undefined;
+
+    for (let index = 0; index < args.length; index += 1) {
+      const arg = args[index];
+      if (!arg) continue;
+
+      if (arg === "-h" || arg === "--help") return { kind: "help" };
+
+      const commonFlag = parseCommonDbFlag(args, index, common);
+      if (commonFlag.handled) {
+        index = commonFlag.nextIndex;
+        continue;
+      }
+
+      if (arg === "--payload-b64") {
+        const value = args[index + 1];
+        if (!value) throw new Error("--payload-b64 requires a value");
+        payloadB64 = value;
+        index += 1;
+        continue;
+      }
+
+      throw new Error(`unsupported argument '${arg}'`);
+    }
+
+    return {
+      home: common.home,
+      db: common.db,
+      migrationsDir: common.migrationsDir,
+      payloadB64,
+    };
+  };
+
+  if (first === "start") {
+    const flags = parseStartFlags(rest);
+    if ("kind" in flags) return flags;
+    return { kind: "start", ...flags };
   }
-  if (first === "start") return { kind: "start" };
+
   if (first === "all" || first === "edge" || first === "worker" || first === "scheduler") {
-    return { kind: "start", role: first };
+    const flags = parseStartFlags(rest);
+    if ("kind" in flags) return flags;
+    return { kind: "start", ...flags, role: flags.role ?? first };
   }
-  if (first === "check") return { kind: "check" };
-  if (first === "toolrunner") return { kind: "toolrunner" };
+
+  if (first === "check") {
+    const flags = parseDbFlags(rest);
+    if ("kind" in flags) return flags;
+    return { kind: "check", ...flags };
+  }
+
+  if (first === "toolrunner") {
+    const flags = parseToolrunnerFlags(rest);
+    if ("kind" in flags) return flags;
+    return { kind: "toolrunner", ...flags };
+  }
+
   if (first === "tls") {
     const [subcommand, ...args] = rest;
-    if (!subcommand) {
-      throw new Error("tls requires a subcommand (fingerprint)");
-    }
+    if (!subcommand) throw new Error("tls requires a subcommand (fingerprint)");
     if (subcommand === "-h" || subcommand === "--help") return { kind: "help" };
-    if (args.length > 0) {
-      throw new Error(`unexpected tls arguments: ${args.join(" ")}`);
+    if (subcommand !== "fingerprint") throw new Error(`unknown tls command '${subcommand}'`);
+
+    const flags = parseDbFlags(args);
+    if ("kind" in flags) return flags;
+    if (flags.db || flags.migrationsDir) {
+      throw new Error("tls fingerprint only supports --home");
     }
-    if (subcommand === "fingerprint") return { kind: "tls_fingerprint" };
-    throw new Error(`unknown tls command '${subcommand}'`);
+    return { kind: "tls_fingerprint", home: flags.home };
   }
 
   if (first === "plugin") {
@@ -428,9 +754,7 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     return { kind: "plugin_install", source_dir: sourceDir, home };
   }
 
-  if (first !== "update") {
-    throw new Error(`unknown command '${first}'`);
-  }
+  if (first !== "update") throw new Error(`unknown command '${first}'`);
 
   let channel: UpdateChannel = "stable";
   let version: string | undefined;
@@ -513,7 +837,7 @@ async function runGatewayUpdate(channel: UpdateChannel, version?: string): Promi
   return exitCode;
 }
 
-function splitHostAndPort(rawHost: string): { host: string; port: string | null } {
+export function splitHostAndPort(rawHost: string): { host: string; port: string | null } {
   const trimmed = rawHost.trim();
   if (trimmed.length === 0) {
     return { host: "", port: null };
@@ -548,7 +872,7 @@ function splitHostAndPort(rawHost: string): { host: string; port: string | null 
   // when the portion before the last colon is itself a valid IPv6 address.
   //
   // This prevents forming incorrect probe URLs like `http://[::1:8788]:8788`
-  // when a user configures GATEWAY_HOST="::1:8788".
+  // when a user passes --host "::1:8788".
   if (firstColon !== -1 && firstColon !== lastColon) {
     const host = trimmed.slice(0, lastColon);
     const port = trimmed.slice(lastColon + 1);
@@ -560,360 +884,52 @@ function splitHostAndPort(rawHost: string): { host: string; port: string | null 
   return { host: trimmed, port: null };
 }
 
-function normalizeProbeHost(host: string): string {
-  const trimmed = host.trim();
-  if (trimmed === "0.0.0.0") return "127.0.0.1";
-  if (trimmed === "::") return "::1";
-  return trimmed;
-}
+async function runGatewayCheck(cmd: Extract<CliCommand, { kind: "check" }>): Promise<number> {
+  const tyrumHome = resolveGatewayHome(cmd.home);
+  const dbPath = resolveGatewayDbPath(tyrumHome, cmd.db);
+  const migrationsDir = resolveGatewayMigrationsDir(dbPath, cmd.migrationsDir);
 
-function hostForUrl(host: string): string {
-  if (host.includes(":") && !host.startsWith("[")) {
-    return `[${host}]`;
-  }
-  return host;
-}
-
-async function loadPluginManifestFromDir(
-  dir: string,
-): Promise<
-  | { kind: "missing" }
-  | { kind: "invalid"; error: string }
-  | { kind: "ok"; manifest: { id: string; name: string; version: string } }
-> {
-  const candidates = ["plugin.yml", "plugin.yaml", "plugin.json"];
-  for (const filename of candidates) {
-    const path = join(dir, filename);
-    let raw: string;
-    try {
-      raw = await readFile(path, "utf-8");
-    } catch {
-      continue;
-    }
-
-    try {
-      const parsed = parseJsonOrYaml(raw, path);
-      if (!isRecord(parsed)) {
-        return { kind: "invalid", error: "manifest must be an object" };
-      }
-      const manifest = PluginManifest.parse(parsed);
-      const missingFields: string[] = [];
-      if (!manifest.entry) missingFields.push("entry");
-      if (!manifest.contributes) missingFields.push("contributes");
-      if (!manifest.permissions) missingFields.push("permissions");
-      if (missingFields.length > 0) {
-        return {
-          kind: "invalid",
-          error: `missing required manifest field(s): ${missingFields.join(", ")}`,
-        };
-      }
-      return {
-        kind: "ok",
-        manifest: { id: manifest.id, name: manifest.name, version: manifest.version },
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return { kind: "invalid", error: message };
-    }
-  }
-  return { kind: "missing" };
-}
-
-async function discoverPluginsInDir(dir: string): Promise<{
-  plugins: Array<{ id: string; name: string; version: string }>;
-  invalid_manifests: number;
-}> {
-  let entries;
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return { plugins: [], invalid_manifests: 0 };
-  }
-
-  const plugins: Array<{ id: string; name: string; version: string }> = [];
-  let invalidManifests = 0;
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const pluginDir = join(dir, entry.name);
-    const result = await loadPluginManifestFromDir(pluginDir);
-    if (result.kind === "ok") {
-      plugins.push(result.manifest);
-    } else if (result.kind === "invalid") {
-      invalidManifests += 1;
-    }
-  }
-
-  plugins.sort((a, b) => a.id.localeCompare(b.id));
-  return { plugins, invalid_manifests: invalidManifests };
-}
-
-function shortHash(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed.length <= 12) return trimmed;
-  return trimmed.slice(0, 12);
-}
-
-type AdminTokenSource = "env" | "file" | "generated";
-
-type GatewayPortInfo =
-  | { valid: true; port: number }
-  | { valid: false; port: number; raw: string | undefined };
-
-function extractInvalidGatewayPortRaw(message: string): string | undefined {
-  const match = message.match(/\bGATEWAY_PORT\b.*\bgot '([^']*)'/i);
-  return match?.[1];
-}
-
-function loadConfigForCheck(overrides: NodeJS.ProcessEnv = {}): {
-  config: ReturnType<typeof loadConfigFromProcessEnv>;
-  portInfo: GatewayPortInfo;
-} {
-  try {
-    const config = loadConfigFromProcessEnv(overrides);
-    return { config, portInfo: { valid: true, port: config.server.port } };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/\bGATEWAY_PORT\b/i.test(message)) {
-      const raw = extractInvalidGatewayPortRaw(message);
-      const config = loadConfigFromProcessEnv({ ...overrides, GATEWAY_PORT: undefined });
-      return { config, portInfo: { valid: false, port: config.server.port, raw } };
-    }
-    throw error;
-  }
-}
-
-async function tryFetchJson(
-  url: string,
-  init: RequestInit & { timeoutMs: number },
-): Promise<{
-  ok: boolean;
-  status: number;
-  json: unknown;
-  error?: string;
-}> {
-  const { timeoutMs, ...requestInit } = init;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      ...requestInit,
-      signal: controller.signal,
-    });
-    const text = await res.text();
-    let json: unknown = null;
-    try {
-      json = JSON.parse(text) as unknown;
-    } catch {
-      json = text;
-    }
-    return { ok: res.ok, status: res.status, json };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, status: 0, json: null, error: message };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function runGatewayCheck(): Promise<number> {
-  let config: ReturnType<typeof loadConfigFromProcessEnv>;
-  let portInfo: GatewayPortInfo;
-  let adminTokenSource: AdminTokenSource;
-  let token: string | undefined;
-
-  try {
-    const loaded = loadConfigForCheck();
-    config = loaded.config;
-    portInfo = loaded.portInfo;
-    adminTokenSource = "env";
-    token = config.auth.token;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!/GATEWAY_TOKEN/i.test(message)) {
-      console.error(`check: failed: ${message}`);
-      return 1;
-    }
-
-    const loaded = loadConfigForCheck({ GATEWAY_TOKEN: "check-token" });
-    config = loaded.config;
-    portInfo = loaded.portInfo;
-
-    const tokenPath = join(config.paths.home, ".admin-token");
-    try {
-      const raw = await readFile(tokenPath, "utf-8");
-      const trimmed = raw.trim();
-      if (trimmed.length > 0) {
-        const fileLoaded = loadConfigForCheck({ GATEWAY_TOKEN: trimmed });
-        config = fileLoaded.config;
-        portInfo = fileLoaded.portInfo;
-        adminTokenSource = "file";
-        token = trimmed;
-      } else {
-        adminTokenSource = "generated";
-        token = undefined;
-      }
-    } catch {
-      adminTokenSource = "generated";
-      token = undefined;
-    }
-  }
-
-  const dbPath = config.database.path;
-  const migrationsDir = config.database.migrationsDir;
-  const tyrumHome = config.paths.home;
-
-  let container: Awaited<ReturnType<typeof createContainerAsync>> | undefined;
+  let db: SqlDb | undefined;
   try {
     ensureDatabaseDirectory(dbPath);
+    db = await openGatewayDb({ dbPath, migrationsDir });
 
-    container = await createContainerAsync(
-      { dbPath, migrationsDir, tyrumHome },
-      { gatewayConfig: config },
-    );
+    const deploymentConfigDal = new DeploymentConfigDal(db);
+    const deployment = await deploymentConfigDal.ensureSeeded({
+      defaultConfig: DeploymentConfig.parse({}),
+      createdBy: { kind: "bootstrap.check" },
+      reason: "seed",
+    });
 
-    const models = await container.modelsDev.ensureLoaded();
-    await container.oauthProviderRegistry.list();
+    const authTokens = new AuthTokenService(db);
+    const systemTokens = await authTokens.countActiveSystemTokens();
+    const defaultTenantTokens = await authTokens.countActiveTenantTokens(DEFAULT_TENANT_ID);
 
     console.log("check: ok");
+    console.log(`db: kind=${db.kind} path=${dbPath}`);
     console.log(
-      `models.dev: source=${models.status.source} providers=${models.status.provider_count} models=${models.status.model_count}`,
+      `deployment_config: revision=${deployment.revision} sha256=${deployment.configSha256.slice(0, 12)}`,
     );
-    if (models.status.last_error) {
-      console.log("models.dev: last_error=present");
-    }
-    console.log("oauth: providers_configured=loaded");
-
-    // --- Static diagnostics ---
-    const hostRaw = config.server.host;
-    const hostSplit = splitHostAndPort(hostRaw);
-    const hostForProbe = hostSplit.host.length > 0 ? hostSplit.host : hostRaw;
-    const isLocalOnly = isLoopbackHost(hostForProbe);
     console.log(
-      `static.exposure: host=${hostRaw} port=${portInfo.valid ? portInfo.port : `invalid(raw=${portInfo.raw})`} is_exposed=${!isLocalOnly}`,
+      `auth_tokens: system=${String(systemTokens)} default_tenant=${String(defaultTenantTokens)}`,
     );
-
-    const tokenPath = join(tyrumHome, ".admin-token");
-    console.log(`static.auth: admin_token_source=${adminTokenSource} token_path=${tokenPath}`);
-
-    try {
-      const policy = await container.policyService?.getStatus?.();
-      if (policy) {
-        console.log(
-          `static.policy: enabled=${policy.enabled} observe_only=${policy.observe_only} sha256=${shortHash(policy.effective_sha256)} deployment=${policy.sources.deployment} agent=${policy.sources.agent ?? "none"}`,
-        );
-      } else {
-        console.log("static.policy: unavailable");
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.log(`static.policy: error=${message}`);
-    }
-
-    try {
-      const userHome = resolveUserTyrumHome();
-      const bundledDir = resolveBundledPluginsDirFrom(__dirname);
-
-      const workspaceDir = join(tyrumHome, "plugins");
-      const userDir = join(userHome, "plugins");
-
-      const [workspacePlugins, userPlugins, bundledPlugins] = await Promise.all([
-        discoverPluginsInDir(workspaceDir),
-        discoverPluginsInDir(userDir),
-        discoverPluginsInDir(bundledDir),
-      ]);
-
-      console.log(
-        `static.plugins: manifests=workspace:${workspacePlugins.plugins.length} user:${userPlugins.plugins.length} bundled:${bundledPlugins.plugins.length} invalid=${workspacePlugins.invalid_manifests + userPlugins.invalid_manifests + bundledPlugins.invalid_manifests}`,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.log(`static.plugins: error=${message}`);
-    }
-
-    try {
-      const secretProvider = await createDbSecretProvider({ db: container.db, dbPath, tyrumHome });
-      const handles = await secretProvider.list();
-      console.log(`static.secrets: provider=db handles=${handles.length}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.log(`static.secrets: provider=db error=${message}`);
-    }
-
-    // --- Live HTTP probes (best-effort) ---
-    try {
-      if (!portInfo.valid) {
-        console.log(`live.http: skipped=invalid_port raw=${portInfo.raw}`);
-        return 0;
-      }
-
-      if (hostSplit.port) {
-        console.log(
-          `live.http: skipped=host_includes_port raw_host=${hostRaw} ignored_port=${hostSplit.port}`,
-        );
-        return 0;
-      }
-
-      const probeHost = normalizeProbeHost(hostForProbe);
-      const baseUrl = `http://${hostForUrl(probeHost)}:${portInfo.port}`;
-      const health = await tryFetchJson(`${baseUrl}/healthz`, { timeoutMs: 500 });
-      const statusPublic = await tryFetchJson(`${baseUrl}/status`, { timeoutMs: 500 });
-
-      const isLoopbackProbeTarget = isLoopbackHost(probeHost);
-      const statusAuth =
-        isLoopbackProbeTarget && token
-          ? await tryFetchJson(`${baseUrl}/status`, {
-              timeoutMs: 500,
-              headers: {
-                authorization: `Bearer ${token}`,
-              },
-            })
-          : null;
-
-      const healthOk =
-        health.ok && isRecord(health.json) && (health.json["status"] as unknown) === "ok";
-      const statusPublicOk =
-        statusPublic.ok &&
-        isRecord(statusPublic.json) &&
-        (statusPublic.json["status"] as unknown) === "ok";
-      const statusAuthOk =
-        statusAuth?.ok &&
-        isRecord(statusAuth.json) &&
-        (statusAuth.json["status"] as unknown) === "ok";
-
-      const formatProbe = (probe: { ok: boolean; status: number } | null, ok: boolean): string => {
-        if (!probe) return "skipped";
-        if (probe.status === 0) return "unavailable";
-        if (ok) return "ok";
-        if (probe.status === 401) return "unauthorized";
-        return `fail(${probe.status})`;
-      };
-
-      console.log(
-        `live.http: base=${baseUrl} healthz=${formatProbe(health, healthOk)} status_public=${formatProbe(statusPublic, statusPublicOk)} status_auth=${formatProbe(statusAuth, Boolean(statusAuthOk))}`,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.log(`live.http: error=${message}`);
-    }
-
     return 0;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`check: failed: ${message}`);
     return 1;
   } finally {
-    if (container) {
-      await container.db.close().catch((closeErr) => {
-        const message = closeErr instanceof Error ? closeErr.message : String(closeErr);
-        console.error(`check: warning: failed to close db: ${message}`);
-      });
-    }
+    await db?.close().catch((closeErr) => {
+      const message = closeErr instanceof Error ? closeErr.message : String(closeErr);
+      console.error(`check: warning: failed to close db: ${message}`);
+    });
   }
 }
 
-async function runTlsFingerprint(): Promise<number> {
-  const tyrumHome = resolveTyrumHome();
+async function runTlsFingerprint(
+  cmd: Extract<CliCommand, { kind: "tls_fingerprint" }>,
+): Promise<number> {
+  const tyrumHome = resolveGatewayHome(cmd.home);
   const certPath = join(tyrumHome, "tls", "cert.pem");
 
   try {
@@ -927,7 +943,7 @@ async function runTlsFingerprint(): Promise<number> {
     console.error(
       `tls fingerprint: failed: ${message}. ` +
         `Expected a certificate at ${certPath}. ` +
-        "Start the gateway with TYRUM_TLS_SELF_SIGNED=1 to generate one.",
+        "Start the gateway with self-signed TLS enabled to generate one.",
     );
     return 1;
   }
@@ -955,19 +971,24 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   }
 
   if (command.kind === "check") {
-    return await runGatewayCheck();
+    return await runGatewayCheck(command);
   }
 
   if (command.kind === "tls_fingerprint") {
-    return await runTlsFingerprint();
+    return await runTlsFingerprint(command);
   }
 
   if (command.kind === "toolrunner") {
-    return runToolRunnerFromStdio();
+    return runToolRunnerFromStdio({
+      home: command.home,
+      db: command.db,
+      migrationsDir: command.migrationsDir,
+      payloadB64: command.payloadB64,
+    });
   }
 
   if (command.kind === "plugin_install") {
-    const tyrumHome = command.home ?? resolveTyrumHome();
+    const tyrumHome = resolveGatewayHome(command.home);
     try {
       const result = await installPluginFromDir({
         home: tyrumHome,
@@ -986,7 +1007,17 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     return runGatewayUpdate(command.channel, command.version);
   }
 
-  await main(command.role);
+  await main({
+    role: command.role,
+    home: command.home,
+    db: command.db,
+    host: command.host,
+    port: command.port,
+    migrationsDir: command.migrationsDir,
+    allowInsecureHttp: command.allowInsecureHttp,
+    engineApiEnabled: command.engineApiEnabled,
+    snapshotImportEnabled: command.snapshotImportEnabled,
+  });
   return 0;
 }
 
@@ -998,43 +1029,135 @@ export async function runShutdownCleanup(
   await Promise.allSettled([closeDb()]);
 }
 
-export async function main(cliRole?: GatewayRole): Promise<void> {
-  const homeForTokenStore = resolveTyrumHome();
+export async function main(
+  input?:
+    | GatewayRole
+    | {
+        role?: GatewayRole;
+        home?: string;
+        db?: string;
+        host?: string;
+        port?: number;
+        migrationsDir?: string;
+        allowInsecureHttp?: boolean;
+        engineApiEnabled?: boolean;
+        snapshotImportEnabled?: boolean;
+      },
+): Promise<void> {
+  const params = typeof input === "string" ? { role: input } : (input ?? {});
 
-  // Initialize the token store early so a generated token is present before config validation.
-  const tokenStore = new TokenStore(homeForTokenStore);
-  const token = await tokenStore.initialize();
+  const instanceId = `gw-${crypto.randomUUID()}`;
+  const role = params.role ?? "all";
+  const tyrumHome = resolveGatewayHome(params.home);
 
-  const configOverrides: NodeJS.ProcessEnv = { GATEWAY_TOKEN: token };
-  if (cliRole !== undefined) {
-    configOverrides["TYRUM_ROLE"] = cliRole;
+  const hostRaw = resolveGatewayHost(params.host);
+  const hostSplit = splitHostAndPort(hostRaw);
+  if (hostSplit.port) {
+    throw new Error(
+      `--host must not include a port (got '${hostRaw}'). Use --port ${hostSplit.port} instead.`,
+    );
   }
-  const parsed = loadConfigFromProcessEnv(configOverrides);
-  const instanceId = parsed.runtime.instanceId ?? `gw-${crypto.randomUUID()}`;
-  const config: typeof parsed = parsed.runtime.instanceId
-    ? parsed
-    : { ...parsed, runtime: { ...parsed.runtime, instanceId } };
-  const role = config.runtime.role;
+  const host = hostSplit.host;
+  const port = resolveGatewayPort(params.port);
 
-  const host = config.server.host;
-  const port = config.server.port;
-  const dbPath = config.database.path;
-  const migrationsDir = config.database.migrationsDir;
-  const tyrumHome = config.paths.home;
+  const dbPath = resolveGatewayDbPath(tyrumHome, params.db);
+  const migrationsDir = resolveGatewayMigrationsDir(dbPath, params.migrationsDir);
   const isLocalOnly = isLoopbackHost(host);
 
   assertSplitRoleUsesPostgres(role, dbPath);
   ensureDatabaseDirectory(dbPath);
 
-  const container = await createContainerAsync(
+  const db = await openGatewayDb({ dbPath, migrationsDir });
+  const deploymentConfigDal = new DeploymentConfigDal(db);
+  const startupOverrides: StartCommandOverrides = {
+    allowInsecureHttp: params.allowInsecureHttp,
+    engineApiEnabled: params.engineApiEnabled,
+    snapshotImportEnabled: params.snapshotImportEnabled,
+  };
+  const deploymentRevision = await deploymentConfigDal.ensureSeeded({
+    defaultConfig: buildStartupDefaultDeploymentConfig(startupOverrides),
+    createdBy: { kind: "bootstrap" },
+    reason: "seed",
+  });
+  const deploymentConfig = applyStartCommandDeploymentOverrides(
+    deploymentRevision.config,
+    startupOverrides,
+  );
+
+  const container = wireContainer(
+    db,
     {
       dbPath,
       migrationsDir,
       tyrumHome,
     },
-    { gatewayConfig: config },
+    { deploymentConfig },
   );
   container.modelsDev.startBackgroundRefresh();
+
+  const defaultScope = await container.identityScopeDal.resolveScopeIds();
+  await new AgentConfigDal(container.db).ensureSeeded({
+    tenantId: defaultScope.tenantId,
+    agentId: defaultScope.agentId,
+    defaultConfig: AgentConfig.parse({
+      model: { model: "openai/gpt-4.1" },
+      tools: { allow: ["tool.fs.read"] },
+    }),
+    createdBy: { kind: "bootstrap" },
+    reason: "seed",
+  });
+
+  const authTokens = new AuthTokenService(container.db);
+
+  const bootstrapTokens: Array<{ label: string; token: string }> = [];
+  if ((await authTokens.countActiveSystemTokens()) === 0) {
+    const issued = await authTokens.issueToken({
+      tenantId: null,
+      role: "admin",
+      scopes: ["*"],
+    });
+    bootstrapTokens.push({ label: "system", token: issued.token });
+  }
+  let hasDefaultTenantAdminToken =
+    (await authTokens.countActiveTenantAdminTokens(DEFAULT_TENANT_ID)) > 0;
+  if (!hasDefaultTenantAdminToken) {
+    const issued = await authTokens.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "admin",
+      scopes: ["*"],
+    });
+    bootstrapTokens.push({ label: "default-tenant-admin", token: issued.token });
+    hasDefaultTenantAdminToken = true;
+  }
+  if (bootstrapTokens.length > 0) {
+    console.log("---");
+    console.log("Bootstrap tokens (printed once):");
+    for (const entry of bootstrapTokens) {
+      console.log(`${entry.label}: ${entry.token}`);
+    }
+    console.log("---");
+  }
+
+  const transportPolicy = assertNonLoopbackDeploymentGuardrails({
+    role,
+    host,
+    tlsReady: deploymentConfig.server.tlsReady,
+    tlsSelfSigned: deploymentConfig.server.tlsSelfSigned,
+    allowInsecureHttp: deploymentConfig.server.allowInsecureHttp,
+    hasTenantAdminToken: hasDefaultTenantAdminToken,
+  });
+
+  if (transportPolicy !== "local") {
+    console.log("---");
+    console.log("Gateway is exposed on a non-local interface.");
+    if (transportPolicy === "insecure") {
+      console.log(
+        "WARNING: plaintext HTTP is allowed by deployment config server.allowInsecureHttp.",
+      );
+      console.log("Configure TLS termination and set deployment config server.tlsReady=true.");
+    }
+    console.log("---");
+  }
 
   const logger = container.logger.child({
     role,
@@ -1043,29 +1166,8 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
   });
   logger.info("gateway.instance", { instance_id: instanceId });
 
-  const transportPolicy = assertNonLoopbackDeploymentGuardrails({
-    role,
-    host,
-    token,
-    tlsReady: config.server.tlsReady,
-    tlsSelfSigned: config.server.tlsSelfSigned,
-    allowInsecureHttp: config.server.allowInsecureHttp,
-  });
-
-  if (transportPolicy !== "local") {
-    const tokenPath = join(tyrumHome, ".admin-token");
-    console.log("---");
-    console.log("Gateway is exposed on a non-local interface.");
-    console.log(`Admin token stored at: ${tokenPath}`);
-    console.log("Read it with: cat " + tokenPath);
-    if (transportPolicy === "insecure") {
-      console.log("WARNING: TYRUM_ALLOW_INSECURE_HTTP=1 is set; plaintext HTTP is allowed.");
-      console.log("Configure TLS termination and set TYRUM_TLS_READY=1 for remote access.");
-    }
-    console.log("---");
-  }
-
-  const secretProvider = await createDbSecretProvider({ db: container.db, dbPath, tyrumHome });
+  const secrets = await createDbSecretProviderFactory({ db: container.db, dbPath, tyrumHome });
+  const secretProviderForTenant = secrets.secretProviderForTenant;
 
   const lifecycleHooks = await loadLifecycleHooksFromHome(tyrumHome, logger);
   const shouldRunEdge = role === "all" || role === "edge";
@@ -1082,6 +1184,7 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
           db: container.db,
           memoryV1Dal: container.memoryV1Dal,
           eventBus: container.eventBus,
+          automationEnabled: deploymentConfig.automation.enabled,
           keepProcessAlive: role === "scheduler",
         })
       : undefined;
@@ -1132,13 +1235,13 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
     serviceName: "tyrum-gateway",
     serviceVersion: VERSION,
     instanceId,
-    otel: config.otel,
+    otel: deploymentConfig.otel,
   });
   if (otel.enabled) {
     logger.info("otel.started");
   }
 
-  const engineApiEnabled = config.execution.engineApiEnabled;
+  const engineApiEnabled = deploymentConfig.execution.engineApiEnabled;
 
   const connectionManager = new ConnectionManager();
   const outboxDal = new OutboxDal(container.db, container.redactionEngine);
@@ -1155,16 +1258,16 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
         })
       : undefined;
   workSignalScheduler?.start();
-  const edgeEngine =
-    shouldRunEdge && engineApiEnabled
-      ? new ExecutionEngine({
-          db: container.db,
-          redactionEngine: container.redactionEngine,
-          secretProvider,
-          policyService: container.policyService,
-          logger,
-        })
-      : undefined;
+  const wsEngine = shouldRunEdge
+    ? new ExecutionEngine({
+        db: container.db,
+        redactionEngine: container.redactionEngine,
+        secretProviderForTenant,
+        policyService: container.policyService,
+        logger,
+      })
+    : undefined;
+  const edgeEngine = engineApiEnabled ? wsEngine : undefined;
 
   const hooksRuntime =
     lifecycleHooks.length > 0 && (shouldRunEdge || shouldRunWorker)
@@ -1229,6 +1332,7 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
     engine: edgeEngine,
     policyService: container.policyService,
     modelsDev: container.modelsDev,
+    modelCatalog: container.modelCatalog,
     cluster: shouldRunEdge
       ? {
           edgeId: instanceId,
@@ -1244,10 +1348,15 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
     onConnectionClosed: (connectionId) => {
       taskResults.rejectAllForConnection(connectionId);
     },
-    onApprovalDecision: (approvalId: string, approved: boolean, reason: string | undefined) => {
+    onApprovalDecision: (
+      tenantId: string,
+      approvalId: string,
+      approved: boolean,
+      reason: string | undefined,
+    ) => {
       void container.approvalDal
         .respond({
-          tenantId: DEFAULT_TENANT_ID,
+          tenantId,
           approvalId,
           decision: approved ? "approved" : "denied",
           reason,
@@ -1265,7 +1374,9 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
             decision_matches: decisionMatches,
           });
 
-          if (!row || !decisionMatches || !protocolDeps.engine) {
+          // Approval decisions are only produced by the edge WebSocket handler, so keep the
+          // run control on wsEngine even when the HTTP engine API is disabled.
+          if (!row || !decisionMatches || !wsEngine) {
             return;
           }
 
@@ -1277,15 +1388,15 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
 
             if (row.status === "approved") {
               if (resumeToken) {
-                await protocolDeps.engine.resumeRun(resumeToken);
+                await wsEngine.resumeRun(resumeToken);
               } else if (row.run_id) {
-                await protocolDeps.engine.cancelRun(row.run_id, resolvedReason);
+                await wsEngine.cancelRun(row.run_id, resolvedReason);
               }
             } else if (row.status === "denied") {
               if (isAgentToolExecution && resumeToken) {
-                await protocolDeps.engine.resumeRun(resumeToken);
+                await wsEngine.resumeRun(resumeToken);
               } else if (row.run_id) {
-                await protocolDeps.engine.cancelRun(row.run_id, resolvedReason);
+                await wsEngine.cancelRun(row.run_id, resolvedReason);
               }
             }
           } catch (err) {
@@ -1314,7 +1425,7 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
   const plugins = shouldRunEdge
     ? await PluginRegistry.load({
         home: tyrumHome,
-        userHome: resolveUserTyrumHome(),
+        userHome: tyrumHome,
         logger,
         container,
       })
@@ -1322,11 +1433,11 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
   protocolDeps.plugins = plugins;
 
   const agents =
-    shouldRunEdge && config.agent.enabled
+    shouldRunEdge && deploymentConfig.agent.enabled
       ? new AgentRegistry({
           container,
           baseHome: tyrumHome,
-          defaultSecretProvider: secretProvider,
+          secretProviderForTenant,
           defaultPolicyService: container.policyService,
           approvalNotifier,
           plugins,
@@ -1335,15 +1446,10 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
         })
       : undefined;
   protocolDeps.agents = agents;
-  protocolDeps.memoryV1BudgetsProvider = async (agentId?: string) => {
-    const id = agentId?.trim() || "default";
-    const home = agents ? agents.resolveAgentHome(id) : tyrumHome;
-    const config = await loadAgentConfig(home);
-    return config.memory.v1.budgets;
-  };
+  protocolDeps.memoryV1BudgetsProvider = createMemoryV1BudgetsProvider(container.db);
 
-  const authRateLimitWindowS = config.auth.rateLimit.windowSeconds;
-  const authRateLimitMax = config.auth.rateLimit.max;
+  const authRateLimitWindowS = deploymentConfig.auth.rateLimit.windowSeconds;
+  const authRateLimitMax = deploymentConfig.auth.rateLimit.max;
   const wsUpgradeRateLimitMax = Math.max(1, Math.floor(authRateLimitMax / 2));
 
   const authRateLimiter = shouldRunEdge
@@ -1364,8 +1470,8 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
     ? createApp(container, {
         agents,
         plugins,
-        tokenStore,
-        secretProvider,
+        authTokens,
+        secretProviderForTenant,
         isLocalOnly,
         connectionManager,
         connectionDirectory,
@@ -1389,8 +1495,8 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
     ? createWsHandler({
         connectionManager,
         protocolDeps,
-        tokenStore,
-        trustedProxies: config.server.trustedProxies,
+        authTokens,
+        trustedProxies: deploymentConfig.server.trustedProxies,
         upgradeRateLimiter: wsUpgradeRateLimiter,
         presenceDal: container.presenceDal,
         nodePairingDal: container.nodePairingDal,
@@ -1412,7 +1518,7 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
   outboxPoller?.start();
 
   const telegramProcessor =
-    shouldRunEdge && agents && container.telegramBot && config.channels.pipelineEnabled
+    shouldRunEdge && agents && container.telegramBot && deploymentConfig.channels.pipelineEnabled
       ? new TelegramChannelProcessor({
           db: container.db,
           sessionDal: container.sessionDal,
@@ -1420,6 +1526,9 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
           telegramBot: container.telegramBot,
           owner: instanceId,
           logger,
+          typingMode: deploymentConfig.channels.typingMode,
+          typingRefreshMs: deploymentConfig.channels.typingRefreshMs,
+          typingAutomationEnabled: deploymentConfig.channels.typingAutomationEnabled,
           memoryV1Dal: container.memoryV1Dal,
           approvalDal: container.approvalDal,
           approvalNotifier,
@@ -1432,7 +1541,7 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
     shouldRunEdge && app && wsHandler
       ? await (async () => {
           const listener = getRequestListener(app.fetch);
-          const tlsSelfSigned = config.server.tlsSelfSigned ?? false;
+          const tlsSelfSigned = deploymentConfig.server.tlsSelfSigned ?? false;
           const { server: s, tlsMaterial } = await (async () => {
             if (!tlsSelfSigned) {
               return { server: createHttpServer(listener), tlsMaterial: null };
@@ -1503,19 +1612,26 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
         const engine = new ExecutionEngine({
           db: container.db,
           redactionEngine: container.redactionEngine,
-          secretProvider,
+          secretProviderForTenant,
           policyService: container.policyService,
           logger,
         });
 
         const resolveExecutor = (): ExecutionStepExecutor => {
-          const toolrunner = config.execution.toolrunner;
+          const toolrunner = deploymentConfig.execution.toolrunner;
           if (toolrunner.launcher === "kubernetes") {
+            if (!isPostgresDbUri(dbPath)) {
+              throw new Error(
+                "execution.toolrunner.launcher=kubernetes requires --db to be a Postgres URI",
+              );
+            }
             return createKubernetesToolRunnerStepExecutor({
               namespace: toolrunner.namespace,
               image: toolrunner.image,
               workspacePvcClaim: toolrunner.workspacePvcClaim,
               tyrumHome,
+              dbPath,
+              hardeningProfile: deploymentConfig.toolrunner.hardeningProfile,
               logger,
               jobTtlSeconds: 300,
             });
@@ -1523,6 +1639,9 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
 
           return createToolRunnerStepExecutor({
             entrypoint: fileURLToPath(import.meta.url),
+            home: tyrumHome,
+            dbPath,
+            migrationsDir,
             logger,
           });
         };

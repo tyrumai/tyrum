@@ -169,6 +169,8 @@ describe("WorkSignalScheduler", () => {
         role: "client",
         authClaims: {
           token_kind: "admin",
+          token_id: "token-1",
+          tenant_id: DEFAULT_TENANT_ID,
           role: "admin",
           scopes: ["*"],
         },

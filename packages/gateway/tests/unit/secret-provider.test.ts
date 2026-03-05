@@ -24,7 +24,12 @@ describe("DbSecretProvider", () => {
   it("creates a master key file and roundtrips secret values (encrypted at rest)", async () => {
     const db = openTestSqliteDb(dbPath);
     try {
-      const provider = await createDbSecretProvider({ db, dbPath, tyrumHome });
+      const provider = await createDbSecretProvider({
+        db,
+        dbPath,
+        tyrumHome,
+        tenantId: DEFAULT_TENANT_ID,
+      });
 
       const handle = await provider.store("db_password", "super-secret-123");
       expect(handle.provider).toBe("db");
@@ -34,7 +39,7 @@ describe("DbSecretProvider", () => {
       const resolved = await provider.resolve(handle);
       expect(resolved).toBe("super-secret-123");
 
-      const keyPath = `${dbPath}.secrets.key`;
+      const keyPath = join(tyrumHome, "master.key");
       const stat = statSync(keyPath);
       if (process.platform !== "win32") {
         expect(stat.mode & 0o777).toBe(0o600);
@@ -71,7 +76,12 @@ describe("DbSecretProvider", () => {
   it("rotates by creating a new version while keeping handle_id stable", async () => {
     const db = openTestSqliteDb(dbPath);
     try {
-      const provider = await createDbSecretProvider({ db, dbPath, tyrumHome });
+      const provider = await createDbSecretProvider({
+        db,
+        dbPath,
+        tyrumHome,
+        tenantId: DEFAULT_TENANT_ID,
+      });
 
       const handle = await provider.store("api_key", "v1");
       expect(await provider.resolve(handle)).toBe("v1");
@@ -104,7 +114,12 @@ describe("DbSecretProvider", () => {
   it("revoke makes the secret unresolvable and excludes it from list()", async () => {
     const db = openTestSqliteDb(dbPath);
     try {
-      const provider = await createDbSecretProvider({ db, dbPath, tyrumHome });
+      const provider = await createDbSecretProvider({
+        db,
+        dbPath,
+        tyrumHome,
+        tenantId: DEFAULT_TENANT_ID,
+      });
 
       const handle = await provider.store("to_revoke", "value");
       expect(await provider.resolve(handle)).toBe("value");

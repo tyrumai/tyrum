@@ -45,6 +45,7 @@ class NodeDispatchStepExecutor implements StepExecutor {
       const { taskId, result } = await this.opts.nodeDispatchService.dispatchAndWait(
         action,
         {
+          tenantId: context.tenantId,
           runId: context.runId,
           stepId: context.stepId,
           attemptId: context.attemptId,

@@ -265,7 +265,10 @@ export async function runPlaybookRuntimeEnvelope(
 
       const playbookBundle = resolvePlaybookPolicyBundle(playbook);
       const effectivePolicy = await deps.policyService.loadEffectiveBundle({ playbookBundle });
-      const snapshot = await deps.policyService.getOrCreateSnapshot(effectivePolicy.bundle);
+      const snapshot = await deps.policyService.getOrCreateSnapshot(
+        DEFAULT_TENANT_ID,
+        effectivePolicy.bundle,
+      );
 
       const triggerMetadata: Record<string, unknown> = {
         source: "playbook-runtime",
@@ -282,6 +285,7 @@ export async function runPlaybookRuntimeEnvelope(
       }
 
       const res = await deps.engine.enqueuePlan({
+        tenantId: DEFAULT_TENANT_ID,
         key,
         lane,
         planId,

@@ -73,7 +73,7 @@ import { broadcastEvent, errorResponse } from "./helpers.js";
 import { handleWorkboardMessage } from "./workboard-handlers.js";
 import { handleSubagentMessage } from "./subagent-handlers.js";
 import { handleMemoryMessage } from "./memory-handlers.js";
-import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../modules/identity/scope.js";
+import { IdentityScopeDal } from "../../modules/identity/scope.js";
 import { ChannelThreadDal } from "../../modules/channels/thread-dal.js";
 
 // ---------------------------------------------------------------------------
@@ -196,6 +196,7 @@ export async function handleClientMessage(
             role: authClaims.role,
             scopes: authClaims.scopes,
           },
+          tenant_id: authClaims.tenant_id ?? undefined,
           required_scopes: ["operator.approvals"],
           request_type: msg.type,
           request_id: msg.request_id,
@@ -227,7 +228,11 @@ export async function handleClientMessage(
         );
       }
 
-      deps.onApprovalDecision?.(approvalId, decision.data.approved, decision.data.reason);
+      const tenantId = authClaims.tenant_id;
+      if (!tenantId) {
+        return errorEvent("unauthorized", "missing tenant_id");
+      }
+      deps.onApprovalDecision?.(tenantId, approvalId, decision.data.approved, decision.data.reason);
       return undefined;
     }
 
@@ -254,6 +259,7 @@ export async function handleClientMessage(
           role: authClaims.role,
           scopes: authClaims.scopes,
         },
+        tenant_id: authClaims.tenant_id ?? undefined,
         required_scopes: null,
         request_type: msg.type,
         request_id: msg.request_id,
@@ -278,6 +284,7 @@ export async function handleClientMessage(
           role: authClaims.role,
           scopes: authClaims.scopes,
         },
+        tenant_id: authClaims.tenant_id ?? undefined,
         required_scopes: requiredScopes,
         request_type: msg.type,
         request_id: msg.request_id,
@@ -285,6 +292,11 @@ export async function handleClientMessage(
       });
       return errorResponse(msg.request_id, msg.type, "forbidden", "insufficient scope");
     }
+  }
+
+  const tenantId = authClaims.tenant_id;
+  if (!tenantId) {
+    return errorResponse(msg.request_id, msg.type, "unauthorized", "tenant token required");
   }
 
   if (msg.type === "ping") {
@@ -332,10 +344,10 @@ export async function handleClientMessage(
 
     const rows =
       status === undefined
-        ? await deps.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID })
+        ? await deps.approvalDal.getPending({ tenantId })
         : status === "cancelled"
           ? []
-          : await deps.approvalDal.getByStatus({ tenantId: DEFAULT_TENANT_ID, status });
+          : await deps.approvalDal.getByStatus({ tenantId, status });
 
     const approvals = rows
       .map(toApprovalContract)
@@ -398,7 +410,7 @@ export async function handleClientMessage(
       }
 
       const existing = await deps.approvalDal.getById({
-        tenantId: DEFAULT_TENANT_ID,
+        tenantId,
         approvalId: req.approval_id,
       });
       if (!existing) {
@@ -466,7 +478,7 @@ export async function handleClientMessage(
     }
 
     const updated = await deps.approvalDal.respond({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       approvalId: req.approval_id,
       decision: req.decision,
       reason: req.reason,
@@ -526,6 +538,7 @@ export async function handleClientMessage(
 
       for (const sel of selectedOverrides) {
         const row = await deps.policyOverrideDal!.create({
+          tenantId,
           agentId: createOverrideContext.agentId,
           workspaceId: sel.workspace_id,
           toolId: sel.tool_id,
@@ -536,6 +549,7 @@ export async function handleClientMessage(
         });
         createdOverrides.push(row);
         broadcastEvent(
+          tenantId,
           {
             event_id: crypto.randomUUID(),
             type: "policy_override.created",
@@ -562,6 +576,7 @@ export async function handleClientMessage(
     });
 
     broadcastEvent(
+      tenantId,
       {
         event_id: crypto.randomUUID(),
         type: "approval.resolved",
@@ -611,6 +626,7 @@ export async function handleClientMessage(
 
     const ok = (pairing: unknown): WsResponseEnvelope => {
       broadcastEvent(
+        tenantId,
         {
           event_id: crypto.randomUUID(),
           type: "pairing.resolved",
@@ -682,7 +698,11 @@ export async function handleClientMessage(
     if (!pairing) return notFound(pairingId);
 
     if (msg.type === "pairing.approve" && scopedToken) {
-      emitPairingApprovedEvent(deps, { pairing, nodeId: pairing.node.node_id, scopedToken });
+      emitPairingApprovedEvent(deps, tenantId, {
+        pairing,
+        nodeId: pairing.node.node_id,
+        scopedToken,
+      });
     }
     return ok(pairing);
   }
@@ -714,6 +734,7 @@ export async function handleClientMessage(
     if (deps.cluster) {
       void deps.cluster.connectionDirectory
         .setReadyCapabilities({
+          tenantId,
           connectionId: client.id,
           readyCapabilities: [...client.readyCapabilities].sort(),
         })
@@ -730,6 +751,7 @@ export async function handleClientMessage(
 
     const nodeId = client.device_id ?? client.id;
     broadcastEvent(
+      tenantId,
       {
         event_id: crypto.randomUUID(),
         type: "capability.ready",
@@ -884,6 +906,7 @@ export async function handleClientMessage(
     }
 
     broadcastEvent(
+      tenantId,
       {
         event_id: crypto.randomUUID(),
         type: "attempt.evidence",
@@ -1021,7 +1044,7 @@ export async function handleClientMessage(
     const sessionKey = parsedReq.data.payload.session_id;
     try {
       const looked = await sessionDal.getWithDeliveryByKey({
-        tenantId: DEFAULT_TENANT_ID,
+        tenantId,
         sessionKey,
       });
       if (!looked || looked.agent_key !== agentKey) {
@@ -1145,7 +1168,7 @@ export async function handleClientMessage(
     const sessionKey = parsedReq.data.payload.session_id;
     try {
       const existing = await sessionDal.getWithDeliveryByKey({
-        tenantId: DEFAULT_TENANT_ID,
+        tenantId,
         sessionKey,
       });
       if (!existing || existing.agent_key !== agentKey) {
@@ -1153,7 +1176,7 @@ export async function handleClientMessage(
       }
 
       const compacted = await sessionDal.compact({
-        tenantId: DEFAULT_TENANT_ID,
+        tenantId,
         sessionId: existing.session.session_id,
         keepLastMessages: parsedReq.data.payload.keep_last_messages ?? 8,
       });
@@ -1209,7 +1232,7 @@ export async function handleClientMessage(
     let looked: Awaited<ReturnType<SessionDal["getWithDeliveryByKey"]>>;
     try {
       looked = await sessionDal.getWithDeliveryByKey({
-        tenantId: DEFAULT_TENANT_ID,
+        tenantId,
         sessionKey,
       });
     } catch (err) {
@@ -1269,7 +1292,7 @@ export async function handleClientMessage(
          FROM execution_runs
          WHERE tenant_id = ? AND key = ? AND lane = ? AND status IN ('queued', 'running', 'paused')
          ORDER BY created_at DESC`,
-        [DEFAULT_TENANT_ID, key, lane],
+        [tenantId, key, lane],
       );
 
       for (const row of activeRuns) {
@@ -1286,7 +1309,7 @@ export async function handleClientMessage(
              error = COALESCE(error, ?),
              reply_text = COALESCE(reply_text, '')
          WHERE tenant_id = ? AND status = 'queued' AND key = ? AND lane = ?`,
-        [nowIso, "cancelled by session.delete", DEFAULT_TENANT_ID, key, lane],
+        [nowIso, "cancelled by session.delete", tenantId, key, lane],
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1305,24 +1328,24 @@ export async function handleClientMessage(
         await tx.run(
           `DELETE FROM session_model_overrides
            WHERE tenant_id = ? AND session_id = ?`,
-          [DEFAULT_TENANT_ID, looked.session.session_id],
+          [tenantId, looked.session.session_id],
         );
         await tx.run(
           `DELETE FROM session_provider_pins
            WHERE tenant_id = ? AND session_id = ?`,
-          [DEFAULT_TENANT_ID, looked.session.session_id],
+          [tenantId, looked.session.session_id],
         );
 
         const queueOverrideDal = new LaneQueueModeOverrideDal(tx);
-        await queueOverrideDal.clear({ tenant_id: DEFAULT_TENANT_ID, key, lane });
+        await queueOverrideDal.clear({ tenant_id: tenantId, key, lane });
 
         const sendOverrideDal = new SessionSendPolicyOverrideDal(tx);
-        await sendOverrideDal.clear({ tenant_id: DEFAULT_TENANT_ID, key });
+        await sendOverrideDal.clear({ tenant_id: tenantId, key });
 
         await tx.run(
           `DELETE FROM sessions
            WHERE tenant_id = ? AND session_id = ?`,
-          [DEFAULT_TENANT_ID, looked.session.session_id],
+          [tenantId, looked.session.session_id],
         );
       });
     } catch (err) {
@@ -1381,8 +1404,12 @@ export async function handleClientMessage(
 
     try {
       const agentId = parsedReq.data.payload.agent_id ?? "default";
+      const tenantId = authClaims.tenant_id;
+      if (!tenantId) {
+        return errorResponse(msg.request_id, msg.type, "unauthorized", "missing tenant id");
+      }
 
-      const runtime = await deps.agents.getRuntime(agentId);
+      const runtime = await deps.agents.getRuntime({ tenantId, agentKey: agentId });
       const res = await runtime.turn({
         channel: parsedReq.data.payload.channel,
         thread_id: parsedReq.data.payload.thread_id,
@@ -1425,11 +1452,12 @@ export async function handleClientMessage(
     }
 
     const res = await executeCommand(parsedReq.data.payload.command, {
+      tenantId: authClaims.tenant_id ?? undefined,
       runtime: deps.runtime,
       commandContext: {
         agentId: parsedReq.data.payload.agent_id,
         channel: parsedReq.data.payload.channel,
-        threadId: parsedReq.data.payload.thread_id,
+        threadId: parsedReq.data.payload.thread_id ?? undefined,
         key: parsedReq.data.payload.key,
         lane: parsedReq.data.payload.lane,
       },
@@ -1443,6 +1471,7 @@ export async function handleClientMessage(
       contextReportDal: deps.contextReportDal,
       plugins: deps.plugins,
       modelsDev: deps.modelsDev,
+      modelCatalog: deps.modelCatalog,
       agents: deps.agents,
     });
 
@@ -1508,9 +1537,10 @@ export async function handleClientMessage(
       const agentId = keyParsed.kind === "agent" ? keyParsed.agent_key : "default";
       const policy = deps.agents ? deps.agents.getPolicyService(agentId) : deps.policyService!;
       const effectivePolicy = await policy.loadEffectiveBundle();
-      const snapshot = await policy.getOrCreateSnapshot(effectivePolicy.bundle);
+      const snapshot = await policy.getOrCreateSnapshot(tenantId, effectivePolicy.bundle);
 
       const res = await deps.engine.enqueuePlan({
+        tenantId,
         key: parsedReq.data.payload.key,
         lane: parsedReq.data.payload.lane,
         planId,
@@ -1675,6 +1705,7 @@ export async function handleClientMessage(
     let failedPeerSends = 0;
     let exampleSendFailure: { peer_id: string; peer_role: string; error: string } | undefined;
     for (const peer of deps.connectionManager.allClients()) {
+      if (peer.auth_claims?.tenant_id !== tenantId) continue;
       try {
         peer.ws.send(payload);
       } catch (err) {
@@ -1702,7 +1733,7 @@ export async function handleClientMessage(
     }
     if (deps.cluster) {
       void deps.cluster.outboxDal
-        .enqueue("ws.broadcast", {
+        .enqueue(tenantId, "ws.broadcast", {
           source_edge_id: deps.cluster.edgeId,
           skip_local: true,
           message: evt,

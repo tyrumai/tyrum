@@ -73,6 +73,8 @@ export interface WatcherSchedulerOptions {
   tickMs?: number;
   firingLeaseTtlMs?: number;
   maxFiringsPerTick?: number;
+  /** Enables execution of watchers via the execution engine (default: false). */
+  automationEnabled?: boolean;
   /**
    * When true, the scheduler interval will keep the Node.js process alive.
    * Defaults to false so background scheduling doesn't block graceful shutdown.
@@ -88,6 +90,7 @@ export class WatcherScheduler {
   private readonly logger?: Logger;
   private readonly tickMs: number;
   private readonly keepProcessAlive: boolean;
+  private readonly automationEnabled: boolean;
   private readonly firingLeaseTtlMs: number;
   private readonly maxFiringsPerTick: number;
   private readonly firingDal: WatcherFiringDal;
@@ -105,6 +108,7 @@ export class WatcherScheduler {
     this.logger = opts.logger;
     this.tickMs = opts.tickMs ?? DEFAULT_TICK_MS;
     this.keepProcessAlive = opts.keepProcessAlive ?? false;
+    this.automationEnabled = opts.automationEnabled ?? false;
     this.firingLeaseTtlMs = opts.firingLeaseTtlMs ?? DEFAULT_FIRING_LEASE_TTL_MS;
     this.maxFiringsPerTick = Math.max(
       1,
@@ -258,8 +262,7 @@ export class WatcherScheduler {
   }
 
   private isAutomationExecutionEnabled(): boolean {
-    const raw = process.env["TYRUM_AUTOMATION_ENABLED"]?.trim().toLowerCase();
-    return Boolean(raw && !["0", "false", "off", "no"].includes(raw));
+    return this.automationEnabled;
   }
 
   private resolvePlaybookBundle(playbook: Playbook): PolicyBundleT | undefined {
@@ -457,7 +460,10 @@ export class WatcherScheduler {
 
     const playbookBundle = playbook ? this.resolvePlaybookBundle(playbook) : undefined;
     const effective = await this.policyService.loadEffectiveBundle({ playbookBundle });
-    const snapshot = await this.policyService.getOrCreateSnapshot(effective.bundle);
+    const snapshot = await this.policyService.getOrCreateSnapshot(
+      firing.tenant_id,
+      effective.bundle,
+    );
 
     try {
       const result = await this.db.transaction(async (tx) => {
@@ -473,6 +479,7 @@ export class WatcherScheduler {
         }
 
         const enqueued = await this.engine!.enqueuePlanInTx(tx, {
+          tenantId: firing.tenant_id,
           key,
           lane,
           planId: automationPlanId,

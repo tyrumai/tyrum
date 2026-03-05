@@ -3,11 +3,11 @@ import type { ConnectedClient, ConnectionManager } from "../../ws/connection-man
 import type { OutboxDal, OutboxRow } from "./outbox-dal.js";
 import type { Logger } from "../observability/logger.js";
 import {
-  normalizeScopes,
   shouldDeliverToWsAudience,
   type WsBroadcastAudience,
   type WsBroadcastRole,
 } from "../../ws/audience.js";
+import { normalizeScopes } from "../auth/scopes.js";
 
 export interface OutboxPollerOptions {
   consumerId: string;
@@ -16,6 +16,7 @@ export interface OutboxPollerOptions {
   logger?: Logger;
   pollIntervalMs?: number;
   batchSize?: number;
+  tenantCacheTtlMs?: number;
 }
 
 type WsEnvelope = WsEventEnvelope | WsRequestEnvelope;
@@ -130,6 +131,8 @@ export class OutboxPoller {
   private readonly logger?: Logger;
   private readonly pollIntervalMs: number;
   private readonly batchSize: number;
+  private readonly tenantCacheTtlMs: number;
+  private cachedTenantIds: { value: string[]; expiresAtMs: number } | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
   private ticking = false;
 
@@ -140,17 +143,11 @@ export class OutboxPoller {
     this.logger = opts.logger;
     this.pollIntervalMs = opts.pollIntervalMs ?? 500;
     this.batchSize = opts.batchSize ?? 200;
+    this.tenantCacheTtlMs = Math.max(1_000, Math.min(300_000, opts.tenantCacheTtlMs ?? 10_000));
   }
 
   start(): void {
     if (this.timer) return;
-    void this.outboxDal.ensureConsumer(this.consumerId).catch((err) => {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger?.error("outbox.ensure_consumer_failed", {
-        consumer_id: this.consumerId,
-        error: message,
-      });
-    });
     this.timer = setInterval(() => {
       void this.tick().catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
@@ -169,48 +166,68 @@ export class OutboxPoller {
     }
   }
 
+  private async listTenantIds(): Promise<string[]> {
+    const nowMs = Date.now();
+    const cached = this.cachedTenantIds;
+    if (cached && cached.expiresAtMs > nowMs) {
+      return cached.value;
+    }
+
+    const tenantIds = await this.outboxDal.listActiveTenantIds();
+    this.cachedTenantIds = { value: tenantIds, expiresAtMs: nowMs + this.tenantCacheTtlMs };
+    return tenantIds;
+  }
+
   async tick(): Promise<void> {
     if (this.ticking) return;
     this.ticking = true;
     try {
-      let rows: OutboxRow[];
-      try {
-        rows = await this.outboxDal.poll(this.consumerId, this.batchSize);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        this.logger?.error("outbox.poll_failed", {
-          consumer_id: this.consumerId,
-          error: message,
-        });
-        return;
-      }
-      if (rows.length === 0) return;
+      const tenantIds = await this.listTenantIds();
+      if (tenantIds.length === 0) return;
 
-      for (const row of rows) {
+      for (const tenantId of tenantIds) {
+        let rows: OutboxRow[];
         try {
-          this.processRow(row);
+          rows = await this.outboxDal.poll(tenantId, this.consumerId, this.batchSize);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          this.logger?.error("outbox.process_failed", {
-            outbox_id: row.id,
-            topic: row.topic,
+          this.logger?.error("outbox.poll_failed", {
+            consumer_id: this.consumerId,
+            tenant_id: tenantId,
             error: message,
           });
-          // At-least-once semantics: don't ack cursor on failure so the row can be retried.
           return;
         }
+        if (rows.length === 0) continue;
 
-        try {
-          await this.outboxDal.ackConsumerCursor(this.consumerId, row.id);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.logger?.error("outbox.ack_failed", {
-            outbox_id: row.id,
-            topic: row.topic,
-            error: message,
-          });
-          // Cursor is not advanced; retry on next tick.
-          return;
+        for (const row of rows) {
+          try {
+            this.processRow(row);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            this.logger?.error("outbox.process_failed", {
+              outbox_id: row.id,
+              tenant_id: row.tenant_id,
+              topic: row.topic,
+              error: message,
+            });
+            // At-least-once semantics: don't ack cursor on failure so the row can be retried.
+            return;
+          }
+
+          try {
+            await this.outboxDal.ackConsumerCursor(row.tenant_id, this.consumerId, row.id);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            this.logger?.error("outbox.ack_failed", {
+              outbox_id: row.id,
+              tenant_id: row.tenant_id,
+              topic: row.topic,
+              error: message,
+            });
+            // Cursor is not advanced; retry on next tick.
+            return;
+          }
         }
       }
     } finally {
@@ -227,6 +244,7 @@ export class OutboxPoller {
       const authAudit = isAuthAuditEvent(parsed.message);
       const payload = JSON.stringify(parsed.message);
       for (const client of this.connectionManager.allClients()) {
+        if (client.auth_claims?.tenant_id !== row.tenant_id) continue;
         if (authAudit && !canReceiveAuthAudit(client)) continue;
         if (!shouldDeliverToWsAudience(client, parsed.audience)) continue;
 
@@ -249,6 +267,8 @@ export class OutboxPoller {
       if (!parsed) return;
       const client = this.connectionManager.getClient(parsed.connection_id);
       if (!client) return;
+      const clientTenantId = client.auth_claims?.tenant_id ?? null;
+      if (clientTenantId !== null && clientTenantId !== row.tenant_id) return;
       try {
         client.ws.send(JSON.stringify(parsed.message));
         if (client.role === "node") {

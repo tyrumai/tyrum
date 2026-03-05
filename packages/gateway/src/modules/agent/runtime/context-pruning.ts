@@ -1,34 +1,43 @@
 import { pruneMessages } from "ai";
 import type { ModelMessage } from "ai";
 
-const DEFAULT_CONTEXT_MAX_MESSAGES = 32;
-const DEFAULT_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES = 4;
+export type ContextPruningConfig = {
+  max_messages: number;
+  tool_prune_keep_last_messages: number;
+};
 
-export function parseNonnegativeInt(value: string | undefined): number | undefined {
-  const trimmed = value?.trim();
-  if (!trimmed) return undefined;
-  if (!/^[0-9]+$/.test(trimmed)) return undefined;
-  const parsed = Number(trimmed);
-  if (!Number.isSafeInteger(parsed)) return undefined;
-  return parsed;
-}
+const DEFAULT_CONTEXT_PRUNING: ContextPruningConfig = {
+  max_messages: 32,
+  tool_prune_keep_last_messages: 4,
+};
 
-function resolveContextMaxMessages(): number {
-  const parsed = parseNonnegativeInt(process.env["TYRUM_CONTEXT_MAX_MESSAGES"]);
-  return Math.max(8, parsed ?? DEFAULT_CONTEXT_MAX_MESSAGES);
-}
-
-function resolveToolPruneKeepLastMessages(): number {
-  const parsed = parseNonnegativeInt(process.env["TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES"]);
-  return Math.max(2, parsed ?? DEFAULT_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES);
+function normalizeContextPruningConfig(
+  cfg: ContextPruningConfig | undefined,
+): ContextPruningConfig {
+  const maxMessages = Math.max(
+    8,
+    Math.floor(cfg?.max_messages ?? DEFAULT_CONTEXT_PRUNING.max_messages),
+  );
+  const keepLastToolMessages = Math.max(
+    2,
+    Math.floor(
+      cfg?.tool_prune_keep_last_messages ?? DEFAULT_CONTEXT_PRUNING.tool_prune_keep_last_messages,
+    ),
+  );
+  return {
+    max_messages: maxMessages,
+    tool_prune_keep_last_messages: keepLastToolMessages,
+  };
 }
 
 export function applyDeterministicContextCompactionAndToolPruning(
   messages: ModelMessage[],
+  contextPruning?: ContextPruningConfig,
 ): ModelMessage[] {
-  const maxMessages = resolveContextMaxMessages();
+  const cfg = normalizeContextPruningConfig(contextPruning);
+  const maxMessages = cfg.max_messages;
   const keepLastToolMessages = Math.min(
-    resolveToolPruneKeepLastMessages(),
+    cfg.tool_prune_keep_last_messages,
     Math.max(2, maxMessages - 1),
   );
 

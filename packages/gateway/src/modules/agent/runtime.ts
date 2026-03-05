@@ -1,7 +1,4 @@
-export {
-  applyDeterministicContextCompactionAndToolPruning,
-  parseNonnegativeInt,
-} from "./runtime/context-pruning.js";
+export { applyDeterministicContextCompactionAndToolPruning } from "./runtime/context-pruning.js";
 export type {
   AgentContextInjectedFileReport,
   AgentContextPartReport,

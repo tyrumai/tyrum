@@ -46,18 +46,71 @@ describe("reference deployment profiles", () => {
     expect(splitRoleEnv.get("GATEWAY_DB_PATH")).toBeUndefined();
   });
 
-  it("keeps split-role reference deployments Postgres-backed", async () => {
+  it("keeps reference compose deployments exposing db paths for smoke helpers", async () => {
     const composeRaw = await expectFile("docker-compose.yml");
     const compose = parseYaml(composeRaw) as any;
     const services = compose.services as Record<string, any> | undefined;
+
+    const singleHost = services?.tyrum;
+    expect(singleHost).toBeDefined();
+
+    const singleHostCommand = singleHost?.command as string[] | undefined;
+    expect(singleHostCommand).toBeDefined();
+
+    const singleHostDbFlagIndex = singleHostCommand?.indexOf("--db") ?? -1;
+    expect(singleHostDbFlagIndex).toBeGreaterThanOrEqual(0);
+    const singleHostDbPath = singleHostCommand?.[singleHostDbFlagIndex + 1];
+    expect(singleHostDbPath).toBe("/var/lib/tyrum/gateway.db");
+
+    const singleHostEnv = singleHost?.environment as Record<string, unknown> | undefined;
+    expect(singleHostEnv?.GATEWAY_DB_PATH).toBe(singleHostDbPath);
 
     const splitServices = ["tyrum-edge", "tyrum-worker", "tyrum-scheduler"];
     for (const serviceName of splitServices) {
       const service = services?.[serviceName];
       expect(service).toBeDefined();
 
+      const command = service.command as string[] | undefined;
+      expect(command).toBeDefined();
+
+      const homeFlagIndex = command?.indexOf("--home") ?? -1;
+      expect(homeFlagIndex).toBeGreaterThanOrEqual(0);
+      expect(command?.[homeFlagIndex + 1]).toBe("/var/lib/tyrum");
+
+      const dbFlagIndex = command?.indexOf("--db") ?? -1;
+      expect(dbFlagIndex).toBeGreaterThanOrEqual(0);
+      const dbPath = command?.[dbFlagIndex + 1];
+      expect(dbPath).toEqual(expect.stringMatching(/postgres(ql)?:\/\//u));
+
       const env = service.environment as Record<string, unknown> | undefined;
-      expect(env?.GATEWAY_DB_PATH).toEqual(expect.stringMatching(/postgres(ql)?:\/\//u));
+      expect(env?.GATEWAY_DB_PATH).toBe(dbPath);
+    }
+  });
+
+  it("keeps snapshot import disabled by default in reference compose deployments", async () => {
+    const composeRaw = await expectFile("docker-compose.yml");
+    const compose = parseYaml(composeRaw) as any;
+    const services = compose.services as Record<string, any> | undefined;
+
+    const singleHost = services?.tyrum;
+    const singleHostCommand = singleHost?.command as string[] | undefined;
+    const singleHostEnv = singleHost?.environment as Record<string, unknown> | undefined;
+
+    expect(singleHostCommand).toBeDefined();
+    expect(singleHostCommand).not.toContain("--enable-snapshot-import");
+    expect(singleHostEnv?.TYRUM_SNAPSHOT_IMPORT_ENABLED).toBe(
+      "${TYRUM_SNAPSHOT_IMPORT_ENABLED:-0}",
+    );
+
+    const splitServices = ["tyrum-edge", "tyrum-worker", "tyrum-scheduler"];
+    for (const serviceName of splitServices) {
+      const service = services?.[serviceName];
+      const command = service?.command as string[] | undefined;
+      const env = service?.environment as Record<string, unknown> | undefined;
+
+      expect(command).toBeDefined();
+      expect(command).not.toContain("--enable-snapshot-import");
+      expect(env?.TYRUM_SNAPSHOT_IMPORT_ENABLED).toBe("${TYRUM_SNAPSHOT_IMPORT_ENABLED:-0}");
     }
   });
 

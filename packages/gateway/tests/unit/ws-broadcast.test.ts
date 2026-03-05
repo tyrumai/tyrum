@@ -2,6 +2,7 @@ import type { WsEventEnvelope } from "@tyrum/schemas";
 import { describe, expect, it, vi } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { broadcastWsEvent } from "../../src/ws/broadcast.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -29,15 +30,33 @@ describe("broadcastWsEvent", () => {
 
     cm.addClient(allowed as never, [], {
       role: "client",
-      authClaims: { token_kind: "device", role: "client", scopes: ["operator.read"] },
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-allowed",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "client",
+        scopes: ["operator.read"],
+      },
     });
     cm.addClient(deniedByScope as never, [], {
       role: "client",
-      authClaims: { token_kind: "device", role: "client", scopes: [] },
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-scope-denied",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "client",
+        scopes: [],
+      },
     });
     cm.addClient(deniedByRole as never, [], {
       role: "node",
-      authClaims: { token_kind: "device", role: "node", scopes: ["operator.read"] },
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-role-denied",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "node",
+        scopes: ["operator.read"],
+      },
     });
 
     const evt: WsEventEnvelope = {
@@ -50,6 +69,7 @@ describe("broadcastWsEvent", () => {
 
     const enqueue = vi.fn(async () => undefined as never);
     broadcastWsEvent(
+      DEFAULT_TENANT_ID,
       evt,
       { connectionManager: cm, cluster: { edgeId: "edge-1", outboxDal: { enqueue } as never } },
       { roles: ["client"], required_scopes: ["operator.read"] },
@@ -64,6 +84,7 @@ describe("broadcastWsEvent", () => {
 
     expect(enqueue).toHaveBeenCalledTimes(1);
     expect(enqueue).toHaveBeenCalledWith(
+      DEFAULT_TENANT_ID,
       "ws.broadcast",
       expect.objectContaining({
         source_edge_id: "edge-1",
@@ -83,11 +104,23 @@ describe("broadcastWsEvent", () => {
 
     cm.addClient(throwing as never, [], {
       role: "client",
-      authClaims: { token_kind: "admin", role: "admin", scopes: ["*"] },
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-throwing",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
     });
     cm.addClient(ok as never, [], {
       role: "client",
-      authClaims: { token_kind: "admin", role: "admin", scopes: ["*"] },
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-ok",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
     });
 
     const evt: WsEventEnvelope = {
@@ -98,7 +131,7 @@ describe("broadcastWsEvent", () => {
       payload: { ok: true },
     } as WsEventEnvelope;
 
-    expect(() => broadcastWsEvent(evt, { connectionManager: cm })).not.toThrow();
+    expect(() => broadcastWsEvent(DEFAULT_TENANT_ID, evt, { connectionManager: cm })).not.toThrow();
     expect(ok.send).toHaveBeenCalledTimes(1);
   });
 });

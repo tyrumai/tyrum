@@ -6,7 +6,6 @@ import type {
 import { PolicyOverride } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
-import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 export interface PolicyOverrideRow extends PolicyOverrideT {}
 
@@ -80,13 +79,14 @@ export class PolicyOverrideDal {
   constructor(private readonly db: SqlDb) {}
 
   async list(params: {
+    tenantId: string;
     agentId?: string;
     toolId?: string;
     status?: PolicyOverrideStatusT;
     limit?: number;
   }): Promise<PolicyOverrideRow[]> {
     const where: string[] = [];
-    const values: unknown[] = [DEFAULT_TENANT_ID];
+    const values: unknown[] = [params.tenantId];
 
     if (params.agentId) {
       where.push("agent_id = ?");
@@ -114,15 +114,19 @@ export class PolicyOverrideDal {
     return rows.map(toOverrideRow);
   }
 
-  async getById(policyOverrideId: string): Promise<PolicyOverrideRow | undefined> {
+  async getById(params: {
+    tenantId: string;
+    policyOverrideId: string;
+  }): Promise<PolicyOverrideRow | undefined> {
     const row = await this.db.get<RawPolicyOverrideRow>(
       `SELECT * FROM policy_overrides WHERE tenant_id = ? AND policy_override_id = ?`,
-      [DEFAULT_TENANT_ID, policyOverrideId],
+      [params.tenantId, params.policyOverrideId],
     );
     return row ? toOverrideRow(row) : undefined;
   }
 
   async create(params: {
+    tenantId: string;
     agentId: string;
     workspaceId?: string;
     toolId: string;
@@ -151,10 +155,10 @@ export class PolicyOverrideDal {
          expires_at,
          created_at,
          updated_at
-       ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       [
-        DEFAULT_TENANT_ID,
+        params.tenantId,
         id,
         overrideKey,
         params.agentId,
@@ -176,6 +180,7 @@ export class PolicyOverrideDal {
   }
 
   async revoke(params: {
+    tenantId: string;
     policyOverrideId: string;
     revokedBy?: unknown;
     reason?: string;
@@ -196,15 +201,19 @@ export class PolicyOverrideDal {
         JSON.stringify(params.revokedBy ?? {}),
         params.reason ?? null,
         nowIso,
-        DEFAULT_TENANT_ID,
+        params.tenantId,
         params.policyOverrideId,
       ],
     );
     if (result.changes === 0) return undefined;
-    return await this.getById(params.policyOverrideId);
+    return await this.getById({
+      tenantId: params.tenantId,
+      policyOverrideId: params.policyOverrideId,
+    });
   }
 
-  async expireStale(nowIso = isoNow()): Promise<PolicyOverrideRow[]> {
+  async expireStale(params: { tenantId: string; nowIso?: string }): Promise<PolicyOverrideRow[]> {
+    const nowIso = params.nowIso ?? isoNow();
     return await this.db.transaction(async (tx) => {
       const rows = await tx.all<RawPolicyOverrideRow>(
         `UPDATE policy_overrides
@@ -215,7 +224,7 @@ export class PolicyOverrideDal {
            AND expires_at IS NOT NULL
            AND expires_at <= ?
          RETURNING *`,
-        [nowIso, DEFAULT_TENANT_ID, nowIso],
+        [nowIso, params.tenantId, nowIso],
       );
       if (rows.length === 0) return [];
 
@@ -231,7 +240,7 @@ export class PolicyOverrideDal {
         await tx.run(
           `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
            VALUES (?, ?, ?, ?)`,
-          [DEFAULT_TENANT_ID, "ws.broadcast", null, JSON.stringify({ message: evt })],
+          [params.tenantId, "ws.broadcast", null, JSON.stringify({ message: evt })],
         );
       }
 
@@ -240,12 +249,13 @@ export class PolicyOverrideDal {
   }
 
   async listActiveForTool(params: {
+    tenantId: string;
     agentId: string;
     workspaceId?: string;
     toolId: string;
   }): Promise<PolicyOverrideRow[]> {
     const nowIso = isoNow();
-    await this.expireStale(nowIso);
+    await this.expireStale({ tenantId: params.tenantId, nowIso });
 
     const rows = await this.db.all<RawPolicyOverrideRow>(
       `SELECT *
@@ -257,7 +267,7 @@ export class PolicyOverrideDal {
          AND (workspace_id IS NULL OR workspace_id = ?)
          AND (expires_at IS NULL OR expires_at > ?)
        ORDER BY created_at DESC`,
-      [DEFAULT_TENANT_ID, params.agentId, params.toolId, params.workspaceId ?? null, nowIso],
+      [params.tenantId, params.agentId, params.toolId, params.workspaceId ?? null, nowIso],
     );
     return rows.map(toOverrideRow);
   }

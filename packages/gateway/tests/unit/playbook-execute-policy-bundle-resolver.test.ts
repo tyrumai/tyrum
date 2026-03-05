@@ -6,6 +6,7 @@ import type { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import type { PolicyService } from "../../src/modules/policy/service.js";
 import { loadAllPlaybooks } from "../../src/modules/playbook/loader.js";
 import { PlaybookRunner } from "../../src/modules/playbook/runner.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(__dirname, "../fixtures/playbooks");
@@ -45,6 +46,16 @@ describe("POST /playbooks/:id/execute (policy bundle)", () => {
     const engine = { enqueuePlan } as unknown as ExecutionEngine;
 
     const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      return await next();
+    });
     app.route("/", createPlaybookRoutes({ playbooks, runner, engine, policyService }));
 
     const res = await app.request("/playbooks/test-playbook/execute", {

@@ -2,7 +2,6 @@ import type { PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
 import { PolicyBundle } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
-import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { sha256HexFromString, stableJsonStringify } from "./canonical-json.js";
 
 export interface PolicySnapshotRow {
@@ -44,31 +43,34 @@ function toRow(raw: RawPolicySnapshotRow): PolicySnapshotRow {
 export class PolicySnapshotDal {
   constructor(private readonly db: SqlDb) {}
 
-  async getById(policySnapshotId: string): Promise<PolicySnapshotRow | undefined> {
+  async getById(
+    tenantId: string,
+    policySnapshotId: string,
+  ): Promise<PolicySnapshotRow | undefined> {
     const row = await this.db.get<RawPolicySnapshotRow>(
       `SELECT policy_snapshot_id, sha256, bundle_json, created_at
        FROM policy_snapshots
        WHERE tenant_id = ? AND policy_snapshot_id = ?`,
-      [DEFAULT_TENANT_ID, policySnapshotId],
+      [tenantId, policySnapshotId],
     );
     return row ? toRow(row) : undefined;
   }
 
-  async getBySha256(sha256: string): Promise<PolicySnapshotRow | undefined> {
+  async getBySha256(tenantId: string, sha256: string): Promise<PolicySnapshotRow | undefined> {
     const row = await this.db.get<RawPolicySnapshotRow>(
       `SELECT policy_snapshot_id, sha256, bundle_json, created_at
        FROM policy_snapshots
        WHERE tenant_id = ? AND sha256 = ?`,
-      [DEFAULT_TENANT_ID, sha256],
+      [tenantId, sha256],
     );
     return row ? toRow(row) : undefined;
   }
 
-  async getOrCreate(bundle: PolicyBundleT): Promise<PolicySnapshotRow> {
+  async getOrCreate(tenantId: string, bundle: PolicyBundleT): Promise<PolicySnapshotRow> {
     const canonicalJson = stableJsonStringify(bundle);
     const sha256 = sha256HexFromString(canonicalJson);
 
-    const existing = await this.getBySha256(sha256);
+    const existing = await this.getBySha256(tenantId, sha256);
     if (existing) return existing;
 
     const id = randomUUID();
@@ -76,7 +78,7 @@ export class PolicySnapshotDal {
       `INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json)
        VALUES (?, ?, ?, ?)
        RETURNING policy_snapshot_id, sha256, bundle_json, created_at`,
-      [DEFAULT_TENANT_ID, id, sha256, canonicalJson],
+      [tenantId, id, sha256, canonicalJson],
     );
     if (!row) {
       throw new Error("policy snapshot insert failed");

@@ -25,6 +25,7 @@ describe("RoutingConfigDal", () => {
 
   it("stores and returns routing config revisions with audit events", async () => {
     const created = await dal.set({
+      tenantId: DEFAULT_TENANT_ID,
       config: {
         v: 1,
         telegram: {
@@ -42,7 +43,7 @@ describe("RoutingConfigDal", () => {
     expect(created.revision).toBeGreaterThan(0);
     expect(created.config.telegram?.threads?.["123"]).toBe("agent-b");
 
-    const latest = await dal.getLatest();
+    const latest = await dal.getLatest(DEFAULT_TENANT_ID);
     expect(latest?.revision).toBe(created.revision);
     expect(latest?.config).toEqual(created.config);
 
@@ -71,26 +72,27 @@ describe("RoutingConfigDal", () => {
 
   it("normalizes sqlite routing config timestamps to ISO-8601", async () => {
     await db.run(
-      "INSERT INTO routing_configs (config_json, created_by_json, reason) VALUES (?, ?, ?)",
-      [JSON.stringify({ v: 1 }), "{}", "seed-default-time"],
+      "INSERT INTO routing_configs (tenant_id, config_json, created_by_json, reason) VALUES (?, ?, ?, ?)",
+      [DEFAULT_TENANT_ID, JSON.stringify({ v: 1 }), "{}", "seed-default-time"],
     );
 
-    const latest = await dal.getLatest();
+    const latest = await dal.getLatest(DEFAULT_TENANT_ID);
     expect(latest).toBeDefined();
     expect(DateTimeSchema.safeParse(latest!.createdAt).success).toBe(true);
   });
 
   it("throws when a stored routing config revision is invalid", async () => {
     await db.run(
-      "INSERT INTO routing_configs (config_json, created_by_json, reason) VALUES (?, ?, ?)",
-      [JSON.stringify({ v: "invalid" }), "{}", "corrupt"],
+      "INSERT INTO routing_configs (tenant_id, config_json, created_by_json, reason) VALUES (?, ?, ?, ?)",
+      [DEFAULT_TENANT_ID, JSON.stringify({ v: 0 }), "{}", "corrupt"],
     );
 
-    await expect(dal.getLatest()).rejects.toThrow();
+    await expect(dal.getLatest(DEFAULT_TENANT_ID)).rejects.toThrow();
   });
 
   it("reverts to an earlier revision by creating a new revision", async () => {
     const initial = await dal.set({
+      tenantId: DEFAULT_TENANT_ID,
       config: {
         v: 1,
         telegram: {
@@ -106,6 +108,7 @@ describe("RoutingConfigDal", () => {
     });
 
     const updated = await dal.set({
+      tenantId: DEFAULT_TENANT_ID,
       config: {
         v: 1,
         telegram: {
@@ -118,6 +121,7 @@ describe("RoutingConfigDal", () => {
     });
 
     const reverted = await dal.revertToRevision({
+      tenantId: DEFAULT_TENANT_ID,
       revision: initial.revision,
       createdBy: { kind: "test" },
       reason: "rollback",
@@ -156,6 +160,7 @@ describe("RoutingConfigDal", () => {
 
     await expect(
       dal.set({
+        tenantId: DEFAULT_TENANT_ID,
         config: { v: 1 },
         createdBy: { kind: "test" },
         reason: "should-fail",

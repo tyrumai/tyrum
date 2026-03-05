@@ -4,6 +4,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { NodePairingDal } from "../../src/modules/node/pairing-dal.js";
 import { createPairingRoutes } from "../../src/routes/pairing.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("Pairing routes", () => {
   let db: SqliteDb;
@@ -17,6 +18,16 @@ describe("Pairing routes", () => {
     didOpenDb = true;
     nodePairingDal = new NodePairingDal(db);
     app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "test-token",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
     app.route("/", createPairingRoutes({ nodePairingDal }));
   });
 

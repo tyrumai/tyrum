@@ -44,10 +44,21 @@ class MemoryPendingDal {
       : undefined;
   }
 
+  async getByState(state: string): Promise<OauthPendingRow | undefined> {
+    return state === this.row.state ? this.row : undefined;
+  }
+
   async consume(input: { tenantId: string; state: string }): Promise<OauthPendingRow | undefined> {
     const row = await this.get(input);
     if (!row) return undefined;
     await this.delete(input);
+    return row;
+  }
+
+  async consumeByState(state: string): Promise<OauthPendingRow | undefined> {
+    const row = await this.getByState(state);
+    if (!row) return undefined;
+    await this.delete({ tenantId: row.tenant_id, state });
     return row;
   }
 
@@ -69,25 +80,22 @@ class MemoryPendingDal {
 class MemoryProviderRegistry {
   constructor(private spec: OAuthProviderSpec) {}
 
-  async get(providerId: string): Promise<OAuthProviderSpec | undefined> {
-    return providerId === this.spec.provider_id ? this.spec : undefined;
+  async get(input: {
+    tenantId: string;
+    providerId: string;
+  }): Promise<OAuthProviderSpec | undefined> {
+    return input.tenantId === this.spec.tenant_id && input.providerId === this.spec.provider_id
+      ? this.spec
+      : undefined;
   }
 
-  async list(): Promise<OAuthProviderSpec[]> {
-    return [this.spec];
+  async list(input: { tenantId: string }): Promise<OAuthProviderSpec[]> {
+    return input.tenantId === this.spec.tenant_id ? [this.spec] : [];
   }
-
-  async reload(): Promise<void> {}
 }
 
 describe("provider OAuth callback cleanup", () => {
-  const prevClientId = process.env["TEST_CLIENT_ID"];
-  const prevClientSecret = process.env["TEST_CLIENT_SECRET"];
-
   beforeEach(() => {
-    process.env["TEST_CLIENT_ID"] = "client-1";
-    process.env["TEST_CLIENT_SECRET"] = "secret-1";
-
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const resolved = typeof url === "string" ? url : url.toString();
       if (resolved === "https://auth.test/token") {
@@ -109,12 +117,6 @@ describe("provider OAuth callback cleanup", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-
-    if (prevClientId === undefined) delete process.env["TEST_CLIENT_ID"];
-    else process.env["TEST_CLIENT_ID"] = prevClientId;
-
-    if (prevClientSecret === undefined) delete process.env["TEST_CLIENT_SECRET"];
-    else process.env["TEST_CLIENT_SECRET"] = prevClientSecret;
   });
 
   it("revokes stored token handles when profile creation fails", async () => {
@@ -137,13 +139,13 @@ describe("provider OAuth callback cleanup", () => {
 
     const pendingDal = new MemoryPendingDal(pending);
     const registry = new MemoryProviderRegistry({
+      tenant_id: DEFAULT_TENANT_ID,
       provider_id: "test",
       display_name: "Test",
       authorization_endpoint: "https://auth.test/authorize",
       token_endpoint: "https://auth.test/token",
       scopes: ["scope1"],
-      client_id_env: "TEST_CLIENT_ID",
-      client_secret_env: "TEST_CLIENT_SECRET",
+      client_id: "client-1",
       token_endpoint_basic_auth: false,
     });
 
@@ -158,7 +160,7 @@ describe("provider OAuth callback cleanup", () => {
       oauthPendingDal: pendingDal as any,
       oauthProviderRegistry: registry as any,
       authProfileDal,
-      secretProvider,
+      secretProviderForTenant: () => secretProvider,
     });
 
     const res = await app.request(
@@ -190,13 +192,13 @@ describe("provider OAuth callback cleanup", () => {
 
     const pendingDal = new MemoryPendingDal(pending);
     const registry = new MemoryProviderRegistry({
+      tenant_id: DEFAULT_TENANT_ID,
       provider_id: "test",
       display_name: "Test",
       authorization_endpoint: "https://auth.test/authorize",
       token_endpoint: "https://auth.test/token",
       scopes: ["scope1"],
-      client_id_env: "TEST_CLIENT_ID",
-      client_secret_env: "TEST_CLIENT_SECRET",
+      client_id: "client-1",
       token_endpoint_basic_auth: false,
     });
 
@@ -204,7 +206,7 @@ describe("provider OAuth callback cleanup", () => {
       oauthPendingDal: pendingDal as any,
       oauthProviderRegistry: registry as any,
       authProfileDal: {} as any,
-      secretProvider,
+      secretProviderForTenant: () => secretProvider,
     });
 
     const res = await app.request(
@@ -213,7 +215,7 @@ describe("provider OAuth callback cleanup", () => {
     );
 
     expect(res.status).toBe(400);
-    expect(await pendingDal.get(pending.state)).toBeUndefined();
+    expect(await pendingDal.getByState(pending.state)).toBeUndefined();
 
     const reuse = await app.request(
       `/providers/test/oauth/callback?state=${encodeURIComponent(pending.state)}&code=code-1`,
@@ -224,18 +226,18 @@ describe("provider OAuth callback cleanup", () => {
 
   it("does not log OAuth state when pending consume fails", async () => {
     const registry = new MemoryProviderRegistry({
+      tenant_id: DEFAULT_TENANT_ID,
       provider_id: "test",
       display_name: "Test",
       authorization_endpoint: "https://auth.test/authorize",
       token_endpoint: "https://auth.test/token",
       scopes: ["scope1"],
-      client_id_env: "TEST_CLIENT_ID",
-      client_secret_env: "TEST_CLIENT_SECRET",
+      client_id: "client-1",
       token_endpoint_basic_auth: false,
     });
 
     const oauthPendingDal = {
-      async consume() {
+      async consumeByState() {
         throw new Error("db down");
       },
     } as any;
@@ -245,7 +247,7 @@ describe("provider OAuth callback cleanup", () => {
       oauthPendingDal,
       oauthProviderRegistry: registry as any,
       authProfileDal: {} as any,
-      secretProvider: new MemorySecretProvider(),
+      secretProviderForTenant: () => new MemorySecretProvider(),
       logger,
     });
 
@@ -265,13 +267,13 @@ describe("provider OAuth callback cleanup", () => {
   it("preserves mount prefix when deriving redirect_uri", async () => {
     const secretProvider = new MemorySecretProvider();
     const registry = new MemoryProviderRegistry({
+      tenant_id: DEFAULT_TENANT_ID,
       provider_id: "test",
       display_name: "Test",
       authorization_endpoint: "https://auth.test/authorize",
       token_endpoint: "https://auth.test/token",
       scopes: ["scope1"],
-      client_id_env: "TEST_CLIENT_ID",
-      client_secret_env: "TEST_CLIENT_SECRET",
+      client_id: "client-1",
       token_endpoint_basic_auth: false,
     });
 
@@ -282,13 +284,24 @@ describe("provider OAuth callback cleanup", () => {
       async create() {},
     } as any;
 
-    const mounted = new Hono().route(
+    const mounted = new Hono();
+    mounted.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
+    mounted.route(
       "/prefix",
       createProviderOAuthRoutes({
         oauthPendingDal,
         oauthProviderRegistry: registry as any,
         authProfileDal: {} as any,
-        secretProvider,
+        secretProviderForTenant: () => secretProvider,
       }),
     );
 
@@ -311,13 +324,13 @@ describe("provider OAuth callback cleanup", () => {
   it("logs when pending cleanup fails during authorization", async () => {
     const secretProvider = new MemorySecretProvider();
     const registry = new MemoryProviderRegistry({
+      tenant_id: DEFAULT_TENANT_ID,
       provider_id: "test",
       display_name: "Test",
       authorization_endpoint: "https://auth.test/authorize",
       token_endpoint: "https://auth.test/token",
       scopes: ["scope1"],
-      client_id_env: "TEST_CLIENT_ID",
-      client_secret_env: "TEST_CLIENT_SECRET",
+      client_id: "client-1",
       token_endpoint_basic_auth: false,
     });
 
@@ -330,13 +343,27 @@ describe("provider OAuth callback cleanup", () => {
 
     const logger = { warn: vi.fn(), info: vi.fn() } as any;
 
-    const app = createProviderOAuthRoutes({
-      oauthPendingDal,
-      oauthProviderRegistry: registry as any,
-      authProfileDal: {} as any,
-      secretProvider,
-      logger,
+    const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-2",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
     });
+    app.route(
+      "/",
+      createProviderOAuthRoutes({
+        oauthPendingDal,
+        oauthProviderRegistry: registry as any,
+        authProfileDal: {} as any,
+        secretProviderForTenant: () => secretProvider,
+        logger,
+      }),
+    );
 
     const res = await app.request(
       new Request("https://example.test/providers/test/oauth/authorize", {

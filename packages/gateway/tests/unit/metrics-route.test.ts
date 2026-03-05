@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Hono } from "hono";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import { createAuthMiddleware } from "../../src/modules/auth/middleware.js";
 import { createHttpScopeAuthorizationMiddleware } from "../../src/modules/authz/http-scope-middleware.js";
 import {
@@ -11,22 +10,30 @@ import {
   createMetricsMiddleware,
 } from "../../src/modules/observability/metrics.js";
 import { createMetricsRoutes } from "../../src/routes/metrics.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("Metrics routes", () => {
-  let tempDir: string;
-  let tokenStore: TokenStore;
+  let db: SqliteDb;
+  let authTokens: AuthTokenService;
   let adminToken: string;
   let operatorReadToken: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "tyrum-metrics-route-test-"));
-    tokenStore = new TokenStore(tempDir);
-    adminToken = await tokenStore.initialize();
+    db = openTestSqliteDb();
+    authTokens = new AuthTokenService(db);
+    adminToken = (
+      await authTokens.issueToken({
+        tenantId: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      })
+    ).token;
 
     operatorReadToken = (
-      await tokenStore.issueDeviceToken({
-        deviceId: "dev_client_1",
+      await authTokens.issueToken({
+        tenantId: DEFAULT_TENANT_ID,
         role: "client",
+        deviceId: "dev_client_1",
         scopes: ["operator.read"],
         ttlSeconds: 15 * 60,
       })
@@ -34,14 +41,14 @@ describe("Metrics routes", () => {
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    await db.close();
   });
 
   function buildApp(): Hono {
     const app = new Hono();
     const registry = new MetricsRegistry();
     app.use("*", createMetricsMiddleware(registry));
-    app.use("*", createAuthMiddleware(tokenStore));
+    app.use("*", createAuthMiddleware(authTokens));
     app.use("*", createHttpScopeAuthorizationMiddleware());
     app.route("/", createMetricsRoutes({ registry }));
     return app;

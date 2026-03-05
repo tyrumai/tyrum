@@ -11,15 +11,8 @@ function skillDoc(body: string): string {
 describe("skills load order", () => {
   let userHome: string | undefined;
   let workspaceHome: string | undefined;
-  const originalUserHome = process.env["TYRUM_USER_HOME"];
 
   afterEach(async () => {
-    if (originalUserHome === undefined) {
-      delete process.env["TYRUM_USER_HOME"];
-    } else {
-      process.env["TYRUM_USER_HOME"] = originalUserHome;
-    }
-
     if (userHome) {
       await rm(userHome, { recursive: true, force: true });
       userHome = undefined;
@@ -33,7 +26,6 @@ describe("skills load order", () => {
   it("prefers workspace over user over bundled when workspace skills are trusted", async () => {
     userHome = await mkdtemp(join(tmpdir(), "tyrum-user-home-"));
     workspaceHome = await mkdtemp(join(tmpdir(), "tyrum-workspace-home-"));
-    process.env["TYRUM_USER_HOME"] = userHome;
 
     await mkdir(join(userHome, "skills/example"), { recursive: true });
     await writeFile(join(userHome, "skills/example/SKILL.md"), skillDoc("user"), "utf-8");
@@ -41,10 +33,15 @@ describe("skills load order", () => {
     await mkdir(join(workspaceHome, "skills/example"), { recursive: true });
     await writeFile(join(workspaceHome, "skills/example/SKILL.md"), skillDoc("workspace"), "utf-8");
 
-    const skills = await loadEnabledSkills(workspaceHome, {
-      skills: { enabled: ["example"], workspace_trusted: true },
-    } as unknown as { skills: { enabled: string[]; workspace_trusted: boolean } });
-
+    // Inject the temp user skills directory without relying on runtime env configuration.
+    // (Gateway runtime no longer reads TYRUM_USER_HOME.)
+    const skills = await loadEnabledSkills(
+      workspaceHome,
+      {
+        skills: { enabled: ["example"], workspace_trusted: true },
+      } as unknown as { skills: { enabled: string[]; workspace_trusted: boolean } },
+      { userSkillsDir: join(userHome, "skills") },
+    );
     expect(skills).toHaveLength(1);
     expect(skills[0]!.body).toContain("workspace");
     expect(skills[0]!.provenance.source).toBe("workspace");
@@ -53,14 +50,17 @@ describe("skills load order", () => {
   it("falls back to user when workspace skill is absent", async () => {
     userHome = await mkdtemp(join(tmpdir(), "tyrum-user-home-"));
     workspaceHome = await mkdtemp(join(tmpdir(), "tyrum-workspace-home-"));
-    process.env["TYRUM_USER_HOME"] = userHome;
 
     await mkdir(join(userHome, "skills/example"), { recursive: true });
     await writeFile(join(userHome, "skills/example/SKILL.md"), skillDoc("user"), "utf-8");
 
-    const skills = await loadEnabledSkills(workspaceHome, {
-      skills: { enabled: ["example"], workspace_trusted: false },
-    } as unknown as { skills: { enabled: string[]; workspace_trusted: boolean } });
+    const skills = await loadEnabledSkills(
+      workspaceHome,
+      {
+        skills: { enabled: ["example"], workspace_trusted: false },
+      } as unknown as { skills: { enabled: string[]; workspace_trusted: boolean } },
+      { userSkillsDir: join(userHome, "skills") },
+    );
 
     expect(skills).toHaveLength(1);
     expect(skills[0]!.body).toContain("user");
@@ -70,7 +70,6 @@ describe("skills load order", () => {
   it("prefers user over bundled when workspace skills are not trusted", async () => {
     userHome = await mkdtemp(join(tmpdir(), "tyrum-user-home-"));
     workspaceHome = await mkdtemp(join(tmpdir(), "tyrum-workspace-home-"));
-    process.env["TYRUM_USER_HOME"] = userHome;
 
     await mkdir(join(userHome, "skills/example"), { recursive: true });
     await writeFile(join(userHome, "skills/example/SKILL.md"), skillDoc("user"), "utf-8");
@@ -78,9 +77,13 @@ describe("skills load order", () => {
     await mkdir(join(workspaceHome, "skills/example"), { recursive: true });
     await writeFile(join(workspaceHome, "skills/example/SKILL.md"), skillDoc("workspace"), "utf-8");
 
-    const skills = await loadEnabledSkills(workspaceHome, {
-      skills: { enabled: ["example"], workspace_trusted: false },
-    } as unknown as { skills: { enabled: string[]; workspace_trusted: boolean } });
+    const skills = await loadEnabledSkills(
+      workspaceHome,
+      {
+        skills: { enabled: ["example"], workspace_trusted: false },
+      } as unknown as { skills: { enabled: string[]; workspace_trusted: boolean } },
+      { userSkillsDir: join(userHome, "skills") },
+    );
 
     expect(skills).toHaveLength(1);
     expect(skills[0]!.body).toContain("user");
@@ -90,14 +93,17 @@ describe("skills load order", () => {
   it("falls back to bundled when workspace skills are not trusted and user skill is absent", async () => {
     userHome = await mkdtemp(join(tmpdir(), "tyrum-user-home-"));
     workspaceHome = await mkdtemp(join(tmpdir(), "tyrum-workspace-home-"));
-    process.env["TYRUM_USER_HOME"] = userHome;
 
     await mkdir(join(workspaceHome, "skills/example"), { recursive: true });
     await writeFile(join(workspaceHome, "skills/example/SKILL.md"), skillDoc("workspace"), "utf-8");
 
-    const skills = await loadEnabledSkills(workspaceHome, {
-      skills: { enabled: ["example"], workspace_trusted: false },
-    } as unknown as { skills: { enabled: string[]; workspace_trusted: boolean } });
+    const skills = await loadEnabledSkills(
+      workspaceHome,
+      {
+        skills: { enabled: ["example"], workspace_trusted: false },
+      } as unknown as { skills: { enabled: string[]; workspace_trusted: boolean } },
+      { userSkillsDir: join(userHome, "skills") },
+    );
 
     expect(skills).toHaveLength(1);
     expect(skills[0]!.meta.id).toBe("example");

@@ -1,30 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createApp } from "../../src/app.js";
+import { describe, expect, it } from "vitest";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import { createTestContainer } from "./helpers.js";
+import { createTestApp } from "./helpers.js";
 
 describe("workflow routes", () => {
-  const originalFlag = process.env["TYRUM_ENGINE_API_ENABLED"];
-
-  beforeEach(() => {
-    process.env["TYRUM_ENGINE_API_ENABLED"] = "1";
-  });
-
-  afterEach(() => {
-    if (originalFlag === undefined) {
-      delete process.env["TYRUM_ENGINE_API_ENABLED"];
-    } else {
-      process.env["TYRUM_ENGINE_API_ENABLED"] = originalFlag;
-    }
-  });
-
   it("POST /workflow/run enqueues a durable execution run", async () => {
-    const container = await createTestContainer();
-    const app = createApp(container);
+    const { app, container } = await createTestApp({
+      deploymentConfig: { execution: { engineApiEnabled: true } },
+    });
 
     const res = await app.request("/workflow/run", {
       method: "POST",
@@ -83,8 +69,9 @@ describe("workflow routes", () => {
   });
 
   it("POST /workflow/resume resumes a paused run via resume token", async () => {
-    const container = await createTestContainer();
-    const app = createApp(container);
+    const { app, container } = await createTestApp({
+      deploymentConfig: { execution: { engineApiEnabled: true } },
+    });
 
     const jobId = "job-resume-1";
     const runId = "run-resume-1";

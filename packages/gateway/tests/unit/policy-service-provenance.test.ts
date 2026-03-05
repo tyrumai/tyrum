@@ -6,7 +6,11 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { PolicyService } from "../../src/modules/policy/service.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
-import { DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), "tyrum-policy-test-"));
@@ -38,30 +42,22 @@ describe("PolicyService provenance rules", () => {
           "utf-8",
         );
 
-        const prevBundlePath = process.env["TYRUM_POLICY_BUNDLE_PATH"];
-        process.env["TYRUM_POLICY_BUNDLE_PATH"] = bundlePath;
-        try {
-          const policy = new PolicyService({
-            home,
-            snapshotDal: new PolicySnapshotDal(db),
-            overrideDal: new PolicyOverrideDal(db),
-          });
+        const policy = new PolicyService({
+          home,
+          snapshotDal: new PolicySnapshotDal(db),
+          overrideDal: new PolicyOverrideDal(db),
+          deploymentPolicy: { bundlePath },
+        });
 
-          const untrusted = await policy.evaluateToolCall({
-            agentId: DEFAULT_AGENT_ID,
-            workspaceId: DEFAULT_WORKSPACE_ID,
-            toolId: "tool.exec",
-            toolMatchTarget: "echo ok",
-            inputProvenance: { source: "web", trusted: false },
-          });
-          expect(untrusted.decision).toBe("require_approval");
-        } finally {
-          if (prevBundlePath === undefined) {
-            delete process.env["TYRUM_POLICY_BUNDLE_PATH"];
-          } else {
-            process.env["TYRUM_POLICY_BUNDLE_PATH"] = prevBundlePath;
-          }
-        }
+        const untrusted = await policy.evaluateToolCall({
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          toolId: "tool.exec",
+          toolMatchTarget: "echo ok",
+          inputProvenance: { source: "web", trusted: false },
+        });
+        expect(untrusted.decision).toBe("require_approval");
       } finally {
         await db.close();
       }
@@ -90,39 +86,32 @@ describe("PolicyService provenance rules", () => {
           "utf-8",
         );
 
-        const prevBundlePath = process.env["TYRUM_POLICY_BUNDLE_PATH"];
-        process.env["TYRUM_POLICY_BUNDLE_PATH"] = bundlePath;
-        try {
-          const policy = new PolicyService({
-            home,
-            snapshotDal: new PolicySnapshotDal(db),
-            overrideDal: new PolicyOverrideDal(db),
-          });
+        const policy = new PolicyService({
+          home,
+          snapshotDal: new PolicySnapshotDal(db),
+          overrideDal: new PolicyOverrideDal(db),
+          deploymentPolicy: { bundlePath },
+        });
 
-          const trusted = await policy.evaluateToolCall({
-            agentId: DEFAULT_AGENT_ID,
-            workspaceId: DEFAULT_WORKSPACE_ID,
-            toolId: "tool.exec",
-            toolMatchTarget: "echo ok",
-            inputProvenance: { source: "user", trusted: true },
-          });
-          expect(trusted.decision).toBe("allow");
+        const trusted = await policy.evaluateToolCall({
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          toolId: "tool.exec",
+          toolMatchTarget: "echo ok",
+          inputProvenance: { source: "user", trusted: true },
+        });
+        expect(trusted.decision).toBe("allow");
 
-          const untrusted = await policy.evaluateToolCall({
-            agentId: DEFAULT_AGENT_ID,
-            workspaceId: DEFAULT_WORKSPACE_ID,
-            toolId: "tool.exec",
-            toolMatchTarget: "echo ok",
-            inputProvenance: { source: "web", trusted: false },
-          });
-          expect(untrusted.decision).toBe("require_approval");
-        } finally {
-          if (prevBundlePath === undefined) {
-            delete process.env["TYRUM_POLICY_BUNDLE_PATH"];
-          } else {
-            process.env["TYRUM_POLICY_BUNDLE_PATH"] = prevBundlePath;
-          }
-        }
+        const untrusted = await policy.evaluateToolCall({
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          toolId: "tool.exec",
+          toolMatchTarget: "echo ok",
+          inputProvenance: { source: "web", trusted: false },
+        });
+        expect(untrusted.decision).toBe("require_approval");
       } finally {
         await db.close();
       }
@@ -151,39 +140,32 @@ describe("PolicyService provenance rules", () => {
           "utf-8",
         );
 
-        const prevBundlePath = process.env["TYRUM_POLICY_BUNDLE_PATH"];
-        process.env["TYRUM_POLICY_BUNDLE_PATH"] = bundlePath;
-        try {
-          const overrideDal = new PolicyOverrideDal(db);
-          const policy = new PolicyService({
-            home,
-            snapshotDal: new PolicySnapshotDal(db),
-            overrideDal,
-          });
+        const overrideDal = new PolicyOverrideDal(db);
+        const policy = new PolicyService({
+          home,
+          snapshotDal: new PolicySnapshotDal(db),
+          overrideDal,
+          deploymentPolicy: { bundlePath },
+        });
 
-          const override = await overrideDal.create({
-            agentId: DEFAULT_AGENT_ID,
-            workspaceId: DEFAULT_WORKSPACE_ID,
-            toolId: "tool.exec",
-            pattern: "echo ok",
-          });
+        const override = await overrideDal.create({
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          toolId: "tool.exec",
+          pattern: "echo ok",
+        });
 
-          const decision = await policy.evaluateToolCall({
-            agentId: DEFAULT_AGENT_ID,
-            workspaceId: DEFAULT_WORKSPACE_ID,
-            toolId: "tool.exec",
-            toolMatchTarget: "echo ok",
-            inputProvenance: { source: "web", trusted: false },
-          });
-          expect(decision.decision).toBe("allow");
-          expect(decision.applied_override_ids).toEqual([override.policy_override_id]);
-        } finally {
-          if (prevBundlePath === undefined) {
-            delete process.env["TYRUM_POLICY_BUNDLE_PATH"];
-          } else {
-            process.env["TYRUM_POLICY_BUNDLE_PATH"] = prevBundlePath;
-          }
-        }
+        const decision = await policy.evaluateToolCall({
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          toolId: "tool.exec",
+          toolMatchTarget: "echo ok",
+          inputProvenance: { source: "web", trusted: false },
+        });
+        expect(decision.decision).toBe("allow");
+        expect(decision.applied_override_ids).toEqual([override.policy_override_id]);
       } finally {
         await db.close();
       }

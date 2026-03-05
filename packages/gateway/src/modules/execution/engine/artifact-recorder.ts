@@ -54,9 +54,14 @@ export class ExecutionEngineArtifactRecorder {
       });
 
       if (inserted) {
-        await this.opts.eventEmitter.emitArtifactCreatedTx(tx, { runId: scope.runId, artifact });
+        await this.opts.eventEmitter.emitArtifactCreatedTx(tx, {
+          tenantId: scope.tenantId,
+          runId: scope.runId,
+          artifact,
+        });
       }
       await this.opts.eventEmitter.emitArtifactAttachedTx(tx, {
+        tenantId: scope.tenantId,
         runId: scope.runId,
         stepId: scope.stepId,
         attemptId: scope.attemptId,

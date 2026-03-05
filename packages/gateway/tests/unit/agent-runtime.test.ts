@@ -22,9 +22,11 @@ import type {
 import { createStubLanguageModel } from "./stub-language-model.js";
 import { MockLanguageModelV3 } from "ai/test";
 import {
+  AgentConfig,
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
 } from "@tyrum/schemas";
+import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -99,6 +101,25 @@ function createDeferred<T = void>(): {
   return { promise, resolve, reject };
 }
 
+async function seedAgentConfig(
+  container: GatewayContainer,
+  input: { agentKey?: string; config: unknown },
+): Promise<void> {
+  const agentKey = input.agentKey?.trim() || "default";
+  const scopeIds = await container.identityScopeDal.resolveScopeIds({
+    tenantKey: "default",
+    agentKey,
+    workspaceKey: "default",
+  });
+  await new AgentConfigDal(container.db).set({
+    tenantId: scopeIds.tenantId,
+    agentId: scopeIds.agentId,
+    config: AgentConfig.parse(input.config),
+    createdBy: { kind: "test" },
+    reason: "test",
+  });
+}
+
 describe("AgentRuntime", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
@@ -122,26 +143,16 @@ describe("AgentRuntime", () => {
       tyrumHome: homeDir,
     });
 
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.node.dispatch",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    await seedAgentConfig(container, {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: { enabled: [] },
+        tools: { allow: ["tool.node.dispatch"] },
+        sessions: { ttl_days: 30, max_turns: 20 },
+        memory: { markdown_enabled: false },
+      },
+    });
 
     const policyService = {
       isEnabled: () => true,
@@ -215,6 +226,14 @@ describe("AgentRuntime", () => {
       id: "conn-1",
       role: "node",
       deviceId: nodeId,
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        device_id: nodeId,
+        role: "node",
+        scopes: [],
+      },
       protocolRev: 2,
     });
 
@@ -1034,6 +1053,7 @@ describe("AgentRuntime", () => {
 
     const engine = new ExecutionEngine({ db: container.db });
     const queued = await engine.enqueuePlan({
+      tenantId: DEFAULT_TENANT_ID,
       key: "agent:agent-b:test:channel:thread-b",
       lane: "main",
       planId: "test-plan-b",
@@ -1203,26 +1223,16 @@ describe("AgentRuntime", () => {
       migrationsDir,
     });
 
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.exec",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    await seedAgentConfig(container, {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: { enabled: [] },
+        tools: { allow: ["tool.exec"] },
+        sessions: { ttl_days: 30, max_turns: 20 },
+        memory: { markdown_enabled: false },
+      },
+    });
 
     const policyService = {
       isEnabled: () => false,
@@ -1854,11 +1864,17 @@ describe("AgentRuntime", () => {
       migrationsDir,
     });
 
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow: []\nsessions:\n  ttl_days: 12\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
-      "utf-8",
-    );
+    await seedAgentConfig(container, {
+      agentKey: "agent-1",
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: { enabled: [] },
+        tools: { allow: [] },
+        sessions: { ttl_days: 12, max_turns: 20 },
+        memory: { markdown_enabled: false },
+      },
+    });
 
     const deleteSpy = vi.spyOn(container.sessionDal, "deleteExpired").mockResolvedValue(0);
 
@@ -1887,11 +1903,16 @@ describe("AgentRuntime", () => {
     });
 
     await mkdir(join(homeDir, "mcp/calendar"), { recursive: true });
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled:\n    - calendar\ntools:\n  allow:\n    - tool.fs.read\n    - mcp.*\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
-      "utf-8",
-    );
+    await seedAgentConfig(container, {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: { enabled: ["calendar"] },
+        tools: { allow: ["tool.fs.read", "mcp.*"] },
+        sessions: { ttl_days: 30, max_turns: 20 },
+        memory: { markdown_enabled: false },
+      },
+    });
     await writeFile(
       join(homeDir, "mcp/calendar/server.yml"),
       `id: calendar\nname: Calendar MCP\nenabled: true\ntransport: stdio\ncommand: node\nargs: []\n`,
@@ -1925,11 +1946,16 @@ describe("AgentRuntime", () => {
       expect.arrayContaining([expect.objectContaining({ id: "calendar" })]),
     );
 
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled:\n    - calendar\ntools:\n  allow:\n    - tool.fs.read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
-      "utf-8",
-    );
+    await seedAgentConfig(container, {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: { enabled: ["calendar"] },
+        tools: { allow: ["tool.fs.read"] },
+        sessions: { ttl_days: 30, max_turns: 20 },
+        memory: { markdown_enabled: false },
+      },
+    });
 
     await runtime.turn({
       channel: "test",

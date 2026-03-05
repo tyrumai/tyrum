@@ -10,7 +10,8 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import { createTestContainer } from "./helpers.js";
+import { createTestContainer, decorateAppWithDefaultAuth } from "./helpers.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 
 type SqlRunner = {
   run(sql: string, params?: unknown[]): Promise<unknown>;
@@ -95,7 +96,6 @@ function extractEvidenceArtifactId(output: string, key: "artifact" | "tree_artif
 describe("tool.node.dispatch desktop evidence artifacts", () => {
   let originalTyrumHome: string | undefined;
   let homeDir: string | undefined;
-  let originalDesktopSandboxSensitivity: string | undefined;
 
   function createExecutor(
     container: Awaited<ReturnType<typeof createTestContainer>>,
@@ -112,6 +112,8 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       undefined,
       {
         db: container.db,
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
         workspaceId: DEFAULT_WORKSPACE_ID,
         ownerPrefix: "test-tool",
       },
@@ -122,7 +124,6 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
 
   beforeEach(async () => {
     originalTyrumHome = process.env["TYRUM_HOME"];
-    originalDesktopSandboxSensitivity = process.env["TYRUM_DESKTOP_SANDBOX_ARTIFACT_SENSITIVITY"];
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-node-dispatch-"));
     process.env["TYRUM_HOME"] = homeDir;
   });
@@ -138,17 +139,18 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       await rm(homeDir, { recursive: true, force: true });
       homeDir = undefined;
     }
-
-    if (originalDesktopSandboxSensitivity === undefined) {
-      delete process.env["TYRUM_DESKTOP_SANDBOX_ARTIFACT_SENSITIVITY"];
-    } else {
-      process.env["TYRUM_DESKTOP_SANDBOX_ARTIFACT_SENSITIVITY"] = originalDesktopSandboxSensitivity;
-    }
   });
 
   it("stores screenshot bytes as a run-scoped artifact and strips base64 from tool output", async () => {
     const container = await createTestContainer();
-    const app = createApp(container);
+    const authTokens = new AuthTokenService(container.db);
+    const tenantToken = await authTokens.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "admin",
+      scopes: ["*"],
+    });
+    const app = createApp(container, { authTokens });
+    decorateAppWithDefaultAuth(app, tenantToken.token);
 
     const scope: ExecutionScopeIds = {
       jobId: "job-node-dispatch-1",
@@ -231,7 +233,14 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
 
   it("stores a11y tree JSON returned in Desktop result as a run-scoped artifact and strips it from tool output", async () => {
     const container = await createTestContainer();
-    const app = createApp(container);
+    const authTokens = new AuthTokenService(container.db);
+    const tenantToken = await authTokens.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "admin",
+      scopes: ["*"],
+    });
+    const app = createApp(container, { authTokens });
+    decorateAppWithDefaultAuth(app, tenantToken.token);
 
     const scope: ExecutionScopeIds = {
       jobId: "job-node-dispatch-3",
@@ -331,7 +340,14 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
 
   it("stores a11y tree JSON as a run-scoped artifact and strips it from tool output", async () => {
     const container = await createTestContainer();
-    const app = createApp(container);
+    const authTokens = new AuthTokenService(container.db);
+    const tenantToken = await authTokens.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "admin",
+      scopes: ["*"],
+    });
+    const app = createApp(container, { authTokens });
+    decorateAppWithDefaultAuth(app, tenantToken.token);
 
     const scope: ExecutionScopeIds = {
       jobId: "job-node-dispatch-2",
@@ -418,8 +434,16 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     await container.db.close();
   });
 
-  it("defaults sandbox desktop evidence artifacts to normal sensitivity and allows env override", async () => {
+  it("defaults sandbox desktop evidence artifacts to normal sensitivity", async () => {
     const container = await createTestContainer();
+    const authTokens = new AuthTokenService(container.db);
+    const tenantToken = await authTokens.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "admin",
+      scopes: ["*"],
+    });
+    const app = createApp(container, { authTokens });
+    decorateAppWithDefaultAuth(app, tenantToken.token);
 
     const scope: ExecutionScopeIds = {
       jobId: "job-node-dispatch-4",
@@ -502,35 +526,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     expect(row).toBeTruthy();
     expect(row?.sensitivity).toBe("normal");
 
-    process.env["TYRUM_DESKTOP_SANDBOX_ARTIFACT_SENSITIVITY"] = "sensitive";
-
-    const result2 = await executor.execute(
-      "tool.node.dispatch",
-      "call-5",
-      {
-        capability: "tyrum.desktop",
-        action: "Desktop",
-        args: { op: "screenshot", display: "primary" },
-      },
-      {
-        execution_run_id: scope.runId,
-        execution_step_id: scope.stepId,
-      },
-    );
-
-    expect(result2.error).toBeUndefined();
-
-    const artifactId2 = extractEvidenceArtifactId(result2.output, "artifact");
-
-    const row2 = await container.db.get<{ sensitivity: string }>(
-      `SELECT sensitivity
-       FROM execution_artifacts
-       WHERE artifact_id = ?`,
-      [artifactId2],
-    );
-    expect(row2).toBeTruthy();
-    expect(row2?.sensitivity).toBe("sensitive");
-
+    void app;
     await container.db.close();
   });
 });

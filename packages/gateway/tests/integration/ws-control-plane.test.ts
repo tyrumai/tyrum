@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { createTestContainer } from "./helpers.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
@@ -19,6 +18,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 
 function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
@@ -80,7 +80,6 @@ function makeAgents(runtime: AgentRuntime, policyService: PolicyService): AgentR
 describe("WS control-plane requests", () => {
   let server: Server | undefined;
   let ws: WebSocket | undefined;
-  let tokenHome: string | undefined;
   let tyrumHome: string | undefined;
   let originalTyrumHome: string | undefined;
   let stopHeartbeat: (() => void) | undefined;
@@ -99,10 +98,6 @@ describe("WS control-plane requests", () => {
       server = undefined;
     }
 
-    if (tokenHome) {
-      await rm(tokenHome, { recursive: true, force: true });
-      tokenHome = undefined;
-    }
     if (tyrumHome) {
       await rm(tyrumHome, { recursive: true, force: true });
       tyrumHome = undefined;
@@ -134,13 +129,14 @@ describe("WS control-plane requests", () => {
       languageModel: createStubLanguageModel("hello"),
     });
 
-    tokenHome = await mkdtemp(join(tmpdir(), "tyrum-ws-token-"));
-    const tokenStore = new TokenStore(tokenHome);
-    const adminToken = await tokenStore.initialize();
+    const authTokens = new AuthTokenService(container.db);
+    const adminToken = (
+      await authTokens.issueToken({ tenantId: DEFAULT_TENANT_ID, role: "admin", scopes: ["*"] })
+    ).token;
 
     const wsHandler = createWsHandler({
       connectionManager,
-      tokenStore,
+      authTokens,
       protocolDeps: {
         connectionManager,
         db: container.db,

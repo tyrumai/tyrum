@@ -22,7 +22,6 @@ import {
   listOrderedEligibleProfilesForProvider,
   OAUTH_REFRESH_LEASE_UNAVAILABLE,
   parseProviderModelId,
-  resolveEnvApiKey,
   resolveProfileApiKey,
   resolveProviderBaseURL,
 } from "./provider-resolution.js";
@@ -72,7 +71,9 @@ export async function resolveSessionModel(
     .map((v) => v.trim())
     .filter((v, i, a) => v.length > 0 && a.indexOf(v) === i);
 
-  const loaded = await deps.container.modelsDev.ensureLoaded();
+  const loaded = await deps.container.modelCatalog.getEffectiveCatalog({
+    tenantId: input.tenantId,
+  });
   const catalog = loaded.catalog;
 
   type ProviderEntry = (typeof catalog)[string];
@@ -121,8 +122,12 @@ export async function resolveSessionModel(
       const { providerId, modelId } = candidate;
       const provider = catalog[providerId];
       if (!provider) return undefined;
+      const providerEnabled = (provider as { enabled?: boolean }).enabled ?? true;
+      if (!providerEnabled) return undefined;
       const model = provider.models?.[modelId];
       if (!model) return undefined;
+      const modelEnabled = (model as { enabled?: boolean }).enabled ?? true;
+      if (!modelEnabled) return undefined;
 
       const providerOverride = (model as { provider?: { npm?: string; api?: string } }).provider;
       const npm = providerOverride?.npm ?? provider.npm;
@@ -167,6 +172,8 @@ export async function resolveSessionModel(
     chosen: (typeof resolvedCandidates)[number],
   ): Promise<LanguageModelV3> {
     const mergedOptions = (() => {
+      const providerOptions =
+        coerceRecord((chosen.provider as { options?: unknown }).options) ?? {};
       const modelOptions = coerceRecord((chosen.model as { options?: unknown }).options) ?? {};
       const variantOptions = (() => {
         const variant = input.config.model.variant?.trim();
@@ -174,23 +181,30 @@ export async function resolveSessionModel(
         if (!variant || !variants) return {};
         return coerceRecord(variants[variant]) ?? {};
       })();
-      return Object.assign({}, modelOptions, variantOptions, input.config.model.options);
+      return Object.assign(
+        {},
+        providerOptions,
+        modelOptions,
+        variantOptions,
+        input.config.model.options,
+      );
     })();
 
+    const providerHeaders =
+      coerceStringRecord((chosen.provider as { headers?: unknown }).headers) ?? {};
     const modelHeaders = coerceStringRecord((chosen.model as { headers?: unknown }).headers) ?? {};
     const optionHeaders = coerceStringRecord(mergedOptions["headers"]) ?? {};
     const headers =
-      Object.keys(modelHeaders).length > 0 || Object.keys(optionHeaders).length > 0
-        ? { ...modelHeaders, ...optionHeaders }
+      Object.keys(providerHeaders).length > 0 ||
+      Object.keys(modelHeaders).length > 0 ||
+      Object.keys(optionHeaders).length > 0
+        ? { ...providerHeaders, ...modelHeaders, ...optionHeaders }
         : undefined;
 
     const baseURL = resolveProviderBaseURL({
-      providerEnv: chosen.provider.env,
       providerApi: chosen.api,
       options: mergedOptions,
     });
-
-    const envApiKey = resolveEnvApiKey(chosen.provider.env);
 
     async function buildModelFromApiKey(apiKey: string | undefined): Promise<LanguageModelV3> {
       const sdk = createProviderFromNpm({
@@ -238,15 +252,7 @@ export async function resolveSessionModel(
 
     const providerLabel = `${chosen.providerId}/${chosen.modelId}`;
 
-    const supportedUrls: PromiseLike<Record<string, RegExp[]>> = (async () => {
-      try {
-        const model = await buildModelFromApiKey(undefined);
-        return await Promise.resolve(model.supportedUrls);
-      } catch {
-        // Intentional: supportedUrls introspection is best-effort; treat supported URLs as unknown.
-        return {};
-      }
-    })();
+    const supportedUrls: PromiseLike<Record<string, RegExp[]>> = Promise.resolve({});
 
     async function callWithRotation<T>(
       options: LanguageModelV3CallOptions,
@@ -351,12 +357,10 @@ export async function resolveSessionModel(
         }
       }
 
-      // Fall back to environment-provided credentials (single attempt; no pinning).
-      try {
-        const model = await buildModelFromApiKey(envApiKey);
-        return await invoke(model, options);
-      } catch (err) {
-        lastErr = err;
+      if (!lastErr) {
+        lastErr = new Error(
+          `no active auth profiles with credentials configured for provider '${chosen.providerId}'`,
+        );
       }
 
       const message = lastErr instanceof Error ? lastErr.message : String(lastErr);

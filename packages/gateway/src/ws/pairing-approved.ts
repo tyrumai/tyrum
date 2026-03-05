@@ -16,8 +16,14 @@ export interface PairingApprovedDeliveryDeps {
 
 export function emitPairingApprovedEvent(
   deps: PairingApprovedDeliveryDeps,
+  tenantId: string,
   input: { pairing: unknown; nodeId: string; scopedToken: string },
 ): void {
+  const normalizedTenantId = tenantId.trim();
+  if (normalizedTenantId.length === 0) {
+    throw new Error("tenantId is required");
+  }
+
   const evt = {
     event_id: crypto.randomUUID(),
     type: "pairing.approved",
@@ -30,6 +36,8 @@ export function emitPairingApprovedEvent(
   for (const client of deps.connectionManager.allClients()) {
     if (client.role !== "node") continue;
     if (client.device_id !== input.nodeId) continue;
+    if (client.auth_claims?.tenant_id && client.auth_claims.tenant_id !== normalizedTenantId)
+      continue;
     try {
       client.ws.send(payload);
     } catch (err) {
@@ -47,12 +55,13 @@ export function emitPairingApprovedEvent(
     const cluster = deps.cluster;
     void (async () => {
       const nowMs = Date.now();
-      const peers = await cluster.connectionDirectory.listNonExpired(nowMs);
+      const peers = await cluster.connectionDirectory.listNonExpired(normalizedTenantId, nowMs);
       for (const peer of peers) {
         if (peer.role !== "node") continue;
         if (peer.device_id !== input.nodeId) continue;
         if (peer.edge_id === cluster.edgeId) continue;
         await cluster.outboxDal.enqueue(
+          normalizedTenantId,
           "ws.direct",
           { connection_id: peer.connection_id, message: evt },
           { targetEdgeId: peer.edge_id },

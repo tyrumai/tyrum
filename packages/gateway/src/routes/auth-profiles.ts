@@ -20,7 +20,7 @@ import type {
   SessionProviderPinDal,
   SessionProviderPinRow,
 } from "../modules/models/session-pin-dal.js";
-import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface AuthProfileRouteDeps {
   authProfileDal: AuthProfileDal;
@@ -41,12 +41,13 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
   const app = new Hono();
 
   app.get("/auth/profiles", async (c) => {
+    const tenantId = requireTenantId(c);
     const providerKey = c.req.query("provider_key")?.trim() || undefined;
     const statusRaw = c.req.query("status")?.trim();
     const status = statusRaw === "active" || statusRaw === "disabled" ? statusRaw : undefined;
 
     const rows = await deps.authProfileDal.list({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       providerKey,
       status,
     });
@@ -55,6 +56,7 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
   });
 
   app.post("/auth/profiles", async (c) => {
+    const tenantId = requireTenantId(c);
     const body = (await c.req.json()) as unknown;
     const parsed = AuthProfileCreateRequest.safeParse(body);
     if (!parsed.success) {
@@ -62,7 +64,7 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
     }
 
     const row = await deps.authProfileDal.create({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       authProfileKey: parsed.data.auth_profile_key,
       providerKey: parsed.data.provider_key,
       type: parsed.data.type,
@@ -75,6 +77,7 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
   });
 
   app.patch("/auth/profiles/:key", async (c) => {
+    const tenantId = requireTenantId(c);
     const authProfileKey = c.req.param("key");
     const body = (await c.req.json()) as unknown;
     const parsed = AuthProfileUpdateRequest.safeParse(body);
@@ -83,7 +86,7 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
     }
 
     const updated = await deps.authProfileDal.updateByKey({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       authProfileKey,
       labels: parsed.data.labels,
       secretKeys: parsed.data.secret_keys,
@@ -96,6 +99,7 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
   });
 
   app.post("/auth/profiles/:key/disable", async (c) => {
+    const tenantId = requireTenantId(c);
     const authProfileKey = c.req.param("key");
     const body = (await c.req.json()) as unknown;
     const parsed = AuthProfileDisableRequest.safeParse(body);
@@ -105,7 +109,7 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
     void parsed;
 
     const updated = await deps.authProfileDal.disableByKey({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       authProfileKey,
     });
     if (!updated) {
@@ -116,6 +120,7 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
   });
 
   app.post("/auth/profiles/:key/enable", async (c) => {
+    const tenantId = requireTenantId(c);
     const authProfileKey = c.req.param("key");
     const body = (await c.req.json()) as unknown;
     const parsed = AuthProfileEnableRequest.safeParse(body);
@@ -125,7 +130,7 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
     void parsed;
 
     const updated = await deps.authProfileDal.enableByKey({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       authProfileKey,
     });
     if (!updated) {
@@ -136,10 +141,11 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
   });
 
   app.get("/auth/pins", async (c) => {
+    const tenantId = requireTenantId(c);
     const sessionId = c.req.query("session_id")?.trim() || undefined;
     const providerKey = c.req.query("provider_key")?.trim() || undefined;
     const pins = await deps.pinDal.list({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       sessionId,
       providerKey,
     });
@@ -147,6 +153,7 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
   });
 
   app.post("/auth/pins", async (c) => {
+    const tenantId = requireTenantId(c);
     const body = (await c.req.json()) as unknown;
     const parsed = SessionProviderPinSetRequest.safeParse(body);
     if (!parsed.success) {
@@ -155,7 +162,7 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
 
     if (parsed.data.auth_profile_key === null) {
       const cleared = await deps.pinDal.clear({
-        tenantId: DEFAULT_TENANT_ID,
+        tenantId,
         sessionId: parsed.data.session_id,
         providerKey: parsed.data.provider_key,
       });
@@ -163,7 +170,7 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
     }
 
     const profile = await deps.authProfileDal.getByKey({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       authProfileKey: parsed.data.auth_profile_key,
     });
     if (!profile) {
@@ -171,7 +178,7 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
     }
 
     const pin = await deps.pinDal.upsert({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       sessionId: parsed.data.session_id,
       providerKey: parsed.data.provider_key,
       authProfileId: profile.auth_profile_id,

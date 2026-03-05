@@ -40,7 +40,7 @@ export class AgentRegistry {
     private readonly opts: {
       container: GatewayContainer;
       baseHome: string;
-      defaultSecretProvider: SecretProvider;
+      secretProviderForTenant: (tenantId: string) => SecretProvider;
       defaultPolicyService: PolicyService;
       /** Optional global LanguageModel override (primarily for tests). */
       defaultLanguageModel?: LanguageModel;
@@ -74,27 +74,29 @@ export class AgentRegistry {
     return service;
   }
 
-  async getSecretProvider(agentId: string): Promise<SecretProvider> {
+  getSecretProvider(tenantId: string, agentId: string): SecretProvider {
     normalizeAgentId(agentId);
-    // Secrets are tenant-scoped and DB-backed; all agents share the same provider.
-    return this.opts.defaultSecretProvider;
+    return this.opts.secretProviderForTenant(tenantId);
   }
 
-  async getRuntime(agentId: string): Promise<AgentRuntime> {
-    const id = normalizeAgentId(agentId);
-    const existing = this.runtimeByAgentId.get(id);
+  async getRuntime(input: { tenantId: string; agentKey: string }): Promise<AgentRuntime> {
+    const tenantId = input.tenantId.trim();
+    const agentId = normalizeAgentId(input.agentKey);
+    const cacheKey = `${tenantId}:${agentId}`;
+    const existing = this.runtimeByAgentId.get(cacheKey);
     if (existing) return await existing;
 
     const promise = (async () => {
-      const home = this.resolveAgentHome(id);
-      const secretProvider = await this.getSecretProvider(id);
-      const policyService = this.getPolicyService(id);
+      const home = this.resolveAgentHome(agentId);
+      const secretProvider = this.getSecretProvider(tenantId, agentId);
+      const policyService = this.getPolicyService(agentId);
 
       const runtime = new AgentRuntime({
         container: this.opts.container,
+        tenantId,
         home,
         fetchImpl: fetch,
-        agentId: id,
+        agentId,
         languageModel: this.opts.defaultLanguageModel,
         secretProvider,
         approvalNotifier: this.opts.approvalNotifier,
@@ -104,17 +106,18 @@ export class AgentRegistry {
       });
 
       this.opts.logger.info("agents.runtime_ready", {
-        agent_id: id,
+        tenant_id: tenantId,
+        agent_id: agentId,
         home,
       });
 
       return runtime;
     })().catch((err) => {
-      this.runtimeByAgentId.delete(id);
+      this.runtimeByAgentId.delete(cacheKey);
       throw err;
     });
 
-    this.runtimeByAgentId.set(id, promise);
+    this.runtimeByAgentId.set(cacheKey, promise);
     return await promise;
   }
 

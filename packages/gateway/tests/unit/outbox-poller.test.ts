@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { OutboxPoller } from "../../src/modules/backplane/outbox-poller.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -26,6 +27,8 @@ describe("OutboxPoller", () => {
     connectionManager.addClient(operatorWs as never, ["cli"] as never, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-operator-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_operator_1",
         scopes: ["operator.read"],
@@ -34,6 +37,8 @@ describe("OutboxPoller", () => {
     connectionManager.addClient(otherWs as never, ["cli"] as never, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-client-2",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_2",
         scopes: [],
@@ -46,6 +51,7 @@ describe("OutboxPoller", () => {
       .mockResolvedValueOnce([
         {
           id: 1,
+          tenant_id: DEFAULT_TENANT_ID,
           topic: "ws.broadcast",
           target_edge_id: null,
           payload: {
@@ -64,6 +70,7 @@ describe("OutboxPoller", () => {
 
     const ackConsumerCursor = vi.fn(async () => undefined);
     const outboxDal = {
+      listActiveTenantIds: vi.fn(async () => [DEFAULT_TENANT_ID]),
       poll,
       ackConsumerCursor,
     } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
@@ -75,7 +82,7 @@ describe("OutboxPoller", () => {
     });
 
     await poller.tick();
-    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(ackConsumerCursor).toHaveBeenCalledWith(DEFAULT_TENANT_ID, "edge-a", 1);
     expect(operatorWs.send).toHaveBeenCalledTimes(1);
     expect(otherWs.send).not.toHaveBeenCalled();
   });
@@ -87,6 +94,8 @@ describe("OutboxPoller", () => {
     connectionManager.addClient(operatorWs as never, ["cli"] as never, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-operator-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_operator_1",
         scopes: ["operator.read"],
@@ -95,6 +104,8 @@ describe("OutboxPoller", () => {
     connectionManager.addClient(otherWs as never, ["cli"] as never, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-client-2",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_2",
         scopes: [],
@@ -107,6 +118,7 @@ describe("OutboxPoller", () => {
       .mockResolvedValueOnce([
         {
           id: 1,
+          tenant_id: DEFAULT_TENANT_ID,
           topic: "ws.broadcast",
           target_edge_id: null,
           payload: {
@@ -123,6 +135,7 @@ describe("OutboxPoller", () => {
 
     const ackConsumerCursor = vi.fn(async () => undefined);
     const outboxDal = {
+      listActiveTenantIds: vi.fn(async () => [DEFAULT_TENANT_ID]),
       poll,
       ackConsumerCursor,
     } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
@@ -134,7 +147,7 @@ describe("OutboxPoller", () => {
     });
 
     await poller.tick();
-    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(ackConsumerCursor).toHaveBeenCalledWith(DEFAULT_TENANT_ID, "edge-a", 1);
     expect(operatorWs.send).toHaveBeenCalledTimes(1);
     expect(otherWs.send).not.toHaveBeenCalled();
   });
@@ -146,6 +159,8 @@ describe("OutboxPoller", () => {
     connectionManager.addClient(operatorWs as never, ["cli"] as never, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-operator-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_operator_1",
         scopes: ["operator.read"],
@@ -154,6 +169,8 @@ describe("OutboxPoller", () => {
     connectionManager.addClient(badWs as never, ["cli"] as never, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-bad-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_bad_1",
         scopes: [123],
@@ -166,6 +183,7 @@ describe("OutboxPoller", () => {
       .mockResolvedValueOnce([
         {
           id: 1,
+          tenant_id: DEFAULT_TENANT_ID,
           topic: "ws.broadcast",
           target_edge_id: null,
           payload: {
@@ -183,6 +201,7 @@ describe("OutboxPoller", () => {
 
     const ackConsumerCursor = vi.fn(async () => undefined);
     const outboxDal = {
+      listActiveTenantIds: vi.fn(async () => [DEFAULT_TENANT_ID]),
       poll,
       ackConsumerCursor,
     } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
@@ -194,7 +213,7 @@ describe("OutboxPoller", () => {
     });
 
     await poller.tick();
-    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(ackConsumerCursor).toHaveBeenCalledWith(DEFAULT_TENANT_ID, "edge-a", 1);
     expect(operatorWs.send).toHaveBeenCalledTimes(1);
     expect(badWs.send).not.toHaveBeenCalled();
   });
@@ -207,6 +226,8 @@ describe("OutboxPoller", () => {
       role: "client",
       authClaims: {
         token_kind: "admin",
+        token_id: "token-admin-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "admin",
         scopes: ["*"],
       },
@@ -214,6 +235,8 @@ describe("OutboxPoller", () => {
     connectionManager.addClient(otherWs as never, ["cli"] as never, {
       authClaims: {
         token_kind: "device",
+        token_id: "token-client-2",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         device_id: "dev_client_2",
         scopes: [],
@@ -226,6 +249,7 @@ describe("OutboxPoller", () => {
       .mockResolvedValueOnce([
         {
           id: 1,
+          tenant_id: DEFAULT_TENANT_ID,
           topic: "ws.broadcast",
           target_edge_id: null,
           payload: {
@@ -243,6 +267,7 @@ describe("OutboxPoller", () => {
 
     const ackConsumerCursor = vi.fn(async () => undefined);
     const outboxDal = {
+      listActiveTenantIds: vi.fn(async () => [DEFAULT_TENANT_ID]),
       poll,
       ackConsumerCursor,
     } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
@@ -254,7 +279,7 @@ describe("OutboxPoller", () => {
     });
 
     await poller.tick();
-    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(ackConsumerCursor).toHaveBeenCalledWith(DEFAULT_TENANT_ID, "edge-a", 1);
     expect(adminWs.send).toHaveBeenCalledTimes(1);
     expect(otherWs.send).not.toHaveBeenCalled();
   });
@@ -266,6 +291,8 @@ describe("OutboxPoller", () => {
       role: "node",
       authClaims: {
         token_kind: "admin",
+        token_id: "token-admin-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "admin",
         scopes: ["*"],
       },
@@ -277,6 +304,7 @@ describe("OutboxPoller", () => {
       .mockResolvedValueOnce([
         {
           id: 1,
+          tenant_id: DEFAULT_TENANT_ID,
           topic: "ws.broadcast",
           target_edge_id: null,
           payload: {
@@ -294,6 +322,7 @@ describe("OutboxPoller", () => {
 
     const ackConsumerCursor = vi.fn(async () => undefined);
     const outboxDal = {
+      listActiveTenantIds: vi.fn(async () => [DEFAULT_TENANT_ID]),
       poll,
       ackConsumerCursor,
     } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
@@ -305,14 +334,23 @@ describe("OutboxPoller", () => {
     });
 
     await poller.tick();
-    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(ackConsumerCursor).toHaveBeenCalledWith(DEFAULT_TENANT_ID, "edge-a", 1);
     expect(adminWs.send).not.toHaveBeenCalled();
   });
 
   it("acks only after processing succeeds (retries on processing error)", async () => {
     const connectionManager = new ConnectionManager();
     const ws = createMockWs();
-    connectionManager.addClient(ws as never, ["cli"]);
+    connectionManager.addClient(ws as never, ["cli"] as never, {
+      role: "client",
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-client-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
 
     const circular: Record<string, unknown> = {};
     (circular as Record<string, unknown>)["self"] = circular;
@@ -323,6 +361,7 @@ describe("OutboxPoller", () => {
       .mockResolvedValueOnce([
         {
           id: 1,
+          tenant_id: DEFAULT_TENANT_ID,
           topic: "ws.broadcast",
           target_edge_id: null,
           payload: { message: circular },
@@ -332,6 +371,7 @@ describe("OutboxPoller", () => {
       .mockResolvedValueOnce([
         {
           id: 1,
+          tenant_id: DEFAULT_TENANT_ID,
           topic: "ws.broadcast",
           target_edge_id: null,
           payload: {
@@ -350,6 +390,7 @@ describe("OutboxPoller", () => {
     const ackConsumerCursor = vi.fn(async () => undefined);
 
     const outboxDal = {
+      listActiveTenantIds: vi.fn(async () => [DEFAULT_TENANT_ID]),
       poll,
       ackConsumerCursor,
     } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
@@ -364,7 +405,7 @@ describe("OutboxPoller", () => {
     expect(ackConsumerCursor).not.toHaveBeenCalled();
 
     await poller.tick();
-    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(ackConsumerCursor).toHaveBeenCalledWith(DEFAULT_TENANT_ID, "edge-a", 1);
     expect(ws.send).toHaveBeenCalledTimes(1);
   });
 
@@ -376,6 +417,14 @@ describe("OutboxPoller", () => {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "node",
+        device_id: "dev_test",
+        scopes: ["*"],
+      },
     });
 
     const nowIso = new Date().toISOString();
@@ -384,6 +433,7 @@ describe("OutboxPoller", () => {
       .mockResolvedValueOnce([
         {
           id: 1,
+          tenant_id: DEFAULT_TENANT_ID,
           topic: "ws.direct",
           target_edge_id: null,
           payload: {
@@ -406,6 +456,7 @@ describe("OutboxPoller", () => {
 
     const ackConsumerCursor = vi.fn(async () => undefined);
     const outboxDal = {
+      listActiveTenantIds: vi.fn(async () => [DEFAULT_TENANT_ID]),
       poll,
       ackConsumerCursor,
     } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
@@ -433,6 +484,8 @@ describe("OutboxPoller", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-admin",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         scopes: ["operator.admin"],
       },
@@ -445,6 +498,8 @@ describe("OutboxPoller", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-readonly",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         scopes: ["operator.read"],
       },
@@ -457,6 +512,8 @@ describe("OutboxPoller", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "node",
         scopes: ["*"],
       },
@@ -468,6 +525,7 @@ describe("OutboxPoller", () => {
       .mockResolvedValueOnce([
         {
           id: 1,
+          tenant_id: DEFAULT_TENANT_ID,
           topic: "ws.broadcast",
           target_edge_id: null,
           payload: {
@@ -490,6 +548,7 @@ describe("OutboxPoller", () => {
 
     const ackConsumerCursor = vi.fn(async () => undefined);
     const outboxDal = {
+      listActiveTenantIds: vi.fn(async () => [DEFAULT_TENANT_ID]),
       poll,
       ackConsumerCursor,
     } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
@@ -502,7 +561,7 @@ describe("OutboxPoller", () => {
 
     await poller.tick();
 
-    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(ackConsumerCursor).toHaveBeenCalledWith(DEFAULT_TENANT_ID, "edge-a", 1);
     expect(wsAdmin.send).toHaveBeenCalledTimes(1);
     expect(wsReadOnly.send).toHaveBeenCalledTimes(0);
     expect(wsNode.send).toHaveBeenCalledTimes(0);
@@ -518,6 +577,8 @@ describe("OutboxPoller", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-admin",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         scopes: ["operator.admin"],
       },
@@ -530,6 +591,8 @@ describe("OutboxPoller", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-readonly",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         scopes: ["operator.read"],
       },
@@ -542,6 +605,8 @@ describe("OutboxPoller", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "node",
         scopes: ["*"],
       },
@@ -553,6 +618,7 @@ describe("OutboxPoller", () => {
       .mockResolvedValueOnce([
         {
           id: 1,
+          tenant_id: DEFAULT_TENANT_ID,
           topic: "ws.broadcast",
           target_edge_id: null,
           payload: {
@@ -575,6 +641,7 @@ describe("OutboxPoller", () => {
 
     const ackConsumerCursor = vi.fn(async () => undefined);
     const outboxDal = {
+      listActiveTenantIds: vi.fn(async () => [DEFAULT_TENANT_ID]),
       poll,
       ackConsumerCursor,
     } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
@@ -587,7 +654,7 @@ describe("OutboxPoller", () => {
 
     await poller.tick();
 
-    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(ackConsumerCursor).toHaveBeenCalledWith(DEFAULT_TENANT_ID, "edge-a", 1);
     expect(wsAdmin.send).toHaveBeenCalledTimes(1);
     expect(wsReadOnly.send).toHaveBeenCalledTimes(1);
     expect(wsNode.send).toHaveBeenCalledTimes(1);
@@ -603,6 +670,8 @@ describe("OutboxPoller", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-admin",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         scopes: ["operator.admin"],
       },
@@ -615,6 +684,8 @@ describe("OutboxPoller", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-readonly",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "client",
         scopes: ["operator.read"],
       },
@@ -627,6 +698,8 @@ describe("OutboxPoller", () => {
       protocolRev: 2,
       authClaims: {
         token_kind: "device",
+        token_id: "token-node-1",
+        tenant_id: DEFAULT_TENANT_ID,
         role: "node",
         scopes: ["*"],
       },
@@ -638,6 +711,7 @@ describe("OutboxPoller", () => {
       .mockResolvedValueOnce([
         {
           id: 1,
+          tenant_id: DEFAULT_TENANT_ID,
           topic: "ws.broadcast",
           target_edge_id: null,
           payload: {
@@ -659,6 +733,7 @@ describe("OutboxPoller", () => {
 
     const ackConsumerCursor = vi.fn(async () => undefined);
     const outboxDal = {
+      listActiveTenantIds: vi.fn(async () => [DEFAULT_TENANT_ID]),
       poll,
       ackConsumerCursor,
     } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
@@ -671,7 +746,7 @@ describe("OutboxPoller", () => {
 
     await poller.tick();
 
-    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(ackConsumerCursor).toHaveBeenCalledWith(DEFAULT_TENANT_ID, "edge-a", 1);
     expect(wsAdmin.send).toHaveBeenCalledTimes(0);
     expect(wsReadOnly.send).toHaveBeenCalledTimes(0);
     expect(wsNode.send).toHaveBeenCalledTimes(0);

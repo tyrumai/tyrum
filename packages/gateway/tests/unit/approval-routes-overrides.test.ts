@@ -41,8 +41,19 @@ describe("approval respond policy overrides", () => {
       },
     });
 
+    const routes = createApprovalRoutes({ approvalDal, policyOverrideDal });
     const app = new Hono();
-    app.route("/", createApprovalRoutes({ approvalDal, policyOverrideDal }));
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      return await next();
+    });
+    app.route("/", routes);
 
     const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",
@@ -57,7 +68,11 @@ describe("approval respond policy overrides", () => {
     });
     expect(res.status).toBe(400);
     expect(
-      await policyOverrideDal.list({ agentId: DEFAULT_AGENT_ID, toolId: "tool.exec" }),
+      await policyOverrideDal.list({
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        toolId: "tool.exec",
+      }),
     ).toHaveLength(0);
   });
 
@@ -83,8 +98,19 @@ describe("approval respond policy overrides", () => {
       },
     });
 
+    const routes = createApprovalRoutes({ approvalDal, policyOverrideDal });
     const app = new Hono();
-    app.route("/", createApprovalRoutes({ approvalDal, policyOverrideDal }));
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      return await next();
+    });
+    app.route("/", routes);
 
     const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",
@@ -108,7 +134,11 @@ describe("approval respond policy overrides", () => {
     });
     expect(approvalAfter?.status).toBe("pending");
     expect(
-      await policyOverrideDal.list({ agentId: DEFAULT_AGENT_ID, toolId: "tool.exec" }),
+      await policyOverrideDal.list({
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        toolId: "tool.exec",
+      }),
     ).toHaveLength(0);
   });
 
@@ -133,8 +163,19 @@ describe("approval respond policy overrides", () => {
       },
     });
 
+    const routes = createApprovalRoutes({ approvalDal, policyOverrideDal });
     const app = new Hono();
-    app.route("/", createApprovalRoutes({ approvalDal, policyOverrideDal }));
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      return await next();
+    });
+    app.route("/", routes);
 
     const reqBody = {
       decision: "approved",
@@ -152,7 +193,11 @@ describe("approval respond policy overrides", () => {
     const firstJson = (await firstRes.json()) as { created_overrides?: unknown[] };
     expect(firstJson.created_overrides).toHaveLength(1);
     expect(
-      await policyOverrideDal.list({ agentId: DEFAULT_AGENT_ID, toolId: "tool.exec" }),
+      await policyOverrideDal.list({
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        toolId: "tool.exec",
+      }),
     ).toHaveLength(1);
 
     const secondRes = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
@@ -165,7 +210,11 @@ describe("approval respond policy overrides", () => {
     const secondJson = (await secondRes.json()) as { created_overrides?: unknown[] };
     expect(secondJson.created_overrides).toBeUndefined();
     expect(
-      await policyOverrideDal.list({ agentId: DEFAULT_AGENT_ID, toolId: "tool.exec" }),
+      await policyOverrideDal.list({
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        toolId: "tool.exec",
+      }),
     ).toHaveLength(1);
   });
 
@@ -205,8 +254,19 @@ describe("approval respond policy overrides", () => {
       },
     });
 
+    const routes = createApprovalRoutes(routeDeps);
     const app = new Hono();
-    app.route("/", createApprovalRoutes(routeDeps));
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      return await next();
+    });
+    app.route("/", routes);
 
     const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
       method: "POST",
@@ -228,7 +288,11 @@ describe("approval respond policy overrides", () => {
     expect(json.approval.status).toBe("approved");
     expect(json.created_overrides).toHaveLength(1);
     expect(
-      await policyOverrideDal.list({ agentId: DEFAULT_AGENT_ID, toolId: "tool.exec" }),
+      await policyOverrideDal.list({
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        toolId: "tool.exec",
+      }),
     ).toHaveLength(1);
   });
 });

@@ -1,31 +1,55 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Hono } from "hono";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { createTestApp } from "./helpers.js";
+import type { GatewayContainer } from "../../src/container.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXTURE_DIR = resolve(__dirname, "../fixtures/operator-ui");
-
-const OPERATOR_UI_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
 const OPERATOR_UI_CSP_POLICY =
   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; frame-ancestors 'none'";
 
 describe("operator UI static hosting (/ui)", () => {
-  const prevUiDir = process.env[OPERATOR_UI_DIR_ENV];
   let app: Hono;
+  let container: GatewayContainer;
+  let requestUnauthenticated: typeof app.request;
+  let operatorUiDistDir: string;
+  let operatorUiDistAssetsDir: string;
 
   beforeEach(async () => {
-    process.env[OPERATOR_UI_DIR_ENV] = FIXTURE_DIR;
-    app = (await createTestApp()).app;
+    operatorUiDistDir = await mkdtemp(join(tmpdir(), "tyrum-operator-ui-"));
+    operatorUiDistAssetsDir = join(operatorUiDistDir, "assets");
+    await mkdir(operatorUiDistAssetsDir, { recursive: true });
+    await writeFile(
+      join(operatorUiDistDir, "index.html"),
+      [
+        "<!doctype html>",
+        "<html>",
+        "<head>",
+        '<meta charset="utf-8">',
+        "<title>Tyrum Operator</title>",
+        "</head>",
+        "<body>",
+        '<div id="root"></div>',
+        '<script type="module" src="/ui/assets/index-test.js"></script>',
+        "</body>",
+        "</html>",
+      ].join(""),
+    );
+    await writeFile(
+      join(operatorUiDistAssetsDir, "index-test.js"),
+      "console.log('operator-ui');\n",
+    );
+
+    const created = await createTestApp({ operatorUiAssetsDir: operatorUiDistDir });
+    app = created.app;
+    container = created.container;
+    requestUnauthenticated = created.requestUnauthenticated;
   });
 
-  afterEach(() => {
-    if (prevUiDir === undefined) delete process.env[OPERATOR_UI_DIR_ENV];
-    else process.env[OPERATOR_UI_DIR_ENV] = prevUiDir;
+  afterEach(async () => {
+    await container.db.close();
+    await rm(operatorUiDistDir, { recursive: true, force: true });
   });
 
   it("serves the operator SPA index at /ui", async () => {
@@ -37,7 +61,7 @@ describe("operator UI static hosting (/ui)", () => {
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     expect(res.headers.get("x-frame-options")).toBe("DENY");
     const html = await res.text();
-    expect(html).toContain("Operator UI Fixture");
+    expect(html).toContain("<title>Tyrum Operator</title>");
   });
 
   it("sets security headers on the SPA entry response (/ui/)", async () => {
@@ -54,19 +78,26 @@ describe("operator UI static hosting (/ui)", () => {
     expect(res.headers.get("content-type")).toContain("text/html");
     expect(res.headers.get("cache-control")).toBe("no-cache");
     const html = await res.text();
-    expect(html).toContain("Operator UI Fixture");
+    expect(html).toContain('<div id="root"></div>');
   });
 
   it("serves static assets with correct content-type and long cache headers", async () => {
-    const res = await app.request("/ui/assets/app.js");
+    const indexRes = await app.request("/ui");
+    expect(indexRes.status).toBe(200);
+    const indexHtml = await indexRes.text();
+    const match = indexHtml.match(/src="(\/ui\/assets\/[^"?]+\.js)"/);
+    if (!match) {
+      throw new Error("expected operator UI index.html to reference a JS asset under /ui/assets/");
+    }
+
+    const res = await app.request(match[1]!);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-security-policy")).toBe(OPERATOR_UI_CSP_POLICY);
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     expect(res.headers.get("x-frame-options")).toBe("DENY");
     expect(res.headers.get("content-type")).toContain("javascript");
     expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
-    const js = await res.text();
-    expect(js).toContain("operator-ui fixture loaded");
+    expect((await res.text()).trim()).not.toBe("");
   });
 
   it("returns 404 for missing /ui/assets files instead of serving index.html", async () => {
@@ -82,27 +113,21 @@ describe("operator UI static hosting (/ui)", () => {
       return;
     }
 
-    const tempRoot = await mkdtemp(join(tmpdir(), "tyrum-ui-error-test-"));
-    const assetsDir = join(tempRoot, "ui");
-    const assetPath = join(assetsDir, "assets", "unreadable.js");
+    const filename = `unreadable-${process.pid}-${Date.now()}.js`;
+    const assetPath = join(operatorUiDistAssetsDir, filename);
 
     try {
-      await mkdir(join(assetsDir, "assets"), { recursive: true });
-      await writeFile(join(assetsDir, "index.html"), "<!doctype html><div>error test</div>\n");
       await writeFile(assetPath, "console.log('unreadable')\n");
       await chmod(assetPath, 0o000);
 
-      process.env[OPERATOR_UI_DIR_ENV] = assetsDir;
-      const errApp = (await createTestApp()).app;
-
-      const res = await errApp.request("/ui/assets/unreadable.js");
+      const res = await requestUnauthenticated(`/ui/assets/${filename}`);
       expect(res.status).toBe(500);
       expect(res.headers.get("content-security-policy")).toBe(OPERATOR_UI_CSP_POLICY);
       expect(res.headers.get("x-content-type-options")).toBe("nosniff");
       expect(res.headers.get("x-frame-options")).toBe("DENY");
     } finally {
       await chmod(assetPath, 0o644).catch(() => {});
-      await rm(tempRoot, { recursive: true, force: true });
+      await rm(assetPath, { force: true }).catch(() => {});
     }
   });
 
@@ -110,7 +135,7 @@ describe("operator UI static hosting (/ui)", () => {
     const res = await app.request("/ui/approvals");
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("Operator UI Fixture");
+    expect(html).toContain('<div id="root"></div>');
   });
 
   it("rejects symlink-based path escapes from the operator UI asset directory", async () => {
@@ -119,39 +144,32 @@ describe("operator UI static hosting (/ui)", () => {
     }
 
     const tempRoot = await mkdtemp(join(tmpdir(), "tyrum-ui-symlink-test-"));
-    const assetsDir = join(tempRoot, "ui");
     const leakRoot = join(tempRoot, "leak");
     const leakFile = join(leakRoot, "secret.txt");
+    const symlinkName = `leak-${process.pid}-${Date.now()}`;
+    const symlinkPath = join(operatorUiDistAssetsDir, symlinkName);
 
     try {
-      await mkdir(join(assetsDir, "assets"), { recursive: true });
       await mkdir(leakRoot, { recursive: true });
-      await writeFile(join(assetsDir, "index.html"), "<!doctype html><div>symlink test</div>\n");
       await writeFile(leakFile, "SECRET\n");
 
-      await symlink(leakRoot, join(assetsDir, "assets", "leak"));
+      await symlink(leakRoot, symlinkPath);
 
-      process.env[OPERATOR_UI_DIR_ENV] = assetsDir;
-      const symlinkedApp = (await createTestApp()).app;
-
-      const res = await symlinkedApp.request("/ui/assets/leak/secret.txt");
+      const res = await requestUnauthenticated(`/ui/assets/${symlinkName}/secret.txt`);
       expect(res.status).toBe(404);
     } finally {
+      await rm(symlinkPath, { force: true }).catch(() => {});
       await rm(tempRoot, { recursive: true, force: true });
     }
   });
 
   it("is publicly fetchable even when auth middleware is enabled", async () => {
-    const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-ui-auth-test-"));
+    const created = await createTestApp({ isLocalOnly: false });
     try {
-      const tokenStore = new TokenStore(tokenHome);
-      await tokenStore.initialize();
-      const authedApp = (await createTestApp({ tokenStore, isLocalOnly: false })).app;
-
-      const res = await authedApp.request("/ui");
+      const res = await created.requestUnauthenticated("/ui");
       expect(res.status).toBe(200);
     } finally {
-      await rm(tokenHome, { recursive: true, force: true });
+      await created.container.db.close();
     }
   });
 });

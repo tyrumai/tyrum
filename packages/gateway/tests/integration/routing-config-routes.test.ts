@@ -25,6 +25,16 @@ describe("routing config routes", () => {
   it("persists routing config revisions and emits ws events", async () => {
     const send = vi.fn();
     const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "test-token",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
 
     const routing = new RoutingConfigDal(db);
     app.route(
@@ -36,7 +46,13 @@ describe("routing config routes", () => {
             allClients: () => [
               {
                 role: "client",
-                auth_claims: { token_kind: "admin", role: "admin", scopes: ["*"] },
+                auth_claims: {
+                  token_kind: "admin",
+                  token_id: "test-token",
+                  tenant_id: DEFAULT_TENANT_ID,
+                  role: "admin",
+                  scopes: ["*"],
+                },
                 ws: { send },
               },
             ],
@@ -86,6 +102,16 @@ describe("routing config routes", () => {
   it("reverts to an earlier revision", async () => {
     const send = vi.fn();
     const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "test-token",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
 
     const routing = new RoutingConfigDal(db);
     app.route(
@@ -97,7 +123,13 @@ describe("routing config routes", () => {
             allClients: () => [
               {
                 role: "client",
-                auth_claims: { token_kind: "admin", role: "admin", scopes: ["*"] },
+                auth_claims: {
+                  token_kind: "admin",
+                  token_id: "test-token",
+                  tenant_id: DEFAULT_TENANT_ID,
+                  role: "admin",
+                  scopes: ["*"],
+                },
                 ws: { send },
               },
             ],
@@ -180,6 +212,16 @@ describe("routing config routes", () => {
     );
 
     const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "test-token",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
     app.route(
       "/",
       createRoutingConfigRoutes({

@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
-import { loadConfig } from "../../src/config.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
+import { DeploymentConfig } from "@tyrum/schemas";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -30,17 +30,13 @@ describe("createApp channel pipeline wiring", () => {
     await container?.db.close();
     container = undefined;
     telegramQueueCtor.mockClear();
-    delete process.env["TYRUM_CHANNEL_PIPELINE_ENABLED"];
   });
 
   it("uses config.channels.pipelineEnabled when deciding to construct TelegramChannelQueue", async () => {
-    process.env["TYRUM_CHANNEL_PIPELINE_ENABLED"] = "1";
-
-    const gatewayConfig = loadConfig({
-      GATEWAY_TOKEN: "test-token",
-      TYRUM_CHANNEL_PIPELINE_ENABLED: "0",
-    });
-    container = createContainer({ dbPath: ":memory:", migrationsDir }, { gatewayConfig });
+    container = createContainer(
+      { dbPath: ":memory:", migrationsDir },
+      { deploymentConfig: DeploymentConfig.parse({ channels: { pipelineEnabled: false } }) },
+    );
     container.telegramBot = {} as any;
 
     const agents = {

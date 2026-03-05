@@ -166,7 +166,7 @@ export class SecretResolutionAuditDal {
             },
           },
         };
-        await enqueueWsBroadcastMessage(this.db, evt);
+        await enqueueWsBroadcastMessage(this.db, row.tenant_id, evt);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.logger?.warn("secret.resolution_emit_failed", {

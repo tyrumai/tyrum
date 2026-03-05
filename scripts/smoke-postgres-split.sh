@@ -11,18 +11,8 @@ if [[ -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
   export COMPOSE_PROJECT_NAME="tyrum-smoke-split-${RANDOM}"
 fi
 
-# Snapshot import is intentionally disabled by default. Smoke tests enable it explicitly.
+# Snapshot import is disabled by default; smoke restores opt in explicitly.
 export TYRUM_SNAPSHOT_IMPORT_ENABLED="${TYRUM_SNAPSHOT_IMPORT_ENABLED:-1}"
-
-if [[ -z "${GATEWAY_TOKEN:-}" ]]; then
-  export GATEWAY_TOKEN
-  if command -v openssl >/dev/null 2>&1; then
-    GATEWAY_TOKEN="$(openssl rand -hex 32)"
-  else
-    GATEWAY_TOKEN="$(node -e 'console.log(require(\"node:crypto\").randomBytes(32).toString(\"hex\"))')"
-  fi
-  echo "[smoke] generated ephemeral GATEWAY_TOKEN for this run"
-fi
 
 cleanup() {
   if [[ "${TYRUM_SMOKE_KEEP_RUNNING:-}" == "1" ]]; then
@@ -51,10 +41,37 @@ wait_for_healthz() {
   return 1
 }
 
+read_bootstrap_token() {
+  local label="$1"
+  local token=""
+  local pattern=""
+
+  pattern="tyrum-token\\.v1\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+"
+
+  for _ in $(seq 1 80); do
+    token="$(
+      docker compose --profile split logs --no-color 2>/dev/null \
+        | grep -Eo "${label}: ${pattern}" \
+        | tail -n 1 \
+        | sed -E "s/^${label}: //"
+    )"
+    if [[ -n "$token" ]]; then
+      echo "$token"
+      return 0
+    fi
+    sleep 0.5
+  done
+
+  echo "[smoke] unable to read bootstrap token '${label}' from split profile logs" >&2
+  docker compose --profile split logs || true
+  return 1
+}
+
 export_snapshot() {
-  local out="$1"
+  local token="$1"
+  local out="$2"
   local code
-  code="$(curl -sS -o "$out" -w "%{http_code}" -H "authorization: Bearer ${GATEWAY_TOKEN}" "http://localhost:8788/snapshot/export")"
+  code="$(curl -sS -o "$out" -w "%{http_code}" -H "authorization: Bearer ${token}" "http://localhost:8788/snapshot/export")"
   if [[ "$code" != "200" ]]; then
     echo "[smoke] snapshot export failed: status=$code"
     cat "$out" || true
@@ -83,10 +100,11 @@ PY
 }
 
 import_snapshot() {
-  local req="$1"
-  local out="$2"
+  local token="$1"
+  local req="$2"
+  local out="$3"
   local code
-  code="$(curl -sS -o "$out" -w "%{http_code}" -H "authorization: Bearer ${GATEWAY_TOKEN}" -H "content-type: application/json" --data-binary "@${req}" "http://localhost:8788/snapshot/import")"
+  code="$(curl -sS -o "$out" -w "%{http_code}" -H "authorization: Bearer ${token}" -H "content-type: application/json" --data-binary "@${req}" "http://localhost:8788/snapshot/import")"
   if [[ "$code" != "200" ]]; then
     echo "[smoke] snapshot import failed: status=$code"
     cat "$out" || true
@@ -99,16 +117,18 @@ docker compose --profile split up -d --build postgres tyrum-edge tyrum-worker ty
 
 wait_for_healthz
 
+source_token="$(read_bootstrap_token "default-tenant-admin")"
+
 echo "[smoke] enqueueing one execution run via workflow API (and polling Postgres)"
 run_line="$(
-  docker compose --profile split exec -T -w /app/packages/gateway tyrum-worker node --input-type=module -e '
+  docker compose --profile split exec -T -e "SMOKE_ADMIN_TOKEN=${source_token}" -w /app/packages/gateway tyrum-worker node --input-type=module -e '
  import { Client } from "pg";
  import { randomUUID } from "node:crypto";
 
 const dbUri = process.env.GATEWAY_DB_PATH;
 if (!dbUri) throw new Error("GATEWAY_DB_PATH is not set in tyrum-worker");
-const token = process.env.GATEWAY_TOKEN;
-if (!token) throw new Error("GATEWAY_TOKEN is not set in tyrum-worker");
+const token = process.env.SMOKE_ADMIN_TOKEN;
+if (!token) throw new Error("SMOKE_ADMIN_TOKEN is missing");
 
 const client = new Client({ connectionString: dbUri });
 await client.connect();
@@ -220,17 +240,19 @@ import_req="${temp_dir}/snapshot-import.json"
 import_res="${temp_dir}/snapshot-import-response.json"
 
 echo "[smoke] exporting snapshot bundle"
-export_snapshot "$snapshot_bundle"
+export_snapshot "$source_token" "$snapshot_bundle"
 
 echo "[smoke] restarting with empty state (restore target)"
 docker compose --profile split down -v >/dev/null 2>&1 || true
 docker compose --profile split up -d --build postgres tyrum-edge tyrum-worker tyrum-scheduler
 wait_for_healthz
 
+target_token="$(read_bootstrap_token "default-tenant-admin")"
+
 build_import_request "$snapshot_bundle" "$import_req"
 
-echo "[smoke] importing snapshot bundle (requires TYRUM_SNAPSHOT_IMPORT_ENABLED=1)"
-import_snapshot "$import_req" "$import_res"
+echo "[smoke] importing snapshot bundle"
+import_snapshot "$target_token" "$import_req" "$import_res"
 
 echo "[smoke] verifying restored state is present"
 docker compose --profile split exec -T -e "SMOKE_RUN_ID=${source_run_id}" -w /app/packages/gateway tyrum-worker node --input-type=module -e '

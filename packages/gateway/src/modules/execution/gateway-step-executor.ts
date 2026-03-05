@@ -7,7 +7,13 @@ import type {
 } from "@tyrum/schemas";
 import { PolicyBundle } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../container.js";
+import { AuthProfileDal } from "../models/auth-profile-dal.js";
 import { createProviderFromNpm } from "../models/provider-factory.js";
+import {
+  OAUTH_REFRESH_LEASE_UNAVAILABLE,
+  resolveProfileApiKey,
+  resolveProviderBaseURL,
+} from "../agent/runtime/provider-resolution.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
 import {
   parsePlaybookOutputContract,
@@ -32,7 +38,7 @@ import {
 } from "../policy/domain.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 import type { SecretProvider } from "../secret/provider.js";
-import { coerceRecord } from "../util/coerce.js";
+import { coerceRecord, coerceStringRecord } from "../util/coerce.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
 const DEFAULT_TOOL_APPROVAL_WAIT_MS = 120_000;
 
@@ -175,6 +181,7 @@ async function resolveSecretScopesFromArgs(
 
 async function evaluateToolCallDecision(input: {
   container: GatewayContainer;
+  tenantId: string;
   policySnapshotId: string;
   agentId: string;
   workspaceId: string;
@@ -186,6 +193,7 @@ async function evaluateToolCallDecision(input: {
   const policy = input.container.policyService;
   if (policy?.isEnabled()) {
     const evaluation = await policy.evaluateToolCallFromSnapshot({
+      tenantId: input.tenantId,
       policySnapshotId: input.policySnapshotId,
       agentId: input.agentId,
       workspaceId: input.workspaceId,
@@ -228,19 +236,31 @@ async function evaluateToolCallDecision(input: {
 
 async function resolveLanguageModel(input: {
   container: GatewayContainer;
+  tenantId: string;
+  secretProvider?: SecretProvider;
   model: string;
 }): Promise<{ model: LanguageModelV3; providerId: string; modelId: string }> {
   const parsed = parseProviderModelId(input.model);
-  const loaded = await input.container.modelsDev.ensureLoaded();
+  const loaded = await input.container.modelCatalog.getEffectiveCatalog({
+    tenantId: input.tenantId,
+  });
   const provider = loaded.catalog[parsed.providerId];
   if (!provider) {
     throw new Error(`provider not found in models.dev catalog: ${parsed.providerId}`);
+  }
+  const providerEnabled = (provider as { enabled?: boolean }).enabled ?? true;
+  if (!providerEnabled) {
+    throw new Error(`provider '${parsed.providerId}' is disabled`);
   }
   const modelEntry = provider.models?.[parsed.modelId];
   if (!modelEntry) {
     throw new Error(
       `model not found in models.dev catalog: ${parsed.providerId}/${parsed.modelId}`,
     );
+  }
+  const modelEnabled = (modelEntry as { enabled?: boolean }).enabled ?? true;
+  if (!modelEnabled) {
+    throw new Error(`model '${parsed.providerId}/${parsed.modelId}' is disabled`);
   }
 
   const providerOverride = (modelEntry as { provider?: { npm?: string; api?: string } }).provider;
@@ -250,11 +270,65 @@ async function resolveLanguageModel(input: {
     throw new Error(`provider npm package missing for ${parsed.providerId}/${parsed.modelId}`);
   }
 
+  if (!input.secretProvider) {
+    throw new Error(
+      `secret provider unavailable; cannot resolve credentials for provider '${parsed.providerId}'`,
+    );
+  }
+
+  const authProfiles = await new AuthProfileDal(input.container.db).list({
+    tenantId: input.tenantId,
+    providerKey: parsed.providerId,
+    status: "active",
+  });
+
+  let apiKey: string | undefined;
+  for (const profile of authProfiles) {
+    const resolved = await resolveProfileApiKey(profile, {
+      tenantId: input.tenantId,
+      secretProvider: input.secretProvider,
+      oauthProviderRegistry: input.container.oauthProviderRegistry,
+      oauthRefreshLeaseDal: input.container.oauthRefreshLeaseDal,
+      oauthLeaseOwner: `execution-${parsed.providerId}`,
+      logger: input.container.logger,
+      fetchImpl: fetch,
+    });
+    if (!resolved) continue;
+    if (resolved === OAUTH_REFRESH_LEASE_UNAVAILABLE) continue;
+    apiKey = resolved;
+    break;
+  }
+
+  if (!apiKey) {
+    throw new Error(
+      `no active auth profiles with credentials configured for provider '${parsed.providerId}'`,
+    );
+  }
+
+  const providerOptions = coerceRecord((provider as { options?: unknown }).options) ?? {};
+  const modelOptions = coerceRecord((modelEntry as { options?: unknown }).options) ?? {};
+  const mergedOptions = Object.assign({}, providerOptions, modelOptions);
+
+  const providerHeaders = coerceStringRecord((provider as { headers?: unknown }).headers) ?? {};
+  const modelHeaders = coerceStringRecord((modelEntry as { headers?: unknown }).headers) ?? {};
+  const optionHeaders = coerceStringRecord(mergedOptions["headers"]) ?? {};
+  const headers =
+    Object.keys(providerHeaders).length > 0 ||
+    Object.keys(modelHeaders).length > 0 ||
+    Object.keys(optionHeaders).length > 0
+      ? { ...providerHeaders, ...modelHeaders, ...optionHeaders }
+      : undefined;
+
+  const baseURL = resolveProviderBaseURL({ providerApi: api, options: mergedOptions });
+
   const providerImpl = createProviderFromNpm({
     npm,
     providerId: parsed.providerId,
-    baseURL: api,
-    options: (modelEntry as { options?: unknown }).options as Record<string, unknown> | undefined,
+    apiKey,
+    baseURL,
+    headers,
+    options: mergedOptions,
+    fetchImpl: fetch,
   });
 
   const raw = providerImpl.languageModel(parsed.modelId);
@@ -384,6 +458,7 @@ function buildToolSet(input: {
     const decision = policySnapshotId
       ? await evaluateToolCallDecision({
           container: input.container,
+          tenantId: input.executionContext.tenantId,
           policySnapshotId,
           agentId: deriveAgentIdFromKey(input.executionContext.key),
           workspaceId: input.executionContext.workspaceId,
@@ -694,7 +769,12 @@ async function executeLlmAction(input: {
 
   const modelResolved = input.languageModelOverride
     ? { model: input.languageModelOverride, providerId: "override", modelId: "override" }
-    : await resolveLanguageModel({ container: input.container, model: modelIdRaw });
+    : await resolveLanguageModel({
+        container: input.container,
+        tenantId: input.executionContext.tenantId,
+        secretProvider: input.secretProvider,
+        model: modelIdRaw,
+      });
 
   const toolBudget: ToolBudgetState = { toolCallsUsed: 0, countedToolCallIds: new Set<string>() };
   const toolCallPolicyStates = new Map<string, ToolCallPolicyState>();

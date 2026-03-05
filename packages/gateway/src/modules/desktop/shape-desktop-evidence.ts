@@ -3,15 +3,13 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { ArtifactStore } from "../artifact/store.js";
 import {
   persistExecutionArtifactBytes,
+  type ExecutionArtifactFallbackScope,
   type ExecutionArtifactSensitivity,
 } from "../artifact/execution-artifacts.js";
 import { parseEvidenceSensitivity } from "../artifact/evidence-sensitivity.js";
 
 function resolveDesktopSandboxEvidenceSensitivity(): ExecutionArtifactSensitivity {
-  return parseEvidenceSensitivity(
-    process.env["TYRUM_DESKTOP_SANDBOX_ARTIFACT_SENSITIVITY"],
-    "normal",
-  );
+  return parseEvidenceSensitivity(undefined, "normal");
 }
 
 function resolveDesktopEvidenceSensitivityForMode(
@@ -22,7 +20,7 @@ function resolveDesktopEvidenceSensitivityForMode(
     return resolveDesktopSandboxEvidenceSensitivity();
   }
 
-  return parseEvidenceSensitivity(process.env["TYRUM_DESKTOP_ARTIFACT_SENSITIVITY"], "sensitive");
+  return parseEvidenceSensitivity(undefined, "sensitive");
 }
 
 export async function resolveDesktopEvidenceSensitivity(
@@ -93,6 +91,7 @@ export async function shapeDesktopEvidenceForArtifacts(input: {
   runId: string;
   stepId: string;
   workspaceId?: string;
+  fallbackScope?: ExecutionArtifactFallbackScope;
   evidence: unknown;
   result?: unknown;
   sensitivity: ExecutionArtifactSensitivity;
@@ -148,6 +147,7 @@ export async function shapeDesktopEvidenceForArtifacts(input: {
           evidence_type: evidenceType,
         },
         sensitivity: input.sensitivity,
+        fallbackScope: input.fallbackScope,
       });
     } catch {
       // Intentional: artifact byte persistence is best-effort; omit bytes when storage fails.
@@ -188,6 +188,7 @@ export async function shapeDesktopEvidenceForArtifacts(input: {
           evidence_type: evidenceType,
         },
         sensitivity: input.sensitivity,
+        fallbackScope: input.fallbackScope,
       });
     } catch {
       // Intentional: DOM snapshot persistence is best-effort; omit tree when storage fails.

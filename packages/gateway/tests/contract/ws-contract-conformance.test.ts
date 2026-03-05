@@ -1,8 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createServer } from "node:http";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { generateKeyPairSync } from "node:crypto";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
@@ -16,13 +13,14 @@ import {
   descriptorIdForClientCapability,
 } from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { dispatchTask } from "../../src/ws/protocol.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { WorkSignalScheduler } from "../../src/modules/workboard/signal-scheduler.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -100,16 +98,24 @@ async function startInstrumentedGateway(
   protocolDeps: ProtocolDeps;
 }> {
   const connectionManager = new ConnectionManager();
-  const protocolDeps = depsFactory(connectionManager);
+  const baseDeps = depsFactory(connectionManager);
+  const protocolDeps: ProtocolDeps = {
+    ...baseDeps,
+    db: baseDeps.db ?? openTestSqliteDb(),
+  };
 
-  const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-contract-"));
-  const tokenStore = new TokenStore(tokenHome);
-  const adminToken = await tokenStore.initialize();
+  const authTokens = new AuthTokenService(protocolDeps.db!);
+  const issued = await authTokens.issueToken({
+    tenantId: DEFAULT_TENANT_ID,
+    role: "admin",
+    scopes: ["*"],
+  });
+  const adminToken = issued.token;
 
   const { wss, handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
     protocolDeps,
-    tokenStore,
+    authTokens,
   });
 
   const clientToGateway: unknown[] = [];
@@ -143,7 +149,6 @@ async function startInstrumentedGateway(
     stopHeartbeat();
     await new Promise<void>((resolve) => wss.close(() => resolve()));
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    await rm(tokenHome, { recursive: true, force: true });
     await protocolDeps.db?.close();
   }
 
@@ -264,6 +269,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     const taskId = await dispatchTask(
       { type: "Http", args: { url: "https://example.com" } },
       {
+        tenantId: DEFAULT_TENANT_ID,
         runId: "550e8400-e29b-41d4-a716-446655440000",
         stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",

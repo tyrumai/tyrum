@@ -1,4 +1,10 @@
-import { normalizeScopes, type AuthTokenClaims } from "./token-store.js";
+import type { AuthTokenClaims } from "@tyrum/schemas";
+
+export function normalizeScopes(scopes: string[] | undefined): string[] {
+  if (!Array.isArray(scopes)) return [];
+  const normalized = scopes.map((scope) => scope.trim()).filter((scope) => scope.length > 0);
+  return [...new Set(normalized)];
+}
 
 export function hasAnyRequiredScope(
   claims: AuthTokenClaims,

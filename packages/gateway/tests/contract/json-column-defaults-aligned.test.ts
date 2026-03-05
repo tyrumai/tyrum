@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,7 +15,7 @@ type JsonColumnSpec = {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const specsPath = join(__dirname, "../../src/statestore/json-columns.json");
-const postgresRebuildPath = join(__dirname, "../../migrations/postgres/100_rebuild_v2.sql");
+const postgresMigrationsDir = join(__dirname, "../../migrations/postgres");
 
 function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -23,6 +23,14 @@ function escapeRegex(input: string): string {
 
 function readSpecs(): JsonColumnSpec[] {
   return JSON.parse(readFileSync(specsPath, "utf8")) as JsonColumnSpec[];
+}
+
+function readPostgresMigrationsSql(): string {
+  const files = readdirSync(postgresMigrationsDir)
+    .filter((file) => file.endsWith(".sql"))
+    .sort();
+  expect(files.length, "postgres migration files").toBeGreaterThan(0);
+  return files.map((file) => readFileSync(join(postgresMigrationsDir, file), "utf-8")).join("\n\n");
 }
 
 function findCreateTableBlock(sql: string, table: string): string | null {
@@ -39,7 +47,7 @@ describe("Postgres migrations", () => {
     const specs = readSpecs().filter((s) => s.default !== null);
     expect(specs.length, "specs with defaults").toBeGreaterThan(0);
 
-    const sql = readFileSync(postgresRebuildPath, "utf8");
+    const sql = readPostgresMigrationsSql();
     for (const spec of specs) {
       const block = findCreateTableBlock(sql, spec.table);
       expect(block, `missing CREATE TABLE block for ${spec.table}`).toBeTruthy();

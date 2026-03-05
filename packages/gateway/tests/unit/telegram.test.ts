@@ -5,10 +5,11 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { NormalizedThreadMessage as NormalizedThreadMessageSchema } from "@tyrum/schemas";
 import { normalizeUpdate, TelegramNormalizationError } from "../../src/modules/ingress/telegram.js";
 import { telegramThreadKey } from "../../src/modules/channels/telegram.js";
+import { DEFAULT_CHANNEL_ACCOUNT_ID } from "../../src/modules/channels/interface.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = resolve(__dirname, "../fixtures/telegram");
@@ -18,28 +19,6 @@ function loadFixture(name: string): string {
 }
 
 describe("Telegram normalization", () => {
-  const originalAccountId = process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
-  const originalChannelKey = process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
-
-  beforeEach(() => {
-    delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
-    delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
-  });
-
-  afterEach(() => {
-    if (originalAccountId === undefined) {
-      delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
-    } else {
-      process.env["TYRUM_TELEGRAM_ACCOUNT_ID"] = originalAccountId;
-    }
-
-    if (originalChannelKey === undefined) {
-      delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
-    } else {
-      process.env["TYRUM_TELEGRAM_CHANNEL_KEY"] = originalChannelKey;
-    }
-  });
-
   it("normalizes text message", () => {
     const update = normalizeUpdate(loadFixture("text_message.json"));
 
@@ -73,7 +52,7 @@ describe("Telegram normalization", () => {
       received_at: "2024-03-09T16:00:00.000Z",
       delivery: {
         channel: "telegram",
-        account: "default",
+        account: DEFAULT_CHANNEL_ACCOUNT_ID,
       },
       container: {
         kind: "dm",
@@ -98,16 +77,34 @@ describe("Telegram normalization", () => {
     ]);
   });
 
-  it("uses configured Telegram account id in the normalized envelope delivery identity", () => {
+  it("ignores TYRUM_TELEGRAM_ACCOUNT_ID for runtime normalization", () => {
+    const prev = process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
     process.env["TYRUM_TELEGRAM_ACCOUNT_ID"] = "work";
-    const update = normalizeUpdate(loadFixture("text_message.json"));
-    expect(update.message.envelope?.delivery.account).toBe("work");
+    try {
+      const update = normalizeUpdate(loadFixture("text_message.json"));
+      expect(update.message.envelope?.delivery.account).toBe(DEFAULT_CHANNEL_ACCOUNT_ID);
+    } finally {
+      if (prev === undefined) {
+        delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
+      } else {
+        process.env["TYRUM_TELEGRAM_ACCOUNT_ID"] = prev;
+      }
+    }
   });
 
-  it("falls back to legacy Telegram channel key when account id is unset", () => {
+  it("ignores legacy TYRUM_TELEGRAM_CHANNEL_KEY for runtime normalization", () => {
+    const prev = process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
     process.env["TYRUM_TELEGRAM_CHANNEL_KEY"] = "legacy-telegram-1";
-    const update = normalizeUpdate(loadFixture("text_message.json"));
-    expect(update.message.envelope?.delivery.account).toBe("legacy-telegram-1");
+    try {
+      const update = normalizeUpdate(loadFixture("text_message.json"));
+      expect(update.message.envelope?.delivery.account).toBe(DEFAULT_CHANNEL_ACCOUNT_ID);
+    } finally {
+      if (prev === undefined) {
+        delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
+      } else {
+        process.env["TYRUM_TELEGRAM_CHANNEL_KEY"] = prev;
+      }
+    }
   });
 
   it("normalizes edited message", () => {

@@ -49,7 +49,7 @@ describe("Central redaction at persistence boundaries", () => {
       redaction.registerSecrets(["secret-BBB"]);
 
       const outbox = new OutboxDal(db, redaction);
-      const row = await outbox.enqueue("ws.broadcast", {
+      const row = await outbox.enqueue(DEFAULT_TENANT_ID, "ws.broadcast", {
         message: "hello secret-BBB world",
       });
 

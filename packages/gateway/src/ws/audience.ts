@@ -1,8 +1,5 @@
-import { normalizeScopes } from "../modules/auth/token-store.js";
-import type { AuthTokenClaims } from "../modules/auth/token-store.js";
+import type { AuthTokenClaims } from "@tyrum/schemas";
 import { hasAnyRequiredScope } from "../modules/auth/scopes.js";
-
-export { normalizeScopes };
 
 export type WsBroadcastRole = "client" | "node";
 export type WsBroadcastAudience = {

@@ -21,16 +21,18 @@ import { ChannelThreadDal } from "./thread-dal.js";
 export type ChannelInboxStatus = "queued" | "processing" | "completed" | "failed";
 
 const DEFAULT_INBOUND_DEDUPE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const INBOUND_DEDUPE_TTL_ENV = "TYRUM_CHANNEL_INBOUND_DEDUPE_TTL_MS";
 const DEFAULT_INBOUND_QUEUE_CAP = 100;
-const INBOUND_QUEUE_CAP_ENV = "TYRUM_CHANNEL_INBOUND_QUEUE_CAP";
 const DEFAULT_INBOUND_QUEUE_OVERFLOW = "drop_oldest";
-const INBOUND_QUEUE_OVERFLOW_ENV = "TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW";
 const DEFAULT_QUEUE_MODE = "collect";
 const ALLOWED_QUEUE_MODES = new Set(["collect", "followup", "steer", "steer_backlog", "interrupt"]);
-const ALLOWED_OVERFLOW_POLICIES = new Set(["drop_oldest", "drop_newest", "summarize_dropped"]);
 
 export type ChannelInboundQueueOverflowPolicy = "drop_oldest" | "drop_newest" | "summarize_dropped";
+
+export type ChannelInboxConfig = {
+  inboundDedupeTtlMs?: number;
+  inboundQueueCap?: number;
+  inboundQueueOverflowPolicy?: ChannelInboundQueueOverflowPolicy;
+};
 
 export type ChannelInboundQueueOverflowResult = {
   cap: number;
@@ -49,41 +51,6 @@ export type ChannelInboundQueueOverflowResult = {
 function normalizeQueueMode(raw: string | undefined): string {
   const normalized = raw?.trim().toLowerCase() ?? "";
   return ALLOWED_QUEUE_MODES.has(normalized) ? normalized : DEFAULT_QUEUE_MODE;
-}
-
-function inboundDedupeTtlMs(): number {
-  const raw = process.env[INBOUND_DEDUPE_TTL_ENV]?.trim();
-  if (raw) {
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return Math.floor(parsed);
-    }
-  }
-  return DEFAULT_INBOUND_DEDUPE_TTL_MS;
-}
-
-function inboundQueueCap(): number | undefined {
-  const raw = process.env[INBOUND_QUEUE_CAP_ENV]?.trim();
-  if (raw) {
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed)) {
-      const cap = Math.floor(parsed);
-      if (cap <= 0) return undefined;
-      return cap;
-    }
-  }
-  return DEFAULT_INBOUND_QUEUE_CAP;
-}
-
-function inboundQueueOverflowPolicy(): ChannelInboundQueueOverflowPolicy {
-  const raw = process.env[INBOUND_QUEUE_OVERFLOW_ENV]?.trim();
-  if (raw) {
-    const normalized = raw.trim().toLowerCase();
-    if (ALLOWED_OVERFLOW_POLICIES.has(normalized)) {
-      return normalized as ChannelInboundQueueOverflowPolicy;
-    }
-  }
-  return DEFAULT_INBOUND_QUEUE_OVERFLOW;
 }
 
 export interface ChannelInboxRow {
@@ -578,13 +545,36 @@ function toRow(raw: RawChannelInboxRow): ChannelInboxRow {
 
 export class ChannelInboxDal {
   private readonly sessionDal: SessionDal;
+  private readonly inboundDedupeTtlMs: number;
+  private readonly inboundQueueCap: number;
+  private readonly inboundQueueOverflowPolicy: ChannelInboundQueueOverflowPolicy;
 
   constructor(
     private readonly db: SqlDb,
     sessionDal?: SessionDal,
+    config?: ChannelInboxConfig,
   ) {
     this.sessionDal =
       sessionDal ?? new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db));
+    const dedupeTtlMsRaw = config?.inboundDedupeTtlMs;
+    this.inboundDedupeTtlMs =
+      typeof dedupeTtlMsRaw === "number" && Number.isFinite(dedupeTtlMsRaw)
+        ? Math.max(1, Math.floor(dedupeTtlMsRaw))
+        : DEFAULT_INBOUND_DEDUPE_TTL_MS;
+
+    const capRaw = config?.inboundQueueCap;
+    this.inboundQueueCap =
+      typeof capRaw === "number" && Number.isFinite(capRaw)
+        ? Math.max(1, Math.floor(capRaw))
+        : DEFAULT_INBOUND_QUEUE_CAP;
+
+    const policyRaw = config?.inboundQueueOverflowPolicy;
+    this.inboundQueueOverflowPolicy =
+      policyRaw === "drop_oldest" ||
+      policyRaw === "drop_newest" ||
+      policyRaw === "summarize_dropped"
+        ? policyRaw
+        : DEFAULT_INBOUND_QUEUE_OVERFLOW;
   }
 
   async enqueue(input: {
@@ -603,7 +593,7 @@ export class ChannelInboxDal {
   }> {
     const payloadJson = JSON.stringify(input.payload ?? {});
     const receivedAtMs = input.received_at_ms;
-    const ttlMs = inboundDedupeTtlMs();
+    const ttlMs = this.inboundDedupeTtlMs;
     const expiresAtMs = receivedAtMs + Math.max(1, ttlMs);
 
     const sourceRaw = input.source.trim();
@@ -617,8 +607,8 @@ export class ChannelInboxDal {
     const containerId = input.thread_id.trim();
     const messageId = input.message_id.trim();
     const queueMode = normalizeQueueMode(input.queue_mode);
-    const cap = inboundQueueCap();
-    const overflowPolicy = inboundQueueOverflowPolicy();
+    const cap = this.inboundQueueCap;
+    const overflowPolicy = this.inboundQueueOverflowPolicy;
 
     const payloadParsed = NormalizedThreadMessageSchema.safeParse(input.payload);
     const containerKind = payloadParsed.success

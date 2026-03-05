@@ -38,23 +38,15 @@ vi.mock("@kubernetes/client-node", () => {
 });
 
 describe("KubernetesToolRunnerStepExecutor hardening", () => {
-  const originalHardeningProfile = process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"];
   const originalKubernetesServiceHost = process.env["KUBERNETES_SERVICE_HOST"];
 
   beforeEach(() => {
     createdJobBody = undefined;
     vi.clearAllMocks();
-    delete process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"];
     delete process.env["KUBERNETES_SERVICE_HOST"];
   });
 
   afterEach(() => {
-    if (originalHardeningProfile === undefined) {
-      delete process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"];
-    } else {
-      process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"] = originalHardeningProfile;
-    }
-
     if (originalKubernetesServiceHost === undefined) {
       delete process.env["KUBERNETES_SERVICE_HOST"];
     } else {
@@ -71,6 +63,8 @@ describe("KubernetesToolRunnerStepExecutor hardening", () => {
       image: "tyrum/gateway:dev",
       workspacePvcClaim: "workspace",
       tyrumHome: "/var/lib/tyrum",
+      dbPath: "postgres://user:pass@localhost:5432/test",
+      hardeningProfile: "baseline",
       deleteJobAfter: false,
     });
 
@@ -79,6 +73,16 @@ describe("KubernetesToolRunnerStepExecutor hardening", () => {
       "plan-1",
       0,
       1_000,
+      {
+        runId: "run-1",
+        stepId: "step-1",
+        attemptId: "attempt-1",
+        approvalId: null,
+        key: "k",
+        lane: "main",
+        workspaceId: "default",
+        policySnapshotId: null,
+      },
     );
 
     expect(result.success).toBe(true);
@@ -99,11 +103,17 @@ describe("KubernetesToolRunnerStepExecutor hardening", () => {
       capabilities: { drop: ["ALL"] },
       runAsNonRoot: true,
     });
+
+    expect(container.securityContext).not.toHaveProperty("readOnlyRootFilesystem", true);
+    expect(podSpec.volumes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "tmp" })]),
+    );
+    expect(container.volumeMounts).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "tmp" })]),
+    );
   });
 
   it("enables hardened profile with read-only rootfs and /tmp mount", async () => {
-    process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"] = "hardened";
-
     const { createKubernetesToolRunnerStepExecutor } =
       await import("../../src/modules/execution/kubernetes-toolrunner-step-executor.js");
 
@@ -112,6 +122,8 @@ describe("KubernetesToolRunnerStepExecutor hardening", () => {
       image: "tyrum/gateway:dev",
       workspacePvcClaim: "workspace",
       tyrumHome: "/var/lib/tyrum",
+      dbPath: "postgres://user:pass@localhost:5432/test",
+      hardeningProfile: "hardened",
       deleteJobAfter: false,
     });
 
@@ -120,6 +132,16 @@ describe("KubernetesToolRunnerStepExecutor hardening", () => {
       "plan-1",
       0,
       1_000,
+      {
+        runId: "run-1",
+        stepId: "step-1",
+        attemptId: "attempt-1",
+        approvalId: null,
+        key: "k",
+        lane: "main",
+        workspaceId: "default",
+        policySnapshotId: null,
+      },
     );
 
     expect(result.success).toBe(true);
@@ -131,6 +153,9 @@ describe("KubernetesToolRunnerStepExecutor hardening", () => {
     expect(container.securityContext).toMatchObject({
       readOnlyRootFilesystem: true,
     });
+
+    expect(podSpec.automountServiceAccountToken).toBe(false);
+    expect(podSpec.enableServiceLinks).toBe(false);
 
     expect(podSpec.volumes).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: "tmp" })]),

@@ -70,6 +70,7 @@ export class AuthAudit {
     surface: "http" | "ws.upgrade";
     reason: "missing_token" | "invalid_token" | "unauthorized";
     token_transport: TokenTransport;
+    tenant_id?: string;
     client_ip?: string;
     method?: string;
     path?: string;
@@ -80,11 +81,16 @@ export class AuthAudit {
     if (!this.failedAuthLimiter.allow(limiterKey)) return;
 
     const occurredAt = new Date(this.nowMs()).toISOString();
+    const tenantId =
+      typeof params.tenant_id === "string" && params.tenant_id.trim().length > 0
+        ? params.tenant_id.trim()
+        : undefined;
     const action = {
       type: "auth.failed",
       surface: params.surface,
       reason: params.reason,
       token_transport: params.token_transport,
+      tenant_id: tenantId,
       client_ip: params.client_ip,
       method: params.method,
       path: params.path,
@@ -95,7 +101,7 @@ export class AuthAudit {
     try {
       await this.eventLog.appendNext(
         {
-          tenantId: DEFAULT_TENANT_ID,
+          tenantId: tenantId ?? DEFAULT_TENANT_ID,
           replayId: randomUUID(),
           planKey: GATEWAY_AUTH_AUDIT_PLAN_ID,
           occurredAt,
@@ -111,6 +117,7 @@ export class AuthAudit {
               surface: params.surface,
               reason: params.reason,
               token_transport: params.token_transport,
+              tenant_id: tenantId,
               client_ip: params.client_ip,
               method: params.method,
               path: params.path,
@@ -124,7 +131,9 @@ export class AuthAudit {
             },
           };
 
-          await enqueueWsBroadcastMessage(tx, evt);
+          if (tenantId) {
+            await enqueueWsBroadcastMessage(tx, tenantId, evt);
+          }
         },
       );
     } catch (err) {
@@ -148,6 +157,7 @@ export class AuthAudit {
       role: "admin" | "client" | "node";
       scopes: string[];
     };
+    tenant_id?: string;
     required_scopes: string[] | null;
     method?: string;
     path?: string;
@@ -157,12 +167,17 @@ export class AuthAudit {
     client_id?: string;
   }): Promise<void> {
     const occurredAt = new Date(this.nowMs()).toISOString();
+    const tenantId =
+      typeof params.tenant_id === "string" && params.tenant_id.trim().length > 0
+        ? params.tenant_id.trim()
+        : undefined;
     const action = {
       type: "authz.denied",
       surface: params.surface,
       reason: params.reason,
       token: params.token,
       required_scopes: params.required_scopes,
+      tenant_id: tenantId,
       method: params.method,
       path: params.path,
       request_type: params.request_type,
@@ -174,7 +189,7 @@ export class AuthAudit {
     try {
       await this.eventLog.appendNext(
         {
-          tenantId: DEFAULT_TENANT_ID,
+          tenantId: tenantId ?? DEFAULT_TENANT_ID,
           replayId: randomUUID(),
           planKey: GATEWAY_AUTH_AUDIT_PLAN_ID,
           occurredAt,
@@ -191,6 +206,7 @@ export class AuthAudit {
               reason: params.reason,
               token: params.token,
               required_scopes: params.required_scopes,
+              tenant_id: tenantId,
               method: params.method,
               path: params.path,
               request_type: params.request_type,
@@ -204,7 +220,9 @@ export class AuthAudit {
               },
             },
           };
-          await enqueueWsBroadcastMessage(tx, evt);
+          if (tenantId) {
+            await enqueueWsBroadcastMessage(tx, tenantId, evt);
+          }
         },
       );
     } catch (err) {

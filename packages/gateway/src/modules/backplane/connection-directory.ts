@@ -215,11 +215,14 @@ export class ConnectionDirectoryDal {
   }
 
   async setReadyCapabilities(params: {
-    tenantId?: string;
+    tenantId: string;
     connectionId: string;
     readyCapabilities: readonly ClientCapability[];
   }): Promise<void> {
-    const tenantId = params.tenantId ?? DEFAULT_TENANT_ID;
+    const tenantId = params.tenantId.trim();
+    if (tenantId.length === 0) {
+      throw new Error("tenantId is required");
+    }
     await this.db.run(
       `UPDATE connections
        SET ready_capabilities_json = ?
@@ -229,12 +232,15 @@ export class ConnectionDirectoryDal {
   }
 
   async touchConnection(params: {
-    tenantId?: string;
+    tenantId: string;
     connectionId: string;
     nowMs: number;
     ttlMs: number;
   }): Promise<void> {
-    const tenantId = params.tenantId ?? DEFAULT_TENANT_ID;
+    const tenantId = params.tenantId.trim();
+    if (tenantId.length === 0) {
+      throw new Error("tenantId is required");
+    }
     const expiresAtMs = params.nowMs + params.ttlMs;
     await this.db.run(
       `UPDATE connections
@@ -244,27 +250,29 @@ export class ConnectionDirectoryDal {
     );
   }
 
-  async removeConnection(connectionId: string, opts?: { tenantId?: string }): Promise<void> {
-    const tenantId = opts?.tenantId ?? DEFAULT_TENANT_ID;
+  async removeConnection(params: { tenantId: string; connectionId: string }): Promise<void> {
+    const tenantId = params.tenantId.trim();
+    if (tenantId.length === 0) {
+      throw new Error("tenantId is required");
+    }
     await this.db.run("DELETE FROM connections WHERE tenant_id = ? AND connection_id = ?", [
       tenantId,
-      connectionId,
+      params.connectionId,
     ]);
   }
 
   async cleanupExpired(nowMs: number): Promise<number> {
-    return (
-      await this.db.run("DELETE FROM connections WHERE tenant_id = ? AND expires_at_ms <= ?", [
-        DEFAULT_TENANT_ID,
-        nowMs,
-      ])
-    ).changes;
+    return (await this.db.run("DELETE FROM connections WHERE expires_at_ms <= ?", [nowMs])).changes;
   }
 
-  async listNonExpired(nowMs: number): Promise<ConnectionDirectoryRow[]> {
+  async listNonExpired(tenantId: string, nowMs: number): Promise<ConnectionDirectoryRow[]> {
+    const normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.length === 0) {
+      throw new Error("tenantId is required");
+    }
     const rows = await this.db.all<RawConnectionDirectoryRow>(
       `SELECT
-         c.tenant_id,
+	         c.tenant_id,
          c.connection_id,
          c.edge_id,
          p.kind AS role,
@@ -278,22 +286,23 @@ export class ConnectionDirectoryDal {
          c.connected_at_ms,
          c.last_seen_at_ms,
          c.expires_at_ms
-       FROM connections c
-       JOIN principals p
-         ON p.tenant_id = c.tenant_id AND p.principal_id = c.principal_id
-       WHERE c.tenant_id = ? AND c.expires_at_ms > ?
-       ORDER BY c.last_seen_at_ms DESC`,
-      [DEFAULT_TENANT_ID, nowMs],
+	       FROM connections c
+	       JOIN principals p
+	         ON p.tenant_id = c.tenant_id AND p.principal_id = c.principal_id
+	       WHERE c.tenant_id = ? AND c.expires_at_ms > ?
+	       ORDER BY c.last_seen_at_ms DESC`,
+      [normalizedTenantId, nowMs],
     );
     return rows.map(toRow);
   }
 
   async listConnectionsForCapability(
+    tenantId: string,
     capability: ClientCapability,
     nowMs: number,
     opts?: { role?: "client" | "node" },
   ): Promise<ConnectionDirectoryRow[]> {
-    const rows = await this.listNonExpired(nowMs);
+    const rows = await this.listNonExpired(tenantId, nowMs);
     return rows.filter(
       (r) => r.capabilities.includes(capability) && (opts?.role ? r.role === opts.role : true),
     );

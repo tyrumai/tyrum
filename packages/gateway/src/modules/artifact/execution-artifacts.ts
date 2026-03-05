@@ -16,6 +16,13 @@ export type ResolvedExecutionArtifactScope = {
   attemptId: string | null;
 };
 
+export type ExecutionArtifactFallbackScope = {
+  tenantId: string;
+  workspaceId: string;
+  agentId: string | null;
+  policySnapshotId?: string | null;
+};
+
 export function deriveAgentIdFromExecutionKey(key: string): string | null {
   if (!key.startsWith("agent:")) return null;
   const parts = key.split(":");
@@ -87,8 +94,8 @@ export async function insertExecutionArtifactRowTx(
       tenantId: string;
       workspaceId: string;
       agentId: string | null;
-      runId: string;
-      stepId: string;
+      runId: string | null;
+      stepId: string | null;
       attemptId: string | null;
       sensitivity: ExecutionArtifactSensitivity;
       policySnapshotId: string | null;
@@ -144,7 +151,12 @@ export async function insertExecutionArtifactRowTx(
   return { inserted: insertResult.changes > 0 };
 }
 
-export async function emitArtifactCreatedTx(tx: SqlDb, runId: string, artifact: ArtifactRefT) {
+export async function emitArtifactCreatedTx(
+  tx: SqlDb,
+  tenantId: string,
+  runId: string,
+  artifact: ArtifactRefT,
+) {
   const evt: WsEventEnvelopeT = {
     event_id: randomUUID(),
     type: "artifact.created",
@@ -152,11 +164,12 @@ export async function emitArtifactCreatedTx(tx: SqlDb, runId: string, artifact: 
     scope: { kind: "run", run_id: runId },
     payload: { artifact },
   };
-  await enqueueWsBroadcastMessage(tx, evt);
+  await enqueueWsBroadcastMessage(tx, tenantId, evt);
 }
 
 export async function emitArtifactAttachedTx(
   tx: SqlDb,
+  tenantId: string,
   runId: string,
   stepId: string,
   attemptId: string,
@@ -169,7 +182,7 @@ export async function emitArtifactAttachedTx(
     scope: { kind: "run", run_id: runId },
     payload: { artifact, step_id: stepId, attempt_id: attemptId },
   };
-  await enqueueWsBroadcastMessage(tx, evt);
+  await enqueueWsBroadcastMessage(tx, tenantId, evt);
 }
 
 export async function persistExecutionArtifactBytes(
@@ -185,14 +198,16 @@ export async function persistExecutionArtifactBytes(
     labels?: string[];
     metadata?: unknown;
     sensitivity: ExecutionArtifactSensitivity;
+    fallbackScope?: ExecutionArtifactFallbackScope;
   },
 ): Promise<ArtifactRefT | null> {
-  const scope = await resolveExecutionArtifactScope(db, {
+  const resolved = await resolveExecutionArtifactScope(db, {
     runId: input.runId,
     stepId: input.stepId,
     workspaceId: input.workspaceId,
   });
-  if (!scope) return null;
+  const fallback = input.fallbackScope;
+  if (!resolved && !fallback) return null;
 
   const artifact = await artifactStore.put({
     kind: input.kind,
@@ -206,22 +221,31 @@ export async function persistExecutionArtifactBytes(
     const { inserted } = await insertExecutionArtifactRowTx(tx, {
       artifact,
       scope: {
-        tenantId: scope.tenantId,
-        workspaceId: scope.workspaceId,
-        agentId: scope.agentId,
-        runId: input.runId,
-        stepId: input.stepId,
-        attemptId: scope.attemptId,
+        tenantId: resolved?.tenantId ?? fallback!.tenantId,
+        workspaceId: resolved?.workspaceId ?? fallback!.workspaceId,
+        agentId: resolved?.agentId ?? fallback!.agentId,
+        runId: resolved ? input.runId : null,
+        stepId: resolved ? input.stepId : null,
+        attemptId: resolved?.attemptId ?? null,
         sensitivity: input.sensitivity,
-        policySnapshotId: scope.policySnapshotId,
+        policySnapshotId: resolved?.policySnapshotId ?? fallback?.policySnapshotId ?? null,
       },
     });
 
+    if (!resolved) return;
+
     if (inserted) {
-      await emitArtifactCreatedTx(tx, input.runId, artifact);
+      await emitArtifactCreatedTx(tx, resolved.tenantId, input.runId, artifact);
     }
-    if (scope.attemptId) {
-      await emitArtifactAttachedTx(tx, input.runId, input.stepId, scope.attemptId, artifact);
+    if (resolved.attemptId) {
+      await emitArtifactAttachedTx(
+        tx,
+        resolved.tenantId,
+        input.runId,
+        input.stepId,
+        resolved.attemptId,
+        artifact,
+      );
     }
   });
 

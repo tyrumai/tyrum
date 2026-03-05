@@ -20,6 +20,7 @@ import { repairPostgresSequences } from "./snapshot-sequence-repair.js";
 export interface SnapshotRouteDeps {
   db: SqlDb;
   version: string;
+  importEnabled: boolean;
 }
 
 const DEFAULT_TABLES = [
@@ -110,11 +111,6 @@ function parseTablesParam(raw: string | undefined): string[] | undefined {
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
   return parts.length > 0 ? parts : undefined;
-}
-
-function isSnapshotImportEnabled(): boolean {
-  const raw = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"]?.trim().toLowerCase();
-  return Boolean(raw && !["0", "false", "off", "no"].includes(raw));
 }
 
 async function tableExists(db: SqlDb, table: string): Promise<boolean> {
@@ -296,11 +292,11 @@ export function createSnapshotRoutes(deps: SnapshotRouteDeps): Hono {
   });
 
   app.post("/snapshot/import", async (c) => {
-    if (!isSnapshotImportEnabled()) {
+    if (!deps.importEnabled) {
       return c.json(
         {
           error: "disabled",
-          message: "snapshot import is disabled (set TYRUM_SNAPSHOT_IMPORT_ENABLED=1)",
+          message: "snapshot import is disabled",
         },
         403,
       );

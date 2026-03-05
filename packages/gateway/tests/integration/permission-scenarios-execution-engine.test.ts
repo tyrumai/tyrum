@@ -7,6 +7,8 @@ import { createApp } from "../../src/app.js";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ExecutionEngine, type StepExecutor } from "../../src/modules/execution/engine.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
+import { decorateAppWithDefaultAuth } from "./helpers.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -56,13 +58,21 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-perms-engine-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
 
+    const authTokens = new AuthTokenService(container.db);
+    const tenantToken = await authTokens.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "admin",
+      scopes: ["*"],
+    });
+
     const engine = new ExecutionEngine({
       db: container.db,
       redactionEngine: container.redactionEngine,
       policyService: container.policyService,
       logger: container.logger,
     });
-    const app = createApp(container, { engine });
+    const app = createApp(container, { engine, authTokens });
+    decorateAppWithDefaultAuth(app, tenantToken.token);
 
     const res = await app.request("/workflow/run", {
       method: "POST",
@@ -143,13 +153,21 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-perms-engine-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
 
+    const authTokens = new AuthTokenService(container.db);
+    const tenantToken = await authTokens.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "admin",
+      scopes: ["*"],
+    });
+
     const engine = new ExecutionEngine({
       db: container.db,
       redactionEngine: container.redactionEngine,
       policyService: container.policyService,
       logger: container.logger,
     });
-    const app = createApp(container, { engine });
+    const app = createApp(container, { engine, authTokens });
+    decorateAppWithDefaultAuth(app, tenantToken.token);
 
     const res = await app.request("/workflow/run", {
       method: "POST",

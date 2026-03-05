@@ -21,6 +21,7 @@ import type { WsBroadcastAudience } from "../audience.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import type { ProtocolDeps } from "./types.js";
 import { broadcastEvent, errorResponse } from "./helpers.js";
+import { IdentityScopeDal } from "../../modules/identity/scope.js";
 
 type WsRequestEnvelope = Extract<WsMessageEnvelope, { request_id: string; payload: unknown }>;
 
@@ -32,20 +33,23 @@ const OPERATOR_MEMORY_EVENT_AUDIENCE = {
 async function maybeRunMemoryV1BudgetConsolidation(params: {
   deps: ProtocolDeps;
   op: "create" | "update";
+  tenantId: string;
   agentId: string;
   memoryItemId: string;
 }): Promise<void> {
   if (!params.deps.memoryV1BudgetsProvider) return;
   if (!params.deps.memoryV1Dal) return;
   try {
-    const budgets = await params.deps.memoryV1BudgetsProvider(params.agentId);
+    const budgets = await params.deps.memoryV1BudgetsProvider(params.tenantId, params.agentId);
     const consolidation = await params.deps.memoryV1Dal.consolidateToBudgets({
+      tenantId: params.tenantId,
       budgets,
       agentId: params.agentId,
     });
 
     for (const created of consolidation.created_items) {
       broadcastEvent(
+        params.tenantId,
         {
           event_id: crypto.randomUUID(),
           type: "memory.item.created",
@@ -59,6 +63,7 @@ async function maybeRunMemoryV1BudgetConsolidation(params: {
 
     for (const tombstone of consolidation.deleted_tombstones) {
       broadcastEvent(
+        params.tenantId,
         {
           event_id: crypto.randomUUID(),
           type: "memory.item.deleted",
@@ -116,6 +121,17 @@ export async function handleMemoryMessage(
     );
   }
 
+  const tenantId = client.auth_claims?.tenant_id;
+  if (!tenantId) {
+    return errorResponse(msg.request_id, msg.type, "unauthorized", "tenant token required");
+  }
+  if (!deps.db) {
+    return errorResponse(msg.request_id, msg.type, "unsupported_request", "db not available");
+  }
+  const identityScopeDal = deps.identityScopeDal ?? new IdentityScopeDal(deps.db);
+  const agentId = await identityScopeDal.ensureAgentId(tenantId, "default");
+  const scope = { tenantId, agentId };
+
   try {
     if (msg.type === "memory.search") {
       const parsedReq = WsMemorySearchRequest.safeParse(msg);
@@ -127,7 +143,7 @@ export async function handleMemoryMessage(
 
       const payload = parsedReq.data.payload;
       const limit = Math.max(1, Math.min(500, payload.limit ?? 50));
-      const res = await deps.memoryV1Dal.search({ ...payload, limit });
+      const res = await deps.memoryV1Dal.search({ ...payload, limit }, scope);
       const result = WsMemorySearchResult.parse(res);
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     }
@@ -143,6 +159,8 @@ export async function handleMemoryMessage(
       const payload = parsedReq.data.payload;
       const limit = Math.max(1, Math.min(500, payload.limit ?? 50));
       const res = await deps.memoryV1Dal.list({
+        tenantId,
+        agentId,
         filter: payload.filter,
         limit,
         cursor: payload.cursor,
@@ -163,7 +181,7 @@ export async function handleMemoryMessage(
         });
       }
 
-      const item = await deps.memoryV1Dal.getById(parsedReq.data.payload.memory_item_id);
+      const item = await deps.memoryV1Dal.getById(parsedReq.data.payload.memory_item_id, scope);
       if (!item) {
         return errorResponse(msg.request_id, msg.type, "not_found", "memory item not found");
       }
@@ -180,10 +198,11 @@ export async function handleMemoryMessage(
         });
       }
 
-      const item = await deps.memoryV1Dal.create(parsedReq.data.payload.item);
+      const item = await deps.memoryV1Dal.create(parsedReq.data.payload.item, scope);
       const result = WsMemoryCreateResult.parse({ v: 1, item });
 
       broadcastEvent(
+        tenantId,
         {
           event_id: crypto.randomUUID(),
           type: "memory.item.created",
@@ -197,6 +216,7 @@ export async function handleMemoryMessage(
       await maybeRunMemoryV1BudgetConsolidation({
         deps,
         op: "create",
+        tenantId,
         agentId: item.agent_id,
         memoryItemId: item.memory_item_id,
       });
@@ -213,10 +233,11 @@ export async function handleMemoryMessage(
       }
 
       const payload = parsedReq.data.payload;
-      const item = await deps.memoryV1Dal.update(payload.memory_item_id, payload.patch);
+      const item = await deps.memoryV1Dal.update(payload.memory_item_id, payload.patch, scope);
       const result = WsMemoryUpdateResult.parse({ v: 1, item });
 
       broadcastEvent(
+        tenantId,
         {
           event_id: crypto.randomUUID(),
           type: "memory.item.updated",
@@ -230,6 +251,7 @@ export async function handleMemoryMessage(
       await maybeRunMemoryV1BudgetConsolidation({
         deps,
         op: "update",
+        tenantId,
         agentId: item.agent_id,
         memoryItemId: item.memory_item_id,
       });
@@ -249,11 +271,12 @@ export async function handleMemoryMessage(
       const tombstone = await deps.memoryV1Dal.delete(
         payload.memory_item_id,
         { deleted_by: "operator", reason: payload.reason },
-        undefined,
+        scope,
       );
       const result = WsMemoryDeleteResult.parse({ v: 1, tombstone });
 
       broadcastEvent(
+        tenantId,
         {
           event_id: crypto.randomUUID(),
           type: "memory.item.deleted",
@@ -277,6 +300,8 @@ export async function handleMemoryMessage(
 
       const payload = parsedReq.data.payload;
       const outcome = await deps.memoryV1Dal.forget({
+        tenantId,
+        agentId,
         selectors: payload.selectors,
         deleted_by: "operator",
       });
@@ -288,6 +313,7 @@ export async function handleMemoryMessage(
 
       for (const tombstone of outcome.tombstones) {
         broadcastEvent(
+          tenantId,
           {
             event_id: crypto.randomUUID(),
             type: "memory.item.forgotten",
@@ -323,7 +349,13 @@ export async function handleMemoryMessage(
     const items: unknown[] = [];
     let cursor: string | undefined;
     for (;;) {
-      const page = await deps.memoryV1Dal.list({ filter: payload.filter, limit: 200, cursor });
+      const page = await deps.memoryV1Dal.list({
+        tenantId,
+        agentId,
+        filter: payload.filter,
+        limit: 200,
+        cursor,
+      });
       items.push(...page.items);
       cursor = page.next_cursor;
       if (!cursor) break;
@@ -333,7 +365,12 @@ export async function handleMemoryMessage(
     if (payload.include_tombstones) {
       let tCursor: string | undefined;
       for (;;) {
-        const page = await deps.memoryV1Dal.listTombstones({ limit: 200, cursor: tCursor });
+        const page = await deps.memoryV1Dal.listTombstones({
+          tenantId,
+          agentId,
+          limit: 200,
+          cursor: tCursor,
+        });
         tombstones.push(...page.tombstones);
         tCursor = page.next_cursor;
         if (!tCursor) break;
@@ -360,6 +397,7 @@ export async function handleMemoryMessage(
     const result = WsMemoryExportResult.parse({ v: 1, artifact_id: ref.artifact_id });
 
     broadcastEvent(
+      tenantId,
       {
         event_id: crypto.randomUUID(),
         type: "memory.export.completed",

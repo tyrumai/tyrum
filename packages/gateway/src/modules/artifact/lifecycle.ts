@@ -37,6 +37,7 @@ export interface ArtifactLifecycleSchedulerOptions {
 }
 
 type ArtifactRow = {
+  tenant_id: string;
   artifact_id: string;
   workspace_id: string;
   agent_id: string | null;
@@ -49,6 +50,7 @@ type ArtifactRow = {
 };
 
 type BucketKey = {
+  tenant_id: string;
   workspace_id: string;
   agent_id: string | null;
   kind: string;
@@ -205,33 +207,36 @@ export class ArtifactLifecycleScheduler {
 
   private async bundleForSnapshot(
     cache: Map<string, PolicyBundleT>,
+    tenantId: string,
     policySnapshotId: string | null,
   ): Promise<PolicyBundleT> {
     if (!policySnapshotId) return PolicyBundle.parse({ v: 1 });
-    const cached = cache.get(policySnapshotId);
+    const cacheKey = `${tenantId}:${policySnapshotId}`;
+    const cached = cache.get(cacheKey);
     if (cached) return cached;
-    const row = await this.policySnapshotDal.getById(policySnapshotId);
+    const row = await this.policySnapshotDal.getById(tenantId, policySnapshotId);
     const bundle = row?.bundle ?? PolicyBundle.parse({ v: 1 });
-    cache.set(policySnapshotId, bundle);
+    cache.set(cacheKey, bundle);
     return bundle;
   }
 
   private async backfillRetentionExpiresAt(): Promise<void> {
     const rows = await this.db.all<ArtifactRow>(
       `SELECT
-         artifact_id,
-         workspace_id,
-         agent_id,
-         kind,
+	         tenant_id,
+	         artifact_id,
+	         workspace_id,
+	         agent_id,
+	         kind,
          created_at,
          size_bytes,
          sensitivity,
          policy_snapshot_id,
          retention_expires_at
-       FROM execution_artifacts
-       WHERE bytes_deleted_at IS NULL AND retention_expires_at IS NULL
-       ORDER BY created_at ASC
-       LIMIT ?`,
+	       FROM execution_artifacts
+	       WHERE bytes_deleted_at IS NULL AND retention_expires_at IS NULL
+	       ORDER BY created_at ASC
+	       LIMIT ?`,
       [this.batchSize],
     );
 
@@ -240,16 +245,20 @@ export class ArtifactLifecycleScheduler {
     const bundleCache = new Map<string, PolicyBundleT>();
     for (const row of rows) {
       const sensitivity = normalizeSensitivity(row.sensitivity);
-      const bundle = await this.bundleForSnapshot(bundleCache, row.policy_snapshot_id);
+      const bundle = await this.bundleForSnapshot(
+        bundleCache,
+        row.tenant_id,
+        row.policy_snapshot_id,
+      );
       const retentionDays = resolveRetentionDays(bundle, row.kind, sensitivity);
       if (!retentionDays) {
         // Mark as evaluated so old rows without retention policy don't
         // permanently starve the backfill batch.
         await this.db.run(
           `UPDATE execution_artifacts
-           SET retention_expires_at = ?
-           WHERE artifact_id = ? AND retention_expires_at IS NULL`,
-          [NO_RETENTION_EXPIRES_AT, row.artifact_id],
+	           SET retention_expires_at = ?
+	           WHERE tenant_id = ? AND artifact_id = ? AND retention_expires_at IS NULL`,
+          [NO_RETENTION_EXPIRES_AT, row.tenant_id, row.artifact_id],
         );
         continue;
       }
@@ -262,9 +271,9 @@ export class ArtifactLifecycleScheduler {
       const expiresAt = new Date(createdMs + retentionDays * 24 * 60 * 60 * 1000).toISOString();
       await this.db.run(
         `UPDATE execution_artifacts
-         SET retention_expires_at = ?
-         WHERE artifact_id = ? AND retention_expires_at IS NULL`,
-        [expiresAt, row.artifact_id],
+	         SET retention_expires_at = ?
+	         WHERE tenant_id = ? AND artifact_id = ? AND retention_expires_at IS NULL`,
+        [expiresAt, row.tenant_id, row.artifact_id],
       );
     }
   }
@@ -272,37 +281,39 @@ export class ArtifactLifecycleScheduler {
   private async pruneExpiredArtifacts(): Promise<void> {
     const { nowIso } = this.clock();
 
-    const rows = await this.db.all<Pick<ArtifactRow, "artifact_id">>(
-      `SELECT artifact_id
+    const rows = await this.db.all<Pick<ArtifactRow, "tenant_id" | "artifact_id">>(
+      `SELECT tenant_id, artifact_id
        FROM execution_artifacts
        WHERE bytes_deleted_at IS NULL
          AND retention_expires_at IS NOT NULL
-         AND retention_expires_at <= ?
+	         AND retention_expires_at <= ?
        ORDER BY retention_expires_at ASC
        LIMIT ?`,
       [nowIso, this.batchSize],
     );
 
     for (const row of rows) {
-      await this.pruneArtifactBytes(row.artifact_id, "retention");
+      await this.pruneArtifactBytes(row.tenant_id, row.artifact_id, "retention");
     }
   }
 
   private async enforceQuotas(): Promise<void> {
     const buckets = await this.db.all<{
+      tenant_id: string;
       workspace_id: string;
       agent_id: string | null;
       kind: string;
       sensitivity: string;
     }>(
-      `SELECT DISTINCT workspace_id, agent_id, kind, ${normalizedSensitivitySql("sensitivity")} AS sensitivity
-       FROM execution_artifacts
-       WHERE bytes_deleted_at IS NULL`,
+      `SELECT DISTINCT tenant_id, workspace_id, agent_id, kind, ${normalizedSensitivitySql("sensitivity")} AS sensitivity
+	       FROM execution_artifacts
+	       WHERE bytes_deleted_at IS NULL`,
     );
 
     const bundleCache = new Map<string, PolicyBundleT>();
     for (const bucket of buckets) {
       const key: BucketKey = {
+        tenant_id: bucket.tenant_id,
         workspace_id: bucket.workspace_id,
         agent_id: bucket.agent_id,
         kind: bucket.kind,
@@ -319,7 +330,7 @@ export class ArtifactLifecycleScheduler {
       let remaining = total;
       for (const artifact of artifacts) {
         if (remaining <= maxBytes) break;
-        await this.pruneArtifactBytes(artifact.artifact_id, "quota");
+        await this.pruneArtifactBytes(key.tenant_id, artifact.artifact_id, "quota");
         remaining -= Math.max(0, artifact.size_bytes ?? 0);
       }
     }
@@ -333,20 +344,25 @@ export class ArtifactLifecycleScheduler {
 
     const row = await this.db.get<{ policy_snapshot_id: string }>(
       `SELECT policy_snapshot_id
-       FROM execution_artifacts
-       WHERE bytes_deleted_at IS NULL
-         AND workspace_id = ?
-         AND kind = ?
-         AND ${normalizedSensitivitySql("sensitivity")} = ?
-         AND policy_snapshot_id IS NOT NULL
+	       FROM execution_artifacts
+	       WHERE tenant_id = ?
+	         AND bytes_deleted_at IS NULL
+	         AND workspace_id = ?
+	         AND kind = ?
+	         AND ${normalizedSensitivitySql("sensitivity")} = ?
+	         AND policy_snapshot_id IS NOT NULL
          AND ${agent.clause}
-       ORDER BY created_at DESC, artifact_id DESC
-       LIMIT 1`,
-      [bucket.workspace_id, bucket.kind, bucket.sensitivity, ...agent.params],
+	       ORDER BY created_at DESC, artifact_id DESC
+	       LIMIT 1`,
+      [bucket.tenant_id, bucket.workspace_id, bucket.kind, bucket.sensitivity, ...agent.params],
     );
 
     if (!row?.policy_snapshot_id) return undefined;
-    const bundle = await this.bundleForSnapshot(bundleCache, row.policy_snapshot_id);
+    const bundle = await this.bundleForSnapshot(
+      bundleCache,
+      bucket.tenant_id,
+      row.policy_snapshot_id,
+    );
     return resolveQuotaMaxBytes(bundle, bucket.kind, bucket.sensitivity);
   }
 
@@ -354,13 +370,14 @@ export class ArtifactLifecycleScheduler {
     const agent = whereNullableEquals("agent_id", bucket.agent_id);
     const row = await this.db.get<{ total_bytes: number | null }>(
       `SELECT SUM(COALESCE(size_bytes, 0)) AS total_bytes
-       FROM execution_artifacts
-       WHERE bytes_deleted_at IS NULL
-         AND workspace_id = ?
-         AND kind = ?
-         AND ${normalizedSensitivitySql("sensitivity")} = ?
-         AND ${agent.clause}`,
-      [bucket.workspace_id, bucket.kind, bucket.sensitivity, ...agent.params],
+	       FROM execution_artifacts
+	       WHERE tenant_id = ?
+	         AND bytes_deleted_at IS NULL
+	         AND workspace_id = ?
+	         AND kind = ?
+	         AND ${normalizedSensitivitySql("sensitivity")} = ?
+	         AND ${agent.clause}`,
+      [bucket.tenant_id, bucket.workspace_id, bucket.kind, bucket.sensitivity, ...agent.params],
     );
     return row?.total_bytes ?? 0;
   }
@@ -371,18 +388,20 @@ export class ArtifactLifecycleScheduler {
     const agent = whereNullableEquals("agent_id", bucket.agent_id);
     return await this.db.all<{ artifact_id: string; size_bytes: number | null }>(
       `SELECT artifact_id, size_bytes
-       FROM execution_artifacts
-       WHERE bytes_deleted_at IS NULL
-         AND workspace_id = ?
-         AND kind = ?
-         AND ${normalizedSensitivitySql("sensitivity")} = ?
-         AND ${agent.clause}
-       ORDER BY created_at ASC, artifact_id ASC`,
-      [bucket.workspace_id, bucket.kind, bucket.sensitivity, ...agent.params],
+	       FROM execution_artifacts
+	       WHERE tenant_id = ?
+	         AND bytes_deleted_at IS NULL
+	         AND workspace_id = ?
+	         AND kind = ?
+	         AND ${normalizedSensitivitySql("sensitivity")} = ?
+	         AND ${agent.clause}
+	       ORDER BY created_at ASC, artifact_id ASC`,
+      [bucket.tenant_id, bucket.workspace_id, bucket.kind, bucket.sensitivity, ...agent.params],
     );
   }
 
   private async pruneArtifactBytes(
+    tenantId: string,
     artifactId: string,
     reason: "retention" | "quota",
   ): Promise<void> {
@@ -402,9 +421,9 @@ export class ArtifactLifecycleScheduler {
 
     await this.db.run(
       `UPDATE execution_artifacts
-       SET bytes_deleted_at = ?, bytes_deleted_reason = ?
-       WHERE artifact_id = ? AND bytes_deleted_at IS NULL`,
-      [nowIso, reason, artifactId],
+	       SET bytes_deleted_at = ?, bytes_deleted_reason = ?
+	       WHERE tenant_id = ? AND artifact_id = ? AND bytes_deleted_at IS NULL`,
+      [nowIso, reason, tenantId, artifactId],
     );
   }
 }

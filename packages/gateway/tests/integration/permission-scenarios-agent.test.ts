@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -7,11 +7,12 @@ import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { ApprovalRow } from "../../src/modules/approval/dal.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
-import type { SecretHandle } from "@tyrum/schemas";
+import { AgentConfig, type SecretHandle } from "@tyrum/schemas";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -118,38 +119,39 @@ function stubMcpManager() {
   };
 }
 
+async function seedAgentConfig(
+  container: GatewayContainer,
+  params: {
+    agentKey?: string;
+    workspaceKey?: string;
+    toolsAllow: string[];
+  },
+): Promise<void> {
+  const ids = await container.identityScopeDal.resolveScopeIds({
+    agentKey: params.agentKey,
+    workspaceKey: params.workspaceKey,
+  });
+  await new AgentConfigDal(container.db).set({
+    tenantId: ids.tenantId,
+    agentId: ids.agentId,
+    config: AgentConfig.parse({
+      model: { model: "openai/gpt-4.1" },
+      skills: { enabled: [] },
+      mcp: { enabled: [] },
+      tools: { allow: params.toolsAllow },
+      sessions: { ttl_days: 30, max_turns: 20 },
+      memory: { markdown_enabled: false },
+    }),
+    createdBy: { kind: "test" },
+    reason: "permission scenarios test seed",
+  });
+}
+
 describe("AgentRuntime approval/permission scenarios (e2e)", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
 
-  const restoreEnv = (key: string, value: string | undefined) => {
-    if (value === undefined) {
-      delete process.env[key];
-    } else {
-      process.env[key] = value;
-    }
-  };
-
-  const originalEnv = {
-    TYRUM_POLICY_ENABLED: process.env["TYRUM_POLICY_ENABLED"],
-    TYRUM_POLICY_MODE: process.env["TYRUM_POLICY_MODE"],
-    TYRUM_POLICY_BUNDLE_PATH: process.env["TYRUM_POLICY_BUNDLE_PATH"],
-    TYRUM_HOME: process.env["TYRUM_HOME"],
-  };
-
-  beforeEach(() => {
-    process.env["TYRUM_POLICY_ENABLED"] = "1";
-    process.env["TYRUM_POLICY_MODE"] = "enforce";
-    delete process.env["TYRUM_POLICY_BUNDLE_PATH"];
-    delete process.env["TYRUM_HOME"];
-  });
-
   afterEach(async () => {
-    restoreEnv("TYRUM_POLICY_ENABLED", originalEnv.TYRUM_POLICY_ENABLED);
-    restoreEnv("TYRUM_POLICY_MODE", originalEnv.TYRUM_POLICY_MODE);
-    restoreEnv("TYRUM_POLICY_BUNDLE_PATH", originalEnv.TYRUM_POLICY_BUNDLE_PATH);
-    restoreEnv("TYRUM_HOME", originalEnv.TYRUM_HOME);
-
     await container?.db.close();
     container = undefined;
 
@@ -162,27 +164,11 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
   it("expires tool approvals when no response arrives (tool not executed)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-perms-agent-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.exec",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    await seedAgentConfig(container, {
+      agentKey: "agent-test",
+      workspaceKey: "ws-test",
+      toolsAllow: ["tool.exec"],
+    });
 
     const languageModel = createSequencedToolLoopLanguageModel([
       {
@@ -264,27 +250,11 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
   it("does not get stuck when a denied tool approval is missing a resume token", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-perms-agent-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.exec",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    await seedAgentConfig(container, {
+      agentKey: "agent-test",
+      workspaceKey: "ws-test",
+      toolsAllow: ["tool.exec"],
+    });
 
     const languageModel = createSequencedToolLoopLanguageModel([
       {
@@ -350,27 +320,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
   it("short-circuits policy denies without creating approvals (tool not executed)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-perms-agent-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.fs.write",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    await seedAgentConfig(container, { toolsAllow: ["tool.fs.write"] });
 
     await writeFile(
       join(homeDir, "policy.yml"),
@@ -431,27 +381,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
 
     await writeFile(join(homeDir, "a.txt"), "file A", "utf-8");
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.fs.read",
-        "    - tool.exec",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    await seedAgentConfig(container, { toolsAllow: ["tool.fs.read", "tool.exec"] });
 
     const languageModel = createSequencedToolLoopLanguageModel([
       {
@@ -505,27 +435,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
 
     const fetchUrl = "https://93.184.216.34";
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.http.fetch",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    await seedAgentConfig(container, { toolsAllow: ["tool.http.fetch"] });
 
     await writeFile(
       join(homeDir, "policy.yml"),
@@ -547,7 +457,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
         "  default: allow",
         "  allow: []",
         "  require_approval:",
-        '    - "env:billing"',
+        '    - "db:billing"',
         "  deny: []",
         "",
       ].join("\n"),
@@ -557,7 +467,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     const handles: SecretHandle[] = [
       {
         handle_id: "handle-abc",
-        provider: "env",
+        provider: "db",
         scope: "billing",
         created_at: new Date().toISOString(),
       },
@@ -569,7 +479,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       }),
       store: vi.fn(async () => ({
         handle_id: "h1",
-        provider: "env",
+        provider: "db",
         scope: "billing",
         created_at: "",
       })),

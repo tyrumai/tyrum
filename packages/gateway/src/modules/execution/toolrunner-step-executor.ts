@@ -9,6 +9,9 @@ const MAX_STDIO_BYTES = 4 * 1024 * 1024;
 
 export interface ToolRunnerStepExecutorOptions {
   entrypoint: string;
+  home: string;
+  dbPath: string;
+  migrationsDir: string;
   env?: NodeJS.ProcessEnv;
   logger?: Logger;
 }
@@ -19,11 +22,17 @@ export function createToolRunnerStepExecutor(opts: ToolRunnerStepExecutorOptions
 
 class ToolRunnerStepExecutor implements StepExecutor {
   private readonly entrypoint: string;
+  private readonly home: string;
+  private readonly dbPath: string;
+  private readonly migrationsDir: string;
   private readonly env: NodeJS.ProcessEnv;
   private readonly logger?: Logger;
 
   constructor(opts: ToolRunnerStepExecutorOptions) {
     this.entrypoint = opts.entrypoint;
+    this.home = opts.home;
+    this.dbPath = opts.dbPath;
+    this.migrationsDir = opts.migrationsDir;
     this.env = opts.env ?? process.env;
     this.logger = opts.logger;
   }
@@ -45,10 +54,24 @@ class ToolRunnerStepExecutor implements StepExecutor {
     const startedAt = Date.now();
 
     return await new Promise<StepResult>((resolve) => {
-      const child = spawn(process.execPath, [...process.execArgv, this.entrypoint, "toolrunner"], {
-        env: { ...this.env, TYRUM_TOOLRUNNER_MODE: "1", TYRUM_LOG_LEVEL: "silent" },
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+      const child = spawn(
+        process.execPath,
+        [
+          ...process.execArgv,
+          this.entrypoint,
+          "toolrunner",
+          "--home",
+          this.home,
+          "--db",
+          this.dbPath,
+          "--migrations-dir",
+          this.migrationsDir,
+        ],
+        {
+          env: this.env,
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
 
       const stdoutChunks: Buffer[] = [];
       const stderrChunks: Buffer[] = [];

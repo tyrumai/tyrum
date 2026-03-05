@@ -13,17 +13,35 @@ import type { ClockFn } from "./types.js";
 export class ExecutionEngineEventEmitter {
   constructor(private readonly opts: { clock: ClockFn; eventsEnabled: boolean }) {}
 
-  async enqueueWsMessage(tx: SqlDb, message: WsEventEnvelopeT | WsRequestEnvelopeT): Promise<void> {
+  async enqueueWsMessage(
+    tx: SqlDb,
+    tenantId: string,
+    message: WsEventEnvelopeT | WsRequestEnvelopeT,
+  ): Promise<void> {
     if (!this.opts.eventsEnabled) return;
-    await enqueueWsBroadcastMessage(tx, message);
+    const normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.length === 0) {
+      throw new Error("tenantId is required");
+    }
+    await enqueueWsBroadcastMessage(tx, normalizedTenantId, message);
   }
 
-  async enqueueWsEvent(tx: SqlDb, evt: WsEventEnvelopeT): Promise<void> {
-    await this.enqueueWsMessage(tx, evt);
+  async enqueueWsEvent(tx: SqlDb, tenantId: string, evt: WsEventEnvelopeT): Promise<void> {
+    await this.enqueueWsMessage(tx, tenantId, evt);
+  }
+
+  private async resolveTenantIdForRunIdTx(tx: SqlDb, runId: string): Promise<string | null> {
+    const row = await tx.get<{ tenant_id: string }>(
+      "SELECT tenant_id FROM execution_runs WHERE run_id = ? LIMIT 1",
+      [runId],
+    );
+    const tenantId = row?.tenant_id?.trim();
+    return tenantId && tenantId.length > 0 ? tenantId : null;
   }
 
   async emitRunUpdatedTx(tx: SqlDb, runId: string): Promise<void> {
     const row = await tx.get<{
+      tenant_id: string;
       run_id: string;
       job_id: string;
       key: string;
@@ -40,6 +58,7 @@ export class ExecutionEngineEventEmitter {
       budget_overridden_at: string | Date | null;
     }>(
       `SELECT
+         tenant_id,
          run_id,
          job_id,
          key,
@@ -86,11 +105,12 @@ export class ExecutionEngineEventEmitter {
         },
       },
     };
-    await this.enqueueWsEvent(tx, evt);
+    await this.enqueueWsEvent(tx, row.tenant_id, evt);
   }
 
   async emitStepUpdatedTx(tx: SqlDb, stepId: string): Promise<void> {
     const row = await tx.get<{
+      tenant_id: string;
       step_id: string;
       run_id: string;
       step_index: number;
@@ -102,6 +122,7 @@ export class ExecutionEngineEventEmitter {
       approval_id: number | null;
     }>(
       `SELECT
+         tenant_id,
          step_id,
          run_id,
          step_index,
@@ -136,11 +157,12 @@ export class ExecutionEngineEventEmitter {
         },
       },
     };
-    await this.enqueueWsEvent(tx, evt);
+    await this.enqueueWsEvent(tx, row.tenant_id, evt);
   }
 
   async emitAttemptUpdatedTx(tx: SqlDb, attemptId: string): Promise<void> {
     const row = await tx.get<{
+      tenant_id: string;
       attempt_id: string;
       step_id: string;
       attempt: number;
@@ -158,6 +180,7 @@ export class ExecutionEngineEventEmitter {
       policy_applied_override_ids_json: string | null;
     }>(
       `SELECT
+         tenant_id,
          attempt_id,
          step_id,
          attempt,
@@ -180,8 +203,8 @@ export class ExecutionEngineEventEmitter {
     if (!row) return;
 
     const step = await tx.get<{ run_id: string }>(
-      "SELECT run_id FROM execution_steps WHERE step_id = ?",
-      [row.step_id],
+      "SELECT run_id FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
+      [row.tenant_id, row.step_id],
     );
 
     const evt: WsEventEnvelopeT = {
@@ -212,12 +235,12 @@ export class ExecutionEngineEventEmitter {
         },
       },
     };
-    await this.enqueueWsEvent(tx, evt);
+    await this.enqueueWsEvent(tx, row.tenant_id, evt);
   }
 
   async emitArtifactCreatedTx(
     tx: SqlDb,
-    opts: { runId: string; artifact: ArtifactRefT },
+    opts: { tenantId: string; runId: string; artifact: ArtifactRefT },
   ): Promise<void> {
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
@@ -226,12 +249,18 @@ export class ExecutionEngineEventEmitter {
       scope: { kind: "run", run_id: opts.runId },
       payload: { artifact: opts.artifact },
     };
-    await this.enqueueWsEvent(tx, evt);
+    await this.enqueueWsEvent(tx, opts.tenantId, evt);
   }
 
   async emitArtifactAttachedTx(
     tx: SqlDb,
-    opts: { runId: string; stepId: string; attemptId: string; artifact: ArtifactRefT },
+    opts: {
+      tenantId: string;
+      runId: string;
+      stepId: string;
+      attemptId: string;
+      artifact: ArtifactRefT;
+    },
   ): Promise<void> {
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
@@ -244,7 +273,7 @@ export class ExecutionEngineEventEmitter {
         attempt_id: opts.attemptId,
       },
     };
-    await this.enqueueWsEvent(tx, evt);
+    await this.enqueueWsEvent(tx, opts.tenantId, evt);
   }
 
   async emitRunIdEventTx(
@@ -252,6 +281,8 @@ export class ExecutionEngineEventEmitter {
     type: "run.queued" | "run.started" | "run.resumed" | "run.completed" | "run.failed",
     runId: string,
   ): Promise<void> {
+    const tenantId = await this.resolveTenantIdForRunIdTx(tx, runId);
+    if (!tenantId) return;
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
       type,
@@ -259,7 +290,7 @@ export class ExecutionEngineEventEmitter {
       scope: { kind: "run", run_id: runId },
       payload: { run_id: runId },
     };
-    await this.enqueueWsEvent(tx, evt);
+    await this.enqueueWsEvent(tx, tenantId, evt);
   }
 
   async emitRunPausedTx(
@@ -271,6 +302,8 @@ export class ExecutionEngineEventEmitter {
       detail?: string;
     },
   ): Promise<void> {
+    const tenantId = await this.resolveTenantIdForRunIdTx(tx, opts.runId);
+    if (!tenantId) return;
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
       type: "run.paused",
@@ -283,10 +316,12 @@ export class ExecutionEngineEventEmitter {
         detail: opts.detail,
       },
     };
-    await this.enqueueWsEvent(tx, evt);
+    await this.enqueueWsEvent(tx, tenantId, evt);
   }
 
   async emitRunCancelledTx(tx: SqlDb, opts: { runId: string; reason?: string }): Promise<void> {
+    const tenantId = await this.resolveTenantIdForRunIdTx(tx, opts.runId);
+    if (!tenantId) return;
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
       type: "run.cancelled",
@@ -294,6 +329,6 @@ export class ExecutionEngineEventEmitter {
       scope: { kind: "run", run_id: opts.runId },
       payload: { run_id: opts.runId, reason: opts.reason },
     };
-    await this.enqueueWsEvent(tx, evt);
+    await this.enqueueWsEvent(tx, tenantId, evt);
   }
 }

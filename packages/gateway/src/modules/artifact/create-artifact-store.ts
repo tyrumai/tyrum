@@ -1,17 +1,18 @@
 import { S3Client } from "@aws-sdk/client-s3";
-import { loadConfigFromProcessEnv } from "../../config.js";
-import type { GatewayConfig } from "../../config.js";
+import type { DeploymentConfigArtifacts } from "@tyrum/schemas";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { ArtifactStore } from "./store.js";
 import { FsArtifactStore, S3ArtifactStore } from "./store.js";
 
 export function createArtifactStore(
-  artifacts: GatewayConfig["artifacts"],
+  artifacts: DeploymentConfigArtifacts,
   redactionEngine: RedactionEngine,
 ): ArtifactStore {
   if (artifacts.store === "s3") {
+    const bucket = artifacts.s3.bucket ?? "tyrum-artifacts";
+    const region = artifacts.s3.region ?? "us-east-1";
     const client = new S3Client({
-      region: artifacts.s3.region,
+      region,
       endpoint: artifacts.s3.endpoint,
       forcePathStyle: artifacts.s3.forcePathStyle,
       credentials:
@@ -23,19 +24,11 @@ export function createArtifactStore(
             }
           : undefined,
     });
-    return new S3ArtifactStore(client, artifacts.s3.bucket, "artifacts", redactionEngine);
+    return new S3ArtifactStore(client, bucket, "artifacts", redactionEngine);
   }
 
+  if (!artifacts.dir) {
+    throw new Error("artifacts.dir is required when artifacts.store=fs");
+  }
   return new FsArtifactStore(artifacts.dir, redactionEngine);
-}
-
-export function createArtifactStoreFromEnv(
-  tyrumHome: string,
-  redactionEngine: RedactionEngine,
-): ArtifactStore {
-  const config = loadConfigFromProcessEnv({
-    GATEWAY_TOKEN: "artifact-store-token",
-    TYRUM_HOME: tyrumHome,
-  });
-  return createArtifactStore(config.artifacts, redactionEngine);
 }

@@ -126,8 +126,7 @@ export async function deriveElevatedExecutionAvailable(
 }
 
 export function resolveAgentId(): string {
-  const raw = process.env["TYRUM_AGENT_ID"]?.trim();
-  return raw && raw.length > 0 ? raw : "default";
+  return "default";
 }
 
 export function resolveTurnRequestId(input: AgentTurnRequestT): string {

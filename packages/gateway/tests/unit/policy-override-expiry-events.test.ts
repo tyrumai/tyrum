@@ -7,7 +7,11 @@ import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { createPolicyBundleRoutes } from "../../src/routes/policy-bundle.js";
 import { OutboxDal } from "../../src/modules/backplane/outbox-dal.js";
 import { OutboxPoller } from "../../src/modules/backplane/outbox-poller.js";
-import { DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -38,6 +42,7 @@ describe("policy overrides expiry events", () => {
     const policyOverrideDal = new PolicyOverrideDal(db);
 
     const override = await policyOverrideDal.create({
+      tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
       toolId: "tool.exec",
@@ -48,7 +53,15 @@ describe("policy overrides expiry events", () => {
 
     const connectionManager = new ConnectionManager();
     const ws = createMockWs();
-    connectionManager.addClient(ws as never, ["cli"]);
+    connectionManager.addClient(ws as never, ["cli"], {
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
 
     const outboxDal = new OutboxDal(db);
     const outboxPoller = new OutboxPoller({
@@ -57,14 +70,23 @@ describe("policy overrides expiry events", () => {
       connectionManager,
     });
 
+    const routes = createPolicyBundleRoutes({
+      policyService: {} as never,
+      policyOverrideDal,
+    });
+
     const app = new Hono();
-    app.route(
-      "/",
-      createPolicyBundleRoutes({
-        policyService: {} as never,
-        policyOverrideDal,
-      }),
-    );
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      return await next();
+    });
+    app.route("/", routes);
 
     const res1 = await app.request("/policy/overrides");
     expect(res1.status).toBe(200);
@@ -98,6 +120,7 @@ describe("policy overrides expiry events", () => {
     const policyOverrideDal = new PolicyOverrideDal(db);
 
     const override = await policyOverrideDal.create({
+      tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
       toolId: "tool.exec",
@@ -108,7 +131,15 @@ describe("policy overrides expiry events", () => {
 
     const connectionManager = new ConnectionManager();
     const ws = createMockWs();
-    connectionManager.addClient(ws as never, ["cli"]);
+    connectionManager.addClient(ws as never, ["cli"], {
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
 
     const outboxDal = new OutboxDal(db);
     const outboxPoller = new OutboxPoller({
@@ -118,6 +149,7 @@ describe("policy overrides expiry events", () => {
     });
 
     const active = await policyOverrideDal.listActiveForTool({
+      tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
       toolId: "tool.exec",

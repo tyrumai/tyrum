@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrowserWindow } from "electron";
 
@@ -12,12 +13,13 @@ const {
   generateTokenMock,
   encryptTokenMock,
   undiciFetchMock,
+  existsSyncMock,
 } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
   registeredHandlers: new Map<string, (...args: unknown[]) => unknown>(),
   saveConfigMock: vi.fn(),
   configExistsMock: vi.fn(() => true),
-  decryptTokenMock: vi.fn(() => "token"),
+  decryptTokenMock: vi.fn(() => "tyrum-token.v1.embedded.token"),
   generateTokenMock: vi.fn(() => "generated-token"),
   encryptTokenMock: vi.fn((token: string) => `enc:${token}`),
   undiciFetchMock: vi.fn(async () => {
@@ -26,14 +28,26 @@ const {
       headers: { "content-type": "application/json" },
     });
   }),
+  existsSyncMock: vi.fn(),
   testState: {
     port: 8788,
     mode: "embedded" as "embedded" | "remote",
+    embeddedDbPath: "/tmp/test-gateway.db",
+    embeddedTokenRef: "enc:token",
     remoteWsUrl: "ws://127.0.0.1:8788/ws",
+    remoteTokenRef: "enc:remote-token",
     remoteTlsCertFingerprint256: "",
     remoteTlsAllowSelfSigned: false,
   },
 }));
+
+vi.mock("node:fs", async () => {
+  const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+  return {
+    ...actual,
+    existsSync: existsSyncMock,
+  };
+});
 
 vi.mock("electron", () => ({
   ipcMain: {
@@ -51,8 +65,10 @@ vi.mock("undici", () => {
 
 class MockGatewayManager extends EventEmitter {
   public status: "stopped" | "starting" | "running" | "error" = "stopped";
+  public lastStartOptions: unknown;
 
-  async start(): Promise<void> {
+  async start(opts?: unknown): Promise<void> {
+    this.lastStartOptions = opts;
     this.status = "running";
     this.emit("status-change", "running");
   }
@@ -60,6 +76,13 @@ class MockGatewayManager extends EventEmitter {
   async stop(): Promise<void> {
     this.status = "stopped";
     this.emit("status-change", "stopped");
+  }
+
+  getBootstrapToken(label: string): string | undefined {
+    if (label === "default-tenant-admin") {
+      return "tyrum-token.v1.bootstrap.token";
+    }
+    return undefined;
   }
 }
 
@@ -73,12 +96,12 @@ vi.mock("../src/main/config/store.js", () => ({
     mode: testState.mode,
     embedded: {
       port: testState.port,
-      dbPath: "/tmp/test-gateway.db",
-      tokenRef: "enc:token",
+      dbPath: testState.embeddedDbPath,
+      tokenRef: testState.embeddedTokenRef,
     },
     remote: {
       wsUrl: testState.remoteWsUrl,
-      tokenRef: "enc:remote-token",
+      tokenRef: testState.remoteTokenRef,
       tlsCertFingerprint256: testState.remoteTlsCertFingerprint256,
       tlsAllowSelfSigned: testState.remoteTlsAllowSelfSigned,
     },
@@ -101,18 +124,23 @@ describe("registerGatewayIpc handlers", () => {
     vi.resetModules();
     testState.port = 8788;
     testState.mode = "embedded";
+    testState.embeddedDbPath = "/tmp/test-gateway.db";
+    testState.embeddedTokenRef = "enc:token";
     testState.remoteWsUrl = "ws://127.0.0.1:8788/ws";
+    testState.remoteTokenRef = "enc:remote-token";
     testState.remoteTlsCertFingerprint256 = "";
     testState.remoteTlsAllowSelfSigned = false;
     saveConfigMock.mockReset();
     configExistsMock.mockReset();
     configExistsMock.mockReturnValue(true);
     decryptTokenMock.mockReset();
-    decryptTokenMock.mockImplementation(() => "token");
+    decryptTokenMock.mockImplementation(() => "tyrum-token.v1.embedded.token");
     generateTokenMock.mockReset();
     generateTokenMock.mockImplementation(() => "generated-token");
     encryptTokenMock.mockReset();
     encryptTokenMock.mockImplementation((token: string) => `enc:${token}`);
+    existsSyncMock.mockReset();
+    existsSyncMock.mockImplementation(() => false);
     undiciFetchMock.mockReset();
     undiciFetchMock.mockImplementation(async () => {
       return new Response(JSON.stringify({ status: "ok" }), {
@@ -191,10 +219,45 @@ describe("registerGatewayIpc handlers", () => {
       mode: "embedded",
       wsUrl: "ws://127.0.0.1:8788/ws",
       httpBaseUrl: "http://127.0.0.1:8788/",
-      token: "token",
+      token: "tyrum-token.v1.embedded.token",
       tlsCertFingerprint256: "",
       tlsAllowSelfSigned: false,
     });
+  });
+
+  it("uses the legacy embedded gateway dbPath when it exists and no override is configured", async () => {
+    const prevHome = process.env["TYRUM_HOME"];
+    process.env["TYRUM_HOME"] = "/tmp/tyrum-home";
+    try {
+      testState.embeddedDbPath = "";
+      const legacyDbPath = join("/tmp/tyrum-home", "gateway", "gateway.db");
+      existsSyncMock.mockImplementation((path) => path === legacyDbPath);
+
+      const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+      const windowStub = {
+        isDestroyed: () => false,
+        webContents: {
+          isDestroyed: () => false,
+          send: vi.fn(),
+        },
+      } as unknown as BrowserWindow;
+
+      const mgr = registerGatewayIpc(windowStub) as unknown as MockGatewayManager;
+
+      const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
+      expect(operatorConnectionHandler).toBeDefined();
+
+      await operatorConnectionHandler!({} as never);
+
+      expect(mgr.lastStartOptions).toEqual(expect.objectContaining({ dbPath: legacyDbPath }));
+    } finally {
+      if (prevHome === undefined) {
+        delete process.env["TYRUM_HOME"];
+      } else {
+        process.env["TYRUM_HOME"] = prevHome;
+      }
+    }
   });
 
   it("rejects operator connection when the desktop is not configured yet", async () => {
@@ -244,19 +307,100 @@ describe("registerGatewayIpc handlers", () => {
       mode: "embedded",
       wsUrl: "ws://127.0.0.1:8788/ws",
       httpBaseUrl: "http://127.0.0.1:8788/",
-      token: "generated-token",
+      token: "tyrum-token.v1.bootstrap.token",
       tlsCertFingerprint256: "",
       tlsAllowSelfSigned: false,
     });
-    expect(generateTokenMock).toHaveBeenCalledTimes(1);
-    expect(encryptTokenMock).toHaveBeenCalledWith("generated-token");
+    expect(generateTokenMock).not.toHaveBeenCalled();
+    expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.bootstrap.token");
     expect(saveConfigMock).toHaveBeenCalledWith(
       expect.objectContaining({
         embedded: expect.objectContaining({
-          tokenRef: "enc:generated-token",
+          tokenRef: "enc:tyrum-token.v1.bootstrap.token",
         }),
       }),
     );
+  });
+
+  it("bootstraps and persists the embedded token on first launch when tokenRef is missing", async () => {
+    testState.embeddedTokenRef = "";
+
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
+    expect(operatorConnectionHandler).toBeDefined();
+
+    const connection = await operatorConnectionHandler!({} as never);
+    expect(connection).toEqual({
+      mode: "embedded",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788/",
+      token: "tyrum-token.v1.bootstrap.token",
+      tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
+    });
+    expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.bootstrap.token");
+    expect(saveConfigMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        embedded: expect.objectContaining({
+          tokenRef: "enc:tyrum-token.v1.bootstrap.token",
+        }),
+      }),
+    );
+  });
+
+  it("reports invalid embedded token format distinctly from decryption failures (ensure)", async () => {
+    decryptTokenMock.mockImplementationOnce(() => "not-a-token");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { ensureEmbeddedGatewayToken } = await import("../src/main/ipc/gateway-ipc.js");
+    const { loadConfig } = await import("../src/main/config/store.js");
+
+    expect(() => ensureEmbeddedGatewayToken(loadConfig())).toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/invalid embedded gateway token format/i),
+      expect.any(Error),
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it("reports invalid embedded token format distinctly from decryption failures (recover)", async () => {
+    decryptTokenMock.mockImplementationOnce(() => "not-a-token");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { registerGatewayIpc, resolveOperatorConnection } =
+      await import("../src/main/ipc/gateway-ipc.js");
+    const { loadConfig } = await import("../src/main/config/store.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    const mgr = registerGatewayIpc(windowStub) as unknown as { status: string };
+    mgr.status = "running";
+
+    expect(() => resolveOperatorConnection(loadConfig())).toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/invalid embedded gateway token format/i),
+      expect.any(Error),
+    );
+
+    warnSpy.mockRestore();
   });
 
   it("does not rotate embedded token when the gateway is already running", async () => {
@@ -280,7 +424,7 @@ describe("registerGatewayIpc handlers", () => {
       mode: "embedded",
       wsUrl: "ws://127.0.0.1:8788/ws",
       httpBaseUrl: "http://127.0.0.1:8788/",
-      token: "token",
+      token: "tyrum-token.v1.embedded.token",
       tlsCertFingerprint256: "",
       tlsAllowSelfSigned: false,
     });
@@ -322,7 +466,7 @@ describe("registerGatewayIpc handlers", () => {
     });
 
     const connection = resolveOperatorConnection(loadConfig());
-    expect(connection.token).toBe("token");
+    expect(connection.token).toBe("tyrum-token.v1.embedded.token");
 
     expect(generateTokenMock).not.toHaveBeenCalled();
     expect(saveConfigMock).not.toHaveBeenCalled();
@@ -332,7 +476,9 @@ describe("registerGatewayIpc handlers", () => {
     testState.mode = "remote";
     testState.remoteWsUrl = "wss://remote.example/ws";
     decryptTokenMock.mockImplementation((tokenRef: string) =>
-      tokenRef === "enc:remote-token" ? "remote-token" : "token",
+      tokenRef === "enc:remote-token"
+        ? "tyrum-token.v1.remote.token"
+        : "tyrum-token.v1.embedded.token",
     );
 
     const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
@@ -355,7 +501,42 @@ describe("registerGatewayIpc handlers", () => {
       mode: "remote",
       wsUrl: "wss://remote.example/ws",
       httpBaseUrl: "https://remote.example/",
-      token: "remote-token",
+      token: "tyrum-token.v1.remote.token",
+      tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
+    });
+  });
+
+  it("accepts opaque remote gateway tokens", async () => {
+    testState.mode = "remote";
+    testState.remoteWsUrl = "ws://remote.example/ws";
+    decryptTokenMock.mockImplementation((tokenRef: string) =>
+      tokenRef === "enc:remote-token"
+        ? "0123456789abcdef0123456789abcdef"
+        : "tyrum-token.v1.embedded.token",
+    );
+
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
+    expect(operatorConnectionHandler).toBeDefined();
+
+    const connection = await operatorConnectionHandler!({} as never);
+    expect(connection).toEqual({
+      mode: "remote",
+      wsUrl: "ws://remote.example/ws",
+      httpBaseUrl: "http://remote.example/",
+      token: "0123456789abcdef0123456789abcdef",
       tlsCertFingerprint256: "",
       tlsAllowSelfSigned: false,
     });

@@ -11,16 +11,17 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { getRequestListener } from "@hono/node-server";
-import type { Hono } from "hono";
-import { createTestApp } from "./helpers.js";
+import { Hono } from "hono";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
-import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+
+let activeDb: SqliteDb | undefined;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -35,19 +36,21 @@ async function startServer(app: Hono): Promise<{
   server: Server;
   port: number;
   adminToken: string;
-  tokenHome: string;
   connectionManager: ConnectionManager;
   stopHeartbeat: () => void;
 }> {
   const connectionManager = new ConnectionManager();
-  const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-ws-upgrade-"));
-  const tokenStore = new TokenStore(tokenHome);
-  const adminToken = await tokenStore.initialize();
+  const db = openTestSqliteDb();
+  activeDb = db;
+  const authTokens = new AuthTokenService(db);
+  const adminToken = (
+    await authTokens.issueToken({ tenantId: DEFAULT_TENANT_ID, role: "admin", scopes: ["*"] })
+  ).token;
 
   const { handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
     protocolDeps: { connectionManager },
-    tokenStore,
+    authTokens,
   });
 
   const requestListener = getRequestListener(app.fetch);
@@ -68,7 +71,7 @@ async function startServer(app: Hono): Promise<{
     });
   });
 
-  return { server, port, adminToken, tokenHome, connectionManager, stopHeartbeat };
+  return { server, port, adminToken, connectionManager, stopHeartbeat };
 }
 
 // ---------------------------------------------------------------------------
@@ -78,7 +81,6 @@ async function startServer(app: Hono): Promise<{
 describe("WebSocket upgrade", () => {
   let httpServer: Server | undefined;
   let client: TyrumClient | undefined;
-  let tokenHome: string | undefined;
   let stopHeartbeat: (() => void) | undefined;
 
   afterEach(async () => {
@@ -90,17 +92,14 @@ describe("WebSocket upgrade", () => {
       await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
       httpServer = undefined;
     }
-    if (tokenHome) {
-      await rm(tokenHome, { recursive: true, force: true });
-      tokenHome = undefined;
-    }
+    await activeDb?.close();
+    activeDb = undefined;
   });
 
   it("connects via WebSocket and completes hello handshake", async () => {
-    const { app } = await createTestApp();
+    const app = new Hono().get("/healthz", (c) => c.json({ status: "ok" }));
     const srv = await startServer(app);
     httpServer = srv.server;
-    tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
     client = new TyrumClient({
@@ -129,10 +128,9 @@ describe("WebSocket upgrade", () => {
   });
 
   it("registers client capabilities correctly in ConnectionManager", async () => {
-    const { app } = await createTestApp();
+    const app = new Hono().get("/healthz", (c) => c.json({ status: "ok" }));
     const srv = await startServer(app);
     httpServer = srv.server;
-    tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
     // Connect a client with only the "cli" capability
@@ -162,10 +160,9 @@ describe("WebSocket upgrade", () => {
   });
 
   it("destroys socket for non-/ws upgrade requests", async () => {
-    const { app } = await createTestApp();
+    const app = new Hono().get("/healthz", (c) => c.json({ status: "ok" }));
     const srv = await startServer(app);
     httpServer = srv.server;
-    tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
     // Attempt a WebSocket connection to a non-/ws path
@@ -186,10 +183,9 @@ describe("WebSocket upgrade", () => {
   });
 
   it("serves HTTP requests alongside WebSocket upgrades", async () => {
-    const { app } = await createTestApp();
+    const app = new Hono().get("/healthz", (c) => c.json({ status: "ok" }));
     const srv = await startServer(app);
     httpServer = srv.server;
-    tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
     // Verify /healthz still works over plain HTTP

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -8,6 +8,8 @@ import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
+import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -39,28 +41,20 @@ describe("AgentRuntime (execution profiles)", () => {
       migrationsDir,
     });
 
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.fs.read",
-        "    - tool.fs.write",
-        "    - tool.exec",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    await new AgentConfigDal(container.db).set({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: { enabled: [] },
+        tools: { allow: ["tool.fs.read", "tool.fs.write", "tool.exec"] },
+        sessions: { ttl_days: 30, max_turns: 20 },
+        memory: { markdown_enabled: false },
+      }),
+      createdBy: { kind: "test" },
+      reason: "test",
+    });
 
     const runtime = new AgentRuntime({
       container,

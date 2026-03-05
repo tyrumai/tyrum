@@ -3,12 +3,13 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { ArtifactStore } from "../artifact/store.js";
 import {
   persistExecutionArtifactBytes,
+  type ExecutionArtifactFallbackScope,
   type ExecutionArtifactSensitivity,
 } from "../artifact/execution-artifacts.js";
 import { parseEvidenceSensitivity } from "../artifact/evidence-sensitivity.js";
 
 export function resolveBrowserEvidenceSensitivity(): ExecutionArtifactSensitivity {
-  return parseEvidenceSensitivity(process.env["TYRUM_BROWSER_ARTIFACT_SENSITIVITY"], "sensitive");
+  return parseEvidenceSensitivity(undefined, "sensitive");
 }
 
 export async function shapeBrowserEvidenceForArtifacts(input: {
@@ -17,6 +18,7 @@ export async function shapeBrowserEvidenceForArtifacts(input: {
   runId: string;
   stepId: string;
   workspaceId?: string;
+  fallbackScope?: ExecutionArtifactFallbackScope;
   evidence: unknown;
   result?: unknown;
   sensitivity: ExecutionArtifactSensitivity;
@@ -67,6 +69,7 @@ export async function shapeBrowserEvidenceForArtifacts(input: {
         duration_ms: durationMs,
       },
       sensitivity: input.sensitivity,
+      fallbackScope: input.fallbackScope,
     });
   } catch {
     // Intentional: artifact byte persistence is best-effort; omit bytes when storage fails.

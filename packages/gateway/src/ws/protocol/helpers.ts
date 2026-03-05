@@ -16,11 +16,13 @@ export function errorResponse(
 }
 
 export function broadcastEvent(
+  tenantId: string,
   evt: WsEventEnvelope,
   deps: ProtocolDeps,
   audience?: WsBroadcastAudience,
 ): void {
   broadcastWsEvent(
+    tenantId,
     evt,
     { connectionManager: deps.connectionManager, cluster: deps.cluster },
     audience,

@@ -7,10 +7,10 @@ export { DEFAULT_WORKSPACE_KEY };
  * Resolve the workspace id for the current process.
  *
  * - Desktop / single-host: defaults to "default".
- * - Split/HA: typically provided by the ToolRunner launcher (job/pod env/args).
+ * - Split/HA: typically provided by the caller (CLI args / payload).
  */
-export function resolveWorkspaceKey(env: NodeJS.ProcessEnv = process.env): WorkspaceKey {
-  const raw = env["TYRUM_WORKSPACE_ID"]?.trim();
-  if (!raw) return WorkspaceKey.parse(DEFAULT_WORKSPACE_KEY);
-  return WorkspaceKey.parse(raw);
+export function resolveWorkspaceKey(raw?: string): WorkspaceKey {
+  const trimmed = raw?.trim();
+  if (!trimmed) return WorkspaceKey.parse(DEFAULT_WORKSPACE_KEY);
+  return WorkspaceKey.parse(trimmed);
 }

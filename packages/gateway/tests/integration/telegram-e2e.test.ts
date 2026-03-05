@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { createIngressRoutes } from "../../src/routes/ingress.js";
 import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
@@ -31,20 +31,6 @@ function makeAgents(runtime: unknown): AgentRegistry {
 }
 
 describe("Telegram E2E: webhook -> agent -> reply", () => {
-  const originalWebhookSecret = process.env["TELEGRAM_WEBHOOK_SECRET"];
-
-  beforeEach(() => {
-    process.env["TELEGRAM_WEBHOOK_SECRET"] = "test-telegram-secret";
-  });
-
-  afterEach(() => {
-    if (originalWebhookSecret === undefined) {
-      delete process.env["TELEGRAM_WEBHOOK_SECRET"];
-    } else {
-      process.env["TELEGRAM_WEBHOOK_SECRET"] = originalWebhookSecret;
-    }
-  });
-
   it("normalizes, calls agent turn, and replies via bot", async () => {
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
@@ -59,7 +45,14 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     };
 
     const app = new Hono();
-    app.route("/", createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }));
+    app.route(
+      "/",
+      createIngressRoutes({
+        telegramBot: bot,
+        telegramWebhookSecret: "test-telegram-secret",
+        agents: makeAgents(mockRuntime),
+      }),
+    );
 
     const res = await app.request("/ingress/telegram", {
       method: "POST",
@@ -109,7 +102,14 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     };
 
     const app = new Hono();
-    app.route("/", createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }));
+    app.route(
+      "/",
+      createIngressRoutes({
+        telegramBot: bot,
+        telegramWebhookSecret: "test-telegram-secret",
+        agents: makeAgents(mockRuntime),
+      }),
+    );
 
     const res = await app.request("/ingress/telegram", {
       method: "POST",
@@ -166,7 +166,14 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     };
 
     const app = new Hono();
-    app.route("/", createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }));
+    app.route(
+      "/",
+      createIngressRoutes({
+        telegramBot: bot,
+        telegramWebhookSecret: "test-telegram-secret",
+        agents: makeAgents(mockRuntime),
+      }),
+    );
 
     const update = {
       update_id: 100,
@@ -216,7 +223,14 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     };
 
     const app = new Hono();
-    app.route("/", createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }));
+    app.route(
+      "/",
+      createIngressRoutes({
+        telegramBot: bot,
+        telegramWebhookSecret: "test-telegram-secret",
+        agents: makeAgents(mockRuntime),
+      }),
+    );
 
     const res = await app.request("/ingress/telegram", {
       method: "POST",
@@ -237,7 +251,14 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     };
 
     const app = new Hono();
-    app.route("/", createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }));
+    app.route(
+      "/",
+      createIngressRoutes({
+        telegramBot: bot,
+        telegramWebhookSecret: "test-telegram-secret",
+        agents: makeAgents(mockRuntime),
+      }),
+    );
 
     const res = await app.request("/ingress/telegram", {
       method: "POST",
@@ -253,8 +274,6 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
   });
 
   it("fails closed when telegram secret is not configured", async () => {
-    delete process.env["TELEGRAM_WEBHOOK_SECRET"];
-
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
 

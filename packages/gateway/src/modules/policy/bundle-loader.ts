@@ -40,7 +40,7 @@ export function defaultPolicyBundle(): PolicyBundleT {
     connectors: {
       default: "require_approval",
       // Default: allow Telegram sends to preserve existing single-user behavior.
-      // Operators can tighten this by supplying `TYRUM_POLICY_BUNDLE_PATH`.
+      // Operators can tighten this by setting deployment config `policy.bundlePath`.
       allow: ["telegram:*"],
       require_approval: [],
       deny: [],

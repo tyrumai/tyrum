@@ -19,11 +19,10 @@ describe("Trusted proxies", () => {
     if (!server) return;
     await new Promise<void>((resolve) => server!.close(() => resolve()));
     server = undefined;
-    delete process.env["GATEWAY_TRUSTED_PROXIES"];
   });
 
   it("ignores forwarding headers when trusted proxies allowlist is unset", async () => {
-    const { app, container } = await createTestApp();
+    const { app, container, auth } = await createTestApp();
     const requestListener = getRequestListener(app.fetch);
     server = createServer(requestListener);
     const port = await startServer(server);
@@ -42,6 +41,7 @@ describe("Trusted proxies", () => {
       {
         method: "POST",
         headers: {
+          authorization: `Bearer ${auth.tenantAdminToken}`,
           "content-type": "application/json",
           "x-forwarded-for": "203.0.113.9",
         },
@@ -64,9 +64,9 @@ describe("Trusted proxies", () => {
   });
 
   it("accepts forwarding headers only from explicit trusted proxies allowlist", async () => {
-    process.env["GATEWAY_TRUSTED_PROXIES"] = "127.0.0.1";
-
-    const { app, container } = await createTestApp();
+    const { app, container, auth } = await createTestApp({
+      deploymentConfig: { server: { trustedProxies: "127.0.0.1" } },
+    });
     const requestListener = getRequestListener(app.fetch);
     server = createServer(requestListener);
     const port = await startServer(server);
@@ -85,6 +85,7 @@ describe("Trusted proxies", () => {
       {
         method: "POST",
         headers: {
+          authorization: `Bearer ${auth.tenantAdminToken}`,
           "content-type": "application/json",
           "x-forwarded-for": "203.0.113.9",
         },
@@ -107,9 +108,9 @@ describe("Trusted proxies", () => {
   });
 
   it("falls back to socket ip when forwarding headers are invalid", async () => {
-    process.env["GATEWAY_TRUSTED_PROXIES"] = "127.0.0.1";
-
-    const { app, container } = await createTestApp();
+    const { app, container, auth } = await createTestApp({
+      deploymentConfig: { server: { trustedProxies: "127.0.0.1" } },
+    });
     const requestListener = getRequestListener(app.fetch);
     server = createServer(requestListener);
     const port = await startServer(server);
@@ -128,6 +129,7 @@ describe("Trusted proxies", () => {
       {
         method: "POST",
         headers: {
+          authorization: `Bearer ${auth.tenantAdminToken}`,
           "content-type": "application/json",
           "x-forwarded-for": "not-an-ip",
         },
@@ -150,9 +152,9 @@ describe("Trusted proxies", () => {
   });
 
   it("parses RFC7239 Forwarded header when proxy is trusted", async () => {
-    process.env["GATEWAY_TRUSTED_PROXIES"] = "127.0.0.1";
-
-    const { app, container } = await createTestApp();
+    const { app, container, auth } = await createTestApp({
+      deploymentConfig: { server: { trustedProxies: "127.0.0.1" } },
+    });
     const requestListener = getRequestListener(app.fetch);
     server = createServer(requestListener);
     const port = await startServer(server);
@@ -171,6 +173,7 @@ describe("Trusted proxies", () => {
       {
         method: "POST",
         headers: {
+          authorization: `Bearer ${auth.tenantAdminToken}`,
           "content-type": "application/json",
           forwarded: "for=203.0.113.11;proto=https;by=127.0.0.1",
         },
@@ -193,9 +196,9 @@ describe("Trusted proxies", () => {
   });
 
   it("rejects spoofed X-Forwarded-For leftmost entries when proxy appends", async () => {
-    process.env["GATEWAY_TRUSTED_PROXIES"] = "127.0.0.1";
-
-    const { app, container } = await createTestApp();
+    const { app, container, auth } = await createTestApp({
+      deploymentConfig: { server: { trustedProxies: "127.0.0.1" } },
+    });
     const requestListener = getRequestListener(app.fetch);
     server = createServer(requestListener);
     const port = await startServer(server);
@@ -214,6 +217,7 @@ describe("Trusted proxies", () => {
       {
         method: "POST",
         headers: {
+          authorization: `Bearer ${auth.tenantAdminToken}`,
           "content-type": "application/json",
           "x-forwarded-for": "203.0.113.9, 198.51.100.10",
         },

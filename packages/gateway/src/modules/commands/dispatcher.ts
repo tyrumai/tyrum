@@ -9,6 +9,7 @@ import type { PolicyOverrideDal } from "../policy/override-dal.js";
 import type { ContextReportDal } from "../context/report-dal.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { ModelsDevService } from "../models/models-dev-service.js";
+import type { ModelCatalogService } from "../models/model-catalog-service.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import { buildStatusDetails } from "../observability/status-details.js";
 import { AuthProfileDal } from "../models/auth-profile-dal.js";
@@ -34,6 +35,7 @@ export type CommandExecuteResult = {
 };
 
 export interface CommandDeps {
+  tenantId?: string;
   runtime?: {
     version: string;
     instanceId: string;
@@ -59,45 +61,21 @@ export interface CommandDeps {
   contextReportDal?: ContextReportDal;
   plugins?: PluginRegistry;
   modelsDev?: ModelsDevService;
+  modelCatalog?: ModelCatalogService;
   agents?: AgentRegistry;
   fetchImpl?: typeof fetch;
 }
 
-const DEFAULT_PROVIDER_USAGE_FETCH_KEY = Symbol("default-provider-usage-fetch");
-
-const providerUsagePollers = new WeakMap<
-  SqlDb,
-  WeakMap<AgentRegistry, Map<unknown, ProviderUsagePoller>>
->();
-
 function getProviderUsagePoller(deps: CommandDeps): ProviderUsagePoller | undefined {
   if (!deps.db || !deps.agents) return undefined;
-  const agents = deps.agents;
-
-  let byAgents = providerUsagePollers.get(deps.db);
-  if (!byAgents) {
-    byAgents = new WeakMap();
-    providerUsagePollers.set(deps.db, byAgents);
-  }
-
-  let byFetch = byAgents.get(deps.agents);
-  if (!byFetch) {
-    byFetch = new Map();
-    byAgents.set(deps.agents, byFetch);
-  }
-
-  const fetchKey = deps.fetchImpl ?? DEFAULT_PROVIDER_USAGE_FETCH_KEY;
-  let poller = byFetch.get(fetchKey);
-  if (!poller) {
-    poller = new ProviderUsagePoller({
-      authProfileDal: new AuthProfileDal(deps.db),
-      pinDal: new SessionProviderPinDal(deps.db),
-      secretProviderGetter: async () => await agents.getSecretProvider("default"),
-      fetchImpl: deps.fetchImpl,
-    });
-    byFetch.set(fetchKey, poller);
-  }
-  return poller;
+  const tenantId = deps.tenantId?.trim() || DEFAULT_TENANT_ID;
+  const agentId = resolveAgentId(deps.commandContext);
+  return new ProviderUsagePoller({
+    authProfileDal: new AuthProfileDal(deps.db),
+    pinDal: new SessionProviderPinDal(deps.db),
+    secretProviderGetter: async () => deps.agents!.getSecretProvider(tenantId, agentId),
+    fetchImpl: deps.fetchImpl,
+  });
 }
 
 function tokensFromCommand(raw: string): string[] {
@@ -546,7 +524,9 @@ export async function executeCommand(
       new IdentityScopeDal(deps.db),
       new ChannelThreadDal(deps.db),
     );
+    const tenantId = deps.tenantId?.trim() || DEFAULT_TENANT_ID;
     const session = await sessionDal.getOrCreate({
+      tenantId,
       scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
       connectorKey: channel,
       accountKey,
@@ -731,8 +711,10 @@ export async function executeCommand(
   }
 
   if (cmd === "status") {
+    const tenantId = deps.tenantId?.trim() || DEFAULT_TENANT_ID;
     const policy = deps.policyService ? await deps.policyService.getStatus() : null;
     const details = await buildStatusDetails({
+      tenantId,
       db: deps.db,
       policyService: deps.policyService,
       policyStatus: policy
@@ -779,8 +761,9 @@ export async function executeCommand(
       status && allowed.has(status)
         ? (status as "pending" | "approved" | "denied" | "expired" | "cancelled")
         : "pending";
+    const tenantId = deps.tenantId?.trim() || DEFAULT_TENANT_ID;
     const rows = await deps.approvalDal.getByStatus({
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       status: filter,
     });
     const payload = { approvals: rows };
@@ -803,6 +786,7 @@ export async function executeCommand(
   }
 
   if (cmd === "policy") {
+    const tenantId = deps.tenantId?.trim() || DEFAULT_TENANT_ID;
     const sub = toks[1]?.toLowerCase();
     if (sub === "bundle") {
       if (!deps.policyService) {
@@ -833,6 +817,7 @@ export async function executeCommand(
         const toolId = toks[4];
         const status = toks[5] as "active" | "revoked" | "expired" | undefined;
         const rows = await deps.policyOverrideDal.list({
+          tenantId,
           agentId: agentId && agentId.trim().length > 0 ? agentId : undefined,
           toolId: toolId && toolId.trim().length > 0 ? toolId : undefined,
           status,
@@ -852,6 +837,7 @@ export async function executeCommand(
         }
         const reason = toks.slice(4).join(" ").trim() || undefined;
         const row = await deps.policyOverrideDal.revoke({
+          tenantId,
           policyOverrideId: id,
           revokedBy: { kind: "ws-command" },
           reason,
@@ -868,7 +854,7 @@ export async function executeCommand(
         if (!id) {
           return { output: "Usage: /policy overrides describe <policy_override_id>", data: null };
         }
-        const row = await deps.policyOverrideDal.getById(id);
+        const row = await deps.policyOverrideDal.getById({ tenantId, policyOverrideId: id });
         if (!row) {
           return { output: `Override ${id} not found.`, data: null };
         }
@@ -1031,11 +1017,19 @@ export async function executeCommand(
     const providerId = modelIdRaw.slice(0, slash);
     const modelId = modelIdRaw.slice(slash + 1);
 
-    if (deps.modelsDev) {
-      const loaded = await deps.modelsDev.ensureLoaded();
+    if (deps.modelCatalog || deps.modelsDev) {
+      const loaded = deps.modelCatalog
+        ? await deps.modelCatalog.getEffectiveCatalog({ tenantId: session.tenant_id })
+        : await deps.modelsDev!.ensureLoaded();
+
       const provider = loaded.catalog[providerId];
+      const providerEnabled = provider
+        ? ((provider as { enabled?: boolean }).enabled ?? true)
+        : false;
       const model = provider?.models?.[modelId];
-      if (!provider || !model) {
+      const modelEnabled = model ? ((model as { enabled?: boolean }).enabled ?? true) : false;
+
+      if (!provider || !providerEnabled || !model || !modelEnabled) {
         return { output: `Model '${modelIdRaw}' not found in models.dev catalog.`, data: null };
       }
     }

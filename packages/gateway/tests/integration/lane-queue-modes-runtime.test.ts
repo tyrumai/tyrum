@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -11,6 +11,8 @@ import {
   LaneQueueInterruptError,
 } from "../../src/modules/lanes/queue-signal-dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -38,28 +40,22 @@ describe("AgentRuntime lane queue modes", () => {
 
   it("steer cancels pending tool calls and injects the steer message", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-lane-steer-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.test",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const agentId = await container.identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "default");
+    await new AgentConfigDal(container.db).set({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId,
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: { enabled: [] },
+        tools: { allow: ["tool.test"] },
+        sessions: { ttl_days: 30, max_turns: 20 },
+        memory: { markdown_enabled: false },
+      }),
+      createdBy: { kind: "test" },
+      reason: "lane queue steer test",
+    });
 
     const key = "agent:default:telegram:default:dm:chat-1";
     const lane = "main";
@@ -152,28 +148,22 @@ describe("AgentRuntime lane queue modes", () => {
 
   it("interrupt aborts at the next tool boundary", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-lane-interrupt-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      [
-        "model:",
-        "  model: openai/gpt-4.1",
-        "skills:",
-        "  enabled: []",
-        "mcp:",
-        "  enabled: []",
-        "tools:",
-        "  allow:",
-        "    - tool.test",
-        "sessions:",
-        "  ttl_days: 30",
-        "  max_turns: 20",
-        "memory:",
-        "  markdown_enabled: false",
-      ].join("\n"),
-      "utf-8",
-    );
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const agentId = await container.identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "default");
+    await new AgentConfigDal(container.db).set({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId,
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: { enabled: [] },
+        tools: { allow: ["tool.test"] },
+        sessions: { ttl_days: 30, max_turns: 20 },
+        memory: { markdown_enabled: false },
+      }),
+      createdBy: { kind: "test" },
+      reason: "lane queue interrupt test",
+    });
 
     const key = "agent:default:telegram:default:dm:chat-1";
     const lane = "main";

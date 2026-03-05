@@ -7,26 +7,18 @@ describe("Channel inbound dedupe TTL", () => {
   let db: SqliteDb;
   let didOpenDb = false;
   let inbox: ChannelInboxDal;
-  const originalTtlMs = process.env["TYRUM_CHANNEL_INBOUND_DEDUPE_TTL_MS"];
 
   beforeEach(() => {
-    process.env["TYRUM_CHANNEL_INBOUND_DEDUPE_TTL_MS"] = "10";
     didOpenDb = false;
     db = openTestSqliteDb();
     didOpenDb = true;
-    inbox = new ChannelInboxDal(db);
+    inbox = new ChannelInboxDal(db, undefined, { inboundDedupeTtlMs: 10 });
   });
 
   afterEach(async () => {
-    if (didOpenDb) {
-      didOpenDb = false;
-      await db.close();
-    }
-    if (originalTtlMs === undefined) {
-      delete process.env["TYRUM_CHANNEL_INBOUND_DEDUPE_TTL_MS"];
-    } else {
-      process.env["TYRUM_CHANNEL_INBOUND_DEDUPE_TTL_MS"] = originalTtlMs;
-    }
+    if (!didOpenDb) return;
+    didOpenDb = false;
+    await db.close();
   });
 
   it("allows re-enqueue after TTL expiry", async () => {

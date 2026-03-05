@@ -6,7 +6,7 @@ import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
 import { insertPlannerEventNext, retryOnUniqueViolation } from "../planner/planner-events.js";
 import { PlanDal } from "../planner/plan-dal.js";
-import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../identity/scope.js";
+import { DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID } from "../identity/scope.js";
 
 export type RoutingConfig = RoutingConfigT;
 
@@ -120,27 +120,34 @@ async function appendAuditEventNext(
 export class RoutingConfigDal {
   constructor(private readonly db: SqlDb) {}
 
-  async getLatest(): Promise<RoutingConfigRevision | undefined> {
+  async getLatest(tenantId: string): Promise<RoutingConfigRevision | undefined> {
     const row = await this.db.get<RawRoutingConfigRow>(
       `SELECT revision, config_json, created_at, created_by_json, reason, reverted_from_revision
        FROM routing_configs
+       WHERE tenant_id = ?
        ORDER BY revision DESC
        LIMIT 1`,
+      [tenantId],
     );
     return row ? rowToRevision(row) : undefined;
   }
 
-  async getByRevision(revision: number): Promise<RoutingConfigRevision | undefined> {
+  async getByRevision(
+    tenantId: string,
+    revision: number,
+  ): Promise<RoutingConfigRevision | undefined> {
     const row = await this.db.get<RawRoutingConfigRow>(
       `SELECT revision, config_json, created_at, created_by_json, reason, reverted_from_revision
        FROM routing_configs
-       WHERE revision = ?`,
-      [revision],
+       WHERE tenant_id = ?
+         AND revision = ?`,
+      [tenantId, revision],
     );
     return row ? rowToRevision(row) : undefined;
   }
 
   async set(params: {
+    tenantId: string;
     config: RoutingConfig;
     createdBy?: unknown;
     reason?: string;
@@ -155,10 +162,11 @@ export class RoutingConfigDal {
 
     return await this.db.transaction(async (tx) => {
       const row = await tx.get<RawRoutingConfigRow>(
-        `INSERT INTO routing_configs (config_json, created_at, created_by_json, reason, reverted_from_revision)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO routing_configs (tenant_id, config_json, created_at, created_by_json, reason, reverted_from_revision)
+         VALUES (?, ?, ?, ?, ?, ?)
          RETURNING revision, config_json, created_at, created_by_json, reason, reverted_from_revision`,
         [
+          params.tenantId,
           configJson,
           createdAt,
           JSON.stringify(params.createdBy ?? {}),
@@ -171,7 +179,7 @@ export class RoutingConfigDal {
       }
 
       await appendAuditEventNext(tx, {
-        tenantId: DEFAULT_TENANT_ID,
+        tenantId: params.tenantId,
         replayId,
         planKey: ROUTING_CONFIG_AUDIT_PLAN_ID,
         occurredAt: createdAt,
@@ -193,17 +201,19 @@ export class RoutingConfigDal {
   }
 
   async revertToRevision(params: {
+    tenantId: string;
     revision: number;
     createdBy?: unknown;
     reason?: string;
     occurredAtIso?: string;
   }): Promise<RoutingConfigRevision> {
-    const target = await this.getByRevision(params.revision);
+    const target = await this.getByRevision(params.tenantId, params.revision);
     if (!target) {
       throw new Error(`routing config revision ${String(params.revision)} not found`);
     }
 
     return await this.set({
+      tenantId: params.tenantId,
       config: target.config,
       createdBy: params.createdBy,
       reason: params.reason,

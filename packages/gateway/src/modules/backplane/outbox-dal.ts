@@ -1,9 +1,9 @@
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { SqlDb } from "../../statestore/types.js";
-import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 export interface OutboxRow {
   id: number;
+  tenant_id: string;
   topic: string;
   target_edge_id: string | null;
   payload: unknown;
@@ -12,6 +12,7 @@ export interface OutboxRow {
 
 interface RawOutboxRow {
   id: number;
+  tenant_id: string;
   topic: string;
   target_edge_id: string | null;
   payload_json: string;
@@ -31,6 +32,7 @@ function toOutboxRow(raw: RawOutboxRow): OutboxRow {
   }
   return {
     id: raw.id,
+    tenant_id: raw.tenant_id,
     topic: raw.topic,
     target_edge_id: raw.target_edge_id,
     payload,
@@ -44,11 +46,24 @@ export class OutboxDal {
     private readonly redactionEngine?: RedactionEngine,
   ) {}
 
+  async listActiveTenantIds(): Promise<string[]> {
+    const rows = await this.db.all<{ tenant_id: string }>(
+      "SELECT tenant_id FROM tenants WHERE status = 'active' ORDER BY tenant_id ASC",
+    );
+    return rows.map((row) => row.tenant_id).filter((id) => id.trim().length > 0);
+  }
+
   async enqueue(
+    tenantId: string,
     topic: string,
     payload: unknown,
     opts?: { targetEdgeId?: string | null },
   ): Promise<OutboxRow> {
+    const normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.length === 0) {
+      throw new Error("tenantId is required");
+    }
+
     const redactedPayload = this.redactionEngine
       ? this.redactionEngine.redactUnknown(payload ?? {}).redacted
       : (payload ?? {});
@@ -58,7 +73,7 @@ export class OutboxDal {
       `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
        VALUES (?, ?, ?, ?)
        RETURNING *`,
-      [DEFAULT_TENANT_ID, topic, opts?.targetEdgeId ?? null, payloadJson],
+      [normalizedTenantId, topic, opts?.targetEdgeId ?? null, payloadJson],
     );
     if (!row) {
       throw new Error("outbox insert failed");
@@ -67,36 +82,56 @@ export class OutboxDal {
     return toOutboxRow(row);
   }
 
-  async ensureConsumer(consumerId: string): Promise<void> {
+  async ensureConsumer(tenantId: string, consumerId: string): Promise<void> {
+    const normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.length === 0) {
+      throw new Error("tenantId is required");
+    }
     await this.db.run(
       `INSERT INTO outbox_consumers (tenant_id, consumer_id, last_outbox_id)
        VALUES (?, ?, 0)
        ON CONFLICT(tenant_id, consumer_id) DO NOTHING`,
-      [DEFAULT_TENANT_ID, consumerId],
+      [normalizedTenantId, consumerId],
     );
   }
 
-  async getConsumerCursor(consumerId: string): Promise<number> {
-    await this.ensureConsumer(consumerId);
+  async getConsumerCursor(tenantId: string, consumerId: string): Promise<number> {
+    const normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.length === 0) {
+      throw new Error("tenantId is required");
+    }
+    await this.ensureConsumer(normalizedTenantId, consumerId);
     const row = await this.db.get<{ last_outbox_id: number }>(
       "SELECT last_outbox_id FROM outbox_consumers WHERE tenant_id = ? AND consumer_id = ?",
-      [DEFAULT_TENANT_ID, consumerId],
+      [normalizedTenantId, consumerId],
     );
     return row?.last_outbox_id ?? 0;
   }
 
-  async ackConsumerCursor(consumerId: string, lastOutboxId: number): Promise<void> {
-    await this.ensureConsumer(consumerId);
+  async ackConsumerCursor(
+    tenantId: string,
+    consumerId: string,
+    lastOutboxId: number,
+  ): Promise<void> {
+    const normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.length === 0) {
+      throw new Error("tenantId is required");
+    }
+    await this.ensureConsumer(normalizedTenantId, consumerId);
     await this.db.run(
       `UPDATE outbox_consumers
        SET last_outbox_id = ?, updated_at = CURRENT_TIMESTAMP
        WHERE tenant_id = ? AND consumer_id = ?`,
-      [lastOutboxId, DEFAULT_TENANT_ID, consumerId],
+      [lastOutboxId, normalizedTenantId, consumerId],
     );
   }
 
-  async poll(consumerId: string, batchSize = 100): Promise<OutboxRow[]> {
-    const cursor = await this.getConsumerCursor(consumerId);
+  async poll(tenantId: string, consumerId: string, batchSize = 100): Promise<OutboxRow[]> {
+    const normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.length === 0) {
+      throw new Error("tenantId is required");
+    }
+    const cursor = await this.getConsumerCursor(normalizedTenantId, consumerId);
     const rows = await this.db.all<RawOutboxRow>(
       `SELECT *
        FROM outbox
@@ -105,7 +140,7 @@ export class OutboxDal {
          AND (target_edge_id IS NULL OR target_edge_id = ?)
        ORDER BY id ASC
        LIMIT ?`,
-      [DEFAULT_TENANT_ID, cursor, consumerId, batchSize],
+      [normalizedTenantId, cursor, consumerId, batchSize],
     );
     return rows.map(toOutboxRow);
   }

@@ -8,7 +8,6 @@ describe("non-loopback deployment guardrails", () => {
       assertNonLoopbackDeploymentGuardrails({
         role: "edge",
         host: "127.0.0.1",
-        token: "short-token",
         tlsReady: false,
         allowInsecureHttp: false,
       }),
@@ -20,7 +19,6 @@ describe("non-loopback deployment guardrails", () => {
       assertNonLoopbackDeploymentGuardrails({
         role: "edge",
         host: "127.0.0.1:8788",
-        token: undefined,
         tlsReady: false,
         allowInsecureHttp: false,
       }),
@@ -32,23 +30,10 @@ describe("non-loopback deployment guardrails", () => {
       assertNonLoopbackDeploymentGuardrails({
         role: "worker",
         host: "0.0.0.0",
-        token: undefined,
         tlsReady: false,
         allowInsecureHttp: false,
       }),
     ).not.toThrow();
-  });
-
-  it("requires a hardened admin token when exposed beyond loopback", () => {
-    expect(() =>
-      assertNonLoopbackDeploymentGuardrails({
-        role: "edge",
-        host: "0.0.0.0",
-        token: "weak-token",
-        tlsReady: false,
-        allowInsecureHttp: true,
-      }),
-    ).toThrow(/token/i);
   });
 
   it("requires TLS readiness unless explicitly allowing insecure HTTP", () => {
@@ -56,7 +41,6 @@ describe("non-loopback deployment guardrails", () => {
       assertNonLoopbackDeploymentGuardrails({
         role: "edge",
         host: "0.0.0.0",
-        token: "a".repeat(32),
         tlsReady: false,
         allowInsecureHttp: false,
       }),
@@ -68,7 +52,6 @@ describe("non-loopback deployment guardrails", () => {
       assertNonLoopbackDeploymentGuardrails({
         role: "edge",
         host: "0.0.0.0",
-        token: "a".repeat(32),
         tlsReady: false,
         allowInsecureHttp: true,
       }),
@@ -80,7 +63,6 @@ describe("non-loopback deployment guardrails", () => {
       assertNonLoopbackDeploymentGuardrails({
         role: "edge",
         host: "0.0.0.0",
-        token: "a".repeat(32),
         tlsReady: true,
         allowInsecureHttp: false,
       }),
@@ -92,12 +74,23 @@ describe("non-loopback deployment guardrails", () => {
       assertNonLoopbackDeploymentGuardrails({
         role: "edge",
         host: "0.0.0.0",
-        token: "a".repeat(32),
         tlsReady: false,
         allowInsecureHttp: false,
         tlsSelfSigned: true,
       }),
     ).toBe("tls");
+  });
+
+  it("requires a tenant admin token before binding to non-loopback hosts", () => {
+    expect(() =>
+      assertNonLoopbackDeploymentGuardrails({
+        role: "edge",
+        host: "0.0.0.0",
+        tlsReady: true,
+        allowInsecureHttp: false,
+        hasTenantAdminToken: false,
+      }),
+    ).toThrow(/token/i);
   });
 
   it("ignores env flags when explicit acknowledgements are omitted", () => {
@@ -111,7 +104,6 @@ describe("non-loopback deployment guardrails", () => {
         assertNonLoopbackDeploymentGuardrails({
           role: "edge",
           host: "0.0.0.0",
-          token: "a".repeat(32),
         }),
       ).toThrow(/tls|insecure/i);
     } finally {

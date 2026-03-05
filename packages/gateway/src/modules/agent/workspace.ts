@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { AgentConfig, IdentityPack, SkillManifest, McpServerSpec } from "@tyrum/schemas";
+import { IdentityPack, SkillManifest, McpServerSpec } from "@tyrum/schemas";
 import type {
   AgentConfig as AgentConfigT,
   IdentityPack as IdentityPackT,
@@ -10,7 +10,6 @@ import type {
   McpServerSpec as McpServerSpecT,
 } from "@tyrum/schemas";
 import {
-  resolveAgentConfigPath,
   resolveIdentityPath,
   resolveSkillsDir,
   resolveUserSkillsDir,
@@ -30,12 +29,6 @@ function readYamlObject(contents: string): Record<string, unknown> {
     return {};
   }
   return parsed as Record<string, unknown>;
-}
-
-export async function loadAgentConfig(home: string): Promise<AgentConfigT> {
-  const path = resolveAgentConfigPath(home);
-  const contents = await readFile(path, "utf-8");
-  return AgentConfig.parse(readYamlObject(contents));
 }
 
 export async function loadIdentity(home: string): Promise<IdentityPackT> {
@@ -79,12 +72,12 @@ async function loadSkillFromDir(
 export async function loadEnabledSkills(
   home: string,
   config: AgentConfigT,
-  opts?: { logger?: Logger },
+  opts?: { logger?: Logger; userSkillsDir?: string; bundledSkillsDir?: string },
 ): Promise<LoadedSkillManifest[]> {
   const loaded: LoadedSkillManifest[] = [];
 
-  const userSkillsDir = resolveUserSkillsDir();
-  const bundledSkillsDir = resolveBundledSkillsDir();
+  const userSkillsDir = opts?.userSkillsDir ?? resolveUserSkillsDir();
+  const bundledSkillsDir = opts?.bundledSkillsDir ?? resolveBundledSkillsDir();
   const workspaceSkillsDir = resolveSkillsDir(home);
   const workspaceTrusted = config.skills.workspace_trusted === true;
 

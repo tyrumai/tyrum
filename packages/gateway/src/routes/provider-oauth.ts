@@ -16,7 +16,7 @@ import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import { coerceRecord, coerceString } from "../modules/util/coerce.js";
 import { safeDetail } from "../utils/safe-detail.js";
-import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
+import { requireTenantId } from "../modules/auth/claims.js";
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
 
@@ -95,9 +95,8 @@ export interface ProviderOAuthRouteDeps {
   oauthPendingDal: OauthPendingDal;
   oauthProviderRegistry: OAuthProviderRegistry;
   authProfileDal: AuthProfileDal;
-  secretProvider: SecretProvider;
+  secretProviderForTenant: (tenantId: string) => SecretProvider;
   logger?: Logger;
-  tenantId?: string;
 }
 
 export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
@@ -105,7 +104,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
 
   app.post("/providers/:provider/oauth/authorize", async (c) => {
     const providerId = c.req.param("provider");
-    const tenantId = deps.tenantId ?? DEFAULT_TENANT_ID;
+    const tenantId = requireTenantId(c);
     const body = await c.req.json().catch(() => ({}));
     const record = coerceRecord(body) ?? {};
     const agentKey = coerceString(record["agent_key"]) ?? "default";
@@ -121,7 +120,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: msg }, 400);
     }
 
-    const spec = await deps.oauthProviderRegistry.get(providerId);
+    const spec = await deps.oauthProviderRegistry.get({ tenantId, providerId });
     if (!spec) {
       return c.json(
         { error: "not_found", message: `oauth provider '${providerId}' not configured` },
@@ -129,16 +128,9 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       );
     }
 
-    const clientIdEnv = coerceString(spec.client_id_env);
-    if (!clientIdEnv) {
-      return c.json(
-        { error: "invalid_config", message: "oauth provider missing client_id_env" },
-        500,
-      );
-    }
-    const clientId = process.env[clientIdEnv]?.trim();
+    const clientId = spec.client_id?.trim();
     if (!clientId) {
-      return c.json({ error: "missing_env", message: `missing env var ${clientIdEnv}` }, 400);
+      return c.json({ error: "invalid_config", message: "oauth provider missing client_id" }, 500);
     }
 
     const { authorizationEndpoint, tokenEndpoint } = await resolveOAuthEndpoints(spec);
@@ -220,7 +212,6 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
 
   app.get("/providers/:provider/oauth/callback", async (c) => {
     const providerId = c.req.param("provider");
-    const tenantId = deps.tenantId ?? DEFAULT_TENANT_ID;
     const state = c.req.query("state")?.trim();
     const code = c.req.query("code")?.trim();
     const error = c.req.query("error")?.trim();
@@ -229,7 +220,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     if (error) {
       // Consume the pending row (if present) so OAuth `state` remains single-use even on error callbacks.
       if (state) {
-        await deps.oauthPendingDal.consume({ tenantId, state }).catch((err) => {
+        await deps.oauthPendingDal.consumeByState(state).catch((err) => {
           deps.logger?.warn("oauth.pending_consume_failed", {
             provider: providerId,
             error: safeDetail(err) ?? "unknown_error",
@@ -252,41 +243,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       );
     }
 
-    const pending = await deps.oauthPendingDal.get({ tenantId, state });
-    if (!pending) {
-      return c.html(
-        renderHtml(
-          "Authorization failed",
-          "Unknown or expired authorization request (state not found). Please retry.",
-        ),
-        400,
-      );
-    }
-    if (pending.provider_id !== providerId) {
-      return c.html(
-        renderHtml(
-          "Authorization failed",
-          "Provider mismatch for OAuth callback (state belongs to a different provider).",
-        ),
-        400,
-      );
-    }
-
-    const nowMs = Date.now();
-    const nowIso = new Date(nowMs).toISOString();
-    if (pending.expires_at <= nowIso) {
-      await deps.oauthPendingDal.delete({ tenantId, state }).catch((err) => {
-        deps.logger?.warn("oauth.pending_delete_failed", {
-          provider: providerId,
-          error: safeDetail(err) ?? "unknown_error",
-        });
-      });
-      return c.html(
-        renderHtml("Authorization failed", "OAuth request expired. Please retry."),
-        400,
-      );
-    }
-    const consumed = await deps.oauthPendingDal.consume({ tenantId, state });
+    const consumed = await deps.oauthPendingDal.consumeByState(state);
     if (!consumed) {
       return c.html(
         renderHtml(
@@ -297,7 +254,27 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       );
     }
 
-    const spec = await deps.oauthProviderRegistry.get(providerId);
+    const tenantId = consumed.tenant_id;
+
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    if (consumed.expires_at <= nowIso) {
+      return c.html(
+        renderHtml("Authorization failed", "OAuth request expired. Please retry."),
+        400,
+      );
+    }
+    if (consumed.provider_id !== providerId) {
+      return c.html(
+        renderHtml(
+          "Authorization failed",
+          "Provider mismatch for OAuth callback (state belongs to a different provider).",
+        ),
+        400,
+      );
+    }
+
+    const spec = await deps.oauthProviderRegistry.get({ tenantId, providerId });
     if (!spec) {
       return c.html(
         renderHtml("Authorization failed", `oauth provider '${providerId}' not configured`),
@@ -305,20 +282,32 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       );
     }
 
-    const clientIdEnv = coerceString(spec.client_id_env);
-    if (!clientIdEnv) {
+    const clientId = spec.client_id?.trim();
+    if (!clientId) {
+      return c.html(renderHtml("Authorization failed", "oauth provider missing client_id"), 500);
+    }
+
+    const secretProvider = deps.secretProviderForTenant(tenantId);
+
+    const clientSecretKey = spec.client_secret_key?.trim();
+    const clientSecret = clientSecretKey
+      ? await secretProvider.resolve({
+          handle_id: clientSecretKey,
+          provider: "db",
+          scope: clientSecretKey,
+          created_at: new Date().toISOString(),
+        })
+      : null;
+
+    if (spec.token_endpoint_basic_auth && !clientSecret) {
       return c.html(
-        renderHtml("Authorization failed", "oauth provider missing client_id_env"),
+        renderHtml(
+          "Authorization failed",
+          "oauth provider requires client_secret_key (token_endpoint_basic_auth=true)",
+        ),
         500,
       );
     }
-    const clientId = process.env[clientIdEnv]?.trim();
-    if (!clientId) {
-      return c.html(renderHtml("Authorization failed", `missing env var ${clientIdEnv}`), 400);
-    }
-
-    const clientSecretEnv = coerceString(spec.client_secret_env);
-    const clientSecret = clientSecretEnv ? process.env[clientSecretEnv]?.trim() : undefined;
 
     let authProfileKey = "";
     let profileExisted = false;
@@ -338,7 +327,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       const token = await exchangeAuthorizationCode({
         tokenEndpoint,
         clientId,
-        clientSecret,
+        clientSecret: clientSecret ?? undefined,
         tokenEndpointBasicAuth: spec.token_endpoint_basic_auth,
         code,
         redirectUri: consumed.redirect_uri,
@@ -382,11 +371,11 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
         ? (refreshSecretKeyExisting ?? `oauth:${providerId}:${authProfileKey}:refresh_token`)
         : refreshSecretKeyExisting;
 
-      await deps.secretProvider.store(accessSecretKey, token.access_token);
+      await secretProvider.store(accessSecretKey, token.access_token);
       storedSecretKeys.push(accessSecretKey);
 
       if (token.refresh_token?.trim() && refreshSecretKey) {
-        await deps.secretProvider.store(refreshSecretKey, token.refresh_token.trim());
+        await secretProvider.store(refreshSecretKey, token.refresh_token.trim());
         storedSecretKeys.push(refreshSecretKey);
       }
 
@@ -447,9 +436,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     } catch (err) {
       if (!profileExisted && storedSecretKeys.length > 0) {
         await Promise.all(
-          storedSecretKeys.map((secretKey) =>
-            deps.secretProvider.revoke(secretKey).catch(() => false),
-          ),
+          storedSecretKeys.map((secretKey) => secretProvider.revoke(secretKey).catch(() => false)),
         );
       }
       const message = err instanceof Error ? err.message : String(err);

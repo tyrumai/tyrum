@@ -16,6 +16,7 @@ import { createIngressRoutes } from "./routes/ingress.js";
 import { createRoutingConfigRoutes } from "./routes/routing-config.js";
 import { createPlanRoutes } from "./routes/plan.js";
 import { createAgentRoutes } from "./routes/agent.js";
+import { createAgentConfigRoutes } from "./routes/agent-config.js";
 import { createContextRoutes } from "./routes/context.js";
 import { createWorkflowRoutes } from "./routes/workflow.js";
 import { createApprovalRoutes } from "./routes/approval.js";
@@ -35,6 +36,7 @@ import { createPluginRoutes } from "./routes/plugins.js";
 import { createModelsDevRoutes } from "./routes/models-dev.js";
 import { createProviderOAuthRoutes } from "./routes/provider-oauth.js";
 import { createContractRoutes } from "./routes/contracts.js";
+import { createSystemRoutes } from "./routes/system.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { createOperatorUiRoutes } from "./routes/operator-ui.js";
 import { createPresenceRoutes } from "./routes/presence.js";
@@ -47,7 +49,7 @@ import { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "./modules/models/session-pin-dal.js";
 import type { Playbook } from "@tyrum/schemas";
 import type { AgentRegistry } from "./modules/agent/registry.js";
-import type { TokenStore } from "./modules/auth/token-store.js";
+import type { AuthTokenService } from "./modules/auth/auth-token-service.js";
 import type { SecretProvider } from "./modules/secret/provider.js";
 import type { PluginRegistry } from "./modules/plugins/registry.js";
 import { createAuthMiddleware } from "./modules/auth/middleware.js";
@@ -73,8 +75,8 @@ import { requestIdForAudit } from "./modules/observability/request-id.js";
 export interface AppOptions {
   agents?: AgentRegistry;
   plugins?: PluginRegistry;
-  tokenStore?: TokenStore;
-  secretProvider?: SecretProvider;
+  authTokens?: AuthTokenService;
+  secretProviderForTenant?: (tenantId: string) => SecretProvider;
   playbooks?: Playbook[];
   isLocalOnly?: boolean;
   connectionManager?: ConnectionManager;
@@ -85,6 +87,7 @@ export interface AppOptions {
     outboxDal: OutboxDal;
   };
   authRateLimiter?: SlidingWindowRateLimiter;
+  operatorUiAssetsDir?: string;
   runtime?: {
     version: string;
     instanceId: string;
@@ -98,20 +101,20 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   const isLocalOnly = opts.isLocalOnly ?? true;
   const runtime = opts.runtime ?? {
     version: VERSION,
-    instanceId: container.gatewayConfig?.runtime.instanceId ?? "unknown",
-    role: container.gatewayConfig?.runtime.role ?? "all",
-    otelEnabled: container.gatewayConfig?.otel.enabled ?? false,
+    instanceId: "unknown",
+    role: "all",
+    otelEnabled: container.deploymentConfig.otel.enabled ?? false,
   };
 
   const engine =
     opts.engine ??
     (() => {
-      const engineApiEnabled = container.gatewayConfig?.execution.engineApiEnabled ?? false;
+      const engineApiEnabled = container.deploymentConfig.execution.engineApiEnabled ?? false;
       if (!engineApiEnabled) return undefined;
       return new ExecutionEngine({
         db: container.db,
         redactionEngine: container.redactionEngine,
-        secretProvider: opts.secretProvider,
+        secretProviderForTenant: opts.secretProviderForTenant,
         policyService: container.policyService,
         logger: container.logger,
       });
@@ -121,19 +124,10 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   const pinDal = new SessionProviderPinDal(container.db);
   const routingConfigDal = new RoutingConfigDal(container.db);
 
-  const secretProviderForAgent = (() => {
-    if (!opts.secretProvider) return undefined;
-    const defaultSecretProvider = opts.secretProvider;
-    return async (agentId: string) => {
-      if (opts.agents) {
-        return await opts.agents.getSecretProvider(agentId);
-      }
-      return defaultSecretProvider;
-    };
-  })();
+  const secretProviderForTenant = opts.secretProviderForTenant;
 
   const trustedProxies = createTrustedProxyAllowlistFromEnv(
-    container.gatewayConfig?.server.trustedProxies,
+    container.deploymentConfig.server.trustedProxies,
   );
   app.use("*", createClientIpMiddleware({ trustedProxies }));
 
@@ -165,7 +159,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   // Prometheus request metrics.
   app.use("*", createMetricsMiddleware(gatewayMetrics));
 
-  const corsOrigins = container.gatewayConfig?.server.corsOrigins ?? [];
+  const corsOrigins = container.deploymentConfig.server.corsOrigins ?? [];
 
   if (corsOrigins.length > 0) {
     app.use(
@@ -179,24 +173,25 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     );
   }
 
-  const channelPipelineEnabled = container.gatewayConfig?.channels.pipelineEnabled ?? true;
+  const channelPipelineEnabled = container.deploymentConfig.channels.pipelineEnabled ?? true;
 
   // Apply auth middleware if a token store is provided
   if (opts.authRateLimiter) {
     const rateLimit = createRateLimitMiddleware(opts.authRateLimiter, { prefix: "auth" });
     app.use("/auth/session", rateLimit);
     app.use("/auth/logout", rateLimit);
-    app.use("/auth/device-tokens/*", rateLimit);
+    app.use("/auth/device-tokens/issue", rateLimit);
+    app.use("/auth/device-tokens/revoke", rateLimit);
   }
 
-  if (opts.tokenStore) {
+  if (opts.authTokens) {
     const authAudit = new AuthAudit({
       eventLog: container.eventLog,
       logger: container.logger,
     });
     app.use(
       "*",
-      createAuthMiddleware(opts.tokenStore, { audit: authAudit, logger: container.logger }),
+      createAuthMiddleware(opts.authTokens, { audit: authAudit, logger: container.logger }),
     );
     app.use("*", createHttpScopeAuthorizationMiddleware({ audit: authAudit }));
   }
@@ -251,7 +246,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       db: container.db,
       authProfileDal,
       pinDal,
-      secretProvider: opts.secretProvider,
+      secretProviderForTenant,
       logger: container.logger,
     }),
   );
@@ -269,22 +264,34 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
         : undefined,
     }),
   );
-  if (opts.tokenStore) {
-    app.route("/", createAuthSessionRoutes({ tokenStore: opts.tokenStore }));
+  if (opts.authTokens) {
+    app.route("/", createAuthSessionRoutes({ authTokens: opts.authTokens }));
+  }
+  if (opts.authTokens) {
+    app.route("/", createDeviceTokenRoutes({ authTokens: opts.authTokens }));
+  }
+  if (opts.authTokens) {
+    app.route(
+      "/",
+      createSystemRoutes({
+        db: container.db,
+        authTokens: opts.authTokens,
+      }),
+    );
   }
   app.route("/", createAuthProfileRoutes({ authProfileDal, pinDal }));
-  if (opts.tokenStore) {
-    app.route("/", createDeviceTokenRoutes({ tokenStore: opts.tokenStore }));
-  }
-  app.route("/", createModelsDevRoutes({ modelsDev: container.modelsDev }));
-  if (opts.secretProvider && isAuthProfilesEnabled()) {
+  app.route(
+    "/",
+    createModelsDevRoutes({ modelsDev: container.modelsDev, modelCatalog: container.modelCatalog }),
+  );
+  if (secretProviderForTenant && isAuthProfilesEnabled()) {
     app.route(
       "/",
       createProviderOAuthRoutes({
         oauthPendingDal: container.oauthPendingDal,
         oauthProviderRegistry: container.oauthProviderRegistry,
         authProfileDal,
-        secretProvider: opts.secretProvider,
+        secretProviderForTenant,
         logger: container.logger,
       }),
     );
@@ -297,6 +304,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     "/",
     createIngressRoutes({
       telegramBot: container.telegramBot,
+      telegramWebhookSecret: container.deploymentConfig.channels.telegramWebhookSecret,
       telegramQueue:
         channelPipelineEnabled && container.telegramBot && opts.agents
           ? new TelegramChannelQueue(container.db, {
@@ -317,20 +325,18 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       home: container.config?.tyrumHome,
     }),
   );
-  if (opts.tokenStore) {
-    app.route(
-      "/",
-      createRoutingConfigRoutes({
-        routingConfigDal,
-        ws: opts.connectionManager
-          ? {
-              connectionManager: opts.connectionManager,
-              cluster: opts.wsCluster,
-            }
-          : undefined,
-      }),
-    );
-  }
+  app.route(
+    "/",
+    createRoutingConfigRoutes({
+      routingConfigDal,
+      ws: opts.connectionManager
+        ? {
+            connectionManager: opts.connectionManager,
+            cluster: opts.wsCluster,
+          }
+        : undefined,
+    }),
+  );
   app.route("/", createPlanRoutes(container));
   if (engine) {
     app.route(
@@ -355,12 +361,32 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route(
     "/",
     createWatcherRoutes(container.watcherProcessor, {
-      secretProviderForAgent,
+      secretProviderForTenant,
     }),
   );
-  app.route("/", createCanvasRoutes(container.canvasDal));
-  app.route("/", createAuditRoutes({ db: container.db, eventLog: container.eventLog }));
-  app.route("/", createSnapshotRoutes({ db: container.db, version: runtime.version }));
+  app.route(
+    "/",
+    createCanvasRoutes({
+      canvasDal: container.canvasDal,
+      identityScopeDal: container.identityScopeDal,
+    }),
+  );
+  app.route(
+    "/",
+    createAuditRoutes({
+      db: container.db,
+      eventLog: container.eventLog,
+      identityScopeDal: container.identityScopeDal,
+    }),
+  );
+  app.route(
+    "/",
+    createSnapshotRoutes({
+      db: container.db,
+      version: runtime.version,
+      importEnabled: container.deploymentConfig.snapshots.importEnabled,
+    }),
+  );
   app.route(
     "/",
     createArtifactRoutes({
@@ -372,11 +398,8 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     }),
   );
 
-  // Playbook routes — load from TYRUM_HOME/playbooks or use pre-loaded set
-  const playbookHome =
-    container.gatewayConfig?.paths.homeExplicit === true
-      ? container.gatewayConfig.paths.home
-      : undefined;
+  // Playbook routes — load from home/playbooks or use pre-loaded set
+  const playbookHome = container.config?.tyrumHome;
   const playbooks =
     opts.playbooks ?? (playbookHome ? loadAllPlaybooks(`${playbookHome}/playbooks`) : []);
   const playbookRunner = new PlaybookRunner();
@@ -393,16 +416,24 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   );
 
   // Operator web UI (static SPA).
-  app.route("/", createOperatorUiRoutes());
+  app.route("/", createOperatorUiRoutes({ assetsDir: opts.operatorUiAssetsDir }));
 
-  if (secretProviderForAgent) {
+  if (secretProviderForTenant) {
     app.route(
       "/",
       createSecretRoutes({
-        secretProviderForAgent,
+        secretProviderForTenant,
       }),
     );
   }
+
+  app.route(
+    "/",
+    createAgentConfigRoutes({
+      db: container.db,
+      identityScopeDal: container.identityScopeDal,
+    }),
+  );
 
   if (opts.connectionManager) {
     app.route("/", createConnectionsRoute(opts.connectionManager));
@@ -434,7 +465,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     };
     const shouldIncludeStackTrace =
       container.config.logStackTraces ??
-      (container.gatewayConfig?.runtime.nodeEnv ?? "development") !== "production";
+      (process.env["NODE_ENV"] ?? "development") !== "production";
     if (shouldIncludeStackTrace && err.stack) {
       payload["error_stack"] = err.stack;
     }

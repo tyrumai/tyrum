@@ -20,10 +20,10 @@ function normalizePositiveInt(value: unknown): number | undefined {
 const KNOWN_CAPABILITIES = new Set<string>(["playwright", "android", "desktop", "cli", "http"]);
 const NORMALIZERS = { normalizeNonnegativeInt, normalizePositiveInt };
 
-export function parseConcurrencyLimitsFromEnv(
+export function parseConcurrencyLimitsJson(
+  raw: string | undefined,
   logger?: Logger,
 ): ExecutionConcurrencyLimits | undefined {
-  const raw = process.env["TYRUM_EXEC_CONCURRENCY_LIMITS"]?.trim();
   if (!raw) return undefined;
 
   let parsed: unknown;

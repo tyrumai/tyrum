@@ -14,6 +14,7 @@ import type { LifecycleHooksRuntime } from "../../modules/hooks/runtime.js";
 import type { Logger } from "../../modules/observability/logger.js";
 import type { SqlDb, StateStoreKind } from "../../statestore/types.js";
 import type { ModelsDevService } from "../../modules/models/models-dev-service.js";
+import type { ModelCatalogService } from "../../modules/models/model-catalog-service.js";
 import type { AuthAudit } from "../../modules/auth/audit.js";
 import type { MemoryV1Dal } from "../../modules/memory/v1-dal.js";
 import type { ArtifactStore } from "../../modules/artifact/store.js";
@@ -38,7 +39,10 @@ export interface ProtocolDeps {
   identityScopeDal?: IdentityScopeDal;
   redactionEngine?: RedactionEngine;
   memoryV1Dal?: MemoryV1Dal;
-  memoryV1BudgetsProvider?: (agentId?: string) => Promise<AgentConfig["memory"]["v1"]["budgets"]>;
+  memoryV1BudgetsProvider?: (
+    tenantId: string,
+    agentId?: string,
+  ) => Promise<AgentConfig["memory"]["v1"]["budgets"]>;
   artifactStore?: ArtifactStore;
   contextReportDal?: ContextReportDal;
   runtime?: {
@@ -58,6 +62,7 @@ export interface ProtocolDeps {
   policyService?: PolicyService;
   plugins?: PluginRegistry;
   modelsDev?: ModelsDevService;
+  modelCatalog?: ModelCatalogService;
   hooks?: LifecycleHooksRuntime;
   presenceTtlMs?: number;
 
@@ -86,5 +91,10 @@ export interface ProtocolDeps {
   onConnectionClosed?: (connectionId: string) => void;
 
   /** Called when an approval.request response is received from a client. */
-  onApprovalDecision?: (approvalId: string, approved: boolean, reason: string | undefined) => void;
+  onApprovalDecision?: (
+    tenantId: string,
+    approvalId: string,
+    approved: boolean,
+    reason: string | undefined,
+  ) => void;
 }

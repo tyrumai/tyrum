@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
+import { DeploymentConfig } from "@tyrum/schemas";
 
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -26,8 +27,11 @@ vi.mock("node:fs", async () => {
 });
 
 import {
+  applyStartCommandDeploymentOverrides,
   assertSplitRoleUsesPostgres,
+  buildStartupDefaultDeploymentConfig,
   parseCliArgs,
+  resolveSnapshotImportEnabled,
   resolveGatewayUpdateTarget,
   runCli,
 } from "../../src/index.js";
@@ -71,12 +75,124 @@ describe("gateway CLI argument parsing", () => {
     expect(parseCliArgs(["scheduler"])).toEqual({ kind: "start", role: "scheduler" });
   });
 
+  it("parses boolean start flags", () => {
+    expect(
+      parseCliArgs([
+        "all",
+        "--allow-insecure-http",
+        "--enable-engine-api",
+        "--enable-snapshot-import",
+      ]),
+    ).toEqual({
+      kind: "start",
+      role: "all",
+      allowInsecureHttp: true,
+      engineApiEnabled: true,
+      snapshotImportEnabled: true,
+    });
+  });
+
+  it("parses common --home/--db/--migrations-dir flags across commands", () => {
+    expect(
+      parseCliArgs([
+        "start",
+        "--home",
+        "/tmp/home",
+        "--db",
+        "/tmp/gateway.db",
+        "--migrations-dir",
+        "/tmp/migs",
+      ]),
+    ).toEqual({
+      kind: "start",
+      home: "/tmp/home",
+      db: "/tmp/gateway.db",
+      migrationsDir: "/tmp/migs",
+    });
+
+    expect(
+      parseCliArgs([
+        "check",
+        "--home",
+        "/tmp/home",
+        "--db",
+        "/tmp/gateway.db",
+        "--migrations-dir",
+        "/tmp/migs",
+      ]),
+    ).toEqual({
+      kind: "check",
+      home: "/tmp/home",
+      db: "/tmp/gateway.db",
+      migrationsDir: "/tmp/migs",
+    });
+
+    expect(
+      parseCliArgs([
+        "toolrunner",
+        "--home",
+        "/tmp/home",
+        "--db",
+        "/tmp/gateway.db",
+        "--migrations-dir",
+        "/tmp/migs",
+        "--payload-b64",
+        "aGVsbG8=",
+      ]),
+    ).toEqual({
+      kind: "toolrunner",
+      home: "/tmp/home",
+      db: "/tmp/gateway.db",
+      migrationsDir: "/tmp/migs",
+      payloadB64: "aGVsbG8=",
+    });
+  });
+
   it("parses check command", () => {
     expect(parseCliArgs(["check"])).toEqual({ kind: "check" });
   });
 
   it("parses TLS fingerprint command", () => {
     expect(parseCliArgs(["tls", "fingerprint"])).toEqual({ kind: "tls_fingerprint" });
+  });
+});
+
+describe("snapshot import enablement", () => {
+  it("allows explicit env-based opt-in for restore workflows", () => {
+    const previous = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+    process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
+
+    try {
+      expect(resolveSnapshotImportEnabled(undefined)).toBe(true);
+      expect(resolveSnapshotImportEnabled(true)).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+      else process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = previous;
+    }
+  });
+
+  it("uses TYRUM_SNAPSHOT_IMPORT_ENABLED only when seeding startup defaults", () => {
+    const previous = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+    process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
+
+    try {
+      expect(buildStartupDefaultDeploymentConfig({}).snapshots.importEnabled).toBe(true);
+
+      const persisted = applyStartCommandDeploymentOverrides(
+        DeploymentConfig.parse({ snapshots: { importEnabled: false } }),
+        {},
+      );
+      expect(persisted.snapshots.importEnabled).toBe(false);
+
+      const explicitCli = applyStartCommandDeploymentOverrides(
+        DeploymentConfig.parse({ snapshots: { importEnabled: false } }),
+        { snapshotImportEnabled: true },
+      );
+      expect(explicitCli.snapshots.importEnabled).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+      else process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = previous;
+    }
   });
 });
 

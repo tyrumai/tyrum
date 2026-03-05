@@ -43,6 +43,16 @@ function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
 }
 
+function extractBootstrapToken(stdout: string, label: string): string {
+  for (const line of stdout.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith(`${label}:`)) continue;
+    const token = trimmed.slice(label.length + 1).trim();
+    if (token.length > 0) return token;
+  }
+  throw new Error(`Bootstrap token '${label}' not found in gateway stdout.`);
+}
+
 function waitForOpen(ws: WebSocket, timeoutMs = 5_000): Promise<void> {
   return new Promise((resolve, reject) => {
     if (ws.readyState === WebSocket.OPEN) return resolve();
@@ -255,7 +265,6 @@ describe("gateway startup process", () => {
         releaseBuildLock = () => {};
 
         const port = await findAvailablePort();
-        const gatewayToken = "tyrum-test-token";
         const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-gateway-startup-"));
         const tyrumHome = join(tempRoot, ".tyrum");
         const dbPath = join(tempRoot, "gateway.db");
@@ -263,19 +272,30 @@ describe("gateway startup process", () => {
         let stdout = "";
         let stderr = "";
 
-        const child = spawn(process.execPath, [GATEWAY_ENTRYPOINT, "start"], {
-          cwd: REPO_ROOT,
-          env: {
-            ...process.env,
-            GATEWAY_HOST: "127.0.0.1",
-            GATEWAY_PORT: String(port),
-            GATEWAY_DB_PATH: dbPath,
+        const child = spawn(
+          process.execPath,
+          [
+            GATEWAY_ENTRYPOINT,
+            "start",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            String(port),
+            "--db",
+            dbPath,
+            "--home",
+            tyrumHome,
+            "--migrations-dir",
             GATEWAY_MIGRATIONS_DIR,
-            GATEWAY_TOKEN: gatewayToken,
-            TYRUM_HOME: tyrumHome,
+          ],
+          {
+            cwd: REPO_ROOT,
+            env: {
+              ...process.env,
+            },
+            stdio: ["ignore", "pipe", "pipe"],
           },
-          stdio: ["ignore", "pipe", "pipe"],
-        });
+        );
 
         child.stdout.setEncoding("utf8");
         child.stderr.setEncoding("utf8");
@@ -291,6 +311,7 @@ describe("gateway startup process", () => {
         try {
           const healthUrl = `http://127.0.0.1:${port}/healthz`;
           await waitForGatewayHealth(healthUrl, child, output);
+          const tenantAdminToken = extractBootstrapToken(stdout, "default-tenant-admin");
 
           const healthResponse = await fetch(healthUrl);
           expect(healthResponse.status).toBe(200);
@@ -300,7 +321,7 @@ describe("gateway startup process", () => {
           const agentStatusUrl = `http://127.0.0.1:${port}/agent/status`;
           const agentStatusResponse = await fetch(agentStatusUrl, {
             headers: {
-              Authorization: `Bearer ${gatewayToken}`,
+              Authorization: `Bearer ${tenantAdminToken}`,
             },
           });
           expect(agentStatusResponse.status).toBe(200);
@@ -327,7 +348,6 @@ describe("gateway startup process", () => {
         ensureGatewayBuild();
 
         const port = await findAvailablePort();
-        const gatewayToken = "tyrum-test-token";
         const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-gateway-ws-approval-"));
         const tyrumHome = join(tempRoot, ".tyrum");
         mkdirSync(tyrumHome, { recursive: true });
@@ -336,21 +356,30 @@ describe("gateway startup process", () => {
         let stdout = "";
         let stderr = "";
 
-        const child = spawn(process.execPath, [GATEWAY_ENTRYPOINT, "start"], {
-          cwd: REPO_ROOT,
-          env: {
-            ...process.env,
-            GATEWAY_HOST: "127.0.0.1",
-            GATEWAY_PORT: String(port),
-            GATEWAY_DB_PATH: dbPath,
+        const child = spawn(
+          process.execPath,
+          [
+            GATEWAY_ENTRYPOINT,
+            "start",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            String(port),
+            "--db",
+            dbPath,
+            "--home",
+            tyrumHome,
+            "--migrations-dir",
             GATEWAY_MIGRATIONS_DIR,
-            GATEWAY_TOKEN: gatewayToken,
-            TYRUM_HOME: tyrumHome,
-            TYRUM_ROLE: "all",
-            TYRUM_ENGINE_API_ENABLED: "1",
+          ],
+          {
+            cwd: REPO_ROOT,
+            env: {
+              ...process.env,
+            },
+            stdio: ["ignore", "pipe", "pipe"],
           },
-          stdio: ["ignore", "pipe", "pipe"],
-        });
+        );
 
         child.stdout.setEncoding("utf8");
         child.stderr.setEncoding("utf8");
@@ -366,6 +395,7 @@ describe("gateway startup process", () => {
         try {
           const healthUrl = `http://127.0.0.1:${port}/healthz`;
           await waitForGatewayHealth(healthUrl, child, output);
+          const tenantAdminToken = extractBootstrapToken(stdout, "default-tenant-admin");
 
           const db = new Database(dbPath);
           try {
@@ -474,7 +504,7 @@ describe("gateway startup process", () => {
 	               ) VALUES (?, ?, ?, 0, 'paused', ?, ?, ?)`,
             ).run(DEFAULT_TENANT_ID, stepId, runId, actionJson, nowIso, approvalId);
 
-            const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(gatewayToken));
+            const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(tenantAdminToken));
             try {
               await waitForOpen(ws);
               await completeHandshake(ws, {
@@ -535,7 +565,6 @@ describe("gateway startup process", () => {
         ensureGatewayBuild();
 
         const port = await findAvailablePort();
-        const gatewayToken = "tyrum-test-token";
         const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-gateway-ws-approval-missing-token-"));
         const tyrumHome = join(tempRoot, ".tyrum");
         mkdirSync(tyrumHome, { recursive: true });
@@ -544,21 +573,30 @@ describe("gateway startup process", () => {
         let stdout = "";
         let stderr = "";
 
-        const child = spawn(process.execPath, [GATEWAY_ENTRYPOINT, "start"], {
-          cwd: REPO_ROOT,
-          env: {
-            ...process.env,
-            GATEWAY_HOST: "127.0.0.1",
-            GATEWAY_PORT: String(port),
-            GATEWAY_DB_PATH: dbPath,
+        const child = spawn(
+          process.execPath,
+          [
+            GATEWAY_ENTRYPOINT,
+            "start",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            String(port),
+            "--db",
+            dbPath,
+            "--home",
+            tyrumHome,
+            "--migrations-dir",
             GATEWAY_MIGRATIONS_DIR,
-            GATEWAY_TOKEN: gatewayToken,
-            TYRUM_HOME: tyrumHome,
-            TYRUM_ROLE: "all",
-            TYRUM_ENGINE_API_ENABLED: "1",
+          ],
+          {
+            cwd: REPO_ROOT,
+            env: {
+              ...process.env,
+            },
+            stdio: ["ignore", "pipe", "pipe"],
           },
-          stdio: ["ignore", "pipe", "pipe"],
-        });
+        );
 
         child.stdout.setEncoding("utf8");
         child.stderr.setEncoding("utf8");
@@ -574,6 +612,7 @@ describe("gateway startup process", () => {
         try {
           const healthUrl = `http://127.0.0.1:${port}/healthz`;
           await waitForGatewayHealth(healthUrl, child, output);
+          const tenantAdminToken = extractBootstrapToken(stdout, "default-tenant-admin");
 
           const db = new Database(dbPath);
           try {
@@ -675,7 +714,7 @@ describe("gateway startup process", () => {
 	               ) VALUES (?, ?, ?, 0, 'paused', ?, ?, ?)`,
             ).run(DEFAULT_TENANT_ID, stepId, runId, actionJson, nowIso, approvalId);
 
-            const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(gatewayToken));
+            const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(tenantAdminToken));
             try {
               await waitForOpen(ws);
               await completeHandshake(ws, {
@@ -739,7 +778,6 @@ describe("gateway startup process", () => {
         releaseBuildLock = () => {};
 
         const port = await findAvailablePort();
-        const gatewayToken = "tyrum-test-token";
         const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-gateway-shutdown-hooks-"));
         const tyrumHome = join(tempRoot, ".tyrum");
         mkdirSync(tyrumHome, { recursive: true });
@@ -755,19 +793,30 @@ describe("gateway startup process", () => {
         let stdout = "";
         let stderr = "";
 
-        const child = spawn(process.execPath, [GATEWAY_ENTRYPOINT, "start"], {
-          cwd: REPO_ROOT,
-          env: {
-            ...process.env,
-            GATEWAY_HOST: "127.0.0.1",
-            GATEWAY_PORT: String(port),
-            GATEWAY_DB_PATH: dbPath,
+        const child = spawn(
+          process.execPath,
+          [
+            GATEWAY_ENTRYPOINT,
+            "start",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            String(port),
+            "--db",
+            dbPath,
+            "--home",
+            tyrumHome,
+            "--migrations-dir",
             GATEWAY_MIGRATIONS_DIR,
-            GATEWAY_TOKEN: gatewayToken,
-            TYRUM_HOME: tyrumHome,
+          ],
+          {
+            cwd: REPO_ROOT,
+            env: {
+              ...process.env,
+            },
+            stdio: ["ignore", "pipe", "pipe"],
           },
-          stdio: ["ignore", "pipe", "pipe"],
-        });
+        );
 
         child.stdout.setEncoding("utf8");
         child.stderr.setEncoding("utf8");
@@ -836,7 +885,6 @@ describe("gateway startup process", () => {
         releaseBuildLock = () => {};
 
         const port = await findAvailablePort();
-        const gatewayToken = "tyrum-test-token";
         const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-gateway-shutdown-hooks-busy-"));
         const tyrumHome = join(tempRoot, ".tyrum");
         mkdirSync(tyrumHome, { recursive: true });
@@ -860,19 +908,30 @@ describe("gateway startup process", () => {
         let stdout = "";
         let stderr = "";
 
-        const child = spawn(process.execPath, [GATEWAY_ENTRYPOINT, "start"], {
-          cwd: REPO_ROOT,
-          env: {
-            ...process.env,
-            GATEWAY_HOST: "127.0.0.1",
-            GATEWAY_PORT: String(port),
-            GATEWAY_DB_PATH: dbPath,
+        const child = spawn(
+          process.execPath,
+          [
+            GATEWAY_ENTRYPOINT,
+            "start",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            String(port),
+            "--db",
+            dbPath,
+            "--home",
+            tyrumHome,
+            "--migrations-dir",
             GATEWAY_MIGRATIONS_DIR,
-            GATEWAY_TOKEN: gatewayToken,
-            TYRUM_HOME: tyrumHome,
+          ],
+          {
+            cwd: REPO_ROOT,
+            env: {
+              ...process.env,
+            },
+            stdio: ["ignore", "pipe", "pipe"],
           },
-          stdio: ["ignore", "pipe", "pipe"],
-        });
+        );
 
         child.stdout.setEncoding("utf8");
         child.stderr.setEncoding("utf8");

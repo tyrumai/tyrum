@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app.js";
-import { createTestContainer } from "./helpers.js";
+import { createTestContainer, decorateAppWithDefaultAuth } from "./helpers.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
+import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 
 describe("approval routes (engine integration)", () => {
   const originalFlag = process.env["TYRUM_ENGINE_API_ENABLED"];
@@ -24,7 +26,15 @@ describe("approval routes (engine integration)", () => {
 
   it("resumes an engine-scoped paused run when an approval is approved", async () => {
     const container = await createTestContainer();
-    const app = createApp(container);
+    const authTokens = new AuthTokenService(container.db);
+    const tenantToken = await authTokens.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "admin",
+      scopes: ["*"],
+    });
+    const engine = new ExecutionEngine({ db: container.db });
+    const app = createApp(container, { authTokens, engine });
+    decorateAppWithDefaultAuth(app, tenantToken.token);
 
     const jobId = "job-approval-1";
     const runId = "run-approval-1";

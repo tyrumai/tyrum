@@ -12,8 +12,8 @@ import { matchesPathPrefixSegment } from "../../app-path.js";
 import { getClientIp } from "./client-ip.js";
 import { requestIdForAudit } from "../observability/request-id.js";
 import type { Logger } from "../observability/logger.js";
-import type { TokenStore } from "./token-store.js";
-import type { AuthTokenClaims } from "./token-store.js";
+import type { AuthTokenClaims } from "@tyrum/schemas";
+import type { AuthTokenService } from "./auth-token-service.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "./http.js";
 import type { AuthAudit } from "./audit.js";
 
@@ -86,17 +86,17 @@ function matchPublicPathExemption(c: Context): PublicPathExemption | undefined {
 }
 
 export function createAuthMiddleware(
-  tokenStore: TokenStore | undefined,
+  authTokens: AuthTokenService | undefined,
   opts?: {
     audit?: AuthAudit;
     logger?: Logger;
   },
 ) {
-  let didLogMissingTokenStore = false;
+  let didLogMissingAuthTokens = false;
   return async (c: Context, next: Next) => {
-    if (!tokenStore) {
-      if (!didLogMissingTokenStore) {
-        didLogMissingTokenStore = true;
+    if (!authTokens) {
+      if (!didLogMissingAuthTokens) {
+        didLogMissingAuthTokens = true;
         opts?.logger?.error("auth.token_store_missing", {
           client_ip: getClientIp(c),
           method: c.req.method,
@@ -137,7 +137,7 @@ export function createAuthMiddleware(
       return c.json(AUTH_ERROR_BODY, 401);
     }
 
-    const claims: AuthTokenClaims | null = tokenStore.authenticate(token);
+    const claims: AuthTokenClaims | null = await authTokens.authenticate(token);
     if (!claims) {
       await opts?.audit?.recordAuthFailed({
         surface: "http",
@@ -150,6 +150,27 @@ export function createAuthMiddleware(
         request_id: requestIdForAudit(c),
       });
       return c.json(AUTH_ERROR_BODY, 401);
+    }
+
+    const isSystemRoute = matchesPathPrefixSegment(c.req.path, "/system");
+    const isSystemToken = claims.tenant_id === null;
+    if (isSystemRoute && !isSystemToken) {
+      return c.json(
+        {
+          error: "forbidden",
+          message: "system token required",
+        },
+        403,
+      );
+    }
+    if (!isSystemRoute && isSystemToken) {
+      return c.json(
+        {
+          error: "forbidden",
+          message: "system token is not valid for tenant routes",
+        },
+        403,
+      );
     }
 
     c.set("authClaims", claims);

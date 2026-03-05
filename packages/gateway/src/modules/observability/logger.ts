@@ -7,14 +7,6 @@ const LEVEL_ORDER: Record<Exclude<LogLevel, "silent">, number> = {
   error: 40,
 };
 
-function parseLogLevel(raw: string | undefined): LogLevel {
-  const v = raw?.trim().toLowerCase();
-  if (v === "debug" || v === "info" || v === "warn" || v === "error" || v === "silent") {
-    return v;
-  }
-  return "info";
-}
-
 function shouldEmit(configured: LogLevel, level: Exclude<LogLevel, "silent">): boolean {
   if (configured === "silent") return false;
   return LEVEL_ORDER[level] >= LEVEL_ORDER[configured];
@@ -29,8 +21,7 @@ export class Logger {
   private readonly base: LogFields;
 
   constructor(opts?: { level?: LogLevel; base?: LogFields }) {
-    this.level =
-      opts?.level ?? parseLogLevel(process.env["TYRUM_LOG_LEVEL"] ?? process.env["LOG_LEVEL"]);
+    this.level = opts?.level ?? "info";
     this.base = opts?.base ?? {};
   }
 

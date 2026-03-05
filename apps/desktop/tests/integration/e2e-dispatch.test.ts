@@ -22,7 +22,6 @@ import { createContainer } from "../../../../packages/gateway/src/container.js";
 import { createApp } from "../../../../packages/gateway/src/app.js";
 import { createWsHandler } from "../../../../packages/gateway/src/routes/ws.js";
 import { ConnectionManager } from "../../../../packages/gateway/src/ws/connection-manager.js";
-import { TokenStore } from "../../../../packages/gateway/src/modules/auth/token-store.js";
 import { dispatchTask } from "../../../../packages/gateway/src/ws/protocol.js";
 import type { ProtocolDeps } from "../../../../packages/gateway/src/ws/protocol.js";
 import { TyrumClient, autoExecute } from "../../../../packages/client/src/index.js";
@@ -33,9 +32,12 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
 } from "@tyrum/schemas";
+import { AuthTokenService } from "../../../../packages/gateway/src/modules/auth/auth-token-service.js";
+import { DEFAULT_TENANT_ID } from "../../../../packages/gateway/src/modules/identity/scope.js";
+import { createDbSecretProviderFactory } from "../../../../packages/gateway/src/modules/secret/create-secret-provider.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../../../packages/gateway/migrations");
+const migrationsDir = join(__dirname, "../../../../packages/gateway/migrations/sqlite");
 const approvedNodePairingDal = {
   getByNodeId: async () =>
     ({
@@ -108,10 +110,24 @@ async function startServer(): Promise<{
   stopHeartbeat: () => void;
   taskResults: TaskResultEntry[];
 }> {
+  const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-e2e-dispatch-"));
   const container = createContainer({
     dbPath: ":memory:",
     migrationsDir,
+    tyrumHome: tokenHome,
   });
+  const secrets = await createDbSecretProviderFactory({
+    db: container.db,
+    dbPath: ":memory:",
+    tyrumHome: tokenHome,
+  });
+  const authTokens = new AuthTokenService(container.db);
+  const issued = await authTokens.issueToken({
+    tenantId: DEFAULT_TENANT_ID,
+    role: "admin",
+    scopes: ["*"],
+  });
+  const adminToken = issued.token;
   const connectionManager = new ConnectionManager();
   const taskResults: TaskResultEntry[] = [];
 
@@ -122,15 +138,15 @@ async function startServer(): Promise<{
     },
   };
 
-  const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-e2e-dispatch-"));
-  const tokenStore = new TokenStore(tokenHome);
-  const adminToken = await tokenStore.initialize();
-
-  const app = createApp(container, { connectionManager });
+  const app = createApp(container, {
+    connectionManager,
+    authTokens,
+    secretProviderForTenant: secrets.secretProviderForTenant,
+  });
   const { handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
     protocolDeps,
-    tokenStore,
+    authTokens,
   });
 
   const requestListener = getRequestListener(app.fetch);
@@ -263,7 +279,12 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         type: "Desktop",
         args: { op: "screenshot", display: "primary", format: "png" },
       },
-      { runId: randomUUID(), stepId: randomUUID(), attemptId: randomUUID() },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        runId: randomUUID(),
+        stepId: randomUUID(),
+        attemptId: randomUUID(),
+      },
       { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
 
@@ -297,7 +318,12 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         type: "Desktop",
         args: { op: "mouse", action: "click", x: 100, y: 200 },
       },
-      { runId: randomUUID(), stepId: randomUUID(), attemptId: randomUUID() },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        runId: randomUUID(),
+        stepId: randomUUID(),
+        attemptId: randomUUID(),
+      },
       { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
 
@@ -325,7 +351,12 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         type: "CLI",
         args: { cmd: "rm", args: ["-rf", "/"] },
       },
-      { runId: randomUUID(), stepId: randomUUID(), attemptId: randomUUID() },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        runId: randomUUID(),
+        stepId: randomUUID(),
+        attemptId: randomUUID(),
+      },
       { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
 
@@ -353,7 +384,12 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         type: "CLI",
         args: { cmd: "echo", args: ["hello", "world"] },
       },
-      { runId: randomUUID(), stepId: randomUUID(), attemptId: randomUUID() },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        runId: randomUUID(),
+        stepId: randomUUID(),
+        attemptId: randomUUID(),
+      },
       { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
 

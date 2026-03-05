@@ -47,39 +47,6 @@ afterEach(() => {
 });
 
 describe("Kubernetes toolrunner step executor", () => {
-  it("buildEnv merges base and overrides (overrides win)", async () => {
-    const { buildEnv } =
-      await import("../../src/modules/execution/kubernetes-toolrunner-step-executor.js");
-
-    const env = buildEnv({ FOO: "bar", OVERRIDE: "base" }, { OVERRIDE: "override", NEW: "x" });
-
-    expect(Object.fromEntries(env.map((e) => [e.name, e.value]))).toEqual({
-      FOO: "bar",
-      OVERRIDE: "override",
-      NEW: "x",
-    });
-  });
-
-  it("buildEnv filters non-string and very large values", async () => {
-    const { buildEnv } =
-      await import("../../src/modules/execution/kubernetes-toolrunner-step-executor.js");
-
-    const env = buildEnv(
-      {
-        SMALL: "ok",
-        EXACT: "x".repeat(32_000),
-        BIG: "x".repeat(32_001),
-        UNDEF: undefined,
-      },
-      {},
-    );
-
-    expect(Object.fromEntries(env.map((e) => [e.name, e.value]))).toEqual({
-      SMALL: "ok",
-      EXACT: "x".repeat(32_000),
-    });
-  });
-
   it("sanitizeDnsLabelSuffix lowercases, replaces invalid chars, and trims hyphens", async () => {
     const { sanitizeDnsLabelSuffix } =
       await import("../../src/modules/execution/kubernetes-toolrunner-step-executor.js");
@@ -128,7 +95,8 @@ describe("Kubernetes toolrunner step executor", () => {
       image: "tyrum/gateway:dev",
       workspacePvcClaim: "workspace",
       tyrumHome: "/var/lib/tyrum",
-      env: { BASE: "1", BIG: "x".repeat(32_001) },
+      dbPath: "postgres://user:pass@localhost:5432/test",
+      hardeningProfile: "baseline",
       deleteJobAfter: false,
     });
 
@@ -156,14 +124,48 @@ describe("Kubernetes toolrunner step executor", () => {
 
     const container = createdJobBody.spec.template.spec.containers[0];
     expect(container.image).toBe("tyrum/gateway:dev");
-    expect(container.env).toEqual(
+
+    expect(container.args.slice(0, 6)).toEqual([
+      "toolrunner",
+      "--home",
+      "/var/lib/tyrum",
+      "--db",
+      "postgres://user:pass@localhost:5432/test",
+      "--payload-b64",
+    ]);
+    expect(container.args[6]).toSatisfy(
+      (value: unknown) => typeof value === "string" && value.trim().length > 0,
+      "payload-b64 arg is a non-empty string",
+    );
+
+    const payloadRaw = Buffer.from(container.args[6], "base64url").toString("utf-8");
+    const payload = JSON.parse(payloadRaw) as Record<string, unknown>;
+    expect(payload["plan_id"]).toBe("plan-1");
+    expect(payload["step_index"]).toBe(0);
+    expect(payload["timeout_ms"]).toBe(1_000);
+    expect(payload["action"]).toEqual({ type: "CLI", args: { cmd: "echo", args: ["hi"] } });
+
+    const podSpec = createdJobBody.spec.template.spec;
+    expect(podSpec.volumes).toHaveLength(1);
+    expect(podSpec.volumes).toEqual(
       expect.arrayContaining([
-        { name: "BASE", value: "1" },
-        expect.objectContaining({ name: "TYRUM_HOME" }),
+        expect.objectContaining({
+          name: "workspace",
+          persistentVolumeClaim: { claimName: "workspace" },
+        }),
       ]),
     );
-    expect(container.env).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: "BIG" })]),
+    expect(podSpec.volumes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "tmp" })]),
+    );
+
+    expect(container.volumeMounts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "workspace", mountPath: "/var/lib/tyrum" }),
+      ]),
+    );
+    expect(container.volumeMounts).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "tmp" })]),
     );
   });
 
@@ -183,6 +185,8 @@ describe("Kubernetes toolrunner step executor", () => {
       image: "tyrum/gateway:dev",
       workspacePvcClaim: "workspace",
       tyrumHome: "/var/lib/tyrum",
+      dbPath: "postgres://user:pass@localhost:5432/test",
+      hardeningProfile: "baseline",
       deleteJobAfter: false,
     });
 
@@ -227,6 +231,8 @@ describe("Kubernetes toolrunner step executor", () => {
       image: "tyrum/gateway:dev",
       workspacePvcClaim: "workspace",
       tyrumHome: "/var/lib/tyrum",
+      dbPath: "postgres://user:pass@localhost:5432/test",
+      hardeningProfile: "baseline",
       logger: logger as any,
       deleteJobAfter: false,
     });
@@ -278,6 +284,8 @@ describe("Kubernetes toolrunner step executor", () => {
       image: "tyrum/gateway:dev",
       workspacePvcClaim: "workspace",
       tyrumHome: "/var/lib/tyrum",
+      dbPath: "postgres://user:pass@localhost:5432/test",
+      hardeningProfile: "baseline",
       logger: logger as any,
       deleteJobAfter: true,
     });

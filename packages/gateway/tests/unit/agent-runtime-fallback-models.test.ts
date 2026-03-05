@@ -7,6 +7,8 @@ import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
 import { SessionModelOverrideDal } from "../../src/modules/models/session-model-override-dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
+import { DbSecretProvider } from "../../src/modules/secret/provider.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -52,16 +54,37 @@ describe("AgentRuntime model fallbacks", () => {
     container = undefined;
     seenProviders.length = 0;
     openaiGenerateError = new Error("openai down");
-    delete process.env["OPENAI_API_KEY"];
-    delete process.env["ANTHROPIC_API_KEY"];
-    delete process.env["TYRUM_AUTH_PROFILES_ENABLED"];
   });
 
-  it("tries configured fallback models after a primary model invocation fails", async () => {
-    process.env["OPENAI_API_KEY"] = "openai-key";
-    process.env["ANTHROPIC_API_KEY"] = "anthropic-key";
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "0";
+  async function seedAuthProfiles(): Promise<DbSecretProvider> {
+    const secretProvider = new DbSecretProvider(container!.db, {
+      tenantId: DEFAULT_TENANT_ID,
+      masterKey: Buffer.alloc(32, 7),
+      keyId: "test-key",
+    });
+    await secretProvider.store("api-key:openai", "openai-key");
+    await secretProvider.store("api-key:anthropic", "anthropic-key");
 
+    const authProfileDal = new AuthProfileDal(container!.db);
+    await authProfileDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: "openai-1",
+      providerKey: "openai",
+      type: "api_key",
+      secretKeys: { api_key: "api-key:openai" },
+    });
+    await authProfileDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      authProfileKey: "anthropic-1",
+      providerKey: "anthropic",
+      type: "api_key",
+      secretKeys: { api_key: "api-key:anthropic" },
+    });
+
+    return secretProvider;
+  }
+
+  it("tries configured fallback models after a primary model invocation fails", async () => {
     container = createContainer({
       dbPath: ":memory:",
       migrationsDir,
@@ -97,9 +120,11 @@ describe("AgentRuntime model fallbacks", () => {
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
     const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+    const secretProvider = await seedAuthProfiles();
     const runtime = new AgentRuntime({
       container,
       agentId: "agent-1",
+      secretProvider,
       fetchImpl,
     });
 
@@ -126,10 +151,6 @@ describe("AgentRuntime model fallbacks", () => {
   });
 
   it("rejects legacy short fallback model ids", async () => {
-    process.env["OPENAI_API_KEY"] = "openai-key";
-    process.env["ANTHROPIC_API_KEY"] = "anthropic-key";
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "0";
-
     container = createContainer({
       dbPath: ":memory:",
       migrationsDir,
@@ -165,9 +186,11 @@ describe("AgentRuntime model fallbacks", () => {
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
     const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+    const secretProvider = await seedAuthProfiles();
     const runtime = new AgentRuntime({
       container,
       agentId: "agent-1",
+      secretProvider,
       fetchImpl,
     });
 
@@ -193,10 +216,6 @@ describe("AgentRuntime model fallbacks", () => {
   });
 
   it("does not try fallback models for non-transient API errors", async () => {
-    process.env["OPENAI_API_KEY"] = "openai-key";
-    process.env["ANTHROPIC_API_KEY"] = "anthropic-key";
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "0";
-
     openaiGenerateError = new APICallError({
       message: "bad request",
       url: "https://api.example/v1",
@@ -240,9 +259,11 @@ describe("AgentRuntime model fallbacks", () => {
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
     const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+    const secretProvider = await seedAuthProfiles();
     const runtime = new AgentRuntime({
       container,
       agentId: "agent-1",
+      secretProvider,
       fetchImpl,
     });
 
@@ -268,10 +289,6 @@ describe("AgentRuntime model fallbacks", () => {
   });
 
   it("respects per-session /model overrides", async () => {
-    process.env["OPENAI_API_KEY"] = "openai-key";
-    process.env["ANTHROPIC_API_KEY"] = "anthropic-key";
-    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "0";
-
     container = createContainer({
       dbPath: ":memory:",
       migrationsDir,
@@ -307,9 +324,11 @@ describe("AgentRuntime model fallbacks", () => {
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
     const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+    const secretProvider = await seedAuthProfiles();
     const runtime = new AgentRuntime({
       container,
       agentId: "agent-1",
+      secretProvider,
       fetchImpl,
     });
 

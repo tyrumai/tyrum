@@ -13,10 +13,6 @@ const DEFAULT_MAX_BATCHES_PER_TICK = 10;
 const DEFAULT_SESSIONS_TTL_DAYS = 30;
 const DEFAULT_CHANNEL_QUEUE_FAILURE_RETENTION_DAYS = 7;
 
-const RETENTION_TICK_ENV = "TYRUM_STATESTORE_RETENTION_TICK_MS";
-const RETENTION_BATCH_ENV = "TYRUM_STATESTORE_RETENTION_BATCH_SIZE";
-const SESSIONS_TTL_ENV = "TYRUM_SESSIONS_TTL_DAYS";
-
 const PG_RETENTION_LOCK_KEY1 = 1959359839; // "tyru" as int-ish
 const PG_RETENTION_LOCK_KEY2 = 1936024435; // "stlr" as int-ish
 
@@ -33,6 +29,7 @@ export interface StateStoreLifecycleSchedulerOptions {
   tickMs?: number;
   batchSize?: number;
   maxBatchesPerTick?: number;
+  sessionsTtlDays?: number;
   keepProcessAlive?: boolean;
   clock?: StateStoreLifecycleSchedulerClockFn;
 }
@@ -42,40 +39,32 @@ function defaultClock(): StateStoreLifecycleSchedulerClock {
   return { nowMs: now.getTime(), nowIso: now.toISOString() };
 }
 
-function resolveSessionsTtlDays(): number {
-  const raw = process.env[SESSIONS_TTL_ENV]?.trim();
-  if (raw) {
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return Math.max(1, Math.floor(parsed));
-    }
-  }
-  return DEFAULT_SESSIONS_TTL_DAYS;
-}
-
 export class StateStoreLifecycleScheduler {
   private readonly db: SqlDb;
   private readonly logger?: Logger;
   private readonly batchSize: number;
   private readonly maxBatchesPerTick: number;
+  private readonly sessionsTtlDays: number;
   private readonly clock: StateStoreLifecycleSchedulerClockFn;
   private readonly interval: IntervalScheduler;
 
   constructor(opts: StateStoreLifecycleSchedulerOptions) {
     this.db = opts.db;
     this.logger = opts.logger;
-    const tickMs = resolvePositiveInt(opts.tickMs, RETENTION_TICK_ENV, DEFAULT_TICK_MS);
+    const tickMs = resolvePositiveInt(opts.tickMs, DEFAULT_TICK_MS);
     this.batchSize = Math.max(
       1,
-      Math.min(
-        1_000_000,
-        resolvePositiveInt(opts.batchSize, RETENTION_BATCH_ENV, DEFAULT_BATCH_SIZE),
-      ),
+      Math.min(1_000_000, resolvePositiveInt(opts.batchSize, DEFAULT_BATCH_SIZE)),
     );
     this.maxBatchesPerTick = Math.max(
       1,
       Math.min(1000, Math.floor(opts.maxBatchesPerTick ?? DEFAULT_MAX_BATCHES_PER_TICK)),
     );
+    const sessionsTtl = opts.sessionsTtlDays;
+    this.sessionsTtlDays =
+      typeof sessionsTtl === "number" && Number.isFinite(sessionsTtl) && sessionsTtl > 0
+        ? Math.max(1, Math.floor(sessionsTtl))
+        : DEFAULT_SESSIONS_TTL_DAYS;
     this.clock = opts.clock ?? defaultClock;
     const keepProcessAlive = opts.keepProcessAlive ?? false;
     this.interval = new IntervalScheduler({
@@ -118,8 +107,9 @@ export class StateStoreLifecycleScheduler {
 
   private async runOnce(db: SqlDb): Promise<void> {
     const { nowMs, nowIso } = this.clock();
-    const sessionsTtlDays = resolveSessionsTtlDays();
-    const sessionsCutoffIso = new Date(nowMs - sessionsTtlDays * 24 * 60 * 60 * 1000).toISOString();
+    const sessionsCutoffIso = new Date(
+      nowMs - this.sessionsTtlDays * 24 * 60 * 60 * 1000,
+    ).toISOString();
     const queueFailureCutoffIso = new Date(
       nowMs - DEFAULT_CHANNEL_QUEUE_FAILURE_RETENTION_DAYS * 24 * 60 * 60 * 1000,
     ).toISOString();

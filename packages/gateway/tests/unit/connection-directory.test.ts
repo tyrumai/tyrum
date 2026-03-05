@@ -30,12 +30,16 @@ describe("ConnectionDirectoryDal", () => {
       ttlMs: 5_000,
     });
 
-    expect(await dir.listConnectionsForCapability("playwright", now)).toHaveLength(1);
-    expect(await dir.listConnectionsForCapability("cli", now)).toHaveLength(0);
+    expect(
+      await dir.listConnectionsForCapability(DEFAULT_TENANT_ID, "playwright", now),
+    ).toHaveLength(1);
+    expect(await dir.listConnectionsForCapability(DEFAULT_TENANT_ID, "cli", now)).toHaveLength(0);
 
     // Expire it
     expect(await dir.cleanupExpired(now + 10_000)).toBe(1);
-    expect(await dir.listConnectionsForCapability("playwright", now + 10_000)).toHaveLength(0);
+    expect(
+      await dir.listConnectionsForCapability(DEFAULT_TENANT_ID, "playwright", now + 10_000),
+    ).toHaveLength(0);
   });
 
   it("treats missing readiness as ready=capabilities (rolling upgrade safe)", async () => {
@@ -84,7 +88,7 @@ describe("ConnectionDirectoryDal", () => {
       ],
     );
 
-    const rows = await dir.listNonExpired(now);
+    const rows = await dir.listNonExpired(DEFAULT_TENANT_ID, now);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.capabilities).toEqual(["cli"]);
     expect(rows[0]!.ready_capabilities).toEqual(["cli"]);
@@ -141,7 +145,7 @@ describe("ConnectionDirectoryDal", () => {
       ],
     );
 
-    const rows = await dir.listNonExpired(now);
+    const rows = await dir.listNonExpired(DEFAULT_TENANT_ID, now);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.capabilities).toEqual(["cli"]);
     expect(rows[0]!.ready_capabilities).toEqual(["cli"]);

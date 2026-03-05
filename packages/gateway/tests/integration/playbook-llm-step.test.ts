@@ -71,6 +71,7 @@ describe("Playbook LLM step executor", () => {
     const engine = new ExecutionEngine({ db: container.db });
 
     const { runId } = await engine.enqueuePlan({
+      tenantId: DEFAULT_TENANT_ID,
       key: "test",
       lane: "main",
       planId: "plan-llm-tool-limit",
@@ -175,6 +176,7 @@ describe("Playbook LLM step executor", () => {
     const engine = new ExecutionEngine({ db: container.db });
 
     const { runId } = await engine.enqueuePlan({
+      tenantId: DEFAULT_TENANT_ID,
       key: "test",
       lane: "main",
       planId: "plan-llm-policy-approval",
@@ -269,6 +271,7 @@ describe("Playbook LLM step executor", () => {
     const engine = new ExecutionEngine({ db: container.db });
 
     const { runId } = await engine.enqueuePlan({
+      tenantId: DEFAULT_TENANT_ID,
       key: "test",
       lane: "main",
       planId: "plan-llm-policy-approval-http",
@@ -335,6 +338,7 @@ describe("Playbook LLM step executor", () => {
     const engine = new ExecutionEngine({ db: container.db });
 
     const { runId } = await engine.enqueuePlan({
+      tenantId: DEFAULT_TENANT_ID,
       key: "test",
       lane: "main",
       planId: "plan-llm-schema-pass",
@@ -411,6 +415,7 @@ describe("Playbook LLM step executor", () => {
     const engine = new ExecutionEngine({ db: container.db });
 
     const { runId } = await engine.enqueuePlan({
+      tenantId: DEFAULT_TENANT_ID,
       key: "test",
       lane: "main",
       planId: "plan-llm-schema-fail",
