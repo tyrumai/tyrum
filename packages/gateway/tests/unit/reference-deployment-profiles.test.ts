@@ -102,13 +102,16 @@ describe("reference deployment profiles", () => {
       "${TYRUM_SNAPSHOT_IMPORT_ENABLED:-0}",
     );
 
-    const edge = services?.["tyrum-edge"];
-    const edgeCommand = edge?.command as string[] | undefined;
-    const edgeEnv = edge?.environment as Record<string, unknown> | undefined;
+    const splitServices = ["tyrum-edge", "tyrum-worker", "tyrum-scheduler"];
+    for (const serviceName of splitServices) {
+      const service = services?.[serviceName];
+      const command = service?.command as string[] | undefined;
+      const env = service?.environment as Record<string, unknown> | undefined;
 
-    expect(edgeCommand).toBeDefined();
-    expect(edgeCommand).not.toContain("--enable-snapshot-import");
-    expect(edgeEnv?.TYRUM_SNAPSHOT_IMPORT_ENABLED).toBe("${TYRUM_SNAPSHOT_IMPORT_ENABLED:-0}");
+      expect(command).toBeDefined();
+      expect(command).not.toContain("--enable-snapshot-import");
+      expect(env?.TYRUM_SNAPSHOT_IMPORT_ENABLED).toBe("${TYRUM_SNAPSHOT_IMPORT_ENABLED:-0}");
+    }
   });
 
   it("ships reference Helm values for single-host and split-role", async () => {

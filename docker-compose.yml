@@ -102,6 +102,8 @@ services:
       ]
     environment:
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
+      # Keep bootstrap snapshot-import seeding consistent across split-role startup races.
+      TYRUM_SNAPSHOT_IMPORT_ENABLED: ${TYRUM_SNAPSHOT_IMPORT_ENABLED:-0}
     depends_on:
       - postgres
     volumes:
@@ -121,6 +123,8 @@ services:
       ]
     environment:
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
+      # Keep bootstrap snapshot-import seeding consistent across split-role startup races.
+      TYRUM_SNAPSHOT_IMPORT_ENABLED: ${TYRUM_SNAPSHOT_IMPORT_ENABLED:-0}
     depends_on:
       - postgres
     restart: unless-stopped
