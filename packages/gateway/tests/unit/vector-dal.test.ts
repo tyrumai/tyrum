@@ -30,8 +30,26 @@ describe("VectorDal", () => {
   describe("insertEmbedding", () => {
     it("rejects inserts when scope is missing", async () => {
       await expect(
-        dal.insertEmbedding("test-label", [1, 0, 0], "text-embedding-3"),
+        dal.insertEmbedding(
+          "test-label",
+          [1, 0, 0],
+          "text-embedding-3",
+          undefined as unknown as Parameters<VectorDal["insertEmbedding"]>[3],
+        ),
       ).rejects.toThrow();
+    });
+
+    it("stores and retrieves an embedding when metadata is omitted", async () => {
+      const id = await dal.insertEmbedding(
+        "test-label",
+        [1, 0, 0],
+        "text-embedding-3",
+        defaultScope,
+      );
+
+      const row = await dal.getById(id, defaultScope);
+      expect(row).toBeDefined();
+      expect(row!.label).toBe("test-label");
     });
 
     it("stores and retrieves an embedding", async () => {

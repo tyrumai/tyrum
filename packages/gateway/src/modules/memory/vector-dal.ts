@@ -72,6 +72,8 @@ export interface VectorScope {
 
 function normalizeScope(scope: VectorScope | undefined): { tenantId: string; agentId: string } {
   if (!scope) throw new Error("scope is required");
+  if (typeof scope.tenantId !== "string") throw new Error("tenantId is required");
+  if (typeof scope.agentId !== "string") throw new Error("agentId is required");
   const tenantId = scope.tenantId.trim();
   const agentId = scope.agentId.trim();
   if (!tenantId) throw new Error("tenantId is required");
@@ -105,9 +107,24 @@ export class VectorDal {
     label: string,
     vector: number[],
     model: string,
-    metadata?: unknown,
-    scope?: VectorScope,
+    scope: VectorScope,
+  ): Promise<string>;
+  async insertEmbedding(
+    label: string,
+    vector: number[],
+    model: string,
+    metadata: unknown,
+    scope: VectorScope,
+  ): Promise<string>;
+  async insertEmbedding(
+    label: string,
+    vector: number[],
+    model: string,
+    metadataOrScope: unknown,
+    scopeArg?: VectorScope,
   ): Promise<string> {
+    const metadata = scopeArg === undefined ? undefined : metadataOrScope;
+    const scope = scopeArg === undefined ? (metadataOrScope as VectorScope) : scopeArg;
     const resolved = normalizeScope(scope);
     const embeddingId = randomUUID();
 
@@ -140,7 +157,7 @@ export class VectorDal {
   async searchByCosineSimilarity(
     queryVector: number[],
     topK: number,
-    scope?: VectorScope,
+    scope: VectorScope,
   ): Promise<VectorSearchResult[]> {
     const resolved = normalizeScope(scope);
     const rows = await this.db.all<RawVectorRow>(
@@ -165,7 +182,7 @@ export class VectorDal {
   }
 
   /** Delete all embeddings with the given label. Returns the number of rows deleted. */
-  async deleteByLabel(label: string, scope?: VectorScope): Promise<number> {
+  async deleteByLabel(label: string, scope: VectorScope): Promise<number> {
     const resolved = normalizeScope(scope);
     return (
       await this.db.run(
@@ -176,7 +193,7 @@ export class VectorDal {
   }
 
   /** Get a single embedding by its embedding_id. */
-  async getById(embeddingId: string, scope?: VectorScope): Promise<VectorRow | undefined> {
+  async getById(embeddingId: string, scope: VectorScope): Promise<VectorRow | undefined> {
     const resolved = normalizeScope(scope);
     const raw = await this.db.get<RawVectorRow>(
       "SELECT * FROM vector_metadata WHERE tenant_id = ? AND agent_id = ? AND embedding_id = ?",
@@ -187,7 +204,7 @@ export class VectorDal {
   }
 
   /** List all embeddings, ordered by creation time descending. */
-  async list(scope?: VectorScope): Promise<VectorRow[]> {
+  async list(scope: VectorScope): Promise<VectorRow[]> {
     const resolved = normalizeScope(scope);
     const rows = await this.db.all<RawVectorRow>(
       "SELECT * FROM vector_metadata WHERE tenant_id = ? AND agent_id = ? ORDER BY created_at DESC, vector_metadata_id DESC",
