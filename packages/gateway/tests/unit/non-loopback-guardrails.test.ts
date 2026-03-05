@@ -81,6 +81,18 @@ describe("non-loopback deployment guardrails", () => {
     ).toBe("tls");
   });
 
+  it("requires a tenant admin token before binding to non-loopback hosts", () => {
+    expect(() =>
+      assertNonLoopbackDeploymentGuardrails({
+        role: "edge",
+        host: "0.0.0.0",
+        tlsReady: true,
+        allowInsecureHttp: false,
+        hasTenantAdminToken: false,
+      }),
+    ).toThrow(/token/i);
+  });
+
   it("ignores env flags when explicit acknowledgements are omitted", () => {
     const prevTlsReady = process.env["TYRUM_TLS_READY"];
     const prevAllowInsecureHttp = process.env["TYRUM_ALLOW_INSECURE_HTTP"];

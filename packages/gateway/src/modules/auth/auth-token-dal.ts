@@ -180,6 +180,16 @@ export class AuthTokenDal {
     return row?.count ?? 0;
   }
 
+  async countActiveTenantAdminTokens(tenantId: string): Promise<number> {
+    const row = await this.db.get<{ count: number }>(
+      `SELECT COUNT(1) AS count
+       FROM auth_tokens
+       WHERE tenant_id = ? AND role = 'admin' AND revoked_at IS NULL`,
+      [tenantId],
+    );
+    return row?.count ?? 0;
+  }
+
   async countActiveSystemTokens(): Promise<number> {
     const row = await this.db.get<{ count: number }>(
       `SELECT COUNT(1) AS count

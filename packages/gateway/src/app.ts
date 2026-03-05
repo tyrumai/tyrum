@@ -179,6 +179,8 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     const rateLimit = createRateLimitMiddleware(opts.authRateLimiter, { prefix: "auth" });
     app.use("/auth/session", rateLimit);
     app.use("/auth/logout", rateLimit);
+    app.use("/auth/device-tokens/issue", rateLimit);
+    app.use("/auth/device-tokens/revoke", rateLimit);
   }
 
   if (opts.authTokens) {

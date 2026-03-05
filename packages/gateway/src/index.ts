@@ -229,6 +229,7 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
   tlsReady?: boolean;
   tlsSelfSigned?: boolean;
   allowInsecureHttp?: boolean;
+  hasTenantAdminToken?: boolean;
 }): NonLoopbackTransportPolicy {
   const shouldRunEdge = input.role === "all" || input.role === "edge";
   if (!shouldRunEdge) return "local";
@@ -237,6 +238,13 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
   const hostForLoopback = hostSplit.host.length > 0 ? hostSplit.host : input.host;
   const isLocalOnly = isLoopbackHost(hostForLoopback);
   if (isLocalOnly) return "local";
+
+  if (input.hasTenantAdminToken === false) {
+    throw new Error(
+      "Gateway is configured to bind to a non-loopback address but no tenant admin tokens exist. " +
+        "Create a tenant admin token before exposing the gateway beyond loopback.",
+    );
+  }
 
   const tlsReady = input.tlsReady ?? false;
   const tlsSelfSigned = input.tlsSelfSigned ?? false;
@@ -1021,13 +1029,16 @@ export async function main(
     });
     bootstrapTokens.push({ label: "system", token: issued.token });
   }
-  if ((await authTokens.countActiveTenantTokens(DEFAULT_TENANT_ID)) === 0) {
+  let hasDefaultTenantAdminToken =
+    (await authTokens.countActiveTenantAdminTokens(DEFAULT_TENANT_ID)) > 0;
+  if (!hasDefaultTenantAdminToken) {
     const issued = await authTokens.issueToken({
       tenantId: DEFAULT_TENANT_ID,
       role: "admin",
       scopes: ["*"],
     });
     bootstrapTokens.push({ label: "default-tenant-admin", token: issued.token });
+    hasDefaultTenantAdminToken = true;
   }
   if (bootstrapTokens.length > 0) {
     console.log("---");
@@ -1044,6 +1055,7 @@ export async function main(
     tlsReady: deploymentRevision.config.server.tlsReady,
     tlsSelfSigned: deploymentRevision.config.server.tlsSelfSigned,
     allowInsecureHttp: deploymentRevision.config.server.allowInsecureHttp,
+    hasTenantAdminToken: hasDefaultTenantAdminToken,
   });
 
   if (transportPolicy !== "local") {

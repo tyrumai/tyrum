@@ -184,6 +184,10 @@ export class AuthTokenService {
     return await this.dal.countActiveTenantTokens(tenantId);
   }
 
+  async countActiveTenantAdminTokens(tenantId: string): Promise<number> {
+    return await this.dal.countActiveTenantAdminTokens(tenantId);
+  }
+
   async countActiveSystemTokens(): Promise<number> {
     return await this.dal.countActiveSystemTokens();
   }

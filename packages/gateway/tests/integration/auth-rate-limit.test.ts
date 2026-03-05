@@ -79,4 +79,60 @@ describe("Auth rate limiting", () => {
     limiter.stop();
     await container.db.close();
   });
+
+  it("returns 429 Too Many Requests after 2 /auth/device-tokens/issue requests per minute", async () => {
+    tokenHome = await mkdtemp(join(tmpdir(), "tyrum-auth-rate-limit-device-tokens-"));
+
+    const limiter = new SlidingWindowRateLimiter({
+      windowMs: 60_000,
+      max: 2,
+      cleanupIntervalMs: 0,
+    });
+
+    const { app, container, auth } = await createTestApp({
+      tyrumHome: tokenHome,
+      isLocalOnly: true,
+      authRateLimiter: limiter,
+    });
+    const adminToken = auth.tenantAdminToken;
+
+    const requestListener = getRequestListener(app.fetch);
+    server = createServer(requestListener);
+    const port = await startServer(server);
+    const url = `http://127.0.0.1:${String(port)}/auth/device-tokens/issue`;
+
+    for (let i = 0; i < 2; i += 1) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          device_id: `test-device-${String(i + 1)}`,
+          role: "client",
+          scopes: ["*"],
+        }),
+      });
+      expect(res.status).toBe(201);
+    }
+
+    const rateLimited = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        device_id: "test-device-3",
+        role: "client",
+        scopes: ["*"],
+      }),
+    });
+
+    expect(rateLimited.status).toBe(429);
+
+    limiter.stop();
+    await container.db.close();
+  });
 });

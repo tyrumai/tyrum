@@ -58,6 +58,9 @@ describe("lifecycle hooks startup gating", () => {
           async countActiveSystemTokens(): Promise<number> {
             return 1;
           }
+          async countActiveTenantAdminTokens(): Promise<number> {
+            return 1;
+          }
           async countActiveTenantTokens(): Promise<number> {
             return 1;
           }
