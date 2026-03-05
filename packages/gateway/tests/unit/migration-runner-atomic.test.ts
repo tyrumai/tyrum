@@ -110,6 +110,45 @@ describe("migration runners", () => {
     );
   });
 
+  it("treats renamed postgres migrations as already applied", async () => {
+    await withTempMigrations(
+      {
+        "103_vector_metadata_pk.sql": `
+          SELECT * FROM this_should_never_run;
+        `,
+      },
+      async (dir) => {
+        const calls: Array<{ text: string; params?: unknown[] }> = [];
+        const client = {
+          query: async (text: string, params?: unknown[]) => {
+            const trimmed = text.trim();
+            calls.push({ text: trimmed, params });
+
+            if (trimmed.startsWith("SELECT name FROM _migrations")) {
+              return { rows: [{ name: "102_vector_metadata_pk.sql" }] };
+            }
+
+            if (trimmed.includes("this_should_never_run")) {
+              throw new Error("unexpected migration execution");
+            }
+
+            return { rows: [] };
+          },
+        };
+
+        await expect(migratePostgres(client as any, dir)).resolves.toBeUndefined();
+
+        expect(
+          calls.some(
+            (c) =>
+              c.text.startsWith("INSERT INTO _migrations") &&
+              c.params?.[0] === "103_vector_metadata_pk.sql",
+          ),
+        ).toBe(true);
+      },
+    );
+  });
+
   it("runs sqlite migrations and tracking atomically", () => {
     return withTempMigrations(
       {

@@ -1,6 +1,7 @@
 import type { PresenceResponse, StatusResponse, UsageResponse } from "@tyrum/client";
 import type { OperatorHttpClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
+import { toErrorMessage } from "../to-error-message.js";
 
 export type OperatorPresenceEntry = PresenceResponse["entries"][number];
 
@@ -25,10 +26,6 @@ export interface StatusStore extends ExternalStore<StatusState> {
   refreshStatus(): Promise<void>;
   refreshUsage(query?: Parameters<OperatorHttpClient["usage"]["get"]>[0]): Promise<void>;
   refreshPresence(): Promise<void>;
-}
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 export function createStatusStore(http: OperatorHttpClient): {

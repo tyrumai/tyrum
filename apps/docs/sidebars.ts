@@ -123,7 +123,11 @@ const sidebars: SidebarsConfig = {
         {
           type: "category",
           label: "Operations & Observability",
-          items: ["architecture/observability", "architecture/presence"],
+          items: [
+            "architecture/observability",
+            "architecture/index-tuning",
+            "architecture/presence",
+          ],
         },
         "architecture/glossary",
       ],

@@ -39,6 +39,12 @@ export class TaskResultRegistry {
     this.maxAssociations = Math.max(1, Math.floor(opts?.maxTaskAssociations ?? this.maxTerminal));
   }
 
+  getAssociatedConnectionId(taskId: string): string | undefined {
+    const normalizedTaskId = taskId.trim();
+    if (normalizedTaskId.length === 0) return undefined;
+    return this.connectionByTask.get(normalizedTaskId);
+  }
+
   associate(taskId: string, connectionId: string): void {
     const normalizedTaskId = taskId.trim();
     const normalizedConnectionId = connectionId.trim();

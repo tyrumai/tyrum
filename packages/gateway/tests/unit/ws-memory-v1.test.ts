@@ -58,6 +58,7 @@ function parseSentJson(ws: MockWebSocket): unknown[] {
 describe("WS memory v1 handlers", () => {
   let baseDir: string;
   let db: ReturnType<typeof openTestSqliteDb>;
+  let didOpenDb = false;
   let memoryV1Dal: MemoryV1Dal;
   let artifactStore: FsArtifactStore;
 
@@ -66,14 +67,19 @@ describe("WS memory v1 handlers", () => {
     vi.setSystemTime(new Date("2026-02-19T12:00:00.000Z"));
 
     baseDir = mkdtempSync(join(tmpdir(), "tyrum-ws-memory-v1-test-"));
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     memoryV1Dal = new MemoryV1Dal(db);
     artifactStore = new FsArtifactStore(baseDir);
   });
 
   afterEach(async () => {
     vi.useRealTimers();
-    await db.close();
+    if (didOpenDb) {
+      didOpenDb = false;
+      await db.close();
+    }
     rmSync(baseDir, { recursive: true, force: true });
   });
 

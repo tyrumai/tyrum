@@ -15,20 +15,29 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 describe("Artifact lifecycle (retention + quotas)", () => {
   let db: SqliteDb;
-  let baseDir: string;
+  let didOpenDb = false;
+  let baseDir: string | undefined;
   let artifactStore: FsArtifactStore;
   let snapshotDal: PolicySnapshotDal;
 
   beforeEach(async () => {
-    db = openTestSqliteDb();
     baseDir = await mkdtemp(join(tmpdir(), "tyrum-artifacts-gc-"));
     artifactStore = new FsArtifactStore(baseDir);
+    didOpenDb = false;
+    db = openTestSqliteDb();
+    didOpenDb = true;
     snapshotDal = new PolicySnapshotDal(db);
   });
 
   afterEach(async () => {
-    await db.close();
-    await rm(baseDir, { recursive: true, force: true });
+    if (didOpenDb) {
+      didOpenDb = false;
+      await db.close();
+    }
+    if (baseDir) {
+      await rm(baseDir, { recursive: true, force: true });
+      baseDir = undefined;
+    }
   });
 
   it("adds durable lifecycle tracking columns to execution_artifacts", async () => {

@@ -11,7 +11,11 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
-import { WsTaskExecuteRequest } from "@tyrum/schemas";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  WsTaskExecuteRequest,
+  descriptorIdForClientCapability,
+} from "@tyrum/schemas";
 import { TyrumClient } from "../../src/ws-client.js";
 import {
   startGateway,
@@ -124,7 +128,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
   // Task dispatch + response round-trip
   // -------------------------------------------------------------------------
 
-  it("gateway dispatches task.execute, client responds, gateway receives result", async () => {
+  it("gateway dispatches task.execute to a node, node responds, gateway receives result", async () => {
     let resolveTaskResult:
       | ((v: {
           taskId: string;
@@ -146,19 +150,34 @@ describe("WS SDK conformance (client <-> gateway)", () => {
 
     gw = await startGateway((cm) => ({
       connectionManager: cm,
+      nodePairingDal: {
+        getByNodeId: async () =>
+          ({
+            status: "approved",
+            capability_allowlist: [
+              {
+                id: descriptorIdForClientCapability("http"),
+                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              },
+            ],
+          }) as never,
+      } as never,
       onTaskResult(taskId, success, result, evidence, error) {
         resolveTaskResult?.({ taskId, success, result, evidence, error });
       },
     }));
 
-    const result = createConnectedClient(gw, { capabilities: ["http"] });
+    const result = createConnectedClient(gw, {
+      capabilities: ["http"],
+      role: "node",
+    });
     client = result.client;
 
     await withTimeout(result.connectedP, TIMEOUT, "connected");
 
     const taskExecuteP = waitForEvent<WsTaskExecuteRequest>(client, "task_execute");
 
-    // Gateway dispatches a task to the connected client
+    // Gateway dispatches a task to the connected node
     const taskId = await gw.dispatchTask(
       { type: "Http", args: { url: "https://example.com" } },
       {

@@ -20,7 +20,8 @@ import { OutboxPoller } from "../../src/modules/backplane/outbox-poller.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
-import { dispatchTask, NoCapableClientError } from "../../src/ws/protocol.js";
+import { dispatchTask } from "../../src/ws/protocol.js";
+import { NoCapableNodeError } from "../../src/ws/protocol/errors.js";
 import { WatcherFiringDal } from "../../src/modules/watcher/firing-dal.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
@@ -199,6 +200,18 @@ async function connectClientWithProof(input: {
 
 describe("Failure matrix (scaling-ha)", () => {
   const connectionsTtlMs = 50;
+  const approvedCliPairingDal = {
+    getByNodeId: async () =>
+      ({
+        status: "approved",
+        capability_allowlist: [
+          {
+            id: descriptorIdForClientCapability("cli"),
+            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+          },
+        ],
+      }) as never,
+  } as never;
 
   let dirs: string[] = [];
   let dbs: SqliteDb[] = [];
@@ -300,7 +313,7 @@ describe("Failure matrix (scaling-ha)", () => {
     const { ws: clientA } = await connectClientWithProof({
       port: portA,
       token,
-      role: "client",
+      role: "node",
       capabilities: ["cli"],
     });
     sockets.push(clientA);
@@ -318,6 +331,7 @@ describe("Failure matrix (scaling-ha)", () => {
     };
     await dispatchTask({ type: "CLI", args: {} }, taskScopeX, {
       connectionManager: cmB,
+      nodePairingDal: approvedCliPairingDal,
       cluster: { edgeId: "edge-b", outboxDal: outboxB, connectionDirectory: cdB },
     } as never);
     await pollerA.tick();
@@ -340,16 +354,17 @@ describe("Failure matrix (scaling-ha)", () => {
     await expect(
       dispatchTask({ type: "CLI", args: {} }, taskScopeX, {
         connectionManager: cmB,
+        nodePairingDal: approvedCliPairingDal,
         cluster: { edgeId: "edge-b", outboxDal: outboxB, connectionDirectory: cdB },
       } as never),
-    ).rejects.toBeInstanceOf(NoCapableClientError);
+    ).rejects.toBeInstanceOf(NoCapableNodeError);
 
     // Client reconnects to edge-b; routing should now target edge-b.
     clientA.close();
     const { ws: clientB } = await connectClientWithProof({
       port: portB,
       token,
-      role: "client",
+      role: "node",
       capabilities: ["cli"],
     });
     sockets.push(clientB);
@@ -365,6 +380,7 @@ describe("Failure matrix (scaling-ha)", () => {
     };
     await dispatchTask({ type: "CLI", args: {} }, taskScopeZ, {
       connectionManager: cmA,
+      nodePairingDal: approvedCliPairingDal,
       cluster: { edgeId: "edge-a", outboxDal: outboxA, connectionDirectory: cdA },
     } as never);
     await pollerB.tick();
@@ -417,7 +433,7 @@ describe("Failure matrix (scaling-ha)", () => {
     const { ws: clientA1 } = await connectClientWithProof({
       port: edgeA1.port,
       token,
-      role: "client",
+      role: "node",
       capabilities: ["cli"],
     });
     sockets.push(clientA1);
@@ -433,6 +449,7 @@ describe("Failure matrix (scaling-ha)", () => {
     };
     await dispatchTask({ type: "CLI", args: {} }, taskScope1, {
       connectionManager: edgeB.connectionManager,
+      nodePairingDal: approvedCliPairingDal,
       cluster: {
         edgeId: "edge-b",
         outboxDal: edgeB.outboxDal,
@@ -457,13 +474,14 @@ describe("Failure matrix (scaling-ha)", () => {
     await expect(
       dispatchTask({ type: "CLI", args: {} }, taskScope1, {
         connectionManager: edgeB.connectionManager,
+        nodePairingDal: approvedCliPairingDal,
         cluster: {
           edgeId: "edge-b",
           outboxDal: edgeB.outboxDal,
           connectionDirectory: edgeB.connectionDirectory,
         },
       } as never),
-    ).rejects.toBeInstanceOf(NoCapableClientError);
+    ).rejects.toBeInstanceOf(NoCapableNodeError);
 
     clientA1.close();
 
@@ -474,7 +492,7 @@ describe("Failure matrix (scaling-ha)", () => {
     const { ws: clientA2 } = await connectClientWithProof({
       port: edgeA2.port,
       token,
-      role: "client",
+      role: "node",
       capabilities: ["cli"],
     });
     sockets.push(clientA2);
@@ -490,6 +508,7 @@ describe("Failure matrix (scaling-ha)", () => {
     };
     await dispatchTask({ type: "CLI", args: {} }, taskScope2, {
       connectionManager: edgeB.connectionManager,
+      nodePairingDal: approvedCliPairingDal,
       cluster: {
         edgeId: "edge-b",
         outboxDal: edgeB.outboxDal,

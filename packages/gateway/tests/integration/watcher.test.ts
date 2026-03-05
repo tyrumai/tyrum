@@ -67,6 +67,7 @@ class InMemorySecretProvider implements SecretProvider {
 
 describe("Watcher routes + scheduler integration", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
   let memoryV1Dal: MemoryV1Dal;
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
@@ -110,7 +111,9 @@ describe("Watcher routes + scheduler integration", () => {
   }
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     memoryV1Dal = new MemoryV1Dal(db);
     eventBus = mitt<GatewayEvents>();
     processor = new WatcherProcessor({ db, memoryV1Dal, eventBus });
@@ -125,6 +128,8 @@ describe("Watcher routes + scheduler integration", () => {
   });
 
   afterEach(async () => {
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 

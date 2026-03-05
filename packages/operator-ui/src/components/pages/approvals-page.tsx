@@ -166,21 +166,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
 
   return (
     <div className="grid gap-6">
-      <PageHeader
-        title="Approvals"
-        actions={
-          <Button
-            data-testid="approvals-refresh"
-            variant="secondary"
-            isLoading={approvals.loading}
-            onClick={() => {
-              void core.approvalsStore.refreshPending();
-            }}
-          >
-            {approvals.loading ? "Refreshing..." : "Refresh"}
-          </Button>
-        }
-      />
+      <PageHeader title="Approvals" />
 
       <LiveRegion data-testid="approvals-pending-live">
         {approvals.pendingIds.length} pending approvals
@@ -191,7 +177,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
       ) : null}
 
       {approvals.pendingIds.length === 0 ? (
-        approvals.loading ? (
+        approvals.loading && approvals.lastSyncedAt === null ? (
           <div
             className="flex items-center justify-center gap-2 px-6 py-12 text-sm text-fg-muted"
             aria-busy={true}

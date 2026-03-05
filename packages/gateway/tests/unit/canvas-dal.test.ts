@@ -6,14 +6,19 @@ import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/ident
 
 describe("CanvasDal", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
   let dal: CanvasDal;
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     dal = new CanvasDal(db);
   });
 
   afterEach(async () => {
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 

@@ -273,6 +273,9 @@ CREATE TABLE channel_inbox (
     REFERENCES channel_threads(tenant_id, workspace_id, channel_thread_id) ON DELETE CASCADE
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS channel_inbox_tenant_inbox_uq
+ON channel_inbox (tenant_id, inbox_id);
+
 CREATE TABLE channel_outbox (
   outbox_id          INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id          TEXT NOT NULL,
@@ -296,7 +299,7 @@ CREATE TABLE channel_outbox (
   session_id         TEXT NOT NULL,
   channel_thread_id  TEXT NOT NULL,
   UNIQUE (tenant_id, dedupe_key),
-  FOREIGN KEY (inbox_id) REFERENCES channel_inbox(inbox_id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, inbox_id) REFERENCES channel_inbox(tenant_id, inbox_id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE CASCADE
 );
 

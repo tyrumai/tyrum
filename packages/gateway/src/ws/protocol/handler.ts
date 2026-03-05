@@ -129,6 +129,28 @@ export async function handleClientMessage(
     }
 
     if (msg.type === "task.execute") {
+      if (client.role !== "node") {
+        deps.logger?.warn("ws.task_result_unauthorized_role", {
+          request_id: msg.request_id,
+          connection_id: client.id,
+          role: client.role,
+        });
+        return errorEvent("unauthorized", "only nodes may respond to task.execute");
+      }
+
+      const expectedConnectionId = deps.taskResults?.getAssociatedConnectionId(msg.request_id);
+      if (expectedConnectionId && expectedConnectionId !== client.id) {
+        deps.logger?.warn("ws.task_result_unexpected_connection", {
+          request_id: msg.request_id,
+          connection_id: client.id,
+          expected_connection_id: expectedConnectionId,
+        });
+        return errorEvent(
+          "unauthorized",
+          "task.execute result received from an unexpected connection",
+        );
+      }
+
       const evidenceAndResult = msg.ok
         ? WsTaskExecuteResult.safeParse(msg.result ?? {})
         : undefined;

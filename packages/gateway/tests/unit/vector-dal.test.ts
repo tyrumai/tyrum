@@ -5,14 +5,19 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 describe("VectorDal", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
   let dal: VectorDal;
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     dal = new VectorDal(db);
   });
 
   afterEach(async () => {
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 

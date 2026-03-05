@@ -275,7 +275,8 @@ CREATE TABLE channel_inbox (
     FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE CASCADE,
   CONSTRAINT channel_inbox_channel_thread_fk
     FOREIGN KEY (tenant_id, workspace_id, channel_thread_id)
-    REFERENCES channel_threads(tenant_id, workspace_id, channel_thread_id) ON DELETE CASCADE
+    REFERENCES channel_threads(tenant_id, workspace_id, channel_thread_id) ON DELETE CASCADE,
+  CONSTRAINT channel_inbox_tenant_inbox_uq UNIQUE (tenant_id, inbox_id)
 );
 
 CREATE TABLE channel_outbox (
@@ -301,7 +302,8 @@ CREATE TABLE channel_outbox (
   session_id          UUID NOT NULL,
   channel_thread_id   UUID NOT NULL,
   CONSTRAINT channel_outbox_dedupe_uq UNIQUE (tenant_id, dedupe_key),
-  CONSTRAINT channel_outbox_inbox_fk FOREIGN KEY (inbox_id) REFERENCES channel_inbox(inbox_id) ON DELETE CASCADE,
+  CONSTRAINT channel_outbox_inbox_fk
+    FOREIGN KEY (tenant_id, inbox_id) REFERENCES channel_inbox(tenant_id, inbox_id) ON DELETE CASCADE,
   CONSTRAINT channel_outbox_session_fk
     FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE CASCADE
 );
@@ -1315,7 +1317,7 @@ CREATE TABLE memory_item_embeddings (
 );
 
 CREATE TABLE vector_metadata (
-  id BIGSERIAL PRIMARY KEY,
+  vector_metadata_id BIGSERIAL PRIMARY KEY,
   tenant_id UUID NOT NULL,
   agent_id  UUID NOT NULL,
   embedding_id TEXT NOT NULL,

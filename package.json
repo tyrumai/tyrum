@@ -11,7 +11,7 @@
     "setup:githooks": "node scripts/setup-githooks.mjs",
     "pretypecheck": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/desktop-node build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build && node -e \"require('node:fs').rmSync('packages/schemas/tsconfig.tsbuildinfo',{force:true})\"",
     "build": "pnpm -r run build",
-    "pretest": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build",
+    "pretest": "node scripts/check-native-sqlite.mjs && pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build",
     "test": "vitest run",
     "test:a11y:operator-ui": "vitest run packages/operator-ui/tests/operator-ui.a11y.test.ts",
     "test:coverage": "vitest run --coverage",
@@ -32,17 +32,27 @@
       "dbus-next>xml2js": "0.5.0",
       "fast-xml-parser": "5.3.8",
       "file-loader>schema-utils": "4.3.3",
+      "immutable": "4.3.8",
       "minimatch": "10.2.4",
       "null-loader>schema-utils": "4.3.3",
       "rollup": "4.59.0",
       "serialize-javascript": "7.0.3",
+      "svgo": "3.3.3",
+      "tar": "7.5.10",
       "tmp": ">=0.2.4",
       "url-loader>schema-utils": "4.3.3",
       "usocket>node-gyp": "11.5.0"
     },
     "patchedDependencies": {
       "@develar/schema-utils@2.6.5": "patches/@develar__schema-utils@2.6.5.patch",
-      "dmg-license@1.0.11": "patches/dmg-license@1.0.11.patch"
+      "dmg-license@1.0.11": "patches/dmg-license@1.0.11.patch",
+      "dompurify@3.3.1": "patches/dompurify@3.3.1.patch"
+    },
+    "allowUnusedPatches": true,
+    "auditConfig": {
+      "ignoreCves": [
+        "CVE-2026-0540"
+      ]
     }
   },
   "devDependencies": {

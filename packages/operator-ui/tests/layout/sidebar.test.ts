@@ -178,4 +178,69 @@ describe("Sidebar", () => {
 
     cleanupTestRoot({ container, root });
   });
+
+  it("renders a sync-now button when provided", () => {
+    const ThemeProvider = (operatorUi as Record<string, unknown>)["ThemeProvider"];
+    const Sidebar = (operatorUi as Record<string, unknown>)["Sidebar"];
+
+    const onSyncNow = vi.fn();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        ThemeProvider as React.ComponentType,
+        null,
+        React.createElement(Sidebar as React.ComponentType, {
+          items: [
+            { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
+          ],
+          activeItemId: "dashboard",
+          onNavigate: vi.fn(),
+          connectionStatus: "connected",
+          onSyncNow,
+        }),
+      ),
+    );
+
+    const syncButton = container.querySelector<HTMLButtonElement>(
+      "[data-testid='sidebar-sync-now']",
+    );
+    expect(syncButton).not.toBeNull();
+
+    act(() => {
+      syncButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onSyncNow).toHaveBeenCalledTimes(1);
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("disables sync-now when requested", () => {
+    const ThemeProvider = (operatorUi as Record<string, unknown>)["ThemeProvider"];
+    const Sidebar = (operatorUi as Record<string, unknown>)["Sidebar"];
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        ThemeProvider as React.ComponentType,
+        null,
+        React.createElement(Sidebar as React.ComponentType, {
+          items: [
+            { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
+          ],
+          activeItemId: "dashboard",
+          onNavigate: vi.fn(),
+          connectionStatus: "disconnected",
+          onSyncNow: vi.fn(),
+          syncNowDisabled: true,
+        }),
+      ),
+    );
+
+    const syncButton = container.querySelector<HTMLButtonElement>(
+      "[data-testid='sidebar-sync-now']",
+    );
+    expect(syncButton).not.toBeNull();
+    expect(syncButton?.disabled).toBe(true);
+
+    cleanupTestRoot({ container, root });
+  });
 });

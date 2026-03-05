@@ -29,9 +29,29 @@ import { TyrumClient, autoExecute } from "../../../../packages/client/src/index.
 import { DesktopProvider, MockDesktopBackend } from "@tyrum/desktop-node";
 import { CliProvider } from "../../src/main/providers/cli-provider.js";
 import { resolvePermissions } from "../../src/main/config/permissions.js";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdForClientCapability,
+} from "@tyrum/schemas";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../../../packages/gateway/migrations");
+const approvedNodePairingDal = {
+  getByNodeId: async () =>
+    ({
+      status: "approved",
+      capability_allowlist: [
+        {
+          id: descriptorIdForClientCapability("desktop"),
+          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+        },
+        {
+          id: descriptorIdForClientCapability("cli"),
+          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+        },
+      ],
+    }) as never,
+} as never;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -159,6 +179,7 @@ async function connectClient(
     token,
     capabilities,
     reconnect: false,
+    role: "node",
     protocolRev: 2,
     device: {
       publicKey: publicKeyDer.toString("base64url"),
@@ -243,7 +264,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         args: { op: "screenshot", display: "primary", format: "png" },
       },
       { runId: randomUUID(), stepId: randomUUID(), attemptId: randomUUID() },
-      { connectionManager: srv.connectionManager },
+      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
 
     // Wait for the round-trip
@@ -277,7 +298,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         args: { op: "mouse", action: "click", x: 100, y: 200 },
       },
       { runId: randomUUID(), stepId: randomUUID(), attemptId: randomUUID() },
-      { connectionManager: srv.connectionManager },
+      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
 
     await delay(300);
@@ -305,7 +326,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         args: { cmd: "rm", args: ["-rf", "/"] },
       },
       { runId: randomUUID(), stepId: randomUUID(), attemptId: randomUUID() },
-      { connectionManager: srv.connectionManager },
+      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
 
     await delay(300);
@@ -333,7 +354,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         args: { cmd: "echo", args: ["hello", "world"] },
       },
       { runId: randomUUID(), stepId: randomUUID(), attemptId: randomUUID() },
-      { connectionManager: srv.connectionManager },
+      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
 
     await delay(500);

@@ -60,10 +60,31 @@ describe("OperatorUiApp error boundary wiring", () => {
       attemptIdsByStepId: {},
     } as const;
 
+    const autoSyncSnapshot = {
+      intervalMs: 30_000,
+      tasks: {},
+      lastRunAtMs: null,
+      lastManualAtMs: null,
+      isSyncing: false,
+    } as const;
+
+    const statusSnapshot = {
+      status: null,
+      usage: null,
+      presenceByInstanceId: {},
+      loading: { status: false, usage: false, presence: false },
+      error: { status: null, usage: null, presence: null },
+      lastSyncedAt: null,
+    } as const;
+
     const core = {
       connectionStore: {
         subscribe: (_listener: () => void) => () => {},
         getSnapshot: () => connectionSnapshot,
+      },
+      autoSyncStore: {
+        subscribe: (_listener: () => void) => () => {},
+        getSnapshot: () => autoSyncSnapshot,
       },
       approvalsStore: {
         subscribe: (_listener: () => void) => () => {},
@@ -72,6 +93,10 @@ describe("OperatorUiApp error boundary wiring", () => {
       pairingStore: {
         subscribe: (_listener: () => void) => () => {},
         getSnapshot: () => pairingSnapshot,
+      },
+      statusStore: {
+        subscribe: (_listener: () => void) => () => {},
+        getSnapshot: () => statusSnapshot,
       },
       runsStore: {
         subscribe: (_listener: () => void) => () => {},
@@ -98,5 +123,5 @@ describe("OperatorUiApp error boundary wiring", () => {
     } finally {
       cleanupTestRoot({ container, root });
     }
-  });
+  }, 15_000);
 });

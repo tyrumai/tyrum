@@ -23,6 +23,10 @@ import { dispatchTask, type ProtocolDeps } from "../../src/ws/protocol.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { generateKeyPairSync } from "node:crypto";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdForClientCapability,
+} from "@tyrum/schemas";
 import { waitForCondition } from "../helpers/wait-for.js";
 
 // ---------------------------------------------------------------------------
@@ -132,7 +136,7 @@ describe("E2E smoke test", () => {
       token: srv.adminToken,
       capabilities: ["playwright", "http"],
       reconnect: false,
-      role: "client",
+      role: "node",
       protocolRev: 2,
       device: {
         publicKey: publicKeyDer.toString("base64url"),
@@ -181,7 +185,21 @@ describe("E2E smoke test", () => {
         stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
       },
-      { connectionManager: srv.connectionManager },
+      {
+        connectionManager: srv.connectionManager,
+        nodePairingDal: {
+          getByNodeId: async () =>
+            ({
+              status: "approved",
+              capability_allowlist: [
+                {
+                  id: descriptorIdForClientCapability("http"),
+                  version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                },
+              ],
+            }) as never,
+        } as never,
+      },
     );
 
     // --- 5. Client receives task_dispatch ---

@@ -24,3 +24,14 @@ export class NodeNotPairedError extends Error {
     this.name = "NodeNotPairedError";
   }
 }
+
+export class NodeDispatchDeniedError extends Error {
+  constructor(
+    public readonly capability: ClientCapability,
+    public readonly policySnapshotId?: string,
+  ) {
+    const suffix = policySnapshotId ? ` (policy snapshot: ${policySnapshotId})` : "";
+    super(`node dispatch denied by policy for capability: ${capability}${suffix}`);
+    this.name = "NodeDispatchDeniedError";
+  }
+}

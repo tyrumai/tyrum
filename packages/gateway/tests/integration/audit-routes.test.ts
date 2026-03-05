@@ -8,17 +8,22 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("Audit routes", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
   let eventLog: EventLog;
   let app: Hono;
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     eventLog = new EventLog(db);
     app = new Hono();
     app.route("/", createAuditRoutes({ db, eventLog }));
   });
 
   afterEach(async () => {
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 

@@ -6,17 +6,24 @@ import {
 import type { ActionPrimitive, ClientCapability, WsRequestEnvelope } from "@tyrum/schemas";
 import { canonicalizeNodeDispatchMatchTarget } from "../../modules/policy/match-target.js";
 import type { ConnectedClient } from "../connection-manager.js";
-import { NoCapableClientError, NoCapableNodeError, NodeNotPairedError } from "./errors.js";
+import {
+  NoCapableClientError,
+  NoCapableNodeError,
+  NodeDispatchDeniedError,
+  NodeNotPairedError,
+} from "./errors.js";
 import type { ProtocolDeps } from "./types.js";
 
 // ---------------------------------------------------------------------------
-// Gateway -> Client dispatch helpers
+// Gateway -> Node dispatch helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Find a capable client and send a `task_dispatch` message.
+ * Find a capable node and send a `task.execute` message.
  *
- * @throws {NoCapableClientError} when no connected client has the required capability.
+ * @throws {NoCapableNodeError} when no connected node has the required capability.
+ * @throws {NodeNotPairedError} when nodes exist but none are paired/authorized.
+ * @throws {NodeDispatchDeniedError} when policy denies node dispatch.
  * @returns the task_id assigned to the dispatched task.
  */
 export function dispatchTask(
@@ -30,8 +37,6 @@ export function dispatchTask(
   }
 
   const descriptorId = descriptorIdForClientCapability(capability);
-  const requiresNodeRole = action.type === "Browser";
-  const requiresPairedNode = action.type === "Desktop" || requiresNodeRole;
   const toolMatchTarget = canonicalizeNodeDispatchMatchTarget(action.type, action.args);
   const policyEnabled = deps.policyService?.isEnabled() ?? false;
   const policyEvalPromise = policyEnabled
@@ -64,9 +69,7 @@ export function dispatchTask(
   if (localCandidates.length === 0) {
     const cluster = deps.cluster;
     if (!cluster) {
-      throw requiresPairedNode
-        ? new NoCapableNodeError(capability)
-        : new NoCapableClientError(capability);
+      throw new NoCapableNodeError(capability);
     }
 
     const nowMs = Date.now();
@@ -105,30 +108,26 @@ export function dispatchTask(
           c.ready_capabilities.includes(capability),
       );
 
-      const eligibleNodes =
-        deps.nodePairingDal && nodeDispatchAllowed
-          ? (
-              await Promise.all(
-                nodeCandidates.map(async (c) => {
-                  return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
-                }),
-              )
-            ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
-          : [];
+      const authorizedNodes = deps.nodePairingDal
+        ? (
+            await Promise.all(
+              nodeCandidates.map(async (c) => {
+                return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
+              }),
+            )
+          ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
+        : [];
+      const eligibleNodes = nodeDispatchAllowed ? authorizedNodes : [];
 
-      const eligibleClients = requiresNodeRole
-        ? []
-        : candidates.filter((c) => c.protocol_rev >= 2 && c.role === "client");
-      const eligible = [...eligibleNodes, ...eligibleClients];
-
-      const target = eligible.find((c) => c.edge_id !== cluster.edgeId) ?? eligible[0];
+      const target = eligibleNodes.find((c) => c.edge_id !== cluster.edgeId) ?? eligibleNodes[0];
       if (!target || target.edge_id === cluster.edgeId) {
-        if (requiresPairedNode) {
-          throw nodeCandidates.length > 0
-            ? new NodeNotPairedError(capability)
-            : new NoCapableNodeError(capability);
+        if (!nodeDispatchAllowed && authorizedNodes.length > 0) {
+          throw new NodeDispatchDeniedError(capability, policySnapshotId);
         }
-        throw new NoCapableClientError(capability);
+
+        throw nodeCandidates.length > 0
+          ? new NodeNotPairedError(capability)
+          : new NoCapableNodeError(capability);
       }
 
       if (
@@ -153,7 +152,7 @@ export function dispatchTask(
           attempt_id: scope.attemptId,
           action,
         },
-        trace: target.role === "node" ? trace : undefined,
+        trace,
       };
 
       await cluster.outboxDal.enqueue(
@@ -187,34 +186,41 @@ export function dispatchTask(
         : undefined;
 
     const eligibleNodes: ConnectedClient[] = [];
-    const eligibleClients: ConnectedClient[] = [];
     let hasReadyNodeCandidate = false;
+    let hasAuthorizedNodeCandidate = false;
 
     for (const c of localCandidates) {
-      if (c.role !== "node") {
-        eligibleClients.push(c);
-        continue;
-      }
-
-      if (!nodeDispatchAllowed) continue;
+      if (c.role !== "node") continue;
       const nodeId = c.device_id;
       if (!nodeId) continue;
       if (!c.readyCapabilities.has(capability)) continue;
       hasReadyNodeCandidate = true;
-      if (!(await isNodeAuthorizedForDispatch(nodeId))) continue;
+      const authorized = await isNodeAuthorizedForDispatch(nodeId);
+      if (authorized) {
+        hasAuthorizedNodeCandidate = true;
+      }
+      if (!nodeDispatchAllowed) {
+        if (hasAuthorizedNodeCandidate) break;
+        continue;
+      }
+      if (!authorized) continue;
       eligibleNodes.push(c);
     }
 
-    const selected = eligibleNodes[0] ?? (requiresNodeRole ? undefined : eligibleClients[0]);
+    const selected = eligibleNodes[0];
     if (!selected) {
       const cluster = deps.cluster;
       if (!cluster) {
-        if (requiresPairedNode) {
-          throw hasReadyNodeCandidate
-            ? new NodeNotPairedError(capability)
-            : new NoCapableNodeError(capability);
+        if (!nodeDispatchAllowed && hasAuthorizedNodeCandidate) {
+          throw new NodeDispatchDeniedError(capability, policySnapshotId);
         }
-        throw new NoCapableClientError(capability);
+        throw hasReadyNodeCandidate
+          ? new NodeNotPairedError(capability)
+          : new NoCapableNodeError(capability);
+      }
+
+      if (!nodeDispatchAllowed && hasAuthorizedNodeCandidate) {
+        throw new NodeDispatchDeniedError(capability, policySnapshotId);
       }
 
       const nowMs = Date.now();
@@ -232,30 +238,26 @@ export function dispatchTask(
           c.ready_capabilities.includes(capability),
       );
 
-      const eligibleNodes2 =
-        deps.nodePairingDal && nodeDispatchAllowed
-          ? (
-              await Promise.all(
-                nodeCandidates.map(async (c) => {
-                  return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
-                }),
-              )
-            ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
-          : [];
+      const authorizedNodes2 = deps.nodePairingDal
+        ? (
+            await Promise.all(
+              nodeCandidates.map(async (c) => {
+                return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
+              }),
+            )
+          ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
+        : [];
+      const eligibleNodes2 = nodeDispatchAllowed ? authorizedNodes2 : [];
 
-      const eligibleClients2 = requiresNodeRole
-        ? []
-        : candidates.filter((c) => c.protocol_rev >= 2 && c.role === "client");
-      const eligible2 = [...eligibleNodes2, ...eligibleClients2];
-
-      const target = eligible2.find((c) => c.edge_id !== cluster.edgeId) ?? eligible2[0];
+      const target = eligibleNodes2.find((c) => c.edge_id !== cluster.edgeId) ?? eligibleNodes2[0];
       if (!target || target.edge_id === cluster.edgeId) {
-        if (requiresPairedNode) {
-          throw nodeCandidates.length > 0 || hasReadyNodeCandidate
-            ? new NodeNotPairedError(capability)
-            : new NoCapableNodeError(capability);
+        if (!nodeDispatchAllowed && (hasAuthorizedNodeCandidate || authorizedNodes2.length > 0)) {
+          throw new NodeDispatchDeniedError(capability, policySnapshotId);
         }
-        throw new NoCapableClientError(capability);
+
+        throw nodeCandidates.length > 0 || hasReadyNodeCandidate
+          ? new NodeNotPairedError(capability)
+          : new NoCapableNodeError(capability);
       }
 
       if (
@@ -280,7 +282,7 @@ export function dispatchTask(
           attempt_id: scope.attemptId,
           action,
         },
-        trace: target.role === "node" ? trace : undefined,
+        trace,
       };
 
       await cluster.outboxDal.enqueue(
@@ -313,7 +315,7 @@ export function dispatchTask(
         attempt_id: scope.attemptId,
         action,
       },
-      trace: selected.role === "node" ? trace : undefined,
+      trace,
     };
     selected.ws.send(JSON.stringify(message));
     if (selected.role === "node") {

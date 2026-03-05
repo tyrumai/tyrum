@@ -61,6 +61,7 @@ class FakeWsClient {
   }));
   sessionDelete = vi.fn(async () => ({ session_id: "session-1" }));
   sessionSend = vi.fn(async () => ({ session_id: "session-1", assistant_message: "" }));
+  workList = vi.fn(async () => ({ items: [] }) as unknown);
 
   on(event: string, handler: Handler): void {
     const existing = this.handlers.get(event);
@@ -139,13 +140,14 @@ function samplePairingListResponse(): PairingListResponse {
 
 function createFakeHttpClient(): Pick<
   TyrumHttpClient,
-  "status" | "usage" | "presence" | "pairings"
+  "status" | "usage" | "presence" | "pairings" | "agentStatus"
 > & {
   __calls: {
     statusGet: number;
     usageGet: number;
     presenceList: number;
     pairingsList: number;
+    agentStatusGet: number;
   };
 } {
   const calls = {
@@ -153,6 +155,7 @@ function createFakeHttpClient(): Pick<
     usageGet: 0,
     presenceList: 0,
     pairingsList: 0,
+    agentStatusGet: 0,
   };
 
   return {
@@ -183,6 +186,12 @@ function createFakeHttpClient(): Pick<
       approve: vi.fn(async () => ({ status: "ok", pairing: samplePairingApproved() })),
       deny: vi.fn(async () => ({ status: "ok", pairing: samplePairingDenied() })),
       revoke: vi.fn(async () => ({ status: "ok", pairing: samplePairingRevoked() })),
+    },
+    agentStatus: {
+      get: vi.fn(async () => {
+        calls.agentStatusGet++;
+        return { status: "ok" } as unknown;
+      }),
     },
   };
 }
@@ -397,6 +406,41 @@ describe("operator-core wiring", () => {
     ).toBeDefined();
   });
 
+  it("exposes autoSyncStore and syncAllNow triggers tasks", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    expect(
+      (core as unknown as { autoSyncStore?: { getSnapshot: () => unknown } }).autoSyncStore,
+    ).toBeDefined();
+    expect(typeof (core as unknown as { syncAllNow?: unknown }).syncAllNow).toBe("function");
+
+    ws.emit("connected", { clientId: "client-123" });
+    await tick();
+
+    const statusGetBefore = http.__calls.statusGet;
+    const usageGetBefore = http.__calls.usageGet;
+    const presenceListBefore = http.__calls.presenceList;
+    const pairingsListBefore = http.__calls.pairingsList;
+    const approvalsListBefore = ws.approvalList.mock.calls.length;
+
+    await core.syncAllNow();
+    await tick();
+
+    expect(http.__calls.statusGet).toBe(statusGetBefore + 1);
+    expect(http.__calls.usageGet).toBe(usageGetBefore + 1);
+    expect(http.__calls.presenceList).toBe(presenceListBefore + 1);
+    expect(http.__calls.pairingsList).toBe(pairingsListBefore + 1);
+    expect(ws.approvalList).toHaveBeenCalledTimes(approvalsListBefore + 1);
+  });
+
   it("exposes elevatedModeStore as a single source of truth", () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();
@@ -468,6 +512,39 @@ describe("operator-core wiring", () => {
     expect(Object.keys(runs.runsById)).toEqual(["run-1"]);
     expect(runs.stepIdsByRunId["run-1"]).toEqual(["step-1"]);
     expect(runs.attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
+  });
+
+  it("uses payload.occurred_at for work.task events when envelope occurred_at is missing", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:10.000Z"));
+
+    try {
+      const ws = new FakeWsClient();
+      const http = createFakeHttpClient();
+
+      const core = createOperatorCore({
+        wsUrl: "ws://127.0.0.1:8788/ws",
+        httpBaseUrl: "http://127.0.0.1:8788",
+        auth: createBearerTokenAuth("test-token"),
+        deps: { ws, http },
+      });
+
+      ws.emit("work.task.started", {
+        payload: {
+          occurred_at: "2026-01-01T00:00:00.000Z",
+          work_item_id: "work-1",
+          task_id: "task-1",
+          run_id: "run-1",
+        },
+      });
+
+      const tasksByWorkItemId = core.workboardStore.getSnapshot().tasksByWorkItemId;
+      expect(tasksByWorkItemId["work-1"]?.["task-1"]?.last_event_at).toBe(
+        "2026-01-01T00:00:00.000Z",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("records transport_error messages from the WS client", async () => {
