@@ -57,7 +57,7 @@ describe("planner event append-next helpers", () => {
           "plan-1",
           DEFAULT_AGENT_ID,
           DEFAULT_WORKSPACE_ID,
-          "test",
+          "audit",
           "active",
         ],
       );
