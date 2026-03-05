@@ -429,7 +429,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const handleWorkTaskEvent = (type: WorkTaskEvent["type"]) => (data: unknown) => {
     const payload = readPayload(data);
     if (!payload) return;
-    const occurredAt = readOccurredAt(data) ?? new Date().toISOString();
+    const occurredAt = readOccurredAt(data) ?? readOccurredAt(payload) ?? new Date().toISOString();
 
     workboard.handleWorkTaskEvent({
       type,

@@ -514,6 +514,39 @@ describe("operator-core wiring", () => {
     expect(runs.attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
   });
 
+  it("uses payload.occurred_at for work.task events when envelope occurred_at is missing", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:10.000Z"));
+
+    try {
+      const ws = new FakeWsClient();
+      const http = createFakeHttpClient();
+
+      const core = createOperatorCore({
+        wsUrl: "ws://127.0.0.1:8788/ws",
+        httpBaseUrl: "http://127.0.0.1:8788",
+        auth: createBearerTokenAuth("test-token"),
+        deps: { ws, http },
+      });
+
+      ws.emit("work.task.started", {
+        payload: {
+          occurred_at: "2026-01-01T00:00:00.000Z",
+          work_item_id: "work-1",
+          task_id: "task-1",
+          run_id: "run-1",
+        },
+      });
+
+      const tasksByWorkItemId = core.workboardStore.getSnapshot().tasksByWorkItemId;
+      expect(tasksByWorkItemId["work-1"]?.["task-1"]?.last_event_at).toBe(
+        "2026-01-01T00:00:00.000Z",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("records transport_error messages from the WS client", async () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();
