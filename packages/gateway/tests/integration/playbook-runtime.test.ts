@@ -7,6 +7,8 @@ import { createApp } from "../../src/app.js";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ExecutionEngine, type StepExecutor } from "../../src/modules/execution/engine.js";
 import { loadAllPlaybooks } from "../../src/modules/playbook/loader.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { startApprovalEngineActionProcessorForTests } from "./helpers.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -328,21 +330,26 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     const resumeToken = paused.requiresApproval?.resumeToken ?? "";
     expect(resumeToken).toBeTruthy();
 
-    const resumeRes = await app.request("/playbooks/runtime", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        action: "resume",
-        token: resumeToken,
-        approve: false,
-        timeoutMs: 2_000,
-      }),
-    });
+    const processor = startApprovalEngineActionProcessorForTests({ container, engine });
+    try {
+      const resumeRes = await app.request("/playbooks/runtime", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "resume",
+          token: resumeToken,
+          approve: false,
+          timeoutMs: 2_000,
+        }),
+      });
 
-    expect(resumeRes.status).toBe(200);
-    const body = (await resumeRes.json()) as { ok: boolean; status: string };
-    expect(body.ok).toBe(true);
-    expect(body.status).toBe("cancelled");
+      expect(resumeRes.status).toBe(200);
+      const body = (await resumeRes.json()) as { ok: boolean; status: string };
+      expect(body.ok).toBe(true);
+      expect(body.status).toBe("cancelled");
+    } finally {
+      processor.stop();
+    }
 
     const runRow = await container.db.get<{ status: string }>(
       "SELECT status FROM execution_runs WHERE run_id = ?",
@@ -382,26 +389,20 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     const resumeToken = paused.requiresApproval?.resumeToken ?? "";
     expect(resumeToken).toBeTruthy();
 
-    const originalRespond = container.approvalDal.respond.bind(container.approvalDal);
-    const respondSpy = vi
-      .spyOn(container.approvalDal, "respond")
-      .mockImplementation(async (input) => {
-        const nowIso = new Date().toISOString();
-        await container.db.run(
-          "UPDATE approvals SET status = 'approved', resolved_at = ?, resolution_json = ? WHERE tenant_id = ? AND approval_id = ?",
-          [
-            nowIso,
-            JSON.stringify({
-              decision: "approved",
-              resolved_at: nowIso,
-              reason: "approved concurrently",
-            }),
-            input.tenantId,
-            input.approvalId,
-          ],
-        );
-        return await originalRespond(input);
-      });
+    const nowIso = new Date().toISOString();
+    await container.db.run(
+      "UPDATE approvals SET status = 'approved', resolved_at = ?, resolution_json = ? WHERE tenant_id = ? AND resume_token = ?",
+      [
+        nowIso,
+        JSON.stringify({
+          decision: "approved",
+          resolved_at: nowIso,
+          reason: "approved concurrently",
+        }),
+        DEFAULT_TENANT_ID,
+        resumeToken,
+      ],
+    );
 
     const resumeRes = await app.request("/playbooks/runtime", {
       method: "POST",
@@ -413,8 +414,6 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
         timeoutMs: 2_000,
       }),
     });
-
-    respondSpy.mockRestore();
 
     expect(resumeRes.status).toBe(200);
     const body = (await resumeRes.json()) as {
@@ -464,6 +463,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     const resumeToken = paused.requiresApproval?.resumeToken ?? "";
     expect(resumeToken).toBeTruthy();
 
+    const processor = startApprovalEngineActionProcessorForTests({ container, engine });
     const resumePromise = app.request("/playbooks/runtime", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -475,7 +475,11 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
       }),
     });
 
-    await waitForRunStatus(container, runId, ["queued", "running"]);
+    try {
+      await waitForRunStatus(container, runId, ["queued", "running"]);
+    } finally {
+      processor.stop();
+    }
 
     const executor: StepExecutor = {
       execute: vi.fn(async () => ({ success: true, result: { ok: true } })),
@@ -536,6 +540,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
       stepRow?.step_id,
     ]);
 
+    const processor = startApprovalEngineActionProcessorForTests({ container, engine });
     const resumePromise = app.request("/playbooks/runtime", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -547,7 +552,11 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
       }),
     });
 
-    await waitForRunStatus(container, runId, ["queued", "running"]);
+    try {
+      await waitForRunStatus(container, runId, ["queued", "running"]);
+    } finally {
+      processor.stop();
+    }
 
     // Regression: ensure stale paused metadata doesn't shadow the actual execution error.
     await container.db.run(

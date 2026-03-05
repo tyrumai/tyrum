@@ -26,6 +26,7 @@ import { WorkSignalScheduler } from "./modules/workboard/signal-scheduler.js";
 import { createDbSecretProviderFactory } from "./modules/secret/create-secret-provider.js";
 import { ArtifactLifecycleScheduler } from "./modules/artifact/lifecycle.js";
 import { WsNotifier } from "./modules/approval/notifier.js";
+import { ApprovalEngineActionProcessor } from "./modules/approval/engine-action-processor.js";
 import { OutboxDal } from "./modules/backplane/outbox-dal.js";
 import { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
 import { OutboxLifecycleScheduler } from "./modules/backplane/outbox-lifecycle.js";
@@ -58,7 +59,6 @@ import { VERSION } from "./version.js";
 import { PluginRegistry } from "./modules/plugins/registry.js";
 import { installPluginFromDir } from "./modules/plugins/installer.js";
 import { AgentRegistry } from "./modules/agent/registry.js";
-import { isRecord } from "./utils/parse-json-or-yaml.js";
 import { loadLifecycleHooksFromHome } from "./modules/hooks/config.js";
 import { LifecycleHooksRuntime } from "./modules/hooks/runtime.js";
 import { ensureSelfSignedTlsMaterial } from "./modules/tls/self-signed.js";
@@ -1355,14 +1355,16 @@ export async function main(
       reason: string | undefined,
     ) => {
       void container.approvalDal
-        .respond({
+        .resolveWithEngineAction({
           tenantId,
           approvalId,
           decision: approved ? "approved" : "denied",
           reason,
           resolvedBy: { kind: "ws.operator" },
         })
-        .then(async (row) => {
+        .then(async (res) => {
+          const row = res?.approval;
+          const transitioned = res?.transitioned ?? false;
           const desiredStatus = approved ? "approved" : "denied";
           const decisionMatches = row?.status === desiredStatus;
 
@@ -1372,42 +1374,8 @@ export async function main(
             status: row?.status ?? "missing",
             reason,
             decision_matches: decisionMatches,
+            transitioned,
           });
-
-          // Approval decisions are only produced by the edge WebSocket handler, so keep the
-          // run control on wsEngine even when the HTTP engine API is disabled.
-          if (!row || !decisionMatches || !wsEngine) {
-            return;
-          }
-
-          try {
-            const isAgentToolExecution =
-              isRecord(row.context) && row.context["source"] === "agent-tool-execution";
-            const resumeToken = row.resume_token?.trim();
-            const resolvedReason = reason ?? row.status;
-
-            if (row.status === "approved") {
-              if (resumeToken) {
-                await wsEngine.resumeRun(resumeToken);
-              } else if (row.run_id) {
-                await wsEngine.cancelRun(row.run_id, resolvedReason);
-              }
-            } else if (row.status === "denied") {
-              if (isAgentToolExecution && resumeToken) {
-                await wsEngine.resumeRun(resumeToken);
-              } else if (row.run_id) {
-                await wsEngine.cancelRun(row.run_id, resolvedReason);
-              }
-            }
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            logger.error("approval.engine_action_failed", {
-              approval_id: approvalId,
-              approved,
-              run_id: row.run_id,
-              error: message,
-            });
-          }
         })
         .catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
@@ -1535,6 +1503,24 @@ export async function main(
         })
       : undefined;
   telegramProcessor?.start();
+
+  const approvalEngineActionProcessor =
+    shouldRunEdge || shouldRunWorker
+      ? new ApprovalEngineActionProcessor({
+          db: container.db,
+          engine:
+            edgeEngine ??
+            new ExecutionEngine({
+              db: container.db,
+              redactionEngine: container.redactionEngine,
+              policyService: container.policyService,
+              logger,
+            }),
+          owner: instanceId,
+          logger,
+        })
+      : undefined;
+  approvalEngineActionProcessor?.start();
 
   // --- HTTP server with WS upgrade support ---
   const server =
@@ -1772,6 +1758,7 @@ export async function main(
     workSignalScheduler?.stop();
     outboxPoller?.stop();
     telegramProcessor?.stop();
+    approvalEngineActionProcessor?.stop();
     container.modelsDev.stopBackgroundRefresh();
 
     void runShutdownCleanup(

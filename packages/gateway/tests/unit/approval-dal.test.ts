@@ -288,4 +288,65 @@ describe("ApprovalDal", () => {
     expect(fetched).toBeDefined();
     expect(fetched!.created_at).toBe(createdAt.toISOString());
   });
+
+  it("uses createTxDal for respondWithTransition transactions", async () => {
+    db = openTestSqliteDb();
+
+    const txDals: SqlDb[] = [];
+
+    class TrackingApprovalDal extends ApprovalDal {
+      constructor(
+        db: SqlDb,
+        private readonly seenTxDals: SqlDb[],
+      ) {
+        super(db);
+      }
+
+      protected override createTxDal(tx: SqlDb): ApprovalDal {
+        this.seenTxDals.push(tx);
+        return new TrackingApprovalDal(tx, this.seenTxDals);
+      }
+    }
+
+    const txDb: SqlDb = {
+      kind: db.kind,
+      get: async <T>(sql: string, params?: readonly unknown[]) => await db!.get<T>(sql, params),
+      all: async <T>(sql: string, params?: readonly unknown[]) => await db!.all<T>(sql, params),
+      run: async (sql: string, params?: readonly unknown[]) => await db!.run(sql, params),
+      exec: async (sql: string) => await db!.exec(sql),
+      transaction: async <T>(fn: (tx: SqlDb) => Promise<T>) => await fn(txDb),
+      close: async () => await db!.close(),
+    };
+
+    const rootDb: SqlDb = {
+      kind: db.kind,
+      get: async <T>(sql: string, params?: readonly unknown[]) => await db!.get<T>(sql, params),
+      all: async <T>(sql: string, params?: readonly unknown[]) => await db!.all<T>(sql, params),
+      run: async (sql: string, params?: readonly unknown[]) => await db!.run(sql, params),
+      exec: async (sql: string) => await db!.exec(sql),
+      transaction: async <T>(fn: (tx: SqlDb) => Promise<T>) =>
+        await db!.transaction(async () => await fn(txDb)),
+      close: async () => await db!.close(),
+    };
+
+    const dal = new TrackingApprovalDal(rootDb, txDals);
+    const created = await dal.create({
+      tenantId,
+      agentId,
+      workspaceId,
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Approve?",
+    });
+
+    const updated = await dal.respondWithTransition({
+      tenantId,
+      approvalId: created.approval_id,
+      decision: "approved",
+    });
+
+    expect(updated?.row.status).toBe("approved");
+    expect(updated?.transitioned).toBe(true);
+    expect(txDals).toHaveLength(1);
+    expect(txDals[0]).toBe(txDb);
+  });
 });

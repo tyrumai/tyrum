@@ -12,7 +12,6 @@ import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { WsEventEnvelope } from "@tyrum/schemas";
 import { UuidSchema } from "@tyrum/schemas";
-import type { ExecutionEngine } from "../modules/execution/engine.js";
 import { toApprovalContract } from "../modules/approval/to-contract.js";
 import { isSafeSuggestedOverridePattern } from "../modules/policy/override-guardrails.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
@@ -29,7 +28,6 @@ const VALID_STATUSES = new Set<ApprovalStatus>([
 export interface ApprovalRouteDeps {
   approvalDal: ApprovalDal;
   policyOverrideDal?: PolicyOverrideDal;
-  engine?: ExecutionEngine;
   ws?: {
     connectionManager: ConnectionManager;
     cluster?: {
@@ -265,7 +263,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       }
     }
 
-    const updated = await deps.approvalDal.respond({
+    const resolved = await deps.approvalDal.resolveWithEngineAction({
       tenantId,
       approvalId: parsedId.data,
       decision,
@@ -276,7 +274,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
         user_agent: c.req.header("user-agent") ?? undefined,
       },
     });
-    if (!updated) {
+    if (!resolved) {
       return c.json(
         {
           error: "not_found",
@@ -285,26 +283,16 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
         404,
       );
     }
+    const updated = resolved.approval;
+    const transitioned = resolved.transitioned;
 
     const desiredStatus = decision;
     const decisionMatches = updated.status === desiredStatus;
-    if (deps.engine && decisionMatches) {
-      const ctx = updated.context;
-      const isAgentToolExecution = isObject(ctx) && ctx["source"] === "agent-tool-execution";
-
-      if (
-        updated.resume_token &&
-        (updated.status === "approved" || (updated.status === "denied" && isAgentToolExecution))
-      ) {
-        await deps.engine.resumeRun(updated.resume_token);
-      } else if (updated.status === "denied" && updated.run_id) {
-        await deps.engine.cancelRun(updated.run_id, body.reason ?? "approval denied");
-      }
-    }
 
     const createdOverrides: unknown[] = [];
 
     if (
+      transitioned &&
       decisionMatches &&
       updated.status === "approved" &&
       shouldCreateOverrides &&
@@ -342,7 +330,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
     }
 
     const contract = toApprovalContract(updated);
-    if (contract) {
+    if (contract && transitioned) {
       const approvalResolvedEvt: WsEventEnvelope = {
         event_id: crypto.randomUUID(),
         type: "approval.resolved",

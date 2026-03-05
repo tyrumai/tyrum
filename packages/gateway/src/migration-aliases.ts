@@ -12,6 +12,11 @@ export const MIGRATION_FILENAME_ALIASES: Readonly<Record<string, readonly string
     "106_db_config_and_tokens_indexes.sql",
   ],
   "109_default_tenant_guardrails.sql": ["108_default_tenant_guardrails.sql"],
+  "110_approval_engine_actions.sql": [
+    "106_approval_engine_actions.sql",
+    "108_approval_engine_actions.sql",
+    "109_approval_engine_actions.sql",
+  ],
 };
 
 export function findAppliedMigrationAlias(

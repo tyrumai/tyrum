@@ -14,6 +14,8 @@ import { DeploymentConfig } from "@tyrum/schemas";
 import type { DeploymentConfig as DeploymentConfigT } from "@tyrum/schemas";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { AgentRegistry as AgentRegistryImpl } from "../../src/modules/agent/registry.js";
+import { ApprovalEngineActionProcessor } from "../../src/modules/approval/engine-action-processor.js";
+import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { createDbSecretProviderFactory } from "../../src/modules/secret/create-secret-provider.js";
 import { VERSION } from "../../src/version.js";
 import type { SlidingWindowRateLimiter } from "../../src/modules/auth/rate-limiter.js";
@@ -277,4 +279,86 @@ export function minimalPlanRequest(overrides?: Record<string, unknown>): Record<
     tags: [],
     ...overrides,
   };
+}
+
+function resolveApprovalEngineActionEngine(
+  container: GatewayContainer,
+  engine: ExecutionEngine | undefined,
+): ExecutionEngine {
+  return (
+    engine ??
+    new ExecutionEngine({
+      db: container.db,
+      redactionEngine: container.redactionEngine,
+      policyService: container.policyService,
+      logger: container.logger,
+    })
+  );
+}
+
+export function startApprovalEngineActionProcessorForTests(input: {
+  container: GatewayContainer;
+  engine?: ExecutionEngine;
+}): ApprovalEngineActionProcessor {
+  const engine = resolveApprovalEngineActionEngine(input.container, input.engine);
+  const processor = new ApprovalEngineActionProcessor({
+    db: input.container.db,
+    engine,
+    owner: "test-instance",
+    logger: input.container.logger,
+    tickMs: 1,
+    leaseTtlMs: 5_000,
+    maxAttempts: 10,
+    batchSize: 10,
+  });
+  processor.start();
+  return processor;
+}
+
+export async function drainApprovalEngineActions(input: {
+  container: GatewayContainer;
+  engine?: ExecutionEngine;
+  maxTicks?: number;
+}): Promise<void> {
+  const engine = resolveApprovalEngineActionEngine(input.container, input.engine);
+  const processor = new ApprovalEngineActionProcessor({
+    db: input.container.db,
+    engine,
+    owner: "test-instance",
+    logger: input.container.logger,
+    tickMs: 1,
+    leaseTtlMs: 5_000,
+    maxAttempts: 10,
+    batchSize: 10,
+  });
+
+  const maxTicks = input.maxTicks ?? 25;
+  for (let i = 0; i < maxTicks; i += 1) {
+    await processor.tick();
+    const pending = await input.container.db.get<{ count: number }>(
+      `SELECT COUNT(*) AS count
+       FROM approval_engine_actions
+       WHERE tenant_id = ?
+         AND status IN ('queued', 'processing')`,
+      [DEFAULT_TENANT_ID],
+    );
+    if ((pending?.count ?? 0) === 0) return;
+  }
+
+  const rows = await input.container.db.all<{
+    action_id: string;
+    approval_id: string;
+    action_kind: string;
+    status: string;
+    attempts: number;
+    last_error: string | null;
+  }>(
+    `SELECT action_id, approval_id, action_kind, status, attempts, last_error
+     FROM approval_engine_actions
+     WHERE tenant_id = ?
+       AND status IN ('queued', 'processing')
+     ORDER BY updated_at ASC, action_id ASC`,
+    [DEFAULT_TENANT_ID],
+  );
+  throw new Error(`timed out draining approval engine actions: ${JSON.stringify(rows, null, 2)}`);
 }

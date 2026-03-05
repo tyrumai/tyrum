@@ -477,14 +477,14 @@ export async function handleClientMessage(
       };
     }
 
-    const updated = await deps.approvalDal.respond({
+    const resolved = await deps.approvalDal.resolveWithEngineAction({
       tenantId,
       approvalId: req.approval_id,
       decision: req.decision,
       reason: req.reason,
       resolvedBy: { kind: "ws", client_id: client.id },
     });
-    if (!updated) {
+    if (!resolved) {
       return errorResponse(
         msg.request_id,
         msg.type,
@@ -492,6 +492,8 @@ export async function handleClientMessage(
         `approval ${String(req.approval_id)} not found`,
       );
     }
+    const updated = resolved.approval;
+    const transitioned = resolved.transitioned;
 
     const desiredStatus = req.decision === "approved" ? "approved" : "denied";
     const decisionMatches = updated.status === desiredStatus;
@@ -504,29 +506,11 @@ export async function handleClientMessage(
         decision: req.decision,
         status: updated.status,
       });
-    } else if (deps.engine) {
-      try {
-        if (updated.status === "approved" && updated.resume_token) {
-          await deps.engine.resumeRun(updated.resume_token);
-        } else if (updated.status === "denied" && updated.run_id) {
-          await deps.engine.cancelRun(updated.run_id, req.reason ?? "approval denied");
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        deps.logger?.error("approval.engine_action_failed", {
-          request_id: msg.request_id,
-          client_id: client.id,
-          request_type: msg.type,
-          approval_id: updated.approval_id,
-          decision: req.decision,
-          run_id: updated.run_id,
-          error: message,
-        });
-      }
     }
 
     let createdOverrides: unknown[] | undefined;
     if (
+      transitioned &&
       decisionMatches &&
       updated.status === "approved" &&
       req.mode === "always" &&
@@ -575,16 +559,18 @@ export async function handleClientMessage(
       created_overrides: createdOverrides,
     });
 
-    broadcastEvent(
-      tenantId,
-      {
-        event_id: crypto.randomUUID(),
-        type: "approval.resolved",
-        occurred_at: new Date().toISOString(),
-        payload: { approval },
-      },
-      deps,
-    );
+    if (transitioned) {
+      broadcastEvent(
+        tenantId,
+        {
+          event_id: crypto.randomUUID(),
+          type: "approval.resolved",
+          occurred_at: new Date().toISOString(),
+          payload: { approval },
+        },
+        deps,
+      );
+    }
     return { request_id: msg.request_id, type: msg.type, ok: true, result };
   }
 

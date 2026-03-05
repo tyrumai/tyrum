@@ -8,7 +8,7 @@ import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ExecutionEngine, type StepExecutor } from "../../src/modules/execution/engine.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
-import { decorateAppWithDefaultAuth } from "./helpers.js";
+import { decorateAppWithDefaultAuth, drainApprovalEngineActions } from "./helpers.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -129,6 +129,8 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
     });
     expect(approveRes.status).toBe(200);
 
+    await drainApprovalEngineActions({ container, engine });
+
     const resumed = await container.db.get<{ status: string; paused_reason: string | null }>(
       "SELECT status, paused_reason FROM execution_runs WHERE run_id = ?",
       [payload.run_id],
@@ -209,6 +211,8 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
       body: JSON.stringify({ decision: "denied", reason: "no" }),
     });
     expect(denyRes.status).toBe(200);
+
+    await drainApprovalEngineActions({ container, engine });
 
     const cancelled = await container.db.get<{ status: string }>(
       "SELECT status FROM execution_runs WHERE run_id = ?",
