@@ -9,6 +9,7 @@ import { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import { AuthAudit } from "../modules/auth/audit.js";
 import { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
 import { ArtifactLifecycleScheduler } from "../modules/artifact/lifecycle.js";
+import { ApprovalEngineActionProcessor } from "../modules/approval/engine-action-processor.js";
 import { WsNotifier } from "../modules/approval/notifier.js";
 import { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
@@ -45,7 +46,6 @@ import { VERSION } from "../version.js";
 import { ConnectionManager } from "../ws/connection-manager.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
 import { TaskResultRegistry, type TaskResult } from "../ws/protocol/task-result-registry.js";
-import { isRecord } from "../utils/parse-json-or-yaml.js";
 import {
   applyStartCommandDeploymentOverrides,
   assertSplitRoleUsesPostgres,
@@ -110,6 +110,7 @@ interface ProtocolRuntime {
   wsEngine?: ExecutionEngine;
   edgeEngine?: ExecutionEngine;
   hooksRuntime?: LifecycleHooksRuntime;
+  approvalEngineActionProcessor?: ApprovalEngineActionProcessor;
   taskResults: TaskResultRegistry;
   protocolDeps: ProtocolDeps;
   approvalNotifier: WsNotifier;
@@ -394,11 +395,15 @@ async function createProtocolRuntime(
 
   const wsEngine = context.shouldRunEdge ? createExecutionEngine(context) : undefined;
   const edgeEngine = context.deploymentConfig.execution.engineApiEnabled ? wsEngine : undefined;
+  const approvalEngine =
+    context.shouldRunEdge || context.shouldRunWorker
+      ? (edgeEngine ?? createExecutionEngine(context, { includeSecrets: false }))
+      : undefined;
   const hooksRuntime =
     context.lifecycleHooks.length > 0 && (context.shouldRunEdge || context.shouldRunWorker)
       ? new LifecycleHooksRuntime({
           db: context.container.db,
-          engine: edgeEngine ?? createExecutionEngine(context, { includeSecrets: false }),
+          engine: approvalEngine!,
           policyService: context.container.policyService,
           hooks: context.lifecycleHooks,
         })
@@ -455,14 +460,16 @@ async function createProtocolRuntime(
       reason: string | undefined,
     ) => {
       void context.container.approvalDal
-        .respond({
+        .resolveWithEngineAction({
           tenantId,
           approvalId,
           decision: approved ? "approved" : "denied",
           reason,
           resolvedBy: { kind: "ws.operator" },
         })
-        .then(async (row) => {
+        .then((res) => {
+          const row = res?.approval;
+          const transitioned = res?.transitioned ?? false;
           const desiredStatus = approved ? "approved" : "denied";
           const decisionMatches = row?.status === desiredStatus;
 
@@ -472,40 +479,8 @@ async function createProtocolRuntime(
             status: row?.status ?? "missing",
             reason,
             decision_matches: decisionMatches,
+            transitioned,
           });
-
-          if (!row || !decisionMatches || !wsEngine) {
-            return;
-          }
-
-          try {
-            const isAgentToolExecution =
-              isRecord(row.context) && row.context["source"] === "agent-tool-execution";
-            const resumeToken = row.resume_token?.trim();
-            const resolvedReason = reason ?? row.status;
-
-            if (row.status === "approved") {
-              if (resumeToken) {
-                await wsEngine.resumeRun(resumeToken);
-              } else if (row.run_id) {
-                await wsEngine.cancelRun(row.run_id, resolvedReason);
-              }
-            } else if (row.status === "denied") {
-              if (isAgentToolExecution && resumeToken) {
-                await wsEngine.resumeRun(resumeToken);
-              } else if (row.run_id) {
-                await wsEngine.cancelRun(row.run_id, resolvedReason);
-              }
-            }
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            context.logger.error("approval.engine_action_failed", {
-              approval_id: approvalId,
-              approved,
-              run_id: row.run_id,
-              error: message,
-            });
-          }
         })
         .catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
@@ -520,6 +495,15 @@ async function createProtocolRuntime(
   };
 
   protocolDeps.memoryV1BudgetsProvider = createMemoryV1BudgetsProvider(context.container.db);
+  const approvalEngineActionProcessor = approvalEngine
+    ? new ApprovalEngineActionProcessor({
+        db: context.container.db,
+        engine: approvalEngine,
+        owner: context.instanceId,
+        logger: context.logger,
+      })
+    : undefined;
+  approvalEngineActionProcessor?.start();
 
   return {
     connectionManager,
@@ -529,6 +513,7 @@ async function createProtocolRuntime(
     wsEngine,
     edgeEngine,
     hooksRuntime,
+    approvalEngineActionProcessor,
     taskResults,
     protocolDeps,
     approvalNotifier: new WsNotifier(protocolDeps),
@@ -901,6 +886,7 @@ function createShutdownHandler(
     runtime.background.outboxLifecycleScheduler?.stop();
     runtime.background.stateStoreLifecycleScheduler?.stop();
     runtime.protocol.workSignalScheduler?.stop();
+    runtime.protocol.approvalEngineActionProcessor?.stop();
     runtime.edge.outboxPoller?.stop();
     runtime.edge.telegramProcessor?.stop();
     context.container.modelsDev.stopBackgroundRefresh();

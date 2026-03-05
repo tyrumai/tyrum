@@ -31,6 +31,8 @@ describe("gateway approval engine action fallback", () => {
     const policyService = { isEnabled: vi.fn(() => false) };
     const redactionEngine = { redact: vi.fn((value: string) => value) };
     const executionEngineOptions: unknown[] = [];
+    const approvalProcessorOptions: unknown[] = [];
+    let approvalProcessorStarts = 0;
 
     vi.doMock("../../src/statestore/postgres.js", () => ({
       PostgresDb: {
@@ -159,7 +161,14 @@ describe("gateway approval engine action fallback", () => {
 
     vi.doMock("../../src/modules/approval/engine-action-processor.js", () => ({
       ApprovalEngineActionProcessor: class ApprovalEngineActionProcessor {
-        start(): void {}
+        constructor(opts: unknown) {
+          approvalProcessorOptions.push(opts);
+        }
+
+        start(): void {
+          approvalProcessorStarts += 1;
+        }
+
         stop(): void {}
       },
     }));
@@ -197,14 +206,22 @@ describe("gateway approval engine action fallback", () => {
       (opts) =>
         typeof opts === "object" &&
         opts !== null &&
-        !("secretProviderForTenant" in opts) &&
-        "redactionEngine" in opts,
+        "redactionEngine" in opts &&
+        ("secretProviderForTenant" in opts ? opts.secretProviderForTenant === undefined : false),
     );
 
     expect(approvalFallback).toMatchObject({
       db,
       redactionEngine,
       policyService,
+    });
+    expect(approvalProcessorStarts).toBe(1);
+    expect(approvalProcessorOptions).toHaveLength(1);
+    expect(approvalProcessorOptions[0]).toMatchObject({
+      db,
+      logger,
+      owner: expect.any(String),
+      engine: expect.any(Object),
     });
   }, 15_000);
 });
