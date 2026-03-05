@@ -1,4 +1,5 @@
 import type { ConnectedClient } from "../../src/ws/connection-manager.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 export function createAdminWsClient(
   overrides?: Partial<Omit<ConnectedClient, "readyCapabilities">> & {
@@ -9,7 +10,12 @@ export function createAdminWsClient(
     id: "test-client",
     ws: {} as unknown as ConnectedClient["ws"],
     role: "client",
-    auth_claims: { token_kind: "admin", role: "admin", scopes: ["*"] },
+    auth_claims: {
+      token_kind: "admin",
+      role: "admin",
+      scopes: ["*"],
+      tenant_id: DEFAULT_TENANT_ID,
+    },
     protocol_rev: 1,
     capabilities: [],
     readyCapabilities: overrides?.readyCapabilities ?? new Set(),
