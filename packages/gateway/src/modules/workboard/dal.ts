@@ -15,6 +15,7 @@ import type * as DalHelpers from "./dal-helpers.js";
 import { WorkboardItemRelationsDal } from "./item-relations-dal.js";
 import { WorkboardItemTransitionsDal } from "./item-transitions-dal.js";
 import { WorkboardItemsDal } from "./items-dal.js";
+import { WorkboardScopeActivityDal } from "./scope-activity-dal.js";
 import { WorkboardSignalsDal } from "./signals-dal.js";
 import { WorkboardStateKvDal } from "./state-kv-dal.js";
 import { WorkboardSubagentDal } from "./subagent-dal.js";
@@ -35,6 +36,7 @@ export class WorkboardDal {
   private readonly taskUpdates: WorkboardTaskUpdatesDal;
   private readonly taskLeasing: WorkboardTaskLeasingDal;
   private readonly subagents: WorkboardSubagentDal;
+  private readonly scopeActivity: WorkboardScopeActivityDal;
   private readonly signals: WorkboardSignalsDal;
 
   constructor(
@@ -58,6 +60,7 @@ export class WorkboardDal {
       enqueueWsEventTx: (tx, evt) => this.enqueueWsEventTx(tx, evt),
     });
     this.subagents = new WorkboardSubagentDal({ db, getItem });
+    this.scopeActivity = new WorkboardScopeActivityDal(db);
     this.signals = new WorkboardSignalsDal(db);
   }
 
@@ -540,14 +543,14 @@ export class WorkboardDal {
   }
 
   upsertScopeActivity(
-    ...args: Parameters<WorkboardSignalsDal["upsertScopeActivity"]>
-  ): ReturnType<WorkboardSignalsDal["upsertScopeActivity"]> {
-    return this.signals.upsertScopeActivity(...args);
+    ...args: Parameters<WorkboardScopeActivityDal["upsertScopeActivity"]>
+  ): ReturnType<WorkboardScopeActivityDal["upsertScopeActivity"]> {
+    return this.scopeActivity.upsertScopeActivity(...args);
   }
 
   getScopeActivity(
-    ...args: Parameters<WorkboardSignalsDal["getScopeActivity"]>
-  ): ReturnType<WorkboardSignalsDal["getScopeActivity"]> {
-    return this.signals.getScopeActivity(...args);
+    ...args: Parameters<WorkboardScopeActivityDal["getScopeActivity"]>
+  ): ReturnType<WorkboardScopeActivityDal["getScopeActivity"]> {
+    return this.scopeActivity.getScopeActivity(...args);
   }
 }
