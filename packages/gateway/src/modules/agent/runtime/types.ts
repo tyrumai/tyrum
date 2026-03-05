@@ -1,7 +1,14 @@
 import type { LanguageModel } from "ai";
+import type {
+  AgentConfig as AgentConfigT,
+  IdentityPack as IdentityPackT,
+  McpServerSpec as McpServerSpecT,
+} from "@tyrum/schemas";
 import type { GatewayContainer } from "../../../container.js";
 import type { McpManager } from "../mcp-manager.js";
+import { MarkdownMemoryStore } from "../markdown-memory.js";
 import type { SessionDal } from "../session-dal.js";
+import type { LoadedSkillManifest } from "../workspace.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
@@ -41,6 +48,14 @@ export interface AgentRuntimeOptions {
   approvalPollMs?: number;
   /** Maximum duration for a single turn to complete via the execution engine. */
   turnEngineWaitMs?: number;
+}
+
+export interface AgentLoadedContext {
+  config: AgentConfigT;
+  identity: IdentityPackT;
+  skills: LoadedSkillManifest[];
+  mcpServers: McpServerSpecT[];
+  memoryStore: MarkdownMemoryStore;
 }
 
 export interface AgentContextPartReport {

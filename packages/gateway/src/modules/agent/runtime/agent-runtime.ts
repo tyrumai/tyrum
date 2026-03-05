@@ -1,14 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
 import { generateText, stepCountIs, streamText } from "ai";
-import type { EmbeddingModel, LanguageModel, ModelMessage, ToolSet } from "ai";
+import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import type {
   AgentStatusResponse as AgentStatusResponseT,
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
   AgentConfig as AgentConfigT,
   McpServerSpec as McpServerSpecT,
-  IdentityPack as IdentityPackT,
   NormalizedContainerKind,
   SecretHandle as SecretHandleT,
   WorkScope,
@@ -17,7 +16,6 @@ import {
   AgentConfig,
   AgentKey,
   AgentStatusResponse,
-  AgentTurnResponse,
   ContextReport as ContextReportSchema,
   SubagentSessionKey,
   WorkspaceKey,
@@ -45,7 +43,6 @@ import {
   type ResolvedAgentTurnInput,
   resolveMainLaneSessionKey,
   resolveTurnRequestId,
-  shouldPromoteToCoreMemory,
   type StepPauseRequest,
 } from "./turn-helpers.js";
 import {
@@ -55,30 +52,16 @@ import {
   formatSkillsPrompt,
   formatToolPrompt,
 } from "./prompts.js";
-import {
-  buildProviderResolutionSetup,
-  listOrderedEligibleProfilesForProvider,
-  parseProviderModelId,
-  resolveProfileApiKey,
-  resolveProviderBaseURL,
-} from "./provider-resolution.js";
 import { resolveSessionModel as resolveSessionModelImpl } from "./session-model-resolution.js";
-import { looksLikeSecretText } from "./secrets.js";
-import type { AgentContextReport, AgentRuntimeOptions } from "./types.js";
+import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
+import { finalizeTurn } from "./turn-finalization.js";
+import { buildWorkFocusDigest } from "./work-focus-digest.js";
+import type { AgentContextReport, AgentLoadedContext, AgentRuntimeOptions } from "./types.js";
 import { ensureWorkspaceInitialized, resolveTyrumHome } from "../home.js";
-import {
-  decideCrossTurnLoopWarning,
-  detectWithinTurnToolLoop,
-  LOOP_WARNING_PREFIX,
-} from "../loop-detection.js";
+import { detectWithinTurnToolLoop } from "../loop-detection.js";
 import { MarkdownMemoryStore } from "../markdown-memory.js";
 import { SessionDal, type SessionRow } from "../session-dal.js";
-import {
-  loadEnabledMcpServers,
-  loadEnabledSkills,
-  loadIdentity,
-  type LoadedSkillManifest,
-} from "../workspace.js";
+import { loadEnabledMcpServers, loadEnabledSkills, loadIdentity } from "../workspace.js";
 import { AgentConfigDal } from "../../config/agent-config-dal.js";
 import { isToolAllowed, selectToolDirectory } from "../tools.js";
 import { getExecutionProfile, normalizeExecutionProfileId } from "../execution-profiles.js";
@@ -89,11 +72,8 @@ import { NodeDispatchService } from "../node-dispatch-service.js";
 import { ToolExecutor } from "../tool-executor.js";
 import { tagContent } from "../provenance.js";
 import { sanitizeForModel } from "../sanitizer.js";
-import { VectorDal } from "../../memory/vector-dal.js";
-import { EmbeddingPipeline } from "../../memory/embedding-pipeline.js";
 import { MemoryV1Dal } from "../../memory/v1-dal.js";
 import { buildMemoryV1Digest } from "../../memory/v1-digest.js";
-import { recordMemoryV1SystemEpisode } from "../../memory/v1-episode-recorder.js";
 import {
   MemoryV1SemanticIndex,
   type MemoryV1SemanticSearchHit,
@@ -102,7 +82,6 @@ import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
-import { createProviderFromNpm } from "../../models/provider-factory.js";
 import {
   appendToolApprovalResponseMessage,
   countAssistantMessages,
@@ -130,10 +109,6 @@ const WITHIN_TURN_LOOP_STOP_REPLY =
   "Loop detected (repeated tool calls); stopping to avoid runaway execution. " +
   "If you want me to continue, adjust the request/constraints or ask me to try a different approach.";
 
-const CROSS_TURN_LOOP_WARNING_TEXT =
-  `${LOOP_WARNING_PREFIX} I may be repeating myself. If this isn’t progressing, tell me what to change ` +
-  "(goal/constraints/example output) and I’ll take a different approach.";
-
 function makeEventfulAbortSignal(upstream: AbortSignal | undefined): AbortSignal | undefined {
   if (!upstream) return undefined;
   const controller = new AbortController();
@@ -150,14 +125,6 @@ function makeEventfulAbortSignal(upstream: AbortSignal | undefined): AbortSignal
   return controller.signal;
 }
 
-interface AgentLoadedContext {
-  config: AgentConfigT;
-  identity: IdentityPackT;
-  skills: LoadedSkillManifest[];
-  mcpServers: McpServerSpecT[];
-  memoryStore: MarkdownMemoryStore;
-}
-
 type TurnExecutionContext = {
   planId: string;
   runId: string;
@@ -170,11 +137,6 @@ type ResolvedExecutionProfile = {
   id: ExecutionProfileId;
   profile: ExecutionProfile;
   source: "interaction_default" | "subagent_record" | "subagent_fallback";
-};
-
-type EmbeddingModelProviderSdk = {
-  textEmbeddingModel?: (modelId: string) => EmbeddingModel;
-  embeddingModel?: (modelId: string) => EmbeddingModel;
 };
 
 const NOOP_APPROVAL_NOTIFIER: ApprovalNotifier = {
@@ -205,50 +167,6 @@ export class AgentRuntime {
   private readonly turnEngineWaitMs: number;
   private lastContextReport: AgentContextReport | undefined;
   private cleanupAtMs = 0;
-
-  private async buildWorkFocusDigest(scope: WorkScope): Promise<string> {
-    try {
-      const workboard = new WorkboardDal(
-        this.opts.container.db,
-        this.opts.container.redactionEngine,
-      );
-      const [{ items: doing }, { items: blocked }, { items: ready }] = await Promise.all([
-        workboard.listItems({ scope, statuses: ["doing"], limit: 3 }),
-        workboard.listItems({ scope, statuses: ["blocked"], limit: 3 }),
-        workboard.listItems({ scope, statuses: ["ready"], limit: 3 }),
-      ]);
-
-      if (doing.length === 0 && blocked.length === 0 && ready.length === 0) {
-        return "No active WorkItems.";
-      }
-
-      const lines: string[] = [];
-      if (doing.length > 0) {
-        lines.push("Doing:");
-        for (const item of doing) {
-          lines.push(`- ${item.work_item_id} — ${item.title}`);
-        }
-      }
-      if (blocked.length > 0) {
-        lines.push("Blocked:");
-        for (const item of blocked) {
-          lines.push(`- ${item.work_item_id} — ${item.title}`);
-        }
-      }
-      if (ready.length > 0) {
-        lines.push("Ready:");
-        for (const item of ready) {
-          lines.push(`- ${item.work_item_id} — ${item.title}`);
-        }
-      }
-
-      return lines.join("\n");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.opts.container.logger.warn("workboard.focus_digest_failed", { error: message });
-      return "Work focus digest unavailable.";
-    }
-  }
 
   constructor(private readonly opts: AgentRuntimeOptions) {
     this.home = opts.home ?? resolveTyrumHome();
@@ -538,14 +456,17 @@ export class AgentRuntime {
         },
         createdFromSessionKey: mainLaneSessionKey,
       });
-      const response = await this.finalizeTurn(
+      this.lastContextReport = contextReport;
+      const response = await finalizeTurn({
+        container: this.opts.container,
+        sessionDal: this.sessionDal,
         ctx,
         session,
         resolved,
-        delegation.reply,
+        reply: delegation.reply,
         usedTools,
         contextReport,
-      );
+      });
 
       const streamResult = streamText({
         model: createStaticLanguageModelV3(delegation.reply),
@@ -591,15 +512,25 @@ export class AgentRuntime {
       ],
       tools: toolSet,
       stopWhen,
-      prepareStep: ({ messages }) =>
-        this.prepareLaneQueueStep(laneQueue, messages, ctx.config.sessions.context_pruning),
+      prepareStep: ({ messages: stepMessages }) =>
+        this.prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
     });
 
     const finalize = async (): Promise<AgentTurnResponseT> => {
       const result = await streamResult;
       const rawReply = (await result.text) || "";
       const reply = this.resolveTurnReply(rawReply, withinTurnLoop.value);
-      return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+      this.lastContextReport = contextReport;
+      return await finalizeTurn({
+        container: this.opts.container,
+        sessionDal: this.sessionDal,
+        ctx,
+        session,
+        resolved,
+        reply,
+        usedTools,
+        contextReport,
+      });
     };
 
     return { streamResult, sessionId: session.session_id, finalize };
@@ -705,7 +636,17 @@ export class AgentRuntime {
         reply = "WorkBoard status is unavailable.";
       }
 
-      return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+      this.lastContextReport = contextReport;
+      return await finalizeTurn({
+        container: this.opts.container,
+        sessionDal: this.sessionDal,
+        ctx,
+        session,
+        resolved,
+        reply,
+        usedTools,
+        contextReport,
+      });
     }
 
     const intakeModeDecision = parseIntakeModeDecision(resolved.message);
@@ -782,7 +723,17 @@ export class AgentRuntime {
       }
 
       const reply = `Delegated work item created: ${item.work_item_id} (mode=${intakeModeDecision.mode}, reason=${intakeModeDecision.reason_code})`;
-      return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+      this.lastContextReport = contextReport;
+      return await finalizeTurn({
+        container: this.opts.container,
+        sessionDal: this.sessionDal,
+        ctx,
+        session,
+        resolved,
+        reply,
+        usedTools,
+        contextReport,
+      });
     }
 
     const intake = await this.resolveIntakeDecision({
@@ -800,14 +751,17 @@ export class AgentRuntime {
         scope: workScope,
         createdFromSessionKey: mainLaneSessionKey,
       });
-      return await this.finalizeTurn(
+      this.lastContextReport = contextReport;
+      return await finalizeTurn({
+        container: this.opts.container,
+        sessionDal: this.sessionDal,
         ctx,
         session,
         resolved,
-        delegation.reply,
+        reply: delegation.reply,
         usedTools,
         contextReport,
-      );
+      });
     }
 
     await maybeRunPreCompactionMemoryFlush(
@@ -869,7 +823,17 @@ export class AgentRuntime {
     const remainingSteps = this.maxSteps - stepsUsedSoFar;
     if (remainingSteps <= 0) {
       const reply = "No assistant response returned.";
-      return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+      this.lastContextReport = contextReport;
+      return await finalizeTurn({
+        container: this.opts.container,
+        sessionDal: this.sessionDal,
+        ctx,
+        session,
+        resolved,
+        reply,
+        usedTools,
+        contextReport,
+      });
     }
 
     const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
@@ -887,8 +851,8 @@ export class AgentRuntime {
       messages,
       tools: toolSet,
       stopWhen,
-      prepareStep: ({ messages }) =>
-        this.prepareLaneQueueStep(laneQueue, messages, ctx.config.sessions.context_pruning),
+      prepareStep: ({ messages: stepMessages }) =>
+        this.prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
       abortSignal,
     });
     const stepsUsedAfterCall = stepsUsedSoFar + result.steps.length;
@@ -971,7 +935,17 @@ export class AgentRuntime {
 
     const rawReply = result.text || "";
     const reply = this.resolveTurnReply(rawReply, withinTurnLoop.value);
-    return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+    this.lastContextReport = contextReport;
+    return await finalizeTurn({
+      container: this.opts.container,
+      sessionDal: this.sessionDal,
+      ctx,
+      session,
+      resolved,
+      reply,
+      usedTools,
+      contextReport,
+    });
   }
 
   private async turnViaExecutionEngine(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
@@ -1007,12 +981,16 @@ export class AgentRuntime {
     agentId: string,
   ): Promise<MemoryV1SemanticSearchHit[]> {
     try {
-      const pipeline = await this.resolveEmbeddingPipeline(
+      const pipeline = await resolveEmbeddingPipeline({
+        container: this.opts.container,
+        secretProvider: this.opts.secretProvider,
+        instanceOwner: this.instanceOwner,
+        fetchImpl: this.fetchImpl,
         primaryModelId,
         sessionId,
         tenantId,
         agentId,
-      );
+      });
       if (!pipeline) return [];
       const index = new MemoryV1SemanticIndex({
         db: this.opts.container.db,
@@ -1027,204 +1005,6 @@ export class AgentRuntime {
     } catch {
       // Intentional: semantic search is best-effort; fall back to no hits on failure.
       return [];
-    }
-  }
-
-  private async resolveEmbeddingPipeline(
-    primaryModelId: string,
-    sessionId: string,
-    tenantId: string,
-    agentId: string,
-  ): Promise<EmbeddingPipeline | undefined> {
-    try {
-      const loaded = await this.opts.container.modelCatalog.getEffectiveCatalog({ tenantId });
-      const catalog = loaded.catalog;
-
-      type ProviderEntry = (typeof catalog)[string];
-      type ModelEntry = NonNullable<ProviderEntry["models"]>[string];
-      type ResolvedEmbeddingCandidate = {
-        providerId: string;
-        modelId: string;
-        provider: ProviderEntry;
-        model: ModelEntry;
-        npm: string;
-        api: string | undefined;
-      };
-
-      const isEmbeddingModel = (id: string, model: ModelEntry): boolean => {
-        if (/embedding/i.test(id)) return true;
-        const family = (model as { family?: unknown }).family;
-        if (typeof family === "string" && /embedding/i.test(family)) return true;
-        const name = (model as { name?: unknown }).name;
-        return typeof name === "string" && /embedding/i.test(name);
-      };
-
-      const resolveEmbeddingCandidate = (
-        providerId: string,
-      ): ResolvedEmbeddingCandidate | undefined => {
-        const provider = catalog[providerId];
-        if (!provider) return undefined;
-        const providerEnabled = (provider as { enabled?: boolean }).enabled ?? true;
-        if (!providerEnabled) return undefined;
-
-        const models = provider.models ?? {};
-        const preferredIds = ["text-embedding-3-small", "text-embedding-3-large"];
-        let embeddingModelId: string | undefined;
-        for (const id of preferredIds) {
-          const candidate = models[id];
-          const candidateEnabled = candidate
-            ? ((candidate as { enabled?: boolean }).enabled ?? true)
-            : false;
-          if (candidate && candidateEnabled) {
-            embeddingModelId = id;
-            break;
-          }
-        }
-        if (!embeddingModelId) {
-          const candidateIds = Object.entries(models)
-            .filter(
-              ([id, model]) =>
-                ((model as { enabled?: boolean }).enabled ?? true) && isEmbeddingModel(id, model),
-            )
-            .map(([id]) => id)
-            .sort((a, b) => a.localeCompare(b));
-          embeddingModelId = candidateIds[0];
-        }
-
-        if (!embeddingModelId) return undefined;
-        const model = models[embeddingModelId];
-        if (!model) return undefined;
-
-        const providerOverride = (model as { provider?: { npm?: string; api?: string } }).provider;
-        const npm = providerOverride?.npm ?? provider.npm;
-        const api = providerOverride?.api ?? provider.api;
-        if (!npm) return undefined;
-
-        return {
-          providerId,
-          modelId: embeddingModelId,
-          provider,
-          model,
-          npm,
-          api,
-        };
-      };
-
-      const primaryProviderId = (() => {
-        try {
-          return parseProviderModelId(primaryModelId).providerId;
-        } catch {
-          // Intentional: primary model id may not follow provider/model format; treat as unknown.
-          return undefined;
-        }
-      })();
-
-      const orderedProviderIds: string[] = [];
-      const seen = new Set<string>();
-      const addProvider = (id: string | undefined): void => {
-        const trimmed = id?.trim();
-        if (!trimmed) return;
-        const provider = catalog[trimmed];
-        if (!provider) return;
-        const enabled = (provider as { enabled?: boolean }).enabled ?? true;
-        if (!enabled) return;
-        if (seen.has(trimmed)) return;
-        seen.add(trimmed);
-        orderedProviderIds.push(trimmed);
-      };
-
-      addProvider(primaryProviderId);
-      addProvider("openai");
-      for (const id of Object.keys(catalog).sort((a, b) => a.localeCompare(b))) {
-        addProvider(id);
-      }
-
-      const {
-        secretProvider,
-        authProfileDal,
-        pinDal,
-        oauthProviderRegistry,
-        oauthRefreshLeaseDal,
-        logger,
-        oauthLeaseOwner,
-        fetchImpl,
-      } = buildProviderResolutionSetup({
-        container: this.opts.container,
-        secretProvider: this.opts.secretProvider,
-        oauthLeaseOwner: this.instanceOwner,
-        fetchImpl: this.fetchImpl,
-      });
-
-      const resolveProviderApiKey = async (providerId: string): Promise<string | undefined> => {
-        const orderedProfiles = await listOrderedEligibleProfilesForProvider({
-          tenantId,
-          sessionId,
-          providerKey: providerId,
-          authProfileDal,
-          pinDal,
-        });
-
-        for (const profile of orderedProfiles) {
-          const apiKey = await resolveProfileApiKey(profile, {
-            tenantId,
-            secretProvider,
-            oauthProviderRegistry,
-            oauthRefreshLeaseDal,
-            oauthLeaseOwner,
-            logger,
-            fetchImpl,
-          });
-          if (apiKey) return apiKey;
-        }
-
-        return undefined;
-      };
-
-      for (const providerId of orderedProviderIds) {
-        const candidate = resolveEmbeddingCandidate(providerId);
-        if (!candidate) continue;
-
-        const apiKey = await resolveProviderApiKey(candidate.providerId);
-        const providerEnv = (candidate.provider as { env?: unknown }).env;
-        const providerRequiresApiKey = Array.isArray(providerEnv)
-          ? providerEnv.some((entry) => typeof entry === "string" && entry.trim().length > 0)
-          : true;
-        if (!apiKey && providerRequiresApiKey) continue;
-
-        const baseURL = resolveProviderBaseURL({
-          providerApi: candidate.api,
-        });
-
-        const sdk = createProviderFromNpm({
-          npm: candidate.npm,
-          providerId: candidate.providerId,
-          apiKey,
-          baseURL,
-          fetchImpl: this.fetchImpl,
-        });
-
-        const sdkAny = sdk as EmbeddingModelProviderSdk;
-        const embeddingModel =
-          typeof sdkAny.textEmbeddingModel === "function"
-            ? sdkAny.textEmbeddingModel(candidate.modelId)
-            : typeof sdkAny.embeddingModel === "function"
-              ? sdkAny.embeddingModel(candidate.modelId)
-              : undefined;
-        if (!embeddingModel) continue;
-
-        const vectorDal = new VectorDal(this.opts.container.db);
-        return new EmbeddingPipeline({
-          vectorDal,
-          scope: { tenantId, agentId },
-          embeddingModel,
-          embeddingModelId: `${candidate.providerId}/${candidate.modelId}`,
-        });
-      }
-
-      return undefined;
-    } catch {
-      // Intentional: embedding pipeline resolution is best-effort; fall back to other retrieval strategies.
-      return undefined;
     }
   }
 
@@ -1436,10 +1216,13 @@ export class AgentRuntime {
     const workFocusDigest =
       isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
         ? "Skipped for command turns."
-        : await this.buildWorkFocusDigest({
-            tenant_id: session.tenant_id,
-            agent_id: session.agent_id,
-            workspace_id: session.workspace_id,
+        : await buildWorkFocusDigest({
+            container: this.opts.container,
+            scope: {
+              tenant_id: session.tenant_id,
+              agent_id: session.agent_id,
+              workspace_id: session.workspace_id,
+            },
           });
 
     const identityPrompt = formatIdentityPrompt(ctx.identity);
@@ -1477,10 +1260,7 @@ export class AgentRuntime {
       return { id: t.id, chars };
     });
     const toolSchemaTotalChars = toolSchemaParts.reduce((total, part) => total + part.chars, 0);
-    const toolSchemaTop = toolSchemaParts
-      .slice()
-      .sort((a, b) => b.chars - a.chars)
-      .slice(0, 5);
+    const toolSchemaTop = toolSchemaParts.toSorted((a, b) => b.chars - a.chars).slice(0, 5);
 
     const contextReportId = randomUUID();
     const report: AgentContextReport = {
@@ -1831,136 +1611,5 @@ export class AgentRuntime {
       work_item_id: workItem.work_item_id,
       subagent_id: subagent.subagent_id,
     };
-  }
-
-  private async finalizeTurn(
-    ctx: AgentLoadedContext,
-    session: SessionRow,
-    input: ResolvedAgentTurnInput,
-    reply: string,
-    usedTools: Set<string>,
-    contextReport: AgentContextReport,
-  ): Promise<AgentTurnResponseT> {
-    const nowIso = new Date().toISOString();
-
-    let finalizedReply = reply;
-    const crossTurnCfg = ctx.config.sessions.loop_detection.cross_turn;
-    if (crossTurnCfg.enabled && !finalizedReply.includes(LOOP_WARNING_PREFIX)) {
-      const previousAssistantMessages = session.turns
-        .filter((turn) => turn.role === "assistant")
-        .map((turn) => turn.content);
-
-      const decision = decideCrossTurnLoopWarning({
-        previousAssistantMessages,
-        reply: finalizedReply,
-        windowAssistantMessages: crossTurnCfg.window_assistant_messages,
-        similarityThreshold: crossTurnCfg.similarity_threshold,
-        minChars: crossTurnCfg.min_chars,
-        cooldownAssistantMessages: crossTurnCfg.cooldown_assistant_messages,
-      });
-      if (decision.warn) {
-        finalizedReply = `${finalizedReply.trimEnd()}\n\n${CROSS_TURN_LOOP_WARNING_TEXT}`;
-        this.opts.container.logger.info("agents.loop.cross_turn_warned", {
-          session_id: session.session_id,
-          channel: input.channel,
-          thread_id: input.thread_id,
-          similarity: decision.similarity,
-          matched_index: decision.matchedIndex,
-        });
-      }
-    }
-
-    this.lastContextReport = contextReport;
-    try {
-      await this.opts.container.contextReportDal.insert({
-        tenantId: session.tenant_id,
-        contextReportId: contextReport.context_report_id,
-        sessionId: session.session_id,
-        channel: input.channel,
-        threadId: input.thread_id,
-        agentId: contextReport.agent_id,
-        workspaceId: contextReport.workspace_id,
-        report: contextReport,
-        createdAtIso: contextReport.generated_at,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.opts.container.logger.warn("context_report.persist_failed", {
-        context_report_id: contextReport.context_report_id,
-        session_id: session.session_id,
-        error: message,
-      });
-    }
-
-    await this.sessionDal.appendTurn({
-      tenantId: session.tenant_id,
-      sessionId: session.session_id,
-      userMessage: input.message,
-      assistantMessage: finalizedReply,
-      maxTurns: ctx.config.sessions.max_turns,
-      timestamp: nowIso,
-    });
-
-    let memoryWritten = false;
-    if (ctx.config.memory.markdown_enabled) {
-      const entry = [
-        `Channel: ${input.channel}`,
-        `Thread: ${input.thread_id}`,
-        `User: ${input.message}`,
-        `Assistant: ${finalizedReply}`,
-      ].join("\n");
-      if (looksLikeSecretText(entry)) {
-        this.opts.container.logger.warn("memory.write_skipped_secret_like", {
-          session_id: session.session_id,
-          channel: input.channel,
-          thread_id: input.thread_id,
-        });
-      } else {
-        await ctx.memoryStore.appendDaily(entry);
-        memoryWritten = true;
-
-        if (shouldPromoteToCoreMemory(input.message)) {
-          await ctx.memoryStore.appendToCoreSection(
-            "Learned Preferences",
-            `- ${input.message.trim()}`,
-          );
-        }
-      }
-    }
-
-    try {
-      await recordMemoryV1SystemEpisode(
-        this.opts.container.memoryV1Dal,
-        {
-          occurred_at: nowIso,
-          channel: input.channel,
-          event_type: "agent_turn",
-          summary_md: `Agent turn: ${input.channel}`,
-          tags: ["agent", "turn"],
-          metadata: {
-            channel: input.channel,
-            thread_id: input.thread_id,
-            session_id: session.session_id,
-          },
-        },
-        session.agent_id,
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.opts.container.logger.warn("memory.v1.system_episode_record_failed", {
-        session_id: session.session_id,
-        channel: input.channel,
-        thread_id: input.thread_id,
-        error: message,
-      });
-    }
-
-    return AgentTurnResponse.parse({
-      reply: finalizedReply,
-      session_id: session.session_id,
-      session_key: session.session_key,
-      used_tools: Array.from(usedTools),
-      memory_written: memoryWritten,
-    });
   }
 }

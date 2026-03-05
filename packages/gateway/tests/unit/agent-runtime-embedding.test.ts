@@ -81,24 +81,23 @@ describe("AgentRuntime embedding pipeline selection", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
-      container,
-      agentId: "agent-1",
-      fetchImpl,
-    });
+    const { resolveEmbeddingPipeline } =
+      await import("../../src/modules/agent/runtime/embedding-pipeline-resolution.js");
 
     const ids = await new IdentityScopeDal(container.db).resolveScopeIds({
       tenantKey: "default",
       agentKey: "agent-1",
       workspaceKey: "default",
     });
-    const pipeline = await (runtime as any).resolveEmbeddingPipeline(
-      "local/chat",
-      randomUUID(),
-      ids.tenantId,
-      ids.agentId,
-    );
+    const pipeline = await resolveEmbeddingPipeline({
+      container,
+      fetchImpl,
+      primaryModelId: "local/chat",
+      sessionId: randomUUID(),
+      tenantId: ids.tenantId,
+      agentId: ids.agentId,
+      instanceOwner: "test-owner",
+    });
     expect(pipeline).toBeDefined();
 
     expect(seenProviderInputs[0]).toMatchObject({
@@ -175,20 +174,19 @@ describe("AgentRuntime embedding pipeline selection", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
+    const { resolveEmbeddingPipeline } =
+      await import("../../src/modules/agent/runtime/embedding-pipeline-resolution.js");
+
+    const pipeline = await resolveEmbeddingPipeline({
       container,
-      agentId: "agent-1",
       secretProvider,
       fetchImpl,
+      primaryModelId: "anthropic/claude-3.5-sonnet",
+      sessionId: randomUUID(),
+      tenantId: ids.tenantId,
+      agentId: ids.agentId,
+      instanceOwner: "test-owner",
     });
-
-    const pipeline = await (runtime as any).resolveEmbeddingPipeline(
-      "anthropic/claude-3.5-sonnet",
-      randomUUID(),
-      ids.tenantId,
-      ids.agentId,
-    );
     expect(pipeline).toBeDefined();
 
     expect(seenProviderInputs[0]).toMatchObject({
