@@ -431,15 +431,47 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     throw new Error(`--role must be one of all|edge|worker|scheduler (got '${value}')`);
   };
 
+  type CommonDbFlags = { home?: string; db?: string; migrationsDir?: string };
+
+  const parseCommonDbFlag = (
+    args: readonly string[],
+    index: number,
+    target: CommonDbFlags,
+  ): { handled: boolean; nextIndex: number } => {
+    const arg = args[index];
+    if (!arg) return { handled: false, nextIndex: index };
+
+    if (arg === "--home") {
+      const value = args[index + 1];
+      if (!value) throw new Error("--home requires a value");
+      target.home = value;
+      return { handled: true, nextIndex: index + 1 };
+    }
+
+    if (arg === "--db") {
+      const value = args[index + 1];
+      if (!value) throw new Error("--db requires a value");
+      target.db = value;
+      return { handled: true, nextIndex: index + 1 };
+    }
+
+    if (arg === "--migrations-dir") {
+      const value = args[index + 1];
+      if (!value) throw new Error("--migrations-dir requires a value");
+      target.migrationsDir = value;
+      return { handled: true, nextIndex: index + 1 };
+    }
+
+    return { handled: false, nextIndex: index };
+  };
+
   const parseStartFlags = (
     args: readonly string[],
   ): Omit<CliCommand & { kind: "start" }, "kind"> | { kind: "help" } => {
-    let home: string | undefined;
-    let db: string | undefined;
+    const common: CommonDbFlags = {};
     let host: string | undefined;
     let port: number | undefined;
     let role: GatewayRole | undefined;
-    let migrationsDir: string | undefined;
     let allowInsecureHttp: true | undefined;
     let engineApiEnabled: true | undefined;
     let snapshotImportEnabled: true | undefined;
@@ -450,19 +482,9 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
 
       if (arg === "-h" || arg === "--help") return { kind: "help" };
 
-      if (arg === "--home") {
-        const value = args[index + 1];
-        if (!value) throw new Error("--home requires a value");
-        home = value;
-        index += 1;
-        continue;
-      }
-
-      if (arg === "--db") {
-        const value = args[index + 1];
-        if (!value) throw new Error("--db requires a value");
-        db = value;
-        index += 1;
+      const commonFlag = parseCommonDbFlag(args, index, common);
+      if (commonFlag.handled) {
+        index = commonFlag.nextIndex;
         continue;
       }
 
@@ -490,14 +512,6 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
         continue;
       }
 
-      if (arg === "--migrations-dir") {
-        const value = args[index + 1];
-        if (!value) throw new Error("--migrations-dir requires a value");
-        migrationsDir = value;
-        index += 1;
-        continue;
-      }
-
       if (arg === "--allow-insecure-http") {
         allowInsecureHttp = true;
         continue;
@@ -517,12 +531,12 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     }
 
     return {
-      home,
-      db,
+      home: common.home,
+      db: common.db,
       host,
       port,
       role,
-      migrationsDir,
+      migrationsDir: common.migrationsDir,
       allowInsecureHttp,
       engineApiEnabled,
       snapshotImportEnabled,
@@ -532,9 +546,7 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   const parseDbFlags = (
     args: readonly string[],
   ): { home?: string; db?: string; migrationsDir?: string } | { kind: "help" } => {
-    let home: string | undefined;
-    let db: string | undefined;
-    let migrationsDir: string | undefined;
+    const common: CommonDbFlags = {};
 
     for (let index = 0; index < args.length; index += 1) {
       const arg = args[index];
@@ -542,34 +554,16 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
 
       if (arg === "-h" || arg === "--help") return { kind: "help" };
 
-      if (arg === "--home") {
-        const value = args[index + 1];
-        if (!value) throw new Error("--home requires a value");
-        home = value;
-        index += 1;
-        continue;
-      }
-
-      if (arg === "--db") {
-        const value = args[index + 1];
-        if (!value) throw new Error("--db requires a value");
-        db = value;
-        index += 1;
-        continue;
-      }
-
-      if (arg === "--migrations-dir") {
-        const value = args[index + 1];
-        if (!value) throw new Error("--migrations-dir requires a value");
-        migrationsDir = value;
-        index += 1;
+      const commonFlag = parseCommonDbFlag(args, index, common);
+      if (commonFlag.handled) {
+        index = commonFlag.nextIndex;
         continue;
       }
 
       throw new Error(`unsupported argument '${arg}'`);
     }
 
-    return { home, db, migrationsDir };
+    return { home: common.home, db: common.db, migrationsDir: common.migrationsDir };
   };
 
   const parseToolrunnerFlags = (
@@ -577,9 +571,7 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   ):
     | { home?: string; db?: string; migrationsDir?: string; payloadB64?: string }
     | { kind: "help" } => {
-    let home: string | undefined;
-    let db: string | undefined;
-    let migrationsDir: string | undefined;
+    const common: CommonDbFlags = {};
     let payloadB64: string | undefined;
 
     for (let index = 0; index < args.length; index += 1) {
@@ -588,27 +580,9 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
 
       if (arg === "-h" || arg === "--help") return { kind: "help" };
 
-      if (arg === "--home") {
-        const value = args[index + 1];
-        if (!value) throw new Error("--home requires a value");
-        home = value;
-        index += 1;
-        continue;
-      }
-
-      if (arg === "--db") {
-        const value = args[index + 1];
-        if (!value) throw new Error("--db requires a value");
-        db = value;
-        index += 1;
-        continue;
-      }
-
-      if (arg === "--migrations-dir") {
-        const value = args[index + 1];
-        if (!value) throw new Error("--migrations-dir requires a value");
-        migrationsDir = value;
-        index += 1;
+      const commonFlag = parseCommonDbFlag(args, index, common);
+      if (commonFlag.handled) {
+        index = commonFlag.nextIndex;
         continue;
       }
 
@@ -623,7 +597,12 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
       throw new Error(`unsupported argument '${arg}'`);
     }
 
-    return { home, db, migrationsDir, payloadB64 };
+    return {
+      home: common.home,
+      db: common.db,
+      migrationsDir: common.migrationsDir,
+      payloadB64,
+    };
   };
 
   if (first === "start") {

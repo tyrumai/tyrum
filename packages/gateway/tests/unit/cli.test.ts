@@ -88,6 +88,62 @@ describe("gateway CLI argument parsing", () => {
     });
   });
 
+  it("parses common --home/--db/--migrations-dir flags across commands", () => {
+    expect(
+      parseCliArgs([
+        "start",
+        "--home",
+        "/tmp/home",
+        "--db",
+        "/tmp/gateway.db",
+        "--migrations-dir",
+        "/tmp/migs",
+      ]),
+    ).toEqual({
+      kind: "start",
+      home: "/tmp/home",
+      db: "/tmp/gateway.db",
+      migrationsDir: "/tmp/migs",
+    });
+
+    expect(
+      parseCliArgs([
+        "check",
+        "--home",
+        "/tmp/home",
+        "--db",
+        "/tmp/gateway.db",
+        "--migrations-dir",
+        "/tmp/migs",
+      ]),
+    ).toEqual({
+      kind: "check",
+      home: "/tmp/home",
+      db: "/tmp/gateway.db",
+      migrationsDir: "/tmp/migs",
+    });
+
+    expect(
+      parseCliArgs([
+        "toolrunner",
+        "--home",
+        "/tmp/home",
+        "--db",
+        "/tmp/gateway.db",
+        "--migrations-dir",
+        "/tmp/migs",
+        "--payload-b64",
+        "aGVsbG8=",
+      ]),
+    ).toEqual({
+      kind: "toolrunner",
+      home: "/tmp/home",
+      db: "/tmp/gateway.db",
+      migrationsDir: "/tmp/migs",
+      payloadB64: "aGVsbG8=",
+    });
+  });
+
   it("parses check command", () => {
     expect(parseCliArgs(["check"])).toEqual({ kind: "check" });
   });
