@@ -53,6 +53,20 @@ describe("createContainer", () => {
     await container.db.close();
   });
 
+  it("preserves websocket backpressure settings from deployment config", async () => {
+    const container = createContainer(
+      { dbPath: ":memory:", migrationsDir },
+      {
+        deploymentConfig: DeploymentConfig.parse({
+          websocket: { maxBufferedBytes: 8192 },
+        }),
+      },
+    );
+
+    expect(container.deploymentConfig.websocket.maxBufferedBytes).toBe(8192);
+    await container.db.close();
+  });
+
   it("throws for Postgres configs with guidance", () => {
     expect(() =>
       createContainer(

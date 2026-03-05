@@ -13,15 +13,18 @@ import {
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
+import type { Logger } from "../modules/observability/logger.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import type { WsBroadcastAudience } from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface RoutingConfigRouteDeps {
+  logger?: Logger;
   routingConfigDal: RoutingConfigDal;
   ws?: {
     connectionManager: ConnectionManager;
+    maxBufferedBytes?: number;
     cluster?: {
       edgeId: string;
       outboxDal: OutboxDal;
@@ -37,7 +40,7 @@ const ROUTING_CONFIG_WS_AUDIENCE: WsBroadcastAudience = {
 function emitEvent(deps: RoutingConfigRouteDeps, tenantId: string, evt: WsEventEnvelope): void {
   const ws = deps.ws;
   if (!ws) return;
-  broadcastWsEvent(tenantId, evt, ws, ROUTING_CONFIG_WS_AUDIENCE);
+  broadcastWsEvent(tenantId, evt, { ...ws, logger: deps.logger }, ROUTING_CONFIG_WS_AUDIENCE);
 }
 
 export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {

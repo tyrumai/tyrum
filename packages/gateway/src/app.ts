@@ -180,6 +180,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   }
 
   const channelPipelineEnabled = container.deploymentConfig.channels.pipelineEnabled ?? true;
+  const wsMaxBufferedBytes = container.deploymentConfig.websocket.maxBufferedBytes;
 
   // Apply auth middleware if a token store is provided
   if (opts.authRateLimiter) {
@@ -260,12 +261,14 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route(
     "/",
     createPolicyBundleRoutes({
+      logger: container.logger,
       policyService: container.policyService,
       policyOverrideDal: container.policyOverrideDal,
       ws: opts.connectionManager
         ? {
             connectionManager: opts.connectionManager,
             cluster: opts.wsCluster,
+            maxBufferedBytes: wsMaxBufferedBytes,
           }
         : undefined,
     }),
@@ -343,6 +346,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
                 ? {
                     connectionManager: opts.connectionManager,
                     cluster: opts.wsCluster,
+                    maxBufferedBytes: wsMaxBufferedBytes,
                   }
                 : undefined,
             })
@@ -357,11 +361,13 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route(
     "/",
     createRoutingConfigRoutes({
+      logger: container.logger,
       routingConfigDal,
       ws: opts.connectionManager
         ? {
             connectionManager: opts.connectionManager,
             cluster: opts.wsCluster,
+            maxBufferedBytes: wsMaxBufferedBytes,
           }
         : undefined,
     }),

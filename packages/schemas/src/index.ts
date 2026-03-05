@@ -96,6 +96,7 @@ export {
   DeploymentConfigExecutionToolRunner,
   DeploymentConfigExecution,
   DeploymentConfigChannels,
+  DeploymentConfigWebsocket,
   DeploymentConfigModelsDev,
   DeploymentConfigPolicy,
   DeploymentConfigAgent,

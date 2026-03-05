@@ -24,7 +24,12 @@ export function broadcastEvent(
   broadcastWsEvent(
     tenantId,
     evt,
-    { connectionManager: deps.connectionManager, cluster: deps.cluster },
+    {
+      connectionManager: deps.connectionManager,
+      cluster: deps.cluster,
+      logger: deps.logger,
+      maxBufferedBytes: deps.maxBufferedBytes,
+    },
     audience,
   );
 }

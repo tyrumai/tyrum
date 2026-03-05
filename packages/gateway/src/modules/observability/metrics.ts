@@ -8,6 +8,15 @@ type LifecyclePruneRowsLabels = "scheduler" | "table";
 type LifecycleTickErrorsLabels = "scheduler";
 
 export type LifecycleSchedulerName = "outbox" | "statestore";
+const WS_SLOW_CONSUMER_BUFFERED_AMOUNT_BUCKETS = [
+  64 * 1024,
+  256 * 1024,
+  512 * 1024,
+  1024 * 1024,
+  2 * 1024 * 1024,
+  5 * 1024 * 1024,
+  10 * 1024 * 1024,
+];
 
 export class MetricsRegistry {
   readonly registry: Registry;
@@ -16,6 +25,9 @@ export class MetricsRegistry {
   readonly lifecyclePruneRowsTotal: Counter<LifecyclePruneRowsLabels>;
   readonly lifecycleTickErrorsTotal: Counter<LifecycleTickErrorsLabels>;
   readonly wsConnectionsActive: Gauge<never>;
+  readonly wsSlowConsumerEvictionsTotal: Counter<never>;
+  readonly wsSendFailuresTotal: Counter<never>;
+  readonly wsSlowConsumerBufferedAmountBytes: Histogram<never>;
 
   constructor() {
     this.registry = new Registry();
@@ -51,6 +63,25 @@ export class MetricsRegistry {
     this.wsConnectionsActive = new Gauge<never>({
       name: "ws_connections_active",
       help: "Number of active WebSocket connections.",
+      registers: [this.registry],
+    });
+
+    this.wsSlowConsumerEvictionsTotal = new Counter<never>({
+      name: "ws_slow_consumer_evictions_total",
+      help: "Number of WebSocket peers evicted for exceeding the outbound buffer limit.",
+      registers: [this.registry],
+    });
+
+    this.wsSendFailuresTotal = new Counter<never>({
+      name: "ws_send_failures_total",
+      help: "Number of WebSocket send attempts that failed.",
+      registers: [this.registry],
+    });
+
+    this.wsSlowConsumerBufferedAmountBytes = new Histogram<never>({
+      name: "ws_slow_consumer_buffered_amount_bytes",
+      help: "Buffered outbound WebSocket bytes observed when evicting slow consumers.",
+      buckets: WS_SLOW_CONSUMER_BUFFERED_AMOUNT_BUCKETS,
       registers: [this.registry],
     });
   }

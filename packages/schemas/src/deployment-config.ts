@@ -106,6 +106,13 @@ export const DeploymentConfigChannels = z
   .strict();
 export type DeploymentConfigChannels = z.infer<typeof DeploymentConfigChannels>;
 
+export const DeploymentConfigWebsocket = z
+  .object({
+    maxBufferedBytes: z.number().int().positive().optional(),
+  })
+  .strict();
+export type DeploymentConfigWebsocket = z.infer<typeof DeploymentConfigWebsocket>;
+
 export const DeploymentConfigModelsDev = z
   .object({
     url: z.string().trim().min(1).optional(),
@@ -192,6 +199,7 @@ export const DeploymentConfig = z
     artifacts: DeploymentConfigArtifacts.prefault({}),
     execution: DeploymentConfigExecution.prefault({}),
     channels: DeploymentConfigChannels.prefault({}),
+    websocket: DeploymentConfigWebsocket.prefault({}),
     modelsDev: DeploymentConfigModelsDev.prefault({}),
     policy: DeploymentConfigPolicy.prefault({}),
     agent: DeploymentConfigAgent.prefault({}),

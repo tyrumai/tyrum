@@ -1,21 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
 import { OutboxPoller } from "../../src/modules/backplane/outbox-poller.js";
+import { MetricsRegistry } from "../../src/modules/observability/metrics.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 interface MockWebSocket {
+  bufferedAmount: number;
   send: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
   on: ReturnType<typeof vi.fn>;
   readyState: number;
+  terminate: ReturnType<typeof vi.fn>;
 }
 
-function createMockWs(): MockWebSocket {
+function createMockWs(options?: { bufferedAmount?: number; readyState?: number }): MockWebSocket {
   return {
+    bufferedAmount: options?.bufferedAmount ?? 0,
     send: vi.fn(),
     close: vi.fn(),
     on: vi.fn(() => undefined as never),
-    readyState: 1,
+    readyState: options?.readyState ?? 1,
+    terminate: vi.fn(),
   };
 }
 
@@ -336,6 +341,94 @@ describe("OutboxPoller", () => {
     await poller.tick();
     expect(ackConsumerCursor).toHaveBeenCalledWith(DEFAULT_TENANT_ID, "edge-a", 1);
     expect(adminWs.send).not.toHaveBeenCalled();
+  });
+
+  it("evicts slow consumers during broadcast delivery and still reaches healthy peers", async () => {
+    const connectionManager = new ConnectionManager();
+    const metrics = new MetricsRegistry();
+    const logger = { warn: vi.fn(), error: vi.fn() };
+    const slowWs = createMockWs({ bufferedAmount: 11 });
+    const healthyWs = createMockWs();
+    connectionManager.addClient(slowWs as never, ["cli"] as never, {
+      id: "slow-client",
+      role: "client",
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-slow",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+    connectionManager.addClient(healthyWs as never, ["cli"] as never, {
+      id: "healthy-client",
+      role: "client",
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-healthy",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+
+    const nowIso = new Date().toISOString();
+    const poll = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: 1,
+          tenant_id: DEFAULT_TENANT_ID,
+          topic: "ws.broadcast",
+          target_edge_id: null,
+          payload: {
+            message: {
+              event_id: "evt-1",
+              type: "plan.update",
+              occurred_at: nowIso,
+              payload: { plan_id: "p1", status: "running" },
+            },
+          },
+          created_at: nowIso,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const ackConsumerCursor = vi.fn(async () => undefined as never);
+    const outboxDal = {
+      listActiveTenantIds: vi.fn(async () => [DEFAULT_TENANT_ID]),
+      poll,
+      ackConsumerCursor,
+    } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
+
+    const poller = new OutboxPoller({
+      consumerId: "edge-a",
+      outboxDal,
+      connectionManager,
+      logger: logger as never,
+      maxBufferedBytes: 10,
+      metrics,
+    });
+
+    await poller.tick();
+
+    expect(ackConsumerCursor).toHaveBeenCalledWith(DEFAULT_TENANT_ID, "edge-a", 1);
+    expect(slowWs.send).not.toHaveBeenCalled();
+    expect(slowWs.close).toHaveBeenCalledWith(1013, "slow consumer");
+    expect(healthyWs.send).toHaveBeenCalledTimes(1);
+    expect(connectionManager.getClient("slow-client")).toBeUndefined();
+    expect(connectionManager.getClient("healthy-client")).toBeDefined();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "ws.slow_consumer_evicted",
+      expect.objectContaining({
+        connection_id: "slow-client",
+        delivery_mode: "cluster_broadcast",
+        topic: "ws.broadcast",
+      }),
+    );
+    await expect(
+      metrics.registry.getSingleMetricAsString("ws_slow_consumer_evictions_total"),
+    ).resolves.toMatch(/ws_slow_consumer_evictions_total\s+1(\s|$)/);
   });
 
   it("acks only after processing succeeds (retries on processing error)", async () => {
