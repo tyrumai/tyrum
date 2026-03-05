@@ -113,6 +113,10 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     return 1;
   }
 
+  if (command.kind === "help" || command.kind === "version") {
+    return await dispatchCommand(command, "");
+  }
+
   const home = resolveTyrumHome();
   return await dispatchCommand(command, home);
 }
