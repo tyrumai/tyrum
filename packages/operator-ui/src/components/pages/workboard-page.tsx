@@ -107,6 +107,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
           status,
           reason,
         });
+        core.workboardStore.upsertWorkItem(res.item);
 
         setSelectedItem((prev: WorkItem | null) => {
           if (selectedIdRef.current !== res.item.work_item_id) return prev;
@@ -118,7 +119,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         setTransitionTarget(null);
       }
     },
-    [core.ws, isConnected, selectedWorkItemId],
+    [core.ws, core.workboardStore, isConnected, selectedWorkItemId],
   );
 
   useEffect(() => {

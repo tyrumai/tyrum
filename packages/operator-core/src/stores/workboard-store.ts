@@ -19,6 +19,7 @@ export interface WorkboardState {
 
 export interface WorkboardStore extends ExternalStore<WorkboardState> {
   refreshList(): Promise<void>;
+  upsertWorkItem(item: WorkItem): void;
   resetSupportProbe(): void;
 }
 
@@ -140,6 +141,7 @@ export function createWorkboardStore(ws: OperatorWsClient): {
     store: {
       ...store,
       refreshList,
+      upsertWorkItem: handleWorkItemUpsert,
       resetSupportProbe,
     },
     handleWorkItemUpsert,

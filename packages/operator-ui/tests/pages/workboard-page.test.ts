@@ -28,6 +28,11 @@ function createWorkboardStore(snapshot?: Partial<Record<string, unknown>>) {
   } as any;
 
   const listeners = new Set<() => void>();
+  const notify = () => {
+    for (const listener of listeners) {
+      listener();
+    }
+  };
 
   const store = {
     subscribe: (listener: () => void) => {
@@ -39,15 +44,28 @@ function createWorkboardStore(snapshot?: Partial<Record<string, unknown>>) {
     getSnapshot: () => state,
     refreshList: vi.fn(async () => {}),
     resetSupportProbe: vi.fn(() => {}),
+    upsertWorkItem: (item: any) => {
+      state = {
+        ...state,
+        items: (() => {
+          const existingIndex = state.items.findIndex(
+            (entry: any) => entry.work_item_id === item.work_item_id,
+          );
+          if (existingIndex === -1) return [...state.items, item];
+          const next = state.items.slice();
+          next[existingIndex] = item;
+          return next;
+        })(),
+      };
+      notify();
+    },
   };
 
   return {
     store,
     setState: (updater: (prev: any) => any) => {
       state = updater(state);
-      for (const listener of listeners) {
-        listener();
-      }
+      notify();
     },
   };
 }
@@ -149,6 +167,16 @@ function clickButton(container: HTMLElement, label: string): void {
   );
   expect(button).not.toBeUndefined();
   button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+}
+
+function getStatusColumn(container: HTMLElement, label: string): HTMLElement {
+  const heading = Array.from(container.querySelectorAll<HTMLSpanElement>("span")).find(
+    (el) => el.textContent === label,
+  );
+  expect(heading).not.toBeUndefined();
+  const column = heading?.closest<HTMLElement>(".w-64");
+  expect(column).not.toBeNull();
+  return column as HTMLElement;
 }
 
 describe("WorkBoardPage", () => {
@@ -277,6 +305,11 @@ describe("WorkBoardPage", () => {
           reason: "operator triaged",
         }),
       );
+      await flushEffects();
+      const backlogColumn = getStatusColumn(testRoot.container, "Backlog");
+      const readyColumn = getStatusColumn(testRoot.container, "Ready");
+      expect(backlogColumn.textContent).toContain("No items");
+      expect(readyColumn.textContent).toContain("Ship regression tests");
 
       vi.stubGlobal(
         "confirm",
