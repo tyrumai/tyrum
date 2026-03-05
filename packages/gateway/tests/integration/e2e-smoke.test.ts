@@ -27,14 +27,11 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
 } from "@tyrum/schemas";
+import { waitForCondition } from "../helpers/wait-for.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /** Start a real HTTP server + WebSocket on a random port. */
 async function startServer(app: Hono): Promise<{
@@ -155,8 +152,10 @@ describe("E2E smoke test", () => {
     await connectedP;
     expect(client.connected).toBe(true);
 
-    // Give the server a moment to register the client after hello
-    await delay(50);
+    await waitForCondition(() => srv.connectionManager.getStats().totalClients === 1, {
+      description: "ConnectionManager to register the connected client",
+      debug: () => JSON.stringify(srv.connectionManager.getStats()),
+    });
 
     // --- 2. Verify /healthz ---
     const healthRes = await fetch(`${baseUrl}/healthz`);
@@ -211,12 +210,21 @@ describe("E2E smoke test", () => {
     // --- 6. Client sends task_result ---
     client.respondTaskExecute(taskId, true, undefined, { statusCode: 200 });
 
-    // Give the server time to process the result
-    await delay(50);
+    await waitForCondition(() => srv.taskResults.some((res) => res.taskId === taskId), {
+      description: "server to process task_result",
+      debug: () =>
+        JSON.stringify(
+          srv.taskResults.map(({ taskId: taskId2, success, error }) => ({
+            taskId: taskId2,
+            success,
+            error,
+          })),
+        ),
+    });
 
-    expect(srv.taskResults.length).toBe(1);
-    expect(srv.taskResults[0]!.taskId).toBe(taskId);
-    expect(srv.taskResults[0]!.success).toBe(true);
+    const taskResult = srv.taskResults.find((res) => res.taskId === taskId);
+    expect(taskResult).toBeDefined();
+    expect(taskResult!.success).toBe(true);
 
     // --- 7. POST /plan works ---
     const planBody = minimalPlanRequest({ tags: ["spend:0:USD"] });
