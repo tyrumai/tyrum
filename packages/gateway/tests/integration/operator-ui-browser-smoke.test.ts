@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { formatOperatorUiSmokeDiagnostics } from "../helpers/operator-ui-smoke-diagnostics.js";
 import { pathExists } from "../helpers/path-exists.js";
 import { startSmokeGateway } from "../e2e/smoke-turn-harness.js";
 
@@ -122,19 +123,18 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
       expect(finalUrl.pathname === "/ui" || finalUrl.pathname.startsWith("/ui/")).toBe(true);
       expect(finalUrl.searchParams.has("token")).toBe(false);
     } catch (error) {
-      const diagnostics = [
-        `url=${page.url()}`,
-        consoleErrors.length > 0 ? `console:\\n${consoleErrors.join("\\n")}` : undefined,
-        pageErrors.length > 0 ? `pageerror:\\n${pageErrors.join("\\n")}` : undefined,
-        requestFailures.length > 0 ? `requestfailed:\\n${requestFailures.join("\\n")}` : undefined,
-        httpErrors.length > 0 ? `http:\\n${httpErrors.join("\\n")}` : undefined,
-      ]
-        .filter((line): line is string => Boolean(line))
-        .join("\\n\\n");
-
-      throw new Error(`Operator UI smoke failed\\n\\n${diagnostics}`, {
-        cause: error instanceof Error ? error : undefined,
-      });
+      throw new Error(
+        formatOperatorUiSmokeDiagnostics({
+          url: page.url(),
+          consoleErrors,
+          pageErrors,
+          requestFailures,
+          httpErrors,
+        }),
+        {
+          cause: error instanceof Error ? error : undefined,
+        },
+      );
     }
   });
 });
