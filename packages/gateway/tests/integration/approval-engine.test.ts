@@ -5,6 +5,7 @@ import {
   decorateAppWithDefaultAuth,
   drainApprovalEngineActions,
 } from "./helpers.js";
+import { seedPausedExecutionRun } from "../helpers/execution-fixtures.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -45,6 +46,15 @@ describe("approval routes (engine integration)", () => {
     const stepId = "step-approval-1";
     const resumeToken = "resume-approval-1";
 
+    await seedPausedExecutionRun({
+      db: container.db,
+      jobId,
+      runId,
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      pausedReason: "takeover",
+      pausedDetail: "paused",
+    });
+
     const approval = await container.approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
@@ -55,48 +65,6 @@ describe("approval routes (engine integration)", () => {
       runId,
       resumeToken,
     });
-
-    await container.db.run(
-      `INSERT INTO execution_jobs (
-         tenant_id,
-         job_id,
-         agent_id,
-         workspace_id,
-         key,
-         lane,
-         status,
-         trigger_json,
-         input_json,
-         latest_run_id
-       )
-       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        jobId,
-        DEFAULT_AGENT_ID,
-        DEFAULT_WORKSPACE_ID,
-        "agent:agent-1:telegram-1:group:thread-1",
-        "main",
-        "{}",
-        "{}",
-        runId,
-      ],
-    );
-    await container.db.run(
-      `INSERT INTO execution_runs (
-         tenant_id,
-         run_id,
-         job_id,
-         key,
-         lane,
-         status,
-         attempt,
-         paused_reason,
-         paused_detail
-       )
-       VALUES (?, ?, ?, ?, ?, 'paused', 1, 'takeover', 'paused')`,
-      [DEFAULT_TENANT_ID, runId, jobId, "agent:agent-1:telegram-1:group:thread-1", "main"],
-    );
     await container.db.run(
       `INSERT INTO execution_steps (
          tenant_id,

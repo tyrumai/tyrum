@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { createApprovalRoutes } from "../../src/routes/approval.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { seedPausedExecutionRun } from "../helpers/execution-fixtures.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import {
   DEFAULT_AGENT_ID,
@@ -22,6 +23,7 @@ describe("approval respond engine actions", () => {
   it("does not apply opposite engine action when already approved", async () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
+    await seedPausedExecutionRun({ db, jobId: "job-1", runId: "run-1" });
 
     const created = await approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
@@ -82,6 +84,7 @@ describe("approval respond engine actions", () => {
   it("does not apply engine actions for expired approvals", async () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
+    await seedPausedExecutionRun({ db, jobId: "job-2", runId: "run-2" });
 
     const created = await approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
