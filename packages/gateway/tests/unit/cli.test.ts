@@ -28,6 +28,7 @@ vi.mock("node:fs", async () => {
 import {
   assertSplitRoleUsesPostgres,
   parseCliArgs,
+  resolveSnapshotImportEnabled,
   resolveGatewayUpdateTarget,
   runCli,
 } from "../../src/index.js";
@@ -150,6 +151,21 @@ describe("gateway CLI argument parsing", () => {
 
   it("parses TLS fingerprint command", () => {
     expect(parseCliArgs(["tls", "fingerprint"])).toEqual({ kind: "tls_fingerprint" });
+  });
+});
+
+describe("snapshot import enablement", () => {
+  it("allows explicit env-based opt-in for restore workflows", () => {
+    const previous = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+    process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
+
+    try {
+      expect(resolveSnapshotImportEnabled(undefined)).toBe(true);
+      expect(resolveSnapshotImportEnabled(true)).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+      else process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = previous;
+    }
   });
 });
 

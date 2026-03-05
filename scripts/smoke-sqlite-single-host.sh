@@ -10,6 +10,9 @@ if [[ -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
   export COMPOSE_PROJECT_NAME="tyrum-smoke-sqlite-${RANDOM}"
 fi
 
+# Snapshot import is disabled by default; smoke restores opt in explicitly.
+export TYRUM_SNAPSHOT_IMPORT_ENABLED="${TYRUM_SNAPSHOT_IMPORT_ENABLED:-1}"
+
 cleanup() {
   if [[ "${TYRUM_SMOKE_KEEP_RUNNING:-}" == "1" ]]; then
     echo "[smoke] leaving containers running (TYRUM_SMOKE_KEEP_RUNNING=1)"

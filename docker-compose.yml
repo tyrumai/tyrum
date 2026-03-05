@@ -18,10 +18,11 @@ services:
         "8788",
         "--allow-insecure-http",
         "--enable-engine-api",
-        "--enable-snapshot-import",
       ]
     environment:
       GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
+      # Snapshot import is disabled by default. Enable explicitly for restore workflows.
+      TYRUM_SNAPSHOT_IMPORT_ENABLED: ${TYRUM_SNAPSHOT_IMPORT_ENABLED:-0}
     ports:
       - "8788:8788"
     volumes:
@@ -77,10 +78,11 @@ services:
         "8788",
         "--allow-insecure-http",
         "--enable-engine-api",
-        "--enable-snapshot-import",
       ]
     environment:
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
+      # Snapshot import is disabled by default. Enable explicitly for restore workflows.
+      TYRUM_SNAPSHOT_IMPORT_ENABLED: ${TYRUM_SNAPSHOT_IMPORT_ENABLED:-0}
     depends_on:
       - postgres
     ports:

@@ -346,6 +346,25 @@ function resolveGatewayMigrationsDir(dbPath: string, override?: string): string 
   return trimmed && trimmed.length > 0 ? trimmed : resolveDefaultMigrationsDir(dbPath);
 }
 
+function resolveTruthyEnvFlag(name: string): boolean {
+  const raw = process.env[name];
+  if (typeof raw !== "string") return false;
+
+  switch (raw.trim().toLowerCase()) {
+    case "1":
+    case "true":
+    case "yes":
+    case "on":
+      return true;
+    default:
+      return false;
+  }
+}
+
+export function resolveSnapshotImportEnabled(snapshotImportOverride?: boolean): boolean {
+  return Boolean(snapshotImportOverride) || resolveTruthyEnvFlag("TYRUM_SNAPSHOT_IMPORT_ENABLED");
+}
+
 async function openGatewayDb(params: { dbPath: string; migrationsDir: string }): Promise<SqlDb> {
   const dbPath = params.dbPath.trim();
   if (isPostgresDbUri(dbPath)) {
@@ -1025,7 +1044,8 @@ export async function main(
     snapshots: {
       ...deploymentRevision.config.snapshots,
       importEnabled:
-        deploymentRevision.config.snapshots.importEnabled || Boolean(params.snapshotImportEnabled),
+        deploymentRevision.config.snapshots.importEnabled ||
+        resolveSnapshotImportEnabled(params.snapshotImportEnabled),
     },
   });
 

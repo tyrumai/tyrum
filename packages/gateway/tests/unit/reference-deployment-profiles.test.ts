@@ -87,6 +87,30 @@ describe("reference deployment profiles", () => {
     }
   });
 
+  it("keeps snapshot import disabled by default in reference compose deployments", async () => {
+    const composeRaw = await expectFile("docker-compose.yml");
+    const compose = parseYaml(composeRaw) as any;
+    const services = compose.services as Record<string, any> | undefined;
+
+    const singleHost = services?.tyrum;
+    const singleHostCommand = singleHost?.command as string[] | undefined;
+    const singleHostEnv = singleHost?.environment as Record<string, unknown> | undefined;
+
+    expect(singleHostCommand).toBeDefined();
+    expect(singleHostCommand).not.toContain("--enable-snapshot-import");
+    expect(singleHostEnv?.TYRUM_SNAPSHOT_IMPORT_ENABLED).toBe(
+      "${TYRUM_SNAPSHOT_IMPORT_ENABLED:-0}",
+    );
+
+    const edge = services?.["tyrum-edge"];
+    const edgeCommand = edge?.command as string[] | undefined;
+    const edgeEnv = edge?.environment as Record<string, unknown> | undefined;
+
+    expect(edgeCommand).toBeDefined();
+    expect(edgeCommand).not.toContain("--enable-snapshot-import");
+    expect(edgeEnv?.TYRUM_SNAPSHOT_IMPORT_ENABLED).toBe("${TYRUM_SNAPSHOT_IMPORT_ENABLED:-0}");
+  });
+
   it("ships reference Helm values for single-host and split-role", async () => {
     const singleValuesRaw = await expectFile("config/deployments/helm-single.values.yaml");
     const splitValuesRaw = await expectFile("config/deployments/helm-split-role.values.yaml");
