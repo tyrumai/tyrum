@@ -14,14 +14,18 @@ describe("statestore SQL helpers", () => {
 
   it("produces active clause that runs on sqlite and postgres", async () => {
     const sqlite = createDatabase(":memory:");
-    sqlite.exec("CREATE TABLE watchers (active INTEGER NOT NULL CHECK (active IN (0, 1)))");
-    sqlite.exec("INSERT INTO watchers (active) VALUES (1), (0)");
+    try {
+      sqlite.exec("CREATE TABLE watchers (active INTEGER NOT NULL CHECK (active IN (0, 1)))");
+      sqlite.exec("INSERT INTO watchers (active) VALUES (1), (0)");
 
-    const sqliteClause = sqlActiveWhereClause({ kind: "sqlite" });
-    const sqliteRows = sqlite
-      .prepare(`SELECT active FROM watchers WHERE ${sqliteClause.sql}`)
-      .all(...sqliteClause.params);
-    expect(sqliteRows).toEqual([{ active: 1 }]);
+      const sqliteClause = sqlActiveWhereClause({ kind: "sqlite" });
+      const sqliteRows = sqlite
+        .prepare(`SELECT active FROM watchers WHERE ${sqliteClause.sql}`)
+        .all(...sqliteClause.params);
+      expect(sqliteRows).toEqual([{ active: 1 }]);
+    } finally {
+      sqlite.close();
+    }
 
     const mem = newDb();
     const { Client } = mem.adapters.createPg();
