@@ -9,22 +9,15 @@ export function parsePairingCommand(argv: readonly string[]): CliCommand {
   if (second === "-h" || second === "--help") return { kind: "help" };
   if (!second) throw new Error("pairing requires a subcommand (approve|deny|revoke)");
 
-  const parsePairingId = (raw: string | undefined, flag: string): number => {
-    return parsePositiveInt(raw, flag);
-  };
-
-  if (second === "approve") return parsePairingApprove(argv, parsePairingId);
+  if (second === "approve") return parsePairingApprove(argv);
   if (second === "deny" || second === "revoke") {
-    return parsePairingDenyOrRevoke(argv, second, parsePairingId);
+    return parsePairingDenyOrRevoke(argv, second);
   }
 
   throw new Error(`unknown pairing subcommand '${second}'`);
 }
 
-function parsePairingApprove(
-  argv: readonly string[],
-  parsePairingId: (raw: string | undefined, flag: string) => number,
-): CliCommand {
+function parsePairingApprove(argv: readonly string[]): CliCommand {
   let pairingId: number | undefined;
   let trustLevel: "local" | "remote" | undefined;
   const capabilities: Array<{ id: string; version: string }> = [];
@@ -35,7 +28,7 @@ function parsePairingApprove(
     if (!arg) continue;
 
     if (arg === "--pairing-id") {
-      pairingId = parsePairingId(argv[i + 1], "--pairing-id");
+      pairingId = parsePositiveInt(argv[i + 1], "--pairing-id");
       i += 1;
       continue;
     }
@@ -95,11 +88,7 @@ function parsePairingApprove(
   };
 }
 
-function parsePairingDenyOrRevoke(
-  argv: readonly string[],
-  second: PairingSubcommand,
-  parsePairingId: (raw: string | undefined, flag: string) => number,
-): CliCommand {
+function parsePairingDenyOrRevoke(argv: readonly string[], second: PairingSubcommand): CliCommand {
   let pairingId: number | undefined;
   let reason: string | undefined;
 
@@ -108,7 +97,7 @@ function parsePairingDenyOrRevoke(
     if (!arg) continue;
 
     if (arg === "--pairing-id") {
-      pairingId = parsePairingId(argv[i + 1], "--pairing-id");
+      pairingId = parsePositiveInt(argv[i + 1], "--pairing-id");
       i += 1;
       continue;
     }

@@ -7,7 +7,7 @@ import {
   type WorkflowLane,
 } from "../cli-command.js";
 
-import { parseNonEmptyString } from "./common.js";
+import { parseNonEmptyString, parseRequiredValue } from "./common.js";
 
 export function parseWorkflowCommand(argv: readonly string[]): CliCommand {
   const second = argv[1];
@@ -49,7 +49,7 @@ function parseWorkflowRun(argv: readonly string[]): CliCommand {
     }
 
     if (arg === "--steps") {
-      stepsRaw = parseWorkflowStepsFlag(argv[i + 1]);
+      stepsRaw = parseRequiredValue(argv[i + 1], "--steps");
       i += 1;
       continue;
     }
@@ -71,11 +71,6 @@ function parseWorkflowRun(argv: readonly string[]): CliCommand {
   }
 
   return { kind: "workflow_run", key, lane, steps: parsedSteps };
-}
-
-function parseWorkflowStepsFlag(raw: string | undefined): string {
-  if (!raw) throw new Error("--steps requires a value");
-  return raw;
 }
 
 function parseWorkflowSteps(stepsRaw: string): ActionPrimitive[] {
