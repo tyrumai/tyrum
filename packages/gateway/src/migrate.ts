@@ -2,6 +2,8 @@ import type Database from "better-sqlite3";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+const DISABLE_FOREIGN_KEYS_MARKER = "-- tyrum:disable_foreign_keys";
+
 /**
  * Applies SQL migration files in filename order from the given directory.
  * Tracks applied migrations in a `_migrations` table to ensure idempotency.
@@ -39,7 +41,16 @@ export function migrate(db: Database.Database, migrationsDir: string): void {
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = readFileSync(join(migrationsDir, file), "utf-8");
-    applyMigration(file, sql);
+    if (sql.includes(DISABLE_FOREIGN_KEYS_MARKER)) {
+      db.exec("PRAGMA foreign_keys = OFF");
+      try {
+        applyMigration(file, sql);
+      } finally {
+        db.exec("PRAGMA foreign_keys = ON");
+      }
+    } else {
+      applyMigration(file, sql);
+    }
     applied.add(file);
   }
 }

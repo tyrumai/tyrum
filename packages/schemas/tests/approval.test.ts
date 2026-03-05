@@ -95,7 +95,10 @@ describe("Approval contracts", () => {
   it("exports stable enums", () => {
     expect(ApprovalStatus.options).toContain("pending");
     expect(ApprovalKind.options).toContain("workflow_step");
+    expect(ApprovalKind.options).toContain("intent");
+    expect(ApprovalKind.options).toContain("retry");
     expect(ApprovalKind.options).toContain("budget");
     expect(ApprovalKind.options).toContain("policy");
+    expect(ApprovalKind.options).toContain("connector.send");
   });
 });

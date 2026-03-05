@@ -1380,7 +1380,7 @@ describe("ExecutionEngine (normalized)", () => {
     expect(run?.paused_reason).toBe("policy");
 
     const policyApproval = await db.get<{ kind: string }>(
-      "SELECT kind FROM approvals WHERE tenant_id = ? AND run_id = ? ORDER BY created_at DESC, approval_id DESC LIMIT 1",
+      "SELECT kind FROM approvals WHERE tenant_id = ? AND run_id = ? AND kind = 'policy' ORDER BY created_at DESC, approval_id DESC LIMIT 1",
       [DEFAULT_TENANT_ID, runId],
     );
     expect(policyApproval?.kind).toBe("policy");

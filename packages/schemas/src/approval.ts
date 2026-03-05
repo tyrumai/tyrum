@@ -16,10 +16,13 @@ export const ApprovalKind = z.enum([
   "spend",
   "pii",
   "workflow_step",
+  "intent",
+  "retry",
   "policy",
   "budget",
   "pairing",
   "takeover",
+  "connector.send",
   "other",
 ]);
 export type ApprovalKind = z.infer<typeof ApprovalKind>;
