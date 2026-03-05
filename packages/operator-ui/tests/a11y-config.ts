@@ -19,7 +19,7 @@ export function formatAxeIncompleteSummary({
 
   const summary = results.incomplete
     .map((result) => ({ id: result.id, nodes: result.nodes.length }))
-    .sort((a, b) => a.id.localeCompare(b.id))
+    .toSorted((a, b) => a.id.localeCompare(b.id))
     .map(({ id, nodes }) => `${id} (${nodes})`)
     .join(", ");
 

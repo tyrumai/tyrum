@@ -131,7 +131,7 @@ function parseSpec(raw: unknown): ParsedSpec {
     if ("type" in obj) {
       return { assertions: [parseAssertion(raw)], metadata: undefined };
     }
-    const keys = Object.keys(obj).sort().join(",");
+    const keys = Object.keys(obj).toSorted().join(",");
     throw new PostconditionError("unsupported_postcondition", `object_with_fields:${keys}`);
   }
   throw new PostconditionError("invalid_postcondition", "postcondition must be an object or array");

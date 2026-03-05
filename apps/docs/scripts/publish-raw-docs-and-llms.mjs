@@ -35,7 +35,7 @@ async function walkFiles(dir) {
 }
 
 function sortPaths(paths) {
-  return [...paths].sort((a, b) => a.localeCompare(b));
+  return paths.toSorted((a, b) => a.localeCompare(b));
 }
 
 function addSection(lines, header, urls) {

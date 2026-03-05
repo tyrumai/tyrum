@@ -139,7 +139,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
       };
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
-    .sort((a, b) => a.nodeId.localeCompare(b.nodeId));
+    .toSorted((a, b) => a.nodeId.localeCompare(b.nodeId));
 
   const takeoverUrl = desktopTakeoverLinks.at(0)?.url;
 
