@@ -28,7 +28,8 @@ describe("native sqlite preflight", () => {
       cwd: REPO_ROOT,
       env: {
         ...process.env,
-        TYRUM_NATIVE_SQLITE_CHECK_TARGET: "__tyrum_nonexistent__",
+        TYRUM_NATIVE_SQLITE_CHECK_TARGET:
+          "./tests/fixtures/native-sqlite-preflight-abi-mismatch.cjs",
       },
       encoding: "utf8",
     });
@@ -36,6 +37,7 @@ describe("native sqlite preflight", () => {
     expect(res.status).not.toBe(0);
     const output = `${res.stdout ?? ""}\n${res.stderr ?? ""}`;
     expect(output).toContain("better-sqlite3");
+    expect(output).toContain("ERR_DLOPEN_FAILED");
     expect(output).toContain("pnpm rebuild better-sqlite3");
   });
 
@@ -49,5 +51,7 @@ describe("native sqlite preflight", () => {
     });
 
     expect(res.status).toBe(0);
+    expect(res.stdout.trim()).toBe("");
+    expect(res.stderr.trim()).toBe("");
   });
 });
