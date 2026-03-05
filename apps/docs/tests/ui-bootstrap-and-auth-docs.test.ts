@@ -7,7 +7,7 @@ import { listMarkdownFiles } from "./markdown-utils.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 
-describe("Issue #568 docs", () => {
+describe("UI bootstrap and auth docs (Issue #568)", () => {
   it("updates install + getting started docs for /ui and /auth/session cookie bootstrap", async () => {
     const installDoc = await readFile(resolve(repoRoot, "docs/install.md"), "utf8");
     expect(installDoc).toMatch(/\/ui\b/);
