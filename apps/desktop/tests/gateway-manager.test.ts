@@ -204,6 +204,50 @@ describe("GatewayManager", () => {
     await gm.stop();
   });
 
+  it("captures bootstrap tokens split across stdout chunks without leaking them", async () => {
+    const gm = new GatewayManager();
+    const stdout = new EventEmitter();
+    const stderr = new EventEmitter();
+    const proc = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null,
+      signalCode: null as string | null,
+      kill: vi.fn((signal?: string) => {
+        if (signal === "SIGTERM") {
+          proc.signalCode = "SIGTERM";
+          queueMicrotask(() => proc.emit("exit", null));
+        }
+      }),
+      stdout,
+      stderr,
+      stdin: null,
+      pid: 12345,
+    });
+    spawnMock.mockReturnValue(proc as never);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
+
+    const logs: { level: string; message: string }[] = [];
+    gm.on("log", (entry) => logs.push(entry));
+
+    await gm.start({
+      gatewayBin: "/nonexistent",
+      port: 7788,
+      dbPath: "/tmp/test.db",
+      accessToken: "test-token",
+    });
+
+    stdout.emit("data", Buffer.from("system: tyrum-token.v1.abc."));
+    expect(logs.some((entry) => entry.message.includes("tyrum-token.v1."))).toBe(false);
+    expect(gm.getBootstrapToken("system")).toBeUndefined();
+
+    stdout.emit("data", Buffer.from("def\r\nhello\r\n"));
+
+    expect(gm.getBootstrapToken("system")).toBe("tyrum-token.v1.abc.def");
+    expect(logs.some((entry) => entry.message.includes("tyrum-token.v1."))).toBe(false);
+    expect(logs.at(-1)?.message).toBe("system: [REDACTED]\r\nhello");
+
+    await gm.stop();
+  });
+
   it("graceful stop does not emit transient error status", async () => {
     const gm = new GatewayManager();
     const proc = mockProc();

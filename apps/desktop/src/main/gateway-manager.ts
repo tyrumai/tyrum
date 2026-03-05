@@ -101,31 +101,53 @@ function appendStartupLogLines(buffer: string[], rawOutput: string): void {
   }
 }
 
-function captureBootstrapTokensFromOutput(tokens: Map<string, string>, rawOutput: string): void {
-  for (const rawLine of rawOutput.split(/\r?\n/g)) {
+type BootstrapTokenChunkProcessor = {
+  processChunk(chunk: string): string;
+  flushRemainder(): string;
+};
+
+function createBootstrapTokenChunkProcessor(
+  tokens: Map<string, string>,
+): BootstrapTokenChunkProcessor {
+  let remainder = "";
+
+  const processLine = (rawLine: string): string => {
     const line = rawLine.trim();
-    if (!line) continue;
     const match = BOOTSTRAP_TOKEN_LINE_PATTERN.exec(line);
     const label = match?.groups?.["label"];
     const token = match?.groups?.["token"];
-    if (!label || !token) continue;
-    tokens.set(label, token);
-  }
-}
+    if (label && token) {
+      tokens.set(label, token);
+      return `${label}: [REDACTED]`;
+    }
+    return rawLine;
+  };
 
-function redactBootstrapTokens(rawOutput: string): string {
-  const parts = rawOutput.split(/(\r?\n)/g);
-  let changed = false;
-  for (let i = 0; i < parts.length; i += 2) {
-    const rawLine = parts[i] ?? "";
-    const line = rawLine.trim();
-    const match = BOOTSTRAP_TOKEN_LINE_PATTERN.exec(line);
-    const label = match?.groups?.["label"];
-    if (!label) continue;
-    changed = true;
-    parts[i] = `${label}: [REDACTED]`;
-  }
-  return changed ? parts.join("") : rawOutput;
+  const processText = (text: string): { output: string; nextRemainder: string } => {
+    const parts = text.split(/(\r?\n)/g);
+    let output = "";
+    for (let i = 0; i + 1 < parts.length; i += 2) {
+      const rawLine = parts[i] ?? "";
+      const newline = parts[i + 1] ?? "";
+      output += processLine(rawLine) + newline;
+    }
+    return { output, nextRemainder: parts.at(-1) ?? "" };
+  };
+
+  return {
+    processChunk(chunk: string): string {
+      const combined = remainder + chunk;
+      const processed = processText(combined);
+      remainder = processed.nextRemainder;
+      return processed.output;
+    },
+    flushRemainder(): string {
+      const pending = remainder;
+      remainder = "";
+      if (!pending) return "";
+      return processLine(pending);
+    },
+  };
 }
 
 function inferHomeFromDbPath(dbPath: string): string | undefined {
@@ -197,10 +219,12 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     });
     this.process = proc;
 
+    const stdoutProcessor = createBootstrapTokenChunkProcessor(this.bootstrapTokens);
+    const stderrProcessor = createBootstrapTokenChunkProcessor(this.bootstrapTokens);
+
     proc.stdout?.on("data", (data: Buffer) => {
-      const output = data.toString();
-      captureBootstrapTokensFromOutput(this.bootstrapTokens, output);
-      const redacted = redactBootstrapTokens(output);
+      const redacted = stdoutProcessor.processChunk(data.toString());
+      if (!redacted) return;
       appendStartupLogLines(startupLogLines, redacted);
       this.emit("log", {
         level: "info",
@@ -210,9 +234,8 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     });
 
     proc.stderr?.on("data", (data: Buffer) => {
-      const output = data.toString();
-      captureBootstrapTokensFromOutput(this.bootstrapTokens, output);
-      const redacted = redactBootstrapTokens(output);
+      const redacted = stderrProcessor.processChunk(data.toString());
+      if (!redacted) return;
       appendStartupLogLines(startupLogLines, redacted);
       this.emit("log", {
         level: "error",
@@ -222,6 +245,26 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     });
 
     proc.on("exit", (code) => {
+      const stdoutFlush = stdoutProcessor.flushRemainder();
+      if (stdoutFlush) {
+        appendStartupLogLines(startupLogLines, stdoutFlush);
+        this.emit("log", {
+          level: "info",
+          message: stdoutFlush.trimEnd(),
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const stderrFlush = stderrProcessor.flushRemainder();
+      if (stderrFlush) {
+        appendStartupLogLines(startupLogLines, stderrFlush);
+        this.emit("log", {
+          level: "error",
+          message: stderrFlush.trimEnd(),
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       const isGracefulStop = this.stoppingProcess === proc;
       if (isGracefulStop) {
         this.stoppingProcess = null;
