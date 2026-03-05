@@ -30,9 +30,6 @@ patchedDependencies:
   dmg-license@1.0.11:
     hash: 9de5625782d661750c4261c2f5575c217222758f9f5aac99b523818484696f82
     path: patches/dmg-license@1.0.11.patch
-  dompurify@3.3.1:
-    hash: 2ed861327bf9311297e355f38063aef952767d6184174457e5fcb760a417b5a2
-    path: patches/dompurify@3.3.1.patch
 
 importers:
 
