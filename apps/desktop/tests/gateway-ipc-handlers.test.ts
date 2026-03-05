@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrowserWindow } from "electron";
 
@@ -229,7 +230,8 @@ describe("registerGatewayIpc handlers", () => {
     process.env["TYRUM_HOME"] = "/tmp/tyrum-home";
     try {
       testState.embeddedDbPath = "";
-      existsSyncMock.mockImplementation((path) => path === "/tmp/tyrum-home/gateway/gateway.db");
+      const legacyDbPath = join("/tmp/tyrum-home", "gateway", "gateway.db");
+      existsSyncMock.mockImplementation((path) => path === legacyDbPath);
 
       const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
 
@@ -248,9 +250,7 @@ describe("registerGatewayIpc handlers", () => {
 
       await operatorConnectionHandler!({} as never);
 
-      expect(mgr.lastStartOptions).toEqual(
-        expect.objectContaining({ dbPath: "/tmp/tyrum-home/gateway/gateway.db" }),
-      );
+      expect(mgr.lastStartOptions).toEqual(expect.objectContaining({ dbPath: legacyDbPath }));
     } finally {
       if (prevHome === undefined) {
         delete process.env["TYRUM_HOME"];
