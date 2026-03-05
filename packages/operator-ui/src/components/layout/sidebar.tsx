@@ -55,6 +55,296 @@ function writeStoredBool(key: string, value: boolean): void {
   }
 }
 
+interface SidebarNavButtonProps {
+  item: SidebarNavItem;
+  activeItemId: string;
+  collapsed: boolean;
+  onNavigate: (id: string) => void;
+}
+
+function SidebarNavButton({ item, activeItemId, collapsed, onNavigate }: SidebarNavButtonProps) {
+  const Icon = item.icon;
+  const active = item.id === activeItemId;
+  const badgeCount = item.badgeCount ?? 0;
+  const badgeText = badgeCount > 99 ? "99+" : String(badgeCount);
+
+  return (
+    <button
+      type="button"
+      data-testid={item.testId ?? `nav-${item.id}`}
+      data-active={active ? "true" : undefined}
+      aria-current={active ? "page" : undefined}
+      title={collapsed ? item.label : undefined}
+      className={cn(
+        "flex w-full items-center rounded-md text-sm transition-colors",
+        collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
+        "border-l-2 border-transparent",
+        active
+          ? "border-primary bg-primary-dim text-fg font-medium"
+          : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+      )}
+      onClick={() => {
+        onNavigate(item.id);
+      }}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {!collapsed ? (
+        <>
+          <span className="flex-1 truncate">{item.label}</span>
+          {badgeCount > 0 ? (
+            <Badge variant={item.badgeVariant ?? "default"} className="ml-auto">
+              {badgeText}
+            </Badge>
+          ) : null}
+        </>
+      ) : null}
+    </button>
+  );
+}
+
+interface SidebarHeaderProps {
+  collapsed: boolean;
+  showHeader: boolean;
+}
+
+function SidebarHeader({ collapsed, showHeader }: SidebarHeaderProps) {
+  if (!showHeader || collapsed) return null;
+
+  return (
+    <div className="flex items-center gap-2 border-b border-border px-4 py-4">
+      <div className="text-base font-semibold">Tyrum</div>
+    </div>
+  );
+}
+
+interface SidebarNavProps {
+  items: SidebarNavItem[];
+  activeItemId: string;
+  onNavigate: (id: string) => void;
+  collapsed: boolean;
+  secondaryItems?: SidebarNavItem[];
+  secondaryLabel: string;
+  secondaryCollapsible: boolean;
+  secondaryCollapsed: boolean;
+  onToggleSecondary: () => void;
+}
+
+function SidebarNav({
+  items,
+  activeItemId,
+  onNavigate,
+  collapsed,
+  secondaryItems,
+  secondaryLabel,
+  secondaryCollapsible,
+  secondaryCollapsed,
+  onToggleSecondary,
+}: SidebarNavProps) {
+  const showSecondaryItems = secondaryItems && secondaryItems.length > 0;
+  const secondaryVisible = showSecondaryItems && (!secondaryCollapsible || !secondaryCollapsed);
+
+  const renderNavItem = (item: SidebarNavItem) => (
+    <SidebarNavButton
+      key={item.id}
+      item={item}
+      activeItemId={activeItemId}
+      collapsed={collapsed}
+      onNavigate={onNavigate}
+    />
+  );
+
+  return (
+    <nav className={cn("flex flex-1 flex-col gap-1 py-3", collapsed ? "px-1" : "px-2")}>
+      {items.map(renderNavItem)}
+      {showSecondaryItems ? (
+        <>
+          <div className="mt-4 border-t border-border" />
+          {secondaryCollapsible && !collapsed ? (
+            <button
+              type="button"
+              data-testid="sidebar-secondary-toggle"
+              className="mt-3 flex w-full items-center gap-1 rounded-md px-3 py-1 text-xs font-medium uppercase tracking-wide text-fg-muted hover:text-fg"
+              onClick={onToggleSecondary}
+            >
+              <ChevronDown
+                className={cn(
+                  "h-3 w-3 shrink-0 transition-transform",
+                  secondaryCollapsed ? "-rotate-90" : null,
+                )}
+              />
+              <span>{secondaryLabel}</span>
+            </button>
+          ) : !collapsed ? (
+            <div className="mt-3 px-3 text-xs font-medium uppercase tracking-wide text-fg-muted">
+              {secondaryLabel}
+            </div>
+          ) : null}
+          {collapsed || secondaryVisible ? secondaryItems.map(renderNavItem) : null}
+        </>
+      ) : null}
+    </nav>
+  );
+}
+
+interface SidebarSyncNowButtonProps {
+  collapsed: boolean;
+  onSyncNow: () => void;
+  syncNowDisabled: boolean;
+  syncNowLoading: boolean;
+}
+
+function SidebarSyncNowButton({
+  collapsed,
+  onSyncNow,
+  syncNowDisabled,
+  syncNowLoading,
+}: SidebarSyncNowButtonProps) {
+  return (
+    <button
+      type="button"
+      data-testid="sidebar-sync-now"
+      title={syncNowLoading ? "Syncing..." : syncNowDisabled ? "Connect to sync." : "Sync now"}
+      aria-label={syncNowLoading ? "Syncing" : "Sync now"}
+      disabled={syncNowDisabled || syncNowLoading}
+      className={cn(
+        "flex items-center rounded-md text-sm transition-colors",
+        collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
+        syncNowDisabled || syncNowLoading
+          ? "cursor-not-allowed opacity-50"
+          : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+      )}
+      onClick={() => {
+        onSyncNow();
+      }}
+    >
+      <RefreshCw className={cn("h-4 w-4", syncNowLoading ? "animate-spin" : null)} />
+      {!collapsed ? <span>{syncNowLoading ? "Syncing…" : "Sync now"}</span> : null}
+    </button>
+  );
+}
+
+interface SidebarStatusControlsProps {
+  collapsed: boolean;
+  connectionStatus: SidebarConnectionStatus;
+}
+
+function SidebarStatusControls({ collapsed, connectionStatus }: SidebarStatusControlsProps) {
+  const connectionDisplay = getConnectionDisplay(connectionStatus);
+
+  return (
+    <div
+      data-testid="sidebar-status-controls"
+      className={cn("flex items-center", collapsed ? "justify-center" : "justify-start")}
+    >
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className={cn(
+                "inline-flex items-center rounded-md text-sm text-fg-muted",
+                collapsed ? "justify-center px-2 py-2" : "w-full gap-2 px-3 py-2",
+              )}
+            >
+              <StatusDot
+                data-testid="connection-status-dot"
+                variant={connectionDisplay.variant}
+                pulse={connectionDisplay.pulse}
+                role="img"
+                aria-label={`Connection ${connectionDisplay.label}`}
+              />
+              {!collapsed ? (
+                <span data-testid="connection-status-label" className="truncate">
+                  {connectionDisplay.label}
+                </span>
+              ) : null}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side={collapsed ? "right" : "top"}>
+            {connectionDisplay.label}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+
+interface SidebarCollapseToggleProps {
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+}
+
+function SidebarCollapseToggle({ collapsed, onToggleCollapsed }: SidebarCollapseToggleProps) {
+  return (
+    <button
+      type="button"
+      data-testid="sidebar-collapse-toggle"
+      title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      className={cn(
+        "flex items-center rounded-md text-sm transition-colors",
+        collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
+        "text-fg-muted hover:bg-bg-subtle hover:text-fg",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+      )}
+      onClick={onToggleCollapsed}
+    >
+      {collapsed ? (
+        <ChevronsRight className="h-4 w-4" />
+      ) : (
+        <>
+          <ChevronsLeft className="h-4 w-4" />
+          <span>Collapse</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+interface SidebarFooterProps {
+  collapsed: boolean;
+  collapsible: boolean;
+  connectionStatus: SidebarConnectionStatus;
+  onSyncNow?: () => void;
+  syncNowDisabled: boolean;
+  syncNowLoading: boolean;
+  onToggleCollapsed: () => void;
+}
+
+function SidebarFooter({
+  collapsed,
+  collapsible,
+  connectionStatus,
+  onSyncNow,
+  syncNowDisabled,
+  syncNowLoading,
+  onToggleCollapsed,
+}: SidebarFooterProps) {
+  return (
+    <div
+      className={cn(
+        "mt-auto flex flex-col gap-2 border-t border-border",
+        collapsed ? "p-2" : "p-4",
+      )}
+    >
+      {onSyncNow ? (
+        <SidebarSyncNowButton
+          collapsed={collapsed}
+          onSyncNow={onSyncNow}
+          syncNowDisabled={syncNowDisabled}
+          syncNowLoading={syncNowLoading}
+        />
+      ) : null}
+
+      <SidebarStatusControls collapsed={collapsed} connectionStatus={connectionStatus} />
+
+      {collapsible ? (
+        <SidebarCollapseToggle collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />
+      ) : null}
+    </div>
+  );
+}
+
 export function Sidebar({
   items,
   activeItemId,
@@ -107,55 +397,6 @@ export function Sidebar({
     writeStoredBool(STORAGE_KEY_SECONDARY, next);
   };
 
-  const connectionDisplay = getConnectionDisplay(connectionStatus);
-  const dotVariant = connectionDisplay.variant;
-  const dotPulse = connectionDisplay.pulse;
-  const connectionLabel = connectionDisplay.label;
-
-  const renderItem = (item: SidebarNavItem) => {
-    const Icon = item.icon;
-    const active = item.id === activeItemId;
-    const badgeCount = item.badgeCount ?? 0;
-    const badgeText = badgeCount > 99 ? "99+" : String(badgeCount);
-    return (
-      <button
-        key={item.id}
-        type="button"
-        data-testid={item.testId ?? `nav-${item.id}`}
-        data-active={active ? "true" : undefined}
-        aria-current={active ? "page" : undefined}
-        title={collapsed ? item.label : undefined}
-        className={cn(
-          "flex w-full items-center rounded-md text-sm transition-colors",
-          collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
-          "border-l-2 border-transparent",
-          active
-            ? "border-primary bg-primary-dim text-fg font-medium"
-            : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-        )}
-        onClick={() => {
-          onNavigate(item.id);
-        }}
-      >
-        <Icon className="h-4 w-4 shrink-0" />
-        {!collapsed ? (
-          <>
-            <span className="flex-1 truncate">{item.label}</span>
-            {badgeCount > 0 ? (
-              <Badge variant={item.badgeVariant ?? "default"} className="ml-auto">
-                {badgeText}
-              </Badge>
-            ) : null}
-          </>
-        ) : null}
-      </button>
-    );
-  };
-
-  const showSecondaryItems = secondaryItems && secondaryItems.length > 0;
-  const secondaryVisible = showSecondaryItems && (!secondaryCollapsible || !secondaryCollapsed);
-
   return (
     <aside
       className={cn(
@@ -165,134 +406,29 @@ export function Sidebar({
       )}
       {...props}
     >
-      {showHeader && !collapsed ? (
-        <div className="flex items-center gap-2 border-b border-border px-4 py-4">
-          <div className="text-base font-semibold">Tyrum</div>
-        </div>
-      ) : null}
+      <SidebarHeader collapsed={collapsed} showHeader={showHeader} />
 
-      <nav className={cn("flex flex-1 flex-col gap-1 py-3", collapsed ? "px-1" : "px-2")}>
-        {items.map(renderItem)}
-        {showSecondaryItems ? (
-          <>
-            <div className="mt-4 border-t border-border" />
-            {secondaryCollapsible && !collapsed ? (
-              <button
-                type="button"
-                data-testid="sidebar-secondary-toggle"
-                className="mt-3 flex w-full items-center gap-1 rounded-md px-3 py-1 text-xs font-medium uppercase tracking-wide text-fg-muted hover:text-fg"
-                onClick={toggleSecondary}
-              >
-                <ChevronDown
-                  className={cn(
-                    "h-3 w-3 shrink-0 transition-transform",
-                    secondaryCollapsed ? "-rotate-90" : null,
-                  )}
-                />
-                <span>{secondaryLabel}</span>
-              </button>
-            ) : !collapsed ? (
-              <div className="mt-3 px-3 text-xs font-medium uppercase tracking-wide text-fg-muted">
-                {secondaryLabel}
-              </div>
-            ) : null}
-            {collapsed
-              ? secondaryItems.map(renderItem)
-              : secondaryVisible
-                ? secondaryItems.map(renderItem)
-                : null}
-          </>
-        ) : null}
-      </nav>
+      <SidebarNav
+        items={items}
+        activeItemId={activeItemId}
+        onNavigate={onNavigate}
+        collapsed={collapsed}
+        secondaryItems={secondaryItems}
+        secondaryLabel={secondaryLabel}
+        secondaryCollapsible={secondaryCollapsible}
+        secondaryCollapsed={secondaryCollapsed}
+        onToggleSecondary={toggleSecondary}
+      />
 
-      <div
-        className={cn(
-          "mt-auto flex flex-col gap-2 border-t border-border",
-          collapsed ? "p-2" : "p-4",
-        )}
-      >
-        {onSyncNow ? (
-          <button
-            type="button"
-            data-testid="sidebar-sync-now"
-            title={
-              syncNowLoading ? "Syncing..." : syncNowDisabled ? "Connect to sync." : "Sync now"
-            }
-            aria-label={syncNowLoading ? "Syncing" : "Sync now"}
-            disabled={syncNowDisabled || syncNowLoading}
-            className={cn(
-              "flex items-center rounded-md text-sm transition-colors",
-              collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
-              syncNowDisabled || syncNowLoading
-                ? "cursor-not-allowed opacity-50"
-                : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-            )}
-            onClick={() => {
-              onSyncNow();
-            }}
-          >
-            <RefreshCw className={cn("h-4 w-4", syncNowLoading ? "animate-spin" : null)} />
-            {!collapsed ? <span>{syncNowLoading ? "Syncing…" : "Sync now"}</span> : null}
-          </button>
-        ) : null}
-
-        <div
-          data-testid="sidebar-status-controls"
-          className={cn("flex items-center", collapsed ? "justify-center" : "justify-start")}
-        >
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-md text-sm text-fg-muted",
-                    collapsed ? "justify-center px-2 py-2" : "w-full gap-2 px-3 py-2",
-                  )}
-                >
-                  <StatusDot
-                    data-testid="connection-status-dot"
-                    variant={dotVariant}
-                    pulse={dotPulse}
-                    role="img"
-                    aria-label={`Connection ${connectionLabel}`}
-                  />
-                  {!collapsed ? (
-                    <span data-testid="connection-status-label" className="truncate">
-                      {connectionLabel}
-                    </span>
-                  ) : null}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side={collapsed ? "right" : "top"}>{connectionLabel}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-
-        {collapsible ? (
-          <button
-            type="button"
-            data-testid="sidebar-collapse-toggle"
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={cn(
-              "flex items-center rounded-md text-sm transition-colors",
-              collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
-              "text-fg-muted hover:bg-bg-subtle hover:text-fg",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-            )}
-            onClick={toggleCollapsed}
-          >
-            {collapsed ? (
-              <ChevronsRight className="h-4 w-4" />
-            ) : (
-              <>
-                <ChevronsLeft className="h-4 w-4" />
-                <span>Collapse</span>
-              </>
-            )}
-          </button>
-        ) : null}
-      </div>
+      <SidebarFooter
+        collapsed={collapsed}
+        collapsible={collapsible}
+        connectionStatus={connectionStatus}
+        onSyncNow={onSyncNow}
+        syncNowDisabled={syncNowDisabled}
+        syncNowLoading={syncNowLoading}
+        onToggleCollapsed={toggleCollapsed}
+      />
     </aside>
   );
 }
