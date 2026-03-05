@@ -10,6 +10,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 type ExecutionScopeIds = {
   jobId: string;
@@ -82,19 +83,25 @@ describe("shapeBrowserEvidenceForArtifacts", () => {
     attemptId: "attempt-browser-evidence-1",
   };
 
-  let db = openTestSqliteDb();
+  let db: SqliteDb;
+  let didOpenDb = false;
   let artifactsDir = "";
   let artifactStore = new FsArtifactStore(".");
 
   beforeEach(async () => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     artifactsDir = await mkdtemp(join(tmpdir(), "tyrum-browser-evidence-"));
     artifactStore = new FsArtifactStore(artifactsDir);
     await seedExecutionScope(db, scope);
   });
 
   afterEach(async () => {
-    await db.close();
+    if (didOpenDb) {
+      didOpenDb = false;
+      await db.close();
+    }
     if (artifactsDir) {
       await rm(artifactsDir, { recursive: true, force: true });
       artifactsDir = "";

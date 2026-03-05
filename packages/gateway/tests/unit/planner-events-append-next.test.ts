@@ -11,12 +11,17 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 describe("planner event append-next helpers", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
   });
 
   afterEach(async () => {
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 

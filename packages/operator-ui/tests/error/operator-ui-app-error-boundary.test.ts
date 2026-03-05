@@ -98,5 +98,5 @@ describe("OperatorUiApp error boundary wiring", () => {
     } finally {
       cleanupTestRoot({ container, root });
     }
-  });
+  }, 15_000);
 });

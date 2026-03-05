@@ -15,11 +15,14 @@ import {
 
 describe("WatcherFiringDal", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
   let dal: WatcherFiringDal;
   let processor: WatcherProcessor;
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     dal = new WatcherFiringDal(db);
     processor = new WatcherProcessor({
       db,
@@ -29,6 +32,8 @@ describe("WatcherFiringDal", () => {
   });
 
   afterEach(async () => {
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 

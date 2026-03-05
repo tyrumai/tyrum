@@ -174,10 +174,13 @@ describe("Channel inbox queue overflow policies", () => {
   const originalOverflow = process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"];
 
   let db: SqliteDb;
+  let didOpenDb = false;
   let inbox: ChannelInboxDal;
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     inbox = new ChannelInboxDal(db);
   });
 
@@ -194,6 +197,8 @@ describe("Channel inbox queue overflow policies", () => {
       process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = originalOverflow;
     }
 
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 

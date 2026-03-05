@@ -6,16 +6,21 @@ import { LaneQueueSignalDal } from "../../src/modules/lanes/queue-signal-dal.js"
 
 describe("LaneQueueSignalDal", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
   let inbox: ChannelInboxDal;
   let signals: LaneQueueSignalDal;
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     inbox = new ChannelInboxDal(db);
     signals = new LaneQueueSignalDal(db);
   });
 
   afterEach(async () => {
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 
