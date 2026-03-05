@@ -1,13 +1,52 @@
 import { describe, expect, it } from "vitest";
-import { readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_ROOT = join(__dirname, "../../migrations");
 
-function getMigrationFiles(kind: "sqlite" | "postgres"): string[] {
-  return readdirSync(join(MIGRATIONS_ROOT, kind))
+function tryGetTrackedMigrationFiles(
+  migrationsRoot: string,
+  kind: "sqlite" | "postgres",
+): string[] | null {
+  const dir = join(migrationsRoot, kind);
+  try {
+    const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: dir,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+
+    if (repoRoot.length === 0) return null;
+
+    const relDir = relative(repoRoot, dir).replaceAll("\\", "/");
+    const tracked = execFileSync("git", ["-C", repoRoot, "ls-files", "--", relDir], {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+
+    const files = tracked
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => basename(line))
+      .filter((file) => file.endsWith(".sql"))
+      .sort();
+
+    return files;
+  } catch {
+    return null;
+  }
+}
+
+function getMigrationFiles(migrationsRoot: string, kind: "sqlite" | "postgres"): string[] {
+  const tracked = tryGetTrackedMigrationFiles(migrationsRoot, kind);
+  if (tracked) return tracked;
+
+  return readdirSync(join(migrationsRoot, kind))
     .filter((f) => f.endsWith(".sql"))
     .sort();
 }
@@ -27,18 +66,40 @@ function getDuplicatePrefixes(files: readonly string[]): string[] {
 
 describe("gateway migrations", () => {
   it("has no duplicate numeric prefixes (sqlite)", () => {
-    const files = getMigrationFiles("sqlite");
+    const files = getMigrationFiles(MIGRATIONS_ROOT, "sqlite");
     expect(getDuplicatePrefixes(files)).toEqual([]);
   });
 
   it("has no duplicate numeric prefixes (postgres)", () => {
-    const files = getMigrationFiles("postgres");
+    const files = getMigrationFiles(MIGRATIONS_ROOT, "postgres");
     expect(getDuplicatePrefixes(files)).toEqual([]);
   });
 
   it("keeps sqlite and postgres migration filenames in sync", () => {
-    const sqliteFiles = getMigrationFiles("sqlite");
-    const postgresFiles = getMigrationFiles("postgres");
+    const sqliteFiles = getMigrationFiles(MIGRATIONS_ROOT, "sqlite");
+    const postgresFiles = getMigrationFiles(MIGRATIONS_ROOT, "postgres");
     expect(sqliteFiles).toEqual(postgresFiles);
+  });
+
+  it("ignores untracked migration files when checking duplicate prefixes", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "tyrum-migrations-"));
+    try {
+      execFileSync("git", ["init"], { cwd: repoRoot, stdio: "ignore" });
+
+      const migrationsRoot = join(repoRoot, "packages/gateway/migrations");
+      const sqliteDir = join(migrationsRoot, "sqlite");
+      mkdirSync(sqliteDir, { recursive: true });
+
+      writeFileSync(join(sqliteDir, "100_a.sql"), "SELECT 1;", "utf-8");
+      writeFileSync(join(sqliteDir, "102_tracked.sql"), "SELECT 1;", "utf-8");
+      execFileSync("git", ["add", "."], { cwd: repoRoot, stdio: "ignore" });
+
+      writeFileSync(join(sqliteDir, "102_untracked.sql"), "SELECT 1;", "utf-8");
+
+      const files = getMigrationFiles(migrationsRoot, "sqlite");
+      expect(getDuplicatePrefixes(files)).toEqual([]);
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 });

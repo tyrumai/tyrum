@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronDown, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { ChevronDown, ChevronsLeft, ChevronsRight, RefreshCw } from "lucide-react";
 import { getConnectionDisplay, type ConnectionStatus } from "../../lib/connection-display.js";
 import { cn } from "../../lib/cn.js";
 import { Badge, type BadgeVariant } from "../ui/badge.js";
@@ -28,6 +28,9 @@ export interface SidebarProps extends React.HTMLAttributes<HTMLElement> {
   collapsible?: boolean;
   showHeader?: boolean;
   connectionStatus?: SidebarConnectionStatus;
+  onSyncNow?: () => void;
+  syncNowDisabled?: boolean;
+  syncNowLoading?: boolean;
 }
 
 const STORAGE_KEY_SECONDARY = "tyrum-sidebar-secondary-collapsed";
@@ -63,6 +66,9 @@ export function Sidebar({
   collapsible = false,
   showHeader = true,
   connectionStatus = "disconnected",
+  onSyncNow,
+  syncNowDisabled = false,
+  syncNowLoading = false,
   className,
   ...props
 }: SidebarProps) {
@@ -205,6 +211,32 @@ export function Sidebar({
           collapsed ? "p-2" : "p-4",
         )}
       >
+        {onSyncNow ? (
+          <button
+            type="button"
+            data-testid="sidebar-sync-now"
+            title={
+              syncNowLoading ? "Syncing..." : syncNowDisabled ? "Connect to sync." : "Sync now"
+            }
+            aria-label={syncNowLoading ? "Syncing" : "Sync now"}
+            disabled={syncNowDisabled || syncNowLoading}
+            className={cn(
+              "flex items-center rounded-md text-sm transition-colors",
+              collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
+              syncNowDisabled || syncNowLoading
+                ? "cursor-not-allowed opacity-50"
+                : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+            )}
+            onClick={() => {
+              onSyncNow();
+            }}
+          >
+            <RefreshCw className={cn("h-4 w-4", syncNowLoading ? "animate-spin" : null)} />
+            {!collapsed ? <span>{syncNowLoading ? "Syncing…" : "Sync now"}</span> : null}
+          </button>
+        ) : null}
+
         <div
           data-testid="sidebar-status-controls"
           className={cn("flex items-center", collapsed ? "justify-center" : "justify-start")}

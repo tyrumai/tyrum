@@ -44,6 +44,10 @@ import { useKeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
 import { BrowserNodeProvider } from "./browser-node/browser-node-provider.js";
 import { getDesktopApi } from "./desktop-api.js";
 import { OperatorUiHostProvider, useHostApiOptional, type HostKind } from "./host/host-api.js";
+import {
+  getActiveAgentIdsFromSessionLanes,
+  parseAgentIdFromKey,
+} from "./lib/status-session-lanes.js";
 import { useOperatorStore } from "./use-operator-store.js";
 
 export type OperatorUiMode = "web" | "desktop";
@@ -174,9 +178,11 @@ function OperatorUiAppRoot({
 }: Pick<OperatorUiAppProps, "core" | "mode" | "onReconfigureGateway">) {
   const [route, setRoute] = useState<OperatorUiRouteId>("dashboard");
   const connection = useOperatorStore(core.connectionStore);
+  const autoSync = useOperatorStore(core.autoSyncStore);
   const approvals = useOperatorStore(core.approvalsStore);
   const pairing = useOperatorStore(core.pairingStore);
   const runs = useOperatorStore(core.runsStore);
+  const status = useOperatorStore(core.statusStore);
   const showOperatorRoutes =
     connection.status === "connected" ||
     (connection.status === "connecting" && connection.recovering);
@@ -188,11 +194,12 @@ function OperatorUiAppRoot({
   const activeAgentIds = new Set<string>();
   for (const run of Object.values(runs.runsById)) {
     if (run.status !== "queued" && run.status !== "running" && run.status !== "paused") continue;
-    if (!run.key.startsWith("agent:")) continue;
-    const rest = run.key.slice("agent:".length);
-    const sep = rest.indexOf(":");
-    if (sep <= 0) continue;
-    activeAgentIds.add(rest.slice(0, sep));
+    const agentId = parseAgentIdFromKey(run.key);
+    if (!agentId) continue;
+    activeAgentIds.add(agentId);
+  }
+  for (const agentId of getActiveAgentIdsFromSessionLanes(status.status?.session_lanes)) {
+    activeAgentIds.add(agentId);
   }
   const activeAgentsCount = activeAgentIds.size;
 
@@ -265,6 +272,11 @@ function OperatorUiAppRoot({
             activeItemId={route}
             onNavigate={navigate}
             connectionStatus={connection.status}
+            onSyncNow={() => {
+              void core.syncAllNow();
+            }}
+            syncNowDisabled={connection.status !== "connected"}
+            syncNowLoading={autoSync.isSyncing}
           />
         ) : null
       }

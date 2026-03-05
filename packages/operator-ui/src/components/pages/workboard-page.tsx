@@ -16,17 +16,14 @@ import { Card, CardContent } from "../ui/card.js";
 import { StatusDot, type StatusDotVariant } from "../ui/status-dot.js";
 import {
   WORK_ITEM_STATUSES,
-  applyWorkTaskEvent,
   groupWorkItemsByStatus,
   selectTasksForSelectedWorkItem,
   shouldProcessWorkStateKvUpdate,
   upsertWorkArtifact,
   upsertWorkDecision,
-  upsertWorkItem,
   upsertWorkSignal,
   upsertWorkStateKvEntry,
   type WorkStateKvEntry,
-  type WorkTasksByWorkItemId,
 } from "../workboard/workboard-store.js";
 
 export type WorkBoardPageProps = {
@@ -60,11 +57,9 @@ function makeWorkItemScope(workItemId: string): WorkStateKVScope {
 export function WorkBoardPage({ core }: WorkBoardPageProps) {
   const connection = useOperatorStore(core.connectionStore);
   const isConnected = connection.status === "connected";
+  const workboard = useOperatorStore(core.workboardStore);
 
   const selectedIdRef = useRef<string | null>(null);
-
-  const [items, setItems] = useState<WorkItem[]>([]);
-  const [tasksByWorkItemId, setTasksByWorkItemId] = useState<WorkTasksByWorkItemId>({});
 
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   const [drilldownBusy, setDrilldownBusy] = useState(false);
@@ -77,29 +72,21 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   const [agentKvEntries, setAgentKvEntries] = useState<WorkStateKvEntry[]>([]);
   const [workItemKvEntries, setWorkItemKvEntries] = useState<WorkStateKvEntry[]>([]);
 
-  const [connectionError, setConnectionError] = useState<string | null>(null);
-
   useEffect(() => {
     selectedIdRef.current = selectedWorkItemId;
   }, [selectedWorkItemId]);
 
-  const grouped = useMemo(() => groupWorkItemsByStatus(items), [items]);
+  const grouped = useMemo(() => groupWorkItemsByStatus(workboard.items), [workboard.items]);
 
-  const refresh = useCallback(async (): Promise<void> => {
-    setConnectionError(null);
-    try {
-      const res = await core.ws.workList({ ...DEFAULT_SCOPE, limit: 200 });
-      setItems(res.items);
-    } catch (error) {
-      const message = formatErrorMessage(error);
-      if (message.includes("work.list failed: unsupported_request")) {
-        setConnectionError("WorkBoard is not supported by this gateway (database not configured).");
-        setItems([]);
-        return;
-      }
-      setConnectionError(message);
-    }
-  }, [core.ws]);
+  useEffect(() => {
+    if (!selectedWorkItemId) return;
+    const item = workboard.items.find((entry) => entry.work_item_id === selectedWorkItemId);
+    if (!item) return;
+    setSelectedItem((prev) => {
+      if (!prev) return prev;
+      return prev.work_item_id === item.work_item_id ? item : prev;
+    });
+  }, [selectedWorkItemId, workboard.items]);
 
   const reconnect = useCallback(() => {
     core.disconnect();
@@ -120,8 +107,8 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
           status,
           reason,
         });
+        core.workboardStore.upsertWorkItem(res.item);
 
-        setItems((prev: WorkItem[]) => upsertWorkItem(prev, res.item));
         setSelectedItem((prev: WorkItem | null) => {
           if (selectedIdRef.current !== res.item.work_item_id) return prev;
           return res.item;
@@ -132,30 +119,13 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         setTransitionTarget(null);
       }
     },
-    [core.ws, isConnected, selectedWorkItemId],
+    [core.ws, core.workboardStore, isConnected, selectedWorkItemId],
   );
 
   useEffect(() => {
     if (!isConnected) return;
 
     let disposed = false;
-
-    setConnectionError(null);
-    void refresh();
-
-    const onWorkItemEvent = (event: { payload: { item: WorkItem } }) => {
-      if (disposed) return;
-      setItems((prev: WorkItem[]) => upsertWorkItem(prev, event.payload.item));
-      setSelectedItem((prev: WorkItem | null) => {
-        if (!prev) return prev;
-        return prev.work_item_id === event.payload.item.work_item_id ? event.payload.item : prev;
-      });
-    };
-
-    const onWorkTaskEvent = (event: Parameters<typeof applyWorkTaskEvent>[1]) => {
-      if (disposed) return;
-      setTasksByWorkItemId((prev) => applyWorkTaskEvent(prev, event));
-    };
 
     const onWorkArtifactCreated = (event: { payload: { artifact: WorkArtifact } }) => {
       if (disposed) return;
@@ -216,18 +186,6 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         .catch(() => {});
     };
 
-    core.ws.on("work.item.created", onWorkItemEvent);
-    core.ws.on("work.item.updated", onWorkItemEvent);
-    core.ws.on("work.item.blocked", onWorkItemEvent);
-    core.ws.on("work.item.completed", onWorkItemEvent);
-    core.ws.on("work.item.failed", onWorkItemEvent);
-    core.ws.on("work.item.cancelled", onWorkItemEvent);
-
-    core.ws.on("work.task.leased", onWorkTaskEvent);
-    core.ws.on("work.task.started", onWorkTaskEvent);
-    core.ws.on("work.task.paused", onWorkTaskEvent);
-    core.ws.on("work.task.completed", onWorkTaskEvent);
-
     core.ws.on("work.artifact.created", onWorkArtifactCreated);
     core.ws.on("work.decision.created", onWorkDecisionCreated);
     core.ws.on("work.signal.created", onWorkSignalUpsert);
@@ -237,18 +195,6 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
 
     return () => {
       disposed = true;
-      core.ws.off("work.item.created", onWorkItemEvent);
-      core.ws.off("work.item.updated", onWorkItemEvent);
-      core.ws.off("work.item.blocked", onWorkItemEvent);
-      core.ws.off("work.item.completed", onWorkItemEvent);
-      core.ws.off("work.item.failed", onWorkItemEvent);
-      core.ws.off("work.item.cancelled", onWorkItemEvent);
-
-      core.ws.off("work.task.leased", onWorkTaskEvent);
-      core.ws.off("work.task.started", onWorkTaskEvent);
-      core.ws.off("work.task.paused", onWorkTaskEvent);
-      core.ws.off("work.task.completed", onWorkTaskEvent);
-
       core.ws.off("work.artifact.created", onWorkArtifactCreated);
       core.ws.off("work.decision.created", onWorkDecisionCreated);
       core.ws.off("work.signal.created", onWorkSignalUpsert);
@@ -256,7 +202,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       core.ws.off("work.signal.fired", onWorkSignalFired);
       core.ws.off("work.state_kv.updated", onWorkStateKvUpdated);
     };
-  }, [core.ws, isConnected, refresh]);
+  }, [core.ws, isConnected]);
 
   useEffect(() => {
     if (!isConnected || !selectedWorkItemId) {
@@ -323,7 +269,10 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     };
   }, [core.ws, isConnected, selectedWorkItemId]);
 
-  const tasksForSelected = selectTasksForSelectedWorkItem(tasksByWorkItemId, selectedWorkItemId);
+  const tasksForSelected = selectTasksForSelectedWorkItem(
+    workboard.tasksByWorkItemId,
+    selectedWorkItemId,
+  );
   const taskList = useMemo(() => Object.values(tasksForSelected), [tasksForSelected]);
 
   const taskCounts = useMemo(() => {
@@ -363,15 +312,6 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
             <StatusDot variant={connectionDotVariant} pulse={connection.status === "connecting"} />
             {connection.status}
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={refresh}
-            disabled={!isConnected}
-            title={!isConnected ? "Connect to refresh." : undefined}
-          >
-            Refresh
-          </Button>
           <Button variant="secondary" size="sm" onClick={reconnect}>
             Reconnect
           </Button>
@@ -386,8 +326,8 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         />
       ) : null}
 
-      {connectionError ? (
-        <Alert variant="error" title="Connection error" description={connectionError} />
+      {workboard.error ? (
+        <Alert variant="error" title="WorkBoard error" description={workboard.error} />
       ) : null}
 
       <div className="flex gap-3 overflow-x-auto pb-2">

@@ -5,45 +5,23 @@ import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
+import { useOperatorStore } from "../../use-operator-store.js";
 
 export function AgentsPage({ core }: { core: OperatorCore }) {
-  const [agentKeyRaw, setAgentKeyRaw] = useState("default");
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<unknown>(undefined);
-  const [error, setError] = useState<unknown>(undefined);
+  const agentStatus = useOperatorStore(core.agentStatusStore);
+  const [agentKeyRaw, setAgentKeyRaw] = useState(agentStatus.agentKey || "default");
 
   const fetchStatus = async (): Promise<void> => {
-    if (busy) return;
-    setBusy(true);
-    setResult(undefined);
-    setError(undefined);
-    try {
-      const trimmed = agentKeyRaw.trim();
-      setResult(await core.http.agentStatus.get(trimmed ? { agent_key: trimmed } : undefined));
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
+    if (agentStatus.loading) return;
+    const trimmed = agentKeyRaw.trim();
+    setAgentKeyRaw(trimmed);
+    core.agentStatusStore.setAgentKey(trimmed);
+    await core.agentStatusStore.refresh();
   };
 
   return (
     <div className="grid gap-6" data-testid="agents-page">
-      <PageHeader
-        title="Agents"
-        actions={
-          <Button
-            variant="secondary"
-            isLoading={busy}
-            data-testid="agents-refresh"
-            onClick={() => {
-              void fetchStatus();
-            }}
-          >
-            Refresh
-          </Button>
-        }
-      />
+      <PageHeader title="Agents" />
 
       <Card>
         <CardHeader>
@@ -59,13 +37,13 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
             value={agentKeyRaw}
             onChange={(e) => setAgentKeyRaw(e.target.value)}
           />
-          <ApiResultCard heading="Status" value={result} error={error} />
+          <ApiResultCard heading="Status" value={agentStatus.status} error={agentStatus.error} />
         </CardContent>
         <CardFooter>
           <Button
             type="button"
             variant="secondary"
-            isLoading={busy}
+            isLoading={agentStatus.loading}
             data-testid="agents-status-fetch"
             onClick={() => {
               void fetchStatus();

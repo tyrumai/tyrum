@@ -124,17 +124,6 @@ export function SettingsPage({ core, mode }: { core: OperatorCore; mode: Operato
               {formattedTokens}
             </span>
           </div>
-          <div>
-            <Button
-              data-testid="settings-refresh-usage"
-              variant="secondary"
-              onClick={() => {
-                void core.statusStore.refreshUsage();
-              }}
-            >
-              Refresh usage
-            </Button>
-          </div>
         </CardContent>
       </Card>
 

@@ -88,6 +88,7 @@ export interface MemoryState {
 export interface MemoryStore extends ExternalStore<MemoryState> {
   list(input?: { filter?: MemoryItemFilter; limit?: number }): Promise<void>;
   search(input: { query: string; filter?: MemoryItemFilter; limit?: number }): Promise<void>;
+  refreshBrowse(): Promise<void>;
   loadMore(): Promise<void>;
   inspect(memoryItemId: MemoryItemId): Promise<void>;
   update(memoryItemId: MemoryItemId, patch: MemoryItemPatch): Promise<MemoryItem>;
@@ -397,6 +398,111 @@ export function createMemoryStore(ws: OperatorWsClient): {
           ...prev.browse,
           loading: false,
           error: toOperatorCoreError("ws", "memory.search", error),
+        },
+      }));
+    } finally {
+      if (activeBrowseRunId === runId) {
+        activeBrowseRunId = null;
+        resetBrowseBuffers();
+      }
+    }
+  }
+
+  async function refreshBrowse(): Promise<void> {
+    const snapshot = store.getSnapshot();
+    const request = snapshot.browse.request;
+    if (!request) return;
+
+    const runId = ++browseRunId;
+    activeBrowseRunId = runId;
+    resetBrowseBuffers();
+
+    setState((prev) => ({
+      ...prev,
+      browse: {
+        ...prev.browse,
+        loading: true,
+        error: null,
+      },
+    }));
+
+    try {
+      if (request.kind === "list") {
+        const result = await ws.memoryList({
+          v: 1,
+          filter: request.filter,
+          limit: request.limit,
+          cursor: undefined,
+        });
+        if (activeBrowseRunId !== runId) return;
+        const upserts = bufferedItemUpserts;
+        const deletes = bufferedDeletedIds;
+        const consolidations = bufferedConsolidations;
+
+        setState((prev) => {
+          let items = applyConsolidationsToListItems(result.items, consolidations);
+          if (deletes.size > 0) {
+            items = items.filter((item) => !deletes.has(item.memory_item_id));
+          }
+          items = applyItemUpserts(items, upserts);
+
+          return {
+            ...prev,
+            browse: completeBrowseSuccess(prev.browse, {
+              request,
+              results: {
+                kind: "list",
+                items,
+                nextCursor: toCursor(result.next_cursor),
+              },
+              now: new Date().toISOString(),
+            }),
+          };
+        });
+        return;
+      }
+
+      const result = await ws.memorySearch({
+        v: 1,
+        query: request.query,
+        filter: request.filter,
+        limit: request.limit,
+        cursor: undefined,
+      });
+      if (activeBrowseRunId !== runId) return;
+      const deletes = bufferedDeletedIds;
+      const consolidations = bufferedConsolidations;
+
+      setState((prev) => {
+        let hits = applyConsolidationsToHits(result.hits, consolidations);
+        if (deletes.size > 0) {
+          hits = hits.filter((hit) => !deletes.has(hit.memory_item_id));
+        }
+        return {
+          ...prev,
+          browse: completeBrowseSuccess(prev.browse, {
+            request,
+            results: {
+              kind: "search",
+              hits,
+              nextCursor: toCursor(result.next_cursor),
+            },
+            now: new Date().toISOString(),
+          }),
+        };
+      });
+    } catch (error) {
+      if (activeBrowseRunId !== runId) return;
+      setState((prev) => ({
+        ...prev,
+        browse: {
+          ...prev.browse,
+          loading: false,
+          error: toOperatorCoreError(
+            "ws",
+            request.kind === "list" ? "memory.list" : "memory.search",
+            error,
+          ),
         },
       }));
     } finally {
@@ -834,6 +940,7 @@ export function createMemoryStore(ws: OperatorWsClient): {
       ...store,
       list,
       search,
+      refreshBrowse,
       loadMore,
       inspect,
       update,

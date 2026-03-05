@@ -4,13 +4,17 @@ import type * as React from "react";
 import { Activity, Bot, Hash, Link2, Play, ShieldCheck, Tag, Wallet } from "lucide-react";
 import { PageHeader } from "../layout/page-header.js";
 import { Badge } from "../ui/badge.js";
-import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { LiveRegion } from "../ui/live-region.js";
 import { Skeleton } from "../ui/skeleton.js";
 import { StatusDot } from "../ui/status-dot.js";
 import { cn } from "../../lib/cn.js";
 import { getConnectionDisplay } from "../../lib/connection-display.js";
+import {
+  getActiveAgentIdsFromSessionLanes,
+  getActiveExecutionRunsCountFromQueueDepth,
+  parseAgentIdFromKey,
+} from "../../lib/status-session-lanes.js";
 import { useHostApiOptional } from "../../host/host-api.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 
@@ -139,25 +143,34 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
     };
   }, [desktopApi]);
 
-  const activeRunsCount = Object.values(runs.runsById).filter(
+  const activeRunsLiveCount = Object.values(runs.runsById).filter(
     (run) => run.status === "queued" || run.status === "running" || run.status === "paused",
   ).length;
+  const activeRunsSeedCount = getActiveExecutionRunsCountFromQueueDepth(status.status?.queue_depth);
+  const activeRunsCount =
+    activeRunsSeedCount === null
+      ? activeRunsLiveCount
+      : Math.max(activeRunsLiveCount, activeRunsSeedCount);
 
   const agentIds = new Set<string>();
   const activeAgentIds = new Set<string>();
   for (const run of Object.values(runs.runsById)) {
-    if (!run.key.startsWith("agent:")) continue;
-    const rest = run.key.slice("agent:".length);
-    const sep = rest.indexOf(":");
-    if (sep <= 0) continue;
-    const agentId = rest.slice(0, sep);
+    const agentId = parseAgentIdFromKey(run.key);
+    if (!agentId) continue;
     agentIds.add(agentId);
     if (run.status === "queued" || run.status === "running" || run.status === "paused") {
       activeAgentIds.add(agentId);
     }
   }
+  for (const agentId of getActiveAgentIdsFromSessionLanes(status.status?.session_lanes)) {
+    activeAgentIds.add(agentId);
+  }
   const activeAgentsCount = activeAgentIds.size;
-  const totalAgentsCount = agentIds.size;
+  const totalAgentIds = new Set<string>(agentIds);
+  for (const agentId of activeAgentIds) {
+    totalAgentIds.add(agentId);
+  }
+  const totalAgentsCount = totalAgentIds.size;
   const activeAgentsText =
     totalAgentsCount > 0 ? `${activeAgentsCount}/${totalAgentsCount}` : `${activeAgentsCount}/-`;
 
@@ -172,47 +185,9 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
 
   const updateAvailable = desktopUpdate?.stage === "available";
 
-  const refreshDashboard = (): void => {
-    void Promise.allSettled([
-      core.statusStore.refreshStatus(),
-      core.statusStore.refreshUsage(),
-      core.statusStore.refreshPresence(),
-      core.approvalsStore.refreshPending(),
-      core.pairingStore.refresh(),
-    ]);
-  };
-
   return (
     <div className="grid gap-6">
-      {hideHeader ? (
-        <div className="flex justify-end">
-          <Button
-            variant="secondary"
-            data-testid="dashboard-refresh-status"
-            onClick={() => {
-              refreshDashboard();
-            }}
-          >
-            Refresh
-          </Button>
-        </div>
-      ) : (
-        <PageHeader
-          title="Dashboard"
-          className="mb-0"
-          actions={
-            <Button
-              variant="secondary"
-              data-testid="dashboard-refresh-status"
-              onClick={() => {
-                refreshDashboard();
-              }}
-            >
-              Refresh
-            </Button>
-          }
-        />
-      )}
+      {hideHeader ? null : <PageHeader title="Dashboard" className="mb-0" />}
 
       <LiveRegion data-testid="dashboard-approvals-live">
         {approvals.pendingIds.length} pending approvals
@@ -234,7 +209,7 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
         <StatCard
           label="Version"
           icon={Tag}
-          loading={status.loading.status}
+          loading={status.loading.status && status.status === null}
           value={status.status?.version ?? "-"}
           badge={
             updateAvailable ? (
@@ -258,14 +233,14 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
         <StatCard
           label="Instance ID"
           icon={Hash}
-          loading={status.loading.status}
+          loading={status.loading.status && status.status === null}
           value={status.status?.instance_id ?? "-"}
         />
 
         <StatCard
           label="Tokens Used"
           icon={Wallet}
-          loading={status.loading.usage}
+          loading={status.loading.usage && status.usage === null}
           value={tokensUsedText}
         />
 
@@ -291,7 +266,7 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
         <StatCard
           label="Pending Approvals"
           icon={ShieldCheck}
-          loading={approvals.loading}
+          loading={approvals.loading && approvals.lastSyncedAt === null}
           value={String(approvals.pendingIds.length)}
           badge={
             approvals.pendingIds.length > 0 ? (
@@ -309,7 +284,7 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
         <StatCard
           label="Pending Pairings"
           icon={Link2}
-          loading={pairing.loading}
+          loading={pairing.loading && pairing.lastSyncedAt === null}
           value={String(pairing.pendingIds.length)}
           badge={
             pairing.pendingIds.length > 0 ? (
