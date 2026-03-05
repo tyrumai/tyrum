@@ -1,6 +1,7 @@
 import type { PairingListResponse, PairingMutateResponse } from "@tyrum/client";
 import type { OperatorHttpClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
+import { beginRefresh, isRefreshActive, type RefreshRunState } from "./status-store.refresh-run.js";
 
 export type Pairing = PairingListResponse["pairings"][number];
 
@@ -52,19 +53,9 @@ function pairingFromMutation(result: PairingMutateResponse): Pairing {
 }
 
 interface PairingRefreshState {
-  runId: number;
-  activeRunId: number | null;
+  runId: RefreshRunState["runId"];
+  activeRunId: RefreshRunState["activeRunId"];
   bufferedUpserts: Map<number, Pairing>;
-}
-
-function beginRefresh(state: PairingRefreshState): number {
-  const runId = ++state.runId;
-  state.activeRunId = runId;
-  return runId;
-}
-
-function isRefreshActive(state: PairingRefreshState, runId: number): boolean {
-  return state.activeRunId === runId;
 }
 
 function resetRefreshBuffer(state: PairingRefreshState): void {

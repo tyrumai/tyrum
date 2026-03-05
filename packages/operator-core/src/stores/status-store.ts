@@ -2,6 +2,12 @@ import type { PresenceResponse, StatusResponse, UsageResponse } from "@tyrum/cli
 import type { OperatorHttpClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 import { toErrorMessage } from "../to-error-message.js";
+import {
+  beginRefresh,
+  endRefreshIfActive,
+  isRefreshActive,
+  type RefreshRunState,
+} from "./status-store.refresh-run.js";
 
 export type OperatorPresenceEntry = PresenceResponse["entries"][number];
 
@@ -29,27 +35,6 @@ export interface StatusStore extends ExternalStore<StatusState> {
 }
 
 type SetState<T> = (updater: (prev: T) => T) => void;
-
-interface RefreshRunState {
-  runId: number;
-  activeRunId: number | null;
-}
-
-function beginRefresh(runState: RefreshRunState): number {
-  const runId = ++runState.runId;
-  runState.activeRunId = runId;
-  return runId;
-}
-
-function isRefreshActive(runState: RefreshRunState, runId: number): boolean {
-  return runState.activeRunId === runId;
-}
-
-function endRefreshIfActive(runState: RefreshRunState, runId: number): void {
-  if (runState.activeRunId === runId) {
-    runState.activeRunId = null;
-  }
-}
 
 async function refreshStatusImpl(
   http: OperatorHttpClient,
