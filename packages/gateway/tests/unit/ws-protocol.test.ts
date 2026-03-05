@@ -19,6 +19,7 @@ import {
 } from "../../src/ws/protocol.js";
 import { NoCapableNodeError, NodeNotPairedError } from "../../src/ws/protocol/errors.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
+import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import {
   DEFAULT_AGENT_ID,
@@ -148,7 +149,7 @@ describe("handleClientMessage", () => {
 
   it("dispatches task.execute response to callback", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["playwright"]);
+    const { id } = makeClient(cm, ["playwright"], { role: "node" });
     const client = cm.getClient(id)!;
     const onTaskResult = vi.fn();
     const deps = makeDeps(cm, { onTaskResult });
@@ -172,6 +173,76 @@ describe("handleClientMessage", () => {
       { screenshot: "base64..." },
       undefined,
     );
+  });
+
+  it("rejects task.execute responses from operator clients", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+    const onTaskResult = vi.fn();
+    const deps = makeDeps(cm, { onTaskResult });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "t-client-1",
+        type: "task.execute",
+        ok: true,
+        result: { evidence: { screenshot: "base64..." } },
+      }),
+      deps,
+    );
+
+    expect(onTaskResult).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
+    expect(result!.type).toBe("error");
+    const payload = (result as unknown as { payload: { code: string } }).payload;
+    expect(payload.code).toBe("unauthorized");
+  });
+
+  it("rejects task.execute results from an unexpected connection", async () => {
+    const cm = new ConnectionManager();
+    const { id: expectedConnectionId } = makeClient(cm, ["cli"], { id: "conn-1", role: "node" });
+    const { id: otherConnectionId } = makeClient(cm, ["cli"], { id: "conn-2", role: "node" });
+    const expected = cm.getClient(expectedConnectionId)!;
+    const other = cm.getClient(otherConnectionId)!;
+
+    const taskResults = new TaskResultRegistry();
+    taskResults.associate("t-expected-1", expectedConnectionId);
+
+    const onTaskResult = vi.fn();
+    const deps = makeDeps(cm, { onTaskResult, taskResults });
+
+    const unexpected = await handleClientMessage(
+      other,
+      JSON.stringify({
+        request_id: "t-expected-1",
+        type: "task.execute",
+        ok: true,
+        result: { evidence: { screenshot: "base64..." } },
+      }),
+      deps,
+    );
+
+    expect(onTaskResult).not.toHaveBeenCalled();
+    expect(unexpected).toBeDefined();
+    expect(unexpected!.type).toBe("error");
+    const payload = (unexpected as unknown as { payload: { code: string } }).payload;
+    expect(payload.code).toBe("unauthorized");
+
+    const result = await handleClientMessage(
+      expected,
+      JSON.stringify({
+        request_id: "t-expected-1",
+        type: "task.execute",
+        ok: true,
+        result: { evidence: { screenshot: "base64..." } },
+      }),
+      deps,
+    );
+
+    expect(result).toBeUndefined();
+    expect(onTaskResult).toHaveBeenCalledOnce();
   });
 
   it("fires command.execute lifecycle hooks after executing a command", async () => {
@@ -242,7 +313,7 @@ describe("handleClientMessage", () => {
 
   it("dispatches task.execute error response", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"]);
+    const { id } = makeClient(cm, ["cli"], { role: "node" });
     const client = cm.getClient(id)!;
     const onTaskResult = vi.fn();
     const deps = makeDeps(cm, { onTaskResult });
@@ -263,7 +334,7 @@ describe("handleClientMessage", () => {
 
   it("dispatches task.execute error response evidence from error details", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"]);
+    const { id } = makeClient(cm, ["cli"], { role: "node" });
     const client = cm.getClient(id)!;
     const onTaskResult = vi.fn();
     const deps = makeDeps(cm, { onTaskResult });

@@ -10,7 +10,7 @@ import { NoCapableClientError, NoCapableNodeError, NodeNotPairedError } from "./
 import type { ProtocolDeps } from "./types.js";
 
 // ---------------------------------------------------------------------------
-// Gateway -> Client dispatch helpers
+// Gateway -> Node dispatch helpers
 // ---------------------------------------------------------------------------
 
 /**
