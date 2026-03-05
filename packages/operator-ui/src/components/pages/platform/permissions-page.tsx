@@ -49,7 +49,8 @@ interface WebConfig {
 }
 
 const DEFAULT_PROFILE: Profile = "balanced";
-const DEFAULT_CAPABILITIES = capabilitiesForProfile(DEFAULT_PROFILE);
+// Preserve the historical restrictive fallback until the stored config provides capabilities.
+const DEFAULT_CAPABILITIES = capabilitiesForProfile("safe");
 const DEFAULT_CLI_CONFIG: CliConfig = { allowedCommands: [], allowedWorkingDirs: [] };
 const DEFAULT_WEB_CONFIG: WebConfig = { allowedDomains: [], headless: true };
 const CAPABILITY_OPTIONS = [
