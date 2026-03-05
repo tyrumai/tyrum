@@ -23,15 +23,17 @@ type RemoteSetupConfig = {
   tokenRef: string;
 };
 
-function validateRemoteSetupConfig({ wsUrl, token }: { wsUrl: string; token: string }):
+type RemoteSetupValidationResult =
   | { ok: true; config: RemoteSetupConfig }
-  | {
-      ok: false;
-      errorMessage:
-        | "Remote WebSocket URL is required."
-        | "Remote WebSocket URL must be a valid ws:// or wss:// URL."
-        | "A gateway token is required for remote mode.";
-    } {
+  | { ok: false; errorMessage: string };
+
+function validateRemoteSetupConfig({
+  wsUrl,
+  token,
+}: {
+  wsUrl: string;
+  token: string;
+}): RemoteSetupValidationResult {
   const trimmedWsUrl = wsUrl.trim();
   const trimmedToken = token.trim();
 

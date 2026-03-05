@@ -203,11 +203,17 @@ async function bootDesktopOperatorCore({
     if (isDisposed()) return;
 
     const elevatedModeStore = createElevatedModeStore();
-    const manager = createDesktopOperatorCoreManager({
-      connection,
-      ipcFetch: createDesktopIpcFetch(api),
-      elevatedModeStore,
-    });
+    let manager: OperatorCoreManager;
+    try {
+      manager = createDesktopOperatorCoreManager({
+        connection,
+        ipcFetch: createDesktopIpcFetch(api),
+        elevatedModeStore,
+      });
+    } catch (error) {
+      elevatedModeStore.dispose();
+      throw error;
+    }
 
     if (isDisposed()) {
       manager.dispose();
