@@ -17,7 +17,7 @@ import {
   sendPlanUpdate,
   NoCapableClientError,
 } from "../../src/ws/protocol.js";
-import { NodeNotPairedError } from "../../src/ws/protocol/errors.js";
+import { NoCapableNodeError, NodeNotPairedError } from "../../src/ws/protocol/errors.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import {
@@ -1719,10 +1719,51 @@ describe("handleClientMessage", () => {
 // ---------------------------------------------------------------------------
 
 describe("dispatchTask", () => {
-  it("sends task.execute request to a capable client", async () => {
+  it("never selects a capability-providing client for task.execute", async () => {
     const cm = new ConnectionManager();
-    const { ws } = makeClient(cm, ["playwright"], { protocolRev: 2 });
+    const { ws } = makeClient(cm, ["cli"], { protocolRev: 2 });
     const deps = makeDeps(cm);
+
+    const action: ActionPrimitive = {
+      type: "CLI",
+      args: { command: "echo hi" },
+    };
+
+    await expect(
+      dispatchTask(
+        action,
+        {
+          runId: "550e8400-e29b-41d4-a716-446655440000",
+          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        },
+        deps,
+      ),
+    ).rejects.toBeInstanceOf(NoCapableNodeError);
+    expect(ws.send).not.toHaveBeenCalled();
+  });
+
+  it("sends task.execute request to a paired capable node", async () => {
+    const cm = new ConnectionManager();
+    const { ws } = makeClient(cm, ["playwright"], {
+      role: "node",
+      deviceId: "dev_web_test",
+      protocolRev: 2,
+    });
+    const deps = makeDeps(cm, {
+      nodePairingDal: {
+        getByNodeId: async () =>
+          ({
+            status: "approved",
+            capability_allowlist: [
+              {
+                id: descriptorIdForClientCapability("playwright"),
+                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              },
+            ],
+          }) as never,
+      } as never,
+    });
 
     const action: ActionPrimitive = {
       type: "Web",
@@ -1980,7 +2021,7 @@ describe("dispatchTask", () => {
         },
         deps,
       ),
-    ).rejects.toBeInstanceOf(NoCapableClientError);
+    ).rejects.toBeInstanceOf(NoCapableNodeError);
     expect(nodeWs.send).not.toHaveBeenCalled();
   });
 
@@ -1993,7 +2034,7 @@ describe("dispatchTask", () => {
           {
             connection_id: "conn-v1",
             edge_id: "edge-a",
-            role: "client",
+            role: "node",
             protocol_rev: 1,
             device_id: "dev-1",
             pubkey: null,
@@ -2001,6 +2042,7 @@ describe("dispatchTask", () => {
             version: null,
             mode: null,
             capabilities: ["cli"],
+            ready_capabilities: ["cli"],
             connected_at_ms: 0,
             last_seen_at_ms: 0,
             expires_at_ms: 10_000,
@@ -2008,7 +2050,7 @@ describe("dispatchTask", () => {
           {
             connection_id: "conn-v2",
             edge_id: "edge-a",
-            role: "client",
+            role: "node",
             protocol_rev: 2,
             device_id: "dev-2",
             pubkey: null,
@@ -2016,6 +2058,7 @@ describe("dispatchTask", () => {
             version: null,
             mode: null,
             capabilities: ["cli"],
+            ready_capabilities: ["cli"],
             connected_at_ms: 0,
             last_seen_at_ms: 0,
             expires_at_ms: 10_000,
@@ -2025,6 +2068,18 @@ describe("dispatchTask", () => {
     };
 
     const deps = makeDeps(cm, {
+      nodePairingDal: {
+        getByNodeId: async () =>
+          ({
+            status: "approved",
+            capability_allowlist: [
+              {
+                id: descriptorIdForClientCapability("cli"),
+                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              },
+            ],
+          }) as never,
+      } as never,
       cluster: {
         edgeId: "edge-b",
         outboxDal: outboxDal as never,
@@ -2082,7 +2137,7 @@ describe("dispatchTask", () => {
         },
         deps,
       ),
-    ).rejects.toBeInstanceOf(NoCapableClientError);
+    ).rejects.toBeInstanceOf(NodeNotPairedError);
     expect(nodeWs.send).not.toHaveBeenCalled();
   });
 
@@ -2222,18 +2277,19 @@ describe("dispatchTask", () => {
       args: { command: "echo hi" },
     };
 
-    const taskId = await dispatchTask(
-      action,
-      {
-        runId: "550e8400-e29b-41d4-a716-446655440000",
-        stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-      },
-      deps,
-    );
-    expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
+    await expect(
+      dispatchTask(
+        action,
+        {
+          runId: "550e8400-e29b-41d4-a716-446655440000",
+          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        },
+        deps,
+      ),
+    ).rejects.toBeInstanceOf(NodeNotPairedError);
     expect(nodeWs.send).not.toHaveBeenCalled();
-    expect(clientWs.send).toHaveBeenCalledOnce();
+    expect(clientWs.send).not.toHaveBeenCalled();
   });
 
   it("does not dispatch to a node when its pairing allowlist version excludes the capability", async () => {
@@ -2267,18 +2323,19 @@ describe("dispatchTask", () => {
       args: { command: "echo hi" },
     };
 
-    const taskId = await dispatchTask(
-      action,
-      {
-        runId: "550e8400-e29b-41d4-a716-446655440000",
-        stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-      },
-      deps,
-    );
-    expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
+    await expect(
+      dispatchTask(
+        action,
+        {
+          runId: "550e8400-e29b-41d4-a716-446655440000",
+          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        },
+        deps,
+      ),
+    ).rejects.toBeInstanceOf(NodeNotPairedError);
     expect(nodeWs.send).not.toHaveBeenCalled();
-    expect(clientWs.send).toHaveBeenCalledOnce();
+    expect(clientWs.send).not.toHaveBeenCalled();
   });
 
   it("does not dispatch to a node when policy denies node dispatch", async () => {
@@ -2349,7 +2406,7 @@ describe("dispatchTask", () => {
         },
         deps,
       ),
-    ).rejects.toBeInstanceOf(NoCapableClientError);
+    ).rejects.toBeInstanceOf(NodeNotPairedError);
     expect(nodeWs.send).not.toHaveBeenCalled();
   });
 
@@ -2462,12 +2519,12 @@ describe("dispatchTask", () => {
         },
         deps,
       ),
-    ).rejects.toBeInstanceOf(NoCapableClientError);
+    ).rejects.toBeInstanceOf(NodeNotPairedError);
     expect(nodeWs.send).not.toHaveBeenCalled();
     expect(legacyWs.send).not.toHaveBeenCalled();
   });
 
-  it("throws NoCapableClientError when no client has the capability", () => {
+  it("throws NoCapableNodeError when no node has the capability", () => {
     const cm = new ConnectionManager();
     makeClient(cm, ["cli"]); // Only CLI capability
     const deps = makeDeps(cm);
@@ -2487,10 +2544,10 @@ describe("dispatchTask", () => {
         },
         deps,
       ),
-    ).toThrow(NoCapableClientError);
+    ).toThrow(NoCapableNodeError);
   });
 
-  it("throws NoCapableClientError when no clients are connected", () => {
+  it("throws NoCapableNodeError when no nodes are connected", () => {
     const cm = new ConnectionManager();
     const deps = makeDeps(cm);
 
@@ -2509,7 +2566,7 @@ describe("dispatchTask", () => {
         },
         deps,
       ),
-    ).toThrow(NoCapableClientError);
+    ).toThrow(NoCapableNodeError);
   });
 
   it("throws NoCapableClientError for unmapped action type", () => {

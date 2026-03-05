@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateKeyPairSync } from "node:crypto";
 import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   WsConnectInitRequest,
   WsConnectInitResponseEnvelope,
   WsConnectProofRequest,
@@ -12,6 +13,7 @@ import {
   WsTaskExecuteRequest,
   WsTaskExecuteResponseEnvelope,
   WsWorkSignalFiredEvent,
+  descriptorIdForClientCapability,
 } from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
@@ -184,6 +186,18 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     server = await startInstrumentedGateway((connectionManager) => {
       return {
         connectionManager,
+        nodePairingDal: {
+          getByNodeId: async () =>
+            ({
+              status: "approved",
+              capability_allowlist: [
+                {
+                  id: descriptorIdForClientCapability("http"),
+                  version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                },
+              ],
+            }) as never,
+        } as never,
         onTaskResult(taskId, success, result, evidence, error) {
           resolveTaskResult?.({ taskId, success, result, evidence, error });
         },
@@ -199,7 +213,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
       token: server.adminToken,
       capabilities: ["http"],
       reconnect: false,
-      role: "client",
+      role: "node",
       protocolRev: 2,
       device: {
         publicKey: publicKeyDer.toString("base64url"),
