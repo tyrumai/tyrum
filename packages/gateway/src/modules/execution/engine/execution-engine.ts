@@ -4,14 +4,10 @@ import type {
   Decision as DecisionT,
   ExecutionTrigger as ExecutionTriggerT,
   PolicyBundle as PolicyBundleT,
-  WsEventEnvelope as WsEventEnvelopeT,
-  WsRequestEnvelope as WsRequestEnvelopeT,
 } from "@tyrum/schemas";
 import {
-  evaluatePostcondition,
   parseTyrumKey,
   PolicyBundle,
-  PostconditionError,
   requiredCapability,
   requiresPostcondition,
 } from "@tyrum/schemas";
@@ -20,7 +16,6 @@ import type { RedactionEngine } from "../../redaction/engine.js";
 import type { Logger } from "../../observability/logger.js";
 import type { PolicyService } from "../../policy/service.js";
 import type { SecretProvider } from "../../secret/provider.js";
-import { canonicalizeToolMatchTarget } from "../../policy/match-target.js";
 import {
   evaluateDomain,
   mostRestrictiveDecision,
@@ -31,11 +26,11 @@ import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.j
 import type { SqlDb } from "../../../statestore/types.js";
 import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
-import { ApprovalDal } from "../../approval/dal.js";
-import { toApprovalContract } from "../../approval/to-contract.js";
 import { IdentityScopeDal } from "../../identity/scope.js";
 import { WorkboardDal } from "../../workboard/dal.js";
 import { sha256HexFromString, stableJsonStringify } from "../../policy/canonical-json.js";
+import { ExecutionEngineApprovalManager } from "./approval-manager.js";
+import { ExecutionAttemptRunner, type ExecuteAttemptOptions } from "./attempt-runner.js";
 import { defaultClock } from "./clock.js";
 import { normalizePositiveInt } from "../normalize-positive-int.js";
 import { ExecutionEngineArtifactRecorder } from "./artifact-recorder.js";
@@ -50,11 +45,8 @@ import {
 } from "./concurrency-manager.js";
 import { ExecutionEngineEventEmitter } from "./event-emitter.js";
 import { normalizeWorkspaceKey, parsePlanIdFromTriggerJson } from "./db.js";
-import {
-  releaseWorkspaceLease,
-  releaseWorkspaceLeaseTx,
-  tryAcquireWorkspaceLeaseTx,
-} from "../../workspace/lease.js";
+import { toolCallFromAction } from "./tool-call.js";
+import { releaseWorkspaceLeaseTx, tryAcquireWorkspaceLeaseTx } from "../../workspace/lease.js";
 import type {
   ClockFn,
   EnqueuePlanInput,
@@ -132,6 +124,8 @@ export class ExecutionEngine {
   private readonly eventsEnabled: boolean;
   private readonly eventEmitter: ExecutionEngineEventEmitter;
   private readonly artifactRecorder: ExecutionEngineArtifactRecorder;
+  private readonly approvalManager: ExecutionEngineApprovalManager;
+  private readonly attemptRunner: ExecutionAttemptRunner;
   private readonly concurrencyLimits?: ExecutionConcurrencyLimits;
 
   constructor(opts: {
@@ -159,6 +153,32 @@ export class ExecutionEngine {
     this.artifactRecorder = new ExecutionEngineArtifactRecorder({
       eventEmitter: this.eventEmitter,
       redactUnknown: (value) => this.redactUnknown(value),
+    });
+    this.approvalManager = new ExecutionEngineApprovalManager({
+      clock: this.clock,
+      logger: this.logger,
+      redactText: (value) => this.redactText(value),
+      redactUnknown: (value) => this.redactUnknown(value),
+      eventEmitter: this.eventEmitter,
+    });
+    this.attemptRunner = new ExecutionAttemptRunner({
+      db: this.db,
+      clock: this.clock,
+      logger: this.logger,
+      policyService: this.policyService,
+      concurrencyLimits: this.concurrencyLimits,
+      redactText: (text) => this.redactText(text),
+      redactUnknown: (value) => this.redactUnknown(value),
+      executeWithTimeout: async (...args) => await this.executeWithTimeout(...args),
+      resolveSecretScopesFromArgs: async (tenantId, args, context) =>
+        await this.resolveSecretScopesFromArgs(tenantId, args, context),
+      retryOrFailStep: async (opts) => await this.approvalManager.maybeRetryOrFailStep(opts),
+      pauseRunForApproval: async (tx, opts, input) =>
+        await this.approvalManager.pauseRunForApproval(tx, opts, input),
+      recordArtifactsTx: async (tx, scope, artifacts) =>
+        await this.recordArtifactsTx(tx, scope, artifacts),
+      emitAttemptUpdatedTx: async (tx, attemptId) => await this.emitAttemptUpdatedTx(tx, attemptId),
+      emitStepUpdatedTx: async (tx, stepId) => await this.emitStepUpdatedTx(tx, stepId),
     });
   }
 
@@ -225,18 +245,6 @@ export class ExecutionEngine {
     return row.kind === "policy" && row.status === "approved";
   }
 
-  private async enqueueWsMessage(
-    tx: SqlDb,
-    tenantId: string,
-    message: WsEventEnvelopeT | WsRequestEnvelopeT,
-  ): Promise<void> {
-    await this.eventEmitter.enqueueWsMessage(tx, tenantId, message);
-  }
-
-  private async enqueueWsEvent(tx: SqlDb, tenantId: string, evt: WsEventEnvelopeT): Promise<void> {
-    await this.eventEmitter.enqueueWsEvent(tx, tenantId, evt);
-  }
-
   private async emitRunUpdatedTx(tx: SqlDb, runId: string): Promise<void> {
     await this.eventEmitter.emitRunUpdatedTx(tx, runId);
   }
@@ -263,18 +271,6 @@ export class ExecutionEngine {
 
   private async emitRunStartedTx(tx: SqlDb, runId: string): Promise<void> {
     await this.emitRunIdEventTx(tx, "run.started", runId);
-  }
-
-  private async emitRunPausedTx(
-    tx: SqlDb,
-    opts: {
-      runId: string;
-      reason: string;
-      approvalId?: string;
-      detail?: string;
-    },
-  ): Promise<void> {
-    await this.eventEmitter.emitRunPausedTx(tx, opts);
   }
 
   private async emitRunResumedTx(tx: SqlDb, runId: string): Promise<void> {
@@ -997,7 +993,7 @@ export class ExecutionEngine {
 
         if (reasons.length > 0) {
           const planId = parsePlanIdFromTriggerJson(run.trigger_json) ?? run.run_id;
-          const paused = await this.pauseRunForApproval(
+          const paused = await this.approvalManager.pauseRunForApproval(
             tx,
             {
               tenantId: run.tenant_id,
@@ -1080,7 +1076,7 @@ export class ExecutionEngine {
         }
 
         if (parsedAction) {
-          const tool = this.toolCallFromAction(parsedAction);
+          const tool = toolCallFromAction(parsedAction);
           const toolId = tool.toolId;
           const toolMatchTarget = tool.matchTarget;
           const url = tool.url;
@@ -1238,7 +1234,7 @@ export class ExecutionEngine {
 
             if (!alreadyApproved) {
               const planId = parsePlanIdFromTriggerJson(run.trigger_json) ?? run.run_id;
-              const paused = await this.pauseRunForApproval(
+              const paused = await this.approvalManager.pauseRunForApproval(
                 tx,
                 {
                   tenantId: run.tenant_id,
@@ -1474,7 +1470,7 @@ export class ExecutionEngine {
             );
             if (!alreadyApproved) {
               const planId = parsePlanIdFromTriggerJson(run.trigger_json) ?? run.run_id;
-              const paused = await this.pauseRunForApproval(
+              const paused = await this.approvalManager.pauseRunForApproval(
                 tx,
                 {
                   tenantId: run.tenant_id,
@@ -1670,1018 +1666,8 @@ export class ExecutionEngine {
     });
   }
 
-  private async executeAttempt(opts: {
-    planId: string;
-    stepIndex: number;
-    action: ActionPrimitiveT;
-    postconditionJson: string | null;
-    maxAttempts: number;
-    timeoutMs: number;
-    tenantId: string;
-    runId: string;
-    jobId: string;
-    agentId: string;
-    workspaceId: string;
-    key: string;
-    lane: string;
-    stepId: string;
-    attemptId: string;
-    attemptNum: number;
-    workerId: string;
-    executor: StepExecutor;
-  }): Promise<boolean> {
-    const wallStartMs = Date.now();
-
-    this.logger?.info("execution.attempt.start", {
-      plan_id: opts.planId,
-      job_id: opts.jobId,
-      run_id: opts.runId,
-      step_id: opts.stepId,
-      attempt_id: opts.attemptId,
-      attempt: opts.attemptNum,
-      key: opts.key,
-      lane: opts.lane,
-      worker_id: opts.workerId,
-      step_index: opts.stepIndex,
-      action_type: opts.action.type,
-    });
-
-    await this.persistAttemptPolicyContext(opts).catch((err) => {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger?.warn("execution.attempt.policy_persist_failed", {
-        run_id: opts.runId,
-        step_id: opts.stepId,
-        attempt_id: opts.attemptId,
-        error: message,
-      });
-    });
-
-    const approvalRow = await this.db.get<{ approval_id: string | null }>(
-      "SELECT approval_id FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
-      [opts.tenantId, opts.stepId],
-    );
-    const runPolicy = await this.db.get<{ policy_snapshot_id: string | null }>(
-      "SELECT policy_snapshot_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
-      [opts.tenantId, opts.runId],
-    );
-
-    const result = await this.executeWithTimeout(
-      opts.executor,
-      opts.action,
-      opts.planId,
-      opts.stepIndex,
-      opts.timeoutMs,
-      {
-        tenantId: opts.tenantId,
-        runId: opts.runId,
-        stepId: opts.stepId,
-        attemptId: opts.attemptId,
-        approvalId: approvalRow?.approval_id ?? null,
-        key: opts.key,
-        lane: opts.lane,
-        workspaceId: opts.workspaceId,
-        policySnapshotId: runPolicy?.policy_snapshot_id ?? null,
-      },
-    );
-    const wallDurationMs = Math.max(0, Date.now() - wallStartMs);
-
-    const evidenceJson =
-      result.evidence !== undefined ? JSON.stringify(this.redactUnknown(result.evidence)) : null;
-    const artifactsJson = JSON.stringify(this.redactUnknown(result.artifacts ?? []));
-    const cost = this.redactUnknown(
-      result.cost
-        ? { ...result.cost, duration_ms: result.cost.duration_ms ?? wallDurationMs }
-        : { duration_ms: wallDurationMs },
-    );
-    const costJson = JSON.stringify(cost);
-
-    const nowIso = this.clock().nowIso;
-
-    // Postcondition evaluation is based on executor output, not DB state.
-    let postconditionError: string | undefined;
-    let postconditionReportJson: string | null = null;
-    let pauseDetail: string | undefined;
-
-    if (result.success && opts.postconditionJson) {
-      try {
-        const spec = JSON.parse(opts.postconditionJson) as unknown;
-        const report = evaluatePostcondition(spec, result.evidence ?? {});
-        postconditionReportJson = JSON.stringify(this.redactUnknown(report));
-        if (!report.passed) {
-          postconditionError = "postcondition failed";
-        }
-      } catch (err) {
-        if (err instanceof PostconditionError && err.kind === "missing_evidence") {
-          pauseDetail = `postcondition missing evidence: ${err.message}`;
-        } else if (err instanceof PostconditionError) {
-          postconditionError = `postcondition error: ${err.message}`;
-        } else {
-          postconditionError = "postcondition error";
-        }
-      }
-    }
-
-    const outcome = await this.db.transaction(async (tx) => {
-      const current = await tx.get<{ run_status: string; job_status: string }>(
-        `SELECT r.status AS run_status, j.status AS job_status
-         FROM execution_runs r
-         JOIN execution_jobs j ON j.tenant_id = r.tenant_id AND j.job_id = r.job_id
-         WHERE r.tenant_id = ? AND r.run_id = ?`,
-        [opts.tenantId, opts.runId],
-      );
-      const step = await tx.get<{ status: string }>(
-        "SELECT status FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
-        [opts.tenantId, opts.stepId],
-      );
-
-      const cancelled =
-        current?.run_status === "cancelled" ||
-        current?.job_status === "cancelled" ||
-        step?.status === "cancelled";
-
-      if (cancelled) {
-        await tx.run(
-          `UPDATE execution_attempts
-           SET status = 'cancelled',
-               finished_at = COALESCE(finished_at, ?),
-               error = COALESCE(error, 'cancelled'),
-               metadata_json = COALESCE(metadata_json, ?),
-               artifacts_json = COALESCE(artifacts_json, ?),
-               cost_json = COALESCE(cost_json, ?)
-           WHERE tenant_id = ? AND attempt_id = ? AND status = 'running'`,
-          [nowIso, evidenceJson, artifactsJson, costJson, opts.tenantId, opts.attemptId],
-        );
-        await this.emitAttemptUpdatedTx(tx, opts.attemptId);
-        await releaseConcurrencySlotsTx(
-          tx,
-          opts.tenantId,
-          opts.attemptId,
-          nowIso,
-          this.concurrencyLimits,
-        );
-        await releaseLaneAndWorkspaceLeasesTx(tx, {
-          tenantId: opts.tenantId,
-          key: opts.key,
-          lane: opts.lane,
-          workspaceId: opts.workspaceId,
-          owner: opts.workerId,
-        });
-        return { kind: "cancelled" as const };
-      }
-
-      if (result.success) {
-        if (result.pause) {
-          await this.markAttemptSucceeded(
-            tx,
-            opts,
-            result,
-            evidenceJson,
-            postconditionReportJson,
-            artifactsJson,
-            costJson,
-          );
-          const artifacts = safeJsonParse(artifactsJson, [] as ArtifactRefT[]);
-          await this.recordArtifactsTx(
-            tx,
-            {
-              tenantId: opts.tenantId,
-              runId: opts.runId,
-              stepId: opts.stepId,
-              attemptId: opts.attemptId,
-              workspaceId: opts.workspaceId,
-              agentId: opts.agentId,
-            },
-            artifacts,
-          );
-          const paused = await this.pauseRunForApproval(tx, opts, {
-            kind: result.pause.kind,
-            prompt: result.pause.prompt,
-            detail: result.pause.detail,
-            context: result.pause.context,
-            expiresAt: result.pause.expiresAt ?? undefined,
-          });
-          return {
-            kind: "paused" as const,
-            reason: "approval" as const,
-            approvalId: paused.approvalId,
-          };
-        }
-
-        if (pauseDetail) {
-          await this.markAttemptSucceeded(
-            tx,
-            opts,
-            result,
-            evidenceJson,
-            null,
-            artifactsJson,
-            costJson,
-          );
-          const artifacts = safeJsonParse(artifactsJson, [] as ArtifactRefT[]);
-          await this.recordArtifactsTx(
-            tx,
-            {
-              tenantId: opts.tenantId,
-              runId: opts.runId,
-              stepId: opts.stepId,
-              attemptId: opts.attemptId,
-              workspaceId: opts.workspaceId,
-              agentId: opts.agentId,
-            },
-            artifacts,
-          );
-          const paused = await this.pauseRunForApproval(tx, opts, {
-            kind: "takeover",
-            prompt: "Takeover required to continue workflow",
-            detail: pauseDetail,
-            context: {
-              source: "execution-engine",
-              run_id: opts.runId,
-              job_id: opts.jobId,
-              step_id: opts.stepId,
-              attempt_id: opts.attemptId,
-              action: opts.action,
-            },
-          });
-          return {
-            kind: "paused" as const,
-            reason: "takeover" as const,
-            approvalId: paused.approvalId,
-          };
-        }
-
-        if (postconditionError) {
-          await this.markAttemptFailed(
-            tx,
-            opts,
-            postconditionError,
-            evidenceJson,
-            postconditionReportJson,
-            artifactsJson,
-            costJson,
-          );
-          const artifacts = safeJsonParse(artifactsJson, [] as ArtifactRefT[]);
-          await this.recordArtifactsTx(
-            tx,
-            {
-              tenantId: opts.tenantId,
-              runId: opts.runId,
-              stepId: opts.stepId,
-              attemptId: opts.attemptId,
-              workspaceId: opts.workspaceId,
-              agentId: opts.agentId,
-            },
-            artifacts,
-          );
-          await this.maybeRetryOrFailStep({
-            tx,
-            nowIso,
-            tenantId: opts.tenantId,
-            agentId: opts.agentId,
-            attemptNum: opts.attemptNum,
-            maxAttempts: opts.maxAttempts,
-            stepId: opts.stepId,
-            attemptId: opts.attemptId,
-            runId: opts.runId,
-            jobId: opts.jobId,
-            workspaceId: opts.workspaceId,
-            key: opts.key,
-            lane: opts.lane,
-            workerId: opts.workerId,
-          });
-          return { kind: "failed" as const, status: "failed" as const, error: postconditionError };
-        }
-
-        await this.markAttemptSucceeded(
-          tx,
-          opts,
-          result,
-          evidenceJson,
-          postconditionReportJson,
-          artifactsJson,
-          costJson,
-        );
-        const artifacts = safeJsonParse(artifactsJson, [] as ArtifactRefT[]);
-        await this.recordArtifactsTx(
-          tx,
-          {
-            tenantId: opts.tenantId,
-            runId: opts.runId,
-            stepId: opts.stepId,
-            attemptId: opts.attemptId,
-            workspaceId: opts.workspaceId,
-            agentId: opts.agentId,
-          },
-          artifacts,
-        );
-
-        const stepUpdated = await tx.run(
-          `UPDATE execution_steps
-           SET status = 'succeeded'
-           WHERE tenant_id = ? AND step_id = ? AND status = 'running'`,
-          [opts.tenantId, opts.stepId],
-        );
-        if (stepUpdated.changes === 1) {
-          await this.emitStepUpdatedTx(tx, opts.stepId);
-        }
-
-        const idempotencyKey = opts.action.idempotency_key?.trim();
-        if (idempotencyKey) {
-          const resultJson =
-            result.result !== undefined ? JSON.stringify(this.redactUnknown(result.result)) : null;
-          await tx.run(
-            `INSERT INTO idempotency_records (
-               tenant_id,
-               scope_key,
-               kind,
-               idempotency_key,
-               status,
-               result_json,
-               error,
-               updated_at
-             ) VALUES (?, ?, 'step', ?, 'succeeded', ?, NULL, ?)
-             ON CONFLICT (tenant_id, scope_key, kind, idempotency_key) DO UPDATE SET
-               status = excluded.status,
-               result_json = excluded.result_json,
-               error = NULL,
-               updated_at = excluded.updated_at`,
-            [opts.tenantId, opts.stepId, idempotencyKey, resultJson, nowIso],
-          );
-        }
-
-        return { kind: "succeeded" as const };
-      }
-
-      const error = result.error ?? "unknown error";
-      const redactedError = this.redactText(error);
-      const timedOut = error.toLowerCase().includes("timed out");
-      const status = timedOut ? "timed_out" : "failed";
-
-      await tx.run(
-        `UPDATE execution_attempts
-         SET status = ?,
-             finished_at = ?,
-             result_json = NULL,
-             error = ?,
-             metadata_json = ?,
-             artifacts_json = ?,
-             cost_json = ?
-         WHERE tenant_id = ? AND attempt_id = ? AND status = 'running'`,
-        [
-          status,
-          nowIso,
-          redactedError,
-          evidenceJson,
-          artifactsJson,
-          costJson,
-          opts.tenantId,
-          opts.attemptId,
-        ],
-      );
-      await this.emitAttemptUpdatedTx(tx, opts.attemptId);
-      const artifacts = safeJsonParse(artifactsJson, [] as ArtifactRefT[]);
-      await this.recordArtifactsTx(
-        tx,
-        {
-          tenantId: opts.tenantId,
-          runId: opts.runId,
-          stepId: opts.stepId,
-          attemptId: opts.attemptId,
-          workspaceId: opts.workspaceId,
-          agentId: opts.agentId,
-        },
-        artifacts,
-      );
-      await releaseConcurrencySlotsTx(
-        tx,
-        opts.tenantId,
-        opts.attemptId,
-        nowIso,
-        this.concurrencyLimits,
-      );
-
-      await this.maybeRetryOrFailStep({
-        tx,
-        nowIso,
-        tenantId: opts.tenantId,
-        agentId: opts.agentId,
-        attemptNum: opts.attemptNum,
-        maxAttempts: opts.maxAttempts,
-        stepId: opts.stepId,
-        attemptId: opts.attemptId,
-        runId: opts.runId,
-        jobId: opts.jobId,
-        workspaceId: opts.workspaceId,
-        key: opts.key,
-        lane: opts.lane,
-        workerId: opts.workerId,
-      });
-      return { kind: "failed" as const, status, error: redactedError };
-    });
-
-    if (opts.action.type === "CLI") {
-      await releaseWorkspaceLease(this.db, {
-        tenantId: opts.tenantId,
-        workspaceId: opts.workspaceId,
-        owner: opts.workerId,
-      }).catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        this.logger?.warn("execution.workspace_lease_release_failed", {
-          workspace_id: opts.workspaceId,
-          worker_id: opts.workerId,
-          error: message,
-        });
-      });
-    }
-
-    if (outcome.kind === "paused") {
-      this.logger?.info("execution.attempt.paused", {
-        job_id: opts.jobId,
-        run_id: opts.runId,
-        step_id: opts.stepId,
-        attempt_id: opts.attemptId,
-        reason: outcome.reason,
-        approval_id: outcome.approvalId,
-      });
-      return true;
-    }
-
-    if (outcome.kind === "succeeded") {
-      this.logger?.info("execution.attempt.succeeded", {
-        job_id: opts.jobId,
-        run_id: opts.runId,
-        step_id: opts.stepId,
-        attempt_id: opts.attemptId,
-        status: "succeeded",
-        duration_ms: wallDurationMs,
-        cost,
-      });
-      return true;
-    }
-
-    if (outcome.kind === "cancelled") {
-      this.logger?.info("execution.attempt.cancelled", {
-        job_id: opts.jobId,
-        run_id: opts.runId,
-        step_id: opts.stepId,
-        attempt_id: opts.attemptId,
-        status: "cancelled",
-      });
-      return true;
-    }
-
-    this.logger?.info("execution.attempt.failed", {
-      job_id: opts.jobId,
-      run_id: opts.runId,
-      step_id: opts.stepId,
-      attempt_id: opts.attemptId,
-      status: outcome.status,
-      error: outcome.error,
-      duration_ms: wallDurationMs,
-      cost,
-    });
-
-    return true;
-  }
-
-  private async persistAttemptPolicyContext(opts: {
-    tenantId: string;
-    agentId: string;
-    runId: string;
-    stepId: string;
-    attemptId: string;
-    workspaceId: string;
-    action: ActionPrimitiveT;
-  }): Promise<void> {
-    const run = await this.db.get<{ policy_snapshot_id: string | null }>(
-      "SELECT policy_snapshot_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
-      [opts.tenantId, opts.runId],
-    );
-    const policySnapshotId = run?.policy_snapshot_id?.trim() ?? "";
-    if (!policySnapshotId) return;
-
-    const tool = this.toolCallFromAction(opts.action);
-    await this.db.run(
-      `UPDATE execution_attempts
-		       SET policy_snapshot_id = ?
-		       WHERE tenant_id = ? AND attempt_id = ?`,
-      [policySnapshotId, opts.tenantId, opts.attemptId],
-    );
-
-    if (!this.policyService?.isEnabled()) return;
-
-    const secretScopes = await this.resolveSecretScopesFromArgs(
-      opts.tenantId,
-      opts.action.args ?? {},
-      {
-        runId: opts.runId,
-        stepId: opts.stepId,
-        attemptId: opts.attemptId,
-      },
-    );
-    const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
-      tenantId: opts.tenantId,
-      policySnapshotId,
-      agentId: opts.agentId,
-      workspaceId: opts.workspaceId,
-      toolId: tool.toolId,
-      toolMatchTarget: tool.matchTarget,
-      url: tool.url,
-      secretScopes: secretScopes.length > 0 ? secretScopes : undefined,
-      inputProvenance: { source: "workflow", trusted: true },
-    });
-
-    const decisionJson = JSON.stringify(
-      evaluation.decision_record ?? { decision: evaluation.decision, rules: [] },
-    );
-    const appliedOverrideIdsJson = JSON.stringify(evaluation.applied_override_ids ?? []);
-
-    await this.db.run(
-      `UPDATE execution_attempts
-       SET policy_decision_json = ?,
-           policy_applied_override_ids_json = ?
-       WHERE tenant_id = ? AND attempt_id = ?`,
-      [decisionJson, appliedOverrideIdsJson, opts.tenantId, opts.attemptId],
-    );
-  }
-
-  private toolCallFromAction(action: ActionPrimitiveT): {
-    toolId: string;
-    matchTarget: string;
-    url?: string;
-  } {
-    const args = action.args as unknown;
-    const rec: Record<string, unknown> =
-      args && typeof args === "object" && !Array.isArray(args)
-        ? (args as Record<string, unknown>)
-        : {};
-
-    if (action.type === "CLI") {
-      const cmd = typeof rec["cmd"] === "string" ? rec["cmd"].trim() : "";
-      const argv = Array.isArray(rec["args"])
-        ? (rec["args"] as unknown[]).filter((v): v is string => typeof v === "string")
-        : [];
-      const command = [cmd, ...argv]
-        .filter((t) => t.trim().length > 0)
-        .join(" ")
-        .trim();
-      const matchTarget = canonicalizeToolMatchTarget("tool.exec", { command });
-      return { toolId: "tool.exec", matchTarget };
-    }
-
-    if (action.type === "Http") {
-      const url = typeof rec["url"] === "string" ? rec["url"].trim() : "";
-      const matchTarget = canonicalizeToolMatchTarget("tool.http.fetch", { url });
-      return { toolId: "tool.http.fetch", matchTarget, url: url.length > 0 ? url : undefined };
-    }
-
-    const toolId = `action.${action.type}`;
-    const matchTarget = canonicalizeToolMatchTarget(toolId, rec);
-    return { toolId, matchTarget };
-  }
-
-  private async markAttemptSucceeded(
-    tx: SqlDb,
-    opts: { tenantId: string; attemptId: string },
-    result: StepResult,
-    evidenceJson: string | null,
-    postconditionReportJson: string | null,
-    artifactsJson: string,
-    costJson: string,
-  ): Promise<void> {
-    const resultJson =
-      result.result !== undefined ? JSON.stringify(this.redactUnknown(result.result)) : null;
-
-    const nowIso = this.clock().nowIso;
-    await tx.run(
-      `UPDATE execution_attempts
-       SET status = 'succeeded',
-           finished_at = ?,
-           result_json = ?,
-           error = NULL,
-           postcondition_report_json = ?,
-           metadata_json = ?,
-           artifacts_json = ?,
-           cost_json = ?
-       WHERE tenant_id = ? AND attempt_id = ? AND status = 'running'`,
-      [
-        nowIso,
-        resultJson,
-        postconditionReportJson,
-        evidenceJson,
-        artifactsJson,
-        costJson,
-        opts.tenantId,
-        opts.attemptId,
-      ],
-    );
-    await this.emitAttemptUpdatedTx(tx, opts.attemptId);
-    await releaseConcurrencySlotsTx(
-      tx,
-      opts.tenantId,
-      opts.attemptId,
-      nowIso,
-      this.concurrencyLimits,
-    );
-  }
-
-  private async markAttemptFailed(
-    tx: SqlDb,
-    opts: { tenantId: string; attemptId: string },
-    error: string,
-    evidenceJson: string | null,
-    postconditionReportJson: string | null,
-    artifactsJson: string,
-    costJson: string,
-  ): Promise<void> {
-    const nowIso = this.clock().nowIso;
-    await tx.run(
-      `UPDATE execution_attempts
-       SET status = 'failed',
-           finished_at = ?,
-           result_json = NULL,
-           error = ?,
-           postcondition_report_json = ?,
-           metadata_json = ?,
-           artifacts_json = ?,
-           cost_json = ?
-       WHERE tenant_id = ? AND attempt_id = ? AND status = 'running'`,
-      [
-        nowIso,
-        this.redactText(error),
-        postconditionReportJson,
-        evidenceJson,
-        artifactsJson,
-        costJson,
-        opts.tenantId,
-        opts.attemptId,
-      ],
-    );
-    await this.emitAttemptUpdatedTx(tx, opts.attemptId);
-    await releaseConcurrencySlotsTx(
-      tx,
-      opts.tenantId,
-      opts.attemptId,
-      nowIso,
-      this.concurrencyLimits,
-    );
-  }
-
-  private async maybeRetryOrFailStep(
-    opts: {
-      tx: SqlDb;
-      nowIso: string;
-      tenantId: string;
-      agentId: string;
-    } & {
-      attemptNum: number;
-      maxAttempts: number;
-      stepId: string;
-      attemptId?: string;
-      runId: string;
-      jobId: string;
-      workspaceId: string;
-      key: string;
-      lane: string;
-      workerId: string;
-    },
-  ): Promise<boolean> {
-    const tx = opts.tx;
-    const maxAttempts = Math.max(1, opts.maxAttempts);
-    if (opts.attemptNum < maxAttempts) {
-      const step = await tx.get<{
-        idempotency_key: string | null;
-        action_json: string;
-        step_index: number;
-      }>(
-        `SELECT idempotency_key, action_json, step_index
-         FROM execution_steps
-         WHERE tenant_id = ? AND step_id = ?`,
-        [opts.tenantId, opts.stepId],
-      );
-
-      const idempotencyKey = step?.idempotency_key?.trim() ?? "";
-      let actionType: ActionPrimitiveT["type"] | undefined;
-      try {
-        const parsed = JSON.parse(step?.action_json ?? "{}") as { type?: unknown };
-        if (typeof parsed?.type === "string") {
-          actionType = parsed.type as ActionPrimitiveT["type"];
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        this.logger?.warn("execution.step_action_parse_failed", {
-          run_id: opts.runId,
-          step_id: opts.stepId,
-          attempt_id: opts.attemptId,
-          error: message,
-        });
-      }
-
-      const isStateChanging = actionType ? requiresPostcondition(actionType) : true;
-      const autoRetryAllowed = idempotencyKey.length > 0 || !isStateChanging;
-
-      if (autoRetryAllowed) {
-        await tx.run(
-          `UPDATE execution_steps
-           SET status = 'queued'
-           WHERE tenant_id = ? AND step_id = ? AND status = 'running'`,
-          [opts.tenantId, opts.stepId],
-        );
-        await this.emitStepUpdatedTx(tx, opts.stepId);
-        return true;
-      }
-
-      const job = await tx.get<{ trigger_json: string }>(
-        "SELECT trigger_json FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
-        [opts.tenantId, opts.jobId],
-      );
-      const planId =
-        (job?.trigger_json ? parsePlanIdFromTriggerJson(job.trigger_json) : undefined) ??
-        opts.runId;
-
-      await this.pauseRunForApproval(
-        tx,
-        {
-          tenantId: opts.tenantId,
-          agentId: opts.agentId,
-          workspaceId: opts.workspaceId,
-          planId,
-          stepIndex: step?.step_index ?? 0,
-          runId: opts.runId,
-          jobId: opts.jobId,
-          stepId: opts.stepId,
-          attemptId: opts.attemptId,
-          key: opts.key,
-          lane: opts.lane,
-          workerId: opts.workerId,
-        },
-        {
-          kind: "retry",
-          prompt: "Retry required — step is not idempotent",
-          detail:
-            "Step failed and is state-changing without an idempotency_key; automatic retries are disabled. Approve to retry.",
-          context: {
-            action_type: actionType,
-            attempt: opts.attemptNum,
-            max_attempts: maxAttempts,
-          },
-        },
-      );
-
-      return true;
-    }
-
-    await tx.run(
-      `UPDATE execution_steps
-       SET status = 'failed'
-       WHERE tenant_id = ? AND step_id = ? AND status = 'running'`,
-      [opts.tenantId, opts.stepId],
-    );
-    await this.emitStepUpdatedTx(tx, opts.stepId);
-
-    await tx.run(
-      `UPDATE execution_steps
-       SET status = 'cancelled'
-       WHERE tenant_id = ? AND run_id = ? AND status = 'queued'`,
-      [opts.tenantId, opts.runId],
-    );
-
-    const runUpdated = await tx.run(
-      `UPDATE execution_runs
-       SET status = 'failed', finished_at = ?
-       WHERE tenant_id = ? AND run_id = ? AND status != 'cancelled'`,
-      [opts.nowIso, opts.tenantId, opts.runId],
-    );
-
-    await tx.run(
-      `UPDATE execution_jobs
-       SET status = 'failed'
-       WHERE tenant_id = ? AND job_id = ? AND status != 'cancelled'`,
-      [opts.tenantId, opts.jobId],
-    );
-
-    if (runUpdated.changes === 1) {
-      await this.emitRunUpdatedTx(tx, opts.runId);
-      await this.emitRunFailedTx(tx, opts.runId);
-    }
-    await releaseLaneAndWorkspaceLeasesTx(tx, {
-      tenantId: opts.tenantId,
-      key: opts.key,
-      lane: opts.lane,
-      workspaceId: opts.workspaceId,
-      owner: opts.workerId,
-    });
-
-    return true;
-  }
-
-  private async pauseRunForApproval(
-    tx: SqlDb,
-    opts: {
-      tenantId: string;
-      agentId: string;
-      workspaceId: string;
-      planId: string;
-      stepIndex: number;
-      runId: string;
-      stepId: string;
-      attemptId?: string;
-      jobId: string;
-      key: string;
-      lane: string;
-      workerId: string;
-    },
-    input: {
-      kind: string;
-      prompt: string;
-      detail: string;
-      context?: unknown;
-      expiresAt?: string | null;
-    },
-  ): Promise<{ approvalId: string; resumeToken: string }> {
-    const nowIso = this.clock().nowIso;
-    const expiresAt =
-      input.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-    const pausedReason =
-      input.kind === "takeover"
-        ? "takeover"
-        : input.kind === "budget"
-          ? "budget"
-          : input.kind === "policy"
-            ? "policy"
-            : "approval";
-    const pausedDetail = this.redactText(input.detail);
-
-    const runUpdated = await tx.run(
-      `UPDATE execution_runs
-       SET status = 'paused', paused_reason = ?, paused_detail = ?
-       WHERE tenant_id = ? AND run_id = ? AND status IN ('running', 'queued')`,
-      [pausedReason, pausedDetail, opts.tenantId, opts.runId],
-    );
-    if (runUpdated.changes !== 1) {
-      const current = await tx.get<{ status: string }>(
-        "SELECT status FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
-        [opts.tenantId, opts.runId],
-      );
-      if (current?.status !== "paused") {
-        throw new Error(`failed to pause run ${opts.runId}`);
-      }
-    }
-
-    const approvalKeyBase = `exec:${opts.runId}:${opts.stepId}`;
-    const approvalKey = (() => {
-      if (input.kind === "policy") {
-        return `${approvalKeyBase}:step:${String(opts.stepIndex)}:policy`;
-      }
-      if (input.kind === "budget") {
-        return `exec:${opts.runId}:budget`;
-      }
-      if (opts.attemptId) {
-        return `${approvalKeyBase}:attempt:${opts.attemptId}:${input.kind}`;
-      }
-      return `${approvalKeyBase}:${input.kind}`;
-    })();
-
-    const approvalDal = new ApprovalDal(tx);
-    let approval = await approvalDal.getByKey({ tenantId: opts.tenantId, approvalKey });
-    let resumeToken = approval?.resume_token?.trim() ?? "";
-
-    const isRecord = (value: unknown): value is Record<string, unknown> =>
-      value !== null && typeof value === "object" && !Array.isArray(value);
-
-    if (!approval || approval.status !== "pending") {
-      const suffix = approval && approval.status !== "pending" ? `:${randomUUID()}` : "";
-      const approvalKeyToCreate = suffix ? `${approvalKey}${suffix}` : approvalKey;
-      resumeToken = `resume-${randomUUID()}`;
-
-      await tx.run(
-        `INSERT INTO resume_tokens (tenant_id, token, run_id, created_at)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT (tenant_id, token) DO NOTHING`,
-        [opts.tenantId, resumeToken, opts.runId, nowIso],
-      );
-
-      const baseContext: Record<string, unknown> = {
-        ...(isRecord(input.context) ? input.context : {}),
-        resume_token: resumeToken,
-        key: opts.key,
-        lane: opts.lane,
-        plan_id: opts.planId,
-        step_index: opts.stepIndex,
-        run_id: opts.runId,
-        job_id: opts.jobId,
-        step_id: opts.stepId,
-        ...(opts.attemptId ? { attempt_id: opts.attemptId } : {}),
-        paused_reason: pausedReason,
-        paused_detail: input.detail,
-      };
-      const contextToPersist = this.redactUnknown(baseContext);
-
-      approval = await approvalDal.create({
-        tenantId: opts.tenantId,
-        agentId: opts.agentId,
-        workspaceId: opts.workspaceId,
-        approvalKey: approvalKeyToCreate,
-        prompt: input.prompt,
-        kind: input.kind,
-        context: contextToPersist,
-        expiresAt,
-        runId: opts.runId,
-        stepId: opts.stepId,
-        attemptId: opts.attemptId ?? null,
-        resumeToken,
-      });
-    } else {
-      if (!resumeToken) {
-        resumeToken = `resume-${randomUUID()}`;
-        await tx.run(
-          `UPDATE approvals
-           SET resume_token = ?
-           WHERE tenant_id = ? AND approval_id = ? AND resume_token IS NULL`,
-          [resumeToken, opts.tenantId, approval.approval_id],
-        );
-      }
-
-      if (resumeToken) {
-        await tx.run(
-          `INSERT INTO resume_tokens (tenant_id, token, run_id, created_at)
-           VALUES (?, ?, ?, ?)
-           ON CONFLICT (tenant_id, token) DO NOTHING`,
-          [opts.tenantId, resumeToken, opts.runId, nowIso],
-        );
-      }
-    }
-
-    const stepUpdated = await tx.run(
-      `UPDATE execution_steps
-       SET status = 'paused', approval_id = COALESCE(approval_id, ?)
-       WHERE tenant_id = ? AND step_id = ? AND status IN ('running', 'queued')`,
-      [approval.approval_id, opts.tenantId, opts.stepId],
-    );
-    if (stepUpdated.changes !== 1) {
-      const current = await tx.get<{ status: string }>(
-        "SELECT status FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
-        [opts.tenantId, opts.stepId],
-      );
-      if (current?.status !== "paused") {
-        throw new Error(`failed to pause step ${opts.stepId}`);
-      }
-    }
-    await tx.run(
-      `UPDATE execution_steps
-       SET approval_id = COALESCE(approval_id, ?)
-       WHERE tenant_id = ? AND step_id = ? AND status = 'paused'`,
-      [approval.approval_id, opts.tenantId, opts.stepId],
-    );
-
-    // Release leases while paused.
-    await releaseLaneAndWorkspaceLeasesTx(tx, {
-      tenantId: opts.tenantId,
-      key: opts.key,
-      lane: opts.lane,
-      workspaceId: opts.workspaceId,
-      owner: opts.workerId,
-    });
-
-    // Emit run/step state updates and approval events/requests.
-    await this.emitRunUpdatedTx(tx, opts.runId);
-    await this.emitStepUpdatedTx(tx, opts.stepId);
-
-    await this.emitRunPausedTx(tx, {
-      runId: opts.runId,
-      reason: pausedReason,
-      approvalId: approval.approval_id,
-      detail: pausedDetail,
-    });
-
-    const approvalContract = toApprovalContract(approval);
-    if (approvalContract) {
-      const approvalRequestedEvt: WsEventEnvelopeT = {
-        event_id: randomUUID(),
-        type: "approval.requested",
-        occurred_at: nowIso,
-        scope: { kind: "run", run_id: opts.runId },
-        payload: { approval: approvalContract },
-      };
-      await this.enqueueWsEvent(tx, opts.tenantId, approvalRequestedEvt);
-    }
-
-    const approvalRequest: WsRequestEnvelopeT = {
-      request_id: `approval-${approval.approval_id}`,
-      type: "approval.request",
-      payload: {
-        approval_id: approval.approval_id,
-        approval_key: approval.approval_key,
-        kind: approval.kind,
-        prompt: approval.prompt,
-        context: approval.context,
-        expires_at: approval.expires_at,
-      },
-    };
-    await this.enqueueWsMessage(tx, opts.tenantId, approvalRequest);
-
-    return { approvalId: approval.approval_id, resumeToken };
+  private async executeAttempt(opts: ExecuteAttemptOptions): Promise<boolean> {
+    return await this.attemptRunner.executeAttempt(opts);
   }
 
   private async maybePauseForToolIntentGuardrailTx(
@@ -2728,7 +1714,7 @@ export class ExecutionEngine {
 
     const item = await dal.getItem({ scope, work_item_id: workItemId });
     if (!item) {
-      const paused = await this.pauseRunForApproval(
+      const paused = await this.approvalManager.pauseRunForApproval(
         tx,
         {
           tenantId: opts.run.tenant_id,
@@ -2926,7 +1912,7 @@ export class ExecutionEngine {
       });
     }
 
-    const paused = await this.pauseRunForApproval(
+    const paused = await this.approvalManager.pauseRunForApproval(
       tx,
       {
         tenantId: opts.run.tenant_id,

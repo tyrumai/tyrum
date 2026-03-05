@@ -8,6 +8,8 @@ import {
   type StepExecutor,
   type StepResult,
 } from "../../src/modules/execution/engine.js";
+import { ExecutionEngineApprovalManager } from "../../src/modules/execution/engine/approval-manager.js";
+import { ExecutionEngineEventEmitter } from "../../src/modules/execution/engine/event-emitter.js";
 import { RedactionEngine } from "../../src/modules/redaction/engine.js";
 import {
   sha256HexFromString,
@@ -2466,4 +2468,100 @@ describe("ExecutionEngine (normalized)", () => {
       await rm(dir, { recursive: true, force: true });
     }
   }, 20_000);
+
+  it("marks the current step failed and cancels queued siblings when retries are exhausted", async () => {
+    db = openTestSqliteDb();
+
+    const nowIso = new Date(0).toISOString();
+    const clock = () => ({ nowMs: 0, nowIso });
+    const manager = new ExecutionEngineApprovalManager({
+      clock,
+      redactText: (value) => value,
+      redactUnknown: (value) => value,
+      eventEmitter: new ExecutionEngineEventEmitter({
+        clock,
+        eventsEnabled: false,
+      }),
+    });
+    const engine = new ExecutionEngine({ db, clock });
+    const { jobId, runId } = await enqueuePlan(engine, {
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-retry-terminal-1",
+      requestId: "test-req-1",
+      steps: [action("Research"), action("Message", { body: "never runs" })],
+    });
+
+    const firstStep = await db.get<{ step_id: string }>(
+      "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC LIMIT 1",
+      [runId],
+    );
+    expect(firstStep?.step_id).toBeTruthy();
+
+    await db.run(
+      "UPDATE execution_jobs SET status = 'running' WHERE tenant_id = ? AND job_id = ?",
+      [DEFAULT_TENANT_ID, jobId],
+    );
+    await db.run(
+      "UPDATE execution_runs SET status = 'running', started_at = ? WHERE tenant_id = ? AND run_id = ?",
+      [nowIso, DEFAULT_TENANT_ID, runId],
+    );
+    await db.run(
+      "UPDATE execution_steps SET status = 'running' WHERE tenant_id = ? AND step_id = ?",
+      [DEFAULT_TENANT_ID, firstStep!.step_id],
+    );
+    await db.run(
+      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "agent:agent-1:telegram-1:group:thread-1", "main", "w1", 60_000],
+    );
+
+    await db.transaction(async (tx) => {
+      await manager.maybeRetryOrFailStep({
+        tx,
+        nowIso,
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        attemptNum: 1,
+        maxAttempts: 1,
+        stepId: firstStep!.step_id,
+        runId,
+        jobId,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        key: "agent:agent-1:telegram-1:group:thread-1",
+        lane: "main",
+        workerId: "w1",
+      });
+    });
+
+    const stepStatuses = await db.all<{ step_index: number; status: string }>(
+      "SELECT step_index, status FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
+      [runId],
+    );
+    expect(stepStatuses).toEqual([
+      { step_index: 0, status: "failed" },
+      { step_index: 1, status: "cancelled" },
+    ]);
+
+    const run = await db.get<{ status: string; finished_at: string | null }>(
+      "SELECT status, finished_at FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      [DEFAULT_TENANT_ID, runId],
+    );
+    expect(run).toEqual({
+      status: "failed",
+      finished_at: nowIso,
+    });
+
+    const job = await db.get<{ status: string }>(
+      "SELECT status FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+      [DEFAULT_TENANT_ID, jobId],
+    );
+    expect(job?.status).toBe("failed");
+
+    const remainingLaneLease = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM lane_leases WHERE tenant_id = ? AND key = ? AND lane = ?",
+      [DEFAULT_TENANT_ID, "agent:agent-1:telegram-1:group:thread-1", "main"],
+    );
+    expect(remainingLaneLease?.n).toBe(0);
+  });
 });
