@@ -1,5 +1,5 @@
 /**
- * Integration test: embedded gateway + desktop/cli node dispatch.
+ * End-to-end test: embedded gateway + desktop/cli node dispatch.
  *
  * Exercises the full round-trip:
  * 1. Start a real gateway (HTTP + WS) on a random port

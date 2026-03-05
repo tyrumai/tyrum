@@ -16,7 +16,7 @@ import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { getRequestListener } from "@hono/node-server";
 import type { Hono } from "hono";
-import { createTestApp, minimalPlanRequest } from "./helpers.js";
+import { createTestApp, minimalPlanRequest } from "../integration/helpers.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { dispatchTask, type ProtocolDeps } from "../../src/ws/protocol.js";
