@@ -255,12 +255,13 @@ export async function handleSessionCompactMessage(
   const agentKey = parsedReq.data.payload.agent_id ?? "default";
   const sessionKey = parsedReq.data.payload.session_id;
   try {
-    const existing = await createSessionDal(deps).getWithDeliveryByKey({ tenantId, sessionKey });
+    const sessionDal = createSessionDal(deps);
+    const existing = await sessionDal.getWithDeliveryByKey({ tenantId, sessionKey });
     if (!existing || existing.agent_key !== agentKey) {
       return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
     }
 
-    const compacted = await createSessionDal(deps).compact({
+    const compacted = await sessionDal.compact({
       tenantId,
       sessionId: existing.session.session_id,
       keepLastMessages: parsedReq.data.payload.keep_last_messages ?? 8,
