@@ -20,6 +20,9 @@ interface MacPermissionSnapshot {
   instructions?: string;
 }
 
+type MacPermissionName = "accessibility" | "screenRecording";
+type CheckUpdate = Partial<CheckItem>;
+
 const CHECK_STATUS_VARIANTS: Record<CheckItem["status"], StatusDotVariant> = {
   ok: "success",
   warn: "warning",
@@ -48,91 +51,174 @@ export function PlatformDiagnosticsPanel() {
 }
 
 function DesktopDiagnosticsPanel({ api }: { api: DesktopApi }) {
-  const [checks, setChecks] = useState<CheckItem[]>([
-    { label: "Gateway process", status: "pending", detail: "Checking..." },
-    { label: "Node runtime", status: "pending", detail: "Checking..." },
-    { label: "Config file", status: "pending", detail: "Checking..." },
-    { label: "macOS permissions", status: "pending", detail: "Checking..." },
-  ]);
+  const { checks, running, runChecks } = useDiagnosticsChecks(api);
+  const { permissionActionNote, requestingPermission, requestPermission } = usePermissionRequests(
+    api,
+    runChecks,
+  );
+
+  useEffect(() => {
+    runChecks();
+  }, [runChecks]);
+
+  return (
+    <div className="grid gap-6">
+      <EnvironmentChecksCard
+        checks={checks}
+        running={running}
+        onRunChecks={runChecks}
+        requestingPermission={requestingPermission}
+        onRequestPermission={requestPermission}
+        permissionActionNote={permissionActionNote}
+      />
+
+      <DesktopUpdatesCard api={api} title="Desktop Updates" />
+    </div>
+  );
+}
+
+function EnvironmentChecksCard(props: {
+  checks: CheckItem[];
+  running: boolean;
+  onRunChecks: () => void;
+  requestingPermission: MacPermissionName | null;
+  onRequestPermission: (permission: MacPermissionName) => void;
+  permissionActionNote: string | null;
+}) {
+  return (
+    <Card>
+      <CardContent className="grid gap-4 pt-6">
+        <div className="text-sm font-semibold text-fg">Environment Checks</div>
+        <EnvironmentCheckList checks={props.checks} running={props.running} />
+        <Button onClick={props.onRunChecks} isLoading={props.running} disabled={props.running}>
+          {props.running ? "Running..." : "Re-run Checks"}
+        </Button>
+        <PermissionRequestSection
+          requestingPermission={props.requestingPermission}
+          onRequestPermission={props.onRequestPermission}
+          permissionActionNote={props.permissionActionNote}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+function EnvironmentCheckList(props: { checks: CheckItem[]; running: boolean }) {
+  return (
+    <div className="grid gap-2">
+      {props.checks.map((check) => (
+        <div
+          key={check.label}
+          className="flex items-start gap-3 border-b border-border py-2 last:border-b-0"
+        >
+          <StatusDot
+            variant={CHECK_STATUS_VARIANTS[check.status] ?? "neutral"}
+            pulse={check.status === "pending" && props.running}
+            className="mt-1"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium text-fg">{check.label}</div>
+            <div className="text-sm text-fg-muted">{check.detail}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PermissionRequestSection(props: {
+  requestingPermission: MacPermissionName | null;
+  onRequestPermission: (permission: MacPermissionName) => void;
+  permissionActionNote: string | null;
+}) {
+  return (
+    <div className="grid gap-2 pt-2">
+      <div className="text-sm font-semibold text-fg">Permission Requests (User initiated)</div>
+      <div className="text-sm text-fg-muted">
+        Diagnostics checks never request permissions automatically. Use these buttons to request
+        permissions when needed.
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <PermissionRequestButton
+          permission="accessibility"
+          label="Request Accessibility"
+          loadingLabel="Requesting..."
+          requestingPermission={props.requestingPermission}
+          onRequestPermission={props.onRequestPermission}
+        />
+        <PermissionRequestButton
+          permission="screenRecording"
+          label="Request Screen Recording"
+          loadingLabel="Opening..."
+          requestingPermission={props.requestingPermission}
+          onRequestPermission={props.onRequestPermission}
+        />
+      </div>
+      {props.permissionActionNote ? (
+        <Alert variant="info" title="Permission request" description={props.permissionActionNote} />
+      ) : null}
+    </div>
+  );
+}
+
+function PermissionRequestButton(props: {
+  permission: MacPermissionName;
+  label: string;
+  loadingLabel: string;
+  requestingPermission: MacPermissionName | null;
+  onRequestPermission: (permission: MacPermissionName) => void;
+}) {
+  const isLoading = props.requestingPermission === props.permission;
+  return (
+    <Button
+      variant="secondary"
+      onClick={() => props.onRequestPermission(props.permission)}
+      isLoading={isLoading}
+      disabled={props.requestingPermission !== null}
+    >
+      {isLoading ? props.loadingLabel : props.label}
+    </Button>
+  );
+}
+
+function useDiagnosticsChecks(api: DesktopApi) {
+  const [checks, setChecks] = useState<CheckItem[]>(createPendingChecks);
   const [running, setRunning] = useState(false);
-  const [requestingPermission, setRequestingPermission] = useState<
-    "accessibility" | "screenRecording" | null
-  >(null);
-  const [permissionActionNote, setPermissionActionNote] = useState<string | null>(null);
+
+  const updateCheck = useCallback((index: number, patch: CheckUpdate) => {
+    setChecks((prev) => patchCheck(prev, index, patch));
+  }, []);
 
   const runChecks = useCallback(() => {
     setRunning(true);
-
-    const update = (index: number, patch: Partial<CheckItem>) => {
-      setChecks((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
-    };
-
     void api
       .getConfig()
-      .then((cfg) => {
-        const c = cfg as Record<string, unknown>;
-        const mode = (c?.["mode"] as string) ?? "unknown";
-        update(2, {
-          status: "ok",
-          detail: `Loaded (mode: ${mode})`,
-        });
-
-        update(0, {
-          status: "ok",
-          detail: `Mode: ${mode}`,
-        });
-
-        update(1, {
-          status: "ok",
-          detail: "Runtime reachable via IPC",
-        });
-      })
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        update(0, { status: "error", detail: msg });
-        update(1, { status: "error", detail: msg });
-        update(2, { status: "error", detail: msg });
-      });
+      .then((cfg) => applyConfigCheckResult(updateCheck, cfg))
+      .catch((error: unknown) => applyConfigCheckError(updateCheck, error));
 
     if (!api.checkMacPermissions) {
-      update(3, { status: "ok", detail: "Not applicable" });
+      updateCheck(3, { status: "ok", detail: "Not applicable" });
       setRunning(false);
       return;
     }
 
     void api
       .checkMacPermissions()
-      .then((result) => {
-        const r = result as MacPermissionSnapshot | null;
-        if (!r) {
-          update(3, { status: "ok", detail: "Not macOS (skipped)" });
-        } else {
-          const accessibility = r.accessibility === true;
-          const screenRecording = r.screenRecording === true;
-          const allOk = accessibility && screenRecording;
-          const missing = [
-            !accessibility ? "Accessibility" : null,
-            !screenRecording ? "Screen Recording" : null,
-          ]
-            .filter(Boolean)
-            .join(", ");
-          const instructions =
-            typeof r.instructions === "string" && r.instructions.trim().length > 0
-              ? ` ${r.instructions.trim()}`
-              : "";
-          update(3, {
-            status: allOk ? "ok" : "warn",
-            detail: allOk ? "All permissions granted" : `Missing: ${missing}.${instructions}`,
-          });
-        }
-      })
-      .catch(() => {
-        update(3, { status: "ok", detail: "Not applicable" });
-      })
+      .then((result) =>
+        updateCheck(3, describeMacPermissionCheck(result as MacPermissionSnapshot | null)),
+      )
+      .catch(() => updateCheck(3, { status: "ok", detail: "Not applicable" }))
       .finally(() => setRunning(false));
-  }, [api]);
+  }, [api, updateCheck]);
 
-  const requestPermission = (permission: "accessibility" | "screenRecording") => {
+  return { checks, running, runChecks };
+}
+
+function usePermissionRequests(api: DesktopApi, runChecks: () => void) {
+  const [requestingPermission, setRequestingPermission] = useState<MacPermissionName | null>(null);
+  const [permissionActionNote, setPermissionActionNote] = useState<string | null>(null);
+
+  const requestPermission = (permission: MacPermissionName) => {
     if (!api.requestMacPermission) {
       setPermissionActionNote("Permission requests are not available in this build.");
       return;
@@ -142,92 +228,88 @@ function DesktopDiagnosticsPanel({ api }: { api: DesktopApi }) {
     setRequestingPermission(permission);
     void api
       .requestMacPermission(permission)
-      .then((result) => {
-        const r = result as { granted: boolean; instructions?: string };
-        if (r.granted) {
-          setPermissionActionNote(`${permission} permission is granted.`);
-          return;
-        }
-        setPermissionActionNote(r.instructions ?? `${permission} permission was not granted.`);
-      })
-      .catch((error: unknown) => {
-        setPermissionActionNote(formatErrorMessage(error));
-      })
+      .then((result) =>
+        setPermissionActionNote(
+          describePermissionRequestResult(
+            permission,
+            result as { granted: boolean; instructions?: string },
+          ),
+        ),
+      )
+      .catch((error: unknown) => setPermissionActionNote(formatErrorMessage(error)))
       .finally(() => {
         setRequestingPermission(null);
         runChecks();
       });
   };
 
-  useEffect(() => {
-    runChecks();
-  }, [runChecks]);
+  return { permissionActionNote, requestingPermission, requestPermission };
+}
 
-  return (
-    <div className="grid gap-6">
-      <Card>
-        <CardContent className="grid gap-4 pt-6">
-          <div className="text-sm font-semibold text-fg">Environment Checks</div>
-          <div className="grid gap-2">
-            {checks.map((check) => (
-              <div
-                key={check.label}
-                className="flex items-start gap-3 border-b border-border py-2 last:border-b-0"
-              >
-                <StatusDot
-                  variant={CHECK_STATUS_VARIANTS[check.status] ?? "neutral"}
-                  pulse={check.status === "pending" && running}
-                  className="mt-1"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-fg">{check.label}</div>
-                  <div className="text-sm text-fg-muted">{check.detail}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <Button onClick={runChecks} isLoading={running} disabled={running}>
-            {running ? "Running..." : "Re-run Checks"}
-          </Button>
+function createPendingChecks(): CheckItem[] {
+  return [
+    { label: "Gateway process", status: "pending", detail: "Checking..." },
+    { label: "Node runtime", status: "pending", detail: "Checking..." },
+    { label: "Config file", status: "pending", detail: "Checking..." },
+    { label: "macOS permissions", status: "pending", detail: "Checking..." },
+  ];
+}
 
-          <div className="grid gap-2 pt-2">
-            <div className="text-sm font-semibold text-fg">
-              Permission Requests (User initiated)
-            </div>
-            <div className="text-sm text-fg-muted">
-              Diagnostics checks never request permissions automatically. Use these buttons to
-              request permissions when needed.
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => requestPermission("accessibility")}
-                isLoading={requestingPermission === "accessibility"}
-                disabled={requestingPermission !== null}
-              >
-                {requestingPermission === "accessibility"
-                  ? "Requesting..."
-                  : "Request Accessibility"}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => requestPermission("screenRecording")}
-                isLoading={requestingPermission === "screenRecording"}
-                disabled={requestingPermission !== null}
-              >
-                {requestingPermission === "screenRecording"
-                  ? "Opening..."
-                  : "Request Screen Recording"}
-              </Button>
-            </div>
-            {permissionActionNote ? (
-              <Alert variant="info" title="Permission request" description={permissionActionNote} />
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
-
-      <DesktopUpdatesCard api={api} title="Desktop Updates" />
-    </div>
+function patchCheck(checks: CheckItem[], index: number, patch: CheckUpdate): CheckItem[] {
+  return checks.map((check, currentIndex) =>
+    currentIndex === index ? { ...check, ...patch } : check,
   );
+}
+
+function applyConfigCheckResult(
+  updateCheck: (index: number, patch: CheckUpdate) => void,
+  config: unknown,
+) {
+  const mode = ((config as Record<string, unknown>)?.["mode"] as string) ?? "unknown";
+  updateCheck(0, { status: "ok", detail: `Mode: ${mode}` });
+  updateCheck(1, { status: "ok", detail: "Runtime reachable via IPC" });
+  updateCheck(2, { status: "ok", detail: `Loaded (mode: ${mode})` });
+}
+
+function applyConfigCheckError(
+  updateCheck: (index: number, patch: CheckUpdate) => void,
+  error: unknown,
+) {
+  const detail = error instanceof Error ? error.message : "Unknown error";
+  updateCheck(0, { status: "error", detail });
+  updateCheck(1, { status: "error", detail });
+  updateCheck(2, { status: "error", detail });
+}
+
+function describeMacPermissionCheck(snapshot: MacPermissionSnapshot | null): CheckUpdate {
+  if (!snapshot) {
+    return { status: "ok", detail: "Not macOS (skipped)" };
+  }
+
+  const missingPermissions = [
+    snapshot.accessibility === true ? null : "Accessibility",
+    snapshot.screenRecording === true ? null : "Screen Recording",
+  ].filter((permission): permission is string => permission !== null);
+  if (missingPermissions.length === 0) {
+    return { status: "ok", detail: "All permissions granted" };
+  }
+
+  const instructions =
+    typeof snapshot.instructions === "string" && snapshot.instructions.trim().length > 0
+      ? ` ${snapshot.instructions.trim()}`
+      : "";
+  return {
+    status: "warn",
+    detail: `Missing: ${missingPermissions.join(", ")}.${instructions}`,
+  };
+}
+
+function describePermissionRequestResult(
+  permission: MacPermissionName,
+  result: { granted: boolean; instructions?: string },
+): string {
+  if (result.granted) {
+    return `${permission} permission is granted.`;
+  }
+  return result.instructions ?? `${permission} permission was not granted.`;
 }
