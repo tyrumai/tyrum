@@ -1,5 +1,6 @@
 import type { PresenceDal } from "../../modules/presence/dal.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
+import { broadcastLocalEvent } from "./connection-support.js";
 import type { WsClusterOptions } from "./types.js";
 
 const HEARTBEAT_INTERVAL_MS = 5_000;
@@ -81,12 +82,5 @@ function broadcastPresencePruned(connectionManager: ConnectionManager, instanceI
     occurred_at: new Date().toISOString(),
     payload: { instance_id: instanceId },
   };
-
-  for (const peer of connectionManager.allClients()) {
-    try {
-      peer.ws.send(JSON.stringify(event));
-    } catch (err) {
-      void err;
-    }
-  }
+  broadcastLocalEvent(connectionManager, event);
 }
