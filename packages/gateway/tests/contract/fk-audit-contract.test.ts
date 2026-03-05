@@ -30,6 +30,23 @@ const legacyIds = {
   policyOverrideId: "10000000-0000-4000-8000-000000000125",
 } as const;
 
+const deleteIds = {
+  approvalId: "10000000-0000-4000-8000-000000000130",
+  policyOverrideId: "10000000-0000-4000-8000-000000000131",
+  runJobId: "10000000-0000-4000-8000-000000000132",
+  runId: "10000000-0000-4000-8000-000000000133",
+  runApprovalId: "10000000-0000-4000-8000-000000000134",
+  stepJobId: "10000000-0000-4000-8000-000000000135",
+  stepRunId: "10000000-0000-4000-8000-000000000136",
+  stepId: "10000000-0000-4000-8000-000000000137",
+  stepApprovalId: "10000000-0000-4000-8000-000000000138",
+  attemptJobId: "10000000-0000-4000-8000-000000000139",
+  attemptRunId: "10000000-0000-4000-8000-000000000140",
+  attemptStepId: "10000000-0000-4000-8000-000000000141",
+  attemptId: "10000000-0000-4000-8000-000000000142",
+  attemptApprovalId: "10000000-0000-4000-8000-000000000143",
+} as const;
+
 type SqliteCase = {
   name: string;
   sql: string;
@@ -38,6 +55,11 @@ type SqliteCase = {
 
 type PostgresCase = {
   name: string;
+  sql: string;
+  params: readonly unknown[];
+};
+
+type SeedStatement = {
   sql: string;
   params: readonly unknown[];
 };
@@ -676,6 +698,335 @@ async function seedPostgresLegacyOrphans(client: {
   );
 }
 
+const deleteGuardSeedStatements: SeedStatement[] = [
+  {
+    sql: `INSERT INTO approvals (
+            tenant_id,
+            approval_id,
+            approval_key,
+            agent_id,
+            workspace_id,
+            kind,
+            status,
+            prompt
+          ) VALUES (?, ?, ?, ?, ?, 'policy', 'pending', ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.approvalId,
+      "approval:fk-audit:delete",
+      ids.agentId,
+      ids.workspaceId,
+      "delete guard approval",
+    ],
+  },
+  {
+    sql: `INSERT INTO policy_overrides (
+            tenant_id,
+            policy_override_id,
+            override_key,
+            status,
+            agent_id,
+            workspace_id,
+            tool_id,
+            pattern,
+            created_from_approval_id,
+            created_by_json,
+            created_at,
+            updated_at
+          ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.policyOverrideId,
+      "override:fk-audit:delete",
+      ids.agentId,
+      ids.workspaceId,
+      "connector.send",
+      "telegram:work:thread-1",
+      deleteIds.approvalId,
+      "{}",
+      "2026-03-05T10:00:00.000Z",
+      "2026-03-05T10:00:00.000Z",
+    ],
+  },
+  {
+    sql: `INSERT INTO channel_outbox (
+            tenant_id,
+            inbox_id,
+            source,
+            thread_id,
+            dedupe_key,
+            chunk_index,
+            text,
+            approval_id,
+            workspace_id,
+            session_id,
+            channel_thread_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      1,
+      "telegram:work",
+      "thread-1",
+      "fk-audit:delete-outbox",
+      0,
+      "hello",
+      deleteIds.approvalId,
+      ids.workspaceId,
+      ids.sessionId,
+      ids.channelThreadId,
+    ],
+  },
+  {
+    sql: `INSERT INTO execution_jobs (
+            tenant_id,
+            job_id,
+            agent_id,
+            workspace_id,
+            key,
+            lane,
+            status,
+            trigger_json,
+            input_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.runJobId,
+      ids.agentId,
+      ids.workspaceId,
+      "fk-audit:delete-run",
+      "main",
+      "queued",
+      "{}",
+      "{}",
+    ],
+  },
+  {
+    sql: `INSERT INTO execution_runs (
+            tenant_id,
+            run_id,
+            job_id,
+            key,
+            lane,
+            status,
+            attempt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.runId,
+      deleteIds.runJobId,
+      "fk-audit:delete-run",
+      "main",
+      "paused",
+      1,
+    ],
+  },
+  {
+    sql: `INSERT INTO approvals (
+            tenant_id,
+            approval_id,
+            approval_key,
+            agent_id,
+            workspace_id,
+            kind,
+            status,
+            prompt,
+            run_id
+          ) VALUES (?, ?, ?, ?, ?, 'policy', 'pending', ?, ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.runApprovalId,
+      "approval:fk-audit:delete-run",
+      ids.agentId,
+      ids.workspaceId,
+      "delete guard run",
+      deleteIds.runId,
+    ],
+  },
+  {
+    sql: `INSERT INTO execution_jobs (
+            tenant_id,
+            job_id,
+            agent_id,
+            workspace_id,
+            key,
+            lane,
+            status,
+            trigger_json,
+            input_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.stepJobId,
+      ids.agentId,
+      ids.workspaceId,
+      "fk-audit:delete-step",
+      "main",
+      "queued",
+      "{}",
+      "{}",
+    ],
+  },
+  {
+    sql: `INSERT INTO execution_runs (
+            tenant_id,
+            run_id,
+            job_id,
+            key,
+            lane,
+            status,
+            attempt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.stepRunId,
+      deleteIds.stepJobId,
+      "fk-audit:delete-step",
+      "main",
+      "paused",
+      1,
+    ],
+  },
+  {
+    sql: `INSERT INTO execution_steps (
+            tenant_id,
+            step_id,
+            run_id,
+            step_index,
+            status,
+            action_json
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
+    params: [ids.tenantId, deleteIds.stepId, deleteIds.stepRunId, 0, "paused", "{}"],
+  },
+  {
+    sql: `INSERT INTO approvals (
+            tenant_id,
+            approval_id,
+            approval_key,
+            agent_id,
+            workspace_id,
+            kind,
+            status,
+            prompt,
+            step_id
+          ) VALUES (?, ?, ?, ?, ?, 'policy', 'pending', ?, ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.stepApprovalId,
+      "approval:fk-audit:delete-step",
+      ids.agentId,
+      ids.workspaceId,
+      "delete guard step",
+      deleteIds.stepId,
+    ],
+  },
+  {
+    sql: `INSERT INTO execution_jobs (
+            tenant_id,
+            job_id,
+            agent_id,
+            workspace_id,
+            key,
+            lane,
+            status,
+            trigger_json,
+            input_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.attemptJobId,
+      ids.agentId,
+      ids.workspaceId,
+      "fk-audit:delete-attempt",
+      "main",
+      "queued",
+      "{}",
+      "{}",
+    ],
+  },
+  {
+    sql: `INSERT INTO execution_runs (
+            tenant_id,
+            run_id,
+            job_id,
+            key,
+            lane,
+            status,
+            attempt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.attemptRunId,
+      deleteIds.attemptJobId,
+      "fk-audit:delete-attempt",
+      "main",
+      "paused",
+      1,
+    ],
+  },
+  {
+    sql: `INSERT INTO execution_steps (
+            tenant_id,
+            step_id,
+            run_id,
+            step_index,
+            status,
+            action_json
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
+    params: [ids.tenantId, deleteIds.attemptStepId, deleteIds.attemptRunId, 0, "paused", "{}"],
+  },
+  {
+    sql: `INSERT INTO execution_attempts (
+            tenant_id,
+            attempt_id,
+            step_id,
+            attempt,
+            status
+          ) VALUES (?, ?, ?, ?, ?)`,
+    params: [ids.tenantId, deleteIds.attemptId, deleteIds.attemptStepId, 1, "running"],
+  },
+  {
+    sql: `INSERT INTO approvals (
+            tenant_id,
+            approval_id,
+            approval_key,
+            agent_id,
+            workspace_id,
+            kind,
+            status,
+            prompt,
+            attempt_id
+          ) VALUES (?, ?, ?, ?, ?, 'policy', 'pending', ?, ?)`,
+    params: [
+      ids.tenantId,
+      deleteIds.attemptApprovalId,
+      "approval:fk-audit:delete-attempt",
+      ids.agentId,
+      ids.workspaceId,
+      "delete guard attempt",
+      deleteIds.attemptId,
+    ],
+  },
+];
+
+function seedSqliteDeleteGuardRows(db: ReturnType<typeof createDatabase>): void {
+  for (const statement of deleteGuardSeedStatements) {
+    db.prepare(statement.sql).run(...statement.params);
+  }
+}
+
+function toPostgresSql(sql: string): string {
+  let placeholder = 0;
+  return sql.replace(/\?/g, () => `$${String(++placeholder)}`);
+}
+
+async function seedPostgresDeleteGuardRows(client: {
+  query: (sql: string, params?: unknown[]) => Promise<unknown>;
+}): Promise<void> {
+  for (const statement of deleteGuardSeedStatements) {
+    await client.query(toPostgresSql(statement.sql), [...statement.params]);
+  }
+}
+
 describe("FK audit contract", () => {
   it("rejects invalid enforced references in sqlite", () => {
     const sqlite = createDatabase(":memory:");
@@ -806,6 +1157,79 @@ describe("FK audit contract", () => {
       expect(outboxRes.rows[0]).toMatchObject({ approval_id: null });
     } finally {
       rmSync(pre110Dir, { recursive: true, force: true });
+      await pg.end();
+    }
+  });
+
+  it("requires explicit child cleanup before deleting audited parents in sqlite", () => {
+    const sqlite = createDatabase(":memory:");
+    migrate(sqlite, sqliteMigrationsDir);
+
+    try {
+      seedSqliteScope(sqlite);
+      seedSqliteDeleteGuardRows(sqlite);
+
+      expect(() =>
+        sqlite
+          .prepare("DELETE FROM execution_runs WHERE tenant_id = ? AND run_id = ?")
+          .run(ids.tenantId, deleteIds.runId),
+      ).toThrow();
+      expect(() =>
+        sqlite
+          .prepare("DELETE FROM execution_steps WHERE tenant_id = ? AND step_id = ?")
+          .run(ids.tenantId, deleteIds.stepId),
+      ).toThrow();
+      expect(() =>
+        sqlite
+          .prepare("DELETE FROM execution_attempts WHERE tenant_id = ? AND attempt_id = ?")
+          .run(ids.tenantId, deleteIds.attemptId),
+      ).toThrow();
+      expect(() =>
+        sqlite
+          .prepare("DELETE FROM approvals WHERE tenant_id = ? AND approval_id = ?")
+          .run(ids.tenantId, deleteIds.approvalId),
+      ).toThrow();
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("requires explicit child cleanup before deleting audited parents in postgres", async () => {
+    const mem = createPgMemDb();
+    const { Client } = mem.adapters.createPg();
+    const pg = new Client();
+    await pg.connect();
+
+    try {
+      await migratePostgres(pg, postgresMigrationsDir);
+      await seedPostgresScope(pg);
+      await seedPostgresDeleteGuardRows(pg);
+
+      await expect(
+        pg.query("DELETE FROM execution_runs WHERE tenant_id = $1 AND run_id = $2", [
+          ids.tenantId,
+          deleteIds.runId,
+        ]),
+      ).rejects.toThrow();
+      await expect(
+        pg.query("DELETE FROM execution_steps WHERE tenant_id = $1 AND step_id = $2", [
+          ids.tenantId,
+          deleteIds.stepId,
+        ]),
+      ).rejects.toThrow();
+      await expect(
+        pg.query("DELETE FROM execution_attempts WHERE tenant_id = $1 AND attempt_id = $2", [
+          ids.tenantId,
+          deleteIds.attemptId,
+        ]),
+      ).rejects.toThrow();
+      await expect(
+        pg.query("DELETE FROM approvals WHERE tenant_id = $1 AND approval_id = $2", [
+          ids.tenantId,
+          deleteIds.approvalId,
+        ]),
+      ).rejects.toThrow();
+    } finally {
       await pg.end();
     }
   });

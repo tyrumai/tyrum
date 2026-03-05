@@ -18,5 +18,6 @@ describe("docs: data model fk audit", () => {
     expect(content).toContain("approvals.run_id");
     expect(content).toContain("Soft reference");
     expect(content).toContain("Cleanup / retention");
+    expect(content).toContain("must clear the child ref first");
   });
 });

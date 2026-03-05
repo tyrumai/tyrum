@@ -2,6 +2,10 @@
 --
 -- Enforce the audited approval/policy foreign keys while preserving rolling-upgrade
 -- safety by normalizing legacy orphaned references to NULL during the rebuild.
+--
+-- Delete-time cleanup remains explicit. These tenant-scoped composite keys
+-- cannot null only the ID column on parent deletion without also nulling the
+-- NOT NULL tenant_id column.
 
 CREATE TABLE approvals_next (
   tenant_id    TEXT NOT NULL,
@@ -45,9 +49,9 @@ CREATE TABLE approvals_next (
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, plan_id) REFERENCES plans(tenant_id, plan_id) ON DELETE SET NULL,
-  FOREIGN KEY (tenant_id, run_id) REFERENCES execution_runs(tenant_id, run_id) ON DELETE SET NULL,
-  FOREIGN KEY (tenant_id, step_id) REFERENCES execution_steps(tenant_id, step_id) ON DELETE SET NULL,
-  FOREIGN KEY (tenant_id, attempt_id) REFERENCES execution_attempts(tenant_id, attempt_id) ON DELETE SET NULL
+  FOREIGN KEY (tenant_id, run_id) REFERENCES execution_runs(tenant_id, run_id),
+  FOREIGN KEY (tenant_id, step_id) REFERENCES execution_steps(tenant_id, step_id),
+  FOREIGN KEY (tenant_id, attempt_id) REFERENCES execution_attempts(tenant_id, attempt_id)
 );
 
 INSERT INTO approvals_next (
@@ -153,7 +157,7 @@ CREATE TABLE policy_overrides_next (
   PRIMARY KEY (tenant_id, policy_override_id),
   UNIQUE (tenant_id, override_key),
   FOREIGN KEY (tenant_id, created_from_approval_id)
-    REFERENCES approvals(tenant_id, approval_id) ON DELETE SET NULL,
+    REFERENCES approvals(tenant_id, approval_id),
   FOREIGN KEY (tenant_id, created_from_policy_snapshot_id)
     REFERENCES policy_snapshots(tenant_id, policy_snapshot_id) ON DELETE SET NULL
 );
@@ -245,7 +249,7 @@ CREATE TABLE channel_outbox (
   UNIQUE (tenant_id, dedupe_key),
   FOREIGN KEY (tenant_id, inbox_id) REFERENCES channel_inbox(tenant_id, inbox_id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, session_id) REFERENCES sessions(tenant_id, session_id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, approval_id) REFERENCES approvals(tenant_id, approval_id) ON DELETE SET NULL
+  FOREIGN KEY (tenant_id, approval_id) REFERENCES approvals(tenant_id, approval_id)
 );
 
 INSERT INTO channel_outbox (
