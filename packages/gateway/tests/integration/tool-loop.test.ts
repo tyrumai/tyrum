@@ -1175,39 +1175,34 @@ describe("Tool execution loop", () => {
       approvalPollMs: 20,
     });
 
-    const autoApproveTimer = setInterval(() => {
-      void (async () => {
-        const c = container;
-        if (!c) return;
-        const approvalEngine = new ExecutionEngine({ db: c.db });
-        const pending = await c.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
-        for (const approval of pending) {
-          const updated = await c.approvalDal.respond({
-            tenantId: DEFAULT_TENANT_ID,
-            approvalId: approval.approval_id,
-            decision: "approved",
-            reason: "approved in test",
-          });
-          if (updated?.resume_token) {
-            await approvalEngine.resumeRun(updated.resume_token);
-          }
-        }
-      })().catch(() => {
-        // ignore (tests may tear down while timer is running)
-      });
-    }, 20);
-    autoApproveTimer.unref();
+    const turnPromise = runtime.turn({
+      channel: "test",
+      thread_id: "thread-3",
+      message: "read a file and fetch a url",
+    });
 
-    let result: Awaited<ReturnType<AgentRuntime["turn"]>>;
-    try {
-      result = await runtime.turn({
-        channel: "test",
-        thread_id: "thread-3",
-        message: "read a file and fetch a url",
-      });
-    } finally {
-      clearInterval(autoApproveTimer);
-    }
+    const pending = await waitForPendingApproval(container);
+    expect(pending.prompt).toContain("tool.http.fetch");
+
+    const approvalEngine = new ExecutionEngine({ db: container.db });
+    const approvalApp = new Hono();
+    stubTenantAuth(approvalApp);
+    approvalApp.route(
+      "/",
+      createApprovalRoutes({
+        approvalDal: container.approvalDal,
+        engine: approvalEngine,
+      }),
+    );
+
+    const res = await approvalApp.request(`/approvals/${String(pending.approval_id)}/respond`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ decision: "approved", reason: "approved in test" }),
+    });
+    expect(res.status).toBe(200);
+
+    const result = await turnPromise;
 
     expect(result.reply).toBe("done with both tools");
     expect(result.used_tools).toContain("tool.fs.read");

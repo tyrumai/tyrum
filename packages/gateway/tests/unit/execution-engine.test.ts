@@ -8,6 +8,8 @@ import {
   type StepExecutor,
   type StepResult,
 } from "../../src/modules/execution/engine.js";
+import { ExecutionEngineApprovalManager } from "../../src/modules/execution/engine/approval-manager.js";
+import { ExecutionEngineEventEmitter } from "../../src/modules/execution/engine/event-emitter.js";
 import { RedactionEngine } from "../../src/modules/redaction/engine.js";
 import {
   sha256HexFromString,
@@ -720,6 +722,95 @@ describe("ExecutionEngine (normalized)", () => {
       .filter((value): value is string => typeof value === "string");
     expect(types).toContain("run.cancelled");
     expect(types).not.toContain("run.resumed");
+  });
+
+  it("pauses and resumes when the executor returns an approval request", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
+    });
+    await enqueuePlan(engine, {
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-executor-pause-1",
+      requestId: "test-req-1",
+      steps: [action("Research")],
+    });
+
+    let calls = 0;
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        calls += 1;
+        if (calls === 1) {
+          return {
+            success: true,
+            pause: {
+              kind: "policy",
+              prompt: "Approve execution of 'tool.http.fetch'",
+              detail: "approval required for tool 'tool.http.fetch'",
+              context: {
+                source: "llm-step-tool-execution",
+                tool_id: "tool.http.fetch",
+                tool_call_id: "tc-1",
+              },
+            },
+            cost: { duration_ms: 1 },
+          };
+        }
+        return { success: true, result: { ok: true }, cost: { duration_ms: 1 } };
+      }),
+    };
+
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    expect(calls).toBe(1);
+
+    const pausedRun = await db.get<{
+      status: string;
+      paused_reason: string | null;
+      paused_detail: string | null;
+    }>("SELECT status, paused_reason, paused_detail FROM execution_runs LIMIT 1");
+    expect(pausedRun?.status).toBe("paused");
+    expect(pausedRun?.paused_reason).toBe("policy");
+    expect(pausedRun?.paused_detail).toContain("tool.http.fetch");
+
+    const pausedStep = await db.get<{ status: string; approval_id: string | null }>(
+      "SELECT status, approval_id FROM execution_steps LIMIT 1",
+    );
+    expect(pausedStep?.status).toBe("paused");
+    expect(pausedStep?.approval_id).toBeTruthy();
+
+    const approval = await db.get<{
+      approval_id: string;
+      kind: string;
+      status: string;
+      resume_token: string | null;
+    }>(
+      "SELECT approval_id, kind, status, resume_token FROM approvals WHERE tenant_id = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(approval?.kind).toBe("policy");
+    expect(approval?.status).toBe("pending");
+    expect(approval?.resume_token).toBeTruthy();
+
+    const approvalDal = new ApprovalDal(db);
+    await approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval!.approval_id,
+      decision: "approved",
+      reason: "approved in test",
+    });
+    await engine.resumeRun(approval!.resume_token!);
+
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    expect(calls).toBe(2);
+    await drain(engine, "w1", mockExecutor);
+
+    const completedRun = await db.get<{ status: string }>(
+      "SELECT status FROM execution_runs LIMIT 1",
+    );
+    expect(completedRun?.status).toBe("succeeded");
   });
 
   it("revokes existing resume tokens when cancelling an already-cancelled run", async () => {
@@ -2466,4 +2557,100 @@ describe("ExecutionEngine (normalized)", () => {
       await rm(dir, { recursive: true, force: true });
     }
   }, 20_000);
+
+  it("marks the current step failed and cancels queued siblings when retries are exhausted", async () => {
+    db = openTestSqliteDb();
+
+    const nowIso = new Date(0).toISOString();
+    const clock = () => ({ nowMs: 0, nowIso });
+    const manager = new ExecutionEngineApprovalManager({
+      clock,
+      redactText: (value) => value,
+      redactUnknown: (value) => value,
+      eventEmitter: new ExecutionEngineEventEmitter({
+        clock,
+        eventsEnabled: false,
+      }),
+    });
+    const engine = new ExecutionEngine({ db, clock });
+    const { jobId, runId } = await enqueuePlan(engine, {
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-retry-terminal-1",
+      requestId: "test-req-1",
+      steps: [action("Research"), action("Message", { body: "never runs" })],
+    });
+
+    const firstStep = await db.get<{ step_id: string }>(
+      "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC LIMIT 1",
+      [runId],
+    );
+    expect(firstStep?.step_id).toBeTruthy();
+
+    await db.run(
+      "UPDATE execution_jobs SET status = 'running' WHERE tenant_id = ? AND job_id = ?",
+      [DEFAULT_TENANT_ID, jobId],
+    );
+    await db.run(
+      "UPDATE execution_runs SET status = 'running', started_at = ? WHERE tenant_id = ? AND run_id = ?",
+      [nowIso, DEFAULT_TENANT_ID, runId],
+    );
+    await db.run(
+      "UPDATE execution_steps SET status = 'running' WHERE tenant_id = ? AND step_id = ?",
+      [DEFAULT_TENANT_ID, firstStep!.step_id],
+    );
+    await db.run(
+      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "agent:agent-1:telegram-1:group:thread-1", "main", "w1", 60_000],
+    );
+
+    await db.transaction(async (tx) => {
+      await manager.maybeRetryOrFailStep({
+        tx,
+        nowIso,
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        attemptNum: 1,
+        maxAttempts: 1,
+        stepId: firstStep!.step_id,
+        runId,
+        jobId,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        key: "agent:agent-1:telegram-1:group:thread-1",
+        lane: "main",
+        workerId: "w1",
+      });
+    });
+
+    const stepStatuses = await db.all<{ step_index: number; status: string }>(
+      "SELECT step_index, status FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
+      [runId],
+    );
+    expect(stepStatuses).toEqual([
+      { step_index: 0, status: "failed" },
+      { step_index: 1, status: "cancelled" },
+    ]);
+
+    const run = await db.get<{ status: string; finished_at: string | null }>(
+      "SELECT status, finished_at FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
+      [DEFAULT_TENANT_ID, runId],
+    );
+    expect(run).toEqual({
+      status: "failed",
+      finished_at: nowIso,
+    });
+
+    const job = await db.get<{ status: string }>(
+      "SELECT status FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+      [DEFAULT_TENANT_ID, jobId],
+    );
+    expect(job?.status).toBe("failed");
+
+    const remainingLaneLease = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM lane_leases WHERE tenant_id = ? AND key = ? AND lane = ?",
+      [DEFAULT_TENANT_ID, "agent:agent-1:telegram-1:group:thread-1", "main"],
+    );
+    expect(remainingLaneLease?.n).toBe(0);
+  });
 });
