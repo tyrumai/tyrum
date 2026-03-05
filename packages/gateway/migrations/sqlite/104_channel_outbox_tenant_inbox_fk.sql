@@ -92,4 +92,3 @@ CREATE INDEX IF NOT EXISTS channel_outbox_approval_id_idx
 ON channel_outbox (tenant_id, approval_id);
 CREATE INDEX IF NOT EXISTS channel_outbox_session_id_idx
 ON channel_outbox (tenant_id, session_id);
-

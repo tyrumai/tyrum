@@ -1,5 +1,6 @@
 export const MIGRATION_FILENAME_ALIASES: Readonly<Record<string, readonly string[]>> = {
   "103_vector_metadata_pk.sql": ["102_vector_metadata_pk.sql"],
+  "104_channel_outbox_tenant_inbox_fk.sql": ["102_channel_outbox_tenant_inbox_fk.sql"],
 };
 
 export function findAppliedMigrationAlias(
