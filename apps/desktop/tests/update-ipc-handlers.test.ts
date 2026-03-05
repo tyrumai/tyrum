@@ -14,39 +14,37 @@ const {
   NotificationMock,
   listeners,
 } = vi.hoisted(() => {
-  const ipcMainHandleMock = vi.fn();
-  const registeredHandlers = new Map<string, (...args: unknown[]) => unknown>();
-  const showOpenDialogMock = vi.fn();
-  const openPathMock = vi.fn();
-  const appGetVersionMock = vi.fn(() => "1.0.0");
-  const notificationShowMock = vi.fn();
-  const checkForUpdatesMock = vi.fn(async () => undefined);
-  const downloadUpdateMock = vi.fn(async () => undefined);
-  const quitAndInstallMock = vi.fn();
-  const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+  const ipcMainHandleMockInner = vi.fn();
+  const registeredHandlersInner = new Map<string, (...args: unknown[]) => unknown>();
+  const showOpenDialogMockInner = vi.fn();
+  const openPathMockInner = vi.fn();
+  const appGetVersionMockInner = vi.fn(() => "1.0.0");
+  const notificationShowMockInner = vi.fn();
+  const checkForUpdatesMockInner = vi.fn(async () => undefined);
+  const downloadUpdateMockInner = vi.fn(async () => undefined);
+  const quitAndInstallMockInner = vi.fn();
+  const listenersInner = new Map<string, Array<(...args: unknown[]) => void>>();
 
-  class NotificationMock {
+  class NotificationMockInner {
     static isSupported = vi.fn(() => true);
 
-    constructor(_options: { title: string; body?: string }) {}
-
-    show = notificationShowMock;
+    show = notificationShowMockInner;
   }
 
-  const autoUpdaterMock = {
+  const autoUpdaterMockInner = {
     autoDownload: true,
     autoInstallOnAppQuit: true,
-    checkForUpdates: checkForUpdatesMock,
-    downloadUpdate: downloadUpdateMock,
-    quitAndInstall: quitAndInstallMock,
+    checkForUpdates: checkForUpdatesMockInner,
+    downloadUpdate: downloadUpdateMockInner,
+    quitAndInstall: quitAndInstallMockInner,
     on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
-      const handlers = listeners.get(event) ?? [];
+      const handlers = listenersInner.get(event) ?? [];
       handlers.push(listener);
-      listeners.set(event, handlers);
-      return autoUpdaterMock;
+      listenersInner.set(event, handlers);
+      return autoUpdaterMockInner;
     }),
     emit: (event: string, ...args: unknown[]) => {
-      const handlers = listeners.get(event) ?? [];
+      const handlers = listenersInner.get(event) ?? [];
       for (const handler of handlers) {
         handler(...args);
       }
@@ -54,18 +52,18 @@ const {
   };
 
   return {
-    ipcMainHandleMock,
-    registeredHandlers,
-    showOpenDialogMock,
-    openPathMock,
-    appGetVersionMock,
-    notificationShowMock,
-    autoUpdaterMock,
-    checkForUpdatesMock,
-    downloadUpdateMock,
-    quitAndInstallMock,
-    NotificationMock,
-    listeners,
+    ipcMainHandleMock: ipcMainHandleMockInner,
+    registeredHandlers: registeredHandlersInner,
+    showOpenDialogMock: showOpenDialogMockInner,
+    openPathMock: openPathMockInner,
+    appGetVersionMock: appGetVersionMockInner,
+    notificationShowMock: notificationShowMockInner,
+    autoUpdaterMock: autoUpdaterMockInner,
+    checkForUpdatesMock: checkForUpdatesMockInner,
+    downloadUpdateMock: downloadUpdateMockInner,
+    quitAndInstallMock: quitAndInstallMockInner,
+    NotificationMock: NotificationMockInner,
+    listeners: listenersInner,
   };
 });
 

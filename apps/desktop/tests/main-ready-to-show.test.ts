@@ -34,110 +34,110 @@ const {
   screenGetAllDisplaysMock,
   screenGetPrimaryDisplayMock,
 } = vi.hoisted(() => {
-  const appHandlers = new Map<string, (...args: unknown[]) => void>();
-  const readyToShowHandlers: Array<() => void> = [];
-  const browserWindowShowMock = vi.fn();
-  const browserWindowOnceMock = vi.fn((event: string, handler: () => void) => {
+  const appHandlersInner = new Map<string, (...args: unknown[]) => void>();
+  const readyToShowHandlersInner: Array<() => void> = [];
+  const browserWindowShowMockInner = vi.fn();
+  const browserWindowOnceMockInner = vi.fn((event: string, handler: () => void) => {
     if (event === "ready-to-show") {
-      readyToShowHandlers.push(handler);
+      readyToShowHandlersInner.push(handler);
     }
   });
-  const webContentsOnMock = vi.fn();
-  const setWindowOpenHandlerMock = vi.fn();
-  const browserWindowMock = vi.fn(function MockBrowserWindow() {
+  const webContentsOnMockInner = vi.fn();
+  const setWindowOpenHandlerMockInner = vi.fn();
+  const browserWindowMockInner = vi.fn(function MockBrowserWindow() {
     return {
       loadURL: vi.fn(),
       loadFile: vi.fn(),
       on: vi.fn(),
       isMinimized: vi.fn(() => false),
       restore: vi.fn(),
-      once: browserWindowOnceMock,
-      show: browserWindowShowMock,
+      once: browserWindowOnceMockInner,
+      show: browserWindowShowMockInner,
       focus: vi.fn(),
       isDestroyed: vi.fn(() => false),
       webContents: {
-        on: webContentsOnMock,
+        on: webContentsOnMockInner,
         isDestroyed: vi.fn(() => false),
         send: vi.fn(),
-        setWindowOpenHandler: setWindowOpenHandlerMock,
+        setWindowOpenHandler: setWindowOpenHandlerMockInner,
       },
     };
   });
 
-  const appWhenReadyMock = vi.fn(() => Promise.resolve());
-  const appOnMock = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-    appHandlers.set(event, handler);
+  const appWhenReadyMockInner = vi.fn(() => Promise.resolve());
+  const appOnMockInner = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+    appHandlersInner.set(event, handler);
   });
-  const appQuitMock = vi.fn();
-  const appRequestSingleInstanceLockMock = vi.fn(() => true);
-  const appSetAppUserModelIdMock = vi.fn();
-  const appGetPathMock = vi.fn(() => "/tmp/tyrum-desktop-tests");
+  const appQuitMockInner = vi.fn();
+  const appRequestSingleInstanceLockMockInner = vi.fn(() => true);
+  const appSetAppUserModelIdMockInner = vi.fn();
+  const appGetPathMockInner = vi.fn(() => "/tmp/tyrum-desktop-tests");
 
-  const screenGetPrimaryDisplayMock = vi.fn(() => ({
+  const screenGetPrimaryDisplayMockInner = vi.fn(() => ({
     id: 1,
     workArea: { x: 0, y: 0, width: 1920, height: 1080 },
   }));
-  const screenGetAllDisplaysMock = vi.fn(() => [
+  const screenGetAllDisplaysMockInner = vi.fn(() => [
     {
       id: 1,
       workArea: { x: 0, y: 0, width: 1920, height: 1080 },
     },
   ]);
 
-  const ipcMainHandleMock = vi.fn();
-  const nativeThemeOnMock = vi.fn();
+  const ipcMainHandleMockInner = vi.fn();
+  const nativeThemeOnMockInner = vi.fn();
 
-  const menuBuildFromTemplateMock = vi.fn(() => ({}));
-  const menuSetApplicationMenuMock = vi.fn();
+  const menuBuildFromTemplateMockInner = vi.fn(() => ({}));
+  const menuSetApplicationMenuMockInner = vi.fn();
 
-  const registerConfigIpcMock = vi.fn();
-  const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
-  const registerNodeIpcMock = vi.fn();
-  const registerUpdateIpcMock = vi.fn();
+  const registerConfigIpcMockInner = vi.fn();
+  const registerGatewayIpcMockInner = vi.fn(() => ({ stop: vi.fn() }));
+  const registerNodeIpcMockInner = vi.fn();
+  const registerUpdateIpcMockInner = vi.fn();
 
-  const configExistsMock = vi.fn(() => true);
-  const loadConfigMock = vi.fn(() => ({ mode: "remote" }));
-  const startEmbeddedGatewayFromConfigMock = vi.fn(async () => ({
+  const configExistsMockInner = vi.fn(() => true);
+  const loadConfigMockInner = vi.fn(() => ({ mode: "remote" }));
+  const startEmbeddedGatewayFromConfigMockInner = vi.fn(async () => ({
     status: "running",
     port: 8788,
   }));
 
-  const loadWindowStateMock = vi.fn(() => null);
-  const saveWindowStateMock = vi.fn();
-  const captureWindowStateMock = vi.fn();
-  const ensureVisibleBoundsMock = vi.fn((bounds: unknown) => bounds);
+  const loadWindowStateMockInner = vi.fn(() => null);
+  const saveWindowStateMockInner = vi.fn();
+  const captureWindowStateMockInner = vi.fn();
+  const ensureVisibleBoundsMockInner = vi.fn((bounds: unknown) => bounds);
 
   return {
-    appRequestSingleInstanceLockMock,
-    appGetPathMock,
-    appSetAppUserModelIdMock,
-    appWhenReadyMock,
-    appHandlers,
-    appOnMock,
-    appQuitMock,
-    browserWindowMock,
-    browserWindowOnceMock,
-    browserWindowShowMock,
-    ipcMainHandleMock,
-    menuBuildFromTemplateMock,
-    menuSetApplicationMenuMock,
-    nativeThemeOnMock,
-    readyToShowHandlers,
-    webContentsOnMock,
-    setWindowOpenHandlerMock,
-    registerConfigIpcMock,
-    registerGatewayIpcMock,
-    registerNodeIpcMock,
-    registerUpdateIpcMock,
-    configExistsMock,
-    loadConfigMock,
-    startEmbeddedGatewayFromConfigMock,
-    captureWindowStateMock,
-    ensureVisibleBoundsMock,
-    loadWindowStateMock,
-    saveWindowStateMock,
-    screenGetAllDisplaysMock,
-    screenGetPrimaryDisplayMock,
+    appRequestSingleInstanceLockMock: appRequestSingleInstanceLockMockInner,
+    appGetPathMock: appGetPathMockInner,
+    appSetAppUserModelIdMock: appSetAppUserModelIdMockInner,
+    appWhenReadyMock: appWhenReadyMockInner,
+    appHandlers: appHandlersInner,
+    appOnMock: appOnMockInner,
+    appQuitMock: appQuitMockInner,
+    browserWindowMock: browserWindowMockInner,
+    browserWindowOnceMock: browserWindowOnceMockInner,
+    browserWindowShowMock: browserWindowShowMockInner,
+    ipcMainHandleMock: ipcMainHandleMockInner,
+    menuBuildFromTemplateMock: menuBuildFromTemplateMockInner,
+    menuSetApplicationMenuMock: menuSetApplicationMenuMockInner,
+    nativeThemeOnMock: nativeThemeOnMockInner,
+    readyToShowHandlers: readyToShowHandlersInner,
+    webContentsOnMock: webContentsOnMockInner,
+    setWindowOpenHandlerMock: setWindowOpenHandlerMockInner,
+    registerConfigIpcMock: registerConfigIpcMockInner,
+    registerGatewayIpcMock: registerGatewayIpcMockInner,
+    registerNodeIpcMock: registerNodeIpcMockInner,
+    registerUpdateIpcMock: registerUpdateIpcMockInner,
+    configExistsMock: configExistsMockInner,
+    loadConfigMock: loadConfigMockInner,
+    startEmbeddedGatewayFromConfigMock: startEmbeddedGatewayFromConfigMockInner,
+    captureWindowStateMock: captureWindowStateMockInner,
+    ensureVisibleBoundsMock: ensureVisibleBoundsMockInner,
+    loadWindowStateMock: loadWindowStateMockInner,
+    saveWindowStateMock: saveWindowStateMockInner,
+    screenGetAllDisplaysMock: screenGetAllDisplaysMockInner,
+    screenGetPrimaryDisplayMock: screenGetPrimaryDisplayMockInner,
   };
 });
 

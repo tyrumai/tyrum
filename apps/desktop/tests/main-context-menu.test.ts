@@ -20,7 +20,7 @@ const {
   loadConfigMock,
   startEmbeddedGatewayFromConfigMock,
 } = vi.hoisted(() => {
-  const browserWindowMock = vi.fn(function MockBrowserWindow() {
+  const browserWindowMockInner = vi.fn(function MockBrowserWindow() {
     return {
       loadURL: vi.fn(),
       loadFile: vi.fn(),
@@ -34,44 +34,44 @@ const {
     };
   });
 
-  const appWhenReadyMock = vi.fn(() => new Promise<void>(() => {}));
-  const appOnMock = vi.fn();
-  const appQuitMock = vi.fn();
-  const appRequestSingleInstanceLockMock = vi.fn(() => true);
-  const appSetAppUserModelIdMock = vi.fn();
-  const shellOpenExternalMock = vi.fn(async () => {});
-  const menuBuildFromTemplateMock = vi.fn(() => ({}) as never);
-  const menuSetApplicationMenuMock = vi.fn();
+  const appWhenReadyMockInner = vi.fn(() => new Promise<void>(() => {}));
+  const appOnMockInner = vi.fn();
+  const appQuitMockInner = vi.fn();
+  const appRequestSingleInstanceLockMockInner = vi.fn(() => true);
+  const appSetAppUserModelIdMockInner = vi.fn();
+  const shellOpenExternalMockInner = vi.fn(async () => {});
+  const menuBuildFromTemplateMockInner = vi.fn(() => ({}) as never);
+  const menuSetApplicationMenuMockInner = vi.fn();
 
-  const registerConfigIpcMock = vi.fn();
-  const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
-  const registerNodeIpcMock = vi.fn();
-  const registerUpdateIpcMock = vi.fn();
+  const registerConfigIpcMockInner = vi.fn();
+  const registerGatewayIpcMockInner = vi.fn(() => ({ stop: vi.fn() }));
+  const registerNodeIpcMockInner = vi.fn();
+  const registerUpdateIpcMockInner = vi.fn();
 
-  const configExistsMock = vi.fn(() => true);
-  const loadConfigMock = vi.fn(() => ({ mode: "remote" }));
-  const startEmbeddedGatewayFromConfigMock = vi.fn(async () => ({
+  const configExistsMockInner = vi.fn(() => true);
+  const loadConfigMockInner = vi.fn(() => ({ mode: "remote" }));
+  const startEmbeddedGatewayFromConfigMockInner = vi.fn(async () => ({
     status: "running",
     port: 8788,
   }));
 
   return {
-    appRequestSingleInstanceLockMock,
-    appSetAppUserModelIdMock,
-    appWhenReadyMock,
-    appOnMock,
-    appQuitMock,
-    browserWindowMock,
-    menuBuildFromTemplateMock,
-    menuSetApplicationMenuMock,
-    shellOpenExternalMock,
-    registerConfigIpcMock,
-    registerGatewayIpcMock,
-    registerNodeIpcMock,
-    registerUpdateIpcMock,
-    configExistsMock,
-    loadConfigMock,
-    startEmbeddedGatewayFromConfigMock,
+    appRequestSingleInstanceLockMock: appRequestSingleInstanceLockMockInner,
+    appSetAppUserModelIdMock: appSetAppUserModelIdMockInner,
+    appWhenReadyMock: appWhenReadyMockInner,
+    appOnMock: appOnMockInner,
+    appQuitMock: appQuitMockInner,
+    browserWindowMock: browserWindowMockInner,
+    menuBuildFromTemplateMock: menuBuildFromTemplateMockInner,
+    menuSetApplicationMenuMock: menuSetApplicationMenuMockInner,
+    shellOpenExternalMock: shellOpenExternalMockInner,
+    registerConfigIpcMock: registerConfigIpcMockInner,
+    registerGatewayIpcMock: registerGatewayIpcMockInner,
+    registerNodeIpcMock: registerNodeIpcMockInner,
+    registerUpdateIpcMock: registerUpdateIpcMockInner,
+    configExistsMock: configExistsMockInner,
+    loadConfigMock: loadConfigMockInner,
+    startEmbeddedGatewayFromConfigMock: startEmbeddedGatewayFromConfigMockInner,
   };
 });
 

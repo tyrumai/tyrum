@@ -21,7 +21,6 @@ const {
 vi.mock("electron", () => ({
   Notification: class NotificationMock {
     static isSupported = vi.fn(() => false);
-    constructor(_options: { title: string; body?: string }) {}
     on = vi.fn();
     show = vi.fn();
   },
