@@ -160,9 +160,9 @@ export function createAutoSyncManager(params: {
     updateIsSyncing();
 
     const promise = (async () => {
-      const now = nowMs();
       try {
         await task.run();
+        const successAtMs = nowMs();
         const nextDelayMs = computeSuccessDelayMs();
         setState((prev) => {
           const prevTask = prev.tasks[taskId];
@@ -175,20 +175,20 @@ export function createAutoSyncManager(params: {
                 ...prevTask,
                 inFlight: false,
                 consecutiveFailures: 0,
-                lastSuccessAt: now,
+                lastSuccessAt: successAtMs,
                 lastError: null,
-                nextAttemptAtMs: now + nextDelayMs,
+                nextAttemptAtMs: successAtMs + nextDelayMs,
               },
             },
           };
         });
       } catch (error) {
-        const consecutiveFailures =
-          (store.getSnapshot().tasks[taskId]?.consecutiveFailures ?? 0) + 1;
-        const nextDelayMs = computeBackoffDelayMs(consecutiveFailures);
+        const failureAtMs = nowMs();
         setState((prev) => {
           const prevTask = prev.tasks[taskId];
           if (!prevTask) return prev;
+          const consecutiveFailures = prevTask.consecutiveFailures + 1;
+          const nextDelayMs = computeBackoffDelayMs(consecutiveFailures);
           return {
             ...prev,
             tasks: {
@@ -198,7 +198,7 @@ export function createAutoSyncManager(params: {
                 inFlight: false,
                 consecutiveFailures,
                 lastError: toErrorMessage(error),
-                nextAttemptAtMs: now + nextDelayMs,
+                nextAttemptAtMs: failureAtMs + nextDelayMs,
               },
             },
           };

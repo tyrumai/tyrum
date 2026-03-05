@@ -33,6 +33,61 @@ describe("auto-sync", () => {
     manager.dispose();
   });
 
+  it("records success time and schedules next attempt from completion", async () => {
+    let nowMs = 1_000;
+
+    const manager = createAutoSyncManager({
+      intervalMs: 30_000,
+      isConnected: () => true,
+      nowMs: () => nowMs,
+      random: () => 0.5, // no jitter
+      tasks: [
+        {
+          id: "t1",
+          run: async () => {
+            nowMs = 6_000; // simulate slow task
+          },
+        },
+      ],
+    });
+
+    await manager.handleConnected();
+
+    const task = manager.store.getSnapshot().tasks["t1"];
+    expect(task?.lastSuccessAt).toBe(6_000);
+    expect(task?.nextAttemptAtMs).toBe(36_000);
+
+    manager.dispose();
+  });
+
+  it("schedules backoff from failure time", async () => {
+    let nowMs = 0;
+
+    const manager = createAutoSyncManager({
+      intervalMs: 30_000,
+      isConnected: () => true,
+      nowMs: () => nowMs,
+      random: () => 0.5, // no jitter
+      tasks: [
+        {
+          id: "t1",
+          run: async () => {
+            nowMs = 5_000; // simulate slow task
+            throw new Error("nope");
+          },
+        },
+      ],
+    });
+
+    await manager.handleConnected();
+
+    const task = manager.store.getSnapshot().tasks["t1"];
+    expect(task?.consecutiveFailures).toBe(1);
+    expect(task?.nextAttemptAtMs).toBe(35_000);
+
+    manager.dispose();
+  });
+
   it("applies exponential backoff with a 30s base and 5m cap", async () => {
     let nowMs = 0;
     const run = vi.fn(async () => {
