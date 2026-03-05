@@ -63,7 +63,7 @@
     "oxlint": "^1.51.0",
     "playwright": "^1.58.2",
     "prettier": "^3.8.1",
-    "tsdown": "^0.20.3",
+    "tsdown": "^0.21.0",
     "typescript": "^5.8.3",
     "vitest": "^4.0.18",
     "vitest-axe": "^0.1.0"
