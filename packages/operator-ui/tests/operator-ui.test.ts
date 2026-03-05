@@ -139,6 +139,7 @@ class FakeWsClient implements OperatorWsClient {
   memoryUpdate = vi.fn(async () => ({ v: 1, item: {} }) as unknown);
   memoryForget = vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] }) as unknown);
   memoryExport = vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" }) as unknown);
+  workList = vi.fn(async () => ({ items: [] }) as unknown);
   sessionList = vi.fn(async () => ({ sessions: [], next_cursor: null }));
   sessionGet = vi.fn(async () => ({
     session: {
@@ -392,6 +393,7 @@ function createFakeHttpClient(): {
   pairingsDeny: ReturnType<typeof vi.fn>;
   pairingsRevoke: ReturnType<typeof vi.fn>;
   agentListGet: ReturnType<typeof vi.fn>;
+  agentStatusGet: ReturnType<typeof vi.fn>;
 } {
   const statusGet = vi.fn(async () => sampleStatusResponse());
   const usageGet = vi.fn(async () => sampleUsageResponse());
@@ -409,11 +411,13 @@ function createFakeHttpClient(): {
     async () => ({ status: "ok", pairing: samplePairingRequestPending() }) as const,
   );
   const agentListGet = vi.fn(async () => ({ agents: [{ agent_key: "default" }] }) as const);
+  const agentStatusGet = vi.fn(async () => ({ status: "ok" }) as const);
 
   const http: OperatorHttpClient = {
     status: { get: statusGet },
     usage: { get: usageGet },
     presence: { list: presenceList },
+    agentStatus: { get: agentStatusGet },
     agentList: { get: agentListGet },
     pairings: {
       list: pairingsList,
@@ -433,6 +437,7 @@ function createFakeHttpClient(): {
     pairingsDeny,
     pairingsRevoke,
     agentListGet,
+    agentStatusGet,
   };
 }
 
@@ -2379,10 +2384,12 @@ describe("operator-ui", () => {
     expect(pageHeader).not.toBeNull();
     expect(pageHeader?.className).toContain("mb-0");
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="dashboard-refresh-status"]',
+    expect(container.querySelector('[data-testid="dashboard-refresh-status"]')).toBeNull();
+
+    const syncButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="sidebar-sync-now"]',
     );
-    expect(refreshButton).not.toBeNull();
+    expect(syncButton).not.toBeNull();
 
     const approvalsLiveRegion = container.querySelector<HTMLDivElement>(
       '[data-testid="dashboard-approvals-live"]',
@@ -2391,12 +2398,9 @@ describe("operator-ui", () => {
     expect(approvalsLiveRegion?.getAttribute("aria-live")).toBe("polite");
     expect(approvalsLiveRegion?.getAttribute("aria-atomic")).toBe("true");
     expect(approvalsLiveRegion?.className).toContain("sr-only");
-    expect(approvalsLiveRegion?.textContent).toContain("0 pending approvals");
-
-    expect(container.querySelector('[data-testid="dashboard-approvals-badge"]')).toBeNull();
 
     await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      syncButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
 
@@ -2466,10 +2470,7 @@ describe("operator-ui", () => {
       approvalsCard?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const approvalsRefresh = container.querySelector<HTMLButtonElement>(
-      '[data-testid="approvals-refresh"]',
-    );
-    expect(approvalsRefresh).not.toBeNull();
+    expect(container.querySelector('[data-testid="approvals-pending-live"]')).not.toBeNull();
 
     act(() => {
       root?.unmount();
@@ -2556,10 +2557,7 @@ describe("operator-ui", () => {
       );
     });
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="dashboard-refresh-status"]',
-    );
-    expect(refreshButton).not.toBeNull();
+    expect(container.querySelector('[data-testid="dashboard-card-connection"]')).not.toBeNull();
 
     act(() => {
       root?.unmount();
@@ -2602,7 +2600,7 @@ describe("operator-ui", () => {
       await Promise.resolve();
     });
 
-    expect(container.querySelector('[data-testid="dashboard-refresh-status"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="dashboard-card-connection"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="memory-inspector"]')).toBeNull();
 
     act(() => {
@@ -2656,13 +2654,8 @@ describe("operator-ui", () => {
     expect(approvalsLiveRegion?.getAttribute("aria-live")).toBe("polite");
     expect(approvalsLiveRegion?.getAttribute("aria-atomic")).toBe("true");
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="approvals-refresh"]',
-    );
-    expect(refreshButton).not.toBeNull();
-
     await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -2731,13 +2724,8 @@ describe("operator-ui", () => {
       approvalsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="approvals-refresh"]',
-    );
-    expect(refreshButton).not.toBeNull();
-
     await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -2793,13 +2781,8 @@ describe("operator-ui", () => {
       approvalsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="approvals-refresh"]',
-    );
-    expect(refreshButton).not.toBeNull();
-
     await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -2850,13 +2833,8 @@ describe("operator-ui", () => {
       pairingLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="pairing-refresh"]',
-    );
-    expect(refreshButton).not.toBeNull();
-
     await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -2958,13 +2936,8 @@ describe("operator-ui", () => {
       pairingLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="pairing-refresh"]',
-    );
-    expect(refreshButton).not.toBeNull();
-
     await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -3025,13 +2998,8 @@ describe("operator-ui", () => {
       );
     });
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="pairing-refresh"]',
-    );
-    expect(refreshButton).not.toBeNull();
-
     await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -3086,13 +3054,8 @@ describe("operator-ui", () => {
       root.render(React.createElement(PairingPage, { core }));
     });
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="pairing-refresh"]',
-    );
-    expect(refreshButton).not.toBeNull();
-
     await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -3143,13 +3106,8 @@ describe("operator-ui", () => {
       root.render(React.createElement(PairingPage, { core }));
     });
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="pairing-refresh"]',
-    );
-    expect(refreshButton).not.toBeNull();
-
     await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -3193,13 +3151,8 @@ describe("operator-ui", () => {
       pairingLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="pairing-refresh"]',
-    );
-    expect(refreshButton).not.toBeNull();
-
     await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -3259,13 +3212,8 @@ describe("operator-ui", () => {
       pairingLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="pairing-refresh"]',
-    );
-    expect(refreshButton).not.toBeNull();
-
     await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -3337,13 +3285,8 @@ describe("operator-ui", () => {
       pairingLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="pairing-refresh"]',
-    );
-    expect(refreshButton).not.toBeNull();
-
     await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -3530,16 +3473,18 @@ describe("operator-ui", () => {
     expect(container.querySelector('[data-testid="settings-usage"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="settings-theme"]')).not.toBeNull();
 
-    const refreshButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="settings-refresh-usage"]',
-    );
-    expect(refreshButton).not.toBeNull();
+    expect(container.querySelector('[data-testid="settings-refresh-usage"]')).toBeNull();
 
     const tokensValue = container.querySelector('[data-testid="settings-usage-total-tokens"]');
-    expect(tokensValue?.textContent).toContain("-");
+    expect(tokensValue).not.toBeNull();
+
+    const syncButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="sidebar-sync-now"]',
+    );
+    expect(syncButton).not.toBeNull();
 
     await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      syncButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
 

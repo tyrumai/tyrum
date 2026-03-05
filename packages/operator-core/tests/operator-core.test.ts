@@ -61,6 +61,7 @@ class FakeWsClient {
   }));
   sessionDelete = vi.fn(async () => ({ session_id: "session-1" }));
   sessionSend = vi.fn(async () => ({ session_id: "session-1", assistant_message: "" }));
+  workList = vi.fn(async () => ({ items: [] }) as unknown);
 
   on(event: string, handler: Handler): void {
     const existing = this.handlers.get(event);
@@ -139,13 +140,14 @@ function samplePairingListResponse(): PairingListResponse {
 
 function createFakeHttpClient(): Pick<
   TyrumHttpClient,
-  "status" | "usage" | "presence" | "pairings"
+  "status" | "usage" | "presence" | "pairings" | "agentStatus"
 > & {
   __calls: {
     statusGet: number;
     usageGet: number;
     presenceList: number;
     pairingsList: number;
+    agentStatusGet: number;
   };
 } {
   const calls = {
@@ -153,6 +155,7 @@ function createFakeHttpClient(): Pick<
     usageGet: 0,
     presenceList: 0,
     pairingsList: 0,
+    agentStatusGet: 0,
   };
 
   return {
@@ -183,6 +186,12 @@ function createFakeHttpClient(): Pick<
       approve: vi.fn(async () => ({ status: "ok", pairing: samplePairingApproved() })),
       deny: vi.fn(async () => ({ status: "ok", pairing: samplePairingDenied() })),
       revoke: vi.fn(async () => ({ status: "ok", pairing: samplePairingRevoked() })),
+    },
+    agentStatus: {
+      get: vi.fn(async () => {
+        calls.agentStatusGet++;
+        return { status: "ok" } as unknown;
+      }),
     },
   };
 }
@@ -395,6 +404,41 @@ describe("operator-core wiring", () => {
     expect(
       (core as unknown as { chatStore?: { getSnapshot: () => unknown } }).chatStore,
     ).toBeDefined();
+  });
+
+  it("exposes autoSyncStore and syncAllNow triggers tasks", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    expect(
+      (core as unknown as { autoSyncStore?: { getSnapshot: () => unknown } }).autoSyncStore,
+    ).toBeDefined();
+    expect(typeof (core as unknown as { syncAllNow?: unknown }).syncAllNow).toBe("function");
+
+    ws.emit("connected", { clientId: "client-123" });
+    await tick();
+
+    const statusGetBefore = http.__calls.statusGet;
+    const usageGetBefore = http.__calls.usageGet;
+    const presenceListBefore = http.__calls.presenceList;
+    const pairingsListBefore = http.__calls.pairingsList;
+    const approvalsListBefore = ws.approvalList.mock.calls.length;
+
+    await core.syncAllNow();
+    await tick();
+
+    expect(http.__calls.statusGet).toBe(statusGetBefore + 1);
+    expect(http.__calls.usageGet).toBe(usageGetBefore + 1);
+    expect(http.__calls.presenceList).toBe(presenceListBefore + 1);
+    expect(http.__calls.pairingsList).toBe(pairingsListBefore + 1);
+    expect(ws.approvalList).toHaveBeenCalledTimes(approvalsListBefore + 1);
   });
 
   it("exposes elevatedModeStore as a single source of truth", () => {

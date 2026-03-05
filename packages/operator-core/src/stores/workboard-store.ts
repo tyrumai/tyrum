@@ -1,0 +1,148 @@
+import type { WorkItem } from "@tyrum/schemas";
+import type { OperatorWsClient } from "../deps.js";
+import { createStore, type ExternalStore } from "../store.js";
+import {
+  applyWorkTaskEvent,
+  upsertWorkItem,
+  type WorkTaskEvent,
+  type WorkTasksByWorkItemId,
+} from "../workboard/workboard-utils.js";
+
+export interface WorkboardState {
+  items: WorkItem[];
+  tasksByWorkItemId: WorkTasksByWorkItemId;
+  supported: boolean | null;
+  loading: boolean;
+  error: string | null;
+  lastSyncedAt: string | null;
+}
+
+export interface WorkboardStore extends ExternalStore<WorkboardState> {
+  refreshList(): Promise<void>;
+  resetSupportProbe(): void;
+}
+
+const DEFAULT_SCOPE = {
+  tenant_id: "default",
+  agent_id: "default",
+  workspace_id: "default",
+} as const;
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isUnsupportedRequestForWorkList(errorMessage: string): boolean {
+  return errorMessage.includes("work.list failed: unsupported_request");
+}
+
+export function createWorkboardStore(ws: OperatorWsClient): {
+  store: WorkboardStore;
+  handleWorkItemUpsert: (item: WorkItem) => void;
+  handleWorkTaskEvent: (event: WorkTaskEvent) => void;
+} {
+  const { store, setState } = createStore<WorkboardState>({
+    items: [],
+    tasksByWorkItemId: {},
+    supported: null,
+    loading: false,
+    error: null,
+    lastSyncedAt: null,
+  });
+
+  let refreshRunId = 0;
+  let activeRefreshRunId: number | null = null;
+  let bufferedWorkItemUpserts = new Map<string, WorkItem>();
+
+  function resetSupportProbe(): void {
+    setState((prev) => {
+      if (prev.supported !== false) return prev;
+      return { ...prev, supported: null, error: null };
+    });
+  }
+
+  function handleWorkItemUpsert(item: WorkItem): void {
+    if (activeRefreshRunId !== null) {
+      bufferedWorkItemUpserts.set(item.work_item_id, item);
+    }
+    setState((prev) => ({
+      ...prev,
+      supported: prev.supported ?? true,
+      items: upsertWorkItem(prev.items, item),
+    }));
+  }
+
+  function handleWorkTaskEvent(event: WorkTaskEvent): void {
+    setState((prev) => ({
+      ...prev,
+      supported: prev.supported ?? true,
+      tasksByWorkItemId: applyWorkTaskEvent(prev.tasksByWorkItemId, event),
+    }));
+  }
+
+  async function refreshList(): Promise<void> {
+    const runId = ++refreshRunId;
+    activeRefreshRunId = runId;
+    bufferedWorkItemUpserts = new Map<string, WorkItem>();
+
+    setState((prev) => ({
+      ...prev,
+      loading: true,
+      error: null,
+    }));
+
+    try {
+      const result = await ws.workList({ ...DEFAULT_SCOPE, limit: 200 });
+      if (activeRefreshRunId !== runId) return;
+      const buffered = bufferedWorkItemUpserts;
+
+      setState((prev) => {
+        let items = result.items;
+        for (const item of buffered.values()) {
+          items = upsertWorkItem(items, item);
+        }
+
+        return {
+          ...prev,
+          items,
+          supported: true,
+          loading: false,
+          lastSyncedAt: new Date().toISOString(),
+        };
+      });
+    } catch (error) {
+      if (activeRefreshRunId !== runId) return;
+      const message = toErrorMessage(error);
+      if (isUnsupportedRequestForWorkList(message)) {
+        setState((prev) => ({
+          ...prev,
+          items: [],
+          supported: false,
+          loading: false,
+          error: "WorkBoard is not supported by this gateway (database not configured).",
+        }));
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        error: message,
+      }));
+    } finally {
+      if (activeRefreshRunId === runId) {
+        activeRefreshRunId = null;
+        bufferedWorkItemUpserts = new Map<string, WorkItem>();
+      }
+    }
+  }
+
+  return {
+    store: {
+      ...store,
+      refreshList,
+      resetSupportProbe,
+    },
+    handleWorkItemUpsert,
+    handleWorkTaskEvent,
+  };
+}

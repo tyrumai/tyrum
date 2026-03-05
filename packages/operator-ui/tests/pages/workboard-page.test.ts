@@ -16,6 +16,42 @@ function createConnectionStore(status: ConnectionStatus) {
   };
 }
 
+function createWorkboardStore(snapshot?: Partial<Record<string, unknown>>) {
+  let state = {
+    items: [],
+    tasksByWorkItemId: {},
+    supported: null,
+    loading: false,
+    error: null,
+    lastSyncedAt: null,
+    ...snapshot,
+  } as any;
+
+  const listeners = new Set<() => void>();
+
+  const store = {
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    getSnapshot: () => state,
+    refreshList: vi.fn(async () => {}),
+    resetSupportProbe: vi.fn(() => {}),
+  };
+
+  return {
+    store,
+    setState: (updater: (prev: any) => any) => {
+      state = updater(state);
+      for (const listener of listeners) {
+        listener();
+      }
+    },
+  };
+}
+
 function createWsStub(overrides?: Partial<Record<string, unknown>>) {
   const handlers = new Map<string, Set<(event: any) => void>>();
 
@@ -84,15 +120,21 @@ function makeWorkItem(partial: Partial<Record<string, unknown>> & { work_item_id
   } as any;
 }
 
-function createCore(status: ConnectionStatus, wsOverrides?: Partial<Record<string, unknown>>) {
+function createCore(
+  status: ConnectionStatus,
+  wsOverrides?: Partial<Record<string, unknown>>,
+  workboardSnapshot?: Partial<Record<string, unknown>>,
+) {
   const ws = createWsStub(wsOverrides);
+  const workboard = createWorkboardStore(workboardSnapshot);
   const core = {
     connectionStore: createConnectionStore(status),
+    workboardStore: workboard.store,
     ws,
     connect: vi.fn(),
     disconnect: vi.fn(),
   } as unknown as OperatorCore;
-  return { core, ws };
+  return { core, ws, workboard };
 }
 
 async function flushEffects(): Promise<void> {
@@ -116,10 +158,6 @@ describe("WorkBoardPage", () => {
 
     try {
       expect(testRoot.container.textContent).toContain("Not connected");
-      const refreshButton = Array.from(
-        testRoot.container.querySelectorAll<HTMLButtonElement>("button"),
-      ).find((el) => el.textContent?.includes("Refresh"));
-      expect(refreshButton?.disabled).toBe(true);
 
       act(() => {
         clickButton(testRoot.container, "Reconnect");
@@ -134,78 +172,84 @@ describe("WorkBoardPage", () => {
 
   it("loads work items, drills down, processes events, and transitions selected item", async () => {
     const workItem = makeWorkItem({ work_item_id: "wi-1", status: "backlog" });
-    const { core, ws } = createCore("connected", {
-      workList: vi.fn(async () => ({ items: [workItem] })),
-      workGet: vi.fn(async () => ({ item: workItem })),
-      workArtifactList: vi.fn(async () => ({
-        artifacts: [
-          {
-            artifact_id: "artifact-1",
-            work_item_id: "wi-1",
-            kind: "note",
-            title: "Artifact title",
-            body_md: "Artifact body",
-            refs: [],
-            created_at: "2026-01-01T00:00:00.000Z",
-          },
-        ],
-      })),
-      workDecisionList: vi.fn(async () => ({
-        decisions: [
-          {
-            decision_id: "decision-1",
-            work_item_id: "wi-1",
-            question: "Ship?",
-            chosen: "yes",
-            rationale_md: "Looks good",
-            created_at: "2026-01-01T00:00:00.000Z",
-          },
-        ],
-      })),
-      workSignalList: vi.fn(async () => ({
-        signals: [
-          {
-            signal_id: "signal-1",
-            work_item_id: "wi-1",
-            trigger_kind: "manual",
-            status: "pending",
-            trigger_spec_json: { source: "manual" },
-            created_at: "2026-01-01T00:00:00.000Z",
-            last_fired_at: null,
-          },
-        ],
-      })),
-      workStateKvList: vi.fn(async ({ scope }: any) => {
-        if (scope.kind === "agent") {
+    const { core, ws, workboard } = createCore(
+      "connected",
+      {
+        workGet: vi.fn(async () => ({ item: workItem })),
+        workArtifactList: vi.fn(async () => ({
+          artifacts: [
+            {
+              artifact_id: "artifact-1",
+              work_item_id: "wi-1",
+              kind: "note",
+              title: "Artifact title",
+              body_md: "Artifact body",
+              refs: [],
+              created_at: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        })),
+        workDecisionList: vi.fn(async () => ({
+          decisions: [
+            {
+              decision_id: "decision-1",
+              work_item_id: "wi-1",
+              question: "Ship?",
+              chosen: "yes",
+              rationale_md: "Looks good",
+              created_at: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        })),
+        workSignalList: vi.fn(async () => ({
+          signals: [
+            {
+              signal_id: "signal-1",
+              work_item_id: "wi-1",
+              trigger_kind: "manual",
+              status: "pending",
+              trigger_spec_json: { source: "manual" },
+              created_at: "2026-01-01T00:00:00.000Z",
+              last_fired_at: null,
+            },
+          ],
+        })),
+        workStateKvList: vi.fn(async ({ scope }: any) => {
+          if (scope.kind === "agent") {
+            return {
+              entries: [
+                {
+                  scope,
+                  key: "agent.key",
+                  value_json: { value: "agent" },
+                },
+              ],
+            };
+          }
           return {
             entries: [
               {
                 scope,
-                key: "agent.key",
-                value_json: { value: "agent" },
+                key: "work.key",
+                value_json: { value: "work-item" },
               },
             ],
           };
-        }
-        return {
-          entries: [
-            {
-              scope,
-              key: "work.key",
-              value_json: { value: "work-item" },
-            },
-          ],
-        };
-      }),
-      workTransition: vi.fn(async ({ work_item_id, status }: any) => ({
-        item: makeWorkItem({ work_item_id, status }),
-      })),
-    });
+        }),
+        workTransition: vi.fn(async ({ work_item_id, status }: any) => ({
+          item: makeWorkItem({ work_item_id, status }),
+        })),
+      },
+      {
+        items: [workItem],
+        supported: true,
+        lastSyncedAt: "2026-01-01T00:00:00.000Z",
+      },
+    );
 
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
     try {
       await flushEffects();
-      expect(ws.workList).toHaveBeenCalledTimes(1);
       expect(testRoot.container.textContent).toContain("Ship regression tests");
 
       const workItemCard = Array.from(
@@ -255,15 +299,21 @@ describe("WorkBoardPage", () => {
       expect(ws.workTransition).toHaveBeenCalledTimes(2);
 
       act(() => {
-        ws.emit("work.task.paused", {
-          type: "work.task.paused",
-          occurred_at: "2026-01-01T00:01:00.000Z",
-          payload: {
-            work_item_id: "wi-1",
-            task_id: "task-1",
-            approval_id: 42,
+        workboard.setState((prev) => ({
+          ...prev,
+          tasksByWorkItemId: {
+            ...prev.tasksByWorkItemId,
+            "wi-1": {
+              ...prev.tasksByWorkItemId["wi-1"],
+              "task-1": {
+                task_id: "task-1",
+                status: "paused",
+                last_event_at: "2026-01-01T00:01:00.000Z",
+                approval_id: 42,
+              },
+            },
           },
-        });
+        }));
       });
       await flushEffects();
       expect(testRoot.container.textContent).toContain("approval 42");
@@ -344,12 +394,6 @@ describe("WorkBoardPage", () => {
       expect(testRoot.container.textContent).toContain("agent.from-event");
       expect(testRoot.container.textContent).toContain("work.from-event");
 
-      await act(async () => {
-        clickButton(testRoot.container, "Refresh");
-        await Promise.resolve();
-      });
-      expect(ws.workList).toHaveBeenCalledTimes(2);
-
       act(() => {
         clickButton(testRoot.container, "Reconnect");
       });
@@ -361,10 +405,9 @@ describe("WorkBoardPage", () => {
   });
 
   it("shows unsupported-request message when work.list is not available", async () => {
-    const { core } = createCore("connected", {
-      workList: vi.fn(async () => {
-        throw new Error("work.list failed: unsupported_request");
-      }),
+    const { core } = createCore("connected", undefined, {
+      supported: false,
+      error: "WorkBoard is not supported by this gateway (database not configured).",
     });
 
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));

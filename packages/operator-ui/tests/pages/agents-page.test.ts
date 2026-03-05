@@ -8,8 +8,23 @@ import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-uti
 
 describe("AgentsPage", () => {
   it("trims agent_key before fetching status and supports empty agent_key", async () => {
-    const agentStatusGet = vi.fn().mockResolvedValue({ ok: true });
-    const core = { http: { agentStatus: { get: agentStatusGet } } } as unknown as OperatorCore;
+    const setAgentKey = vi.fn();
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    const snapshot = {
+      agentKey: "default",
+      status: null,
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    } as const;
+    const core = {
+      agentStatusStore: {
+        subscribe: (_listener: () => void) => () => {},
+        getSnapshot: () => snapshot,
+        setAgentKey,
+        refresh,
+      },
+    } as unknown as OperatorCore;
 
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
 
@@ -32,19 +47,14 @@ describe("AgentsPage", () => {
       await Promise.resolve();
     });
 
-    expect(agentStatusGet).toHaveBeenCalledTimes(1);
-    expect(agentStatusGet).toHaveBeenCalledWith({ agent_key: "agent-1" });
+    expect(setAgentKey).toHaveBeenCalledTimes(1);
+    expect(setAgentKey).toHaveBeenCalledWith("agent-1");
+    expect(refresh).toHaveBeenCalledTimes(1);
 
     const refreshButton = testRoot.container.querySelector<HTMLButtonElement>(
       '[data-testid="agents-refresh"]',
     );
-    expect(refreshButton).not.toBeNull();
-
-    await act(async () => {
-      refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    expect(agentStatusGet).toHaveBeenCalledTimes(2);
+    expect(refreshButton).toBeNull();
 
     act(() => {
       setNativeValue(agentIdInput as HTMLInputElement, "   ");
@@ -54,8 +64,9 @@ describe("AgentsPage", () => {
       fetchButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
-    expect(agentStatusGet).toHaveBeenCalledTimes(3);
-    expect(agentStatusGet).toHaveBeenLastCalledWith(undefined);
+    expect(setAgentKey).toHaveBeenCalledTimes(2);
+    expect(setAgentKey).toHaveBeenLastCalledWith("");
+    expect(refresh).toHaveBeenCalledTimes(2);
 
     cleanupTestRoot(testRoot);
   });
