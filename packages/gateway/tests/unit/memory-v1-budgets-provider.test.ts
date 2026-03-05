@@ -74,4 +74,29 @@ describe("Memory v1 budgets provider", () => {
     await expect(provider(tenantId, agentA)).resolves.toEqual(configA.memory.v1.budgets);
     await expect(provider(tenantId, agentB)).resolves.toEqual(configB.memory.v1.budgets);
   });
+
+  it("falls back to the default agent config when agentId is omitted", async () => {
+    const identity = new IdentityScopeDal(db);
+    const tenantId = await identity.ensureTenantId("t-default");
+    const defaultAgentId = await identity.ensureAgentId(tenantId, "default");
+
+    const base = AgentConfig.parse({
+      model: { model: "openai/gpt-4.1" },
+      tools: { allow: [] },
+    });
+    const config = withBudgetOverrides(base, {
+      max_total_items: 7,
+      per_kind: {
+        note: { ...base.memory.v1.budgets.per_kind.note, max_items: 3 },
+      },
+    });
+
+    const dal = new AgentConfigDal(db);
+    await dal.set({ tenantId, agentId: defaultAgentId, config });
+
+    const provider = createMemoryV1BudgetsProvider(db);
+
+    await expect(provider(tenantId)).resolves.toEqual(config.memory.v1.budgets);
+    await expect(provider(tenantId, "   ")).resolves.toEqual(config.memory.v1.budgets);
+  });
 });
