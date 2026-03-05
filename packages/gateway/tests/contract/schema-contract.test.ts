@@ -29,14 +29,6 @@ async function getPostgresColumns(
   return (res.rows as Array<{ column_name: string }>).map((r) => r.column_name);
 }
 
-function normalizeColumnsForContract(table: string, cols: string[]): string[] {
-  // SQLite keeps AUTOINCREMENT PK as `vector_metadata_id`; Postgres uses `id`.
-  if (table === "vector_metadata") {
-    return cols.map((c) => (c === "vector_metadata_id" ? "id" : c));
-  }
-  return cols;
-}
-
 describe("StateStore schema contract (sqlite vs postgres)", () => {
   it("keeps core table column sets aligned", async () => {
     // SQLite (real engine)
@@ -106,8 +98,8 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
       ] as const;
 
       for (const table of tables) {
-        const sqliteCols = normalizeColumnsForContract(table, getSqliteColumns(sqlite, table));
-        const pgCols = normalizeColumnsForContract(table, await getPostgresColumns(pg, table));
+        const sqliteCols = getSqliteColumns(sqlite, table);
+        const pgCols = await getPostgresColumns(pg, table);
         expect(sqliteCols.length, `sqlite columns for ${table}`).toBeGreaterThan(0);
         expect(pgCols.length, `postgres columns for ${table}`).toBeGreaterThan(0);
         sqliteCols.sort();
