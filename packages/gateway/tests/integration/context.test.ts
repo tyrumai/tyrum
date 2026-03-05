@@ -130,6 +130,7 @@ describe("/context", () => {
 
   it("returns last-known context report metadata after an agent turn", async () => {
     const { app, container, agents } = await createTestApp({
+      tyrumHome: homeDir,
       languageModel: createToolCallLanguageModel({
         toolCalls: [
           {
