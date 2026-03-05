@@ -1618,8 +1618,7 @@ export class WorkboardDal {
 
         const adj = new Map<string, string[]>();
         for (const row of allTasks) {
-          const deps = dalHelpers.parseJsonOr(row.depends_on_json, []) as string[];
-          adj.set(row.task_id, dalHelpers.normalizeTaskDeps(deps));
+          adj.set(row.task_id, dalHelpers.parseTaskDepsJson(row.depends_on_json));
         }
         adj.set(params.task_id, normalizedDependsOn);
 
@@ -1792,10 +1791,7 @@ export class WorkboardDal {
       const depsById = new Map<string, string[]>();
       for (const row of rows) {
         statusById.set(row.task_id, row.status as WorkItemTaskState);
-        depsById.set(
-          row.task_id,
-          dalHelpers.normalizeTaskDeps(dalHelpers.parseJsonOr(row.depends_on_json, []) as string[]),
-        );
+        depsById.set(row.task_id, dalHelpers.parseTaskDepsJson(row.depends_on_json));
       }
 
       const isTerminal = (s: WorkItemTaskState | undefined): boolean => {

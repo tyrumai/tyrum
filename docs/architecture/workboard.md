@@ -149,6 +149,22 @@ Each WorkItem may have an internal task graph: nodes represent tasks, and edges 
   - Doing if one or more tasks are leased/running.
   - Done only when acceptance checks pass and required evidence exists.
 
+#### Task dependency storage (`work_item_tasks`)
+
+Task-to-task dependencies are stored on each task row as `work_item_tasks.depends_on_json` (a JSON array of `task_id` strings). This JSON representation is the canonical model for now because it is cross-database and keeps migrations simple.
+
+Encoding and invariants:
+
+- Dependencies are normalized (trimmed, de-duplicated, no empty strings).
+- Writes validate: referenced tasks exist, belong to the same `work_item_id`, and never include the task itself.
+- Updates additionally reject dependency cycles.
+
+Scheduling:
+
+- A task is runnable when all dependencies are terminal (`completed`, `skipped`, `cancelled`, `failed`).
+
+If/when dependency graph queries become a bottleneck (critical path, reverse edges, large DAGs), we can introduce a normalized edge table (for example `work_item_task_dependencies`) and treat `depends_on_json` as a denormalized cache.
+
 ### Subagent (delegated execution context)
 
 A subagent is a delegated execution context that shares the parent agent's identity boundary but has its own runtime context and transcript.
