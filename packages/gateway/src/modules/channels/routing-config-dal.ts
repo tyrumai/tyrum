@@ -6,7 +6,7 @@ import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
 import { insertPlannerEventNext, retryOnUniqueViolation } from "../planner/planner-events.js";
 import { PlanDal } from "../planner/plan-dal.js";
-import { DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID } from "../identity/scope.js";
+import { DEFAULT_AGENT_KEY, DEFAULT_WORKSPACE_KEY, IdentityScopeDal } from "../identity/scope.js";
 
 export type RoutingConfig = RoutingConfigT;
 
@@ -69,6 +69,8 @@ async function appendAuditEventNext(
   tx: SqlDb,
   event: {
     tenantId: string;
+    agentId: string;
+    workspaceId: string;
     replayId: string;
     planKey: string;
     occurredAt: string;
@@ -86,8 +88,8 @@ async function appendAuditEventNext(
         const planId = await new PlanDal(tx).ensurePlanId({
           tenantId: event.tenantId,
           planKey: event.planKey,
-          agentId: DEFAULT_AGENT_ID,
-          workspaceId: DEFAULT_WORKSPACE_ID,
+          agentId: event.agentId,
+          workspaceId: event.workspaceId,
           kind: "audit",
           status: "active",
         });
@@ -121,13 +123,17 @@ export class RoutingConfigDal {
   constructor(private readonly db: SqlDb) {}
 
   async getLatest(tenantId: string): Promise<RoutingConfigRevision | undefined> {
+    const resolvedTenantId = tenantId.trim();
+    if (!resolvedTenantId) {
+      throw new Error("tenantId is required");
+    }
     const row = await this.db.get<RawRoutingConfigRow>(
       `SELECT revision, config_json, created_at, created_by_json, reason, reverted_from_revision
        FROM routing_configs
        WHERE tenant_id = ?
        ORDER BY revision DESC
        LIMIT 1`,
-      [tenantId],
+      [resolvedTenantId],
     );
     return row ? rowToRevision(row) : undefined;
   }
@@ -136,12 +142,16 @@ export class RoutingConfigDal {
     tenantId: string,
     revision: number,
   ): Promise<RoutingConfigRevision | undefined> {
+    const resolvedTenantId = tenantId.trim();
+    if (!resolvedTenantId) {
+      throw new Error("tenantId is required");
+    }
     const row = await this.db.get<RawRoutingConfigRow>(
       `SELECT revision, config_json, created_at, created_by_json, reason, reverted_from_revision
        FROM routing_configs
        WHERE tenant_id = ?
          AND revision = ?`,
-      [tenantId, revision],
+      [resolvedTenantId, revision],
     );
     return row ? rowToRevision(row) : undefined;
   }
@@ -154,6 +164,9 @@ export class RoutingConfigDal {
     occurredAtIso?: string;
     revertedFromRevision?: number;
   }): Promise<RoutingConfigRevision> {
+    const tenantId = params.tenantId.trim();
+    if (!tenantId) throw new Error("tenantId is required");
+
     const createdAt = params.occurredAtIso ?? new Date().toISOString();
     const normalizedConfig = RoutingConfigSchema.parse(params.config);
     const configJson = JSON.stringify(normalizedConfig);
@@ -166,7 +179,7 @@ export class RoutingConfigDal {
          VALUES (?, ?, ?, ?, ?, ?)
          RETURNING revision, config_json, created_at, created_by_json, reason, reverted_from_revision`,
         [
-          params.tenantId,
+          tenantId,
           configJson,
           createdAt,
           JSON.stringify(params.createdBy ?? {}),
@@ -178,8 +191,15 @@ export class RoutingConfigDal {
         throw new Error("routing config insert failed");
       }
 
+      const identityScopeDal = new IdentityScopeDal(tx);
+      const agentId = await identityScopeDal.ensureAgentId(tenantId, DEFAULT_AGENT_KEY);
+      const workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, DEFAULT_WORKSPACE_KEY);
+      await identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+
       await appendAuditEventNext(tx, {
-        tenantId: params.tenantId,
+        tenantId,
+        agentId,
+        workspaceId,
         replayId,
         planKey: ROUTING_CONFIG_AUDIT_PLAN_ID,
         occurredAt: createdAt,
@@ -207,13 +227,17 @@ export class RoutingConfigDal {
     reason?: string;
     occurredAtIso?: string;
   }): Promise<RoutingConfigRevision> {
-    const target = await this.getByRevision(params.tenantId, params.revision);
+    const tenantId = params.tenantId.trim();
+    if (!tenantId) {
+      throw new Error("tenantId is required");
+    }
+    const target = await this.getByRevision(tenantId, params.revision);
     if (!target) {
       throw new Error(`routing config revision ${String(params.revision)} not found`);
     }
 
     return await this.set({
-      tenantId: params.tenantId,
+      tenantId,
       config: target.config,
       createdBy: params.createdBy,
       reason: params.reason,

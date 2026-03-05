@@ -3,24 +3,27 @@
  */
 
 import { embed, type EmbeddingModel } from "ai";
-import type { VectorDal, VectorSearchResult } from "./vector-dal.js";
+import type { VectorDal, VectorScope, VectorSearchResult } from "./vector-dal.js";
 
 export interface EmbeddingPipelineOptions {
   vectorDal: VectorDal;
-  agentId?: string;
+  scope: VectorScope;
   embeddingModel: EmbeddingModel;
   embeddingModelId: string;
 }
 
 export class EmbeddingPipeline {
   private readonly vectorDal: VectorDal;
-  private readonly agentId: string | undefined;
+  private readonly scope: VectorScope;
   private readonly embeddingModel: EmbeddingModel;
   private readonly embeddingModelId: string;
 
   constructor(opts: EmbeddingPipelineOptions) {
     this.vectorDal = opts.vectorDal;
-    this.agentId = opts.agentId?.trim() || undefined;
+    this.scope = {
+      tenantId: opts.scope.tenantId.trim(),
+      agentId: opts.scope.agentId.trim(),
+    };
     this.embeddingModel = opts.embeddingModel;
     this.embeddingModelId = opts.embeddingModelId.trim();
   }
@@ -51,13 +54,13 @@ export class EmbeddingPipeline {
       vector,
       this.embeddingModelId,
       metadata,
-      this.agentId,
+      this.scope,
     );
   }
 
   /** Embed a query and search for similar vectors. Returns top K results. */
   async search(queryText: string, topK: number): Promise<VectorSearchResult[]> {
     const queryVector = await this.embed(queryText);
-    return await this.vectorDal.searchByCosineSimilarity(queryVector, topK, this.agentId);
+    return await this.vectorDal.searchByCosineSimilarity(queryVector, topK, this.scope);
   }
 }

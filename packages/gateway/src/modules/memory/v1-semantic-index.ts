@@ -1,6 +1,5 @@
 import type { MemoryItemKind, MemorySensitivity } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
-import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { VectorDal, cosineSimilarity } from "./vector-dal.js";
 
 export interface MemoryV1Embedder {
@@ -10,8 +9,8 @@ export interface MemoryV1Embedder {
 
 export interface MemoryV1SemanticIndexOptions {
   db: SqlDb;
-  tenantId?: string;
-  agentId?: string;
+  tenantId: string;
+  agentId: string;
   embedder: MemoryV1Embedder;
   maxEmbedChars?: number;
 }
@@ -33,16 +32,6 @@ type MemoryEmbeddingJoinedRow = {
   summary_md: string | null;
   vector_data: string | null;
 };
-
-function normalizeTenantId(tenantId?: string): string {
-  const trimmed = tenantId?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : DEFAULT_TENANT_ID;
-}
-
-function normalizeAgentId(agentId?: string): string {
-  const trimmed = agentId?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : DEFAULT_AGENT_ID;
-}
 
 function assertFiniteVector(value: unknown): asserts value is number[] {
   if (!Array.isArray(value)) {
@@ -119,8 +108,10 @@ export class MemoryV1SemanticIndex {
 
   constructor(opts: MemoryV1SemanticIndexOptions) {
     this.db = opts.db;
-    this.tenantId = normalizeTenantId(opts.tenantId);
-    this.agentId = normalizeAgentId(opts.agentId);
+    this.tenantId = opts.tenantId.trim();
+    this.agentId = opts.agentId.trim();
+    if (!this.tenantId) throw new Error("tenantId is required");
+    if (!this.agentId) throw new Error("agentId is required");
     this.embedder = opts.embedder;
     this.vectorDal = new VectorDal(opts.db);
     this.maxEmbedChars = Math.max(256, Math.floor(opts.maxEmbedChars ?? 4000));

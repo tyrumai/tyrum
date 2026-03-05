@@ -125,8 +125,8 @@ describe("routing config (durable) + ingress", () => {
       );
 
       await db.run(
-        "INSERT INTO routing_configs (config_json, created_by_json, reason) VALUES (?, ?, ?)",
-        [JSON.stringify({ v: "invalid" }), "{}", "corrupt"],
+        "INSERT INTO routing_configs (tenant_id, config_json, created_by_json, reason) VALUES (?, ?, ?, ?)",
+        [DEFAULT_TENANT_ID, JSON.stringify({ v: "invalid" }), "{}", "corrupt"],
       );
 
       let capturedAgentId: string | undefined;

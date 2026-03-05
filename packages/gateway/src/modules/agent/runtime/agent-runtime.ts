@@ -1016,6 +1016,7 @@ export class AgentRuntime {
       if (!pipeline) return [];
       const index = new MemoryV1SemanticIndex({
         db: this.opts.container.db,
+        tenantId,
         agentId,
         embedder: {
           modelId: "runtime/embedding",
@@ -1214,7 +1215,7 @@ export class AgentRuntime {
         const vectorDal = new VectorDal(this.opts.container.db);
         return new EmbeddingPipeline({
           vectorDal,
-          agentId,
+          scope: { tenantId, agentId },
           embeddingModel,
           embeddingModelId: `${candidate.providerId}/${candidate.modelId}`,
         });

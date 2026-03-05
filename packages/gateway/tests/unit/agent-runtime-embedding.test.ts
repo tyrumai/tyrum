@@ -197,7 +197,7 @@ describe("AgentRuntime embedding pipeline selection", () => {
     });
     expect(createdPipelines[0]).toMatchObject({
       embeddingModelId: "openai/text-embedding-3-small",
-      agentId: ids.agentId,
+      scope: { tenantId: ids.tenantId, agentId: ids.agentId },
     });
   });
 });

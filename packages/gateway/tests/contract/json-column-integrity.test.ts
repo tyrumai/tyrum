@@ -24,7 +24,9 @@ describe("JSON column integrity (sqlite vs postgres)", () => {
       migrate(sqlite, sqliteMigrationsDir);
 
       const insertRoutingConfig = (configJson: string) =>
-        sqlite.prepare("INSERT INTO routing_configs (config_json) VALUES (?)").run(configJson);
+        sqlite
+          .prepare("INSERT INTO routing_configs (tenant_id, config_json) VALUES (?, ?)")
+          .run(DEFAULT_TENANT_ID, configJson);
 
       expect(() => insertRoutingConfig(validJson)).not.toThrow();
       expect(() => insertRoutingConfig(invalidJson)).toThrow();
@@ -108,11 +110,17 @@ describe("JSON column integrity (sqlite vs postgres)", () => {
     const { db, close } = await openTestPostgresDb();
     try {
       await expect(
-        db.run("INSERT INTO routing_configs (config_json) VALUES (?)", [validJson]),
+        db.run("INSERT INTO routing_configs (tenant_id, config_json) VALUES (?, ?)", [
+          DEFAULT_TENANT_ID,
+          validJson,
+        ]),
       ).resolves.toBeDefined();
 
       await expect(
-        db.run("INSERT INTO routing_configs (config_json) VALUES (?)", [invalidJson]),
+        db.run("INSERT INTO routing_configs (tenant_id, config_json) VALUES (?, ?)", [
+          DEFAULT_TENANT_ID,
+          invalidJson,
+        ]),
       ).rejects.toThrow();
 
       await expect(
