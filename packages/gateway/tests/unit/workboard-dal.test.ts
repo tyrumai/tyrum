@@ -1105,6 +1105,44 @@ describe("WorkboardDal", () => {
     expect(raw!.close_reason).toBe("requested by operator");
   });
 
+  it("infers subagent work_item_id from work_item_task_id", async () => {
+    const dal = createDal();
+    const scope = await resolveScope();
+
+    const item = await dal.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Parent task owner",
+        created_from_session_key: "agent:default:main",
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+    const task = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        execution_profile: "executor",
+        side_effect_class: "none",
+      },
+      createdAtIso: "2026-02-27T00:00:01.000Z",
+    });
+
+    const subagent = await dal.createSubagent({
+      scope,
+      subagent: {
+        execution_profile: "executor",
+        session_key: "agent:default:subagent:inferred-owner",
+        work_item_task_id: task.task_id,
+      },
+      subagentId: "00000000-0000-0000-0000-000000000124",
+      createdAtIso: "2026-02-27T00:00:02.000Z",
+    });
+
+    expect(subagent.work_item_task_id).toBe(task.task_id);
+    expect(subagent.work_item_id).toBe(item.work_item_id);
+  });
+
   it("rejects cross-work-item task dependencies", async () => {
     const dal = createDal();
     const scope = await resolveScope();
