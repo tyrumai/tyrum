@@ -1,0 +1,429 @@
+[
+  {
+    "table": "agent_state_kv",
+    "column": "provenance_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "agent_state_kv",
+    "column": "value_json",
+    "shape": "any",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "approvals",
+    "column": "context_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "approvals",
+    "column": "resolution_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "auth_profiles",
+    "column": "labels_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "canvas_artifacts",
+    "column": "metadata_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "channel_inbox",
+    "column": "payload_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "channel_outbox",
+    "column": "response_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "connections",
+    "column": "capabilities_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "connections",
+    "column": "ready_capabilities_json",
+    "shape": "array",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "context_reports",
+    "column": "report_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "execution_artifacts",
+    "column": "labels_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "execution_artifacts",
+    "column": "metadata_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "execution_attempts",
+    "column": "artifacts_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "execution_attempts",
+    "column": "cost_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "execution_attempts",
+    "column": "metadata_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "execution_attempts",
+    "column": "policy_applied_override_ids_json",
+    "shape": "array",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "execution_attempts",
+    "column": "policy_decision_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "execution_attempts",
+    "column": "postcondition_report_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "execution_attempts",
+    "column": "result_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "execution_jobs",
+    "column": "input_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "execution_jobs",
+    "column": "trigger_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "execution_runs",
+    "column": "budgets_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "execution_steps",
+    "column": "action_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "execution_steps",
+    "column": "postcondition_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "idempotency_records",
+    "column": "result_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "memory_item_provenance",
+    "column": "metadata_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "memory_item_provenance",
+    "column": "refs_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "memory_items",
+    "column": "value_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "node_pairings",
+    "column": "capabilities_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "node_pairings",
+    "column": "capability_allowlist_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "node_pairings",
+    "column": "metadata_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "node_pairings",
+    "column": "resolved_by_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "oauth_pending",
+    "column": "metadata_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "outbox",
+    "column": "payload_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "planner_events",
+    "column": "action_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "policy_overrides",
+    "column": "created_by_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "policy_overrides",
+    "column": "revoked_by_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "policy_snapshots",
+    "column": "bundle_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "presence_entries",
+    "column": "metadata_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "principals",
+    "column": "metadata_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "routing_configs",
+    "column": "config_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "routing_configs",
+    "column": "created_by_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "sessions",
+    "column": "turns_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "vector_metadata",
+    "column": "metadata_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "watchers",
+    "column": "trigger_config_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "work_artifacts",
+    "column": "provenance_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "work_artifacts",
+    "column": "refs_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "work_decisions",
+    "column": "alternatives_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "work_decisions",
+    "column": "input_artifact_ids_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "work_item_events",
+    "column": "payload_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "work_item_links",
+    "column": "meta_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "work_item_state_kv",
+    "column": "provenance_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "work_item_state_kv",
+    "column": "value_json",
+    "shape": "any",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "work_item_tasks",
+    "column": "artifacts_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "work_item_tasks",
+    "column": "depends_on_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "work_items",
+    "column": "acceptance_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "work_items",
+    "column": "budgets_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "work_items",
+    "column": "fingerprint_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "work_signals",
+    "column": "payload_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "work_signals",
+    "column": "trigger_spec_json",
+    "shape": "any",
+    "nullable": false,
+    "default": null
+  }
+]
