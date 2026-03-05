@@ -2,6 +2,12 @@ import type { PresenceResponse, StatusResponse, UsageResponse } from "@tyrum/cli
 import type { OperatorHttpClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 import { toErrorMessage } from "../to-error-message.js";
+import {
+  beginRefresh,
+  endRefreshIfActive,
+  isRefreshActive,
+  type RefreshRunState,
+} from "./status-store.refresh-run.js";
 
 export type OperatorPresenceEntry = PresenceResponse["entries"][number];
 
@@ -28,6 +34,174 @@ export interface StatusStore extends ExternalStore<StatusState> {
   refreshPresence(): Promise<void>;
 }
 
+type SetState<T> = (updater: (prev: T) => T) => void;
+
+async function refreshStatusImpl(
+  http: OperatorHttpClient,
+  setState: SetState<StatusState>,
+  runState: RefreshRunState,
+): Promise<void> {
+  const runId = beginRefresh(runState);
+  setState((prev) => ({
+    ...prev,
+    loading: { ...prev.loading, status: true },
+    error: { ...prev.error, status: null },
+  }));
+  try {
+    const status = await http.status.get();
+    if (!isRefreshActive(runState, runId)) return;
+    setState((prev) => ({
+      ...prev,
+      status,
+      loading: { ...prev.loading, status: false },
+      lastSyncedAt: new Date().toISOString(),
+    }));
+  } catch (error) {
+    if (!isRefreshActive(runState, runId)) return;
+    setState((prev) => ({
+      ...prev,
+      loading: { ...prev.loading, status: false },
+      error: { ...prev.error, status: toErrorMessage(error) },
+    }));
+  } finally {
+    endRefreshIfActive(runState, runId);
+  }
+}
+
+async function refreshUsageImpl(
+  http: OperatorHttpClient,
+  setState: SetState<StatusState>,
+  runState: RefreshRunState,
+  query?: Parameters<OperatorHttpClient["usage"]["get"]>[0],
+): Promise<void> {
+  const runId = beginRefresh(runState);
+  setState((prev) => ({
+    ...prev,
+    loading: { ...prev.loading, usage: true },
+    error: { ...prev.error, usage: null },
+  }));
+  try {
+    const usage = await http.usage.get(query);
+    if (!isRefreshActive(runState, runId)) return;
+    setState((prev) => ({
+      ...prev,
+      usage,
+      loading: { ...prev.loading, usage: false },
+      lastSyncedAt: new Date().toISOString(),
+    }));
+  } catch (error) {
+    if (!isRefreshActive(runState, runId)) return;
+    setState((prev) => ({
+      ...prev,
+      loading: { ...prev.loading, usage: false },
+      error: { ...prev.error, usage: toErrorMessage(error) },
+    }));
+  } finally {
+    endRefreshIfActive(runState, runId);
+  }
+}
+
+interface PresenceRefreshState extends RefreshRunState {
+  bufferedUpserts: Map<string, OperatorPresenceEntry>;
+  bufferedPrunes: Set<string>;
+}
+
+function resetPresenceBuffers(state: PresenceRefreshState): void {
+  state.bufferedUpserts = new Map<string, OperatorPresenceEntry>();
+  state.bufferedPrunes = new Set<string>();
+}
+
+async function refreshPresenceImpl(
+  http: OperatorHttpClient,
+  setState: SetState<StatusState>,
+  state: PresenceRefreshState,
+): Promise<void> {
+  const runId = beginRefresh(state);
+  resetPresenceBuffers(state);
+
+  setState((prev) => ({
+    ...prev,
+    loading: { ...prev.loading, presence: true },
+    error: { ...prev.error, presence: null },
+  }));
+  try {
+    const presence = await http.presence.list();
+    if (!isRefreshActive(state, runId)) return;
+    const upserts = state.bufferedUpserts;
+    const prunes = state.bufferedPrunes;
+
+    const presenceByInstanceId: Record<string, OperatorPresenceEntry> = {};
+    for (const entry of presence.entries) {
+      presenceByInstanceId[entry.instance_id] = entry;
+    }
+    for (const entry of upserts.values()) {
+      presenceByInstanceId[entry.instance_id] = {
+        ...presenceByInstanceId[entry.instance_id],
+        ...entry,
+      };
+    }
+    for (const instanceId of prunes) {
+      delete presenceByInstanceId[instanceId];
+    }
+    setState((prev) => ({
+      ...prev,
+      presenceByInstanceId,
+      loading: { ...prev.loading, presence: false },
+      lastSyncedAt: new Date().toISOString(),
+    }));
+  } catch (error) {
+    if (!isRefreshActive(state, runId)) return;
+    setState((prev) => ({
+      ...prev,
+      loading: { ...prev.loading, presence: false },
+      error: { ...prev.error, presence: toErrorMessage(error) },
+    }));
+  } finally {
+    if (state.activeRunId === runId) {
+      state.activeRunId = null;
+      resetPresenceBuffers(state);
+    }
+  }
+}
+
+function handlePresenceUpsertImpl(
+  setState: SetState<StatusState>,
+  refreshState: PresenceRefreshState,
+  entry: OperatorPresenceEntry,
+): void {
+  if (refreshState.activeRunId !== null) {
+    refreshState.bufferedPrunes.delete(entry.instance_id);
+    refreshState.bufferedUpserts.set(entry.instance_id, entry);
+  }
+  setState((prev) => ({
+    ...prev,
+    presenceByInstanceId: {
+      ...prev.presenceByInstanceId,
+      [entry.instance_id]: {
+        ...prev.presenceByInstanceId[entry.instance_id],
+        ...entry,
+      },
+    },
+  }));
+}
+
+function handlePresencePrunedImpl(
+  setState: SetState<StatusState>,
+  refreshState: PresenceRefreshState,
+  instanceId: string,
+): void {
+  if (refreshState.activeRunId !== null) {
+    refreshState.bufferedUpserts.delete(instanceId);
+    refreshState.bufferedPrunes.add(instanceId);
+  }
+  setState((prev) => {
+    if (!(instanceId in prev.presenceByInstanceId)) return prev;
+    const next = { ...prev.presenceByInstanceId };
+    delete next[instanceId];
+    return { ...prev, presenceByInstanceId: next };
+  });
+}
+
 export function createStatusStore(http: OperatorHttpClient): {
   store: StatusStore;
   handlePresenceUpsert: (entry: OperatorPresenceEntry) => void;
@@ -42,171 +216,25 @@ export function createStatusStore(http: OperatorHttpClient): {
     lastSyncedAt: null,
   });
 
-  let refreshStatusRunId = 0;
-  let activeRefreshStatusRunId: number | null = null;
-
-  let refreshUsageRunId = 0;
-  let activeRefreshUsageRunId: number | null = null;
-
-  let refreshPresenceRunId = 0;
-  let activeRefreshPresenceRunId: number | null = null;
-  let bufferedPresenceUpserts = new Map<string, OperatorPresenceEntry>();
-  let bufferedPresencePrunes = new Set<string>();
-
-  async function refreshStatus(): Promise<void> {
-    const runId = ++refreshStatusRunId;
-    activeRefreshStatusRunId = runId;
-    setState((prev) => ({
-      ...prev,
-      loading: { ...prev.loading, status: true },
-      error: { ...prev.error, status: null },
-    }));
-    try {
-      const status = await http.status.get();
-      if (activeRefreshStatusRunId !== runId) return;
-      setState((prev) => ({
-        ...prev,
-        status,
-        loading: { ...prev.loading, status: false },
-        lastSyncedAt: new Date().toISOString(),
-      }));
-    } catch (error) {
-      if (activeRefreshStatusRunId !== runId) return;
-      setState((prev) => ({
-        ...prev,
-        loading: { ...prev.loading, status: false },
-        error: { ...prev.error, status: toErrorMessage(error) },
-      }));
-    } finally {
-      if (activeRefreshStatusRunId === runId) {
-        activeRefreshStatusRunId = null;
-      }
-    }
-  }
-
-  async function refreshUsage(
-    query?: Parameters<OperatorHttpClient["usage"]["get"]>[0],
-  ): Promise<void> {
-    const runId = ++refreshUsageRunId;
-    activeRefreshUsageRunId = runId;
-    setState((prev) => ({
-      ...prev,
-      loading: { ...prev.loading, usage: true },
-      error: { ...prev.error, usage: null },
-    }));
-    try {
-      const usage = await http.usage.get(query);
-      if (activeRefreshUsageRunId !== runId) return;
-      setState((prev) => ({
-        ...prev,
-        usage,
-        loading: { ...prev.loading, usage: false },
-        lastSyncedAt: new Date().toISOString(),
-      }));
-    } catch (error) {
-      if (activeRefreshUsageRunId !== runId) return;
-      setState((prev) => ({
-        ...prev,
-        loading: { ...prev.loading, usage: false },
-        error: { ...prev.error, usage: toErrorMessage(error) },
-      }));
-    } finally {
-      if (activeRefreshUsageRunId === runId) {
-        activeRefreshUsageRunId = null;
-      }
-    }
-  }
-
-  async function refreshPresence(): Promise<void> {
-    const runId = ++refreshPresenceRunId;
-    activeRefreshPresenceRunId = runId;
-    bufferedPresenceUpserts = new Map<string, OperatorPresenceEntry>();
-    bufferedPresencePrunes = new Set<string>();
-
-    setState((prev) => ({
-      ...prev,
-      loading: { ...prev.loading, presence: true },
-      error: { ...prev.error, presence: null },
-    }));
-    try {
-      const presence = await http.presence.list();
-      if (activeRefreshPresenceRunId !== runId) return;
-      const upserts = bufferedPresenceUpserts;
-      const prunes = bufferedPresencePrunes;
-
-      const presenceByInstanceId: Record<string, OperatorPresenceEntry> = {};
-      for (const entry of presence.entries) {
-        presenceByInstanceId[entry.instance_id] = entry;
-      }
-      for (const entry of upserts.values()) {
-        presenceByInstanceId[entry.instance_id] = {
-          ...presenceByInstanceId[entry.instance_id],
-          ...entry,
-        };
-      }
-      for (const instanceId of prunes) {
-        delete presenceByInstanceId[instanceId];
-      }
-      setState((prev) => ({
-        ...prev,
-        presenceByInstanceId,
-        loading: { ...prev.loading, presence: false },
-        lastSyncedAt: new Date().toISOString(),
-      }));
-    } catch (error) {
-      if (activeRefreshPresenceRunId !== runId) return;
-      setState((prev) => ({
-        ...prev,
-        loading: { ...prev.loading, presence: false },
-        error: { ...prev.error, presence: toErrorMessage(error) },
-      }));
-    } finally {
-      if (activeRefreshPresenceRunId === runId) {
-        activeRefreshPresenceRunId = null;
-        bufferedPresenceUpserts = new Map<string, OperatorPresenceEntry>();
-        bufferedPresencePrunes = new Set<string>();
-      }
-    }
-  }
-
-  function handlePresenceUpsert(entry: OperatorPresenceEntry): void {
-    if (activeRefreshPresenceRunId !== null) {
-      bufferedPresencePrunes.delete(entry.instance_id);
-      bufferedPresenceUpserts.set(entry.instance_id, entry);
-    }
-    setState((prev) => ({
-      ...prev,
-      presenceByInstanceId: {
-        ...prev.presenceByInstanceId,
-        [entry.instance_id]: {
-          ...prev.presenceByInstanceId[entry.instance_id],
-          ...entry,
-        },
-      },
-    }));
-  }
-
-  function handlePresencePruned(instanceId: string): void {
-    if (activeRefreshPresenceRunId !== null) {
-      bufferedPresenceUpserts.delete(instanceId);
-      bufferedPresencePrunes.add(instanceId);
-    }
-    setState((prev) => {
-      if (!(instanceId in prev.presenceByInstanceId)) return prev;
-      const next = { ...prev.presenceByInstanceId };
-      delete next[instanceId];
-      return { ...prev, presenceByInstanceId: next };
-    });
-  }
+  const refreshStatusState: RefreshRunState = { runId: 0, activeRunId: null };
+  const refreshUsageState: RefreshRunState = { runId: 0, activeRunId: null };
+  const refreshPresenceState: PresenceRefreshState = {
+    runId: 0,
+    activeRunId: null,
+    bufferedUpserts: new Map<string, OperatorPresenceEntry>(),
+    bufferedPrunes: new Set<string>(),
+  };
 
   return {
     store: {
       ...store,
-      refreshStatus,
-      refreshUsage,
-      refreshPresence,
+      refreshStatus: () => refreshStatusImpl(http, setState, refreshStatusState),
+      refreshUsage: (query) => refreshUsageImpl(http, setState, refreshUsageState, query),
+      refreshPresence: () => refreshPresenceImpl(http, setState, refreshPresenceState),
     },
-    handlePresenceUpsert,
-    handlePresencePruned,
+    handlePresenceUpsert: (entry) =>
+      handlePresenceUpsertImpl(setState, refreshPresenceState, entry),
+    handlePresencePruned: (instanceId) =>
+      handlePresencePrunedImpl(setState, refreshPresenceState, instanceId),
   };
 }

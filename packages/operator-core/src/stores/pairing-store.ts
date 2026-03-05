@@ -1,6 +1,7 @@
 import type { PairingListResponse, PairingMutateResponse } from "@tyrum/client";
 import type { OperatorHttpClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
+import { beginRefresh, isRefreshActive, type RefreshRunState } from "./status-store.refresh-run.js";
 
 export type Pairing = PairingListResponse["pairings"][number];
 
@@ -28,6 +29,8 @@ export interface PairingStore extends ExternalStore<PairingState> {
   ): Promise<Pairing>;
 }
 
+type SetState<T> = (updater: (prev: T) => T) => void;
+
 function upsertPairing(state: PairingState, pairing: Pairing): PairingState {
   const id = pairing.pairing_id;
   const byId = { ...state.byId, [id]: pairing };
@@ -49,6 +52,86 @@ function pairingFromMutation(result: PairingMutateResponse): Pairing {
   return result.pairing;
 }
 
+interface PairingRefreshState {
+  runId: RefreshRunState["runId"];
+  activeRunId: RefreshRunState["activeRunId"];
+  bufferedUpserts: Map<number, Pairing>;
+}
+
+function resetRefreshBuffer(state: PairingRefreshState): void {
+  state.bufferedUpserts = new Map<number, Pairing>();
+}
+
+function handlePairingUpsertImpl(
+  setState: SetState<PairingState>,
+  refreshState: PairingRefreshState,
+  pairing: Pairing,
+): void {
+  if (refreshState.activeRunId !== null) {
+    refreshState.bufferedUpserts.set(pairing.pairing_id, pairing);
+  }
+  setState((prev) => upsertPairing(prev, pairing));
+}
+
+async function refreshImpl(
+  http: OperatorHttpClient,
+  setState: SetState<PairingState>,
+  refreshState: PairingRefreshState,
+): Promise<void> {
+  const runId = beginRefresh(refreshState);
+  resetRefreshBuffer(refreshState);
+
+  setState((prev) => ({ ...prev, loading: true, error: null }));
+  try {
+    const result = await http.pairings.list();
+    if (!isRefreshActive(refreshState, runId)) return;
+    const buffered = refreshState.bufferedUpserts;
+
+    const byId: Record<number, Pairing> = {};
+    const pendingIds: number[] = [];
+    for (const pairing of result.pairings) {
+      byId[pairing.pairing_id] = pairing;
+      if (pairing.status === "pending") {
+        pendingIds.push(pairing.pairing_id);
+      }
+    }
+    setState((prev) => {
+      let next: PairingState = { ...prev, byId, pendingIds };
+      for (const pairing of buffered.values()) {
+        next = upsertPairing(next, pairing);
+      }
+      return {
+        ...next,
+        loading: false,
+        lastSyncedAt: new Date().toISOString(),
+      };
+    });
+  } catch (error) {
+    if (!isRefreshActive(refreshState, runId)) return;
+    setState((prev) => ({
+      ...prev,
+      loading: false,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  } finally {
+    if (refreshState.activeRunId === runId) {
+      refreshState.activeRunId = null;
+      resetRefreshBuffer(refreshState);
+    }
+  }
+}
+
+async function mutatePairingImpl(
+  mutate: () => Promise<PairingMutateResponse>,
+  setState: SetState<PairingState>,
+  refreshState: PairingRefreshState,
+): Promise<Pairing> {
+  const result = await mutate();
+  const pairing = pairingFromMutation(result);
+  handlePairingUpsertImpl(setState, refreshState, pairing);
+  return pairing;
+}
+
 export function createPairingStore(http: OperatorHttpClient): {
   store: PairingStore;
   handlePairingUpsert: (pairing: Pairing) => void;
@@ -61,100 +144,23 @@ export function createPairingStore(http: OperatorHttpClient): {
     lastSyncedAt: null,
   });
 
-  let refreshRunId = 0;
-  let activeRefreshRunId: number | null = null;
-  let bufferedPairingUpserts = new Map<number, Pairing>();
-
-  function handlePairingUpsert(pairing: Pairing): void {
-    if (activeRefreshRunId !== null) {
-      bufferedPairingUpserts.set(pairing.pairing_id, pairing);
-    }
-    setState((prev) => upsertPairing(prev, pairing));
-  }
-
-  async function refresh(): Promise<void> {
-    const runId = ++refreshRunId;
-    activeRefreshRunId = runId;
-    bufferedPairingUpserts = new Map<number, Pairing>();
-
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const result = await http.pairings.list();
-      if (activeRefreshRunId !== runId) return;
-      const buffered = bufferedPairingUpserts;
-
-      const byId: Record<number, Pairing> = {};
-      const pendingIds: number[] = [];
-      for (const pairing of result.pairings) {
-        byId[pairing.pairing_id] = pairing;
-        if (pairing.status === "pending") {
-          pendingIds.push(pairing.pairing_id);
-        }
-      }
-      setState((prev) => {
-        let next: PairingState = { ...prev, byId, pendingIds };
-        for (const pairing of buffered.values()) {
-          next = upsertPairing(next, pairing);
-        }
-        return {
-          ...next,
-          loading: false,
-          lastSyncedAt: new Date().toISOString(),
-        };
-      });
-    } catch (error) {
-      if (activeRefreshRunId !== runId) return;
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    } finally {
-      if (activeRefreshRunId === runId) {
-        activeRefreshRunId = null;
-        bufferedPairingUpserts = new Map<number, Pairing>();
-      }
-    }
-  }
-
-  async function approve(
-    pairingId: number,
-    input: Parameters<OperatorHttpClient["pairings"]["approve"]>[1],
-  ): Promise<Pairing> {
-    const result = await http.pairings.approve(pairingId, input);
-    const pairing = pairingFromMutation(result);
-    handlePairingUpsert(pairing);
-    return pairing;
-  }
-
-  async function deny(
-    pairingId: number,
-    input?: Parameters<OperatorHttpClient["pairings"]["deny"]>[1],
-  ): Promise<Pairing> {
-    const result = await http.pairings.deny(pairingId, input);
-    const pairing = pairingFromMutation(result);
-    handlePairingUpsert(pairing);
-    return pairing;
-  }
-
-  async function revoke(
-    pairingId: number,
-    input?: Parameters<OperatorHttpClient["pairings"]["revoke"]>[1],
-  ): Promise<Pairing> {
-    const result = await http.pairings.revoke(pairingId, input);
-    const pairing = pairingFromMutation(result);
-    handlePairingUpsert(pairing);
-    return pairing;
-  }
+  const refreshState: PairingRefreshState = {
+    runId: 0,
+    activeRunId: null,
+    bufferedUpserts: new Map<number, Pairing>(),
+  };
 
   return {
     store: {
       ...store,
-      refresh,
-      approve,
-      deny,
-      revoke,
+      refresh: () => refreshImpl(http, setState, refreshState),
+      approve: (pairingId, input) =>
+        mutatePairingImpl(() => http.pairings.approve(pairingId, input), setState, refreshState),
+      deny: (pairingId, input) =>
+        mutatePairingImpl(() => http.pairings.deny(pairingId, input), setState, refreshState),
+      revoke: (pairingId, input) =>
+        mutatePairingImpl(() => http.pairings.revoke(pairingId, input), setState, refreshState),
     },
-    handlePairingUpsert,
+    handlePairingUpsert: (pairing) => handlePairingUpsertImpl(setState, refreshState, pairing),
   };
 }
