@@ -52,7 +52,7 @@ type CliHandler<K extends CliCommand["kind"]> = (
 
 type CliHandlers = { [K in CliCommand["kind"]]: CliHandler<K> };
 
-const commandHandlers = {
+const commandHandlers: CliHandlers = {
   help: async () => {
     printCliHelp();
     return 0;
@@ -92,7 +92,14 @@ const commandHandlers = {
   config_set: handleConfigSet,
   identity_show: handleIdentityShow,
   identity_init: handleIdentityInit,
-} satisfies CliHandlers;
+};
+
+function dispatchCommand<K extends CliCommand["kind"]>(
+  command: Extract<CliCommand, { kind: K }>,
+  home: string,
+): Promise<number> {
+  return commandHandlers[command.kind](command, home);
+}
 
 export async function runCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {
   const normalizedArgv = argv[0] === "--" ? argv.slice(1) : argv;
@@ -107,5 +114,5 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   }
 
   const home = resolveTyrumHome();
-  return await commandHandlers[command.kind](command as never, home);
+  return await dispatchCommand(command, home);
 }
