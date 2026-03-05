@@ -1,123 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { openTestPostgresDb } from "../helpers/postgres-db.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
-import { migratePostgres } from "../../src/migrate-postgres.js";
-import { DataType, newDb } from "pg-mem";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 type OpenDalResult = { dal: MemoryV1Dal; db: SqlDb; close: () => Promise<void> };
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const postgresMigrationsDir = join(__dirname, "../../migrations/postgres");
-
-function translatePlaceholders(sql: string): { sql: string; count: number } {
-  let out = "";
-  let count = 0;
-  let inSingle = false;
-  let inDouble = false;
-
-  for (let i = 0; i < sql.length; i += 1) {
-    const ch = sql[i]!;
-
-    if (ch === "'" && !inDouble) {
-      out += ch;
-      if (inSingle) {
-        const next = sql[i + 1];
-        if (next === "'") {
-          out += next;
-          i += 1;
-        } else {
-          inSingle = false;
-        }
-      } else {
-        inSingle = true;
-      }
-      continue;
-    }
-
-    if (ch === `"` && !inSingle) {
-      inDouble = !inDouble;
-      out += ch;
-      continue;
-    }
-
-    if (ch === "?" && !inSingle && !inDouble) {
-      count += 1;
-      out += `$${count}`;
-      continue;
-    }
-
-    out += ch;
-  }
-
-  return { sql: out, count };
-}
-
-async function openPgMemDal(): Promise<OpenDalResult> {
-  const mem = newDb();
-  mem.public.registerFunction({
-    name: "strpos",
-    args: [DataType.text, DataType.text],
-    returns: DataType.integer,
-    implementation: (haystack: string, needle: string) => {
-      const idx = haystack.indexOf(needle);
-      return idx >= 0 ? idx + 1 : 0;
-    },
-  });
-  const { Client } = mem.adapters.createPg();
-  const pg = new Client();
-  await pg.connect();
-  await migratePostgres(pg, postgresMigrationsDir);
-
-  const db: SqlDb = {
-    kind: "postgres",
-    get: async (sql, params = []) => {
-      const translated = translatePlaceholders(sql);
-      const res = await pg.query(translated.sql, params as unknown[]);
-      return (res.rows[0] as unknown) ?? undefined;
-    },
-    all: async (sql, params = []) => {
-      const translated = translatePlaceholders(sql);
-      const res = await pg.query(translated.sql, params as unknown[]);
-      return res.rows as unknown[];
-    },
-    run: async (sql, params = []) => {
-      const translated = translatePlaceholders(sql);
-      const res = await pg.query(translated.sql, params as unknown[]);
-      return { changes: res.rowCount ?? 0 };
-    },
-    exec: async (sql) => {
-      await pg.query(sql);
-    },
-    transaction: async (fn) => {
-      await pg.query("BEGIN");
-      try {
-        const result = await fn(db);
-        await pg.query("COMMIT");
-        return result;
-      } catch (err) {
-        try {
-          await pg.query("ROLLBACK");
-        } catch {
-          // ignore rollback errors; surface original failure
-        }
-        throw err;
-      }
-    },
-    close: async () => {},
-  };
-
-  return {
-    dal: new MemoryV1Dal(db),
-    db,
-    close: async () => {
-      await pg.end();
-    },
-  };
-}
 
 async function openSqliteDal(): Promise<OpenDalResult> {
   const db = openTestSqliteDb();
@@ -130,9 +18,14 @@ async function openSqliteDal(): Promise<OpenDalResult> {
   };
 }
 
+async function openPostgresDal(): Promise<OpenDalResult> {
+  const { db, close } = await openTestPostgresDb();
+  return { dal: new MemoryV1Dal(db), db, close };
+}
+
 const fixtures = [
   { name: "sqlite" as const, open: openSqliteDal },
-  { name: "postgres" as const, open: openPgMemDal },
+  { name: "postgres" as const, open: openPostgresDal },
 ];
 
 async function ensureAgentScopes(db: SqlDb): Promise<{
