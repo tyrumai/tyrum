@@ -10,10 +10,13 @@ import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.
 
 describe("routing config (durable) + ingress", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
   let previousWebhookSecret: string | undefined;
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     previousWebhookSecret = process.env["TELEGRAM_WEBHOOK_SECRET"];
     process.env["TELEGRAM_WEBHOOK_SECRET"] = "test-secret";
   });
@@ -24,7 +27,10 @@ describe("routing config (durable) + ingress", () => {
     } else {
       delete process.env["TELEGRAM_WEBHOOK_SECRET"];
     }
-    await db.close();
+    if (didOpenDb) {
+      didOpenDb = false;
+      await db.close();
+    }
   });
 
   it("routes telegram updates using durable routing config state", async () => {

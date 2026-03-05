@@ -14,17 +14,22 @@ const { EmbeddingPipeline } = await import("../../src/modules/memory/embedding-p
 
 describe("EmbeddingPipeline", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
   let vectorDal: VectorDal;
   const embeddingModel = {} as unknown as EmbeddingModel;
   const embeddingModelId = "openai/text-embedding-3-small";
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     vectorDal = new VectorDal(db);
     embedMock.mockReset();
   });
 
   afterEach(async () => {
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 

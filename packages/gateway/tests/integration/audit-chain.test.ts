@@ -8,14 +8,19 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 describe("Audit hash chain integration", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
   let log: EventLog;
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     log = new EventLog(db);
   });
 
   afterEach(async () => {
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 

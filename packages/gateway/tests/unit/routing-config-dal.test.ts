@@ -7,14 +7,19 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("RoutingConfigDal", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
   let dal: RoutingConfigDal;
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     dal = new RoutingConfigDal(db);
   });
 
   afterEach(async () => {
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 

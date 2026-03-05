@@ -7,17 +7,22 @@ import { createPairingRoutes } from "../../src/routes/pairing.js";
 
 describe("Pairing routes", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
   let nodePairingDal: NodePairingDal;
   let app: Hono;
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     nodePairingDal = new NodePairingDal(db);
     app = new Hono();
     app.route("/", createPairingRoutes({ nodePairingDal }));
   });
 
   afterEach(async () => {
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 

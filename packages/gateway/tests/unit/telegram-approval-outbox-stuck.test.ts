@@ -11,12 +11,17 @@ import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
 
 describe("TelegramChannelProcessor approval-gated outbox robustness", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
   });
 
   afterEach(async () => {
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 

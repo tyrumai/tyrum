@@ -5,17 +5,23 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 describe("Channel inbound dedupe TTL", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
   let inbox: ChannelInboxDal;
   const originalTtlMs = process.env["TYRUM_CHANNEL_INBOUND_DEDUPE_TTL_MS"];
 
   beforeEach(() => {
     process.env["TYRUM_CHANNEL_INBOUND_DEDUPE_TTL_MS"] = "10";
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     inbox = new ChannelInboxDal(db);
   });
 
   afterEach(async () => {
-    await db.close();
+    if (didOpenDb) {
+      didOpenDb = false;
+      await db.close();
+    }
     if (originalTtlMs === undefined) {
       delete process.env["TYRUM_CHANNEL_INBOUND_DEDUPE_TTL_MS"];
     } else {

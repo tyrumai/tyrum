@@ -19,13 +19,16 @@ import {
 
 describe("WatcherScheduler", () => {
   let db: SqliteDb;
+  let didOpenDb = false;
   let memoryV1Dal: MemoryV1Dal;
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
   let scheduler: WatcherScheduler;
 
   beforeEach(() => {
+    didOpenDb = false;
     db = openTestSqliteDb();
+    didOpenDb = true;
     memoryV1Dal = new MemoryV1Dal(db);
     eventBus = mitt<GatewayEvents>();
     processor = new WatcherProcessor({ db, memoryV1Dal, eventBus });
@@ -33,6 +36,8 @@ describe("WatcherScheduler", () => {
   });
 
   afterEach(async () => {
+    if (!didOpenDb) return;
+    didOpenDb = false;
     await db.close();
   });
 
