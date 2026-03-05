@@ -1,10 +1,7 @@
 export const MIGRATION_FILENAME_ALIASES: Readonly<Record<string, readonly string[]>> = {
   "103_vector_metadata_pk.sql": ["102_vector_metadata_pk.sql"],
   "104_channel_outbox_tenant_inbox_fk.sql": ["102_channel_outbox_tenant_inbox_fk.sql"],
-  "105_db_config_and_tokens.sql": [
-    "102_db_config_and_tokens.sql",
-    "104_db_config_and_tokens.sql",
-  ],
+  "105_db_config_and_tokens.sql": ["102_db_config_and_tokens.sql", "104_db_config_and_tokens.sql"],
   "106_db_config_and_tokens_indexes.sql": [
     "103_db_config_and_tokens_indexes.sql",
     "105_db_config_and_tokens_indexes.sql",

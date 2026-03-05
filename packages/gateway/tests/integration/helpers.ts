@@ -169,9 +169,7 @@ export interface TestAppOptions {
   enableAgents?: boolean;
 }
 
-export async function createTestApp(
-  opts: TestAppOptions = {},
-): Promise<
+export async function createTestApp(opts: TestAppOptions = {}): Promise<
   {
     app: Hono;
     container: GatewayContainer;
@@ -278,4 +276,3 @@ export function minimalPlanRequest(overrides?: Record<string, unknown>): Record<
     ...overrides,
   };
 }
-
