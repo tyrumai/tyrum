@@ -38,13 +38,16 @@ describe("apps/web main bootstrap", () => {
       subscribe: ReturnType<typeof vi.fn>;
       dispose: ReturnType<typeof vi.fn>;
     };
+    core: { connect: ReturnType<typeof vi.fn> };
     unsubscribe: ReturnType<typeof vi.fn>;
   } => {
+    const core = { connect: vi.fn() };
     const unsubscribe = vi.fn();
     return {
+      core,
       unsubscribe,
       manager: {
-        getCore: vi.fn(() => ({})),
+        getCore: vi.fn(() => core),
         subscribe: vi.fn(() => unsubscribe),
         dispose: vi.fn(),
       },
@@ -75,7 +78,7 @@ describe("apps/web main bootstrap", () => {
       elevatedModeStore as unknown as ReturnType<typeof operatorCore.createElevatedModeStore>,
     );
 
-    const { manager, unsubscribe } = makeManagerMock();
+    const { manager, unsubscribe, core } = makeManagerMock();
     vi.mocked(operatorCore.createOperatorCoreManager).mockReturnValue(
       manager as unknown as ReturnType<typeof operatorCore.createOperatorCoreManager>,
     );
@@ -89,6 +92,7 @@ describe("apps/web main bootstrap", () => {
       operatorCore,
       replaceStateSpy,
       root,
+      core,
       unsubscribe,
       urlAuth,
     };
@@ -104,6 +108,7 @@ describe("apps/web main bootstrap", () => {
   it("creates the operator core manager and scrubs auth token from the URL", async () => {
     const {
       elevatedModeStore,
+      core,
       manager,
       operatorCore,
       replaceStateSpy,
@@ -144,6 +149,7 @@ describe("apps/web main bootstrap", () => {
         elevatedModeStore,
       }),
     );
+    expect(core.connect).toHaveBeenCalledTimes(1);
     expect(replaceStateSpy).toHaveBeenCalledWith(expect.anything(), "", "/ui#hash");
     expect(root.render).toHaveBeenCalled();
 
@@ -153,6 +159,7 @@ describe("apps/web main bootstrap", () => {
   it("uses browser cookie auth when no token is present and does not rewrite the URL", async () => {
     const {
       elevatedModeStore,
+      core,
       manager,
       operatorCore,
       replaceStateSpy,
@@ -180,6 +187,7 @@ describe("apps/web main bootstrap", () => {
         elevatedModeStore,
       }),
     );
+    expect(core.connect).not.toHaveBeenCalled();
     expect(replaceStateSpy).not.toHaveBeenCalled();
     expect(root.render).toHaveBeenCalled();
 

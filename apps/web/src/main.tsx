@@ -28,16 +28,17 @@ function resolveGatewayHttpBaseUrl(): string {
   return window.location.origin;
 }
 
-function resolveAuthFromLocation(
-  httpBaseUrl: string,
-): ReturnType<typeof createBearerTokenAuth | typeof createBrowserCookieAuth> {
+function resolveAuthFromLocation(httpBaseUrl: string): {
+  auth: ReturnType<typeof createBearerTokenAuth | typeof createBrowserCookieAuth>;
+  connectOnLoad: boolean;
+} {
   const token = readAuthTokenFromUrl(window.location.href);
   scrubAuthTokenFromUrl();
   if (token) {
     void createGatewayAuthSession({ token, httpBaseUrl }).catch(() => {});
-    return createBearerTokenAuth(token);
+    return { auth: createBearerTokenAuth(token), connectOnLoad: true };
   }
-  return createBrowserCookieAuth();
+  return { auth: createBrowserCookieAuth(), connectOnLoad: false };
 }
 
 function resolveGatewayWsUrl(): string {
@@ -59,12 +60,17 @@ if (!container) {
 
 const elevatedModeStore = createElevatedModeStore();
 const httpBaseUrl = resolveGatewayHttpBaseUrl();
+const resolvedAuth = resolveAuthFromLocation(httpBaseUrl);
 const manager = createOperatorCoreManager({
   wsUrl: resolveGatewayWsUrl(),
   httpBaseUrl,
-  baselineAuth: resolveAuthFromLocation(httpBaseUrl),
+  baselineAuth: resolvedAuth.auth,
   elevatedModeStore,
 });
+
+if (resolvedAuth.connectOnLoad) {
+  manager.getCore().connect();
+}
 
 const root = createRoot(container);
 const render = (): void => {
