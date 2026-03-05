@@ -9,6 +9,37 @@ const PACKAGE_ROOT = resolve(__dirname, "../..");
 const REPO_ROOT = resolve(PACKAGE_ROOT, "../..");
 
 const CHECK_SCRIPT = resolve(REPO_ROOT, "scripts/check-native-sqlite.mjs");
+const PNPM_SCRIPT_ALIAS = /^pnpm(?: run)? ([a-z0-9:-]+)$/u;
+
+function resolveScriptCommand(
+  scripts: Record<string, string> | undefined,
+  scriptName: string,
+): string | undefined {
+  if (!scripts) return undefined;
+
+  const seen = new Set<string>();
+  let currentName = scriptName;
+
+  for (;;) {
+    if (seen.has(currentName)) {
+      throw new Error(`Detected recursive package.json script alias: ${currentName}`);
+    }
+
+    seen.add(currentName);
+
+    const command = scripts[currentName];
+    if (typeof command !== "string") {
+      return undefined;
+    }
+
+    const aliasMatch = command.match(PNPM_SCRIPT_ALIAS);
+    if (!aliasMatch) {
+      return command;
+    }
+
+    currentName = aliasMatch[1];
+  }
+}
 
 describe("native sqlite preflight", () => {
   it("is wired into root pretest", () => {
@@ -16,9 +47,12 @@ describe("native sqlite preflight", () => {
     const raw = readFileSync(packageJsonPath, "utf8");
     const pkg = JSON.parse(raw) as { scripts?: Record<string, string> };
 
-    const pretest = pkg.scripts?.pretest;
-    expect(pretest).toBeTypeOf("string");
-    expect(pretest).toMatch(/^node scripts\/check-native-sqlite\.mjs && /);
+    expect(resolveScriptCommand(pkg.scripts, "pretest")).toMatch(
+      /^node scripts\/check-native-sqlite\.mjs && /,
+    );
+    expect(resolveScriptCommand(pkg.scripts, "pretest:watch")).toMatch(
+      /^node scripts\/check-native-sqlite\.mjs && /,
+    );
   });
 
   it("fails with remediation when better-sqlite3 cannot load", () => {
