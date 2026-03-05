@@ -1,16 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Hono } from "hono";
 import { createTestApp } from "./helpers.js";
 import type { GatewayContainer } from "../../src/container.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(__dirname, "../../../..");
-const operatorUiDistDir = join(repoRoot, "apps", "web", "dist");
-const operatorUiDistAssetsDir = join(operatorUiDistDir, "assets");
 
 const OPERATOR_UI_CSP_POLICY =
   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; frame-ancestors 'none'";
@@ -19,9 +13,35 @@ describe("operator UI static hosting (/ui)", () => {
   let app: Hono;
   let container: GatewayContainer;
   let requestUnauthenticated: typeof app.request;
+  let operatorUiDistDir: string;
+  let operatorUiDistAssetsDir: string;
 
   beforeEach(async () => {
-    const created = await createTestApp();
+    operatorUiDistDir = await mkdtemp(join(tmpdir(), "tyrum-operator-ui-"));
+    operatorUiDistAssetsDir = join(operatorUiDistDir, "assets");
+    await mkdir(operatorUiDistAssetsDir, { recursive: true });
+    await writeFile(
+      join(operatorUiDistDir, "index.html"),
+      [
+        "<!doctype html>",
+        "<html>",
+        "<head>",
+        '<meta charset="utf-8">',
+        "<title>Tyrum Operator</title>",
+        "</head>",
+        "<body>",
+        '<div id="root"></div>',
+        '<script type="module" src="/ui/assets/index-test.js"></script>',
+        "</body>",
+        "</html>",
+      ].join(""),
+    );
+    await writeFile(
+      join(operatorUiDistAssetsDir, "index-test.js"),
+      "console.log('operator-ui');\n",
+    );
+
+    const created = await createTestApp({ operatorUiAssetsDir: operatorUiDistDir });
     app = created.app;
     container = created.container;
     requestUnauthenticated = created.requestUnauthenticated;
@@ -29,6 +49,7 @@ describe("operator UI static hosting (/ui)", () => {
 
   afterEach(async () => {
     await container.db.close();
+    await rm(operatorUiDistDir, { recursive: true, force: true });
   });
 
   it("serves the operator SPA index at /ui", async () => {

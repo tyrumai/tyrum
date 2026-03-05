@@ -167,6 +167,7 @@ export interface TestAppOptions {
   authRateLimiter?: SlidingWindowRateLimiter;
   deploymentConfig?: Partial<DeploymentConfigT>;
   enableAgents?: boolean;
+  operatorUiAssetsDir?: string;
 }
 
 export async function createTestApp(opts: TestAppOptions = {}): Promise<
@@ -227,6 +228,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<
     secretProviderForTenant: secrets.secretProviderForTenant,
     isLocalOnly: opts.isLocalOnly,
     authRateLimiter: opts.authRateLimiter,
+    operatorUiAssetsDir: opts.operatorUiAssetsDir,
     runtime: {
       version: VERSION,
       instanceId: "test-instance",

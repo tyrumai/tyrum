@@ -142,9 +142,10 @@ async function serveIndexHtml(assetsDir: string | undefined): Promise<string> {
   return await readFile(indexPath, "utf-8");
 }
 
-export function createOperatorUiRoutes(): Hono {
+export function createOperatorUiRoutes(opts: { assetsDir?: string } = {}): Hono {
   const app = new Hono();
-  const assetsDir = resolveOperatorUiAssetsDirFrom(dirname(fileURLToPath(import.meta.url)));
+  const assetsDir =
+    opts.assetsDir ?? resolveOperatorUiAssetsDirFrom(dirname(fileURLToPath(import.meta.url)));
   const assetsDirReal = assetsDir ? safeRealpathSync(assetsDir) : undefined;
 
   app.use(OPERATOR_UI_PATH_PREFIX, applyOperatorUiSecurityHeaders);

@@ -87,6 +87,7 @@ export interface AppOptions {
     outboxDal: OutboxDal;
   };
   authRateLimiter?: SlidingWindowRateLimiter;
+  operatorUiAssetsDir?: string;
   runtime?: {
     version: string;
     instanceId: string;
@@ -415,7 +416,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   );
 
   // Operator web UI (static SPA).
-  app.route("/", createOperatorUiRoutes());
+  app.route("/", createOperatorUiRoutes({ assetsDir: opts.operatorUiAssetsDir }));
 
   if (secretProviderForTenant) {
     app.route(

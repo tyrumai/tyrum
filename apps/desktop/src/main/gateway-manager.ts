@@ -118,7 +118,9 @@ function createBootstrapTokenChunkProcessor(
     const token = match?.groups?.["token"];
     if (label && token) {
       tokens.set(label, token);
-      return `${label}: [REDACTED]`;
+      const leadingWhitespace = rawLine.match(/^\s*/)?.[0] ?? "";
+      const trailingWhitespace = rawLine.match(/\s*$/)?.[0] ?? "";
+      return `${leadingWhitespace}${label}: [REDACTED]${trailingWhitespace}`;
     }
     return rawLine;
   };

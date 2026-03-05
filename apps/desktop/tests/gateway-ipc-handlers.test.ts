@@ -32,7 +32,9 @@ const {
     port: 8788,
     mode: "embedded" as "embedded" | "remote",
     embeddedDbPath: "/tmp/test-gateway.db",
+    embeddedTokenRef: "enc:token",
     remoteWsUrl: "ws://127.0.0.1:8788/ws",
+    remoteTokenRef: "enc:remote-token",
     remoteTlsCertFingerprint256: "",
     remoteTlsAllowSelfSigned: false,
   },
@@ -94,11 +96,11 @@ vi.mock("../src/main/config/store.js", () => ({
     embedded: {
       port: testState.port,
       dbPath: testState.embeddedDbPath,
-      tokenRef: "enc:token",
+      tokenRef: testState.embeddedTokenRef,
     },
     remote: {
       wsUrl: testState.remoteWsUrl,
-      tokenRef: "enc:remote-token",
+      tokenRef: testState.remoteTokenRef,
       tlsCertFingerprint256: testState.remoteTlsCertFingerprint256,
       tlsAllowSelfSigned: testState.remoteTlsAllowSelfSigned,
     },
@@ -122,7 +124,9 @@ describe("registerGatewayIpc handlers", () => {
     testState.port = 8788;
     testState.mode = "embedded";
     testState.embeddedDbPath = "/tmp/test-gateway.db";
+    testState.embeddedTokenRef = "enc:token";
     testState.remoteWsUrl = "ws://127.0.0.1:8788/ws";
+    testState.remoteTokenRef = "enc:remote-token";
     testState.remoteTlsCertFingerprint256 = "";
     testState.remoteTlsAllowSelfSigned = false;
     saveConfigMock.mockReset();
@@ -308,6 +312,43 @@ describe("registerGatewayIpc handlers", () => {
       tlsAllowSelfSigned: false,
     });
     expect(generateTokenMock).not.toHaveBeenCalled();
+    expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.bootstrap.token");
+    expect(saveConfigMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        embedded: expect.objectContaining({
+          tokenRef: "enc:tyrum-token.v1.bootstrap.token",
+        }),
+      }),
+    );
+  });
+
+  it("bootstraps and persists the embedded token on first launch when tokenRef is missing", async () => {
+    testState.embeddedTokenRef = "";
+
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
+    expect(operatorConnectionHandler).toBeDefined();
+
+    const connection = await operatorConnectionHandler!({} as never);
+    expect(connection).toEqual({
+      mode: "embedded",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788/",
+      token: "tyrum-token.v1.bootstrap.token",
+      tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
+    });
     expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.bootstrap.token");
     expect(saveConfigMock).toHaveBeenCalledWith(
       expect.objectContaining({

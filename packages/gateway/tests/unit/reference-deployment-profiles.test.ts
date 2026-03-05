@@ -56,8 +56,19 @@ describe("reference deployment profiles", () => {
       const service = services?.[serviceName];
       expect(service).toBeDefined();
 
+      const command = service.command as string[] | undefined;
+      expect(command).toBeDefined();
+
+      const homeFlagIndex = command?.indexOf("--home") ?? -1;
+      expect(homeFlagIndex).toBeGreaterThanOrEqual(0);
+      expect(command?.[homeFlagIndex + 1]).toBe("/var/lib/tyrum");
+
+      const dbFlagIndex = command?.indexOf("--db") ?? -1;
+      expect(dbFlagIndex).toBeGreaterThanOrEqual(0);
+      expect(command?.[dbFlagIndex + 1]).toEqual(expect.stringMatching(/postgres(ql)?:\/\//u));
+
       const env = service.environment as Record<string, unknown> | undefined;
-      expect(env?.GATEWAY_DB_PATH).toEqual(expect.stringMatching(/postgres(ql)?:\/\//u));
+      expect(env?.GATEWAY_DB_PATH).toBeUndefined();
     }
   });
 
