@@ -16,5 +16,5 @@ export async function listMarkdownFiles(dir: string): Promise<string[]> {
     }
   }
 
-  return files.sort();
+  return files.toSorted();
 }
