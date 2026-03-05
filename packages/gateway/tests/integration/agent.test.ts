@@ -111,7 +111,7 @@ describe("agent routes", () => {
   });
 
   it("returns singleton status from local workspace", async () => {
-    const { app, agents, container } = await createTestApp();
+    const { app, agents, container } = await createTestApp({ tyrumHome: homeDir });
     const res = await app.request("/agent/status");
 
     expect(res.status).toBe(200);
@@ -143,7 +143,7 @@ describe("agent routes", () => {
     await mkdir(join(homeDir!, "agents/agent-1"), { recursive: true });
     await writeWorkspace(join(homeDir!, "agents/agent-1"));
 
-    const { app, agents, container } = await createTestApp();
+    const { app, agents, container } = await createTestApp({ tyrumHome: homeDir });
 
     const res = await app.request("/agent/list");
     expect(res.status).toBe(200);
@@ -165,7 +165,7 @@ describe("agent routes", () => {
     await mkdir(join(homeDir!, "agents/agent-2"), { recursive: true });
     await writeWorkspace(join(homeDir!, "agents/agent-2"));
 
-    const { app, agents, container } = await createTestApp();
+    const { app, agents, container } = await createTestApp({ tyrumHome: homeDir });
     const getRuntimeSpy = vi.spyOn(agents!, "getRuntime");
     const res = await app.request("/agent/status?agent_key=agent-2");
     expect(res.status).toBe(200);
@@ -185,6 +185,7 @@ describe("agent routes", () => {
 
   it("separates short-term session context per channel/thread and writes memory files", async () => {
     const { app, container, agents } = await createTestApp({
+      tyrumHome: homeDir,
       languageModel: createStubLanguageModel("ok"),
     });
 
@@ -264,6 +265,7 @@ describe("agent routes", () => {
 
   it("accepts envelope-only turns with attachments", async () => {
     const { app, container, agents } = await createTestApp({
+      tyrumHome: homeDir,
       languageModel: createStubLanguageModel("ok"),
     });
 
