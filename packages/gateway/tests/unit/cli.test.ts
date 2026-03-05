@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
+import { DeploymentConfig } from "@tyrum/schemas";
 
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -26,7 +27,9 @@ vi.mock("node:fs", async () => {
 });
 
 import {
+  applyStartCommandDeploymentOverrides,
   assertSplitRoleUsesPostgres,
+  buildStartupDefaultDeploymentConfig,
   parseCliArgs,
   resolveSnapshotImportEnabled,
   resolveGatewayUpdateTarget,
@@ -162,6 +165,30 @@ describe("snapshot import enablement", () => {
     try {
       expect(resolveSnapshotImportEnabled(undefined)).toBe(true);
       expect(resolveSnapshotImportEnabled(true)).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+      else process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = previous;
+    }
+  });
+
+  it("uses TYRUM_SNAPSHOT_IMPORT_ENABLED only when seeding startup defaults", () => {
+    const previous = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+    process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
+
+    try {
+      expect(buildStartupDefaultDeploymentConfig({}).snapshots.importEnabled).toBe(true);
+
+      const persisted = applyStartCommandDeploymentOverrides(
+        DeploymentConfig.parse({ snapshots: { importEnabled: false } }),
+        {},
+      );
+      expect(persisted.snapshots.importEnabled).toBe(false);
+
+      const explicitCli = applyStartCommandDeploymentOverrides(
+        DeploymentConfig.parse({ snapshots: { importEnabled: false } }),
+        { snapshotImportEnabled: true },
+      );
+      expect(explicitCli.snapshots.importEnabled).toBe(true);
     } finally {
       if (previous === undefined) delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
       else process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = previous;

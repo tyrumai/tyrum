@@ -14,11 +14,15 @@ function fileExists(path: string): Promise<boolean> {
 }
 
 export function resolveTyrumHome(): string {
+  const fromEnv = process.env["TYRUM_HOME"]?.trim();
+  if (fromEnv && fromEnv.length > 0) {
+    return fromEnv;
+  }
   return join(homedir(), ".tyrum");
 }
 
 export function resolveUserTyrumHome(): string {
-  return join(homedir(), ".tyrum");
+  return resolveTyrumHome();
 }
 
 export function resolveAgentConfigPath(home = resolveTyrumHome()): string {

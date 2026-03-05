@@ -54,7 +54,7 @@ const STARTUP_NOISE_PATTERNS = [
 const STARTUP_LOG_BUFFER_LIMIT = 80;
 
 const BOOTSTRAP_TOKEN_LINE_PATTERN =
-  /^(?<label>system|default-tenant-admin):\s*(?<token>tyrum-token\.v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\s*$/;
+  /^(?<prefix>.*?)(?<label>system|default-tenant-admin):\s*(?<token>tyrum-token\.v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)(?<suffix>\s*)$/;
 
 function isStartupNoiseLine(line: string): boolean {
   return STARTUP_NOISE_PATTERNS.some((pattern) => pattern.test(line));
@@ -112,15 +112,14 @@ function createBootstrapTokenChunkProcessor(
   let remainder = "";
 
   const processLine = (rawLine: string): string => {
-    const line = rawLine.trim();
-    const match = BOOTSTRAP_TOKEN_LINE_PATTERN.exec(line);
+    const match = BOOTSTRAP_TOKEN_LINE_PATTERN.exec(rawLine);
+    const prefix = match?.groups?.["prefix"] ?? "";
     const label = match?.groups?.["label"];
     const token = match?.groups?.["token"];
+    const suffix = match?.groups?.["suffix"] ?? "";
     if (label && token) {
       tokens.set(label, token);
-      const leadingWhitespace = rawLine.match(/^\s*/)?.[0] ?? "";
-      const trailingWhitespace = rawLine.match(/\s*$/)?.[0] ?? "";
-      return `${leadingWhitespace}${label}: [REDACTED]${trailingWhitespace}`;
+      return `${prefix}${label}: [REDACTED]${suffix}`;
     }
     return rawLine;
   };

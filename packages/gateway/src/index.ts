@@ -365,6 +365,51 @@ export function resolveSnapshotImportEnabled(snapshotImportOverride?: boolean): 
   return Boolean(snapshotImportOverride) || resolveTruthyEnvFlag("TYRUM_SNAPSHOT_IMPORT_ENABLED");
 }
 
+type StartCommandOverrides = Pick<
+  Extract<CliCommand, { kind: "start" }>,
+  "allowInsecureHttp" | "engineApiEnabled" | "snapshotImportEnabled"
+>;
+
+export function buildStartupDefaultDeploymentConfig(
+  overrides: StartCommandOverrides,
+): DeploymentConfig {
+  return DeploymentConfig.parse({
+    server: {
+      allowInsecureHttp: Boolean(overrides.allowInsecureHttp),
+    },
+    execution: {
+      engineApiEnabled: Boolean(overrides.engineApiEnabled),
+    },
+    snapshots: {
+      importEnabled: resolveSnapshotImportEnabled(overrides.snapshotImportEnabled),
+    },
+  });
+}
+
+export function applyStartCommandDeploymentOverrides(
+  deploymentConfig: DeploymentConfig,
+  overrides: StartCommandOverrides,
+): DeploymentConfig {
+  return DeploymentConfig.parse({
+    ...deploymentConfig,
+    server: {
+      ...deploymentConfig.server,
+      allowInsecureHttp:
+        deploymentConfig.server.allowInsecureHttp || Boolean(overrides.allowInsecureHttp),
+    },
+    execution: {
+      ...deploymentConfig.execution,
+      engineApiEnabled:
+        deploymentConfig.execution.engineApiEnabled || Boolean(overrides.engineApiEnabled),
+    },
+    snapshots: {
+      ...deploymentConfig.snapshots,
+      importEnabled:
+        deploymentConfig.snapshots.importEnabled || Boolean(overrides.snapshotImportEnabled),
+    },
+  });
+}
+
 async function openGatewayDb(params: { dbPath: string; migrationsDir: string }): Promise<SqlDb> {
   const dbPath = params.dbPath.trim();
   if (isPostgresDbUri(dbPath)) {
@@ -1024,30 +1069,20 @@ export async function main(
 
   const db = await openGatewayDb({ dbPath, migrationsDir });
   const deploymentConfigDal = new DeploymentConfigDal(db);
+  const startupOverrides: StartCommandOverrides = {
+    allowInsecureHttp: params.allowInsecureHttp,
+    engineApiEnabled: params.engineApiEnabled,
+    snapshotImportEnabled: params.snapshotImportEnabled,
+  };
   const deploymentRevision = await deploymentConfigDal.ensureSeeded({
-    defaultConfig: DeploymentConfig.parse({}),
+    defaultConfig: buildStartupDefaultDeploymentConfig(startupOverrides),
     createdBy: { kind: "bootstrap" },
     reason: "seed",
   });
-  const deploymentConfig = DeploymentConfig.parse({
-    ...deploymentRevision.config,
-    server: {
-      ...deploymentRevision.config.server,
-      allowInsecureHttp:
-        deploymentRevision.config.server.allowInsecureHttp || Boolean(params.allowInsecureHttp),
-    },
-    execution: {
-      ...deploymentRevision.config.execution,
-      engineApiEnabled:
-        deploymentRevision.config.execution.engineApiEnabled || Boolean(params.engineApiEnabled),
-    },
-    snapshots: {
-      ...deploymentRevision.config.snapshots,
-      importEnabled:
-        deploymentRevision.config.snapshots.importEnabled ||
-        resolveSnapshotImportEnabled(params.snapshotImportEnabled),
-    },
-  });
+  const deploymentConfig = applyStartCommandDeploymentOverrides(
+    deploymentRevision.config,
+    startupOverrides,
+  );
 
   const container = wireContainer(
     db,
