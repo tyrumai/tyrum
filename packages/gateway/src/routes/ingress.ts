@@ -19,7 +19,6 @@ import { recordMemoryV1SystemEpisode } from "../modules/memory/v1-episode-record
 import type { Logger } from "../modules/observability/logger.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { safeDetail } from "../utils/safe-detail.js";
-import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 
 export interface IngressDeps {
   telegramBot?: TelegramBot;
