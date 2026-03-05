@@ -186,14 +186,14 @@ async function handleApprovalResolveMessage(
     return policyOverrides.response;
   }
 
-  const updated = await deps.approvalDal.respond({
+  const resolved = await deps.approvalDal.resolveWithEngineAction({
     tenantId,
     approvalId: req.approval_id,
     decision: req.decision,
     reason: req.reason,
     resolvedBy: { kind: "ws", client_id: client.id },
   });
-  if (!updated) {
+  if (!resolved) {
     return errorResponse(
       msg.request_id,
       msg.type,
@@ -208,7 +208,8 @@ async function handleApprovalResolveMessage(
     deps,
     tenantId,
     req,
-    updated,
+    updated: resolved.approval,
+    transitioned: resolved.transitioned,
     policyOverrides,
   });
 }
@@ -220,15 +221,26 @@ async function finalizeApprovalResolve(params: {
   tenantId: string;
   req: ApprovalResolveRequestPayload;
   updated: ApprovalRow;
+  transitioned: boolean;
   policyOverrides: PolicyOverridesContext;
 }): Promise<WsResponseEnvelope> {
-  const { client, msg, deps, tenantId, req, updated, policyOverrides } = params;
+  const { client, msg, deps, tenantId, req, updated, transitioned, policyOverrides } = params;
   const desiredStatus = req.decision === "approved" ? "approved" : "denied";
   const decisionMatches = updated.status === desiredStatus;
-  await maybeHandleApprovalEngineAction({ client, deps, msg, req, updated, decisionMatches });
+  if (updated.status !== desiredStatus) {
+    deps.logger?.warn("approval.decision_mismatch", {
+      request_id: msg.request_id,
+      client_id: client.id,
+      request_type: msg.type,
+      approval_id: updated.approval_id,
+      decision: req.decision,
+      status: updated.status,
+    });
+  }
 
   let createdOverrides: unknown[] | undefined;
   if (
+    transitioned &&
     decisionMatches &&
     updated.status === "approved" &&
     req.mode === "always" &&
@@ -254,16 +266,18 @@ async function finalizeApprovalResolve(params: {
   }
   const result = buildApprovalResolveResult(approval, createdOverrides);
 
-  broadcastEvent(
-    tenantId,
-    {
-      event_id: crypto.randomUUID(),
-      type: "approval.resolved",
-      occurred_at: new Date().toISOString(),
-      payload: { approval },
-    },
-    deps,
-  );
+  if (transitioned) {
+    broadcastEvent(
+      tenantId,
+      {
+        event_id: crypto.randomUUID(),
+        type: "approval.resolved",
+        occurred_at: new Date().toISOString(),
+        payload: { approval },
+      },
+      deps,
+    );
+  }
   return { request_id: msg.request_id, type: msg.type, ok: true, result };
 }
 
@@ -404,56 +418,6 @@ async function loadApprovalForAlwaysMode(
     };
   }
   return { existing };
-}
-
-async function maybeHandleApprovalEngineAction(params: {
-  client: ConnectedClient;
-  deps: ProtocolDeps;
-  msg: ProtocolRequestEnvelope;
-  req: ApprovalResolveRequestPayload;
-  updated: {
-    approval_id: string;
-    status: string;
-    resume_token?: string | null;
-    run_id?: string | null;
-  };
-  decisionMatches: boolean;
-}): Promise<void> {
-  const { client, deps, msg, req, updated, decisionMatches } = params;
-  const desiredStatus = req.decision === "approved" ? "approved" : "denied";
-  if (updated.status !== desiredStatus) {
-    deps.logger?.warn("approval.decision_mismatch", {
-      request_id: msg.request_id,
-      client_id: client.id,
-      request_type: msg.type,
-      approval_id: updated.approval_id,
-      decision: req.decision,
-      status: updated.status,
-    });
-    return;
-  }
-  if (!decisionMatches || !deps.engine) {
-    return;
-  }
-
-  try {
-    if (updated.status === "approved" && updated.resume_token) {
-      await deps.engine.resumeRun(updated.resume_token);
-    } else if (updated.status === "denied" && updated.run_id) {
-      await deps.engine.cancelRun(updated.run_id, req.reason ?? "approval denied");
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    deps.logger?.error("approval.engine_action_failed", {
-      request_id: msg.request_id,
-      client_id: client.id,
-      request_type: msg.type,
-      approval_id: updated.approval_id,
-      decision: req.decision,
-      run_id: updated.run_id,
-      error: message,
-    });
-  }
 }
 
 async function createPolicyOverrides(params: {
