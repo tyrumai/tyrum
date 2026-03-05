@@ -44,10 +44,6 @@ vi.mock("electron", () => ({
 vi.mock("undici", () => {
   class Agent {
     destroy = vi.fn(async () => {});
-
-    constructor(_opts: unknown) {
-      // no-op
-    }
   }
 
   return { Agent, fetch: undiciFetchMock };

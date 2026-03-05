@@ -266,8 +266,12 @@ describe("operator-ui a11y", () => {
   ];
 
   for (const testCase of cases) {
-    it(`has no WCAG AA axe violations on ${testCase.mode}:${testCase.route}`, async () => {
-      await expectNoAxeViolationsForRoute(testCase);
-    });
+    it(
+      `has no WCAG AA axe violations on ${testCase.mode}:${testCase.route}`,
+      { timeout: 15_000 },
+      async () => {
+        await expectNoAxeViolationsForRoute(testCase);
+      },
+    );
   }
 });

@@ -32,24 +32,24 @@ const {
   startEmbeddedGatewayFromConfigMock,
   windowHandlers,
 } = vi.hoisted(() => {
-  const appWhenReadyMock = vi.fn(() => Promise.resolve());
-  const appOnMock = vi.fn();
-  const appQuitMock = vi.fn();
-  const appRequestSingleInstanceLockMock = vi.fn(() => true);
-  const appSetAppUserModelIdMock = vi.fn();
-  const appGetPathMock = vi.fn(() => "/tmp/tyrum-desktop-tests");
+  const appWhenReadyMockInner = vi.fn(() => Promise.resolve());
+  const appOnMockInner = vi.fn();
+  const appQuitMockInner = vi.fn();
+  const appRequestSingleInstanceLockMockInner = vi.fn(() => true);
+  const appSetAppUserModelIdMockInner = vi.fn();
+  const appGetPathMockInner = vi.fn(() => "/tmp/tyrum-desktop-tests");
 
-  const windowHandlers = new Map<string, (...args: unknown[]) => void>();
-  const browserWindowOnMock = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-    windowHandlers.set(event, handler);
+  const windowHandlersInner = new Map<string, (...args: unknown[]) => void>();
+  const browserWindowOnMockInner = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+    windowHandlersInner.set(event, handler);
   });
-  const browserWindowMaximizeMock = vi.fn();
-  const browserWindowMock = vi.fn(function MockBrowserWindow() {
+  const browserWindowMaximizeMockInner = vi.fn();
+  const browserWindowMockInner = vi.fn(function MockBrowserWindow() {
     return {
-      maximize: browserWindowMaximizeMock,
+      maximize: browserWindowMaximizeMockInner,
       loadURL: vi.fn(),
       loadFile: vi.fn(),
-      on: browserWindowOnMock,
+      on: browserWindowOnMockInner,
       once: vi.fn(),
       show: vi.fn(),
       focus: vi.fn(),
@@ -63,48 +63,48 @@ const {
     };
   });
 
-  const screenGetPrimaryDisplayMock = vi.fn(() => ({
+  const screenGetPrimaryDisplayMockInner = vi.fn(() => ({
     id: 1,
     workArea: { x: 0, y: 0, width: 1920, height: 1080 },
   }));
-  const screenGetAllDisplaysMock = vi.fn(() => [
+  const screenGetAllDisplaysMockInner = vi.fn(() => [
     {
       id: 1,
       workArea: { x: 0, y: 0, width: 1920, height: 1080 },
     },
   ]);
 
-  const menuBuildFromTemplateMock = vi.fn(() => ({}));
-  const menuSetApplicationMenuMock = vi.fn();
-  const dialogShowMessageBoxMock = vi.fn(async () => ({ response: 0 }));
+  const menuBuildFromTemplateMockInner = vi.fn(() => ({}));
+  const menuSetApplicationMenuMockInner = vi.fn();
+  const dialogShowMessageBoxMockInner = vi.fn(async () => ({ response: 0 }));
 
-  const ipcMainHandleMock = vi.fn();
-  const nativeThemeOnMock = vi.fn();
+  const ipcMainHandleMockInner = vi.fn();
+  const nativeThemeOnMockInner = vi.fn();
 
-  const registerConfigIpcMock = vi.fn();
-  const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
-  const registerNodeIpcMock = vi.fn();
-  const registerUpdateIpcMock = vi.fn();
+  const registerConfigIpcMockInner = vi.fn();
+  const registerGatewayIpcMockInner = vi.fn(() => ({ stop: vi.fn() }));
+  const registerNodeIpcMockInner = vi.fn();
+  const registerUpdateIpcMockInner = vi.fn();
 
-  const configExistsMock = vi.fn(() => true);
-  const loadConfigMock = vi.fn(() => ({ mode: "remote" }));
-  const startEmbeddedGatewayFromConfigMock = vi.fn(async () => ({
+  const configExistsMockInner = vi.fn(() => true);
+  const loadConfigMockInner = vi.fn(() => ({ mode: "remote" }));
+  const startEmbeddedGatewayFromConfigMockInner = vi.fn(async () => ({
     status: "running",
     port: 8788,
   }));
 
-  const loadWindowStateMock = vi.fn(() => ({
+  const loadWindowStateMockInner = vi.fn(() => ({
     bounds: { x: 2000, y: 100, width: 800, height: 600 },
     isMaximized: true,
   }));
-  const ensureVisibleBoundsMock = vi.fn((_bounds: unknown, _workAreas: unknown) => ({
+  const ensureVisibleBoundsMockInner = vi.fn((_bounds: unknown, _workAreas: unknown) => ({
     x: 1120,
     y: 100,
     width: 800,
     height: 600,
   }));
-  const saveWindowStateMock = vi.fn();
-  const captureWindowStateMock = vi.fn(
+  const saveWindowStateMockInner = vi.fn();
+  const captureWindowStateMockInner = vi.fn(
     (_window: unknown, options?: { isMaximized?: boolean }) =>
       ({
         bounds: { x: 100, y: 120, width: 800, height: 600 },
@@ -113,34 +113,34 @@ const {
   );
 
   return {
-    appGetPathMock,
-    appOnMock,
-    appQuitMock,
-    appRequestSingleInstanceLockMock,
-    appSetAppUserModelIdMock,
-    appWhenReadyMock,
-    browserWindowMock,
-    captureWindowStateMock,
-    browserWindowMaximizeMock,
-    browserWindowOnMock,
-    configExistsMock,
-    dialogShowMessageBoxMock,
-    ensureVisibleBoundsMock,
-    ipcMainHandleMock,
-    loadConfigMock,
-    loadWindowStateMock,
-    menuBuildFromTemplateMock,
-    menuSetApplicationMenuMock,
-    nativeThemeOnMock,
-    registerConfigIpcMock,
-    registerGatewayIpcMock,
-    registerNodeIpcMock,
-    registerUpdateIpcMock,
-    screenGetAllDisplaysMock,
-    screenGetPrimaryDisplayMock,
-    saveWindowStateMock,
-    startEmbeddedGatewayFromConfigMock,
-    windowHandlers,
+    appGetPathMock: appGetPathMockInner,
+    appOnMock: appOnMockInner,
+    appQuitMock: appQuitMockInner,
+    appRequestSingleInstanceLockMock: appRequestSingleInstanceLockMockInner,
+    appSetAppUserModelIdMock: appSetAppUserModelIdMockInner,
+    appWhenReadyMock: appWhenReadyMockInner,
+    browserWindowMock: browserWindowMockInner,
+    captureWindowStateMock: captureWindowStateMockInner,
+    browserWindowMaximizeMock: browserWindowMaximizeMockInner,
+    browserWindowOnMock: browserWindowOnMockInner,
+    configExistsMock: configExistsMockInner,
+    dialogShowMessageBoxMock: dialogShowMessageBoxMockInner,
+    ensureVisibleBoundsMock: ensureVisibleBoundsMockInner,
+    ipcMainHandleMock: ipcMainHandleMockInner,
+    loadConfigMock: loadConfigMockInner,
+    loadWindowStateMock: loadWindowStateMockInner,
+    menuBuildFromTemplateMock: menuBuildFromTemplateMockInner,
+    menuSetApplicationMenuMock: menuSetApplicationMenuMockInner,
+    nativeThemeOnMock: nativeThemeOnMockInner,
+    registerConfigIpcMock: registerConfigIpcMockInner,
+    registerGatewayIpcMock: registerGatewayIpcMockInner,
+    registerNodeIpcMock: registerNodeIpcMockInner,
+    registerUpdateIpcMock: registerUpdateIpcMockInner,
+    screenGetAllDisplaysMock: screenGetAllDisplaysMockInner,
+    screenGetPrimaryDisplayMock: screenGetPrimaryDisplayMockInner,
+    saveWindowStateMock: saveWindowStateMockInner,
+    startEmbeddedGatewayFromConfigMock: startEmbeddedGatewayFromConfigMockInner,
+    windowHandlers: windowHandlersInner,
   };
 });
 

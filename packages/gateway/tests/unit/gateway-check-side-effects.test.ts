@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { access, rm, mkdtemp } from "node:fs/promises";
+import { rm, mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { pathExists } from "../helpers/path-exists.js";
 
 vi.mock("../../src/container.js", () => {
   const mockContainer = {
@@ -32,15 +33,6 @@ vi.mock("../../src/container.js", () => {
     createContainerAsync: async () => mockContainer,
   };
 });
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 describe("tyrum check side effects", () => {
   const originalEnv = {
