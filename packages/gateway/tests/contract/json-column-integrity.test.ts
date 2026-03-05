@@ -15,55 +15,102 @@ const sqliteMigrationsDir = join(__dirname, "../../migrations/sqlite");
 
 describe("JSON column integrity (sqlite vs postgres)", () => {
   it("rejects invalid JSON in high-value TEXT JSON columns", async () => {
+    const validJson = JSON.stringify({ ok: true });
     const invalidJson = "{not valid json";
 
     // SQLite (real engine)
     const sqlite = createDatabase(":memory:");
-    migrate(sqlite, sqliteMigrationsDir);
+    try {
+      migrate(sqlite, sqliteMigrationsDir);
 
-    expect(() =>
-      sqlite.prepare("INSERT INTO routing_configs (config_json) VALUES (?)").run(invalidJson),
-    ).toThrow();
+      const insertRoutingConfig = (configJson: string) =>
+        sqlite.prepare("INSERT INTO routing_configs (config_json) VALUES (?)").run(configJson);
 
-    expect(() =>
-      sqlite
-        .prepare(
-          `INSERT INTO watchers (
-             tenant_id,
-             watcher_id,
-             watcher_key,
-             agent_id,
-             workspace_id,
-             trigger_type,
-             trigger_config_json
-           )
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          DEFAULT_TENANT_ID,
-          "00000000-0000-4000-8000-000000000010",
-          "watcher-1",
-          DEFAULT_AGENT_ID,
-          DEFAULT_WORKSPACE_ID,
-          "plan.complete",
-          invalidJson,
-        ),
-    ).toThrow();
+      expect(() => insertRoutingConfig(validJson)).not.toThrow();
+      expect(() => insertRoutingConfig(invalidJson)).toThrow();
 
-    expect(() =>
-      sqlite
-        .prepare(
-          `INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json)
-           VALUES (?, ?, ?, ?)`,
-        )
-        .run(DEFAULT_TENANT_ID, "00000000-0000-4000-8000-000000000011", "sha1", invalidJson),
-    ).toThrow();
+      const insertWatcher = (input: {
+        watcherId: string;
+        watcherKey: string;
+        triggerConfigJson: string;
+      }) =>
+        sqlite
+          .prepare(
+            `INSERT INTO watchers (
+               tenant_id,
+               watcher_id,
+               watcher_key,
+               agent_id,
+               workspace_id,
+               trigger_type,
+               trigger_config_json
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            DEFAULT_TENANT_ID,
+            input.watcherId,
+            input.watcherKey,
+            DEFAULT_AGENT_ID,
+            DEFAULT_WORKSPACE_ID,
+            "plan.complete",
+            input.triggerConfigJson,
+          );
 
-    sqlite.close();
+      expect(() =>
+        insertWatcher({
+          watcherId: "00000000-0000-4000-8000-000000000010",
+          watcherKey: "watcher-valid",
+          triggerConfigJson: validJson,
+        }),
+      ).not.toThrow();
+
+      expect(() =>
+        insertWatcher({
+          watcherId: "00000000-0000-4000-8000-000000000011",
+          watcherKey: "watcher-invalid",
+          triggerConfigJson: invalidJson,
+        }),
+      ).toThrow();
+
+      const insertPolicySnapshot = (input: {
+        policySnapshotId: string;
+        sha256: string;
+        bundleJson: string;
+      }) =>
+        sqlite
+          .prepare(
+            `INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json)
+             VALUES (?, ?, ?, ?)`,
+          )
+          .run(DEFAULT_TENANT_ID, input.policySnapshotId, input.sha256, input.bundleJson);
+
+      expect(() =>
+        insertPolicySnapshot({
+          policySnapshotId: "00000000-0000-4000-8000-000000000020",
+          sha256: "sha-valid",
+          bundleJson: validJson,
+        }),
+      ).not.toThrow();
+
+      expect(() =>
+        insertPolicySnapshot({
+          policySnapshotId: "00000000-0000-4000-8000-000000000021",
+          sha256: "sha-invalid",
+          bundleJson: invalidJson,
+        }),
+      ).toThrow();
+    } finally {
+      sqlite.close();
+    }
 
     // Postgres (pg-mem)
     const { db, close } = await openTestPostgresDb();
     try {
+      await expect(
+        db.run("INSERT INTO routing_configs (config_json) VALUES (?)", [validJson]),
+      ).resolves.toBeDefined();
+
       await expect(
         db.run("INSERT INTO routing_configs (config_json) VALUES (?)", [invalidJson]),
       ).rejects.toThrow();
@@ -83,7 +130,31 @@ describe("JSON column integrity (sqlite vs postgres)", () => {
           [
             DEFAULT_TENANT_ID,
             "00000000-0000-4000-8000-000000000010",
-            "watcher-1",
+            "watcher-valid",
+            DEFAULT_AGENT_ID,
+            DEFAULT_WORKSPACE_ID,
+            "plan.complete",
+            validJson,
+          ],
+        ),
+      ).resolves.toBeDefined();
+
+      await expect(
+        db.run(
+          `INSERT INTO watchers (
+             tenant_id,
+             watcher_id,
+             watcher_key,
+             agent_id,
+             workspace_id,
+             trigger_type,
+             trigger_config_json
+           )
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            DEFAULT_TENANT_ID,
+            "00000000-0000-4000-8000-000000000011",
+            "watcher-invalid",
             DEFAULT_AGENT_ID,
             DEFAULT_WORKSPACE_ID,
             "plan.complete",
@@ -96,7 +167,15 @@ describe("JSON column integrity (sqlite vs postgres)", () => {
         db.run(
           `INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json)
            VALUES (?, ?, ?, ?)`,
-          [DEFAULT_TENANT_ID, "00000000-0000-4000-8000-000000000011", "sha1", invalidJson],
+          [DEFAULT_TENANT_ID, "00000000-0000-4000-8000-000000000020", "sha-valid", validJson],
+        ),
+      ).resolves.toBeDefined();
+
+      await expect(
+        db.run(
+          `INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json)
+           VALUES (?, ?, ?, ?)`,
+          [DEFAULT_TENANT_ID, "00000000-0000-4000-8000-000000000021", "sha-invalid", invalidJson],
         ),
       ).rejects.toThrow();
     } finally {
