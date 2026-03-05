@@ -17,6 +17,10 @@ SET status = 'active'
 WHERE status NOT IN ('active', 'success', 'escalate', 'failure');
 
 ALTER TABLE plans
+  DROP CONSTRAINT IF EXISTS plans_kind_check,
+  DROP CONSTRAINT IF EXISTS plans_status_check;
+
+ALTER TABLE plans
   ADD CONSTRAINT plans_kind_check CHECK (kind IN ('audit', 'planner')),
   ADD CONSTRAINT plans_status_check CHECK (status IN ('active', 'success', 'escalate', 'failure'));
 
@@ -45,6 +49,10 @@ SET status = 'pending'
 WHERE status NOT IN ('pending', 'approved', 'denied', 'expired', 'cancelled');
 
 ALTER TABLE approvals
+  DROP CONSTRAINT IF EXISTS approvals_kind_check,
+  DROP CONSTRAINT IF EXISTS approvals_status_check;
+
+ALTER TABLE approvals
   ADD CONSTRAINT approvals_kind_check CHECK (
     kind IN (
       'spend',
@@ -63,3 +71,4 @@ ALTER TABLE approvals
   ADD CONSTRAINT approvals_status_check CHECK (
     status IN ('pending', 'approved', 'denied', 'expired', 'cancelled')
   );
+

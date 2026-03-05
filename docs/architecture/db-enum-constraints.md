@@ -11,8 +11,8 @@ This document records which DB columns are treated as enums (and constrained at 
 
 Enforced in:
 
-- SQLite: `packages/gateway/migrations/sqlite/102_enum_constraints_v2.sql`
-- Postgres: `packages/gateway/migrations/postgres/102_enum_constraints_v2.sql`
+- SQLite: `packages/gateway/migrations/sqlite/103_enum_constraints_v2.sql`
+- Postgres: `packages/gateway/migrations/postgres/103_enum_constraints_v2.sql`
 
 ### Approvals (`approvals`)
 
@@ -21,8 +21,8 @@ Enforced in:
 
 Enforced in:
 
-- SQLite: `packages/gateway/migrations/sqlite/102_enum_constraints_v2.sql`
-- Postgres: `packages/gateway/migrations/postgres/102_enum_constraints_v2.sql`
+- SQLite: `packages/gateway/migrations/sqlite/103_enum_constraints_v2.sql`
+- Postgres: `packages/gateway/migrations/postgres/103_enum_constraints_v2.sql`
 
 ## Intentionally unconstrained
 

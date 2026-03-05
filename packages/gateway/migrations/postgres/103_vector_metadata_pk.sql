@@ -15,3 +15,4 @@ END $$;
 CREATE SEQUENCE IF NOT EXISTS vector_metadata_id_seq;
 ALTER TABLE vector_metadata
   ALTER COLUMN vector_metadata_id SET DEFAULT nextval('vector_metadata_id_seq');
+

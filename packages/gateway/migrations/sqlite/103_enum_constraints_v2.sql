@@ -184,3 +184,4 @@ CREATE INDEX IF NOT EXISTS approvals_status_idx ON approvals (tenant_id, status)
 CREATE INDEX IF NOT EXISTS approvals_expires_at_idx ON approvals (tenant_id, expires_at);
 CREATE INDEX IF NOT EXISTS approvals_session_id_idx ON approvals (tenant_id, session_id);
 CREATE INDEX IF NOT EXISTS approvals_plan_id_idx ON approvals (tenant_id, plan_id);
+

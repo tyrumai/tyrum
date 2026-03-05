@@ -83,7 +83,7 @@ describe("RoutingConfigDal", () => {
   it("throws when a stored routing config revision is invalid", async () => {
     await db.run(
       "INSERT INTO routing_configs (config_json, created_by_json, reason) VALUES (?, ?, ?)",
-      ["not-json", "{}", "corrupt"],
+      [JSON.stringify({ v: "invalid" }), "{}", "corrupt"],
     );
 
     await expect(dal.getLatest()).rejects.toThrow();
