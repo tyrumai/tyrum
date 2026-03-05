@@ -1,8 +1,8 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DataType, newDb } from "pg-mem";
 import { migratePostgres } from "../../src/migrate-postgres.js";
 import type { SqlDb } from "../../src/statestore/types.js";
+import { createPgMemDb } from "./pg-mem.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -51,63 +51,8 @@ function translatePlaceholders(sql: string): string {
   return out;
 }
 
-function registerCommonPgFunctions(mem: ReturnType<typeof newDb>): void {
-  mem.public.registerFunction({
-    name: "strpos",
-    args: [DataType.text, DataType.text],
-    returns: DataType.integer,
-    implementation: (haystack: string, needle: string) => {
-      const idx = haystack.indexOf(needle);
-      return idx >= 0 ? idx + 1 : 0;
-    },
-  });
-
-  mem.public.registerFunction({
-    name: "jsonb_array_length",
-    args: [DataType.jsonb],
-    returns: DataType.integer,
-    implementation: (value: unknown) => {
-      if (!Array.isArray(value)) {
-        throw new Error("cannot get array length of a scalar/object");
-      }
-      return value.length;
-    },
-  });
-
-  mem.public.registerFunction({
-    name: "jsonb_typeof",
-    args: [DataType.jsonb],
-    returns: DataType.text,
-    implementation: (value: unknown) => {
-      if (value === null) return "null";
-      if (Array.isArray(value)) return "array";
-      if (typeof value === "object") return "object";
-      if (typeof value === "string") return "string";
-      if (typeof value === "number") return "number";
-      if (typeof value === "boolean") return "boolean";
-      return "unknown";
-    },
-  });
-
-  mem.public.registerFunction({
-    name: "pg_input_is_valid",
-    args: [DataType.text, DataType.text],
-    returns: DataType.bool,
-    implementation: (value: string, targetType: string) => {
-      if (!targetType || !targetType.toLowerCase().includes("json")) return false;
-      try {
-        JSON.parse(value);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-  });
-}
-
 export async function openTestPostgresDb(): Promise<{ db: SqlDb; close: () => Promise<void> }> {
-  const mem = newDb();
-  registerCommonPgFunctions(mem);
+  const mem = createPgMemDb();
 
   const { Client } = mem.adapters.createPg();
   const pg = new Client();

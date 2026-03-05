@@ -203,5 +203,20 @@ ON work_signal_firings (tenant_id, lease_expires_at_ms);
 -- Memory
 CREATE INDEX IF NOT EXISTS memory_items_created_at_idx
 ON memory_items (tenant_id, agent_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS vector_metadata_created_idx
-ON vector_metadata (tenant_id, created_at DESC, id DESC);
+DO $$
+BEGIN
+  -- Keep this migration compatible with both historical schemas:
+  -- - v2 rebuild initially created `vector_metadata.id` (then renamed in 103)
+  -- - newer rebuilds create `vector_metadata.vector_metadata_id` directly
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'vector_metadata'
+      AND column_name = 'vector_metadata_id'
+  ) THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS vector_metadata_created_idx ON vector_metadata (tenant_id, created_at DESC, vector_metadata_id DESC)';
+  ELSE
+    EXECUTE 'CREATE INDEX IF NOT EXISTS vector_metadata_created_idx ON vector_metadata (tenant_id, created_at DESC, id DESC)';
+  END IF;
+END $$;
