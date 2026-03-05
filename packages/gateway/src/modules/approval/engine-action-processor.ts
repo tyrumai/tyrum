@@ -10,11 +10,6 @@ const DEFAULT_LEASE_TTL_MS = 30_000;
 const DEFAULT_MAX_ATTEMPTS = 10;
 const DEFAULT_BATCH_SIZE = 10;
 
-const TICK_ENV = "TYRUM_APPROVAL_ENGINE_ACTION_TICK_MS";
-const LEASE_TTL_ENV = "TYRUM_APPROVAL_ENGINE_ACTION_LEASE_TTL_MS";
-const MAX_ATTEMPTS_ENV = "TYRUM_APPROVAL_ENGINE_ACTION_MAX_ATTEMPTS";
-const BATCH_ENV = "TYRUM_APPROVAL_ENGINE_ACTION_BATCH_SIZE";
-
 export interface ApprovalEngineActionProcessorClock {
   nowMs: number;
   nowIso: string;
@@ -60,10 +55,10 @@ export class ApprovalEngineActionProcessor {
     this.logger = opts.logger;
     this.tenantId = opts.tenantId ?? DEFAULT_TENANT_ID;
     this.clock = opts.clock ?? defaultClock;
-    const tickMs = resolvePositiveInt(opts.tickMs, TICK_ENV, DEFAULT_TICK_MS);
-    this.leaseTtlMs = resolvePositiveInt(opts.leaseTtlMs, LEASE_TTL_ENV, DEFAULT_LEASE_TTL_MS);
-    this.maxAttempts = resolvePositiveInt(opts.maxAttempts, MAX_ATTEMPTS_ENV, DEFAULT_MAX_ATTEMPTS);
-    this.batchSize = resolvePositiveInt(opts.batchSize, BATCH_ENV, DEFAULT_BATCH_SIZE);
+    const tickMs = resolvePositiveInt(opts.tickMs, DEFAULT_TICK_MS);
+    this.leaseTtlMs = resolvePositiveInt(opts.leaseTtlMs, DEFAULT_LEASE_TTL_MS);
+    this.maxAttempts = resolvePositiveInt(opts.maxAttempts, DEFAULT_MAX_ATTEMPTS);
+    this.batchSize = resolvePositiveInt(opts.batchSize, DEFAULT_BATCH_SIZE);
     const keepProcessAlive = opts.keepProcessAlive ?? false;
 
     this.interval = new IntervalScheduler({
