@@ -345,6 +345,8 @@ export function resolveOperatorConnection(config: DesktopNodeConfig): OperatorCo
     };
   }
 
+  // Remote deployments may still use opaque GATEWAY_TOKEN values, so do not
+  // apply the embedded bootstrap-token format check here.
   const token = config.remote.tokenRef ? decryptToken(config.remote.tokenRef) : "";
   const tlsCertFingerprint256 =
     typeof config.remote.tlsCertFingerprint256 === "string"

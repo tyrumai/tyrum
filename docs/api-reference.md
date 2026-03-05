@@ -535,7 +535,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 - Request: JSON `SnapshotImportRequest`
 - Response:
   - `200` JSON `{ status: "ok", imported_at, format, tables, inserted_total, inserted_by_table }`
-  - `403` `{ error: "disabled", ... }` unless snapshot import is explicitly enabled for the deployment (for example `TYRUM_SNAPSHOT_IMPORT_ENABLED=1` or `--enable-snapshot-import`)
+  - `403` `{ error: "disabled", ... }` unless snapshot import is explicitly enabled for the deployment. On fresh state you can seed this with `TYRUM_SNAPSHOT_IMPORT_ENABLED=1`; after config is already seeded, use `--enable-snapshot-import` on startup instead.
   - `400` invalid request / unknown tables
   - `500` import refused (non-empty tables) or internal failures
   - `401`, `403`

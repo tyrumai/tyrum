@@ -507,6 +507,41 @@ describe("registerGatewayIpc handlers", () => {
     });
   });
 
+  it("accepts opaque remote gateway tokens", async () => {
+    testState.mode = "remote";
+    testState.remoteWsUrl = "ws://remote.example/ws";
+    decryptTokenMock.mockImplementation((tokenRef: string) =>
+      tokenRef === "enc:remote-token"
+        ? "0123456789abcdef0123456789abcdef"
+        : "tyrum-token.v1.embedded.token",
+    );
+
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
+    expect(operatorConnectionHandler).toBeDefined();
+
+    const connection = await operatorConnectionHandler!({} as never);
+    expect(connection).toEqual({
+      mode: "remote",
+      wsUrl: "ws://remote.example/ws",
+      httpBaseUrl: "http://remote.example/",
+      token: "0123456789abcdef0123456789abcdef",
+      tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
+    });
+  });
+
   it("rejects non-websocket remote wsUrl values", async () => {
     testState.mode = "remote";
     testState.remoteWsUrl = "https://remote.example/ws";
