@@ -29,6 +29,15 @@ export function broadcastEvent(
   );
 }
 
+export function errorEvent(code: string, message: string): WsEventEnvelope {
+  return {
+    event_id: crypto.randomUUID(),
+    type: "error",
+    occurred_at: new Date().toISOString(),
+    payload: { code, message },
+  };
+}
+
 export function workboardErrorResponse(
   requestId: string,
   type: string,

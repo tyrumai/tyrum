@@ -20,8 +20,15 @@ import type { MemoryV1Dal } from "../../modules/memory/v1-dal.js";
 import type { ArtifactStore } from "../../modules/artifact/store.js";
 import type { RedactionEngine } from "../../modules/redaction/engine.js";
 import type { TaskResultRegistry } from "./task-result-registry.js";
-import type { AgentConfig } from "@tyrum/schemas";
+import type { AgentConfig, WsMessageEnvelope } from "@tyrum/schemas";
 import type { IdentityScopeDal } from "../../modules/identity/scope.js";
+
+export type ProtocolRequestEnvelope = Extract<
+  WsMessageEnvelope,
+  { request_id: string; payload: unknown }
+>;
+
+export type ProtocolResponseEnvelope = Extract<WsMessageEnvelope, { ok: boolean }>;
 
 // ---------------------------------------------------------------------------
 // Dependency injection

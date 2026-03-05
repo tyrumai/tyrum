@@ -10,15 +10,13 @@ import {
   WsSubagentSpawnRequest,
   WsSubagentSpawnResult,
 } from "@tyrum/schemas";
-import type { WsMessageEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
+import type { WsResponseEnvelope } from "@tyrum/schemas";
 import type { ConnectedClient } from "../connection-manager.js";
 import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
 import { WorkboardDal } from "../../modules/workboard/dal.js";
 import { IdentityScopeDal, normalizeScopeKeys } from "../../modules/identity/scope.js";
-import type { ProtocolDeps } from "./types.js";
+import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 import { broadcastEvent, errorResponse, workboardErrorResponse } from "./helpers.js";
-
-type WsRequestEnvelope = Extract<WsMessageEnvelope, { request_id: string; payload: unknown }>;
 
 type ScopeKeysPayload = {
   tenant_key?: string;
@@ -59,7 +57,7 @@ async function resolveWorkScope(params: {
 
 export async function handleSubagentMessage(
   client: ConnectedClient,
-  msg: WsRequestEnvelope,
+  msg: ProtocolRequestEnvelope,
   deps: ProtocolDeps,
 ): Promise<WsResponseEnvelope | undefined> {
   if (!msg.type.startsWith("subagent.")) return undefined;
