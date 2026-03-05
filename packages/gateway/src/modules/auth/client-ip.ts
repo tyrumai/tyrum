@@ -202,7 +202,7 @@ function parseXRealIpHeaderIps(value: string): string[] {
   return [];
 }
 
-function toSingleHeaderValue(value: string | string[] | undefined): string | undefined {
+export function toSingleHeaderValue(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value[0];
   return typeof value === "string" ? value : undefined;
 }

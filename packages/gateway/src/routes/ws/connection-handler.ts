@@ -14,6 +14,7 @@ import type { WebSocket, WebSocketServer } from "ws";
 import type { AuthTokenService } from "../../modules/auth/auth-token-service.js";
 import {
   resolveClientIpFromRequest,
+  toSingleHeaderValue,
   type TrustedProxyAllowlist,
 } from "../../modules/auth/client-ip.js";
 import type { NodePairingDal } from "../../modules/node/pairing-dal.js";
@@ -29,7 +30,6 @@ import {
   parseRemoteIp,
   parseRequestPath,
   resolveWsAuth,
-  toSingleHeaderValue,
 } from "./auth.js";
 import {
   PAIRING_REQUESTED_AUDIENCE,
