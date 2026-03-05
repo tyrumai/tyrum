@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 
-describe("Issue #841 desktop docs", () => {
+describe("Desktop docs (Issue #841)", () => {
   it("adds desktop developer README", async () => {
     const readme = await readFile(resolve(repoRoot, "apps/desktop/README.md"), "utf8");
 

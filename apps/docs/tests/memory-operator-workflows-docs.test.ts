@@ -7,7 +7,7 @@ import { listMarkdownFiles } from "./markdown-utils.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 
-describe("Issue #666 docs", () => {
+describe("Memory operator workflow docs (Issue #666)", () => {
   it("documents Memory v1 operator workflows (inspect/export/forget)", async () => {
     const memoryDoc = await readFile(resolve(repoRoot, "docs/architecture/memory.md"), "utf8");
 

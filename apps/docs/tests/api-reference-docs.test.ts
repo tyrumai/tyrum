@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 
-describe("Issue #842 API reference docs", () => {
+describe("API reference docs (Issue #842)", () => {
   it("adds docs/api-reference.md covering HTTP and WebSocket APIs", async () => {
     const doc = await readFile(resolve(repoRoot, "docs/api-reference.md"), "utf8");
 
