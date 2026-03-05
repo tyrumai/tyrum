@@ -20,6 +20,8 @@ services:
         "--enable-engine-api",
         "--enable-snapshot-import",
       ]
+    environment:
+      GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
     ports:
       - "8788:8788"
     volumes:
@@ -77,6 +79,8 @@ services:
         "--enable-engine-api",
         "--enable-snapshot-import",
       ]
+    environment:
+      GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
     depends_on:
       - postgres
     ports:
@@ -94,6 +98,8 @@ services:
         "--db",
         "${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}",
       ]
+    environment:
+      GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
     depends_on:
       - postgres
     volumes:
@@ -111,6 +117,8 @@ services:
         "--db",
         "${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}",
       ]
+    environment:
+      GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
     depends_on:
       - postgres
     restart: unless-stopped

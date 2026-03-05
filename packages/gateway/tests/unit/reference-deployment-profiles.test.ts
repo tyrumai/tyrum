@@ -46,10 +46,24 @@ describe("reference deployment profiles", () => {
     expect(splitRoleEnv.get("GATEWAY_DB_PATH")).toBeUndefined();
   });
 
-  it("keeps split-role reference deployments Postgres-backed", async () => {
+  it("keeps reference compose deployments exposing db paths for smoke helpers", async () => {
     const composeRaw = await expectFile("docker-compose.yml");
     const compose = parseYaml(composeRaw) as any;
     const services = compose.services as Record<string, any> | undefined;
+
+    const singleHost = services?.tyrum;
+    expect(singleHost).toBeDefined();
+
+    const singleHostCommand = singleHost?.command as string[] | undefined;
+    expect(singleHostCommand).toBeDefined();
+
+    const singleHostDbFlagIndex = singleHostCommand?.indexOf("--db") ?? -1;
+    expect(singleHostDbFlagIndex).toBeGreaterThanOrEqual(0);
+    const singleHostDbPath = singleHostCommand?.[singleHostDbFlagIndex + 1];
+    expect(singleHostDbPath).toBe("/var/lib/tyrum/gateway.db");
+
+    const singleHostEnv = singleHost?.environment as Record<string, unknown> | undefined;
+    expect(singleHostEnv?.GATEWAY_DB_PATH).toBe(singleHostDbPath);
 
     const splitServices = ["tyrum-edge", "tyrum-worker", "tyrum-scheduler"];
     for (const serviceName of splitServices) {
@@ -65,10 +79,11 @@ describe("reference deployment profiles", () => {
 
       const dbFlagIndex = command?.indexOf("--db") ?? -1;
       expect(dbFlagIndex).toBeGreaterThanOrEqual(0);
-      expect(command?.[dbFlagIndex + 1]).toEqual(expect.stringMatching(/postgres(ql)?:\/\//u));
+      const dbPath = command?.[dbFlagIndex + 1];
+      expect(dbPath).toEqual(expect.stringMatching(/postgres(ql)?:\/\//u));
 
       const env = service.environment as Record<string, unknown> | undefined;
-      expect(env?.GATEWAY_DB_PATH).toBeUndefined();
+      expect(env?.GATEWAY_DB_PATH).toBe(dbPath);
     }
   });
 
