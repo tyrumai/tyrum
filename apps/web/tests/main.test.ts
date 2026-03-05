@@ -25,7 +25,18 @@ vi.mock("../src/url-auth.js", () => ({
   stripAuthTokenFromUrl: vi.fn(),
 }));
 
+vi.mock("../src/reload-page.js", () => ({
+  reloadPage: vi.fn(),
+}));
+
 describe("apps/web main bootstrap", () => {
+  type RootMock = { render: ReturnType<typeof vi.fn> };
+
+  type OperatorUiAppProps = {
+    onReloadPage: () => void;
+    onReconfigureGateway: (httpUrl: string, wsUrl: string) => void;
+  };
+
   const setupDom = (url: string): ReturnType<typeof vi.spyOn> => {
     document.body.innerHTML = '<div id="root"></div>';
     window.history.replaceState({}, "", url);
@@ -70,6 +81,7 @@ describe("apps/web main bootstrap", () => {
     const replaceStateSpy = setupDom(initialUrl);
 
     const operatorCore = await import("@tyrum/operator-core");
+    const reloadPage = await import("../src/reload-page.js");
     const urlAuth = await import("../src/url-auth.js");
     const reactDomClient = await import("react-dom/client");
 
@@ -94,8 +106,26 @@ describe("apps/web main bootstrap", () => {
       root,
       core,
       unsubscribe,
+      reloadPage,
       urlAuth,
     };
+  };
+
+  const getRenderedOperatorUiProps = (root: RootMock): OperatorUiAppProps => {
+    const strictModeElement = root.render.mock.calls.at(-1)?.[0] as {
+      props?: {
+        children?: {
+          props?: {
+            children?: {
+              props?: OperatorUiAppProps;
+            };
+          };
+        };
+      };
+    };
+    const props = strictModeElement?.props?.children?.props?.children?.props;
+    expect(props).toBeDefined();
+    return props as OperatorUiAppProps;
   };
 
   beforeEach(() => {
@@ -196,5 +226,58 @@ describe("apps/web main bootstrap", () => {
 
   it("throws when the root element is missing", async () => {
     await expect(import("../src/main.tsx")).rejects.toThrow("Missing root element (#root).");
+  });
+
+  it("re-renders on manager updates and persists gateway reconfiguration before reloading", async () => {
+    const { operatorCore, manager, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
+
+    const cookieAuth = { type: "browser-cookie" } as const;
+    vi.mocked(operatorCore.createBrowserCookieAuth).mockReturnValue(
+      cookieAuth as unknown as ReturnType<typeof operatorCore.createBrowserCookieAuth>,
+    );
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+
+    await import("../src/main.tsx");
+
+    const rerender = manager.subscribe.mock.calls[0]?.[0] as (() => void) | undefined;
+    expect(rerender).toBeTypeOf("function");
+    expect(root.render).toHaveBeenCalledTimes(1);
+
+    rerender?.();
+    expect(root.render).toHaveBeenCalledTimes(2);
+
+    const props = getRenderedOperatorUiProps(root);
+    props.onReloadPage();
+    props.onReconfigureGateway("http://gateway.internal", "ws://gateway.internal/ws");
+
+    expect(setItemSpy).toHaveBeenCalledWith("tyrum-gateway-http", "http://gateway.internal");
+    expect(setItemSpy).toHaveBeenCalledWith("tyrum-gateway-ws", "ws://gateway.internal/ws");
+    expect(reloadPage.reloadPage).toHaveBeenCalledTimes(2);
+  });
+
+  it("still reloads when gateway reconfiguration cannot be persisted", async () => {
+    const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
+
+    const cookieAuth = { type: "browser-cookie" } as const;
+    vi.mocked(operatorCore.createBrowserCookieAuth).mockReturnValue(
+      cookieAuth as unknown as ReturnType<typeof operatorCore.createBrowserCookieAuth>,
+    );
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage unavailable");
+    });
+
+    await import("../src/main.tsx");
+
+    const props = getRenderedOperatorUiProps(root);
+    props.onReconfigureGateway("http://gateway.internal", "ws://gateway.internal/ws");
+
+    expect(setItemSpy).toHaveBeenCalledTimes(1);
+    expect(reloadPage.reloadPage).toHaveBeenCalledTimes(1);
   });
 });

@@ -9,6 +9,7 @@ import {
 } from "@tyrum/operator-core";
 import { OperatorUiApp, OperatorUiHostProvider } from "@tyrum/operator-ui";
 import "@tyrum/operator-ui/globals.css";
+import { reloadPage } from "./reload-page.js";
 import { readAuthTokenFromUrl, stripAuthTokenFromUrl } from "./url-auth.js";
 
 function scrubAuthTokenFromUrl(): void {
@@ -80,13 +81,13 @@ const render = (): void => {
         <OperatorUiApp
           core={manager.getCore()}
           mode="web"
-          onReloadPage={() => window.location.reload()}
+          onReloadPage={reloadPage}
           onReconfigureGateway={(httpUrl, wsUrl) => {
             try {
               localStorage.setItem("tyrum-gateway-http", httpUrl);
               localStorage.setItem("tyrum-gateway-ws", wsUrl);
             } catch {}
-            window.location.reload();
+            reloadPage();
           }}
         />
       </OperatorUiHostProvider>
