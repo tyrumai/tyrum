@@ -48,6 +48,7 @@
       "dmg-license@1.0.11": "patches/dmg-license@1.0.11.patch",
       "dompurify@3.3.1": "patches/dompurify@3.3.1.patch"
     },
+    "allowUnusedPatches": true,
     "auditConfig": {
       "ignoreCves": [
         "CVE-2026-0540"
