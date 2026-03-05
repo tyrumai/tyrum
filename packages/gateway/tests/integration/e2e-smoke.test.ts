@@ -14,6 +14,9 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { getRequestListener } from "@hono/node-server";
 import type { Hono } from "hono";
 import { createTestApp, minimalPlanRequest } from "./helpers.js";
@@ -28,6 +31,7 @@ import {
   descriptorIdForClientCapability,
 } from "@tyrum/schemas";
 import { waitForCondition } from "../helpers/wait-for.js";
+import { pathExists } from "../helpers/path-exists.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -38,6 +42,7 @@ async function startServer(app: Hono): Promise<{
   server: Server;
   port: number;
   adminToken: string;
+  tokenHome: string;
   connectionManager: ConnectionManager;
   stopHeartbeat: () => void;
   taskResults: Array<{
@@ -65,8 +70,16 @@ async function startServer(app: Hono): Promise<{
   };
 
   // Use a real token store to enforce WS authentication.
-  const tokenStore = new TokenStore("/tmp/tyrum-e2e-test-" + Date.now());
-  const adminToken = await tokenStore.initialize();
+  const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-e2e-test-"));
+  let tokenStore: TokenStore;
+  let adminToken: string;
+  try {
+    tokenStore = new TokenStore(tokenHome);
+    adminToken = await tokenStore.initialize();
+  } catch (error) {
+    await rm(tokenHome, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
 
   const { handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
@@ -92,6 +105,7 @@ async function startServer(app: Hono): Promise<{
     server,
     port,
     adminToken,
+    tokenHome,
     connectionManager,
     stopHeartbeat,
     taskResults,
@@ -106,6 +120,7 @@ describe("E2E smoke test", () => {
   let httpServer: Server | undefined;
   let client: TyrumClient | undefined;
   let stopHeartbeat: (() => void) | undefined;
+  let tokenHome: string | undefined;
 
   afterEach(async () => {
     client?.disconnect();
@@ -116,6 +131,13 @@ describe("E2E smoke test", () => {
       await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
       httpServer = undefined;
     }
+
+    if (tokenHome) {
+      const home = tokenHome;
+      tokenHome = undefined;
+      await rm(home, { recursive: true, force: true });
+      expect(await pathExists(home)).toBe(false);
+    }
   });
 
   it("full plan → dispatch → result → healthz flow", async () => {
@@ -123,6 +145,7 @@ describe("E2E smoke test", () => {
     const srv = await startServer(app);
     httpServer = srv.server;
     stopHeartbeat = srv.stopHeartbeat;
+    tokenHome = srv.tokenHome;
 
     const baseUrl = `http://127.0.0.1:${srv.port}`;
 
