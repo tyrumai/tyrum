@@ -10,6 +10,7 @@ Deployments range from a single host (replica count = 1) to multi-instance clust
 - Expose typed APIs (WebSocket-first; HTTP where appropriate).
 - Validate inbound/outbound messages against contracts.
 - Route requests to internal modules or to capable nodes.
+- Dispatch `task.execute` capability calls to **paired/authorized nodes only** (operator clients never execute capabilities).
 - Emit events for lifecycle, actions, and state changes.
 - Persist essential state (sessions, transcripts, work state, memory, audit logs) via the StateStore.
 - Host the **execution engine** (queue, retries, idempotency, pause/resume, evidence capture). Step execution is performed by workers coordinated via the StateStore (workers may be co-located/in-process or run as separate processes/hosts).

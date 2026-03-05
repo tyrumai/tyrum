@@ -56,4 +56,5 @@ Clients may also present a unified "Session" timeline view that merges chat, run
 ## What a client is not
 
 - A client is not a capability provider. Capabilities live on nodes.
+- A client never executes `task.execute` capability calls, even if it advertises a capability.
 - A client is not required for automation to run, but it is the primary interface for oversight.
