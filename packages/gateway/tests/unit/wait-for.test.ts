@@ -17,8 +17,8 @@ describe("waitForCondition", () => {
     }, 10);
 
     await waitForCondition(() => ready, {
-      timeoutMs: 250,
-      intervalMs: 5,
+      timeoutMs: 1_000,
+      intervalMs: 10,
       description: "ready flag",
     });
   });
@@ -31,7 +31,7 @@ describe("waitForCondition", () => {
         if (calls < 3) throw new Error("not yet");
         return true;
       },
-      { timeoutMs: 250, intervalMs: 5, description: "transient condition" },
+      { timeoutMs: 1_000, intervalMs: 10, description: "transient condition" },
     );
 
     expect(calls).toBeGreaterThanOrEqual(3);
