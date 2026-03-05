@@ -1469,7 +1469,7 @@ describe("ExecutionEngine (normalized)", () => {
       await db.run(
         `INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json)
          VALUES (?, ?, ?, ?)`,
-        [DEFAULT_TENANT_ID, invalidSnapshotId, "invalid", "{not-json"],
+        [DEFAULT_TENANT_ID, invalidSnapshotId, "invalid", JSON.stringify({ v: "invalid" })],
       );
 
       await overrideDal.create({

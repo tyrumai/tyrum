@@ -117,7 +117,7 @@ describe("WatcherScheduler", () => {
     const id = await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
     await db.run(
       "UPDATE watchers SET trigger_config_json = ? WHERE tenant_id = ? AND watcher_id = ?",
-      ["not-json{", DEFAULT_TENANT_ID, id],
+      [JSON.stringify({ intervalMs: "invalid" }), DEFAULT_TENANT_ID, id],
     );
 
     await scheduler.tick();
