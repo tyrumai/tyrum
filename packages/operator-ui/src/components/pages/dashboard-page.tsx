@@ -13,6 +13,7 @@ import { getConnectionDisplay } from "../../lib/connection-display.js";
 import {
   getActiveAgentIdsFromSessionLanes,
   getActiveExecutionRunsCountFromQueueDepth,
+  parseAgentIdFromKey,
 } from "../../lib/status-session-lanes.js";
 import { useHostApiOptional } from "../../host/host-api.js";
 import { useOperatorStore } from "../../use-operator-store.js";
@@ -154,11 +155,8 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
   const agentIds = new Set<string>();
   const activeAgentIds = new Set<string>();
   for (const run of Object.values(runs.runsById)) {
-    if (!run.key.startsWith("agent:")) continue;
-    const rest = run.key.slice("agent:".length);
-    const sep = rest.indexOf(":");
-    if (sep <= 0) continue;
-    const agentId = rest.slice(0, sep);
+    const agentId = parseAgentIdFromKey(run.key);
+    if (!agentId) continue;
     agentIds.add(agentId);
     if (run.status === "queued" || run.status === "running" || run.status === "paused") {
       activeAgentIds.add(agentId);

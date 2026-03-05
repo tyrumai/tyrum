@@ -44,7 +44,10 @@ import { useKeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
 import { BrowserNodeProvider } from "./browser-node/browser-node-provider.js";
 import { getDesktopApi } from "./desktop-api.js";
 import { OperatorUiHostProvider, useHostApiOptional, type HostKind } from "./host/host-api.js";
-import { getActiveAgentIdsFromSessionLanes } from "./lib/status-session-lanes.js";
+import {
+  getActiveAgentIdsFromSessionLanes,
+  parseAgentIdFromKey,
+} from "./lib/status-session-lanes.js";
 import { useOperatorStore } from "./use-operator-store.js";
 
 export type OperatorUiMode = "web" | "desktop";
@@ -191,11 +194,9 @@ function OperatorUiAppRoot({
   const activeAgentIds = new Set<string>();
   for (const run of Object.values(runs.runsById)) {
     if (run.status !== "queued" && run.status !== "running" && run.status !== "paused") continue;
-    if (!run.key.startsWith("agent:")) continue;
-    const rest = run.key.slice("agent:".length);
-    const sep = rest.indexOf(":");
-    if (sep <= 0) continue;
-    activeAgentIds.add(rest.slice(0, sep));
+    const agentId = parseAgentIdFromKey(run.key);
+    if (!agentId) continue;
+    activeAgentIds.add(agentId);
   }
   for (const agentId of getActiveAgentIdsFromSessionLanes(status.status?.session_lanes)) {
     activeAgentIds.add(agentId);

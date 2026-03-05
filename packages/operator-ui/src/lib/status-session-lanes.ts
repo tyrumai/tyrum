@@ -1,6 +1,6 @@
 import { isRecord } from "../utils/is-record.js";
 
-function parseAgentIdFromKey(key: string): string | null {
+export function parseAgentIdFromKey(key: string): string | null {
   if (!key.startsWith("agent:")) return null;
   const rest = key.slice("agent:".length);
   const sep = rest.indexOf(":");

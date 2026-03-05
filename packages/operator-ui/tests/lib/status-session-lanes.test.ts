@@ -3,9 +3,20 @@ import { describe, expect, it } from "vitest";
 import {
   getActiveAgentIdsFromSessionLanes,
   getActiveExecutionRunsCountFromQueueDepth,
+  parseAgentIdFromKey,
 } from "../../src/lib/status-session-lanes.js";
 
 describe("status-session-lanes", () => {
+  it("parses agent ids from agent run keys", () => {
+    expect(parseAgentIdFromKey("agent:default:ui:main")).toBe("default");
+    expect(parseAgentIdFromKey("agent:secondary:ui")).toBe("secondary");
+    expect(parseAgentIdFromKey("agent:default:")).toBe("default");
+
+    expect(parseAgentIdFromKey("agent::ui")).toBeNull();
+    expect(parseAgentIdFromKey("agent:default")).toBeNull();
+    expect(parseAgentIdFromKey("not-agent")).toBeNull();
+  });
+
   it("extracts active agent ids from session lanes", () => {
     const ids = getActiveAgentIdsFromSessionLanes([
       { key: "agent:default:ui:main", latest_run_status: "running", queued_runs: 0 },
