@@ -39,18 +39,6 @@ export function migrate(db: Database.Database, migrationsDir: string): void {
     .filter((f) => f.endsWith(".sql"))
     .sort();
 
-  const renamedMigrations = new Map<string, string>([
-    ["103_vector_metadata_pk.sql", "102_vector_metadata_pk.sql"],
-  ]);
-
-  for (const [current, legacy] of renamedMigrations) {
-    if (!files.includes(current)) continue;
-    if (applied.has(current)) continue;
-    if (!applied.has(legacy)) continue;
-    insertMigration.run(current);
-    applied.add(current);
-  }
-
   for (const file of files) {
     if (applied.has(file)) continue;
     const alias = findAppliedMigrationAlias(file, applied);
