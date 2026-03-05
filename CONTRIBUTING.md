@@ -50,7 +50,26 @@ The repo-local hooks are:
 - `pre-commit`: runs `pnpm format:check-staged` and `pnpm lint` for fast checks on commit.
 - `pre-push`: runs `pnpm lint`, `pnpm typecheck`, and `pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json` for stronger validation before pushing.
 
-## 4. Before Opening a PR
+## 4. Test Conventions
+
+Use the smallest test scope that proves the behavior you changed:
+
+- `tests/unit/` for single-module behavior and pure logic.
+- `tests/integration/` for wiring across modules or package boundaries with real in-process dependencies.
+- `tests/e2e/` for full user or gateway flows that boot real servers, WebSocket clients, browsers, containers, or other entry points end-to-end.
+- `tests/contract/` for durable schema, migration, and storage compatibility checks.
+- `tests/conformance/` for protocol behaviors that multiple implementations must satisfy the same way.
+
+If a package only has one test scope today, keeping those unit-style tests directly under `tests/` is acceptable until another scope is added.
+
+Name executable tests after the behavior under test and keep the scope in the folder, not the file name:
+
+- Prefer `tests/e2e/dispatch.test.ts` over `tests/integration/e2e-dispatch.test.ts`.
+- Keep `*.test.ts` for executable tests only.
+- Prefer `tests/helpers/` and `tests/fixtures/` for shared helpers and reusable data; small scope-local `*-utils.ts` files are fine when they stay adjacent to one test family.
+- Avoid repeating the scope in the file name when the folder already provides it.
+
+## 5. Before Opening a PR
 
 Run these commands and verify all pass:
 
@@ -101,7 +120,7 @@ To audit the whole repo (warnings only):
 pnpm lint:oxlint:report
 ```
 
-## 5. Branch Protections & Reviews
+## 6. Branch Protections & Reviews
 
 Pull requests must reference their GitHub Issue and pass all required checks:
 
@@ -111,7 +130,7 @@ Pull requests must reference their GitHub Issue and pass all required checks:
 
 Follow the 72-character imperative commit style (e.g. `Add policy gate scaffold`).
 
-## 6. Static Analysis (SAST)
+## 7. Static Analysis (SAST)
 
 The `sast` workflow runs Semgrep on every PR and on pushes to `main` when there are changes under `packages/` or `apps/`.
 
