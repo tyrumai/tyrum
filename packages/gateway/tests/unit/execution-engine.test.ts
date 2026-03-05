@@ -724,6 +724,95 @@ describe("ExecutionEngine (normalized)", () => {
     expect(types).not.toContain("run.resumed");
   });
 
+  it("pauses and resumes when the executor returns an approval request", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
+    });
+    await enqueuePlan(engine, {
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-executor-pause-1",
+      requestId: "test-req-1",
+      steps: [action("Research")],
+    });
+
+    let calls = 0;
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        calls += 1;
+        if (calls === 1) {
+          return {
+            success: true,
+            pause: {
+              kind: "policy",
+              prompt: "Approve execution of 'tool.http.fetch'",
+              detail: "approval required for tool 'tool.http.fetch'",
+              context: {
+                source: "llm-step-tool-execution",
+                tool_id: "tool.http.fetch",
+                tool_call_id: "tc-1",
+              },
+            },
+            cost: { duration_ms: 1 },
+          };
+        }
+        return { success: true, result: { ok: true }, cost: { duration_ms: 1 } };
+      }),
+    };
+
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    expect(calls).toBe(1);
+
+    const pausedRun = await db.get<{
+      status: string;
+      paused_reason: string | null;
+      paused_detail: string | null;
+    }>("SELECT status, paused_reason, paused_detail FROM execution_runs LIMIT 1");
+    expect(pausedRun?.status).toBe("paused");
+    expect(pausedRun?.paused_reason).toBe("policy");
+    expect(pausedRun?.paused_detail).toContain("tool.http.fetch");
+
+    const pausedStep = await db.get<{ status: string; approval_id: string | null }>(
+      "SELECT status, approval_id FROM execution_steps LIMIT 1",
+    );
+    expect(pausedStep?.status).toBe("paused");
+    expect(pausedStep?.approval_id).toBeTruthy();
+
+    const approval = await db.get<{
+      approval_id: string;
+      kind: string;
+      status: string;
+      resume_token: string | null;
+    }>(
+      "SELECT approval_id, kind, status, resume_token FROM approvals WHERE tenant_id = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(approval?.kind).toBe("policy");
+    expect(approval?.status).toBe("pending");
+    expect(approval?.resume_token).toBeTruthy();
+
+    const approvalDal = new ApprovalDal(db);
+    await approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval!.approval_id,
+      decision: "approved",
+      reason: "approved in test",
+    });
+    await engine.resumeRun(approval!.resume_token!);
+
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    expect(calls).toBe(2);
+    await drain(engine, "w1", mockExecutor);
+
+    const completedRun = await db.get<{ status: string }>(
+      "SELECT status FROM execution_runs LIMIT 1",
+    );
+    expect(completedRun?.status).toBe("succeeded");
+  });
+
   it("revokes existing resume tokens when cancelling an already-cancelled run", async () => {
     db = openTestSqliteDb();
 
