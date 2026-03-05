@@ -1144,6 +1144,64 @@ describe("WorkboardDal", () => {
     ).rejects.toThrow(/depends_on|work item|scope/i);
   });
 
+  it("rejects depends_on task ids that do not exist", async () => {
+    const dal = createDal();
+    const scope = await resolveScope();
+
+    const item = await dal.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Missing depends_on",
+        created_from_session_key: "agent:default:main",
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    await expect(
+      dal.createTask({
+        scope,
+        task: {
+          work_item_id: item.work_item_id,
+          depends_on: ["00000000-0000-0000-0000-000000000099"],
+          execution_profile: "planner",
+          side_effect_class: "none",
+        },
+        createdAtIso: "2026-02-27T00:00:01.000Z",
+      }),
+    ).rejects.toThrow(/depends_on.*not found/i);
+  });
+
+  it("rejects depends_on that includes the task id itself", async () => {
+    const dal = createDal();
+    const scope = await resolveScope();
+
+    const item = await dal.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Self depends_on",
+        created_from_session_key: "agent:default:main",
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    const taskId = "00000000-0000-0000-0000-000000000001";
+    await expect(
+      dal.createTask({
+        scope,
+        task: {
+          work_item_id: item.work_item_id,
+          depends_on: [taskId],
+          execution_profile: "planner",
+          side_effect_class: "none",
+        },
+        taskId,
+        createdAtIso: "2026-02-27T00:00:01.000Z",
+      }),
+    ).rejects.toThrow(/depends_on.*itself/i);
+  });
+
   it("rejects task dependency cycles", async () => {
     const dal = createDal();
     const scope = await resolveScope();
@@ -1188,6 +1246,77 @@ describe("WorkboardDal", () => {
         updatedAtIso: "2026-02-27T00:00:04.000Z",
       }),
     ).rejects.toThrow(/cycle/i);
+  });
+
+  it("normalizes task depends_on entries on read", async () => {
+    const dal = createDal();
+    const scope = await resolveScope();
+
+    const item = await dal.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Read normalization",
+        created_from_session_key: "agent:default:main",
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    const root = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        execution_profile: "planner",
+        side_effect_class: "none",
+      },
+      taskId: "00000000-0000-0000-0000-000000000001",
+      createdAtIso: "2026-02-27T00:00:01.000Z",
+    });
+
+    const rawTaskId = "00000000-0000-0000-0000-000000000002";
+    const createdAtIso = "2026-02-27T00:00:02.000Z";
+    await db!.run(
+      `INSERT INTO work_item_tasks (
+         tenant_id,
+         task_id,
+         work_item_id,
+         status,
+         depends_on_json,
+         execution_profile,
+         side_effect_class,
+         run_id,
+         approval_id,
+         artifacts_json,
+         started_at,
+         finished_at,
+         result_summary,
+         created_at,
+         updated_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        scope.tenant_id,
+        rawTaskId,
+        item.work_item_id,
+        "queued",
+        JSON.stringify([`  ${root.task_id}  `, root.task_id, "", "   ", root.task_id]),
+        "planner",
+        "none",
+        null,
+        null,
+        "[]",
+        null,
+        null,
+        null,
+        createdAtIso,
+        createdAtIso,
+      ],
+    );
+
+    const tasks = await dal.listTasks({ scope, work_item_id: item.work_item_id });
+    const raw = tasks.find((t) => t.task_id === rawTaskId);
+    expect(raw).toBeDefined();
+    expect(raw!.depends_on).toEqual([root.task_id]);
   });
 
   it("leases runnable tasks respecting fan-out/fan-in dependencies", async () => {

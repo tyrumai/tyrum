@@ -340,7 +340,7 @@ export function toWorkItemTask(raw: RawWorkItemTaskRow): WorkItemTask {
     task_id: raw.task_id,
     work_item_id: raw.work_item_id,
     status: raw.status as WorkItemTaskState,
-    depends_on: parseJsonOr(raw.depends_on_json, []) as string[],
+    depends_on: parseTaskDepsJson(raw.depends_on_json),
     execution_profile: raw.execution_profile,
     side_effect_class: raw.side_effect_class,
     run_id: raw.run_id ?? undefined,
@@ -350,6 +350,17 @@ export function toWorkItemTask(raw: RawWorkItemTaskRow): WorkItemTask {
     finished_at: normalizeMaybeTime(raw.finished_at),
     result_summary: raw.result_summary ?? undefined,
   } as WorkItemTask;
+}
+
+export function parseTaskDepsJson(raw: string | null): string[] {
+  const parsed = parseJsonOr(raw, []);
+  if (!Array.isArray(parsed)) return [];
+  const deps: string[] = [];
+  for (const value of parsed) {
+    if (typeof value !== "string") continue;
+    deps.push(value);
+  }
+  return normalizeTaskDeps(deps);
 }
 
 export function normalizeTaskDeps(input: readonly string[] | undefined): string[] {
