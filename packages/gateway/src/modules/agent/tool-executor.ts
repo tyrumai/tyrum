@@ -23,7 +23,11 @@ import type { SqlDb } from "../../statestore/types.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
 import type { ArtifactStore } from "../artifact/store.js";
-import { NoCapableNodeError, NodeNotPairedError } from "../../ws/protocol/errors.js";
+import {
+  NoCapableNodeError,
+  NodeDispatchDeniedError,
+  NodeNotPairedError,
+} from "../../ws/protocol/errors.js";
 import {
   resolveDesktopEvidenceSensitivity,
   shapeDesktopEvidenceForArtifacts,
@@ -621,6 +625,8 @@ export class ToolExecutor {
         retryable = true;
       } else if (err instanceof NoCapableNodeError) {
         code = "no_capable_node";
+      } else if (err instanceof NodeDispatchDeniedError) {
+        code = "policy_denied";
       } else if (err instanceof NodeNotPairedError) {
         code = "not_paired";
       }

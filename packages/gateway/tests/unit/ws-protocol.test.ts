@@ -2409,7 +2409,7 @@ describe("dispatchTask", () => {
     expect(clientWs.send).not.toHaveBeenCalled();
   });
 
-  it("does not dispatch to a node when policy denies node dispatch", async () => {
+  it("throws NodeDispatchDeniedError when policy denies node dispatch", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
     cm.addClient(nodeWs as never, ["cli"] as never, {
@@ -2477,7 +2477,7 @@ describe("dispatchTask", () => {
         },
         deps,
       ),
-    ).rejects.toBeInstanceOf(NodeNotPairedError);
+    ).rejects.toMatchObject({ name: "NodeDispatchDeniedError" });
     expect(nodeWs.send).not.toHaveBeenCalled();
   });
 

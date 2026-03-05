@@ -12,7 +12,11 @@ import {
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../../src/modules/workspace/lease.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
-import type { McpServerSpec } from "@tyrum/schemas";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdForClientCapability,
+  type McpServerSpec,
+} from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 import { NodeDispatchService } from "../../src/modules/agent/node-dispatch-service.js";
@@ -399,6 +403,70 @@ describe("ToolExecutor", () => {
       expect(result.error).toBeUndefined();
       expect(result.output).toContain('"ok":false');
       expect(result.output).toContain('"code":"not_paired"');
+    });
+
+    it("tool.node.dispatch returns a structured policy_denied error when policy denies node dispatch", async () => {
+      homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
+
+      const cm = new ConnectionManager();
+      const registry = new TaskResultRegistry();
+      const nodeWs = { send: vi.fn(), on: vi.fn(), readyState: 1 } as never;
+      cm.addClient(nodeWs, ["desktop"], {
+        id: "conn-1",
+        role: "node",
+        deviceId: "node-1",
+        protocolRev: 2,
+      });
+
+      const deps = {
+        connectionManager: cm,
+        taskResults: registry,
+        nodePairingDal: {
+          getByNodeId: vi.fn(async () => {
+            return {
+              status: "approved",
+              capability_allowlist: [
+                {
+                  id: descriptorIdForClientCapability("desktop"),
+                  version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                },
+              ],
+            };
+          }),
+        },
+        policyService: {
+          isEnabled: () => true,
+          isObserveOnly: () => false,
+          evaluateToolCall: vi.fn(async () => {
+            return {
+              decision: "deny",
+              policy_snapshot: { policy_snapshot_id: "snap-1" },
+            };
+          }),
+        },
+      };
+
+      const executor = new ToolExecutor(
+        homeDir,
+        stubMcpManager(),
+        new Map(),
+        fetch,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        new NodeDispatchService(deps as never),
+      );
+
+      const result = await executor.execute("tool.node.dispatch", "call-7", {
+        capability: "tyrum.desktop",
+        action: "Desktop",
+      });
+
+      expect(result.error).toBeUndefined();
+      expect(result.output).toContain('"ok":false');
+      expect(result.output).toContain('"code":"policy_denied"');
     });
 
     it("tool.node.dispatch omits oversized evidence to keep output bounded", async () => {
