@@ -1,25 +1,50 @@
-import { readFile } from "node:fs/promises";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createAdminWsClient, serializeWsRequest } from "../helpers/ws-protocol-test-helpers.js";
+
+const { handleWorkboardMessageMock } = vi.hoisted(() => ({
+  handleWorkboardMessageMock: vi.fn(async (_client: unknown, msg: unknown) => {
+    const type = (msg as { type?: string }).type;
+    const requestId = (msg as { request_id?: string }).request_id;
+    if (!type?.startsWith("work.")) return undefined;
+    return {
+      request_id: requestId ?? "missing",
+      type,
+      ok: true as const,
+      result: { mocked: true },
+    };
+  }),
+}));
+
+vi.mock("../../src/ws/protocol/workboard-handlers.js", () => {
+  return { handleWorkboardMessage: handleWorkboardMessageMock };
+});
 
 describe("workboard WS handler extraction", () => {
-  it("extracts work.* handlers into a dedicated module", async () => {
-    const handlerSource = await readFile(
-      new URL("../../src/ws/protocol/handler.ts", import.meta.url),
-      {
-        encoding: "utf8",
-      },
-    );
+  afterEach(() => {
+    handleWorkboardMessageMock.mockClear();
+    vi.resetModules();
+    vi.restoreAllMocks();
+  });
 
-    expect(handlerSource).toContain("handleWorkboardMessage(");
-    const inlineCheckExample = 'if (msg.type === "work.create") {';
-    expect(inlineCheckExample).toMatch(/msg\.type === "work\./);
-    expect(handlerSource).not.toMatch(/msg\.type === "work\./);
+  it("routes work.* requests through workboard-handlers", async () => {
+    const client = createAdminWsClient();
+    const deps = {};
+    const raw = serializeWsRequest({ type: "work.create" });
 
-    const workboardSource = await readFile(
-      new URL("../../src/ws/protocol/workboard-handlers.ts", import.meta.url),
-      { encoding: "utf8" },
+    const { handleClientMessage } = await import("../../src/ws/protocol/handler.js");
+    const res = await handleClientMessage(client, raw, deps);
+
+    expect(handleWorkboardMessageMock).toHaveBeenCalledTimes(1);
+    expect(handleWorkboardMessageMock).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({ request_id: "req-1", type: "work.create" }),
+      deps,
     );
-    expect(workboardSource).toContain("handleWorkboardMessage");
-    expect(workboardSource).toContain('"work.create"');
+    expect(res).toEqual({
+      request_id: "req-1",
+      type: "work.create",
+      ok: true,
+      result: { mocked: true },
+    });
   });
 });
