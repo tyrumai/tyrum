@@ -32,22 +32,37 @@ Examples:
 
 Tyrum instantiates model providers using standard provider adapters referenced by the model catalog (for example, provider packages in the Vercel AI SDK ecosystem). Tyrum does not maintain a separate built-in mapping table of provider names to implementations.
 
-## Selection and fallback
+## Configured presets and selection
+
+Operators configure **providers** and **model presets** in the control plane:
+
+- A provider can have multiple configured accounts.
+- A model preset points to one discovered `provider/model` and applies curated options such as `reasoning_effort`.
+- Built-in execution profiles are assigned to configured presets.
+
+At runtime, Tyrum resolves models in this order:
+
+1. Session preset override (`/model <preset_key>`).
+2. Session raw model override (legacy compatibility).
+3. Execution-profile preset assignment.
+4. Legacy bootstrap fallback when no preset assignment exists.
+
+## Fallback
 
 When a model call fails, Tyrum attempts recovery in a predictable order:
 
-1. **Auth profile rotation** within the provider (if multiple credentials are configured).
+1. **Provider account rotation** within the provider (if multiple credentials are configured).
 2. **Model fallback** to the next model in an explicit fallback chain.
 
 Failures should be surfaced as structured events so clients can show what happened and why.
 
-## Auth profile selection (within a provider)
+## Provider account selection (within a provider)
 
-Providers can have multiple **auth profiles** (API keys and/or OAuth profiles). Profiles are scoped per agent, reference secrets by handle, and can represent multiple accounts.
+Providers can have multiple configured accounts (internally backed by **auth profiles**). These records reference secrets by handle and can represent multiple API-key or token-based accounts.
 
 Selection behavior is deterministic:
 
-- a profile can be explicitly pinned (globally or per-session)
+- an account can be explicitly pinned (globally or per-session)
 - otherwise Tyrum chooses a stable default order and pins the chosen profile per session
 - on rate limits and transient failures, Tyrum rotates to the next eligible profile and applies cooldowns
 
@@ -58,7 +73,7 @@ Details: [Provider Auth and Onboarding](./auth.md) and [Secrets](./secrets.md).
 Model selection emits events that include:
 
 - chosen `provider/model`
-- chosen auth profile id (redacted)
+- chosen provider account id (redacted)
 - rotations, cooldowns, and fallback decisions
 
-Operator surfaces (`/status`, `/usage`, UI settings) expose the active model/provider, auth profile state, and provider usage where available (see [Observability](./observability.md)).
+Operator surfaces (`/status`, `/usage`, Configure > Providers, Configure > Models) expose the active model/provider, account state, and provider usage where available (see [Observability](./observability.md)).

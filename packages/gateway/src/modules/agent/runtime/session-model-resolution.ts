@@ -9,6 +9,8 @@ import type { LanguageModel } from "ai";
 import type { AgentConfig as AgentConfigT } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../../container.js";
 import type { AuthProfileRow } from "../../models/auth-profile-dal.js";
+import { ConfiguredModelPresetDal } from "../../models/configured-model-preset-dal.js";
+import { ExecutionProfileModelAssignmentDal } from "../../models/execution-profile-model-assignment-dal.js";
 import { SessionModelOverrideDal } from "../../models/session-model-override-dal.js";
 import { createProviderFromNpm } from "../../models/provider-factory.js";
 import type { SecretProvider } from "../../secret/provider.js";
@@ -40,6 +42,7 @@ export async function resolveSessionModel(
     config: AgentConfigT;
     tenantId: string;
     sessionId: string;
+    executionProfileId?: string;
     profileModelId?: string;
     fetchImpl?: typeof fetch;
   },
@@ -60,16 +63,69 @@ export async function resolveSessionModel(
     sessionId: input.sessionId,
   });
   const overrideModelId = override?.model_id?.trim();
+  const presetDal = new ConfiguredModelPresetDal(deps.container.db);
+  const assignmentDal = new ExecutionProfileModelAssignmentDal(deps.container.db);
+  const executionProfileId = input.executionProfileId;
+  const sessionPreset =
+    override?.preset_key != null
+      ? await presetDal.getByKey({
+          tenantId: input.tenantId,
+          presetKey: override.preset_key,
+        })
+      : undefined;
+  const assignedPreset =
+    sessionPreset || !executionProfileId
+      ? undefined
+      : await (async () => {
+          const assignment = await assignmentDal.getByProfileId({
+            tenantId: input.tenantId,
+            executionProfileId,
+          });
+          if (!assignment) return undefined;
+          return await presetDal.getByKey({
+            tenantId: input.tenantId,
+            presetKey: assignment.preset_key,
+          });
+        })();
 
-  const rawCandidateIds = [
-    overrideModelId,
-    input.profileModelId,
-    input.config.model.model,
-    ...(input.config.model.fallback ?? []),
-  ]
-    .filter((v): v is string => typeof v === "string")
-    .map((v) => v.trim())
-    .filter((v, i, a) => v.length > 0 && a.indexOf(v) === i);
+  type CandidateInput = {
+    rawModelId: string;
+    optionsOverride?: Record<string, unknown>;
+  };
+
+  const candidateInputs: CandidateInput[] = (() => {
+    const baseCandidates = [
+      input.profileModelId,
+      input.config.model.model,
+      ...(input.config.model.fallback ?? []),
+    ]
+      .filter((value): value is string => typeof value === "string")
+      .map((rawModelId) => ({ rawModelId }));
+    const presetCandidate = (
+      preset: NonNullable<typeof sessionPreset> | NonNullable<typeof assignedPreset>,
+    ): CandidateInput => ({
+      rawModelId: `${preset.provider_key}/${preset.model_id}`,
+      optionsOverride: preset.options,
+    });
+
+    if (sessionPreset) {
+      return [presetCandidate(sessionPreset), ...baseCandidates];
+    }
+
+    if (overrideModelId) {
+      return [{ rawModelId: overrideModelId }, ...baseCandidates];
+    }
+
+    if (assignedPreset) {
+      return [presetCandidate(assignedPreset), ...baseCandidates];
+    }
+
+    return baseCandidates;
+  })();
+
+  const rawCandidateIds = candidateInputs
+    .map((candidate) => candidate.rawModelId.trim())
+    .filter((value, index, values) => value.length > 0 && values.indexOf(value) === index);
 
   const loaded = await deps.container.modelCatalog.getEffectiveCatalog({
     tenantId: input.tenantId,
@@ -85,12 +141,16 @@ export async function resolveSessionModel(
     model: ModelEntry;
     npm: string;
     api: string | undefined;
+    optionsOverride?: Record<string, unknown>;
   };
 
   const invalidCandidateIds: string[] = [];
+  const optionsByCandidateId = new Map<string, Record<string, unknown>>();
   const parsedCandidates: Array<{ providerId: string; modelId: string }> = [];
   const seenCandidates = new Set<string>();
-  for (const rawCandidate of rawCandidateIds) {
+  for (const candidateInput of candidateInputs) {
+    const rawCandidate = candidateInput.rawModelId.trim();
+    if (!rawCandidate) continue;
     let parsed: { providerId: string; modelId: string } | undefined;
     try {
       parsed = parseProviderModelId(rawCandidate);
@@ -108,6 +168,9 @@ export async function resolveSessionModel(
     const key = `${parsed.providerId}/${parsed.modelId}`;
     if (seenCandidates.has(key)) continue;
     seenCandidates.add(key);
+    if (candidateInput.optionsOverride) {
+      optionsByCandidateId.set(key, candidateInput.optionsOverride);
+    }
     parsedCandidates.push(parsed);
   }
 
@@ -141,6 +204,7 @@ export async function resolveSessionModel(
         model,
         npm,
         api,
+        optionsOverride: optionsByCandidateId.get(`${providerId}/${modelId}`),
       };
     })
     .filter((v): v is ResolvedCandidate => Boolean(v));
@@ -187,6 +251,7 @@ export async function resolveSessionModel(
         modelOptions,
         variantOptions,
         input.config.model.options,
+        chosen.optionsOverride ?? {},
       );
     })();
 

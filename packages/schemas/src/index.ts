@@ -139,6 +139,40 @@ export {
 } from "./risk.js";
 
 export {
+  ProviderConfigFieldKind,
+  ProviderConfigFieldInput,
+  ProviderConfigField,
+  ProviderAccountMethod,
+  ProviderRegistryEntry,
+  ProviderRegistryResponse,
+  ConfiguredProviderAccount,
+  ConfiguredProviderGroup,
+  ConfiguredProviderListResponse,
+  ProviderAccountCreateRequest,
+  ProviderAccountUpdateRequest,
+  ProviderAccountMutateResponse,
+} from "./provider-config.js";
+
+export {
+  ConfiguredExecutionProfileId,
+  ConfiguredModelPresetOptionSet,
+  ConfiguredModelPreset,
+  ConfiguredModelPresetListResponse,
+  ConfiguredModelPresetCreateRequest,
+  ConfiguredModelPresetUpdateRequest,
+  ConfiguredModelPresetMutateResponse,
+  ConfiguredAvailableModel,
+  ConfiguredAvailableModelListResponse,
+  ExecutionProfileModelAssignment,
+  ExecutionProfileModelAssignmentListResponse,
+  ExecutionProfileModelAssignmentUpdateRequest,
+  ExecutionProfileModelAssignmentUpdateResponse,
+  ModelConfigDeleteRequest,
+  ModelConfigDeleteConflictResponse,
+  ModelConfigDeleteResponse,
+} from "./model-config.js";
+
+export {
   MemoryItemId,
   MemoryItemKind,
   MemorySensitivity,

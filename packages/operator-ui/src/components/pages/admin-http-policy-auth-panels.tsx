@@ -3,8 +3,6 @@ import * as React from "react";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
-import { AdminHttpAuthPinsCard } from "./admin-http-auth-pins-card.js";
-import { AdminHttpAuthProfilesCard } from "./admin-http-auth-profiles-card.js";
 import { AdminHttpPolicyCard } from "./admin-http-policy-card.js";
 import type { PendingMutation } from "./admin-http-panels.shared.js";
 import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
@@ -30,7 +28,7 @@ export function AdminHttpPolicyAuthPanels({ core }: { core: OperatorCore }) {
   }, []);
 
   return (
-    <div className="grid gap-4" data-testid="admin-http-policy-auth-panels">
+    <div className="grid gap-4" data-testid="admin-http-policy-panel">
       {!canMutate ? (
         <div className="grid gap-3">
           <Alert
@@ -53,8 +51,6 @@ export function AdminHttpPolicyAuthPanels({ core }: { core: OperatorCore }) {
       ) : null}
 
       <AdminHttpPolicyCard http={http} openMutation={openMutation} canMutate={canMutate} />
-      <AdminHttpAuthProfilesCard http={http} openMutation={openMutation} canMutate={canMutate} />
-      <AdminHttpAuthPinsCard http={http} openMutation={openMutation} canMutate={canMutate} />
 
       <ConfirmDangerDialog
         open={pendingMutation !== null}

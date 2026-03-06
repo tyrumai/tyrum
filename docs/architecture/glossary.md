@@ -221,7 +221,7 @@ An opaque reference to a secret stored in the secret provider. Executors and cap
 
 ## Auth profile
 
-A durable record describing how Tyrum authenticates to a provider (API key or OAuth), represented as metadata plus secret handles. Auth profiles are scoped per agent and participate in deterministic rotation and model failover.
+A durable internal record describing how Tyrum authenticates to a provider account (API key, OAuth, or token), represented as metadata plus secret handles. Operator-facing UX presents these as configured provider accounts rather than raw auth profiles.
 
 ## Context report
 

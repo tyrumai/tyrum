@@ -18,6 +18,7 @@ import { ProviderUsagePoller } from "../observability/provider-usage.js";
 import { SessionDal } from "../agent/session-dal.js";
 import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../identity/scope.js";
 import { ChannelThreadDal } from "../channels/thread-dal.js";
+import { ConfiguredModelPresetDal } from "../models/configured-model-preset-dal.js";
 import { SessionModelOverrideDal } from "../models/session-model-override-dal.js";
 import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
@@ -94,6 +95,10 @@ function jsonBlock(value: unknown): string {
 function formatUsageTotals(value: unknown): string {
   if (!value || typeof value !== "object") return "No usage data available.";
   return jsonBlock(value);
+}
+
+function isLegacyConfiguredPresetKey(presetKey: string): boolean {
+  return presetKey.trim().toLowerCase().startsWith("legacy-");
 }
 
 type UsageTotals = {
@@ -459,7 +464,7 @@ function helpText(): string {
     "- /presence",
     "- /approvals [pending|approved|denied|expired]",
     "- /pairings [pending|approved|denied|revoked]",
-    "- /model [provider/model[@profile]]",
+    "- /model [preset_key|provider/model[@profile]]",
     "- /intake [auto|inline|delegate_execute|delegate_plan]",
     "- /queue [collect|followup|steer|steer_backlog|interrupt]",
     "- /send [on|off|inherit]",
@@ -967,7 +972,8 @@ export async function executeCommand(
     const resolved = await resolveChannelThread(deps.db, ctx);
     if (!resolved) {
       return {
-        output: "Usage: /model <provider/model> (requires key or channel/thread context)",
+        output:
+          "Usage: /model <preset_key|provider/model[@profile]> (requires key or channel/thread context)",
         data: null,
       };
     }
@@ -986,6 +992,7 @@ export async function executeCommand(
       containerKind: "channel",
     });
     const overrides = new SessionModelOverrideDal(deps.db);
+    const presetDal = new ConfiguredModelPresetDal(deps.db);
 
     const modelArg = toks[1];
     if (!modelArg) {
@@ -996,26 +1003,75 @@ export async function executeCommand(
       const payload = {
         session_id: session.session_id,
         model_id: existing?.model_id ?? null,
+        preset_key: existing?.preset_key ?? null,
       };
       return { output: jsonBlock(payload), data: payload };
     }
 
     const trimmed = modelArg.trim();
     const at = trimmed.indexOf("@");
-    const modelIdRaw = at >= 0 ? trimmed.slice(0, at).trim() : trimmed;
+    const modelSelectorRaw = at >= 0 ? trimmed.slice(0, at).trim() : trimmed;
     const profileIdRaw = at >= 0 ? trimmed.slice(at + 1).trim() : undefined;
 
     if (profileIdRaw !== undefined && profileIdRaw.length === 0) {
       return { output: "Usage: /model <provider/model>@<profile>", data: null };
     }
 
+    const directPreset = profileIdRaw
+      ? undefined
+      : await presetDal.getByKey({
+          tenantId: session.tenant_id,
+          presetKey: modelSelectorRaw,
+        });
+    let presetKey: string | null = directPreset?.preset_key ?? null;
+    let modelIdRaw =
+      directPreset != null
+        ? `${directPreset.provider_key}/${directPreset.model_id}`
+        : modelSelectorRaw;
+
     const slash = modelIdRaw.indexOf("/");
     if (slash <= 0 || slash === modelIdRaw.length - 1) {
-      return { output: `Invalid model '${modelIdRaw}' (expected provider/model).`, data: null };
+      if (profileIdRaw) {
+        return {
+          output: `Invalid model '${modelSelectorRaw}' (expected provider/model).`,
+          data: null,
+        };
+      }
+      return directPreset
+        ? {
+            output: `Configured model preset '${modelSelectorRaw}' is misconfigured.`,
+            data: null,
+          }
+        : { output: `Configured model preset '${modelSelectorRaw}' not found.`, data: null };
     }
 
     const providerId = modelIdRaw.slice(0, slash);
     const modelId = modelIdRaw.slice(slash + 1);
+
+    if (!directPreset && !profileIdRaw) {
+      const matchingPresets = (await presetDal.list({ tenantId: session.tenant_id })).filter(
+        (preset) =>
+          !isLegacyConfiguredPresetKey(preset.preset_key) &&
+          preset.provider_key === providerId &&
+          preset.model_id === modelId,
+      );
+
+      if (matchingPresets.length > 1) {
+        const keys = matchingPresets
+          .map((preset) => preset.preset_key)
+          .sort((a, b) => a.localeCompare(b))
+          .join(", ");
+        return {
+          output: `Model '${modelIdRaw}' matches multiple configured presets: ${keys}. Use /model <preset_key>.`,
+          data: null,
+        };
+      }
+      if (matchingPresets.length === 1) {
+        const matchedPreset = matchingPresets[0]!;
+        presetKey = matchedPreset.preset_key;
+        modelIdRaw = `${matchedPreset.provider_key}/${matchedPreset.model_id}`;
+      }
+    }
 
     if (deps.modelCatalog || deps.modelsDev) {
       const loaded = deps.modelCatalog
@@ -1063,6 +1119,7 @@ export async function executeCommand(
           tenantId: session.tenant_id,
           sessionId: session.session_id,
           modelId: modelIdRaw,
+          presetKey: null,
         });
         const pins = new SessionProviderPinDal(tx);
         const pinned = await pins.upsert({
@@ -1090,6 +1147,7 @@ export async function executeCommand(
         tenantId: session.tenant_id,
         sessionId: session.session_id,
         modelId: modelIdRaw,
+        presetKey,
       });
       const pins = new SessionProviderPinDal(tx);
       await pins.clear({
@@ -1103,6 +1161,7 @@ export async function executeCommand(
     const payload = {
       session_id: row.session_id,
       model_id: row.model_id,
+      preset_key: row.preset_key,
     };
     return { output: jsonBlock(payload), data: payload };
   }

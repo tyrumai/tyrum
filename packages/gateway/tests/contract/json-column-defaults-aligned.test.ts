@@ -42,6 +42,15 @@ function findCreateTableBlock(sql: string, table: string): string | null {
   return match ? (match[1] ?? null) : null;
 }
 
+function findAddColumnBlock(sql: string, table: string, column: string): string | null {
+  const pattern = new RegExp(
+    `ALTER\\s+TABLE\\s+${escapeRegex(table)}\\s+ADD\\s+COLUMN\\s+${escapeRegex(column)}\\b([\\s\\S]{0,240}?);`,
+    "m",
+  );
+  const match = sql.match(pattern);
+  return match ? (match[0] ?? null) : null;
+}
+
 describe("Postgres migrations", () => {
   it("keeps *_json column defaults aligned with canonical spec", () => {
     const specs = readSpecs().filter((s) => s.default !== null);
@@ -49,8 +58,12 @@ describe("Postgres migrations", () => {
 
     const sql = readPostgresMigrationsSql();
     for (const spec of specs) {
-      const block = findCreateTableBlock(sql, spec.table);
-      expect(block, `missing CREATE TABLE block for ${spec.table}`).toBeTruthy();
+      const createTableBlock = findCreateTableBlock(sql, spec.table);
+      const block =
+        createTableBlock && createTableBlock.includes(spec.column)
+          ? createTableBlock
+          : findAddColumnBlock(sql, spec.table, spec.column);
+      expect(block, `missing column definition for ${spec.table}.${spec.column}`).toBeTruthy();
       if (!block) continue;
 
       const defaultValue = spec.default;

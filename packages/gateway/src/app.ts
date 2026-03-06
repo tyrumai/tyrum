@@ -35,6 +35,8 @@ import { createDeviceTokenRoutes } from "./routes/device-token.js";
 import { createPluginRoutes } from "./routes/plugins.js";
 import { createModelsDevRoutes } from "./routes/models-dev.js";
 import { createProviderOAuthRoutes } from "./routes/provider-oauth.js";
+import { createProviderConfigRoutes } from "./routes/provider-config.js";
+import { createModelConfigRoutes } from "./routes/model-config.js";
 import { createContractRoutes } from "./routes/contracts.js";
 import { createSystemRoutes } from "./routes/system.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
@@ -47,6 +49,8 @@ import { TelegramChannelQueue } from "./modules/channels/telegram.js";
 import { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
 import { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "./modules/models/session-pin-dal.js";
+import { ConfiguredModelPresetDal } from "./modules/models/configured-model-preset-dal.js";
+import { ExecutionProfileModelAssignmentDal } from "./modules/models/execution-profile-model-assignment-dal.js";
 import type { Playbook } from "@tyrum/schemas";
 import type { AgentRegistry } from "./modules/agent/registry.js";
 import type { AuthTokenService } from "./modules/auth/auth-token-service.js";
@@ -122,6 +126,8 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
 
   const authProfileDal = new AuthProfileDal(container.db);
   const pinDal = new SessionProviderPinDal(container.db);
+  const configuredModelPresetDal = new ConfiguredModelPresetDal(container.db);
+  const executionProfileModelAssignmentDal = new ExecutionProfileModelAssignmentDal(container.db);
   const routingConfigDal = new RoutingConfigDal(container.db);
 
   const secretProviderForTenant = opts.secretProviderForTenant;
@@ -283,6 +289,29 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route(
     "/",
     createModelsDevRoutes({ modelsDev: container.modelsDev, modelCatalog: container.modelCatalog }),
+  );
+  if (secretProviderForTenant) {
+    app.route(
+      "/",
+      createProviderConfigRoutes({
+        db: container.db,
+        authProfileDal,
+        modelCatalog: container.modelCatalog,
+        secretProviderForTenant,
+        configuredModelPresetDal,
+        executionProfileModelAssignmentDal,
+      }),
+    );
+  }
+  app.route(
+    "/",
+    createModelConfigRoutes({
+      db: container.db,
+      modelCatalog: container.modelCatalog,
+      authProfileDal,
+      configuredModelPresetDal,
+      executionProfileModelAssignmentDal,
+    }),
   );
   if (secretProviderForTenant && isAuthProfilesEnabled()) {
     app.route(

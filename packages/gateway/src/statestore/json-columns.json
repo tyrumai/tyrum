@@ -43,6 +43,13 @@
   },
   {
     "table": "auth_profiles",
+    "column": "config_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "auth_profiles",
     "column": "labels_json",
     "shape": "object",
     "nullable": false,
@@ -138,6 +145,13 @@
     "shape": "array",
     "nullable": true,
     "default": null
+  },
+  {
+    "table": "configured_model_presets",
+    "column": "options_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
   },
   {
     "table": "context_reports",

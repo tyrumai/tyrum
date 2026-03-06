@@ -6,6 +6,7 @@ import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { ModelsDevService } from "../../src/modules/models/models-dev-service.js";
 import { SessionDal } from "../../src/modules/agent/session-dal.js";
+import { ConfiguredModelPresetDal } from "../../src/modules/models/configured-model-preset-dal.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -86,6 +87,24 @@ describe("missing slash commands", () => {
       throw new Error("channel_inbox insert failed");
     }
     return row.inbox_id;
+  }
+
+  async function createConfiguredPreset(input: {
+    presetKey: string;
+    displayName: string;
+    providerKey: string;
+    modelId: string;
+    options?: Record<string, unknown>;
+  }) {
+    if (!db) throw new Error("db not initialized");
+    return await new ConfiguredModelPresetDal(db).create({
+      tenantId: DEFAULT_TENANT_ID,
+      presetKey: input.presetKey,
+      displayName: input.displayName,
+      providerKey: input.providerKey,
+      modelId: input.modelId,
+      options: input.options ?? {},
+    });
   }
 
   afterEach(async () => {
@@ -360,6 +379,124 @@ describe("missing slash commands", () => {
     });
   });
 
+  it("supports /model <preset_key> for a session", async () => {
+    db = openTestSqliteDb();
+    await createConfiguredPreset({
+      presetKey: "anthropic-default",
+      displayName: "Anthropic Default",
+      providerKey: "anthropic",
+      modelId: "claude-3.5-sonnet",
+      options: { reasoning_effort: "high" },
+    });
+
+    const result = await executeCommand("/model anthropic-default", {
+      db,
+      commandContext: { agentId: "default", channel: "ui", threadId: "thread-preset" },
+    });
+
+    const payload = result.data as { session_id: string; model_id: string; preset_key: string };
+    expect(payload).toMatchObject({
+      model_id: "anthropic/claude-3.5-sonnet",
+      preset_key: "anthropic-default",
+    });
+
+    const row = await db.get<{ model_id: string; preset_key: string | null }>(
+      `SELECT model_id, preset_key
+       FROM session_model_overrides
+       WHERE tenant_id = ? AND session_id = ?`,
+      [DEFAULT_TENANT_ID, payload.session_id],
+    );
+    expect(row).toEqual({
+      model_id: "anthropic/claude-3.5-sonnet",
+      preset_key: "anthropic-default",
+    });
+  });
+
+  it("reports misconfigured configured presets without blaming user input", async () => {
+    db = openTestSqliteDb();
+    const nowIso = new Date().toISOString();
+
+    await db.run(
+      `INSERT INTO configured_model_presets (
+         tenant_id,
+         preset_id,
+         preset_key,
+         display_name,
+         provider_key,
+         model_id,
+         options_json,
+         created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, '{}', ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        randomUUID(),
+        "broken-preset",
+        "Broken preset",
+        "",
+        "gpt-4.1",
+        nowIso,
+        nowIso,
+      ],
+    );
+
+    const result = await executeCommand("/model broken-preset", {
+      db,
+      commandContext: { agentId: "default", channel: "ui", threadId: "thread-broken-preset" },
+    });
+
+    expect(result.data).toBeNull();
+    expect(result.output).toBe("Configured model preset 'broken-preset' is misconfigured.");
+  });
+
+  it("resolves /model <provider/model> to a unique configured preset", async () => {
+    db = openTestSqliteDb();
+    await createConfiguredPreset({
+      presetKey: "anthropic-default",
+      displayName: "Anthropic Default",
+      providerKey: "anthropic",
+      modelId: "claude-3.5-sonnet",
+      options: { reasoning_effort: "medium" },
+    });
+
+    const result = await executeCommand("/model anthropic/claude-3.5-sonnet", {
+      db,
+      commandContext: { agentId: "default", channel: "ui", threadId: "thread-unique" },
+    });
+
+    const payload = result.data as { session_id: string; model_id: string; preset_key: string };
+    expect(payload).toMatchObject({
+      model_id: "anthropic/claude-3.5-sonnet",
+      preset_key: "anthropic-default",
+    });
+  });
+
+  it("rejects /model <provider/model> when multiple configured presets target the same model", async () => {
+    db = openTestSqliteDb();
+    await createConfiguredPreset({
+      presetKey: "anthropic-default",
+      displayName: "Anthropic Default",
+      providerKey: "anthropic",
+      modelId: "claude-3.5-sonnet",
+    });
+    await createConfiguredPreset({
+      presetKey: "anthropic-review",
+      displayName: "Anthropic Review",
+      providerKey: "anthropic",
+      modelId: "claude-3.5-sonnet",
+    });
+
+    const result = await executeCommand("/model anthropic/claude-3.5-sonnet", {
+      db,
+      commandContext: { agentId: "default", channel: "ui", threadId: "thread-ambiguous" },
+    });
+
+    expect(result.data).toBeNull();
+    expect(result.output).toContain("matches multiple configured presets");
+    expect(result.output).toContain("anthropic-default");
+    expect(result.output).toContain("anthropic-review");
+  });
+
   it("supports /model <provider/model>@<profile> for a session", async () => {
     const prevEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
     process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
@@ -404,13 +541,16 @@ describe("missing slash commands", () => {
         auth_profile_key: "profile-openrouter-1",
       });
 
-      const override = await db.get<{ model_id: string }>(
-        `SELECT model_id
+      const override = await db.get<{ model_id: string; preset_key: string | null }>(
+        `SELECT model_id, preset_key
          FROM session_model_overrides
          WHERE tenant_id = ? AND session_id = ?`,
         [DEFAULT_TENANT_ID, payload.session_id],
       );
-      expect(override?.model_id).toBe("openrouter/gpt-4o");
+      expect(override).toEqual({
+        model_id: "openrouter/gpt-4o",
+        preset_key: null,
+      });
 
       const pin = await db.get<{ auth_profile_id: string }>(
         `SELECT auth_profile_id

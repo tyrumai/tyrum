@@ -15,4 +15,19 @@ describe("migration aliases", () => {
       findAppliedMigrationAlias("109_default_tenant_guardrails.sql", new Set()),
     ).toBeUndefined();
   });
+
+  it("treats rebased provider-model-config migrations as already applied", () => {
+    expect(
+      findAppliedMigrationAlias(
+        "113_provider_model_config.sql",
+        new Set(["108_provider_model_config.sql"]),
+      ),
+    ).toBe("108_provider_model_config.sql");
+    expect(
+      findAppliedMigrationAlias(
+        "114_provider_model_config_indexes.sql",
+        new Set(["109_provider_model_config_indexes.sql"]),
+      ),
+    ).toBe("109_provider_model_config_indexes.sql");
+  });
 });

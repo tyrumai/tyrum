@@ -22,6 +22,23 @@ export type {
   ModelsProviderDetailResponse,
   ModelsProviderModelsResponse,
 } from "./models.js";
+export type {
+  ProviderRegistryResult,
+  ConfiguredProviderListResult,
+  ProviderAccountCreateInput,
+  ProviderAccountUpdateInput,
+  ProviderDeleteInput,
+  ProviderDeleteResult,
+} from "./provider-config.js";
+export type {
+  ConfiguredModelPresetListResult,
+  ConfiguredAvailableModelListResult,
+  ConfiguredModelPresetCreateInput,
+  ConfiguredModelPresetUpdateInput,
+  ExecutionProfileAssignmentUpdateInput,
+  ModelPresetDeleteInput,
+  ModelPresetDeleteResult,
+} from "./model-config.js";
 export type { SecretStoreResponse } from "./secrets.js";
 export type { AuthPinSetResult } from "./auth.js";
 export type { ContractCatalog, ContractJsonSchema } from "./contracts.js";

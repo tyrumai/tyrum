@@ -13,6 +13,7 @@ import { createContextApi, type ContextApi } from "./context.js";
 import { createDeviceTokensApi, type DeviceTokensApi } from "./device-tokens.js";
 import { createHealthApi, type HealthApi } from "./health.js";
 import { createModelsApi, type ModelsApi } from "./models.js";
+import { createModelConfigApi, type ModelConfigApi } from "./model-config.js";
 import {
   createPairingsApi,
   createPresenceApi,
@@ -25,6 +26,7 @@ import {
 } from "./observability.js";
 import { createPluginsApi, type PluginsApi } from "./plugins.js";
 import { createPolicyApi, type PolicyApi } from "./policy.js";
+import { createProviderConfigApi, type ProviderConfigApi } from "./provider-config.js";
 import { createRoutingConfigApi, type RoutingConfigApi } from "./routing-config.js";
 import { createSecretsApi, type SecretsApi } from "./secrets.js";
 import { HttpTransport, type TyrumHttpClientOptions } from "./shared.js";
@@ -38,6 +40,8 @@ export interface TyrumHttpClient {
   plugins: PluginsApi;
   contracts: ContractsApi;
   models: ModelsApi;
+  providerConfig: ProviderConfigApi;
+  modelConfig: ModelConfigApi;
   status: StatusApi;
   usage: UsageApi;
   presence: PresenceApi;
@@ -79,6 +83,8 @@ export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHtt
     plugins: createPluginsApi(transport),
     contracts: createContractsApi(transport),
     models: createModelsApi(transport),
+    providerConfig: createProviderConfigApi(transport),
+    modelConfig: createModelConfigApi(transport),
     status: createStatusApi(transport),
     usage: createUsageApi(transport),
     presence: createPresenceApi(transport),
