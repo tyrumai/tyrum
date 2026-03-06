@@ -493,6 +493,10 @@ async function handleGatewayStop(): Promise<{ status: "stopped" }> {
   return { status: "stopped" };
 }
 
+export async function stopEmbeddedGatewayFromMainProcess(): Promise<{ status: "stopped" }> {
+  return handleGatewayStop();
+}
+
 async function handleGatewayStatus(): Promise<ReturnType<typeof getGatewayStatusSnapshot>> {
   const config = loadConfig();
   return getGatewayStatusSnapshot(manager?.status, config.embedded.port);

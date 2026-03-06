@@ -1,6 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useState } from "react";
-import type { DesktopApi } from "../../../desktop-api.js";
+import type { DesktopApi, DesktopBackgroundState } from "../../../desktop-api.js";
 import { useHostApi } from "../../../host/host-api.js";
 import { formatErrorMessage } from "../../../utils/format-error-message.js";
 import { Alert } from "../../ui/alert.js";
@@ -58,6 +58,9 @@ function DesktopConnectionPage({ core, api }: { core: OperatorCore; api: Desktop
   const [nodeStatus, setNodeStatus] = useState("disconnected");
   const [busy, setBusy] = useState(false);
   const [gatewayError, setGatewayError] = useState<string | null>(null);
+  const [backgroundState, setBackgroundState] = useState<DesktopBackgroundState | null>(null);
+  const [backgroundBusy, setBackgroundBusy] = useState(false);
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -97,6 +100,18 @@ function DesktopConnectionPage({ core, api }: { core: OperatorCore; api: Desktop
         // Ignore snapshot failures; live status events and actions still update the view.
       });
 
+    if (api.background?.getState) {
+      void api.background
+        .getState()
+        .then((state) => {
+          if (disposed) return;
+          setBackgroundState(state);
+        })
+        .catch(() => {
+          // Ignore background-state failures; the feature simply remains unavailable.
+        });
+    }
+
     const unsubscribe = api.onStatusChange((s) => {
       if (disposed) return;
       const info = s as Record<string, unknown>;
@@ -109,6 +124,13 @@ function DesktopConnectionPage({ core, api }: { core: OperatorCore; api: Desktop
       }
       if (typeof info["nodeStatus"] === "string") setNodeStatus(info["nodeStatus"] as string);
       if (typeof info["port"] === "number") setPort(info["port"] as number);
+      if (
+        info["backgroundState"] &&
+        typeof info["backgroundState"] === "object" &&
+        !Array.isArray(info["backgroundState"])
+      ) {
+        setBackgroundState(info["backgroundState"] as DesktopBackgroundState);
+      }
     });
 
     return () => {
@@ -179,6 +201,20 @@ function DesktopConnectionPage({ core, api }: { core: OperatorCore; api: Desktop
     }
   };
 
+  const toggleBackgroundMode = async (nextEnabled: boolean): Promise<void> => {
+    if (!api.background || backgroundBusy || busy) return;
+    setBackgroundBusy(true);
+    setBackgroundError(null);
+    try {
+      const nextState = await api.background.setEnabled(nextEnabled);
+      setBackgroundState(nextState);
+    } catch (error) {
+      setBackgroundError(formatErrorMessage(error));
+    } finally {
+      setBackgroundBusy(false);
+    }
+  };
+
   return (
     <div className="grid gap-6">
       <h1 className="text-2xl font-semibold tracking-tight text-fg">Connection</h1>
@@ -200,6 +236,10 @@ function DesktopConnectionPage({ core, api }: { core: OperatorCore; api: Desktop
             setPort={setPort}
             startGateway={startGateway}
             stopGateway={stopGateway}
+            backgroundState={backgroundState}
+            backgroundBusy={backgroundBusy}
+            backgroundError={backgroundError}
+            toggleBackgroundMode={toggleBackgroundMode}
           />
         </TabsContent>
 
@@ -238,9 +278,25 @@ function EmbeddedGatewayTab(props: {
   setPort: (next: number) => void;
   startGateway: () => Promise<void>;
   stopGateway: () => Promise<void>;
+  backgroundState: DesktopBackgroundState | null;
+  backgroundBusy: boolean;
+  backgroundError: string | null;
+  toggleBackgroundMode: (nextEnabled: boolean) => Promise<void>;
 }) {
-  const { busy, gatewayError, gatewayStatus, mode, port, setPort, startGateway, stopGateway } =
-    props;
+  const {
+    busy,
+    gatewayError,
+    gatewayStatus,
+    mode,
+    port,
+    setPort,
+    startGateway,
+    stopGateway,
+    backgroundState,
+    backgroundBusy,
+    backgroundError,
+    toggleBackgroundMode,
+  } = props;
 
   return (
     <Card>
@@ -270,8 +326,49 @@ function EmbeddedGatewayTab(props: {
           Status: {gatewayStatus} {mode === "embedded" ? "(active mode)" : ""}
         </div>
 
+        {backgroundState ? (
+          <div className="grid gap-3 rounded-md border border-border bg-bg-card/40 px-3 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="grid gap-0.5">
+                <div className="text-sm font-medium text-fg">Background mode</div>
+                <div className="text-xs text-fg-muted">
+                  Launch Tyrum at login and hide the window on close while keeping the embedded
+                  gateway running.
+                </div>
+              </div>
+              <Switch
+                checked={backgroundState.enabled}
+                disabled={busy || backgroundBusy}
+                onCheckedChange={(nextEnabled) => {
+                  void toggleBackgroundMode(nextEnabled);
+                }}
+              />
+            </div>
+
+            <div className="text-xs text-fg-muted">
+              {backgroundState.enabled
+                ? backgroundState.loginAutoStartActive
+                  ? "Launch at login is active."
+                  : mode === "embedded"
+                    ? "Background mode is enabled, but launch at login is not active on this platform right now."
+                    : "Background mode is saved and will activate when Embedded mode is active."
+                : "Background mode is disabled."}
+            </div>
+
+            <div className="text-xs text-fg-muted">
+              Tray/menu-bar access: {backgroundState.trayAvailable ? "available" : "unavailable"}.
+              If the desktop node is connected when the window is hidden, its local capabilities
+              stay active until you disconnect.
+            </div>
+          </div>
+        ) : null}
+
         {gatewayError ? (
           <Alert variant="error" title="Gateway error" description={gatewayError} />
+        ) : null}
+
+        {backgroundError ? (
+          <Alert variant="error" title="Background mode error" description={backgroundError} />
         ) : null}
       </CardContent>
     </Card>

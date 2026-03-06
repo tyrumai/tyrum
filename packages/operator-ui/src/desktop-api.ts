@@ -1,8 +1,20 @@
 type DesktopMacPermission = "accessibility" | "screenRecording";
 
+export type DesktopBackgroundState = {
+  enabled: boolean;
+  supported: boolean;
+  trayAvailable: boolean;
+  loginAutoStartActive: boolean;
+  mode: "embedded" | "remote";
+};
+
 export type DesktopApi = {
   getConfig: () => Promise<unknown>;
   setConfig: (partial: unknown) => Promise<unknown>;
+  background?: {
+    getState: () => Promise<DesktopBackgroundState>;
+    setEnabled: (enabled: boolean) => Promise<DesktopBackgroundState>;
+  };
   gateway: {
     getStatus: () => Promise<{ status: string; port: number }>;
     start: () => Promise<{ status: string; port: number }>;
@@ -33,6 +45,7 @@ export type DesktopApi = {
     disconnect: () => Promise<{ status: string }>;
   };
   onStatusChange: (cb: (status: unknown) => void) => () => void;
+  onNavigationRequest?: (cb: (request: unknown) => void) => () => void;
   onLog?: (cb: (entry: unknown) => void) => () => void;
   checkMacPermissions?: () => Promise<unknown>;
   requestMacPermission?: (permission: DesktopMacPermission) => Promise<unknown>;

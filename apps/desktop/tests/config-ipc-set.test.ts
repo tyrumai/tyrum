@@ -106,4 +106,26 @@ describe("config-ipc config:set allowlist", () => {
     );
     expect(nativeTheme.themeSource).toBe("light");
   });
+
+  it("does not allow background.enabled via config:set", async () => {
+    const { registerConfigIpc } = await import("../src/main/ipc/config-ipc.js");
+    registerConfigIpc();
+
+    const handler = registeredHandlers.get("config:set");
+    expect(handler).toBeTypeOf("function");
+
+    const result = handler?.({}, { background: { enabled: true } });
+
+    expect(saveConfigMock).toHaveBeenCalledTimes(1);
+    expect(saveConfigMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        background: expect.objectContaining({ enabled: false }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        background: expect.objectContaining({ enabled: false }),
+      }),
+    );
+  });
 });

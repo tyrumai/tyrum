@@ -24,6 +24,25 @@ Start an embedded gateway managed by the desktop app.
 1. Keep the default port (`8788`) or pick a free port.
 2. Click **Start Gateway**.
 
+#### Background mode
+
+Embedded mode can optionally keep Tyrum available in the background:
+
+- Open **Connection → Embedded** and enable **Background mode**.
+- Tyrum adds a tray/menu-bar icon and starts at login in a hidden state.
+- Closing the main window hides it instead of quitting, so the embedded gateway keeps running.
+- Use the tray/menu-bar menu to reopen Tyrum, jump back to **Connection**, start or stop the
+  gateway, or quit the app completely.
+
+Notes:
+
+- Background mode is only active while **Embedded** mode is selected.
+- If you switch to **Remote**, Tyrum keeps the preference but disables launch-at-login until you
+  switch back to **Embedded**.
+- Explicitly quitting Tyrum still shuts down the embedded gateway and desktop-local resources.
+- Linux background mode requires a working system tray/status notifier and writes an XDG autostart
+  entry under `~/.config/autostart/` (or `$XDG_CONFIG_HOME/autostart/`).
+
 ### Remote
 
 Connect the desktop app to an existing gateway.

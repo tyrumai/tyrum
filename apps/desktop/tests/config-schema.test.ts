@@ -19,6 +19,7 @@ describe("DesktopNodeConfig schema", () => {
   it("defaults mode to 'embedded' and profile to 'balanced'", () => {
     const parsed = DesktopNodeConfig.parse({});
     expect(parsed.mode).toBe("embedded");
+    expect(parsed.background.enabled).toBe(false);
     expect(parsed.permissions.profile).toBe("balanced");
   });
 

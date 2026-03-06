@@ -16,9 +16,12 @@ const {
   ipcMainHandleMock,
   menuBuildFromTemplateMock,
   menuSetApplicationMenuMock,
+  nativeImageCreateFromDataUrlMock,
+  nativeImageCreateFromPathMock,
   nativeThemeOnMock,
   readyToShowHandlers,
   webContentsOnMock,
+  trayMock,
   setWindowOpenHandlerMock,
   registerConfigIpcMock,
   registerGatewayIpcMock,
@@ -49,6 +52,7 @@ const {
       loadURL: vi.fn(),
       loadFile: vi.fn(),
       on: vi.fn(),
+      hide: vi.fn(),
       isMinimized: vi.fn(() => false),
       restore: vi.fn(),
       once: browserWindowOnceMockInner,
@@ -86,6 +90,19 @@ const {
 
   const ipcMainHandleMockInner = vi.fn();
   const nativeThemeOnMockInner = vi.fn();
+  const trayMockInner = vi.fn(function MockTray() {
+    return {
+      destroy: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      on: vi.fn(),
+      setContextMenu: vi.fn(),
+      setToolTip: vi.fn(),
+    };
+  });
+  const nativeImageCreateFromPathMockInner = vi.fn(() => ({}));
+  const nativeImageCreateFromDataUrlMockInner = vi.fn(() => ({
+    setTemplateImage: vi.fn(),
+  }));
 
   const menuBuildFromTemplateMockInner = vi.fn(() => ({}));
   const menuSetApplicationMenuMockInner = vi.fn();
@@ -122,7 +139,10 @@ const {
     menuBuildFromTemplateMock: menuBuildFromTemplateMockInner,
     menuSetApplicationMenuMock: menuSetApplicationMenuMockInner,
     nativeThemeOnMock: nativeThemeOnMockInner,
+    nativeImageCreateFromDataUrlMock: nativeImageCreateFromDataUrlMockInner,
+    nativeImageCreateFromPathMock: nativeImageCreateFromPathMockInner,
     readyToShowHandlers: readyToShowHandlersInner,
+    trayMock: trayMockInner,
     webContentsOnMock: webContentsOnMockInner,
     setWindowOpenHandlerMock: setWindowOpenHandlerMockInner,
     registerConfigIpcMock: registerConfigIpcMockInner,
@@ -143,12 +163,16 @@ const {
 
 vi.mock("electron", () => ({
   app: {
+    getAppPath: vi.fn(() => "/tmp/tyrum-desktop-tests"),
+    getLoginItemSettings: vi.fn(() => ({ openAtLogin: false })),
     whenReady: appWhenReadyMock,
     on: appOnMock,
     quit: appQuitMock,
     requestSingleInstanceLock: appRequestSingleInstanceLockMock,
     setAppUserModelId: appSetAppUserModelIdMock,
+    setLoginItemSettings: vi.fn(),
     getPath: appGetPathMock,
+    isPackaged: false,
   },
   BrowserWindow: browserWindowMock,
   ipcMain: {
@@ -164,6 +188,11 @@ vi.mock("electron", () => ({
   Menu: {
     buildFromTemplate: menuBuildFromTemplateMock,
     setApplicationMenu: menuSetApplicationMenuMock,
+  },
+  Tray: trayMock,
+  nativeImage: {
+    createFromDataURL: nativeImageCreateFromDataUrlMock,
+    createFromPath: nativeImageCreateFromPathMock,
   },
   screen: {
     getAllDisplays: screenGetAllDisplaysMock,

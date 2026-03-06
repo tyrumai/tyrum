@@ -24,6 +24,8 @@ extraResources:
     to: gateway/migrations
   - from: dist/gateway/node_modules
     to: gateway/node_modules
+  - from: build/icons/32x32.png
+    to: tray/32x32.png
 mac:
   icon: build/icon.icns
   target: [dmg, zip]

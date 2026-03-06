@@ -2,10 +2,22 @@ import type { DesktopThemeState } from "../shared/theme.js";
 
 export type { DesktopThemeState };
 
+export interface DesktopBackgroundState {
+  enabled: boolean;
+  supported: boolean;
+  trayAvailable: boolean;
+  loginAutoStartActive: boolean;
+  mode: "embedded" | "remote";
+}
+
 export interface TyrumDesktopApi {
   configExists: () => Promise<boolean>;
   getConfig: () => Promise<unknown>;
   setConfig: (partial: unknown) => Promise<void>;
+  background: {
+    getState: () => Promise<DesktopBackgroundState>;
+    setEnabled: (enabled: boolean) => Promise<DesktopBackgroundState>;
+  };
   theme: {
     getState: () => Promise<DesktopThemeState>;
     onChange: (cb: (state: DesktopThemeState) => void) => () => void;

@@ -7,13 +7,14 @@ This checklist is for manual QA of “native feel” behaviors across macOS, Win
 - [ ] `pnpm --filter tyrum-desktop test` is green
 - [ ] Build type noted: dev (`pnpm --filter tyrum-desktop build && pnpm --filter tyrum-desktop dev`) or packaged (`pnpm --filter tyrum-desktop dist`)
 - [ ] OS + version noted
+- [ ] Background mode coverage noted: disabled baseline + enabled embedded-mode pass
 
 ## macOS
 
 ### Menus + shortcuts
 
 - [ ] App menu includes **About**, **Preferences…** (`CmdOrCtrl+,`), **Hide/Hide Others/Show All**, **Quit**
-- [ ] Invoking **Preferences…** (`CmdOrCtrl+,`) does not crash (renderer does not currently handle navigation requests)
+- [ ] Invoking **Preferences…** (`CmdOrCtrl+,`) opens the **Connection** page without crashing
 - [ ] Standard shortcuts work (at least): `Cmd+Q`, `Cmd+W`, `Cmd+M`, `CmdOrCtrl+,`
 
 ### Window lifecycle
@@ -21,6 +22,15 @@ This checklist is for manual QA of “native feel” behaviors across macOS, Win
 - [ ] Startup window does not show until ready (no blank/white flash)
 - [ ] Single-instance behavior: launching the app again focuses/restores the existing window
 - [ ] Dock icon click re-activates the app and re-opens the window if needed
+
+### Background mode
+
+- [ ] Enabling **Connection → Embedded → Background mode** creates a menu-bar item
+- [ ] With background mode enabled, closing the window hides Tyrum instead of destroying the window
+- [ ] Menu-bar **Show Tyrum** restores the window and focuses it
+- [ ] Menu-bar **Open Connection** restores the window and lands on the **Connection** page
+- [ ] Menu-bar **Quit Tyrum** fully exits and the embedded gateway stops
+- [ ] Login launch starts hidden when the saved mode is **Embedded**
 
 ### Window state
 
@@ -49,7 +59,7 @@ This checklist is for manual QA of “native feel” behaviors across macOS, Win
 ### Menus + shortcuts
 
 - [ ] Menu bar includes **File/Edit/View/Help**
-- [ ] Invoking **Settings…** (`CmdOrCtrl+,`) does not crash (renderer does not currently handle navigation requests)
+- [ ] Invoking **Settings…** (`CmdOrCtrl+,`) opens the **Connection** page without crashing
 - [ ] Dev tools menu items only appear in dev builds
 
 ### Window lifecycle
@@ -57,6 +67,15 @@ This checklist is for manual QA of “native feel” behaviors across macOS, Win
 - [ ] Startup window does not show until ready (no blank/white flash)
 - [ ] Single-instance behavior: launching the app again focuses/restores the existing window
 - [ ] Closing the last window quits the app (no background process unless intentionally packaged that way)
+
+### Background mode
+
+- [ ] Enabling **Connection → Embedded → Background mode** creates a tray icon
+- [ ] With background mode enabled, closing the last window hides Tyrum instead of quitting
+- [ ] Tray **Show Tyrum** restores the window and focuses it
+- [ ] Tray **Open Connection** restores the window and lands on the **Connection** page
+- [ ] Tray **Quit Tyrum** fully exits and the embedded gateway stops
+- [ ] Login launch starts hidden when the saved mode is **Embedded**
 
 ### Window state
 
@@ -85,7 +104,7 @@ This checklist is for manual QA of “native feel” behaviors across macOS, Win
 ### Menus + shortcuts
 
 - [ ] Menu bar includes **File/Edit/View/Help** (or the platform equivalent)
-- [ ] Invoking **Settings…** (`CmdOrCtrl+,`) does not crash (renderer does not currently handle navigation requests)
+- [ ] Invoking **Settings…** (`CmdOrCtrl+,`) opens the **Connection** page without crashing
 - [ ] Dev tools menu items only appear in dev builds
 
 ### Window lifecycle
@@ -93,6 +112,16 @@ This checklist is for manual QA of “native feel” behaviors across macOS, Win
 - [ ] Startup window does not show until ready (no blank/white flash)
 - [ ] Single-instance behavior: launching the app again focuses/restores the existing window
 - [ ] Closing the last window quits the app
+
+### Background mode
+
+- [ ] Enabling **Connection → Embedded → Background mode** creates a tray/status-notifier item when the desktop environment supports it
+- [ ] With background mode enabled, closing the last window hides Tyrum instead of quitting
+- [ ] Tray **Show Tyrum** restores the window and focuses it
+- [ ] Tray **Open Connection** restores the window and lands on the **Connection** page
+- [ ] Tray **Quit Tyrum** fully exits and the embedded gateway stops
+- [ ] Login launch starts hidden when the saved mode is **Embedded**
+- [ ] Enabling background mode fails closed with a clear error when no tray/status notifier is available
 
 ### Window state
 
@@ -125,3 +154,4 @@ Highest-risk “native behavior” logic is covered by unit/integration tests:
 - Application menu template: `apps/desktop/tests/menu-template.test.ts`
 - Context menu template + registration: `apps/desktop/tests/context-menu.test.ts`
 - Ensure-visible window bounds: `apps/desktop/tests/window-state.test.ts`
+- Background mode config, tray/autostart, and hidden-launch behavior: `apps/desktop/tests/background-mode.test.ts`, `apps/desktop/tests/main-ready-to-show.test.ts`, `apps/desktop/tests/main-window-state-persistence.test.ts`

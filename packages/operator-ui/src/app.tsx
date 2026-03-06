@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import {
   Bot,
   Cable,
@@ -243,6 +243,19 @@ function OperatorUiAppRoot({
     }
     setRoute(id);
   };
+
+  useEffect(() => {
+    if (host?.kind !== "desktop" || !host.api?.onNavigationRequest) {
+      return;
+    }
+
+    return host.api.onNavigationRequest((request: unknown) => {
+      if (!request || typeof request !== "object" || Array.isArray(request)) return;
+      const pageId = (request as { pageId?: unknown }).pageId;
+      if (typeof pageId !== "string") return;
+      navigate(pageId);
+    });
+  }, [host]);
 
   useKeyboardShortcut(
     showOperatorRoutes

@@ -29,6 +29,10 @@ type PreloadApi = {
   configExists: () => Promise<unknown>;
   getConfig: () => Promise<unknown>;
   setConfig: (partial: unknown) => Promise<unknown>;
+  background: {
+    getState: () => Promise<unknown>;
+    setEnabled: (enabled: boolean) => Promise<unknown>;
+  };
   theme: {
     getState: () => Promise<unknown>;
     onChange: (cb: (state: unknown) => void) => () => void;
@@ -144,6 +148,8 @@ describe("preload theme bridge", () => {
     await api.configExists();
     await api.getConfig();
     await api.setConfig({ autoStartGateway: true });
+    await api.background.getState();
+    await api.background.setEnabled(true);
     await api.updates.getState();
     await api.updates.check();
     await api.updates.download();
@@ -173,6 +179,8 @@ describe("preload theme bridge", () => {
       ["config:exists"],
       ["config:get"],
       ["config:set", { autoStartGateway: true }],
+      ["background:get-state"],
+      ["background:set-enabled", true],
       ["updates:state"],
       ["updates:check"],
       ["updates:download"],
