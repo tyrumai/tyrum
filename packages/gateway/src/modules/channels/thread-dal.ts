@@ -88,4 +88,32 @@ export class ChannelThreadDal {
     }
     return existing.channel_thread_id;
   }
+
+  async setChannelAccountStatus(input: {
+    tenantId: string;
+    workspaceId: string;
+    channelAccountId: string;
+    status: string;
+    updatedAtIso?: string;
+  }): Promise<boolean> {
+    const updatedAtIso = input.updatedAtIso ?? new Date().toISOString();
+    const result = await this.db.run(
+      `UPDATE channel_accounts
+       SET status = ?,
+           updated_at = ?
+       WHERE tenant_id = ?
+         AND workspace_id = ?
+         AND channel_account_id = ?
+         AND status <> ?`,
+      [
+        input.status,
+        updatedAtIso,
+        input.tenantId,
+        input.workspaceId,
+        input.channelAccountId,
+        input.status,
+      ],
+    );
+    return result.changes === 1;
+  }
 }

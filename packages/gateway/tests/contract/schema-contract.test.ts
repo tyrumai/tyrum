@@ -36,6 +36,8 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
         "memory_item_embeddings",
         "watchers",
         "watcher_firings",
+        "channel_accounts",
+        "channel_threads",
         "sessions",
         "peer_identity_links",
         "approvals",

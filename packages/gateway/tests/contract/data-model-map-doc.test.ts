@@ -15,6 +15,10 @@ describe("docs: data model map", () => {
     expect(content, "docs/architecture/data-model-map.md should exist").toBeTypeOf("string");
     expect(content).toContain("packages/gateway/migrations/sqlite/100_rebuild_v2.sql");
     expect(content).toContain("packages/gateway/migrations/postgres/100_rebuild_v2.sql");
+    expect(content).toContain("Timestamp audit");
+    expect(content).toContain("channel_accounts.status");
+    expect(content).toContain("channel_threads");
+    expect(content).toContain("work_signals");
     expect(content).toContain("Pruning checklist");
     expect(content).toContain("Retention");
     expect(content).toContain("PII");
