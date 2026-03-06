@@ -383,6 +383,7 @@ async function createProtocolRuntime(
   context: GatewayBootContext,
   otel: OtelRuntime,
 ): Promise<ProtocolRuntime> {
+  const wsMaxBufferedBytes = context.deploymentConfig.websocket.maxBufferedBytes;
   const connectionManager = new ConnectionManager();
   const outboxDal = new OutboxDal(context.container.db, context.container.redactionEngine);
   const connectionDirectory = new ConnectionDirectoryDal(context.container.db);
@@ -393,6 +394,7 @@ async function createProtocolRuntime(
           connectionManager,
           owner: context.instanceId,
           logger: context.logger,
+          maxBufferedBytes: wsMaxBufferedBytes,
           cluster: { edgeId: context.instanceId, outboxDal },
           keepProcessAlive: context.role === "scheduler",
         })
@@ -444,6 +446,7 @@ async function createProtocolRuntime(
     policyService: context.container.policyService,
     modelsDev: context.container.modelsDev,
     modelCatalog: context.container.modelCatalog,
+    maxBufferedBytes: wsMaxBufferedBytes,
     cluster: context.shouldRunEdge
       ? {
           edgeId: context.instanceId,
@@ -668,6 +671,7 @@ async function startEdgeRuntime(
     outboxDal: protocol.outboxDal,
     connectionManager: protocol.connectionManager,
     logger: context.logger,
+    maxBufferedBytes: context.deploymentConfig.websocket.maxBufferedBytes,
   });
   outboxPoller.start();
 
