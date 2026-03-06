@@ -11,7 +11,7 @@ export interface ElevatedModeState {
 }
 
 export interface ElevatedModeStore extends ExternalStore<ElevatedModeState> {
-  enter(input: { elevatedToken: string; expiresAt: string }): void;
+  enter(input: { elevatedToken: string; expiresAt?: string | null }): void;
   exit(): void;
   dispose(): void;
 }
@@ -123,21 +123,36 @@ function startTimers(runtime: ElevatedModeRuntime, remainingMs: number): void {
 
 function enterImpl(
   runtime: ElevatedModeRuntime,
-  input: { elevatedToken: string; expiresAt: string },
+  input: { elevatedToken: string; expiresAt?: string | null },
 ): void {
   const elevatedToken = input.elevatedToken.trim();
   if (!elevatedToken) {
     throw new Error("elevatedToken is required");
   }
 
-  const expiresAt = input.expiresAt.trim();
-  if (!expiresAt) {
-    throw new Error("expiresAt is required");
+  const nowMs = runtime.now();
+  const enteredAt = new Date(nowMs).toISOString();
+  const rawExpiresAt = input.expiresAt;
+  if (rawExpiresAt == null) {
+    clearTimers(runtime);
+    runtime.expiresAtMs = null;
+    runtime.setState((prev) => ({
+      ...prev,
+      status: "active",
+      elevatedToken,
+      enteredAt,
+      expiresAt: null,
+      remainingMs: null,
+    }));
+    return;
   }
 
-  const nowMs = runtime.now();
+  const expiresAt = rawExpiresAt.trim();
+  if (!expiresAt) {
+    throw new Error("expiresAt must be a non-empty ISO datetime string or null");
+  }
+
   const nextExpiresAtMs = parseExpiresAtMs(expiresAt);
-  const enteredAt = new Date(nowMs).toISOString();
   const remainingMs = toRemainingMs(nextExpiresAtMs, nowMs);
 
   if (remainingMs === 0) {

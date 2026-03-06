@@ -246,7 +246,12 @@ function DesktopBootstrap() {
 
   return (
     <OperatorUiHostProvider value={hostApi}>
-      <OperatorUiApp core={operatorCore.core} mode="desktop" onReloadPage={operatorCore.retry} />
+      <OperatorUiApp
+        core={operatorCore.core}
+        mode="desktop"
+        elevatedModeController={operatorCore.elevatedModeController ?? undefined}
+        onReloadPage={operatorCore.retry}
+      />
     </OperatorUiHostProvider>
   );
 }

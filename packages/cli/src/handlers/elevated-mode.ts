@@ -72,6 +72,9 @@ export async function handleElevatedModeEnter(
       scopes: ["operator.admin"],
       ttl_seconds: command.ttl_seconds ?? 60 * 10,
     });
+    if (!issued.expires_at) {
+      throw new Error("gateway returned a persistent elevated-mode token without expires_at");
+    }
 
     const statePath = resolveOperatorElevatedModePath(home);
     await saveOperatorElevatedModeState(statePath, {

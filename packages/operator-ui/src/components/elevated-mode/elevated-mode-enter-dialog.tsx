@@ -13,7 +13,7 @@ import { useElevatedModeUiContext } from "./elevated-mode-provider.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 
 export function ElevatedModeEnterDialog() {
-  const { core, isEnterOpen, requestEnter, closeEnter } = useElevatedModeUiContext();
+  const { enterElevatedMode, isEnterOpen, requestEnter, closeEnter } = useElevatedModeUiContext();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(busy);
   busyRef.current = busy;
@@ -32,31 +32,6 @@ export function ElevatedModeEnterDialog() {
     resetForm();
   }, [isEnterOpen]);
 
-  const issueDeviceToken = async (): Promise<void> => {
-    const deviceId = core.deviceId?.trim();
-    if (!deviceId) {
-      throw new Error("Current client device identity is unavailable.");
-    }
-
-    const issued = await core.http.deviceTokens.issue({
-      device_id: deviceId,
-      role: "client",
-      scopes: [
-        "operator.read",
-        "operator.write",
-        "operator.approvals",
-        "operator.pairing",
-        "operator.admin",
-      ],
-      ttl_seconds: 60 * 10,
-    });
-
-    core.elevatedModeStore.enter({
-      elevatedToken: issued.token,
-      expiresAt: issued.expires_at,
-    });
-  };
-
   const submit = async (): Promise<void> => {
     if (busyRef.current) return;
 
@@ -69,7 +44,7 @@ export function ElevatedModeEnterDialog() {
     setBusy(true);
     setErrorMessage(null);
     try {
-      await issueDeviceToken();
+      await enterElevatedMode();
       resetForm();
       closeEnter();
     } catch (error) {
@@ -117,8 +92,8 @@ export function ElevatedModeEnterDialog() {
         <DialogHeader>
           <DialogTitle>Enter Elevated Mode</DialogTitle>
           <DialogDescription>
-            Elevated Mode enables dangerous operator actions. It is time-limited and can be exited
-            at any time. Entering it uses your current authenticated session.
+            Elevated Mode enables dangerous operator actions. It can be exited at any time. Entering
+            it uses your current authenticated session.
           </DialogDescription>
         </DialogHeader>
 

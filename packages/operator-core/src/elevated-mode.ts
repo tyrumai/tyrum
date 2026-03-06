@@ -13,7 +13,6 @@ export class ElevatedModeRequiredError extends Error {
 export function isElevatedModeActive(state: ElevatedModeState): boolean {
   if (state.status !== "active") return false;
   if (!state.elevatedToken) return false;
-  if (!state.expiresAt) return false;
   if (state.remainingMs !== null && state.remainingMs <= 0) return false;
   return true;
 }

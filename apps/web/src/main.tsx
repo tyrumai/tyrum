@@ -8,8 +8,15 @@ import {
   createGatewayAuthSession,
   createOperatorCore,
   createOperatorCoreManager,
+  createTyrumHttpClient,
+  httpAuthForAuth,
 } from "@tyrum/operator-core";
-import { OperatorUiApp, OperatorUiHostProvider } from "@tyrum/operator-ui";
+import {
+  OperatorUiApp,
+  OperatorUiHostProvider,
+  createPersistentElevatedModeController,
+  type ElevatedModeController,
+} from "@tyrum/operator-ui";
 import "@tyrum/operator-ui/globals.css";
 import { reloadPage } from "./reload-page.js";
 import { readAuthTokenFromUrl, stripAuthTokenFromUrl } from "./url-auth.js";
@@ -67,6 +74,10 @@ async function bootstrap(): Promise<void> {
   const elevatedModeStore = createElevatedModeStore();
   const httpBaseUrl = resolveGatewayHttpBaseUrl();
   const resolvedAuth = resolveAuthFromLocation(httpBaseUrl);
+  const baselineHttp = createTyrumHttpClient({
+    baseUrl: httpBaseUrl,
+    auth: httpAuthForAuth(resolvedAuth.auth),
+  });
   const manager = createOperatorCoreManager({
     wsUrl: resolveGatewayWsUrl(),
     httpBaseUrl,
@@ -78,6 +89,11 @@ async function bootstrap(): Promise<void> {
         deviceIdentity,
       });
     },
+  });
+  const elevatedModeController: ElevatedModeController = createPersistentElevatedModeController({
+    http: baselineHttp,
+    deviceId: deviceIdentity.deviceId,
+    elevatedModeStore,
   });
 
   if (resolvedAuth.connectOnLoad) {
@@ -92,6 +108,7 @@ async function bootstrap(): Promise<void> {
           <OperatorUiApp
             core={manager.getCore()}
             mode="web"
+            elevatedModeController={elevatedModeController}
             onReloadPage={reloadPage}
             onReconfigureGateway={(httpUrl, wsUrl) => {
               try {
