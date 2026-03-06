@@ -1,9 +1,6 @@
-import { createTyrumHttpClient } from "@tyrum/client";
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
-import { Input } from "../ui/input.js";
-import { Label } from "../ui/label.js";
 import {
   Dialog,
   DialogContent,
@@ -14,24 +11,17 @@ import {
 } from "../ui/dialog.js";
 import { useElevatedModeUiContext } from "./elevated-mode-provider.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
-import { resolveTyrumHttpFetch } from "../../utils/tyrum-http-fetch.js";
 
 export function ElevatedModeEnterDialog() {
-  const { core, mode, isEnterOpen, requestEnter, closeEnter } = useElevatedModeUiContext();
+  const { core, isEnterOpen, requestEnter, closeEnter } = useElevatedModeUiContext();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(busy);
   busyRef.current = busy;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [revealToken, setRevealToken] = useState(false);
   const confirmRef = useRef<HTMLInputElement | null>(null);
-  const tokenRef = useRef<HTMLInputElement | null>(null);
 
   const resetForm = (): void => {
     setErrorMessage(null);
-    setRevealToken(false);
-    if (tokenRef.current) {
-      tokenRef.current.value = "";
-    }
     if (confirmRef.current) {
       confirmRef.current.checked = false;
     }
@@ -42,14 +32,8 @@ export function ElevatedModeEnterDialog() {
     resetForm();
   }, [isEnterOpen]);
 
-  const issueDeviceToken = async (accessToken: string): Promise<void> => {
-    const http = createTyrumHttpClient({
-      baseUrl: core.httpBaseUrl,
-      auth: { type: "bearer", token: accessToken },
-      fetch: resolveTyrumHttpFetch(mode),
-    });
-
-    const issued = await http.deviceTokens.issue({
+  const issueDeviceToken = async (): Promise<void> => {
+    const issued = await core.http.deviceTokens.issue({
       device_id: "operator-ui",
       role: "client",
       scopes: [
@@ -77,16 +61,10 @@ export function ElevatedModeEnterDialog() {
       return;
     }
 
-    const accessToken = tokenRef.current?.value.trim() ?? "";
-    if (!accessToken) {
-      setErrorMessage("Elevated access token is required");
-      return;
-    }
-
     setBusy(true);
     setErrorMessage(null);
     try {
-      await issueDeviceToken(accessToken);
+      await issueDeviceToken();
       resetForm();
       closeEnter();
     } catch (error) {
@@ -128,14 +106,14 @@ export function ElevatedModeEnterDialog() {
         }}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
-          tokenRef.current?.focus();
+          confirmRef.current?.focus();
         }}
       >
         <DialogHeader>
           <DialogTitle>Enter Elevated Mode</DialogTitle>
           <DialogDescription>
             Elevated Mode enables dangerous operator actions. It is time-limited and can be exited
-            at any time.
+            at any time. Entering it uses your current authenticated session.
           </DialogDescription>
         </DialogHeader>
 
@@ -144,37 +122,6 @@ export function ElevatedModeEnterDialog() {
             <input type="checkbox" data-testid="elevated-mode-confirm" ref={confirmRef} />
             <span>I understand and want to proceed.</span>
           </label>
-
-          <div className="grid gap-2">
-            <Label htmlFor="elevated-mode-token">Elevated access token</Label>
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <Input
-                  id="elevated-mode-token"
-                  data-testid="elevated-mode-token"
-                  ref={tokenRef}
-                  type={revealToken ? "text" : "password"}
-                  spellCheck={false}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  autoComplete="off"
-                />
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                data-testid="elevated-mode-token-toggle"
-                disabled={busy}
-                aria-pressed={revealToken}
-                onClick={() => {
-                  setRevealToken((prev) => !prev);
-                }}
-              >
-                {revealToken ? "Hide" : "Show"}
-              </Button>
-            </div>
-          </div>
 
           {errorMessage ? (
             <Alert variant="error" title="Elevated Mode error" description={errorMessage} />

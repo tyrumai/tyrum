@@ -1,6 +1,6 @@
 import type { CliCommand } from "../cli-command.js";
 
-import { parseElevatedToken, parsePositiveInt } from "./common.js";
+import { parsePositiveInt } from "./common.js";
 
 export function parseElevatedModeCommand(argv: readonly string[]): CliCommand {
   const second = argv[1];
@@ -41,18 +41,11 @@ function parseElevatedModeExit(argv: readonly string[]): CliCommand {
 }
 
 function parseElevatedModeEnter(argv: readonly string[]): CliCommand {
-  let elevatedToken: string | undefined;
   let ttlSeconds: number | undefined;
 
   for (let i = 2; i < argv.length; i += 1) {
     const arg = argv[i];
     if (!arg) continue;
-
-    if (arg === "--elevated-token") {
-      elevatedToken = parseElevatedToken(argv[i + 1]);
-      i += 1;
-      continue;
-    }
 
     if (arg === "--ttl-seconds") {
       ttlSeconds = parsePositiveInt(argv[i + 1], "--ttl-seconds");
@@ -68,13 +61,8 @@ function parseElevatedModeEnter(argv: readonly string[]): CliCommand {
     throw new Error(`unexpected elevated-mode.enter argument '${arg}'`);
   }
 
-  if (!elevatedToken) {
-    throw new Error("elevated-mode enter requires --elevated-token <token>");
-  }
-
   return {
     kind: "elevated_mode_enter",
-    elevated_token: elevatedToken,
     ttl_seconds: ttlSeconds,
   };
 }

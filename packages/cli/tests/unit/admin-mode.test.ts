@@ -109,19 +109,14 @@ describe("@tyrum/cli elevated-mode", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli([
-        "elevated-mode",
-        "enter",
-        "--elevated-token",
-        "elevated-access-token",
-      ]);
+      const code = await runCli(["elevated-mode", "enter", "--ttl-seconds", "42"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
       expect(httpCtorSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           baseUrl: "http://127.0.0.1:8788",
-          auth: { type: "bearer", token: "elevated-access-token" },
+          auth: { type: "bearer", token: "base" },
         }),
       );
       expect(httpDeviceTokensIssueSpy).toHaveBeenCalledWith(
@@ -129,6 +124,7 @@ describe("@tyrum/cli elevated-mode", () => {
           device_id: "operator-cli",
           role: "client",
           scopes: ["operator.admin"],
+          ttl_seconds: 42,
         }),
       );
 
