@@ -6,15 +6,11 @@ import {
   WsPairingRevokeRequest,
   clientCapabilityFromDescriptorId,
 } from "@tyrum/schemas";
-import type {
-  ClientCapability,
-  NodePairingRequest as NodePairingRequestT,
-  WsResponseEnvelope,
-} from "@tyrum/schemas";
+import type { CapabilityDescriptor, ClientCapability, WsResponseEnvelope } from "@tyrum/schemas";
+import { resolveNodePairing } from "../../modules/node/pairing-resolve-service.js";
 import { PAIRING_WS_AUDIENCE } from "../audience.js";
 import { emitPairingApprovedEvent } from "../pairing-approved.js";
 import type { ConnectedClient } from "../connection-manager.js";
-import { ensurePairingResolvedEvent } from "../stable-events.js";
 import { broadcastEvent, errorResponse } from "./helpers.js";
 import {
   handleAttemptEvidenceMessage,
@@ -82,27 +78,113 @@ async function handlePairingMessage(
     client_id: client.id,
     device_id: client.device_id,
   };
-  const resolved = await resolvePairing(msg, deps, resolvedBy);
-  if ("response" in resolved) {
-    return resolved.response;
+  const parsed = parsePairingRequest(msg);
+  if ("response" in parsed) {
+    return parsed.response;
   }
 
-  if (msg.type === "pairing.approve" && resolved.scopedToken) {
-    emitPairingApprovedEvent(deps, tenantId, {
-      pairing: resolved.pairing,
-      nodeId: resolved.pairing.node.node_id,
-      scopedToken: resolved.scopedToken,
-    });
+  const result = await resolveNodePairing(
+    {
+      nodePairingDal: deps.nodePairingDal,
+      wsEventDal: deps.wsEventDal,
+      emitEvent: ({ tenantId: eventTenantId, event }) => {
+        broadcastEvent(eventTenantId, event, deps, PAIRING_WS_AUDIENCE);
+      },
+      emitPairingApproved: ({ tenantId: eventTenantId, pairing, nodeId, scopedToken }) => {
+        emitPairingApprovedEvent(deps, eventTenantId, {
+          pairing,
+          nodeId,
+          scopedToken,
+        });
+      },
+    },
+    {
+      tenantId,
+      ...parsed.input,
+      resolvedBy,
+    },
+  );
+  if (!result.ok) {
+    return errorResponse(msg.request_id, msg.type, result.code, result.message);
   }
 
-  const persistedEvent = await ensurePairingResolvedEvent({
-    tenantId,
-    pairing: resolved.pairing,
-    wsEventDal: deps.wsEventDal,
-  });
-  broadcastEvent(tenantId, persistedEvent.event, deps, PAIRING_WS_AUDIENCE);
-  const result = WsPairingResolveResult.parse({ pairing: resolved.pairing });
-  return { request_id: msg.request_id, type: msg.type, ok: true, result };
+  const payload = WsPairingResolveResult.parse({ pairing: result.pairing });
+  return { request_id: msg.request_id, type: msg.type, ok: true, result: payload };
+}
+
+function parsePairingRequest(msg: ProtocolRequestEnvelope):
+  | { response: WsResponseEnvelope }
+  | {
+      input:
+        | {
+            pairingId: number;
+            decision: "approved";
+            reason?: string;
+            trustLevel: "local" | "remote";
+            capabilityAllowlist: readonly CapabilityDescriptor[];
+          }
+        | {
+            pairingId: number;
+            decision: "denied" | "revoked";
+            reason?: string;
+          };
+    } {
+  const invalidRequest = (message: string, issues?: unknown) => {
+    return {
+      response: errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        message,
+        issues ? { issues } : undefined,
+      ),
+    };
+  };
+
+  if (msg.type === "pairing.approve") {
+    const parsedReq = WsPairingApproveRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return invalidRequest(parsedReq.error.message, parsedReq.error.issues);
+    }
+
+    return {
+      input: {
+        pairingId: parsedReq.data.payload.pairing_id,
+        decision: "approved",
+        reason: parsedReq.data.payload.reason,
+        trustLevel: parsedReq.data.payload.trust_level,
+        capabilityAllowlist: parsedReq.data.payload.capability_allowlist,
+      },
+    };
+  }
+
+  if (msg.type === "pairing.deny") {
+    const parsedReq = WsPairingDenyRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return invalidRequest(parsedReq.error.message, parsedReq.error.issues);
+    }
+
+    return {
+      input: {
+        pairingId: parsedReq.data.payload.pairing_id,
+        decision: "denied",
+        reason: parsedReq.data.payload.reason,
+      },
+    };
+  }
+
+  const parsedReq = WsPairingRevokeRequest.safeParse(msg);
+  if (!parsedReq.success) {
+    return invalidRequest(parsedReq.error.message, parsedReq.error.issues);
+  }
+
+  return {
+    input: {
+      pairingId: parsedReq.data.payload.pairing_id,
+      decision: "revoked",
+      reason: parsedReq.data.payload.reason,
+    },
+  };
 }
 
 function handleCapabilityReadyMessage(
@@ -172,106 +254,4 @@ function handleCapabilityReadyMessage(
   );
 
   return { request_id: msg.request_id, type: msg.type, ok: true };
-}
-
-async function resolvePairing(
-  msg: ProtocolRequestEnvelope,
-  deps: ProtocolDeps,
-  resolvedBy: { kind: "ws"; client_id: string; device_id?: string },
-): Promise<
-  { response: WsResponseEnvelope } | { pairing: NodePairingRequestT; scopedToken?: string }
-> {
-  const notFound = (pairingId: number) => {
-    return {
-      response: errorResponse(
-        msg.request_id,
-        msg.type,
-        "not_found",
-        `pairing ${String(pairingId)} not found or not resolvable`,
-      ),
-    };
-  };
-
-  if (msg.type === "pairing.approve") {
-    const parsedReq = WsPairingApproveRequest.safeParse(msg);
-    if (!parsedReq.success) {
-      return {
-        response: errorResponse(
-          msg.request_id,
-          msg.type,
-          "invalid_request",
-          parsedReq.error.message,
-          {
-            issues: parsedReq.error.issues,
-          },
-        ),
-      };
-    }
-
-    const resolved = await deps.nodePairingDal!.resolve({
-      pairingId: parsedReq.data.payload.pairing_id,
-      decision: "approved",
-      reason: parsedReq.data.payload.reason,
-      resolvedBy,
-      trustLevel: parsedReq.data.payload.trust_level,
-      capabilityAllowlist: parsedReq.data.payload.capability_allowlist,
-    });
-    if (!resolved?.pairing) {
-      return notFound(parsedReq.data.payload.pairing_id);
-    }
-    return { pairing: resolved.pairing, scopedToken: resolved.scopedToken };
-  }
-
-  if (msg.type === "pairing.deny") {
-    const parsedReq = WsPairingDenyRequest.safeParse(msg);
-    if (!parsedReq.success) {
-      return {
-        response: errorResponse(
-          msg.request_id,
-          msg.type,
-          "invalid_request",
-          parsedReq.error.message,
-          {
-            issues: parsedReq.error.issues,
-          },
-        ),
-      };
-    }
-
-    const resolved = await deps.nodePairingDal!.resolve({
-      pairingId: parsedReq.data.payload.pairing_id,
-      decision: "denied",
-      reason: parsedReq.data.payload.reason,
-      resolvedBy,
-    });
-    if (!resolved?.pairing) {
-      return notFound(parsedReq.data.payload.pairing_id);
-    }
-    return { pairing: resolved.pairing };
-  }
-
-  const parsedReq = WsPairingRevokeRequest.safeParse(msg);
-  if (!parsedReq.success) {
-    return {
-      response: errorResponse(
-        msg.request_id,
-        msg.type,
-        "invalid_request",
-        parsedReq.error.message,
-        {
-          issues: parsedReq.error.issues,
-        },
-      ),
-    };
-  }
-
-  const pairing = await deps.nodePairingDal!.revoke({
-    pairingId: parsedReq.data.payload.pairing_id,
-    reason: parsedReq.data.payload.reason,
-    resolvedBy,
-  });
-  if (!pairing) {
-    return notFound(parsedReq.data.payload.pairing_id);
-  }
-  return { pairing };
 }

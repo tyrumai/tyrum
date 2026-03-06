@@ -9,13 +9,13 @@ import type { WsEventDal } from "../modules/ws-event/dal.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
+import { resolveNodePairing } from "../modules/node/pairing-resolve-service.js";
 import { emitPairingApprovedEvent } from "../ws/pairing-approved.js";
 import { PAIRING_WS_AUDIENCE } from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
 import { CapabilityDescriptor, NodePairingTrustLevel, type WsEventEnvelope } from "@tyrum/schemas";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import { requireTenantId } from "../modules/auth/claims.js";
-import { ensurePairingResolvedEvent } from "../ws/stable-events.js";
 
 export interface PairingRouteDeps {
   nodePairingDal: NodePairingDal;
@@ -92,40 +92,42 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       );
     }
 
-    const resolved = await deps.nodePairingDal.resolve({
-      tenantId,
-      pairingId: id,
-      decision: "approved",
-      reason,
-      trustLevel: trustLevelParsed.data,
-      capabilityAllowlist: allowlistParsed.data,
-      resolvedBy: {
-        kind: "http",
-        ip: getClientIp(c),
-        user_agent: c.req.header("user-agent") ?? undefined,
+    const result = await resolveNodePairing(
+      {
+        nodePairingDal: deps.nodePairingDal,
+        wsEventDal: deps.wsEventDal,
+        emitEvent: ({ tenantId: eventTenantId, event }) => {
+          emitEvent(deps, eventTenantId, event);
+        },
+        emitPairingApproved: deps.ws
+          ? ({ tenantId: eventTenantId, pairing, nodeId, scopedToken }) => {
+              emitPairingApprovedEvent({ ...deps.ws!, logger: deps.logger }, eventTenantId, {
+                pairing,
+                nodeId,
+                scopedToken,
+              });
+            }
+          : undefined,
       },
-    });
-    if (!resolved) {
-      return c.json({ error: "not_found", message: "pairing not found or not pending" }, 404);
+      {
+        tenantId,
+        pairingId: id,
+        decision: "approved",
+        reason,
+        trustLevel: trustLevelParsed.data,
+        capabilityAllowlist: allowlistParsed.data,
+        resolvedBy: {
+          kind: "http",
+          ip: getClientIp(c),
+          user_agent: c.req.header("user-agent") ?? undefined,
+        },
+      },
+    );
+    if (!result.ok) {
+      return c.json({ error: result.code, message: result.message }, 404);
     }
-    const { pairing, scopedToken } = resolved;
 
-    if (scopedToken && deps.ws) {
-      emitPairingApprovedEvent({ ...deps.ws, logger: deps.logger }, tenantId, {
-        pairing,
-        nodeId: pairing.node.node_id,
-        scopedToken,
-      });
-    }
-
-    const persistedEvent = await ensurePairingResolvedEvent({
-      tenantId,
-      pairing,
-      wsEventDal: deps.wsEventDal,
-    });
-    emitEvent(deps, tenantId, persistedEvent.event);
-
-    return c.json({ status: "ok", pairing });
+    return c.json({ status: "ok", pairing: result.pairing });
   });
 
   app.post("/pairings/:id/deny", async (c) => {
@@ -136,30 +138,31 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     }
     const body = (await c.req.json()) as { reason?: string };
 
-    const resolved = await deps.nodePairingDal.resolve({
-      tenantId,
-      pairingId: id,
-      decision: "denied",
-      reason: typeof body.reason === "string" ? body.reason : undefined,
-      resolvedBy: {
-        kind: "http",
-        ip: getClientIp(c),
-        user_agent: c.req.header("user-agent") ?? undefined,
+    const result = await resolveNodePairing(
+      {
+        nodePairingDal: deps.nodePairingDal,
+        wsEventDal: deps.wsEventDal,
+        emitEvent: ({ tenantId: eventTenantId, event }) => {
+          emitEvent(deps, eventTenantId, event);
+        },
       },
-    });
-    if (!resolved) {
-      return c.json({ error: "not_found", message: "pairing not found or not pending" }, 404);
+      {
+        tenantId,
+        pairingId: id,
+        decision: "denied",
+        reason: typeof body.reason === "string" ? body.reason : undefined,
+        resolvedBy: {
+          kind: "http",
+          ip: getClientIp(c),
+          user_agent: c.req.header("user-agent") ?? undefined,
+        },
+      },
+    );
+    if (!result.ok) {
+      return c.json({ error: result.code, message: result.message }, 404);
     }
-    const { pairing } = resolved;
 
-    const persistedEvent = await ensurePairingResolvedEvent({
-      tenantId,
-      pairing,
-      wsEventDal: deps.wsEventDal,
-    });
-    emitEvent(deps, tenantId, persistedEvent.event);
-
-    return c.json({ status: "ok", pairing });
+    return c.json({ status: "ok", pairing: result.pairing });
   });
 
   app.post("/pairings/:id/revoke", async (c) => {
@@ -170,28 +173,31 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     }
     const body = (await c.req.json()) as { reason?: string };
 
-    const pairing = await deps.nodePairingDal.revoke({
-      tenantId,
-      pairingId: id,
-      reason: typeof body.reason === "string" ? body.reason : undefined,
-      resolvedBy: {
-        kind: "http",
-        ip: getClientIp(c),
-        user_agent: c.req.header("user-agent") ?? undefined,
+    const result = await resolveNodePairing(
+      {
+        nodePairingDal: deps.nodePairingDal,
+        wsEventDal: deps.wsEventDal,
+        emitEvent: ({ tenantId: eventTenantId, event }) => {
+          emitEvent(deps, eventTenantId, event);
+        },
       },
-    });
-    if (!pairing) {
-      return c.json({ error: "not_found", message: "pairing not found or not approved" }, 404);
+      {
+        tenantId,
+        pairingId: id,
+        decision: "revoked",
+        reason: typeof body.reason === "string" ? body.reason : undefined,
+        resolvedBy: {
+          kind: "http",
+          ip: getClientIp(c),
+          user_agent: c.req.header("user-agent") ?? undefined,
+        },
+      },
+    );
+    if (!result.ok) {
+      return c.json({ error: result.code, message: result.message }, 404);
     }
 
-    const persistedEvent = await ensurePairingResolvedEvent({
-      tenantId,
-      pairing,
-      wsEventDal: deps.wsEventDal,
-    });
-    emitEvent(deps, tenantId, persistedEvent.event);
-
-    return c.json({ status: "ok", pairing });
+    return c.json({ status: "ok", pairing: result.pairing });
   });
 
   return app;

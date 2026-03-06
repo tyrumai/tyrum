@@ -14,20 +14,11 @@ import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { WsEventEnvelope } from "@tyrum/schemas";
 import { UuidSchema } from "@tyrum/schemas";
-import { toApprovalContract } from "../modules/approval/to-contract.js";
-import { isSafeSuggestedOverridePattern } from "../modules/policy/override-guardrails.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import { requireTenantId } from "../modules/auth/claims.js";
-import {
-  APPROVAL_POLICY_OVERRIDE_WS_AUDIENCE,
-  APPROVAL_WS_AUDIENCE,
-  type WsBroadcastAudience,
-} from "../ws/audience.js";
+import { type WsBroadcastAudience } from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
-import {
-  ensureApprovalResolvedEvent,
-  ensurePolicyOverrideCreatedEvent,
-} from "../ws/stable-events.js";
+import { resolveApproval } from "../modules/approval/resolve-service.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>([
   "pending",
@@ -56,49 +47,11 @@ function emitEvent(
   deps: ApprovalRouteDeps,
   tenantId: string,
   evt: WsEventEnvelope,
-  audience: WsBroadcastAudience,
+  audience?: WsBroadcastAudience,
 ): void {
   const ws = deps.ws;
   if (!ws) return;
   broadcastWsEvent(tenantId, evt, { ...ws, logger: deps.logger }, audience);
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function extractSuggestedOverrides(
-  approvalContext: unknown,
-): Array<{ tool_id: string; pattern: string; workspace_id?: string }> {
-  if (!isObject(approvalContext)) return [];
-  const policy = approvalContext["policy"];
-  if (!isObject(policy)) return [];
-  const suggested = policy["suggested_overrides"];
-  if (!Array.isArray(suggested)) return [];
-
-  const out: Array<{ tool_id: string; pattern: string; workspace_id?: string }> = [];
-  for (const entry of suggested) {
-    if (!isObject(entry)) continue;
-    const toolId = entry["tool_id"];
-    const pattern = entry["pattern"];
-    const workspaceId = entry["workspace_id"];
-    if (typeof toolId === "string" && typeof pattern === "string") {
-      out.push({
-        tool_id: toolId,
-        pattern,
-        workspace_id: typeof workspaceId === "string" ? workspaceId : undefined,
-      });
-    }
-  }
-  return out;
-}
-
-function extractPolicySnapshotId(approvalContext: unknown): string | undefined {
-  if (!isObject(approvalContext)) return undefined;
-  const policy = approvalContext["policy"];
-  if (!isObject(policy)) return undefined;
-  const value = policy["policy_snapshot_id"];
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
 export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
@@ -149,17 +102,16 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
   /** Respond to a pending approval (approve or deny). */
   app.post("/approvals/:id/respond", async (c) => {
     const tenantId = requireTenantId(c);
-    const id = c.req.param("id");
-    const parsedId = UuidSchema.safeParse(id);
+    const parsedId = UuidSchema.safeParse(c.req.param("id"));
     if (!parsedId.success) {
       return c.json({ error: "invalid_request", message: "id must be a UUID" }, 400);
     }
 
     const body = (await c.req.json()) as {
       decision?: "approved" | "denied";
-      reason?: string;
-      mode?: "once" | "always";
-      overrides?: Array<{ tool_id?: string; pattern?: string; workspace_id?: string }>;
+      reason?: unknown;
+      mode?: unknown;
+      overrides?: Array<{ tool_id?: unknown; pattern?: unknown; workspace_id?: unknown }>;
     };
 
     let decision: "approved" | "denied";
@@ -175,170 +127,43 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       );
     }
 
-    const existing = await deps.approvalDal.getById({
-      tenantId,
-      approvalId: parsedId.data,
-    });
-    if (!existing) {
-      return c.json({ error: "not_found", message: `approval ${String(id)} not found` }, 404);
-    }
-
-    if (existing.status !== "pending") {
-      // Idempotency: if the approval has already been resolved, return the
-      // existing state without applying side effects (engine actions, overrides,
-      // or duplicate broadcasts).
-      return c.json({ approval: existing });
-    }
-
-    const shouldCreateOverrides = decision === "approved" && body.mode === "always";
-    const selectedNormalized: Array<{ tool_id: string; pattern: string; workspace_id?: string }> =
-      [];
-    const overrideDalForRequest = shouldCreateOverrides ? deps.policyOverrideDal : undefined;
-
-    if (shouldCreateOverrides) {
-      if (!overrideDalForRequest) {
-        return c.json({ error: "unsupported", message: "policy overrides not configured" }, 400);
-      }
-
-      const suggested = extractSuggestedOverrides(existing.context);
-      const selected = Array.isArray(body.overrides) ? body.overrides : [];
-
-      for (const entry of selected) {
-        const toolId = typeof entry.tool_id === "string" ? entry.tool_id.trim() : "";
-        const pattern = typeof entry.pattern === "string" ? entry.pattern.trim() : "";
-        const workspaceId =
-          typeof entry.workspace_id === "string" ? entry.workspace_id.trim() : undefined;
-        if (!toolId || !pattern) continue;
-        selectedNormalized.push(
-          workspaceId
-            ? { tool_id: toolId, pattern, workspace_id: workspaceId }
-            : { tool_id: toolId, pattern },
-        );
-      }
-
-      if (selectedNormalized.length === 0) {
-        return c.json(
-          {
-            error: "invalid_request",
-            message: "mode=always requires selecting one or more overrides",
-          },
-          400,
-        );
-      }
-
-      const allowed = new Set(
-        suggested.map((s) => `${s.tool_id}::${s.pattern}::${s.workspace_id ?? ""}`),
-      );
-      for (const sel of selectedNormalized) {
-        const key = `${sel.tool_id}::${sel.pattern}::${sel.workspace_id ?? ""}`;
-        if (!allowed.has(key)) {
-          return c.json(
-            {
-              error: "invalid_request",
-              message: "requested overrides must be selected from suggested_overrides",
-            },
-            400,
-          );
-        }
-        if (!isSafeSuggestedOverridePattern(sel.pattern)) {
-          return c.json(
-            {
-              error: "invalid_request",
-              message: "requested overrides violate deny guardrails",
-            },
-            400,
-          );
-        }
-      }
-
-      for (const sel of selectedNormalized) {
-        if (!sel.workspace_id) continue;
-        const parsedWorkspaceId = UuidSchema.safeParse(sel.workspace_id);
-        if (!parsedWorkspaceId.success) {
-          return c.json({ error: "invalid_request", message: "workspace_id must be a UUID" }, 400);
-        }
-      }
-    }
-
-    const resolved = await deps.approvalDal.resolveWithEngineAction({
-      tenantId,
-      approvalId: parsedId.data,
-      decision,
-      reason: body.reason,
-      resolvedBy: {
-        kind: "http",
-        ip: getClientIp(c),
-        user_agent: c.req.header("user-agent") ?? undefined,
+    const resolvedBy = {
+      kind: "http" as const,
+      ip: getClientIp(c),
+      user_agent: c.req.header("user-agent") ?? undefined,
+    };
+    const result = await resolveApproval(
+      {
+        approvalDal: deps.approvalDal,
+        policyOverrideDal: deps.policyOverrideDal,
+        wsEventDal: deps.wsEventDal,
+        emitEvent: ({ tenantId: eventTenantId, event, audience }) => {
+          emitEvent(deps, eventTenantId, event, audience);
+        },
       },
-    });
-    if (!resolved) {
+      {
+        tenantId,
+        approvalId: parsedId.data,
+        decision,
+        reason: typeof body.reason === "string" ? body.reason : undefined,
+        mode: body.mode === "always" || body.mode === "once" ? body.mode : undefined,
+        overrides: Array.isArray(body.overrides) ? body.overrides : undefined,
+        resolvedBy,
+      },
+    );
+    if (!result.ok) {
       return c.json(
         {
-          error: "not_found",
-          message: `approval ${String(id)} not found or already responded`,
+          error: result.code,
+          message: result.message,
         },
-        404,
+        result.code === "not_found" ? 404 : 400,
       );
-    }
-    const updated = resolved.approval;
-    const transitioned = resolved.transitioned;
-
-    const desiredStatus = decision;
-    const decisionMatches = updated.status === desiredStatus;
-
-    const createdOverrides: unknown[] = [];
-
-    if (
-      transitioned &&
-      decisionMatches &&
-      updated.status === "approved" &&
-      shouldCreateOverrides &&
-      overrideDalForRequest
-    ) {
-      const createdBy = {
-        kind: "http",
-        ip: getClientIp(c),
-        user_agent: c.req.header("user-agent") ?? undefined,
-      };
-      const agentId = updated.agent_id;
-      const snapshotId = extractPolicySnapshotId(updated.context);
-
-      for (const sel of selectedNormalized) {
-        const row = await overrideDalForRequest.create({
-          tenantId,
-          agentId,
-          workspaceId: sel.workspace_id,
-          toolId: sel.tool_id,
-          pattern: sel.pattern,
-          createdBy,
-          createdFromApprovalId: updated.approval_id,
-          createdFromPolicySnapshotId: snapshotId,
-        });
-        createdOverrides.push(row);
-
-        const persistedEvent = await ensurePolicyOverrideCreatedEvent({
-          tenantId,
-          override: row,
-          audience: APPROVAL_POLICY_OVERRIDE_WS_AUDIENCE,
-          wsEventDal: deps.wsEventDal,
-        });
-        emitEvent(deps, tenantId, persistedEvent.event, APPROVAL_POLICY_OVERRIDE_WS_AUDIENCE);
-      }
-    }
-
-    const contract = toApprovalContract(updated);
-    if (contract && transitioned) {
-      const approvalResolvedEvt = await ensureApprovalResolvedEvent({
-        tenantId,
-        approval: contract,
-        wsEventDal: deps.wsEventDal,
-      });
-      emitEvent(deps, tenantId, approvalResolvedEvt.event, APPROVAL_WS_AUDIENCE);
     }
 
     return c.json({
-      approval: updated,
-      created_overrides: createdOverrides.length > 0 ? createdOverrides : undefined,
+      approval: result.approval,
+      created_overrides: result.createdOverrides,
     });
   });
 
