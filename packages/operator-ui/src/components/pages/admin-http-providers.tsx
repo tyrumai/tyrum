@@ -89,6 +89,20 @@ function methodLabel(entry: ProviderRegistryEntry | undefined, methodKey: string
   return method?.label ?? methodKey;
 }
 
+function syncDisplayNameOnProviderChange(input: {
+  currentDisplayName: string;
+  currentProviderName?: string;
+  nextProviderName?: string;
+}): string {
+  if (!input.currentDisplayName.trim()) {
+    return input.nextProviderName ?? "";
+  }
+  if (input.currentDisplayName === (input.currentProviderName ?? "")) {
+    return input.nextProviderName ?? "";
+  }
+  return input.currentDisplayName;
+}
+
 function normalizeFormState(input: {
   registry: ProviderRegistryEntry[];
   configuredProviders: ConfiguredProviderGroup[];
@@ -362,9 +376,11 @@ function ProviderAccountDialog({
               setState((current) => ({
                 providerKey: nextProvider?.provider_key ?? "",
                 methodKey: nextProvider?.methods[0]?.method_key ?? "",
-                displayName: current.displayName.trim()
-                  ? current.displayName
-                  : (nextProvider?.name ?? ""),
+                displayName: syncDisplayNameOnProviderChange({
+                  currentDisplayName: current.displayName,
+                  currentProviderName: selectedProvider?.name,
+                  nextProviderName: nextProvider?.name,
+                }),
                 configValues: Object.fromEntries(
                   (nextProvider?.methods[0]?.fields ?? [])
                     .filter((field) => field.kind === "config" && field.input === "boolean")

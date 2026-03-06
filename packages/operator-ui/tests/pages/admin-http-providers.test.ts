@@ -170,6 +170,87 @@ function createTestCore(input?: {
 }
 
 describe("AdminHttpProvidersPanel", () => {
+  it("updates the default display name when the selected provider changes", async () => {
+    const { core } = createTestCore();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        ElevatedModeProvider,
+        { core, mode: "web" },
+        React.createElement(AdminHttpProvidersPanel, { core }),
+      ),
+    );
+
+    await flush();
+
+    const addButton = container.querySelector<HTMLButtonElement>(
+      "[data-testid='providers-add-open']",
+    );
+    expect(addButton).not.toBeNull();
+    act(() => {
+      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = document.body.querySelector<HTMLElement>(
+      "[data-testid='providers-account-dialog']",
+    );
+    expect(dialog).not.toBeNull();
+
+    const providerSelect = findLabeledSelect(dialog!, "Provider");
+    const displayNameInput = findLabeledInput(dialog!, "Display name");
+    expect(providerSelect).not.toBeNull();
+    expect(displayNameInput).not.toBeNull();
+    expect(displayNameInput?.value).toBe("OpenAI");
+
+    setSelectValue(providerSelect!, "anthropic");
+
+    expect(displayNameInput?.value).toBe("Anthropic");
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("preserves a custom display name when the selected provider changes", async () => {
+    const { core } = createTestCore();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        ElevatedModeProvider,
+        { core, mode: "web" },
+        React.createElement(AdminHttpProvidersPanel, { core }),
+      ),
+    );
+
+    await flush();
+
+    const addButton = container.querySelector<HTMLButtonElement>(
+      "[data-testid='providers-add-open']",
+    );
+    expect(addButton).not.toBeNull();
+    act(() => {
+      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = document.body.querySelector<HTMLElement>(
+      "[data-testid='providers-account-dialog']",
+    );
+    expect(dialog).not.toBeNull();
+
+    const providerSelect = findLabeledSelect(dialog!, "Provider");
+    const displayNameInput = findLabeledInput(dialog!, "Display name");
+    expect(providerSelect).not.toBeNull();
+    expect(displayNameInput).not.toBeNull();
+
+    act(() => {
+      setNativeValue(displayNameInput!, "Team account");
+    });
+
+    setSelectValue(providerSelect!, "anthropic");
+
+    expect(displayNameInput?.value).toBe("Team account");
+
+    cleanupTestRoot({ container, root });
+  });
+
   it("creates provider accounts from the add dialog", async () => {
     const { core, setProviders } = createTestCore();
 
