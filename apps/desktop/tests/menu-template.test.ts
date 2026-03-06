@@ -24,7 +24,7 @@ describe("buildApplicationMenuTemplate", () => {
     expect(typeof preferencesItem?.click).toBe("function");
 
     preferencesItem?.click?.({} as never, null, {} as never);
-    expect(onRequestNavigate).toHaveBeenCalledWith({ pageId: "connection" });
+    expect(onRequestNavigate).toHaveBeenCalledWith({ pageId: "node-configure" });
 
     const windowMenu = template.find((item) => item.label === "Window");
     expect(windowMenu).toBeDefined();
@@ -76,7 +76,7 @@ describe("buildApplicationMenuTemplate", () => {
     expect(settingsItem?.accelerator).toBe("CmdOrCtrl+,");
 
     settingsItem?.click?.({} as never, null, {} as never);
-    expect(onRequestNavigate).toHaveBeenCalledWith({ pageId: "connection" });
+    expect(onRequestNavigate).toHaveBeenCalledWith({ pageId: "node-configure" });
 
     const helpMenu = prodTemplate.find((item) => item.label === "Help");
     expect(helpMenu).toBeDefined();

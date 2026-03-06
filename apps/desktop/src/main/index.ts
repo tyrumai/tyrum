@@ -112,8 +112,8 @@ function emitBackgroundStateChange(state: BackgroundModeState): void {
   win.webContents.send("status:change", { backgroundState: state });
 }
 
-function requestConnectionNavigation(): void {
-  requestNavigation({ pageId: "connection" });
+function requestNodeConfigureNavigation(): void {
+  requestNavigation({ pageId: "node-configure" });
 }
 
 function ensureBackgroundController(): BackgroundModeController {
@@ -123,7 +123,7 @@ function ensureBackgroundController(): BackgroundModeController {
 
   backgroundModeController = new BackgroundModeController({
     onShowMainWindow: requestMainWindowFocus,
-    onRequestNavigate: requestConnectionNavigation,
+    onRequestNavigate: requestNodeConfigureNavigation,
     onStateChange: emitBackgroundStateChange,
   });
   setBackgroundModeController(backgroundModeController);

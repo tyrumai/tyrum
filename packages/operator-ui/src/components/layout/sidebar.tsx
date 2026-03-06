@@ -350,7 +350,7 @@ export function Sidebar({
   activeItemId,
   onNavigate,
   secondaryItems,
-  secondaryLabel = "Desktop",
+  secondaryLabel = "Node",
   secondaryCollapsible = false,
   secondaryDefaultCollapsed = true,
   collapsible = false,
