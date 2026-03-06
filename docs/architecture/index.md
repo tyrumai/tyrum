@@ -130,6 +130,7 @@ flowchart LR
 - [Sandbox and policy](./sandbox-policy.md)
 - [Observability](./observability.md)
 - [Data lifecycle and retention](./data-lifecycle.md)
+- [Operational table maintenance contract](./operational-maintenance.md)
 - [Gateway data model map (v2)](./data-model-map.md)
 - [Gateway FK audit](./data-model-fk-audit.md)
 - [Presence](./presence.md)

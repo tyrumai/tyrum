@@ -78,6 +78,8 @@ describe("Metrics routes", () => {
     const body = await res.text();
     expect(body).toContain("http_requests_total");
     expect(body).toContain("http_request_duration_seconds");
+    expect(body).toContain("lifecycle_prune_rows_total");
+    expect(body).toContain("lifecycle_tick_errors_total");
     expect(body).toContain("ws_connections_active");
   });
 

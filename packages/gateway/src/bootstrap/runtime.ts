@@ -33,6 +33,7 @@ import { loadLifecycleHooksFromHome } from "../modules/hooks/config.js";
 import { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { createMemoryV1BudgetsProvider } from "../modules/memory/v1-budgets-provider.js";
+import { gatewayMetrics } from "../modules/observability/metrics.js";
 import { maybeStartOtel, type OtelRuntime } from "../modules/observability/otel.js";
 import { PluginRegistry } from "../modules/plugins/registry.js";
 import { createDbSecretProviderFactory } from "../modules/secret/create-secret-provider.js";
@@ -345,6 +346,7 @@ function startBackgroundSchedulers(context: GatewayBootContext): BackgroundSched
           db: context.container.db,
           keepProcessAlive,
           logger: context.container.logger,
+          metrics: gatewayMetrics,
         })
       : undefined;
 
@@ -356,6 +358,7 @@ function startBackgroundSchedulers(context: GatewayBootContext): BackgroundSched
             context.deploymentConfig.lifecycle.channels.terminalRetentionDays,
           keepProcessAlive,
           logger: context.container.logger,
+          metrics: gatewayMetrics,
           sessionsTtlDays: context.deploymentConfig.lifecycle.sessions.ttlDays,
         })
       : undefined;

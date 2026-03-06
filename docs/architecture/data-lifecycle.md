@@ -10,6 +10,7 @@ References:
 - [Scaling and high availability](./scaling-ha.md)
 - [Backplane (outbox contract)](./backplane.md)
 - [Observability](./observability.md)
+- [Operational table maintenance contract](./operational-maintenance.md)
 - [Artifacts](./artifacts.md)
 - [Sandbox and policy](./sandbox-policy.md)
 
@@ -56,6 +57,7 @@ Lifecycle expectations:
 Architecture notes:
 
 - TTL-derived state is pruned periodically based on explicit expiry timestamps.
+- The per-table maintenance contract for current operational tables is documented in [Operational table maintenance contract](./operational-maintenance.md).
 - Session/transcript retention is enforced by configurable lifecycle policies (for example last-activity windows), with safe cascading to dependent derived records.
 - In clustered deployments, retention jobs run under a single-writer lock/lease so pruning is correct and predictable.
 

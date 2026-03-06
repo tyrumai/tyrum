@@ -4,11 +4,17 @@ import { getLeafHonoRoutePath } from "../../hono-route.js";
 
 type HttpRequestTotalLabels = "method" | "path" | "status";
 type HttpRequestDurationLabels = "method" | "path";
+type LifecyclePruneRowsLabels = "scheduler" | "table";
+type LifecycleTickErrorsLabels = "scheduler";
+
+export type LifecycleSchedulerName = "outbox" | "statestore";
 
 export class MetricsRegistry {
   readonly registry: Registry;
   readonly httpRequestsTotal: Counter<HttpRequestTotalLabels>;
   readonly httpRequestDurationSeconds: Histogram<HttpRequestDurationLabels>;
+  readonly lifecyclePruneRowsTotal: Counter<LifecyclePruneRowsLabels>;
+  readonly lifecycleTickErrorsTotal: Counter<LifecycleTickErrorsLabels>;
   readonly wsConnectionsActive: Gauge<never>;
 
   constructor() {
@@ -28,11 +34,46 @@ export class MetricsRegistry {
       registers: [this.registry],
     });
 
+    this.lifecyclePruneRowsTotal = new Counter<LifecyclePruneRowsLabels>({
+      name: "lifecycle_prune_rows_total",
+      help: "Rows pruned by background lifecycle maintenance.",
+      labelNames: ["scheduler", "table"] as const,
+      registers: [this.registry],
+    });
+
+    this.lifecycleTickErrorsTotal = new Counter<LifecycleTickErrorsLabels>({
+      name: "lifecycle_tick_errors_total",
+      help: "Background lifecycle scheduler tick failures.",
+      labelNames: ["scheduler"] as const,
+      registers: [this.registry],
+    });
+
     this.wsConnectionsActive = new Gauge<never>({
       name: "ws_connections_active",
       help: "Number of active WebSocket connections.",
       registers: [this.registry],
     });
+  }
+
+  recordLifecyclePruneRows(
+    scheduler: LifecycleSchedulerName,
+    table: string,
+    rowsPruned: number,
+  ): void {
+    if (!Number.isFinite(rowsPruned) || rowsPruned <= 0) return;
+    try {
+      this.lifecyclePruneRowsTotal.inc({ scheduler, table }, rowsPruned);
+    } catch {
+      // Intentional: lifecycle maintenance must continue even if Prometheus rejects a sample.
+    }
+  }
+
+  recordLifecycleTickError(scheduler: LifecycleSchedulerName): void {
+    try {
+      this.lifecycleTickErrorsTotal.inc({ scheduler });
+    } catch {
+      // Intentional: error accounting must not make a failed lifecycle tick worse.
+    }
   }
 }
 
