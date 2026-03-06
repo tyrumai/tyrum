@@ -7,6 +7,7 @@ import {
   descriptorIdForClientCapability,
 } from "@tyrum/schemas";
 import * as deviceIdentity from "../src/device-identity.js";
+import type { TyrumClientProtocolErrorInfo } from "../src/ws-client.js";
 import { TyrumClient } from "../src/ws-client.js";
 
 // ---------------------------------------------------------------------------
@@ -144,6 +145,14 @@ function waitForReconnectScheduled(
   });
 }
 
+function handleInboundFrame(client: TyrumClient, raw: string): void {
+  (
+    client as unknown as {
+      handleMessage: (frame: string) => void;
+    }
+  ).handleMessage(raw);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -159,6 +168,7 @@ describe("TyrumClient", () => {
       await server.close();
       server = undefined;
     }
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -309,6 +319,119 @@ describe("TyrumClient", () => {
     expect(Object.prototype.hasOwnProperty.call(device, "platform")).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(device, "version")).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(device, "mode")).toBe(false);
+  });
+
+  it("reports malformed JSON frames through protocol_error hooks", () => {
+    const received: TyrumClientProtocolErrorInfo[] = [];
+    const onProtocolError = vi.fn((info) => {
+      received.push(info);
+    });
+    client = new TyrumClient({
+      url: "ws://127.0.0.1:65535",
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+      onProtocolError: onProtocolError,
+    });
+
+    const protocolEvents: TyrumClientProtocolErrorInfo[] = [];
+    client.on("protocol_error", (info) => {
+      protocolEvents.push(info);
+    });
+
+    handleInboundFrame(client, "{bad json");
+
+    expect(onProtocolError).toHaveBeenCalledTimes(1);
+    expect(received).toEqual([
+      {
+        kind: "invalid_json",
+        raw: "{bad json",
+        error: expect.any(String),
+        suppressedCount: 0,
+      },
+    ]);
+    expect(protocolEvents).toEqual(received);
+  });
+
+  it("reports invalid envelopes through protocol_error hooks", () => {
+    const received: TyrumClientProtocolErrorInfo[] = [];
+    const onProtocolError = vi.fn((info) => {
+      received.push(info);
+    });
+    client = new TyrumClient({
+      url: "ws://127.0.0.1:65535",
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+      onProtocolError: onProtocolError,
+    });
+
+    handleInboundFrame(client, JSON.stringify({ type: "plan.update" }));
+
+    expect(onProtocolError).toHaveBeenCalledTimes(1);
+    expect(received).toEqual([
+      {
+        kind: "invalid_envelope",
+        raw: JSON.stringify({ type: "plan.update" }),
+        error: expect.any(String),
+        suppressedCount: 0,
+      },
+    ]);
+  });
+
+  it("rate limits repeated protocol_error reports and flushes a suppressed count", () => {
+    vi.useFakeTimers();
+    const onProtocolError = vi.fn();
+    client = new TyrumClient({
+      url: "ws://127.0.0.1:65535",
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+      onProtocolError,
+    });
+
+    handleInboundFrame(client, "{bad json");
+    handleInboundFrame(client, "{still bad");
+
+    expect(onProtocolError).toHaveBeenCalledTimes(1);
+    expect(onProtocolError).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        kind: "invalid_json",
+        suppressedCount: 0,
+      }),
+    );
+
+    vi.advanceTimersByTime(5_000);
+    handleInboundFrame(client, JSON.stringify({ type: "plan.update" }));
+
+    expect(onProtocolError).toHaveBeenCalledTimes(2);
+    expect(onProtocolError).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        kind: "invalid_envelope",
+        suppressedCount: 1,
+      }),
+    );
+  });
+
+  it("warns about malformed frames when debugProtocol is enabled", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const raw = '{"token":"secret","broken":';
+    client = new TyrumClient({
+      url: "ws://127.0.0.1:65535",
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+      debugProtocol: true,
+    });
+
+    handleInboundFrame(client, raw);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toContain("invalid_json");
+    expect(warn.mock.calls[0]?.[0]).toContain(`raw_length=${raw.length}`);
+    expect(warn.mock.calls[0]?.[0]).not.toContain(raw);
   });
 
   it("sends namespaced, versioned capability descriptors in connect.init", async () => {

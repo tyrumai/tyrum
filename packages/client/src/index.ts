@@ -2,7 +2,12 @@
 export const VERSION = "0.1.0";
 
 export { TyrumClient } from "./ws-client.js";
-export type { TyrumClientOptions, TyrumClientEvents } from "./ws-client.js";
+export type {
+  TyrumClientEvents,
+  TyrumClientOptions,
+  TyrumClientProtocolErrorInfo,
+  TyrumClientProtocolErrorKind,
+} from "./ws-client.js";
 
 export { normalizeFingerprint256 } from "./tls/fingerprint.js";
 

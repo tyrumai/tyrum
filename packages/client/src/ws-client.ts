@@ -207,9 +207,19 @@ type TyrumProtocolEvents = {
   [EventType in WsEventT["type"]]: Extract<WsEventT, { type: EventType }>;
 };
 
+export type TyrumClientProtocolErrorKind = "invalid_json" | "invalid_envelope";
+
+export interface TyrumClientProtocolErrorInfo {
+  kind: TyrumClientProtocolErrorKind;
+  raw: string;
+  error?: string;
+  suppressedCount: number;
+}
+
 export type TyrumClientEvents = TyrumProtocolEvents & {
   connected: { clientId: string };
   disconnected: { code: number; reason: string };
+  protocol_error: TyrumClientProtocolErrorInfo;
   reconnect_scheduled: { delayMs: number; nextRetryAtMs: number; attempt: number };
   transport_error: { message: string };
   task_execute: WsTaskExecuteRequest;
@@ -291,6 +301,17 @@ export interface TyrumClientOptions {
    * Defaults to 1000.
    */
   maxSeenRequestIds?: number;
+  /**
+   * When `true`, emit a rate-limited warning for malformed inbound frames.
+   * Defaults to `false`.
+   */
+  debugProtocol?: boolean;
+  /**
+   * Optional callback for malformed inbound WebSocket frames.
+   *
+   * Reports are rate-limited to avoid noisy logs or callback storms.
+   */
+  onProtocolError?: (info: TyrumClientProtocolErrorInfo) => void;
 }
 
 type GeneratedDevice = {
@@ -314,6 +335,8 @@ const DEFAULT_MAX_RECONNECT_DELAY = 30_000;
 const DEFAULT_RECONNECT_BASE_DELAY = 5_000;
 const DEFAULT_MAX_SEEN_EVENT_IDS = 1_000;
 const DEFAULT_MAX_SEEN_REQUEST_IDS = 1_000;
+const DEFAULT_PROTOCOL_ERROR_REPORT_INTERVAL_MS = 5_000;
+const MAX_PROTOCOL_ERROR_RAW_LENGTH = 512;
 const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
 const DEFAULT_PROTOCOL_REV = 2;
@@ -366,6 +389,14 @@ function toBase64UrlUtf8(value: string): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
+function truncateProtocolErrorRaw(raw: string): string {
+  if (raw.length <= MAX_PROTOCOL_ERROR_RAW_LENGTH) {
+    return raw;
+  }
+  const suffix = `... [truncated ${raw.length - MAX_PROTOCOL_ERROR_RAW_LENGTH} chars]`;
+  return `${raw.slice(0, MAX_PROTOCOL_ERROR_RAW_LENGTH)}${suffix}`;
+}
+
 function formatCloseReason(code: number, reason: string): string {
   const trimmedReason = reason.trim();
   return trimmedReason.length > 0
@@ -409,6 +440,7 @@ export class TyrumClient {
     maxReconnectDelay: number;
     maxSeenEventIds: number;
     maxSeenRequestIds: number;
+    debugProtocol: boolean;
     role: WsPeerRole;
     protocolRev: number;
   };
@@ -432,10 +464,13 @@ export class TyrumClient {
   private suppressReconnect = false;
   private generatedDevice: GeneratedDevice | null = null;
   private generatedDevicePromise: Promise<GeneratedDevice> | null = null;
+  private suppressedProtocolErrors = 0;
+  private nextProtocolErrorReportAtMs = 0;
 
   constructor(options: TyrumClientOptions) {
     this.emitter = mitt<TyrumClientEvents>();
     this.opts = {
+      debugProtocol: false,
       role: "client",
       protocolRev: DEFAULT_PROTOCOL_REV,
       reconnect: true,
@@ -822,6 +857,7 @@ export class TyrumClient {
     this.clientId = null;
     this.transportErrorHint = null;
     this.suppressReconnect = false;
+    this.resetProtocolErrorReporting();
     const attempt = ++this.connectionAttempt;
     void this.openSocketAttempt(attempt);
   }
@@ -1270,16 +1306,70 @@ export class TyrumClient {
     }
   }
 
+  private resetProtocolErrorReporting(): void {
+    this.suppressedProtocolErrors = 0;
+    this.nextProtocolErrorReportAtMs = 0;
+  }
+
+  private warnProtocolError(info: TyrumClientProtocolErrorInfo, rawLength: number): void {
+    const errorSuffix = info.error ? ` (${info.error})` : "";
+    const suppressedSuffix =
+      info.suppressedCount > 0
+        ? `; suppressed ${info.suppressedCount} similar frame${
+            info.suppressedCount === 1 ? "" : "s"
+          }`
+        : "";
+    console.warn(
+      `[TyrumClient] protocol error ${info.kind}${suppressedSuffix}; raw_length=${rawLength}${errorSuffix}`,
+    );
+  }
+
+  private reportProtocolError(
+    kind: TyrumClientProtocolErrorKind,
+    raw: string,
+    error?: string,
+  ): void {
+    const now = Date.now();
+    if (now < this.nextProtocolErrorReportAtMs) {
+      this.suppressedProtocolErrors += 1;
+      return;
+    }
+
+    const rawLength = raw.length;
+    const info: TyrumClientProtocolErrorInfo = {
+      kind,
+      raw: truncateProtocolErrorRaw(raw),
+      error: typeof error === "string" && error.trim().length > 0 ? error : undefined,
+      suppressedCount: this.suppressedProtocolErrors,
+    };
+
+    this.suppressedProtocolErrors = 0;
+    this.nextProtocolErrorReportAtMs = now + DEFAULT_PROTOCOL_ERROR_REPORT_INTERVAL_MS;
+
+    this.emitter.emit("protocol_error", info);
+    this.opts.onProtocolError?.(info);
+
+    if (this.opts.debugProtocol) {
+      this.warnProtocolError(info, rawLength);
+    }
+  }
+
   private handleMessage(raw: string): void {
     let json: unknown;
     try {
       json = JSON.parse(raw);
-    } catch {
-      return; // silently ignore malformed frames
+    } catch (error) {
+      this.reportProtocolError(
+        "invalid_json",
+        raw,
+        error instanceof Error ? error.message : String(error),
+      );
+      return;
     }
 
     const parsed = WsMessageEnvelope.safeParse(json);
     if (!parsed.success) {
+      this.reportProtocolError("invalid_envelope", raw, parsed.error.message);
       return;
     }
 
