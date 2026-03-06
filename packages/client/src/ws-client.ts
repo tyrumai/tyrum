@@ -3,7 +3,7 @@
  *
  * Connects via the standard WebSocket API (available natively in Node 24+
  * and all modern browsers), sends/receives typed protocol messages, and
- * optionally auto-reconnects with fixed-interval retry.
+ * optionally auto-reconnects with exponential backoff + jitter.
  */
 
 import type { Emitter } from "mitt";
@@ -275,6 +275,8 @@ export interface TyrumClientOptions {
   };
   /** Whether to auto-reconnect on unexpected close. Defaults to `true`. */
   reconnect?: boolean;
+  /** Base reconnect retry delay in milliseconds. Defaults to 5 000. */
+  reconnectBaseDelayMs?: number;
   /** Upper bound for reconnect retry delay in milliseconds. Defaults to 30 000. */
   maxReconnectDelay?: number;
   /**
@@ -309,12 +311,13 @@ type ResolvedConnectDevice = GeneratedDevice & {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_MAX_RECONNECT_DELAY = 30_000;
-const DEFAULT_RECONNECT_DELAY = 5_000;
+const DEFAULT_RECONNECT_BASE_DELAY = 5_000;
 const DEFAULT_MAX_SEEN_EVENT_IDS = 1_000;
 const DEFAULT_MAX_SEEN_REQUEST_IDS = 1_000;
 const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
 const DEFAULT_PROTOCOL_REV = 2;
+const TERMINAL_RECONNECT_CLOSE_CODES = new Set<number>([4005, 4006, 4007, 4008]);
 const WS_ACK_RESULT = {
   safeParse: (
     input: unknown,
@@ -363,6 +366,37 @@ function toBase64UrlUtf8(value: string): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
+function formatCloseReason(code: number, reason: string): string {
+  const trimmedReason = reason.trim();
+  return trimmedReason.length > 0
+    ? `WebSocket closed with ${code} (${trimmedReason}).`
+    : `WebSocket closed with ${code}.`;
+}
+
+function getTerminalReconnectMessage(code: number, reason: string, token: string): string | null {
+  if (TERMINAL_RECONNECT_CLOSE_CODES.has(code)) {
+    const closeReason = formatCloseReason(code, reason);
+    switch (code) {
+      case 4005:
+        return `${closeReason} Check the client and gateway protocol revisions before reconnecting.`;
+      case 4006:
+        return `${closeReason} Check the configured device_id and device key pair before reconnecting.`;
+      case 4007:
+        return `${closeReason} Check the configured device private key before reconnecting.`;
+      case 4008:
+        return `${closeReason} Check that the scoped token matches this device before reconnecting.`;
+      default:
+        return closeReason;
+    }
+  }
+
+  if (code === 4001 && token.trim().length > 0) {
+    return `${formatCloseReason(code, reason)} Refresh or replace the configured token before reconnecting.`;
+  }
+
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Client
 // ---------------------------------------------------------------------------
@@ -371,6 +405,7 @@ export class TyrumClient {
   private readonly emitter: Emitter<TyrumClientEvents>;
   private readonly opts: TyrumClientOptions & {
     reconnect: boolean;
+    reconnectBaseDelayMs: number;
     maxReconnectDelay: number;
     maxSeenEventIds: number;
     maxSeenRequestIds: number;
@@ -404,6 +439,7 @@ export class TyrumClient {
       role: "client",
       protocolRev: DEFAULT_PROTOCOL_REV,
       reconnect: true,
+      reconnectBaseDelayMs: DEFAULT_RECONNECT_BASE_DELAY,
       maxReconnectDelay: DEFAULT_MAX_RECONNECT_DELAY,
       maxSeenEventIds: DEFAULT_MAX_SEEN_EVENT_IDS,
       maxSeenRequestIds: DEFAULT_MAX_SEEN_REQUEST_IDS,
@@ -439,6 +475,7 @@ export class TyrumClient {
   /** Open the WebSocket connection and send the `hello` handshake. */
   connect(): void {
     this.intentionalClose = false;
+    this.reconnectAttempt = 0;
     this.openSocket();
   }
 
@@ -929,7 +966,6 @@ export class TyrumClient {
     this.ws = ws;
 
     ws.addEventListener("open", () => {
-      this.reconnectAttempt = 0;
       this.sendConnect();
     });
 
@@ -938,6 +974,16 @@ export class TyrumClient {
     });
 
     ws.addEventListener("close", (event: CloseEvent) => {
+      const terminalReconnectMessage = getTerminalReconnectMessage(
+        event.code,
+        event.reason,
+        this.opts.token,
+      );
+      if (terminalReconnectMessage) {
+        this.suppressReconnect = true;
+        this.emitter.emit("transport_error", { message: terminalReconnectMessage });
+      }
+
       this.emitter.emit("disconnected", {
         code: event.code,
         reason: event.reason,
@@ -1135,6 +1181,7 @@ export class TyrumClient {
             this.disconnectIfHandshakeSocketActive(handshakeWs);
             return;
           }
+          this.reconnectAttempt = 0;
           this.ready = true;
           this.clientId = parsed2.data.client_id;
           this.emitter.emit("connected", { clientId: parsed2.data.client_id });
@@ -1347,8 +1394,11 @@ export class TyrumClient {
   }
 
   private scheduleReconnect(): void {
-    const delay = Math.min(DEFAULT_RECONNECT_DELAY, this.opts.maxReconnectDelay);
     const attempt = this.reconnectAttempt + 1;
+    const maxReconnectDelayMs = Math.max(0, this.opts.maxReconnectDelay);
+    const reconnectBaseDelayMs = Math.max(0, this.opts.reconnectBaseDelayMs);
+    const backoffDelayMs = Math.min(maxReconnectDelayMs, reconnectBaseDelayMs * 2 ** (attempt - 1));
+    const delay = Math.min(backoffDelayMs, Math.floor(Math.random() * (backoffDelayMs + 1)));
     const nextRetryAtMs = Date.now() + delay;
     this.reconnectAttempt++;
     this.emitter.emit("reconnect_scheduled", {
