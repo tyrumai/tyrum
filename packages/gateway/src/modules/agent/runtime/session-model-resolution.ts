@@ -250,8 +250,8 @@ export async function resolveSessionModel(
         providerOptions,
         modelOptions,
         variantOptions,
-        input.config.model.options,
         chosen.optionsOverride ?? {},
+        input.config.model.options,
       );
     })();
 
