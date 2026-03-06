@@ -92,7 +92,8 @@ import { LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
 import { resolveWorkspaceKey } from "../../workspace/id.js";
 import { WorkboardDal } from "../../workboard/dal.js";
 import { ChannelOutboxDal } from "../../channels/outbox-dal.js";
-import { parseChannelSourceKey } from "../../channels/interface.js";
+import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../../channels/interface.js";
+import { SessionSendPolicyOverrideDal } from "../../channels/send-policy-override-dal.js";
 import { DEFAULT_TENANT_ID } from "../../identity/scope.js";
 import { ScheduleService } from "../../automation/schedule-service.js";
 
@@ -629,6 +630,11 @@ export class AgentRuntime {
     });
     const targetSessionKey = activity?.last_active_session_key?.trim();
     if (!targetSessionKey) return;
+    const sendOverride = await new SessionSendPolicyOverrideDal(this.opts.container.db).get({
+      tenant_id: tenantId,
+      key: targetSessionKey,
+    });
+    if (sendOverride?.send_policy === "off") return;
 
     const route = await this.opts.container.db.get<{
       inbox_id: number;
@@ -648,13 +654,90 @@ export class AgentRuntime {
     );
     if (!route) return;
 
+    const outbox = new ChannelOutboxDal(this.opts.container.db);
     const dedupeKey = [
       "automation.reply",
       input.automation.schedule_id ?? "unknown",
       input.automation.fired_at ?? "unknown",
       input.response.session_id,
     ].join(":");
-    const outbox = new ChannelOutboxDal(this.opts.container.db);
+    const existing = await outbox.getByDedupeKey({
+      tenant_id: route.tenant_id,
+      dedupe_key: dedupeKey,
+    });
+    if (existing) return;
+
+    let decision: "allow" | "deny" | "require_approval" = "allow";
+    let policySnapshotId: string | undefined;
+    if (this.policyService.isEnabled()) {
+      try {
+        const parsedSource = parseChannelSourceKey(route.source);
+        const matchTarget =
+          parsedSource.accountId === DEFAULT_CHANNEL_ACCOUNT_ID
+            ? `${parsedSource.connector}:${route.thread_id}`
+            : `${parsedSource.connector}:${parsedSource.accountId}:${route.thread_id}`;
+        const evaluation = await this.policyService.evaluateConnectorAction({
+          tenantId,
+          agentId,
+          workspaceId,
+          matchTarget,
+        });
+        decision = evaluation.decision;
+        policySnapshotId = evaluation.policy_snapshot?.policy_snapshot_id;
+      } catch {
+        // Intentional: fail closed if connector policy evaluation fails.
+        decision = "require_approval";
+      }
+
+      if (this.policyService.isObserveOnly()) {
+        decision = "allow";
+      }
+    }
+
+    if (sendOverride?.send_policy === "on") {
+      decision = "allow";
+    }
+
+    if (
+      decision === "deny" &&
+      this.policyService.isEnabled() &&
+      !this.policyService.isObserveOnly()
+    ) {
+      return;
+    }
+
+    let approvalId: string | undefined;
+    if (decision === "require_approval") {
+      const approval = await this.approvalDal.create({
+        tenantId,
+        agentId,
+        workspaceId,
+        approvalKey: `connector:automation.reply:${route.source}:${route.thread_id}:${dedupeKey}`,
+        kind: "connector.send",
+        prompt: `Approve sending an automation reply`,
+        context: {
+          source: route.source,
+          thread_id: route.thread_id,
+          inbox_id: route.inbox_id,
+          key: targetSessionKey,
+          policy_snapshot_id: policySnapshotId,
+          automation: {
+            schedule_id: input.automation.schedule_id,
+            schedule_kind: input.automation.schedule_kind,
+            fired_at: input.automation.fired_at,
+          },
+          preview: input.response.reply,
+        },
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      });
+      approvalId = approval.approval_id;
+      try {
+        this.approvalNotifier.notify(approval);
+      } catch {
+        // Intentional: approval notification is best-effort.
+      }
+    }
+
     await outbox.enqueue({
       tenant_id: route.tenant_id,
       inbox_id: route.inbox_id,
@@ -663,6 +746,7 @@ export class AgentRuntime {
       dedupe_key: dedupeKey,
       chunk_index: 0,
       text: input.response.reply,
+      approval_id: approvalId ?? null,
       workspace_id: route.workspace_id,
       session_id: route.session_id,
       channel_thread_id: route.channel_thread_id,
@@ -1235,6 +1319,9 @@ export class AgentRuntime {
     agentId: string,
     workspaceId: string,
   ): Promise<void> {
+    if (!this.opts.container.deploymentConfig.automation.enabled) {
+      return;
+    }
     const scopeKey = `${this.tenantId}:${agentId}:${workspaceId}`;
     if (this.defaultHeartbeatSeededScopes.has(scopeKey)) {
       return;

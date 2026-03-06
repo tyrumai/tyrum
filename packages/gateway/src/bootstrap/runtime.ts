@@ -333,7 +333,10 @@ async function startBackgroundSchedulers(
     context.container.db,
     context.container.identityScopeDal,
   );
-  if (context.role === "all" || context.role === "scheduler") {
+  if (
+    (context.role === "all" || context.role === "scheduler") &&
+    context.deploymentConfig.automation.enabled
+  ) {
     await scheduleService.seedDefaultHeartbeatSchedules();
   }
 

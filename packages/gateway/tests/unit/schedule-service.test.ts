@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, describe, expect, it } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import {
   ScheduleService,
@@ -24,6 +24,7 @@ describe("ScheduleService", () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     await db.close();
   });
 
@@ -116,6 +117,39 @@ describe("ScheduleService", () => {
     expect(new Date(next!).toISOString()).toBe("2026-03-06T10:05:00.000Z");
   });
 
+  it("starts cron schedules from the current time and resets the cursor on resume", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-06T10:02:30.000Z"));
+
+    const schedule = await service.createSchedule({
+      tenantId: DEFAULT_TENANT_ID,
+      kind: "cron",
+      cadence: { type: "cron", expression: "0 12 * * *", timezone: "Europe/Amsterdam" },
+      execution: {
+        kind: "playbook",
+        playbook_id: "daily-check",
+      },
+    });
+
+    expect(schedule.last_fired_at).toBe("2026-03-06T10:02:30.000Z");
+    expect(schedule.next_fire_at).toBe("2026-03-06T11:00:00.000Z");
+
+    await service.pauseSchedule({
+      tenantId: DEFAULT_TENANT_ID,
+      scheduleId: schedule.schedule_id,
+    });
+
+    vi.setSystemTime(new Date("2026-03-06T10:50:00.000Z"));
+
+    const resumed = await service.resumeSchedule({
+      tenantId: DEFAULT_TENANT_ID,
+      scheduleId: schedule.schedule_id,
+    });
+
+    expect(resumed.last_fired_at).toBe("2026-03-06T10:50:00.000Z");
+    expect(resumed.next_fire_at).toBe("2026-03-06T11:00:00.000Z");
+  });
+
   it("ensures the default heartbeat for a membership without creating duplicates", async () => {
     const first = await service.ensureDefaultHeartbeatScheduleForMembership({
       tenantId: DEFAULT_TENANT_ID,
@@ -144,5 +178,55 @@ describe("ScheduleService", () => {
         schedule.target_scope.workspace_key === "default",
     );
     expect(matching).toHaveLength(1);
+  });
+
+  it("rejects invalid steps schedules before persisting them", async () => {
+    await expect(
+      service.createSchedule({
+        tenantId: DEFAULT_TENANT_ID,
+        kind: "cron",
+        cadence: { type: "interval", interval_ms: 60_000 },
+        execution: {
+          kind: "steps",
+          steps: [{ type: "Nope", args: {} }] as never,
+        },
+      }),
+    ).rejects.toThrow(/invalid steps schedule action/i);
+
+    const afterFailedCreate = await db.get<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM watchers WHERE tenant_id = ? AND trigger_type = 'periodic'",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(afterFailedCreate?.count).toBe(0);
+
+    const valid = await service.createSchedule({
+      tenantId: DEFAULT_TENANT_ID,
+      kind: "cron",
+      cadence: { type: "interval", interval_ms: 60_000 },
+      execution: {
+        kind: "steps",
+        steps: [{ type: "CLI", args: { command: "echo hi" } }],
+      },
+    });
+
+    await expect(
+      service.updateSchedule({
+        tenantId: DEFAULT_TENANT_ID,
+        scheduleId: valid.schedule_id,
+        patch: {
+          execution: {
+            kind: "steps",
+            steps: [{ type: "Nope", args: {} }] as never,
+          },
+        },
+      }),
+    ).rejects.toThrow(/invalid steps schedule action/i);
+
+    const reloaded = await service.getSchedule({
+      tenantId: DEFAULT_TENANT_ID,
+      scheduleId: valid.schedule_id,
+      includeDeleted: true,
+    });
+    expect(reloaded?.execution).toEqual(valid.execution);
   });
 });

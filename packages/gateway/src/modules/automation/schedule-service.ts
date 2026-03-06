@@ -258,6 +258,50 @@ function parseCadence(value: unknown, legacyIntervalMs?: unknown): ScheduleCaden
   return { type: "interval", interval_ms: intervalMs };
 }
 
+function normalizeExecutionInput(
+  execution: ScheduleExecution,
+  kind: ScheduleKind,
+): ScheduleExecution {
+  if (execution.kind === "agent_turn") {
+    return {
+      kind: "agent_turn",
+      instruction:
+        execution.instruction?.trim() ||
+        (kind === "heartbeat" ? DEFAULT_HEARTBEAT_INSTRUCTION : undefined),
+    };
+  }
+
+  if (execution.kind === "playbook") {
+    const playbookId = execution.playbook_id.trim();
+    if (!playbookId) {
+      throw new Error("playbook schedules require execution.playbook_id");
+    }
+    return { kind: "playbook", playbook_id: playbookId };
+  }
+
+  if (!Array.isArray(execution.steps) || execution.steps.length === 0) {
+    throw new Error("steps schedules require at least one valid action");
+  }
+
+  const steps: ActionPrimitive[] = [];
+  for (const rawStep of execution.steps) {
+    const parsed = ActionPrimitiveSchema.safeParse(rawStep);
+    if (!parsed.success) {
+      throw new Error(`invalid steps schedule action: ${parsed.error.message}`);
+    }
+    steps.push(parsed.data);
+  }
+
+  return { kind: "steps", steps };
+}
+
+function defaultStoredLastFiredAtMs(
+  config: NormalizedScheduleConfig,
+  nowMs: number,
+): number | null {
+  return config.cadence.type === "cron" ? nowMs : null;
+}
+
 function normalizeScheduleConfig(input: {
   kind: ScheduleKind;
   enabled?: boolean;
@@ -284,21 +328,14 @@ function normalizeScheduleConfig(input: {
     input.delivery?.mode,
     input.kind === "heartbeat" ? "quiet" : "notify",
   );
+  const normalizedExecution = normalizeExecutionInput(input.execution, input.kind);
 
   return {
     v: 1,
     schedule_kind: input.kind,
     enabled,
     cadence: input.cadence,
-    execution:
-      input.execution.kind === "agent_turn"
-        ? {
-            kind: "agent_turn",
-            instruction:
-              input.execution.instruction?.trim() ||
-              (input.kind === "heartbeat" ? DEFAULT_HEARTBEAT_INSTRUCTION : undefined),
-          }
-        : input.execution,
+    execution: normalizedExecution,
     delivery: { mode: deliveryMode },
     ...(input.seededDefault ? { seeded_default: true } : undefined),
     ...(input.key?.trim() ? { key: input.key.trim() } : undefined),
@@ -588,7 +625,7 @@ export function resolvePendingScheduleFireMs(input: {
     return slotMs > lastFiredAtMs ? slotMs : undefined;
   }
 
-  const lastFiredAtMs = input.lastFiredAtMs ?? 0;
+  const lastFiredAtMs = input.lastFiredAtMs ?? input.nowMs;
   const next = nextCronFireAtMs({
     expression: input.config.cadence.expression,
     timeZone: input.config.cadence.timezone,
@@ -617,7 +654,7 @@ export function resolveNextScheduleFireMs(input: {
   return nextCronFireAtMs({
     expression: input.config.cadence.expression,
     timeZone: input.config.cadence.timezone,
-    afterMs: Math.max(input.lastFiredAtMs ?? 0, input.nowMs - 60_000),
+    afterMs: input.lastFiredAtMs ?? input.nowMs,
   });
 }
 
@@ -813,7 +850,8 @@ export class ScheduleService {
 
     const scheduleId = randomUUID();
     const watcherKey = input.watcherKey?.trim() || `schedule:${scheduleId}`;
-    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
     const config = normalizeScheduleConfig({
       kind: input.kind,
       enabled: input.enabled,
@@ -846,7 +884,9 @@ export class ScheduleService {
         workspaceId,
         serializeScheduleConfig(config),
         sqlBoolParam(this.db, true),
-        input.lastFiredAtMs ?? null,
+        input.lastFiredAtMs !== undefined
+          ? input.lastFiredAtMs
+          : defaultStoredLastFiredAtMs(config, nowMs),
         nowIso,
         nowIso,
       ],
@@ -864,6 +904,13 @@ export class ScheduleService {
     scheduleId: string;
     patch: UpdateScheduleInput;
   }): Promise<ScheduleRecord> {
+    const existingRow = await this.db.get<{ last_fired_at_ms: number | null }>(
+      `SELECT last_fired_at_ms
+       FROM watchers
+       WHERE tenant_id = ? AND watcher_id = ? AND trigger_type = 'periodic'
+       LIMIT 1`,
+      [input.tenantId, input.scheduleId],
+    );
     const existing = await this.getSchedule({
       tenantId: input.tenantId,
       scheduleId: input.scheduleId,
@@ -883,12 +930,27 @@ export class ScheduleService {
       },
       seededDefault: existing.seeded_default,
     });
+    const nowMs = Date.now();
+    const resetLastFiredAtMs =
+      config.enabled &&
+      config.cadence.type === "cron" &&
+      (!existing.enabled ||
+        existing.cadence.type !== "cron" ||
+        existingRow?.last_fired_at_ms === null ||
+        existingRow?.last_fired_at_ms === undefined);
+    const nextLastFiredAtMs = resetLastFiredAtMs ? nowMs : (existingRow?.last_fired_at_ms ?? null);
 
     await this.db.run(
       `UPDATE watchers
-       SET trigger_config_json = ?, updated_at = ?
+       SET trigger_config_json = ?, last_fired_at_ms = ?, updated_at = ?
        WHERE tenant_id = ? AND watcher_id = ? AND trigger_type = 'periodic'`,
-      [serializeScheduleConfig(config), new Date().toISOString(), input.tenantId, input.scheduleId],
+      [
+        serializeScheduleConfig(config),
+        nextLastFiredAtMs,
+        new Date(nowMs).toISOString(),
+        input.tenantId,
+        input.scheduleId,
+      ],
     );
 
     const updated = await this.getSchedule({
