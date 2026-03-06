@@ -8,6 +8,7 @@
 import { Hono } from "hono";
 import type { ApprovalDal, ApprovalStatus } from "../modules/approval/dal.js";
 import type { PolicyOverrideDal } from "../modules/policy/override-dal.js";
+import type { Logger } from "../modules/observability/logger.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { WsEventEnvelope } from "@tyrum/schemas";
@@ -16,6 +17,7 @@ import { toApprovalContract } from "../modules/approval/to-contract.js";
 import { isSafeSuggestedOverridePattern } from "../modules/policy/override-guardrails.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import { requireTenantId } from "../modules/auth/claims.js";
+import { broadcastWsEvent } from "../ws/broadcast.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>([
   "pending",
@@ -27,9 +29,11 @@ const VALID_STATUSES = new Set<ApprovalStatus>([
 
 export interface ApprovalRouteDeps {
   approvalDal: ApprovalDal;
+  logger?: Logger;
   policyOverrideDal?: PolicyOverrideDal;
   ws?: {
     connectionManager: ConnectionManager;
+    maxBufferedBytes?: number;
     cluster?: {
       edgeId: string;
       outboxDal: OutboxDal;
@@ -40,30 +44,7 @@ export interface ApprovalRouteDeps {
 function emitEvent(deps: ApprovalRouteDeps, tenantId: string, evt: WsEventEnvelope): void {
   const ws = deps.ws;
   if (!ws) return;
-
-  const payload = JSON.stringify(evt);
-  for (const client of ws.connectionManager.allClients()) {
-    const clientTenantId = client.auth_claims?.tenant_id ?? null;
-    if (clientTenantId !== tenantId) continue;
-    try {
-      client.ws.send(payload);
-    } catch (err) {
-      void err;
-      // ignore
-    }
-  }
-
-  if (ws.cluster) {
-    void ws.cluster.outboxDal
-      .enqueue(tenantId, "ws.broadcast", {
-        source_edge_id: ws.cluster.edgeId,
-        skip_local: true,
-        message: evt,
-      })
-      .catch(() => {
-        // ignore
-      });
-  }
+  broadcastWsEvent(tenantId, evt, { ...ws, logger: deps.logger });
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

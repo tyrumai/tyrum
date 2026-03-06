@@ -4,18 +4,22 @@
 
 import { Hono } from "hono";
 import type { NodePairingDal } from "../modules/node/pairing-dal.js";
+import type { Logger } from "../modules/observability/logger.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import { emitPairingApprovedEvent } from "../ws/pairing-approved.js";
+import { broadcastWsEvent } from "../ws/broadcast.js";
 import { CapabilityDescriptor, NodePairingTrustLevel, type WsEventEnvelope } from "@tyrum/schemas";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface PairingRouteDeps {
   nodePairingDal: NodePairingDal;
+  logger?: Logger;
   ws?: {
     connectionManager: ConnectionManager;
+    maxBufferedBytes?: number;
     cluster?: {
       edgeId: string;
       outboxDal: OutboxDal;
@@ -27,30 +31,7 @@ export interface PairingRouteDeps {
 function emitEvent(deps: PairingRouteDeps, tenantId: string, evt: WsEventEnvelope): void {
   const ws = deps.ws;
   if (!ws) return;
-
-  const payload = JSON.stringify(evt);
-  for (const client of ws.connectionManager.allClients()) {
-    const clientTenantId = client.auth_claims?.tenant_id ?? null;
-    if (clientTenantId !== tenantId) continue;
-    try {
-      client.ws.send(payload);
-    } catch (err) {
-      void err;
-      // ignore
-    }
-  }
-
-  if (ws.cluster) {
-    void ws.cluster.outboxDal
-      .enqueue(tenantId, "ws.broadcast", {
-        source_edge_id: ws.cluster.edgeId,
-        skip_local: true,
-        message: evt,
-      })
-      .catch(() => {
-        // ignore
-      });
-  }
+  broadcastWsEvent(tenantId, evt, { ...ws, logger: deps.logger });
 }
 
 export function createPairingRoutes(deps: PairingRouteDeps): Hono {
@@ -126,7 +107,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     const { pairing, scopedToken } = resolved;
 
     if (scopedToken && deps.ws) {
-      emitPairingApprovedEvent(deps.ws, tenantId, {
+      emitPairingApprovedEvent({ ...deps.ws, logger: deps.logger }, tenantId, {
         pairing,
         nodeId: pairing.node.node_id,
         scopedToken,

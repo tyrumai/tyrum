@@ -103,6 +103,7 @@ export interface WorkSignalSchedulerOptions {
   connectionManager: ConnectionManager;
   owner?: string;
   logger?: Logger;
+  maxBufferedBytes?: number;
   cluster?: {
     edgeId: string;
     outboxDal: OutboxDal;
@@ -123,6 +124,7 @@ export class WorkSignalScheduler {
   private readonly connectionManager: ConnectionManager;
   private readonly owner: string;
   private readonly logger?: Logger;
+  private readonly maxBufferedBytes?: number;
   private readonly cluster?: { edgeId: string; outboxDal: OutboxDal };
   private readonly tickMs: number;
   private readonly keepProcessAlive: boolean;
@@ -137,6 +139,7 @@ export class WorkSignalScheduler {
     this.connectionManager = opts.connectionManager;
     this.owner = opts.owner?.trim() || "work-signal-scheduler";
     this.logger = opts.logger;
+    this.maxBufferedBytes = opts.maxBufferedBytes;
     this.cluster = opts.cluster;
     this.tickMs = opts.tickMs ?? DEFAULT_TICK_MS;
     this.keepProcessAlive = opts.keepProcessAlive ?? false;
@@ -224,7 +227,12 @@ export class WorkSignalScheduler {
     broadcastWsEvent(
       tenantId,
       evt,
-      { connectionManager: this.connectionManager, cluster: this.cluster },
+      {
+        connectionManager: this.connectionManager,
+        cluster: this.cluster,
+        logger: this.logger,
+        maxBufferedBytes: this.maxBufferedBytes,
+      },
       audience,
     );
   }

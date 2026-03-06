@@ -2,20 +2,24 @@ import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
 import type { ConnectedClient, ConnectionManager } from "../../ws/connection-manager.js";
 import type { OutboxDal, OutboxRow } from "./outbox-dal.js";
 import type { Logger } from "../observability/logger.js";
+import type { MetricsRegistry } from "../observability/metrics.js";
 import {
   shouldDeliverToWsAudience,
   type WsBroadcastAudience,
   type WsBroadcastRole,
 } from "../../ws/audience.js";
 import { normalizeScopes } from "../auth/scopes.js";
+import { safeSendWs } from "../../ws/safe-send.js";
 
 export interface OutboxPollerOptions {
   consumerId: string;
   outboxDal: OutboxDal;
   connectionManager: ConnectionManager;
   logger?: Logger;
+  metrics?: MetricsRegistry;
   pollIntervalMs?: number;
   batchSize?: number;
+  maxBufferedBytes?: number;
   tenantCacheTtlMs?: number;
 }
 
@@ -129,8 +133,10 @@ export class OutboxPoller {
   private readonly outboxDal: OutboxDal;
   private readonly connectionManager: ConnectionManager;
   private readonly logger?: Logger;
+  private readonly metrics?: MetricsRegistry;
   private readonly pollIntervalMs: number;
   private readonly batchSize: number;
+  private readonly maxBufferedBytes?: number;
   private readonly tenantCacheTtlMs: number;
   private cachedTenantIds: { value: string[]; expiresAtMs: number } | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -141,8 +147,10 @@ export class OutboxPoller {
     this.outboxDal = opts.outboxDal;
     this.connectionManager = opts.connectionManager;
     this.logger = opts.logger;
+    this.metrics = opts.metrics;
     this.pollIntervalMs = opts.pollIntervalMs ?? 500;
     this.batchSize = opts.batchSize ?? 200;
+    this.maxBufferedBytes = opts.maxBufferedBytes;
     this.tenantCacheTtlMs = Math.max(1_000, Math.min(300_000, opts.tenantCacheTtlMs ?? 10_000));
   }
 
@@ -248,16 +256,19 @@ export class OutboxPoller {
         if (authAudit && !canReceiveAuthAudit(client)) continue;
         if (!shouldDeliverToWsAudience(client, parsed.audience)) continue;
 
-        try {
-          client.ws.send(payload);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.logger?.warn("outbox.ws_send_failed", {
-            topic: row.topic,
-            connection_id: client.id,
-            error: message,
-          });
-        }
+        safeSendWs(client, payload, {
+          connectionManager: this.connectionManager,
+          deliveryMode: "cluster_broadcast",
+          logFields: {
+            outbox_id: row.id,
+            tenant_id: row.tenant_id,
+          },
+          logger: this.logger,
+          maxBufferedBytes: this.maxBufferedBytes,
+          metrics: this.metrics,
+          sendFailureLogMessage: "outbox.ws_send_failed",
+          topic: row.topic,
+        });
       }
       return;
     }
@@ -269,22 +280,25 @@ export class OutboxPoller {
       if (!client) return;
       const clientTenantId = client.auth_claims?.tenant_id ?? null;
       if (clientTenantId !== null && clientTenantId !== row.tenant_id) return;
-      try {
-        client.ws.send(JSON.stringify(parsed.message));
-        if (client.role === "node") {
-          const attemptId = extractAttemptId(parsed.message);
-          if (attemptId) {
-            const nodeId = client.device_id ?? client.id;
-            this.connectionManager.recordDispatchedAttemptExecutor(attemptId, nodeId);
-          }
+      const delivered = safeSendWs(client, JSON.stringify(parsed.message), {
+        connectionManager: this.connectionManager,
+        deliveryMode: "cluster_direct",
+        logFields: {
+          outbox_id: row.id,
+          tenant_id: row.tenant_id,
+        },
+        logger: this.logger,
+        maxBufferedBytes: this.maxBufferedBytes,
+        metrics: this.metrics,
+        sendFailureLogMessage: "outbox.ws_send_failed",
+        topic: row.topic,
+      });
+      if (delivered && client.role === "node") {
+        const attemptId = extractAttemptId(parsed.message);
+        if (attemptId) {
+          const nodeId = client.device_id ?? client.id;
+          this.connectionManager.recordDispatchedAttemptExecutor(attemptId, nodeId);
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        this.logger?.warn("outbox.ws_send_failed", {
-          topic: row.topic,
-          connection_id: client.id,
-          error: message,
-        });
       }
       return;
     }

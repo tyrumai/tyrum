@@ -280,6 +280,7 @@ type WsBroadcastDeps = {
     edgeId: string;
     outboxDal: OutboxDal;
   };
+  maxBufferedBytes?: number;
 };
 
 export class TelegramChannelQueue {
@@ -290,6 +291,7 @@ export class TelegramChannelQueue {
   private readonly accountId: string;
   private readonly lane: string;
   private readonly dmScope: DmScope;
+  private readonly logger?: Logger;
   private readonly ws?: WsBroadcastDeps;
 
   constructor(
@@ -314,13 +316,14 @@ export class TelegramChannelQueue {
       opts?.accountId?.trim() || opts?.channelKey?.trim() || telegramAccountIdFromEnv();
     this.lane = normalizeLane(opts?.lane);
     this.dmScope = resolveDmScope({ configured: opts?.dmScope ?? "per_account_channel_peer" });
+    this.logger = opts.logger;
     this.ws = opts?.ws;
   }
 
   private emitWsEvent(tenantId: string, evt: WsEventEnvelope): void {
     const ws = this.ws;
     if (!ws) return;
-    broadcastWsEvent(tenantId, evt, ws);
+    broadcastWsEvent(tenantId, evt, { ...ws, logger: this.logger });
   }
 
   async enqueue(

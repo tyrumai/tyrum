@@ -501,7 +501,12 @@ class WsConnectionSession {
     broadcastWsEvent(
       tenantId,
       event,
-      { connectionManager: this.input.connectionManager, cluster: this.input.protocolDeps.cluster },
+      {
+        connectionManager: this.input.connectionManager,
+        cluster: this.input.protocolDeps.cluster,
+        logger: this.input.protocolDeps.logger,
+        maxBufferedBytes: this.input.protocolDeps.maxBufferedBytes,
+      },
       PAIRING_REQUESTED_AUDIENCE,
     );
   }

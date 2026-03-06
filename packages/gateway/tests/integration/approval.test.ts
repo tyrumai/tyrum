@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { Hono } from "hono";
 import { createTestApp } from "./helpers.js";
+import { ConnectionManager } from "../../src/ws/connection-manager.js";
+import { createApprovalRoutes } from "../../src/routes/approval.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -12,6 +14,26 @@ const approvalScope = {
   agentId: DEFAULT_AGENT_ID,
   workspaceId: DEFAULT_WORKSPACE_ID,
 } as const;
+
+interface MockWebSocket {
+  bufferedAmount: number;
+  send: ReturnType<typeof vi.fn>;
+  close: ReturnType<typeof vi.fn>;
+  on: ReturnType<typeof vi.fn>;
+  readyState: number;
+  terminate: ReturnType<typeof vi.fn>;
+}
+
+function createMockWs(options?: { bufferedAmount?: number; readyState?: number }): MockWebSocket {
+  return {
+    bufferedAmount: options?.bufferedAmount ?? 0,
+    send: vi.fn(),
+    close: vi.fn(),
+    on: vi.fn(() => undefined as never),
+    readyState: options?.readyState ?? 1,
+    terminate: vi.fn(),
+  };
+}
 
 describe("Approval routes", () => {
   let app: Hono;
@@ -210,5 +232,74 @@ describe("Approval routes (with DAL access)", () => {
     };
     expect(body.approvals).toHaveLength(1);
     expect(body.approvals[0]!.prompt).toBe("Second?");
+  });
+
+  it("evicts slow websocket consumers when broadcasting approval.resolved", async () => {
+    const approval = await container.approvalDal.create({
+      ...approvalScope,
+      approvalKey: "approval-test-ws-backpressure",
+      prompt: "Approve?",
+    });
+
+    const connectionManager = new ConnectionManager();
+    const slowWs = createMockWs({ bufferedAmount: 11 });
+    const healthyWs = createMockWs();
+    connectionManager.addClient(slowWs as never, ["cli"] as never, {
+      id: "slow-client",
+      role: "client",
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-slow",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+    connectionManager.addClient(healthyWs as never, ["cli"] as never, {
+      id: "healthy-client",
+      role: "client",
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-healthy",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+
+    const approvalApp = new (await import("hono")).Hono();
+    approvalApp.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      return await next();
+    });
+    approvalApp.route(
+      "/",
+      createApprovalRoutes({
+        approvalDal: container.approvalDal,
+        logger: container.logger,
+        ws: { connectionManager, maxBufferedBytes: 10 },
+      }),
+    );
+
+    const res = await approvalApp.request(`/approvals/${String(approval.approval_id)}/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision: "approved", reason: "looks safe" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(slowWs.send).not.toHaveBeenCalled();
+    expect(slowWs.close).toHaveBeenCalledWith(1013, "slow consumer");
+    expect(connectionManager.getClient("slow-client")).toBeUndefined();
+    expect(healthyWs.send).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(healthyWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
+      type: "approval.resolved",
+    });
   });
 });

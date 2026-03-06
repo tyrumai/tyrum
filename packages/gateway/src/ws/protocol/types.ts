@@ -72,6 +72,7 @@ export interface ProtocolDeps {
   modelCatalog?: ModelCatalogService;
   hooks?: LifecycleHooksRuntime;
   presenceTtlMs?: number;
+  maxBufferedBytes?: number;
 
   /**
    * Optional cluster router. When configured, the gateway can deliver WS messages

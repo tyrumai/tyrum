@@ -1,22 +1,30 @@
 import type { WsEventEnvelope } from "@tyrum/schemas";
 import { describe, expect, it, vi } from "vitest";
+import { MetricsRegistry } from "../../src/modules/observability/metrics.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { broadcastWsEvent } from "../../src/ws/broadcast.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 interface MockWebSocket {
+  bufferedAmount: number;
   send: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
   on: ReturnType<typeof vi.fn>;
   readyState: number;
+  terminate: ReturnType<typeof vi.fn>;
 }
 
-function createMockWs(sendImpl?: (payload: string) => void): MockWebSocket {
+function createMockWs(
+  sendImpl?: (payload: string) => void,
+  options?: { bufferedAmount?: number; readyState?: number },
+): MockWebSocket {
   return {
+    bufferedAmount: options?.bufferedAmount ?? 0,
     send: vi.fn(sendImpl ?? (() => undefined as never)),
     close: vi.fn(),
     on: vi.fn(() => undefined as never),
-    readyState: 1,
+    readyState: options?.readyState ?? 1,
+    terminate: vi.fn(),
   };
 }
 
@@ -133,5 +141,68 @@ describe("broadcastWsEvent", () => {
 
     expect(() => broadcastWsEvent(DEFAULT_TENANT_ID, evt, { connectionManager: cm })).not.toThrow();
     expect(ok.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("evicts slow consumers and still delivers to healthy peers", async () => {
+    const metrics = new MetricsRegistry();
+    const cm = new ConnectionManager();
+    const logger = { warn: vi.fn() };
+    const slow = createMockWs(undefined, { bufferedAmount: 11 });
+    const healthy = createMockWs();
+
+    cm.addClient(slow as never, [], {
+      id: "slow-client",
+      role: "client",
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-slow",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+    cm.addClient(healthy as never, [], {
+      id: "healthy-client",
+      role: "client",
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-healthy",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+
+    const evt: WsEventEnvelope = {
+      event_id: "evt-3",
+      type: "test.event",
+      occurred_at: new Date().toISOString(),
+      scope: { kind: "agent", agent_id: "default" },
+      payload: { ok: true },
+    } as WsEventEnvelope;
+
+    broadcastWsEvent(DEFAULT_TENANT_ID, evt, {
+      connectionManager: cm,
+      logger: logger as never,
+      maxBufferedBytes: 10,
+      metrics,
+    });
+
+    expect(slow.send).not.toHaveBeenCalled();
+    expect(slow.close).toHaveBeenCalledWith(1013, "slow consumer");
+    expect(healthy.send).toHaveBeenCalledTimes(1);
+    expect(cm.getClient("slow-client")).toBeUndefined();
+    expect(cm.getClient("healthy-client")).toBeDefined();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "ws.slow_consumer_evicted",
+      expect.objectContaining({
+        connection_id: "slow-client",
+        delivery_mode: "local_broadcast",
+        topic: "ws.broadcast",
+      }),
+    );
+    await expect(
+      metrics.registry.getSingleMetricAsString("ws_slow_consumer_evictions_total"),
+    ).resolves.toMatch(/ws_slow_consumer_evictions_total\s+1(\s|$)/);
   });
 });
