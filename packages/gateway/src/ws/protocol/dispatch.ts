@@ -3,7 +3,7 @@ import {
   descriptorIdForClientCapability,
   requiredCapability,
 } from "@tyrum/schemas";
-import type { ActionPrimitive, ClientCapability, WsRequestEnvelope } from "@tyrum/schemas";
+import type { ActionPrimitive, CapabilityKind, WsRequestEnvelope } from "@tyrum/schemas";
 import { canonicalizeNodeDispatchMatchTarget } from "../../modules/policy/match-target.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import {
@@ -33,7 +33,7 @@ export function dispatchTask(
 ): Promise<string> {
   const capability = requiredCapability(action.type);
   if (capability === undefined) {
-    throw new NoCapableClientError(action.type as ClientCapability);
+    throw new NoCapableClientError(action.type as CapabilityKind);
   }
 
   const descriptorId = descriptorIdForClientCapability(capability);

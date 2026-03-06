@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CapabilityDescriptor, ClientCapability } from "../capability.js";
+import { CapabilityDescriptor, CapabilityKind } from "../capability.js";
 import { NodeId } from "../keys.js";
 import { ActionPrimitiveKind } from "../planner.js";
 import {
@@ -68,8 +68,8 @@ export const WsCapabilityReadyEvent = WsEventEnvelope.extend({
 });
 export type WsCapabilityReadyEvent = z.infer<typeof WsCapabilityReadyEvent>;
 
-/** Maps ActionPrimitiveKind to the required client capability. */
-const CAPABILITY_MAP: Partial<Record<ActionPrimitiveKind, ClientCapability>> = {
+/** Maps ActionPrimitiveKind to the legacy capability kind used for node routing. */
+const CAPABILITY_MAP: Partial<Record<ActionPrimitiveKind, CapabilityKind>> = {
   Web: "playwright",
   Browser: "browser",
   Android: "android",
@@ -78,6 +78,6 @@ const CAPABILITY_MAP: Partial<Record<ActionPrimitiveKind, ClientCapability>> = {
   Http: "http",
 };
 
-export function requiredCapability(kind: ActionPrimitiveKind): ClientCapability | undefined {
+export function requiredCapability(kind: ActionPrimitiveKind): CapabilityKind | undefined {
   return CAPABILITY_MAP[kind];
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CapabilityDescriptor, ClientCapability } from "../capability.js";
+import { CapabilityDescriptor, CapabilityKind } from "../capability.js";
 import { WsRequestEnvelope, WsResponseErrEnvelope, WsResponseOkEnvelope } from "./envelopes.js";
 
 // ---------------------------------------------------------------------------
@@ -73,7 +73,7 @@ export type WsConnectProofResult = z.infer<typeof WsConnectProofResult>;
  */
 export const WsConnectPayload = z
   .object({
-    capabilities: z.array(ClientCapability).default([]),
+    capabilities: z.array(CapabilityKind).default([]),
     client_id: z.string().min(1).optional(),
   })
   .strict();
