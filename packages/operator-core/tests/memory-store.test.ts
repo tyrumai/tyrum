@@ -16,6 +16,73 @@ function deferred<T>(): {
 }
 
 describe("memory-store", () => {
+  it("omits agent_id when memory operations use the implicit default scope", async () => {
+    const ws = {
+      memoryList: vi.fn(async () => ({
+        v: 1,
+        items: [{ memory_item_id: "m1" }],
+        next_cursor: undefined,
+      })),
+      memorySearch: vi.fn(async () => ({
+        v: 1,
+        hits: [{ memory_item_id: "m1" }],
+        next_cursor: undefined,
+      })),
+      memoryGet: vi.fn(async () => ({ v: 1, item: { memory_item_id: "m1" } })),
+      memoryUpdate: vi.fn(async () => ({ v: 1, item: { memory_item_id: "m1" } })),
+      memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 1, tombstones: [] })),
+      memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
+    } as any;
+
+    const { store } = createMemoryStore(ws);
+
+    await store.list();
+    await store.search({ query: "remember" });
+    await store.inspect("m1");
+    await store.update("m1", { body_md: "updated" } as any);
+    await store.forget([{ kind: "id", memory_item_id: "m1" }]);
+    await store.export();
+
+    expect(ws.memoryList).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: undefined,
+      filter: undefined,
+      limit: undefined,
+      cursor: undefined,
+    });
+    expect(ws.memorySearch).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: undefined,
+      query: "remember",
+      filter: undefined,
+      limit: undefined,
+      cursor: undefined,
+    });
+    expect(ws.memoryGet).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: undefined,
+      memory_item_id: "m1",
+    });
+    expect(ws.memoryUpdate).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: undefined,
+      memory_item_id: "m1",
+      patch: { body_md: "updated" },
+    });
+    expect(ws.memoryForget).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: undefined,
+      confirm: "FORGET",
+      selectors: [{ kind: "id", memory_item_id: "m1" }],
+    });
+    expect(ws.memoryExport).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: undefined,
+      filter: undefined,
+      include_tombstones: false,
+    });
+  });
+
   it("refreshBrowse preserves existing results while loading", async () => {
     const ws = {
       memoryList: vi.fn(async () => ({
@@ -56,6 +123,65 @@ describe("memory-store", () => {
     );
   });
 
+  it("refreshBrowse() and loadMore() preserve an explicit agent scope", async () => {
+    const ws = {
+      memoryList: vi
+        .fn()
+        .mockResolvedValueOnce({
+          v: 1,
+          items: [{ memory_item_id: "m1", agent_id: "agent-2" }],
+          next_cursor: "cursor-1",
+        })
+        .mockResolvedValueOnce({
+          v: 1,
+          items: [{ memory_item_id: "m2", agent_id: "agent-2" }],
+          next_cursor: "cursor-2",
+        })
+        .mockResolvedValueOnce({
+          v: 1,
+          items: [{ memory_item_id: "m3", agent_id: "agent-2" }],
+          next_cursor: undefined,
+        }),
+      memorySearch: vi.fn(async () => ({
+        v: 1,
+        hits: [],
+        next_cursor: undefined,
+      })),
+      memoryGet: vi.fn(async () => ({ v: 1, item: {} })),
+      memoryUpdate: vi.fn(async () => ({ v: 1, item: {} })),
+      memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] })),
+      memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
+    } as any;
+
+    const { store } = createMemoryStore(ws);
+
+    await store.list({ agentId: "agent-2" });
+    await store.refreshBrowse();
+    await store.loadMore();
+
+    expect(ws.memoryList).toHaveBeenNthCalledWith(1, {
+      v: 1,
+      agent_id: "agent-2",
+      filter: undefined,
+      limit: undefined,
+      cursor: undefined,
+    });
+    expect(ws.memoryList).toHaveBeenNthCalledWith(2, {
+      v: 1,
+      agent_id: "agent-2",
+      filter: undefined,
+      limit: undefined,
+      cursor: undefined,
+    });
+    expect(ws.memoryList).toHaveBeenNthCalledWith(3, {
+      v: 1,
+      agent_id: "agent-2",
+      filter: undefined,
+      limit: undefined,
+      cursor: "cursor-2",
+    });
+  });
+
   it("buffers upserts, tombstones, and consolidations during list() and applies them on completion", async () => {
     const nextList = deferred<any>();
     const ws = {
@@ -73,9 +199,17 @@ describe("memory-store", () => {
     const listPromise = store.list();
     expect(store.getSnapshot().browse.loading).toBe(true);
 
-    handleMemoryItemUpsert({ memory_item_id: "upsert-me", content: "new" } as any);
-    handleMemoryTombstone({ memory_item_id: "delete-me" } as any);
-    handleMemoryConsolidated(["from-1"], { memory_item_id: "consolidated", content: "c" } as any);
+    handleMemoryItemUpsert({
+      memory_item_id: "upsert-me",
+      agent_id: "default",
+      content: "new",
+    } as any);
+    handleMemoryTombstone({ memory_item_id: "delete-me", agent_id: "default" } as any);
+    handleMemoryConsolidated(["from-1"], {
+      memory_item_id: "consolidated",
+      agent_id: "default",
+      content: "c",
+    } as any);
 
     nextList.resolve({
       v: 1,
@@ -139,11 +273,20 @@ describe("memory-store", () => {
 
     handleMemoryConsolidated(["fromA"], {
       memory_item_id: "consolidated",
+      agent_id: "default",
       content: "already-present",
     } as any);
-    handleMemoryConsolidated(["fromB"], { memory_item_id: "consolidatedB", content: "cb" } as any);
-    handleMemoryItemUpsert({ memory_item_id: "new1", content: "new1-upserted" } as any);
-    handleMemoryTombstone({ memory_item_id: "keep2" } as any);
+    handleMemoryConsolidated(["fromB"], {
+      memory_item_id: "consolidatedB",
+      agent_id: "default",
+      content: "cb",
+    } as any);
+    handleMemoryItemUpsert({
+      memory_item_id: "new1",
+      agent_id: "default",
+      content: "new1-upserted",
+    } as any);
+    handleMemoryTombstone({ memory_item_id: "keep2", agent_id: "default" } as any);
 
     nextPage.resolve({
       v: 1,
@@ -196,8 +339,11 @@ describe("memory-store", () => {
 
     const loadMorePromise = store.loadMore();
 
-    handleMemoryConsolidated(["from"], { memory_item_id: "consolidated" } as any);
-    handleMemoryTombstone({ memory_item_id: "h1" } as any);
+    handleMemoryConsolidated(["from"], {
+      memory_item_id: "consolidated",
+      agent_id: "default",
+    } as any);
+    handleMemoryTombstone({ memory_item_id: "h1", agent_id: "default" } as any);
 
     nextPage.resolve({
       v: 1,
@@ -235,7 +381,7 @@ describe("memory-store", () => {
     expect(store.getSnapshot().inspect.loading).toBe(true);
     expect((store.getSnapshot().inspect.item as any)?.content).toBe("list-item");
 
-    handleMemoryTombstone({ memory_item_id: "m1" } as any);
+    handleMemoryTombstone({ memory_item_id: "m1", agent_id: "default" } as any);
     expect(store.getSnapshot().inspect.memoryItemId).toBe(null);
 
     nextGet.resolve({ v: 1, item: { memory_item_id: "m1", content: "remote" } });
@@ -254,7 +400,10 @@ describe("memory-store", () => {
       })),
       memorySearch: vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined })),
       memoryGet: vi.fn(async () => ({ v: 1, item: { memory_item_id: "m1", content: "old" } })),
-      memoryUpdate: vi.fn(async () => ({ v: 1, item: { memory_item_id: "m1", content: "new" } })),
+      memoryUpdate: vi.fn(async () => ({
+        v: 1,
+        item: { memory_item_id: "m1", agent_id: "default", content: "new" },
+      })),
       memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] })),
       memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
     } as any;
@@ -303,5 +452,85 @@ describe("memory-store", () => {
     handleMemoryExportCompleted("artifact-123");
     expect(store.getSnapshot().export.artifactId).toBe("artifact-123");
     expect(store.getSnapshot().export.running).toBe(false);
+  });
+
+  it("forwards agent scope through memory operations and ignores events from other agents", async () => {
+    const ws = {
+      memoryList: vi.fn(async () => ({
+        v: 1,
+        items: [{ memory_item_id: "m1", agent_id: "agent-2", content: "old" }],
+        next_cursor: undefined,
+      })),
+      memorySearch: vi.fn(async () => ({
+        v: 1,
+        hits: [{ memory_item_id: "m1" }],
+        next_cursor: undefined,
+      })),
+      memoryGet: vi.fn(async () => ({
+        v: 1,
+        item: { memory_item_id: "m1", agent_id: "agent-2", content: "old" },
+      })),
+      memoryUpdate: vi.fn(async () => ({
+        v: 1,
+        item: { memory_item_id: "m1", agent_id: "agent-2", content: "new" },
+      })),
+      memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 1, tombstones: [] })),
+      memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
+    } as any;
+
+    const { store, handleMemoryItemUpsert } = createMemoryStore(ws);
+
+    await store.list({ agentId: "agent-2" });
+    await store.search({ agentId: "agent-2", query: "old" });
+    await store.inspect("m1", { agentId: "agent-2" });
+    await store.update("m1", { content: "new" } as any, { agentId: "agent-2" });
+    await store.forget([{ kind: "id", memory_item_id: "m1" }], { agentId: "agent-2" });
+    await store.export({ agentId: "agent-2" });
+
+    expect(ws.memoryList).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: "agent-2",
+      filter: undefined,
+      limit: undefined,
+      cursor: undefined,
+    });
+    expect(ws.memorySearch).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: "agent-2",
+      query: "old",
+      filter: undefined,
+      limit: undefined,
+      cursor: undefined,
+    });
+    expect(ws.memoryGet).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: "agent-2",
+      memory_item_id: "m1",
+    });
+    expect(ws.memoryUpdate).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: "agent-2",
+      memory_item_id: "m1",
+      patch: { content: "new" },
+    });
+    expect(ws.memoryForget).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: "agent-2",
+      confirm: "FORGET",
+      selectors: [{ kind: "id", memory_item_id: "m1" }],
+    });
+    expect(ws.memoryExport).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: "agent-2",
+      filter: undefined,
+      include_tombstones: false,
+    });
+
+    handleMemoryItemUpsert({
+      memory_item_id: "m1",
+      agent_id: "default",
+      content: "ignored",
+    } as any);
+    expect((store.getSnapshot().inspect.item as any)?.content).toBe("new");
   });
 });

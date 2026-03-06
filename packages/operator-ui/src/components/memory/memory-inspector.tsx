@@ -177,9 +177,10 @@ function preventInteractOutside(e: Event): void {
 
 export interface MemoryInspectorProps {
   core: OperatorCore;
+  agentId?: string;
 }
 
-export function MemoryInspector({ core }: MemoryInspectorProps) {
+export function MemoryInspector({ core, agentId }: MemoryInspectorProps) {
   const memory = useOperatorStore(core.memoryStore);
   const [bodyMdDraft, setBodyMdDraft] = useState("");
   const [summaryMdDraft, setSummaryMdDraft] = useState("");
@@ -216,8 +217,8 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
   } | null>(null);
 
   useEffect(() => {
-    void core.memoryStore.list({ limit: 50 });
-  }, [core]);
+    void core.memoryStore.list({ agentId, limit: 50 });
+  }, [agentId, core]);
 
   useEffect(() => {
     const item = memory.inspect.item;
@@ -288,7 +289,7 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
     setSaving(true);
     setSaveError(null);
     try {
-      await core.memoryStore.update(item.memory_item_id, patch);
+      await core.memoryStore.update(item.memory_item_id, patch, { agentId });
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -304,7 +305,7 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
     setForgetBusy(true);
     setForgetError(null);
     try {
-      await core.memoryStore.forget([{ kind: "id", memory_item_id: forgetTargetId }]);
+      await core.memoryStore.forget([{ kind: "id", memory_item_id: forgetTargetId }], { agentId });
       setForgetOpen(false);
       setForgetTargetId(null);
       setForgetConfirm("");
@@ -329,10 +330,10 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
     if (browseMode === "search") {
       const trimmedQuery = query.trim();
       if (!trimmedQuery) return;
-      void core.memoryStore.search({ query: trimmedQuery, filter, limit: 50 });
+      void core.memoryStore.search({ agentId, query: trimmedQuery, filter, limit: 50 });
       return;
     }
-    void core.memoryStore.list({ filter, limit: 50 });
+    void core.memoryStore.list({ agentId, filter, limit: 50 });
   };
 
   const downloadExport = async (artifactId: string): Promise<void> => {
@@ -611,7 +612,7 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
           isLoading={memory.export.running}
           onClick={() => {
             setDownloadError(null);
-            void core.memoryStore.export({ includeTombstones, filter });
+            void core.memoryStore.export({ agentId, includeTombstones, filter });
           }}
         >
           Export
@@ -695,7 +696,7 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
                     : "",
                 )}
                 onClick={() => {
-                  void core.memoryStore.inspect(row.memoryItemId);
+                  void core.memoryStore.inspect(row.memoryItemId, { agentId });
                 }}
               >
                 <div className="truncate font-mono text-xs text-fg-muted">{row.memoryItemId}</div>

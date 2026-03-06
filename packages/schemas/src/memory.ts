@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ArtifactId } from "./artifact.js";
 import { DateTimeSchema, UuidSchema } from "./common.js";
-import { AgentId } from "./keys.js";
+import { AgentId, AgentKey } from "./keys.js";
 
 // ---------------------------------------------------------------------------
 // Core primitives
@@ -110,6 +110,10 @@ export type MemoryTombstone = z.infer<typeof MemoryTombstone>;
 // Search/query/filter
 // ---------------------------------------------------------------------------
 
+// Memory requests keep the historical `agent_id` field name, but callers may
+// provide either an external agent key or an internal agent UUID.
+const MemoryRequestAgentRef = z.union([AgentKey, AgentId]);
+
 export const MemoryProvenanceFilter = z
   .object({
     source_kinds: z.array(MemoryProvenanceSourceKind).optional(),
@@ -134,6 +138,7 @@ export type MemoryItemFilter = z.infer<typeof MemoryItemFilter>;
 export const MemorySearchRequest = z
   .object({
     v: z.literal(1),
+    agent_id: MemoryRequestAgentRef.optional(),
     query: z.string().trim().min(1),
     filter: MemoryItemFilter.optional(),
     limit: z.number().int().positive().optional(),
@@ -169,6 +174,7 @@ export type MemorySearchResponse = z.infer<typeof MemorySearchResponse>;
 export const MemoryGetRequest = z
   .object({
     v: z.literal(1),
+    agent_id: MemoryRequestAgentRef.optional(),
     memory_item_id: MemoryItemId,
   })
   .strict();
@@ -185,6 +191,7 @@ export type MemoryGetResponse = z.infer<typeof MemoryGetResponse>;
 export const MemoryListRequest = z
   .object({
     v: z.literal(1),
+    agent_id: MemoryRequestAgentRef.optional(),
     filter: MemoryItemFilter.optional(),
     limit: z.number().int().positive().optional(),
     cursor: z.string().trim().min(1).optional(),
@@ -253,6 +260,7 @@ export type MemoryItemCreateInput = z.infer<typeof MemoryItemCreateInput>;
 export const MemoryCreateRequest = z
   .object({
     v: z.literal(1),
+    agent_id: MemoryRequestAgentRef.optional(),
     item: MemoryItemCreateInput,
   })
   .strict();
@@ -286,6 +294,7 @@ export type MemoryItemPatch = z.infer<typeof MemoryItemPatch>;
 export const MemoryUpdateRequest = z
   .object({
     v: z.literal(1),
+    agent_id: MemoryRequestAgentRef.optional(),
     memory_item_id: MemoryItemId,
     patch: MemoryItemPatch,
   })
@@ -303,6 +312,7 @@ export type MemoryUpdateResponse = z.infer<typeof MemoryUpdateResponse>;
 export const MemoryDeleteRequest = z
   .object({
     v: z.literal(1),
+    agent_id: MemoryRequestAgentRef.optional(),
     memory_item_id: MemoryItemId,
     reason: z.string().trim().min(1).optional(),
   })
@@ -368,6 +378,7 @@ export type MemoryForgetSelector = z.infer<typeof MemoryForgetSelector>;
 export const MemoryForgetRequest = z
   .object({
     v: z.literal(1),
+    agent_id: MemoryRequestAgentRef.optional(),
     confirm: z.literal("FORGET"),
     selectors: z.array(MemoryForgetSelector).min(1),
   })
@@ -390,6 +401,7 @@ export type MemoryForgetResponse = z.infer<typeof MemoryForgetResponse>;
 export const MemoryExportRequest = z
   .object({
     v: z.literal(1),
+    agent_id: MemoryRequestAgentRef.optional(),
     filter: MemoryItemFilter.optional(),
     include_tombstones: z.boolean().default(false),
   })

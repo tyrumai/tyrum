@@ -1,4 +1,5 @@
 import {
+  AgentId,
   WsMemoryCreateRequest,
   WsMemoryCreateResult,
   WsMemoryDeleteRequest,
@@ -126,9 +127,29 @@ export async function handleMemoryMessage(
   if (!deps.db) {
     return errorResponse(msg.request_id, msg.type, "unsupported_request", "db not available");
   }
-  const identityScopeDal = deps.identityScopeDal ?? new IdentityScopeDal(deps.db);
-  const agentId = await identityScopeDal.ensureAgentId(tenantId, "default");
-  const scope = { tenantId, agentId };
+  const db = deps.db;
+  const identityScopeDal = deps.identityScopeDal ?? new IdentityScopeDal(db);
+  const resolveScope = async (agentRef?: string) => {
+    const trimmed = agentRef?.trim();
+    if (!trimmed) {
+      const agentId = await identityScopeDal.ensureAgentId(tenantId, "default");
+      return { tenantId, agentId };
+    }
+    if (AgentId.safeParse(trimmed).success) {
+      const existing = await db.get<{ agent_id: string }>(
+        "SELECT agent_id FROM agents WHERE tenant_id = ? AND agent_id = ? LIMIT 1",
+        [tenantId, trimmed],
+      );
+      if (!existing?.agent_id) {
+        const error = new Error("agent not found");
+        Object.assign(error, { code: "not_found" });
+        throw error;
+      }
+      return { tenantId, agentId: existing.agent_id };
+    }
+    const agentId = await identityScopeDal.ensureAgentId(tenantId, trimmed);
+    return { tenantId, agentId };
+  };
 
   try {
     if (msg.type === "memory.search") {
@@ -140,6 +161,7 @@ export async function handleMemoryMessage(
       }
 
       const payload = parsedReq.data.payload;
+      const scope = await resolveScope(payload.agent_id);
       const limit = Math.max(1, Math.min(500, payload.limit ?? 50));
       const res = await deps.memoryV1Dal.search({ ...payload, limit }, scope);
       const result = WsMemorySearchResult.parse(res);
@@ -155,10 +177,11 @@ export async function handleMemoryMessage(
       }
 
       const payload = parsedReq.data.payload;
+      const scope = await resolveScope(payload.agent_id);
       const limit = Math.max(1, Math.min(500, payload.limit ?? 50));
       const res = await deps.memoryV1Dal.list({
-        tenantId,
-        agentId,
+        tenantId: scope.tenantId,
+        agentId: scope.agentId,
         filter: payload.filter,
         limit,
         cursor: payload.cursor,
@@ -179,7 +202,9 @@ export async function handleMemoryMessage(
         });
       }
 
-      const item = await deps.memoryV1Dal.getById(parsedReq.data.payload.memory_item_id, scope);
+      const payload = parsedReq.data.payload;
+      const scope = await resolveScope(payload.agent_id);
+      const item = await deps.memoryV1Dal.getById(payload.memory_item_id, scope);
       if (!item) {
         return errorResponse(msg.request_id, msg.type, "not_found", "memory item not found");
       }
@@ -196,7 +221,9 @@ export async function handleMemoryMessage(
         });
       }
 
-      const item = await deps.memoryV1Dal.create(parsedReq.data.payload.item, scope);
+      const payload = parsedReq.data.payload;
+      const scope = await resolveScope(payload.agent_id);
+      const item = await deps.memoryV1Dal.create(payload.item, scope);
       const result = WsMemoryCreateResult.parse({ v: 1, item });
 
       broadcastEvent(
@@ -231,6 +258,7 @@ export async function handleMemoryMessage(
       }
 
       const payload = parsedReq.data.payload;
+      const scope = await resolveScope(payload.agent_id);
       const item = await deps.memoryV1Dal.update(payload.memory_item_id, payload.patch, scope);
       const result = WsMemoryUpdateResult.parse({ v: 1, item });
 
@@ -266,6 +294,7 @@ export async function handleMemoryMessage(
       }
 
       const payload = parsedReq.data.payload;
+      const scope = await resolveScope(payload.agent_id);
       const tombstone = await deps.memoryV1Dal.delete(
         payload.memory_item_id,
         { deleted_by: "operator", reason: payload.reason },
@@ -297,9 +326,10 @@ export async function handleMemoryMessage(
       }
 
       const payload = parsedReq.data.payload;
+      const scope = await resolveScope(payload.agent_id);
       const outcome = await deps.memoryV1Dal.forget({
-        tenantId,
-        agentId,
+        tenantId: scope.tenantId,
+        agentId: scope.agentId,
         selectors: payload.selectors,
         deleted_by: "operator",
       });
@@ -343,13 +373,14 @@ export async function handleMemoryMessage(
     }
 
     const payload = parsedReq.data.payload;
+    const scope = await resolveScope(payload.agent_id);
 
     const items: unknown[] = [];
     let cursor: string | undefined;
     for (;;) {
       const page = await deps.memoryV1Dal.list({
-        tenantId,
-        agentId,
+        tenantId: scope.tenantId,
+        agentId: scope.agentId,
         filter: payload.filter,
         limit: 200,
         cursor,
@@ -364,8 +395,8 @@ export async function handleMemoryMessage(
       let tCursor: string | undefined;
       for (;;) {
         const page = await deps.memoryV1Dal.listTombstones({
-          tenantId,
-          agentId,
+          tenantId: scope.tenantId,
+          agentId: scope.agentId,
           limit: 200,
           cursor: tCursor,
         });
@@ -418,6 +449,9 @@ export async function handleMemoryMessage(
         : undefined;
     if (message === "memory item not found") {
       return errorResponse(msg.request_id, msg.type, "not_found", "memory item not found");
+    }
+    if (message === "agent not found") {
+      return errorResponse(msg.request_id, msg.type, "not_found", "agent not found");
     }
     if (message === "invalid cursor") {
       return errorResponse(msg.request_id, msg.type, "invalid_request", "invalid cursor");

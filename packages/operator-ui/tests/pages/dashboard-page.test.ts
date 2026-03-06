@@ -60,12 +60,20 @@ describe("DashboardPage", () => {
       attemptIdsByStepId: {},
     });
 
+    const { store: workboardStore } = createStore({
+      items: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+
     const core = {
       connectionStore,
       statusStore,
       approvalsStore,
       pairingStore,
       runsStore,
+      workboardStore,
     } as unknown as OperatorCore;
 
     const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));

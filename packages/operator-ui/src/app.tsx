@@ -3,18 +3,15 @@ import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import {
   Bot,
   Cable,
-  Database,
   Globe,
   LayoutGrid,
   Link2,
   Lock,
   MessageSquare,
   Monitor,
-  Play,
   SquareKanban,
   Shield,
   ShieldCheck,
-  SlidersHorizontal,
   Wrench,
 } from "lucide-react";
 import { ElevatedModeProvider } from "./elevated-mode.js";
@@ -29,10 +26,7 @@ import { ConnectPage } from "./components/pages/connect-page.js";
 import { ConfigurePage } from "./components/pages/configure-page.js";
 import { DashboardPage } from "./components/pages/dashboard-page.js";
 import { DesktopPage } from "./components/pages/desktop-page.js";
-import { MemoryPage } from "./components/pages/memory-page.js";
 import { PairingPage } from "./components/pages/pairing-page.js";
-import { RunsPage } from "./components/pages/runs-page.js";
-import { SettingsPage } from "./components/pages/settings-page.js";
 import { WorkBoardPage } from "./components/pages/workboard-page.js";
 import { BrowserCapabilitiesPage } from "./components/pages/platform/browser-capabilities-page.js";
 import { PlatformConnectionPage } from "./components/pages/platform/connection-page.js";
@@ -62,14 +56,11 @@ export interface OperatorUiAppProps {
 type OperatorUiRouteId =
   | "dashboard"
   | "chat"
-  | "memory"
   | "approvals"
-  | "runs"
-  | "agents"
   | "workboard"
+  | "agents"
   | "pairing"
   | "configure"
-  | "settings"
   | "desktop"
   | "connection"
   | "permissions"
@@ -81,14 +72,11 @@ type NavIcon = ComponentType<{ className?: string }>;
 const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon }> = {
   dashboard: { label: "Dashboard", icon: LayoutGrid },
   chat: { label: "Chat", icon: MessageSquare },
-  memory: { label: "Memory", icon: Database },
   approvals: { label: "Approvals", icon: ShieldCheck },
-  runs: { label: "Runs", icon: Play },
-  agents: { label: "Agents", icon: Bot },
   workboard: { label: "Work", icon: SquareKanban },
+  agents: { label: "Agents", icon: Bot },
   pairing: { label: "Pairings", icon: Link2 },
   configure: { label: "Configure", icon: Shield },
-  settings: { label: "Settings", icon: SlidersHorizontal },
   desktop: { label: "Desktop", icon: Monitor },
   connection: { label: "Connection", icon: Cable },
   permissions: { label: "Permissions", icon: Lock },
@@ -98,25 +86,15 @@ const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon 
 const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
   "dashboard",
   "chat",
-  "memory",
   "approvals",
-  "runs",
-  "agents",
   "workboard",
+  "agents",
   "pairing",
   "configure",
-  "settings",
 ];
 
-const MOBILE_NAV_ORDER: OperatorUiRouteId[] = ["dashboard", "approvals", "runs", "settings"];
-const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = [
-  "chat",
-  "memory",
-  "agents",
-  "workboard",
-  "pairing",
-  "configure",
-];
+const MOBILE_NAV_ORDER: OperatorUiRouteId[] = ["dashboard", "chat", "approvals", "workboard"];
+const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["agents", "pairing", "configure"];
 const PLATFORM_DESKTOP_NAV_ORDER: OperatorUiRouteId[] = [
   "desktop",
   "connection",
@@ -128,12 +106,11 @@ const PLATFORM_WEB_NAV_ORDER: OperatorUiRouteId[] = ["browser"];
 const KEYBOARD_NAV_ORDER: OperatorUiRouteId[] = [
   "dashboard",
   "chat",
-  "memory",
   "approvals",
-  "runs",
   "workboard",
+  "agents",
   "pairing",
-  "settings",
+  "configure",
 ];
 
 function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {
@@ -313,14 +290,11 @@ function OperatorUiAppRoot({
           <>
             {route === "dashboard" && <DashboardPage core={core} onNavigate={navigate} />}
             {route === "chat" && <ChatPage core={core} />}
-            {route === "memory" && <MemoryPage core={core} />}
             {route === "approvals" && <ApprovalsPage core={core} />}
-            {route === "runs" && <RunsPage core={core} />}
             {route === "agents" && <AgentsPage core={core} />}
             {route === "workboard" && <WorkBoardPage core={core} />}
             {route === "pairing" && <PairingPage core={core} />}
             {route === "configure" && <ConfigurePage core={core} />}
-            {route === "settings" && <SettingsPage core={core} mode={mode} />}
             {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
             {route === "connection" && <PlatformConnectionPage core={core} />}
             {route === "permissions" && <PlatformPermissionsPage />}
