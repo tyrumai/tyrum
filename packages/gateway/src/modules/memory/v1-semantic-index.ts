@@ -267,13 +267,23 @@ export class MemoryV1SemanticIndex {
     }
 
     return [...bestByItem.values()]
-      .sort((a, b) => b.similarity - a.similarity)
+      .toSorted((a, b) => b.similarity - a.similarity)
       .slice(0, topK)
-      .map((hit) => ({
-        memory_item_id: hit.memory_item_id,
-        kind: hit.kind,
-        score: Math.max(0, hit.similarity),
-        ...(hit.snippet ? { snippet: hit.snippet } : {}),
-      }));
+      .map((hit) => {
+        const normalizedHit: {
+          memory_item_id: string;
+          kind: MemoryItemKind;
+          score: number;
+          snippet?: string;
+        } = {
+          memory_item_id: hit.memory_item_id,
+          kind: hit.kind,
+          score: Math.max(0, hit.similarity),
+        };
+        if (hit.snippet) {
+          normalizedHit.snippet = hit.snippet;
+        }
+        return normalizedHit;
+      });
   }
 }

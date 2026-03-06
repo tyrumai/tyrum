@@ -101,7 +101,7 @@ export async function listOrderedEligibleProfilesForProvider(input: {
   const pinnedId = pin?.auth_profile_id;
 
   return pinnedId
-    ? [...eligibleProfiles].sort((a, b) =>
+    ? [...eligibleProfiles].toSorted((a, b) =>
         a.auth_profile_id === pinnedId ? -1 : b.auth_profile_id === pinnedId ? 1 : 0,
       )
     : eligibleProfiles;

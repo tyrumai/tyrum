@@ -78,7 +78,7 @@ function stableFingerprint(spec: McpServerSpecT): string {
       transport: remote.transport,
       url: remote.url,
       headers: remote.headers
-        ? Object.entries(remote.headers).sort((a, b) => a[0].localeCompare(b[0]))
+        ? Object.entries(remote.headers).toSorted((a, b) => a[0].localeCompare(b[0]))
         : [],
       timeout_ms: remote.timeout_ms ?? null,
       scopes: remote.scopes ?? [],
@@ -87,7 +87,7 @@ function stableFingerprint(spec: McpServerSpecT): string {
 
   const stdio = asStdio(spec);
   const envEntries = stdio.env
-    ? Object.entries(stdio.env).sort((a, b) => a[0].localeCompare(b[0]))
+    ? Object.entries(stdio.env).toSorted((a, b) => a[0].localeCompare(b[0]))
     : [];
 
   return JSON.stringify({

@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,126 +62,129 @@ async function readJsonFile(
   throw lastError;
 }
 
-export function createContractRoutes(): Hono {
-  const contracts = new Hono();
-  let jsonSchemaDir: string | undefined;
-  let jsonSchemaDirResolved: string | undefined;
+function resolveSchemaDirState(): {
+  jsonSchemaDir: string | undefined;
+  jsonSchemaDirResolved: string | undefined;
+} {
   try {
-    jsonSchemaDir = resolveSchemasJsonSchemaDir();
-    jsonSchemaDirResolved = resolve(jsonSchemaDir);
+    const jsonSchemaDir = resolveSchemasJsonSchemaDir();
+    return {
+      jsonSchemaDir,
+      jsonSchemaDirResolved: resolve(jsonSchemaDir),
+    };
   } catch (err) {
     void err;
-    jsonSchemaDir = undefined;
-    jsonSchemaDirResolved = undefined;
+    return {
+      jsonSchemaDir: undefined,
+      jsonSchemaDirResolved: undefined,
+    };
+  }
+}
+
+function unavailableResponse(c: Context, message: string): Response {
+  return c.json(
+    {
+      error: "contracts_unavailable",
+      message,
+    },
+    500,
+  );
+}
+
+function notFoundResponse(c: Context): Response {
+  return c.json(
+    {
+      error: "not_found",
+      message: "Contract schema not found.",
+    },
+    404,
+  );
+}
+
+function sanitizeCatalogEntry(entry: unknown): unknown {
+  if (!entry || typeof entry !== "object") return entry;
+  const file =
+    "file" in entry && typeof (entry as { file?: unknown }).file === "string"
+      ? basename(String((entry as { file: string }).file))
+      : undefined;
+  if (!file) return entry;
+  return Object.assign({}, entry, { file });
+}
+
+function sanitizeCatalogPayload(parsed: unknown): unknown {
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    !("schemas" in parsed) ||
+    !Array.isArray((parsed as { schemas?: unknown }).schemas)
+  ) {
+    return parsed;
   }
 
-  contracts.get("/contracts/jsonschema/catalog.json", async (c) => {
-    if (!jsonSchemaDir) {
-      return c.json(
-        {
-          error: "contracts_unavailable",
-          message: "JSON Schema catalog unavailable.",
-        },
-        500,
-      );
+  const schemas = (parsed as { schemas: unknown[] }).schemas.map(sanitizeCatalogEntry);
+  return { ...(parsed as Record<string, unknown>), schemas };
+}
+
+async function handleCatalogRequest(
+  c: Context,
+  jsonSchemaDir: string | undefined,
+): Promise<Response> {
+  if (!jsonSchemaDir) {
+    return unavailableResponse(c, "JSON Schema catalog unavailable.");
+  }
+
+  try {
+    const parsed: unknown = await readJsonFile(join(jsonSchemaDir, "catalog.json"), {
+      transientNotFound: true,
+    });
+    return c.json(sanitizeCatalogPayload(parsed));
+  } catch (err) {
+    void err;
+    return unavailableResponse(c, "JSON Schema catalog unavailable.");
+  }
+}
+
+async function handleSchemaRequest(
+  c: Context,
+  jsonSchemaDirResolved: string | undefined,
+): Promise<Response> {
+  if (!jsonSchemaDirResolved) {
+    return unavailableResponse(c, "Contract schema unavailable.");
+  }
+
+  const file = c.req.param("file")?.trim() || "";
+  if (!isSafeContractFilename(file) || file === "catalog.json") {
+    return notFoundResponse(c);
+  }
+
+  const fullPath = resolve(jsonSchemaDirResolved, file);
+  const rel = relative(jsonSchemaDirResolved, fullPath);
+  if (rel.startsWith("..") || isAbsolute(rel)) {
+    return notFoundResponse(c);
+  }
+
+  try {
+    const parsed = await readJsonFile(fullPath);
+    return c.json(parsed);
+  } catch (err) {
+    if (errorCode(err) === "ENOENT") {
+      return notFoundResponse(c);
     }
 
-    try {
-      const parsed: unknown = await readJsonFile(join(jsonSchemaDir, "catalog.json"), {
-        transientNotFound: true,
-      });
+    return unavailableResponse(c, "Contract schema unavailable.");
+  }
+}
 
-      if (
-        parsed &&
-        typeof parsed === "object" &&
-        "schemas" in parsed &&
-        Array.isArray((parsed as { schemas?: unknown }).schemas)
-      ) {
-        const schemas = (parsed as { schemas: unknown[] }).schemas.map((entry) => {
-          if (!entry || typeof entry !== "object") return entry;
-          const file =
-            "file" in entry && typeof (entry as { file?: unknown }).file === "string"
-              ? basename(String((entry as { file: string }).file))
-              : undefined;
-          if (!file) return entry;
-          return { ...entry, file };
-        });
+export function createContractRoutes(): Hono {
+  const contracts = new Hono();
+  const { jsonSchemaDir, jsonSchemaDirResolved } = resolveSchemaDirState();
 
-        return c.json({ ...(parsed as Record<string, unknown>), schemas });
-      }
-
-      return c.json(parsed);
-    } catch (err) {
-      void err;
-      return c.json(
-        {
-          error: "contracts_unavailable",
-          message: "JSON Schema catalog unavailable.",
-        },
-        500,
-      );
-    }
-  });
-
-  contracts.get("/contracts/jsonschema/:file", async (c) => {
-    if (!jsonSchemaDirResolved) {
-      return c.json(
-        {
-          error: "contracts_unavailable",
-          message: "Contract schema unavailable.",
-        },
-        500,
-      );
-    }
-
-    const file = c.req.param("file")?.trim() || "";
-    if (!isSafeContractFilename(file) || file === "catalog.json") {
-      return c.json(
-        {
-          error: "not_found",
-          message: "Contract schema not found.",
-        },
-        404,
-      );
-    }
-
-    const fullPath = resolve(jsonSchemaDirResolved, file);
-    const rel = relative(jsonSchemaDirResolved, fullPath);
-    if (rel.startsWith("..") || isAbsolute(rel)) {
-      return c.json(
-        {
-          error: "not_found",
-          message: "Contract schema not found.",
-        },
-        404,
-      );
-    }
-
-    try {
-      const parsed = await readJsonFile(fullPath);
-      return c.json(parsed);
-    } catch (err) {
-      const code = errorCode(err);
-
-      if (code === "ENOENT") {
-        return c.json(
-          {
-            error: "not_found",
-            message: "Contract schema not found.",
-          },
-          404,
-        );
-      }
-
-      return c.json(
-        {
-          error: "contracts_unavailable",
-          message: "Contract schema unavailable.",
-        },
-        500,
-      );
-    }
-  });
+  contracts.get("/contracts/jsonschema/catalog.json", (c) =>
+    handleCatalogRequest(c, jsonSchemaDir),
+  );
+  contracts.get("/contracts/jsonschema/:file", (c) =>
+    handleSchemaRequest(c, jsonSchemaDirResolved),
+  );
 
   return contracts;
 }

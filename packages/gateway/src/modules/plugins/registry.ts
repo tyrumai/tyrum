@@ -160,9 +160,9 @@ function collectAllOfInternalRefTargets(root: unknown): WeakSet<object> {
     if (Array.isArray(allOf)) {
       for (const entry of allOf) {
         if (!isRecord(entry)) continue;
-        const ref = entry["$ref"];
-        if (typeof ref !== "string") continue;
-        const resolved = resolveInternalJsonSchemaRef(root, ref);
+        const entryRef = entry["$ref"];
+        if (typeof entryRef !== "string") continue;
+        const resolved = resolveInternalJsonSchemaRef(root, entryRef);
         if (resolved !== null && typeof resolved === "object") {
           targets.add(resolved as object);
         }
@@ -602,7 +602,7 @@ export class PluginRegistry {
         loaded_at: p.loaded_at,
         source_dir: p.source_dir,
       }))
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .toSorted((a, b) => a.id.localeCompare(b.id));
   }
 
   getManifest(pluginId: string): PluginManifestT | undefined {

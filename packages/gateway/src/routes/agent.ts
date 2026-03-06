@@ -30,7 +30,7 @@ export function createAgentRoutes(agents: AgentRegistry): Hono {
         .map((entry) => entry.name)
         .filter((name) => name !== "default")
         .filter((name) => AgentKey.safeParse(name).success)
-        .sort((a, b) => a.localeCompare(b));
+        .toSorted((a, b) => a.localeCompare(b));
     } catch (err) {
       const code =
         err && typeof err === "object" && "code" in err

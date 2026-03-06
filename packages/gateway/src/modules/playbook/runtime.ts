@@ -11,7 +11,7 @@ import type { PlaybookRunner } from "./runner.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
 function isValidationError(err: unknown): boolean {
@@ -232,188 +232,259 @@ export interface PlaybookRuntimeDeps {
   runner: PlaybookRunner;
 }
 
+type PlaybookRunInput = {
+  action: "run";
+  pipeline: string;
+  argsJson?: string;
+  cwd?: string;
+  maxOutputBytes?: number;
+  timeoutMs?: number;
+};
+
+type PlaybookResumeInput = {
+  action: "resume";
+  token: string;
+  approve: boolean;
+  reason?: string;
+  timeoutMs?: number;
+};
+
+type PlaybookRuntimeInput = PlaybookRunInput | PlaybookResumeInput;
+
+type PlaybookStep = ReturnType<PlaybookRunner["run"]>["steps"][number];
+
+function parseRuntimeArgs(argsJson: string | undefined): {
+  runtimeArgs: unknown | undefined;
+  error?: PlaybookRuntimeEnvelopeT;
+} {
+  if (argsJson === undefined) {
+    return { runtimeArgs: undefined };
+  }
+
+  try {
+    return { runtimeArgs: JSON.parse(argsJson) as unknown };
+  } catch (err) {
+    void err;
+    return {
+      runtimeArgs: undefined,
+      error: {
+        ok: false,
+        status: "error",
+        output: [],
+        error: { message: "argsJson must be valid JSON", code: "invalid_request" },
+      },
+    };
+  }
+}
+
+function validateWorkspaceRelativeCwd(
+  cwd: string | undefined,
+): PlaybookRuntimeEnvelopeT | undefined {
+  if (!cwd) return undefined;
+
+  const trimmed = cwd.trim();
+  if (trimmed.length === 0 || isAbsolute(trimmed) || trimmed.split(/[\\/]+/).includes("..")) {
+    return {
+      ok: false,
+      status: "error",
+      output: [],
+      error: { message: "cwd must be a workspace-relative path", code: "invalid_request" },
+    };
+  }
+
+  return undefined;
+}
+
+function applyRuntimeStepOverrides(
+  steps: readonly PlaybookStep[],
+  input: PlaybookRunInput,
+  runtimeArgs: unknown | undefined,
+): PlaybookStep[] {
+  return steps.map((step) => {
+    if (!input.cwd && input.maxOutputBytes === undefined && runtimeArgs === undefined) {
+      return step;
+    }
+
+    const nextArgs: Record<string, unknown> = { ...step.args };
+    if (runtimeArgs !== undefined) {
+      nextArgs["__playbook_runtime_args"] = runtimeArgs;
+    }
+    if (input.cwd) {
+      nextArgs["cwd"] = input.cwd;
+    }
+    if (typeof input.maxOutputBytes === "number" && Number.isFinite(input.maxOutputBytes)) {
+      nextArgs["max_output_bytes"] = Math.floor(input.maxOutputBytes);
+    }
+
+    return Object.assign({}, step, { args: nextArgs });
+  });
+}
+
+function buildTriggerMetadata(
+  playbook: Playbook,
+  input: PlaybookRunInput,
+  runtimeArgs: unknown | undefined,
+): Record<string, unknown> {
+  const triggerMetadata: Record<string, unknown> = {
+    source: "playbook-runtime",
+    playbook_id: playbook.manifest.id,
+  };
+  if (runtimeArgs !== undefined) {
+    triggerMetadata["args"] = runtimeArgs;
+  }
+  if (input.cwd) {
+    triggerMetadata["cwd"] = input.cwd;
+  }
+  if (typeof input.maxOutputBytes === "number" && Number.isFinite(input.maxOutputBytes)) {
+    triggerMetadata["max_output_bytes"] = Math.floor(input.maxOutputBytes);
+  }
+  return triggerMetadata;
+}
+
+async function runPlaybookRuntimeAction(
+  deps: PlaybookRuntimeDeps,
+  input: PlaybookRunInput,
+  timeoutMs: number,
+): Promise<PlaybookRuntimeEnvelopeT> {
+  const parsedArgs = parseRuntimeArgs(input.argsJson);
+  if (parsedArgs.error) {
+    return parsedArgs.error;
+  }
+
+  const cwdError = validateWorkspaceRelativeCwd(input.cwd);
+  if (cwdError) {
+    return cwdError;
+  }
+
+  const playbook = resolvePlaybookFromPipeline(input.pipeline, deps.playbooks);
+  const compiled = deps.runner.run(playbook);
+  const steps = applyRuntimeStepOverrides(compiled.steps, input, parsedArgs.runtimeArgs);
+  const planId = `playbook-${playbook.manifest.id}-${randomUUID()}`;
+  const requestId = `req-${randomUUID()}`;
+  const key = `playbook:${playbook.manifest.id}`;
+  const lane = "main";
+
+  const playbookBundle = resolvePlaybookPolicyBundle(playbook);
+  const effectivePolicy = await deps.policyService.loadEffectiveBundle({ playbookBundle });
+  const snapshot = await deps.policyService.getOrCreateSnapshot(
+    DEFAULT_TENANT_ID,
+    effectivePolicy.bundle,
+  );
+
+  const res = await deps.engine.enqueuePlan({
+    tenantId: DEFAULT_TENANT_ID,
+    key,
+    lane,
+    planId,
+    requestId,
+    steps,
+    policySnapshotId: snapshot.policy_snapshot_id,
+    trigger: {
+      kind: "api",
+      key,
+      lane,
+      metadata: buildTriggerMetadata(playbook, input, parsedArgs.runtimeArgs),
+    },
+  });
+
+  return envelopeForRunStatus(deps.db, res.runId, timeoutMs);
+}
+
+function resolveApprovalRunId(row: ApprovalRow): string | undefined {
+  const id = row.run_id?.trim();
+  return id && id.length > 0 ? id : undefined;
+}
+
+async function runPlaybookResumeAction(
+  deps: PlaybookRuntimeDeps,
+  input: PlaybookResumeInput,
+  timeoutMs: number,
+): Promise<PlaybookRuntimeEnvelopeT> {
+  const approval = await deps.approvalDal.getByResumeToken({
+    tenantId: DEFAULT_TENANT_ID,
+    resumeToken: input.token,
+  });
+  if (!approval) {
+    return {
+      ok: false,
+      status: "error",
+      output: [],
+      error: { message: "resume token not found", code: "not_found" },
+    };
+  }
+
+  const runId = resolveApprovalRunId(approval);
+  if (!runId) {
+    return {
+      ok: false,
+      status: "error",
+      output: [],
+      error: { message: "approval is missing run_id", code: "invalid_state" },
+    };
+  }
+
+  const resolvedApproval =
+    approval.status === "pending"
+      ? (
+          await deps.approvalDal.resolveWithEngineAction({
+            tenantId: DEFAULT_TENANT_ID,
+            approvalId: approval.approval_id,
+            decision: input.approve ? "approved" : "denied",
+            reason: input.reason,
+            resolvedBy: { kind: "playbook" },
+          })
+        )?.approval
+      : approval;
+  if (!resolvedApproval) {
+    return {
+      ok: false,
+      status: "error",
+      output: [],
+      error: { message: "resume token not found", code: "not_found" },
+    };
+  }
+
+  const matches =
+    (input.approve && resolvedApproval.status === "approved") ||
+    (!input.approve && resolvedApproval.status === "denied");
+  if (!matches) {
+    return {
+      ok: false,
+      status: "error",
+      output: [],
+      error: { message: "approval already resolved", code: "conflict" },
+    };
+  }
+
+  const deadline = Date.now() + Math.max(1, timeoutMs);
+  const remainingTimeoutMs = () => Math.max(1, deadline - Date.now());
+
+  try {
+    await waitForRunToResumeOrCancel(deps.db, runId, remainingTimeoutMs());
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      status: "error",
+      output: [],
+      error: { message, code: "timeout" },
+    };
+  }
+
+  return envelopeForRunStatus(deps.db, runId, remainingTimeoutMs());
+}
+
 export async function runPlaybookRuntimeEnvelope(
   deps: PlaybookRuntimeDeps,
-  input:
-    | {
-        action: "run";
-        pipeline: string;
-        argsJson?: string;
-        cwd?: string;
-        maxOutputBytes?: number;
-        timeoutMs?: number;
-      }
-    | { action: "resume"; token: string; approve: boolean; reason?: string; timeoutMs?: number },
+  input: PlaybookRuntimeInput,
 ): Promise<PlaybookRuntimeEnvelopeT> {
   const timeoutMs = input.timeoutMs ?? 30_000;
 
   try {
     if (input.action === "run") {
-      let runtimeArgs: unknown | undefined;
-      if (input.argsJson !== undefined) {
-        try {
-          runtimeArgs = JSON.parse(input.argsJson) as unknown;
-        } catch {
-          // Intentional: surface invalid JSON as a structured invalid_request error.
-          return {
-            ok: false,
-            status: "error",
-            output: [],
-            error: { message: "argsJson must be valid JSON", code: "invalid_request" },
-          };
-        }
-      }
-
-      if (input.cwd) {
-        const trimmed = input.cwd.trim();
-        if (trimmed.length === 0 || isAbsolute(trimmed) || trimmed.split(/[\\/]+/).includes("..")) {
-          return {
-            ok: false,
-            status: "error",
-            output: [],
-            error: { message: "cwd must be a workspace-relative path", code: "invalid_request" },
-          };
-        }
-      }
-
-      const playbook = resolvePlaybookFromPipeline(input.pipeline, deps.playbooks);
-      const compiled = deps.runner.run(playbook);
-      const steps = compiled.steps.map((step) => {
-        if (!input.cwd && input.maxOutputBytes === undefined && runtimeArgs === undefined) {
-          return step;
-        }
-
-        const nextArgs: Record<string, unknown> = { ...step.args };
-        if (runtimeArgs !== undefined) {
-          nextArgs["__playbook_runtime_args"] = runtimeArgs;
-        }
-        if (input.cwd) {
-          nextArgs["cwd"] = input.cwd;
-        }
-        if (typeof input.maxOutputBytes === "number" && Number.isFinite(input.maxOutputBytes)) {
-          nextArgs["max_output_bytes"] = Math.floor(input.maxOutputBytes);
-        }
-
-        return { ...step, args: nextArgs };
-      });
-
-      const planId = `playbook-${playbook.manifest.id}-${randomUUID()}`;
-      const requestId = `req-${randomUUID()}`;
-      const key = `playbook:${playbook.manifest.id}`;
-      const lane = "main";
-
-      const playbookBundle = resolvePlaybookPolicyBundle(playbook);
-      const effectivePolicy = await deps.policyService.loadEffectiveBundle({ playbookBundle });
-      const snapshot = await deps.policyService.getOrCreateSnapshot(
-        DEFAULT_TENANT_ID,
-        effectivePolicy.bundle,
-      );
-
-      const triggerMetadata: Record<string, unknown> = {
-        source: "playbook-runtime",
-        playbook_id: playbook.manifest.id,
-      };
-      if (runtimeArgs !== undefined) {
-        triggerMetadata["args"] = runtimeArgs;
-      }
-      if (input.cwd) {
-        triggerMetadata["cwd"] = input.cwd;
-      }
-      if (typeof input.maxOutputBytes === "number" && Number.isFinite(input.maxOutputBytes)) {
-        triggerMetadata["max_output_bytes"] = Math.floor(input.maxOutputBytes);
-      }
-
-      const res = await deps.engine.enqueuePlan({
-        tenantId: DEFAULT_TENANT_ID,
-        key,
-        lane,
-        planId,
-        requestId,
-        steps,
-        policySnapshotId: snapshot.policy_snapshot_id,
-        trigger: { kind: "api", key, lane, metadata: triggerMetadata },
-      });
-
-      return await envelopeForRunStatus(deps.db, res.runId, timeoutMs);
+      return await runPlaybookRuntimeAction(deps, input, timeoutMs);
     }
-
-    const approval = await deps.approvalDal.getByResumeToken({
-      tenantId: DEFAULT_TENANT_ID,
-      resumeToken: input.token,
-    });
-    if (!approval) {
-      return {
-        ok: false,
-        status: "error",
-        output: [],
-        error: { message: "resume token not found", code: "not_found" },
-      };
-    }
-
-    const resolveRunId = (row: ApprovalRow): string | undefined => {
-      const id = row.run_id?.trim();
-      return id && id.length > 0 ? id : undefined;
-    };
-
-    const runId = resolveRunId(approval);
-    if (!runId) {
-      return {
-        ok: false,
-        status: "error",
-        output: [],
-        error: { message: "approval is missing run_id", code: "invalid_state" },
-      };
-    }
-
-    const resolvedApproval =
-      approval.status === "pending"
-        ? (
-            await deps.approvalDal.resolveWithEngineAction({
-              tenantId: DEFAULT_TENANT_ID,
-              approvalId: approval.approval_id,
-              decision: input.approve ? "approved" : "denied",
-              reason: input.reason,
-              resolvedBy: { kind: "playbook" },
-            })
-          )?.approval
-        : approval;
-    if (!resolvedApproval) {
-      return {
-        ok: false,
-        status: "error",
-        output: [],
-        error: { message: "resume token not found", code: "not_found" },
-      };
-    }
-
-    const matches =
-      (input.approve && resolvedApproval.status === "approved") ||
-      (!input.approve && resolvedApproval.status === "denied");
-    if (!matches) {
-      return {
-        ok: false,
-        status: "error",
-        output: [],
-        error: { message: "approval already resolved", code: "conflict" },
-      };
-    }
-
-    const deadline = Date.now() + Math.max(1, timeoutMs);
-    const remainingTimeoutMs = () => Math.max(1, deadline - Date.now());
-
-    try {
-      await waitForRunToResumeOrCancel(deps.db, runId, remainingTimeoutMs());
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return {
-        ok: false,
-        status: "error",
-        output: [],
-        error: { message, code: "timeout" },
-      };
-    }
-
-    return await envelopeForRunStatus(deps.db, runId, remainingTimeoutMs());
+    return await runPlaybookResumeAction(deps, input, timeoutMs);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const code =

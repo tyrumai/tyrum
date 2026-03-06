@@ -35,7 +35,8 @@ export function startExecutionWorkerLoop(opts: ExecutionWorkerLoopOptions): Exec
       max_ticks_per_cycle: maxTicksPerCycle,
     });
 
-    while (!stopping) {
+    for (;;) {
+      if (stopping) break;
       try {
         let didWork = false;
         for (let i = 0; i < maxTicksPerCycle; i += 1) {

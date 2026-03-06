@@ -334,7 +334,7 @@ export async function turnViaExecutionEngine(
   let laneQueueInterruptReason: string | undefined;
 
   const executor: StepExecutor = {
-    execute: async (action, planId, stepIndex, timeoutMs, _context) => {
+    execute: async (action, stepPlanId, stepIndex, timeoutMs, _context) => {
       if (action.type !== "Decide") {
         return { success: false, error: `unsupported action type: ${action.type}` };
       }
@@ -372,7 +372,7 @@ export async function turnViaExecutionEngine(
           abortSignal: controller.signal,
           timeoutMs: effectiveTimeoutMs,
           execution: {
-            planId,
+            planId: stepPlanId,
             runId,
             stepIndex,
             stepId: stepRow.step_id,

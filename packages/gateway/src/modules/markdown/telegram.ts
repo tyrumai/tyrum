@@ -179,7 +179,7 @@ function renderInlineRangeToTelegramHtml(
       (span): span is InlineSpan =>
         (span.kind === "style" || span.kind === "link") && span.start >= start && span.end <= end,
     )
-    .map((span) => ({ ...span }));
+    .map((span) => Object.assign({}, span) as InlineSpan);
 
   const suffixes = new Map<number, string[]>();
   const filtered: InlineSpan[] = [];
@@ -216,8 +216,8 @@ function renderInlineRangeToTelegramHtml(
     closesByIndex.set(span.end, closes);
   }
 
-  for (const [idx, spans] of opensByIndex) {
-    spans.sort((a, b) => {
+  for (const [idx, openSpans] of opensByIndex) {
+    openSpans.sort((a, b) => {
       if (a.end !== b.end) return b.end - a.end;
 
       const kindCmp = inlineKindRank(a) - inlineKindRank(b);
@@ -235,11 +235,11 @@ function renderInlineRangeToTelegramHtml(
 
       return 0;
     });
-    opensByIndex.set(idx, spans);
+    opensByIndex.set(idx, openSpans);
   }
 
-  for (const [idx, spans] of closesByIndex) {
-    spans.sort((a, b) => {
+  for (const [idx, closeSpans] of closesByIndex) {
+    closeSpans.sort((a, b) => {
       if (a.start !== b.start) return b.start - a.start;
 
       const kindCmp = inlineKindRank(b) - inlineKindRank(a);
@@ -257,7 +257,7 @@ function renderInlineRangeToTelegramHtml(
 
       return 0;
     });
-    closesByIndex.set(idx, spans);
+    closesByIndex.set(idx, closeSpans);
   }
 
   let out = "";

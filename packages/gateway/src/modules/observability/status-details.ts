@@ -269,7 +269,7 @@ async function loadAuthProfileHealth(
   const disabled = profiles.filter((p) => p.status === "disabled").length;
   const providers = [...new Set(profiles.map((p) => p.provider_key))]
     .filter((provider) => provider.trim().length > 0)
-    .sort();
+    .toSorted();
 
   return {
     enabled: isAuthProfilesEnabled(),
@@ -487,7 +487,7 @@ async function loadSessionLanes(
     });
   }
 
-  return lanes.sort((a, b) => {
+  return lanes.toSorted((a, b) => {
     const keyCmp = a.key.localeCompare(b.key);
     if (keyCmp !== 0) return keyCmp;
     return a.lane.localeCompare(b.lane);

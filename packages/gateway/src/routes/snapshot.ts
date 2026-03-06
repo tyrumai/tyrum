@@ -169,7 +169,7 @@ async function listPrimaryKeyColumns(db: SqlDb, table: string): Promise<string[]
     );
     return rows
       .filter((r) => typeof r.pk === "number" && r.pk > 0)
-      .sort((a, b) => a.pk - b.pk)
+      .toSorted((a, b) => a.pk - b.pk)
       .map((r) => r.name);
   }
 
