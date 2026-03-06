@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export type ToolRisk = "low" | "medium" | "high";
 
 export interface ToolDescriptor {
@@ -120,6 +122,107 @@ const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     },
   },
 ];
+
+function shortToolIdHash(toolId: string): string {
+  return createHash("sha256").update(toolId).digest("hex").slice(0, 8);
+}
+
+function sanitizeToolIdForModel(toolId: string): string {
+  const sanitized = toolId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return sanitized.length > 0 ? sanitized : `tool_${shortToolIdHash(toolId)}`;
+}
+
+function isReservedModelToolName(input: {
+  candidate: string;
+  toolId: string;
+  canonicalToolIds: ReadonlySet<string>;
+  usedNames: ReadonlySet<string>;
+}): boolean {
+  return (
+    input.usedNames.has(input.candidate) ||
+    (input.canonicalToolIds.has(input.candidate) && input.candidate !== input.toolId)
+  );
+}
+
+export function buildModelToolNameMap(toolIds: readonly string[]): Map<string, string> {
+  const names = new Map<string, string>();
+  const canonicalToolIds = new Set<string>();
+  const normalizedToolIds: string[] = [];
+
+  for (const rawToolId of toolIds) {
+    const toolId = rawToolId.trim();
+    if (toolId.length === 0 || canonicalToolIds.has(toolId)) continue;
+    canonicalToolIds.add(toolId);
+    normalizedToolIds.push(toolId);
+  }
+
+  const usedNames = new Set<string>();
+
+  for (const toolId of normalizedToolIds) {
+    const baseName = sanitizeToolIdForModel(toolId);
+    let candidate = baseName;
+    if (
+      isReservedModelToolName({
+        candidate,
+        toolId,
+        canonicalToolIds,
+        usedNames,
+      })
+    ) {
+      candidate = `${baseName}_${shortToolIdHash(toolId)}`;
+    }
+
+    let suffix = 1;
+    while (
+      isReservedModelToolName({
+        candidate,
+        toolId,
+        canonicalToolIds,
+        usedNames,
+      })
+    ) {
+      candidate = `${baseName}_${String(suffix)}`;
+      suffix += 1;
+    }
+
+    names.set(toolId, candidate);
+    usedNames.add(candidate);
+  }
+
+  return names;
+}
+
+export function registerModelTool<T>(
+  toolSet: Record<string, T>,
+  toolId: string,
+  tool: T,
+  modelToolNames: ReadonlyMap<string, string>,
+): string {
+  const canonicalToolId = toolId.trim();
+  const modelToolName = modelToolNames.get(canonicalToolId) ?? canonicalToolId;
+  const existingModelTool = toolSet[modelToolName];
+
+  if (existingModelTool !== undefined && existingModelTool !== tool) {
+    throw new Error(`model tool name collision for '${modelToolName}'`);
+  }
+
+  toolSet[modelToolName] = tool;
+  if (modelToolName !== canonicalToolId) {
+    const existingCanonicalTool = toolSet[canonicalToolId];
+    if (existingCanonicalTool !== undefined && existingCanonicalTool !== tool) {
+      throw new Error(`model tool alias collision for '${canonicalToolId}'`);
+    }
+
+    Object.defineProperty(toolSet, canonicalToolId, {
+      value: tool,
+      enumerable: false,
+      configurable: true,
+      writable: false,
+    });
+  }
+
+  return modelToolName;
+}
 
 export function isToolAllowed(allowlist: readonly string[], toolId: string): boolean {
   for (const entry of allowlist) {
