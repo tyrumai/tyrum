@@ -4285,6 +4285,96 @@ describe("operator-ui", () => {
     container.remove();
   });
 
+  it("clears persistent elevated mode when the controller becomes available after a 4001 disconnect", async () => {
+    const session = new Map<string, string>();
+    session.set(
+      "tyrum.operator-ui.elevated-mode.v1",
+      JSON.stringify({
+        httpBaseUrl: "http://example.test",
+        deviceId: TEST_DEVICE_IDENTITY.deviceId,
+        elevatedToken: "restored-token",
+        expiresAt: null,
+      }),
+    );
+    stubPersistentStorage({ session });
+
+    const ws = new FakeWsClient(false);
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deviceIdentity: TEST_DEVICE_IDENTITY,
+      deps: { ws, http },
+    });
+    core.elevatedModeStore.enter({ elevatedToken: "restored-token", expiresAt: null });
+
+    const controller = {
+      enter: vi.fn(async () => {}),
+      exit: vi.fn(async () => {}),
+    };
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(
+          ElevatedModeProvider,
+          {
+            core,
+            mode: "web",
+          },
+          React.createElement(
+            ElevatedModeGate,
+            null,
+            React.createElement("button", { type: "button", "data-testid": "danger-action" }, "Go"),
+          ),
+        ),
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      ws.emit("disconnected", { code: 4001, reason: "unauthorized" });
+      await Promise.resolve();
+    });
+
+    expect(core.elevatedModeStore.getSnapshot().status).toBe("active");
+    expect(session.has("tyrum.operator-ui.elevated-mode.v1")).toBe(true);
+
+    await act(async () => {
+      root?.render(
+        React.createElement(
+          ElevatedModeProvider,
+          {
+            core,
+            mode: "web",
+            elevatedModeController: controller,
+          },
+          React.createElement(
+            ElevatedModeGate,
+            null,
+            React.createElement("button", { type: "button", "data-testid": "danger-action" }, "Go"),
+          ),
+        ),
+      );
+      await Promise.resolve();
+    });
+
+    expect(core.elevatedModeStore.getSnapshot().status).toBe("inactive");
+    expect(session.has("tyrum.operator-ui.elevated-mode.v1")).toBe(false);
+    expect(container.querySelector('[data-testid="elevated-mode-frame"]')).toBeNull();
+    expect(container.querySelector('[data-testid="danger-action"]')).toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
   it("migrates legacy web persistence from localStorage into sessionStorage", async () => {
     const local = new Map<string, string>();
     local.set(

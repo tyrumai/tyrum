@@ -179,7 +179,6 @@ export function ElevatedModeProvider({
       DISCONNECTED_CONNECTION_STORE,
   );
   const restorePendingRef = useRef(false);
-  const restoredTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!elevatedModeController) return;
@@ -197,25 +196,21 @@ export function ElevatedModeProvider({
         clearPersistedElevatedModeState(mode);
       }
       restorePendingRef.current = false;
-      restoredTokenRef.current = null;
       return;
     }
 
     try {
       restorePendingRef.current = true;
-      restoredTokenRef.current = persisted.elevatedToken;
       core.elevatedModeStore.enter({
         elevatedToken: persisted.elevatedToken,
         expiresAt: persisted.expiresAt,
       });
       if (!isElevatedModeActive(core.elevatedModeStore.getSnapshot())) {
         restorePendingRef.current = false;
-        restoredTokenRef.current = null;
         clearPersistedElevatedModeState(mode);
       }
     } catch {
       restorePendingRef.current = false;
-      restoredTokenRef.current = null;
       clearPersistedElevatedModeState(mode);
     }
   }, [core, elevatedModeController, mode]);
@@ -251,17 +246,22 @@ export function ElevatedModeProvider({
     if (!isElevatedModeActive(elevatedMode)) return;
 
     if (connection.status === "connected") {
-      restoredTokenRef.current = null;
       return;
     }
 
     if (connection.lastDisconnect?.code !== 4001) return;
 
     restorePendingRef.current = false;
-    restoredTokenRef.current = null;
     clearPersistedElevatedModeState(mode);
     core.elevatedModeStore.exit();
-  }, [connection.lastDisconnect, connection.status, core.elevatedModeStore, elevatedMode, mode]);
+  }, [
+    connection.lastDisconnect,
+    connection.status,
+    core.elevatedModeStore,
+    elevatedMode,
+    elevatedModeController,
+    mode,
+  ]);
 
   const enterElevatedMode = async (): Promise<void> => {
     if (elevatedModeController) {
