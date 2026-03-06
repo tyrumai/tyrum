@@ -17,7 +17,7 @@ import {
 } from "./background-mode.js";
 import { setWindowsAppUserModelId, setupSingleInstance } from "./single-instance.js";
 import { configureMacAboutPanel } from "./platform/os-integrations.js";
-import { buildApplicationMenuTemplate } from "./menu.js";
+import { buildApplicationMenuTemplate, type NavigationRequest } from "./menu.js";
 import { registerContextMenus } from "./context-menu.js";
 import { isSafeExternalUrl } from "./safe-external-url.js";
 import { extractDeepLinkUrlFromArgv, isDeepLinkUrl } from "./deep-links.js";
