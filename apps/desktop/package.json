@@ -31,7 +31,7 @@
     "@fiahfy/ico": "0.0.5",
     "@hono/node-server": "^1.19.11",
     "@tailwindcss/vite": "^4.2.1",
-    "@types/node": "^24.0.0",
+    "@types/node": "^25.3.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@tyrum/gateway": "workspace:*",
