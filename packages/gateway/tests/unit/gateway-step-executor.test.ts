@@ -8,6 +8,10 @@ import { createGatewayStepExecutor } from "../../src/modules/execution/gateway-s
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
 
+vi.mock("../../src/modules/models/provider-factory.js", () => ({
+  createProviderFromNpm: vi.fn(),
+}));
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 

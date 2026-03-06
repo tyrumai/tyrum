@@ -4,10 +4,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { APICallError, type LanguageModelV3 } from "@ai-sdk/provider";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
-import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
+import { AuthProfileDal, type AuthProfileRow } from "../../src/modules/models/auth-profile-dal.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
 import { DbSecretProvider } from "../../src/modules/secret/provider.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { resolveProfileSecrets } from "../../src/modules/agent/runtime/provider-resolution.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -89,6 +90,107 @@ describe("AgentRuntime OAuth refresh", () => {
       nowIso,
     });
   }
+
+  it("returns freshly refreshed OAuth secrets without rereading stale auth slots", async () => {
+    const nowIso = new Date().toISOString();
+    const profile: AuthProfileRow = {
+      tenant_id: DEFAULT_TENANT_ID,
+      auth_profile_id: "profile-1",
+      auth_profile_key: "profile-1",
+      provider_key: "openai",
+      display_name: "profile-1",
+      method_key: "oauth",
+      type: "oauth",
+      status: "active",
+      config: {},
+      secret_keys: {
+        access_token: "oauth:access",
+        refresh_token: "oauth:refresh",
+        workspace_id: "oauth:workspace",
+      },
+      labels: {},
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+
+    const resolvedValues = new Map<string, string>([
+      ["oauth:access", "OLD_ACCESS"],
+      ["oauth:refresh", "OLD_REFRESH"],
+      ["oauth:workspace", "workspace-1"],
+      ["oauth:client_secret", "client-secret"],
+    ]);
+    const storedValues = new Map<string, string>();
+    const secretProvider = {
+      async resolve(handle: { handle_id: string }) {
+        return resolvedValues.get(handle.handle_id) ?? null;
+      },
+      async store(secretKey: string, value: string) {
+        storedValues.set(secretKey, value);
+        return {
+          handle_id: secretKey,
+          provider: "db" as const,
+          scope: secretKey,
+          created_at: nowIso,
+        };
+      },
+      async revoke() {
+        return false;
+      },
+      async list() {
+        return [];
+      },
+    };
+
+    const resolved = await resolveProfileSecrets(
+      profile,
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        secretProvider,
+        oauthProviderRegistry: {
+          async get() {
+            return {
+              tenant_id: DEFAULT_TENANT_ID,
+              provider_id: "openai",
+              scopes: [],
+              client_id: "client-id",
+              client_secret_key: "oauth:client_secret",
+              token_endpoint: "https://oauth.example/token",
+              token_endpoint_basic_auth: true,
+            };
+          },
+        } as any,
+        oauthRefreshLeaseDal: {
+          async tryAcquire() {
+            return true;
+          },
+          async release() {},
+        } as any,
+        oauthLeaseOwner: "test-owner",
+        logger: { warn: vi.fn() } as any,
+        fetchImpl: async (input, init) => {
+          expect(String(input)).toBe("https://oauth.example/token");
+          expect(init?.method).toBe("POST");
+          return new Response(
+            JSON.stringify({
+              access_token: "NEW_ACCESS",
+              refresh_token: "NEW_REFRESH",
+              token_type: "Bearer",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        },
+      },
+      { forceOAuthRefresh: true },
+    );
+
+    expect(resolved).toEqual({
+      access_token: "NEW_ACCESS",
+      refresh_token: "NEW_REFRESH",
+      workspace_id: "workspace-1",
+    });
+    expect(storedValues.get("oauth:access")).toBe("NEW_ACCESS");
+    expect(storedValues.get("oauth:refresh")).toBe("NEW_REFRESH");
+  });
 
   it("refreshes an OAuth profile on 401 and reuses the refreshed access token", async () => {
     container = createContainer({

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
 import { APICallError } from "@ai-sdk/provider";
-import type { LanguageModelV3 } from "@ai-sdk/provider";
+import type { LanguageModelV2, LanguageModelV3 } from "@ai-sdk/provider";
 import { ConfiguredModelPresetDal } from "../../src/modules/models/configured-model-preset-dal.js";
 import { ExecutionProfileModelAssignmentDal } from "../../src/modules/models/execution-profile-model-assignment-dal.js";
 import { SessionModelOverrideDal } from "../../src/modules/models/session-model-override-dal.js";
@@ -22,6 +22,28 @@ vi.mock("../../src/modules/models/provider-factory.js", () => {
   return {
     createProviderFromNpm: (input: { providerId: string }) => {
       const providerId = input.providerId;
+      if (providerId === "gitlab") {
+        const model: LanguageModelV2 = {
+          specificationVersion: "v2",
+          provider: providerId,
+          modelId: `${providerId}/mock`,
+          supportedUrls: {},
+          async doGenerate() {
+            seenProviders.push(providerId);
+            return {} as Awaited<ReturnType<LanguageModelV2["doGenerate"]>>;
+          },
+          async doStream() {
+            throw new Error("not implemented");
+          },
+        };
+
+        return {
+          languageModel() {
+            return model;
+          },
+        };
+      }
+
       const model: LanguageModelV3 = {
         specificationVersion: "v3",
         provider: providerId,
@@ -167,6 +189,65 @@ describe("AgentRuntime model fallbacks", () => {
     const res = await model.doGenerate({} as any);
     expect((res as any).text).toBe("ok");
     expect(seenProviders).toEqual(["openai", "anthropic"]);
+  });
+
+  it("rejects fallback chains that mix model specification versions", async () => {
+    container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const cacheDal = new ModelsDevCacheDal(container.db);
+    const nowIso = new Date().toISOString();
+    await cacheDal.upsert({
+      fetchedAt: nowIso,
+      etag: null,
+      sha256: "sha",
+      json: JSON.stringify({
+        openai: {
+          id: "openai",
+          name: "OpenAI",
+          env: ["OPENAI_API_KEY"],
+          npm: "@ai-sdk/openai",
+          models: { "gpt-4.1": { id: "gpt-4.1", name: "GPT-4.1" } },
+        },
+        gitlab: {
+          id: "gitlab",
+          name: "GitLab",
+          env: ["GITLAB_TOKEN"],
+          npm: "@gitlab/gitlab-ai-provider",
+          models: { "duo-chat": { id: "duo-chat", name: "Duo Chat" } },
+        },
+      }),
+      source: "remote",
+      lastError: null,
+      nowIso,
+    });
+
+    const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
+
+    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+    const runtime = new AgentRuntime({
+      container,
+      agentId: "agent-1",
+      fetchImpl,
+    });
+
+    await expect(
+      (runtime as any).resolveSessionModel({
+        config: {
+          model: {
+            model: "openai/gpt-4.1",
+            fallback: ["gitlab/duo-chat"],
+            options: {},
+          },
+        },
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: "session-mixed-specs",
+        fetchImpl,
+      }),
+    ).rejects.toThrow("configured model candidates must share one specification version");
+    expect(seenProviders).toEqual([]);
   });
 
   it("rejects legacy short fallback model ids", async () => {
