@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-/** Client capability kinds. */
+/**
+ * Legacy capability kind enum kept for routing and handshake compatibility.
+ *
+ * Nodes advertise and execute these capabilities; clients do not execute
+ * capability calls.
+ */
 export const ClientCapability = z.enum([
   "playwright",
   "android",
@@ -10,6 +15,10 @@ export const ClientCapability = z.enum([
   "browser",
 ]);
 export type ClientCapability = z.infer<typeof ClientCapability>;
+
+/** Preferred alias for the legacy `ClientCapability` enum. */
+export const CapabilityKind = ClientCapability;
+export type CapabilityKind = ClientCapability;
 
 const CAPABILITY_ID_SEGMENT = "[a-z][a-z0-9-]*";
 const CAPABILITY_ID_PATTERN = new RegExp(
@@ -43,21 +52,19 @@ const LEGACY_TO_DESCRIPTOR_ID = {
   browser: "tyrum.browser",
 } as const;
 
-type LegacyCapabilityDescriptorId = (typeof LEGACY_TO_DESCRIPTOR_ID)[ClientCapability];
+type LegacyCapabilityDescriptorId = (typeof LEGACY_TO_DESCRIPTOR_ID)[CapabilityKind];
 
 const DESCRIPTOR_TO_LEGACY = Object.fromEntries(
   (
-    Object.entries(LEGACY_TO_DESCRIPTOR_ID) as Array<
-      [ClientCapability, LegacyCapabilityDescriptorId]
-    >
+    Object.entries(LEGACY_TO_DESCRIPTOR_ID) as Array<[CapabilityKind, LegacyCapabilityDescriptorId]>
   ).map(([capability, id]) => [id, capability]),
-) as Record<LegacyCapabilityDescriptorId, ClientCapability>;
+) as Record<LegacyCapabilityDescriptorId, CapabilityKind>;
 
 /**
  * Capability descriptor used in the vNext handshake.
  *
  * Descriptors are namespaced and explicitly versioned so nodes can advertise
- * stable contracts independently from legacy enum routing keys.
+ * stable contracts independently from legacy capability-kind routing keys.
  */
 export const CapabilityDescriptor = z
   .object({
@@ -68,11 +75,11 @@ export const CapabilityDescriptor = z
 export type CapabilityDescriptor = z.infer<typeof CapabilityDescriptor>;
 
 export function descriptorIdForClientCapability(
-  capability: ClientCapability,
+  capability: CapabilityKind,
 ): LegacyCapabilityDescriptorId {
   return LEGACY_TO_DESCRIPTOR_ID[capability];
 }
 
-export function clientCapabilityFromDescriptorId(id: string): ClientCapability | undefined {
+export function clientCapabilityFromDescriptorId(id: string): CapabilityKind | undefined {
   return DESCRIPTOR_TO_LEGACY[id as LegacyCapabilityDescriptorId];
 }

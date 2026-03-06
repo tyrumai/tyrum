@@ -1,6 +1,7 @@
 export {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   CapabilityDescriptor,
+  CapabilityKind,
   ClientCapability,
   clientCapabilityFromDescriptorId,
   descriptorIdForClientCapability,

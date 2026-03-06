@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { CapabilityKind } from "../src/index.js";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   CapabilityDescriptor,
+  ClientCapability,
   clientCapabilityFromDescriptorId,
   descriptorIdForClientCapability,
 } from "../src/capability.js";
@@ -44,6 +46,11 @@ describe("CapabilityDescriptor", () => {
 });
 
 describe("descriptor legacy mappings", () => {
+  it("exports CapabilityKind as the legacy compatibility alias", () => {
+    expect(CapabilityKind).toBe(ClientCapability);
+    expect(CapabilityKind.parse("http")).toBe("http");
+  });
+
   it("maps core client capability to namespaced ID", () => {
     expect(descriptorIdForClientCapability("cli")).toBe("tyrum.cli");
   });
