@@ -297,6 +297,16 @@ function sampleAgentStatusResponse() {
         max_messages: 32,
         tool_prune_keep_last_messages: 4,
       },
+      loop_detection: {
+        within_turn: {
+          consecutive_repeat_limit: 2,
+          cycle_repeat_limit: 3,
+        },
+        cross_turn: {
+          window_assistant_messages: 8,
+          similarity_threshold: 0.92,
+        },
+      },
     },
   } as const;
 }

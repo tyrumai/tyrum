@@ -15,6 +15,7 @@ import { AdminHttpRoutingConfigPanel } from "./admin-http-routing-config.js";
 import { AdminHttpSecretsPanel } from "./admin-http-secrets.js";
 import { AdminWsCommandPanel } from "./admin-ws-command-panel.js";
 import { ConfigureGeneralPanel } from "./configure-general-panel.js";
+import { ThemeProvider, useThemeOptional } from "../../hooks/use-theme.js";
 
 export interface ConfigurePageProps {
   core: OperatorCore;
@@ -45,7 +46,7 @@ function ReadOnlyNotice({ onEnterElevatedMode }: { onEnterElevatedMode: () => vo
   );
 }
 
-export function ConfigurePage({ core }: ConfigurePageProps) {
+function ConfigurePageContent({ core }: ConfigurePageProps) {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const [activeTab, setActiveTab] = useState("general");
   const showReadOnlyNotice = !canMutate && activeTab !== "general";
@@ -138,4 +139,10 @@ export function ConfigurePage({ core }: ConfigurePageProps) {
       </Tabs>
     </div>
   );
+}
+
+export function ConfigurePage(props: ConfigurePageProps) {
+  const existingTheme = useThemeOptional();
+  const page = <ConfigurePageContent {...props} />;
+  return existingTheme ? page : <ThemeProvider>{page}</ThemeProvider>;
 }

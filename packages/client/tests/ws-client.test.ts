@@ -1787,7 +1787,7 @@ describe("TyrumClient", () => {
     expect(searchRes.v).toBe(1);
     expect(searchRes.hits[0].memory_item_id).toBe(noteItem.memory_item_id);
 
-    const listPayload = { v: 1, limit: 1 };
+    const listPayload = { v: 1, agent_id: "agent-2", limit: 1 };
     const listRes = await expectMemoryRequest(
       () => client!.memoryList(listPayload),
       "memory.list",
