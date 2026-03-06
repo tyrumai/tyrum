@@ -4,6 +4,7 @@ import type {
   WsRequestEnvelope as WsRequestEnvelopeT,
 } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
+import type { WsBroadcastAudience } from "../../../ws/audience.js";
 import { enqueueWsBroadcastMessage } from "../../../ws/outbox.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { normalizeDbDateTime } from "../../../utils/db-time.js";
@@ -17,17 +18,23 @@ export class ExecutionEngineEventEmitter {
     tx: SqlDb,
     tenantId: string,
     message: WsEventEnvelopeT | WsRequestEnvelopeT,
+    audience?: WsBroadcastAudience,
   ): Promise<void> {
     if (!this.opts.eventsEnabled) return;
     const normalizedTenantId = tenantId.trim();
     if (normalizedTenantId.length === 0) {
       throw new Error("tenantId is required");
     }
-    await enqueueWsBroadcastMessage(tx, normalizedTenantId, message);
+    await enqueueWsBroadcastMessage(tx, normalizedTenantId, message, audience);
   }
 
-  async enqueueWsEvent(tx: SqlDb, tenantId: string, evt: WsEventEnvelopeT): Promise<void> {
-    await this.enqueueWsMessage(tx, tenantId, evt);
+  async enqueueWsEvent(
+    tx: SqlDb,
+    tenantId: string,
+    evt: WsEventEnvelopeT,
+    audience?: WsBroadcastAudience,
+  ): Promise<void> {
+    await this.enqueueWsMessage(tx, tenantId, evt, audience);
   }
 
   private async resolveTenantIdForRunIdTx(tx: SqlDb, runId: string): Promise<string | null> {

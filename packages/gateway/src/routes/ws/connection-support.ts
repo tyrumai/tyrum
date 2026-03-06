@@ -7,13 +7,10 @@ import {
   type WsPeerRole,
 } from "@tyrum/schemas";
 import type { PresenceRow } from "../../modules/presence/dal.js";
-import type { WsBroadcastAudience } from "../../ws/audience.js";
+import { PAIRING_WS_AUDIENCE } from "../../ws/audience.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 
-export const PAIRING_REQUESTED_AUDIENCE: WsBroadcastAudience = {
-  roles: ["client"],
-  required_scopes: ["operator.pairing"],
-};
+export const PAIRING_REQUESTED_AUDIENCE = PAIRING_WS_AUDIENCE;
 
 export interface PendingInit {
   protocolRev: number;

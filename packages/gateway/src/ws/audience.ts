@@ -7,6 +7,25 @@ export type WsBroadcastAudience = {
   required_scopes?: string[];
 };
 
+export const OPERATOR_WS_AUDIENCE = {
+  roles: ["client"],
+} as const satisfies WsBroadcastAudience;
+
+export const APPROVAL_WS_AUDIENCE = {
+  roles: ["client"],
+  required_scopes: ["operator.approvals"],
+} as const satisfies WsBroadcastAudience;
+
+export const PAIRING_WS_AUDIENCE = {
+  roles: ["client"],
+  required_scopes: ["operator.pairing"],
+} as const satisfies WsBroadcastAudience;
+
+export const POLICY_WS_AUDIENCE = {
+  roles: ["client"],
+  required_scopes: ["operator.admin"],
+} as const satisfies WsBroadcastAudience;
+
 export function shouldDeliverToWsAudience(
   client: { role: string; auth_claims?: AuthTokenClaims },
   audience: WsBroadcastAudience | undefined,

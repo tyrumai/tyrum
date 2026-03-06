@@ -11,6 +11,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Hono } from "hono";
 import type { GatewayContainer } from "../../container.js";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
+import { OPERATOR_WS_AUDIENCE } from "../../ws/audience.js";
+import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
 import {
   parsePluginLockFile,
   pluginIntegritySha256Hex,
@@ -1218,11 +1220,7 @@ export class PluginRegistry {
             },
           };
 
-          await tx.run(
-            `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
-             VALUES (?, ?, ?, ?)`,
-            [DEFAULT_TENANT_ID, "ws.broadcast", null, JSON.stringify({ message: evt })],
-          );
+          await enqueueWsBroadcastMessage(tx, DEFAULT_TENANT_ID, evt, OPERATOR_WS_AUDIENCE);
         },
       );
     } catch (err) {
@@ -1313,11 +1311,7 @@ export class PluginRegistry {
             },
           };
 
-          await tx.run(
-            `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
-             VALUES (?, ?, ?, ?)`,
-            [DEFAULT_TENANT_ID, "ws.broadcast", null, JSON.stringify({ message: evt })],
-          );
+          await enqueueWsBroadcastMessage(tx, DEFAULT_TENANT_ID, evt, OPERATOR_WS_AUDIENCE);
         },
       );
     } catch (err) {

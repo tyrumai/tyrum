@@ -1,11 +1,7 @@
 import type { WsRequestEnvelope } from "@tyrum/schemas";
 import { hasAnyRequiredScope } from "../../modules/auth/scopes.js";
+import { APPROVAL_WS_AUDIENCE } from "../audience.js";
 import type { ProtocolDeps } from "./types.js";
-
-const APPROVAL_WS_AUDIENCE = {
-  roles: ["client"],
-  required_scopes: ["operator.approvals"],
-} as const;
 
 /**
  * Send an approval.request to the first connected operator client.

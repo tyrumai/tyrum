@@ -134,6 +134,18 @@ function waitForJsonMessageMatching(
   });
 }
 
+function recordJsonMessages(ws: WebSocket): Array<Record<string, unknown>> {
+  const messages: Array<Record<string, unknown>> = [];
+  ws.on("message", (data) => {
+    try {
+      messages.push(JSON.parse(String(data)) as Record<string, unknown>);
+    } catch {
+      // ignore malformed frames
+    }
+  });
+  return messages;
+}
+
 async function createAuthTokens(tyrumHome: string): Promise<{
   container: GatewayContainer;
   authTokens: AuthTokenService;
@@ -1029,6 +1041,9 @@ describe("WS handler integration", () => {
     expect(pairing).toBeDefined();
     expect(pairing!.status).toBe("pending");
 
+    const operatorMessages = recordJsonMessages(operator);
+    const nodeMessages = recordJsonMessages(node);
+
     operator.send(
       JSON.stringify({
         request_id: "r-approve",
@@ -1062,6 +1077,12 @@ describe("WS handler integration", () => {
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       },
     ]);
+    await waitForCondition(
+      () => operatorMessages.some((msg) => msg["type"] === "pairing.resolved"),
+      { description: "operator pairing.resolved event" },
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    expect(nodeMessages.some((msg) => msg["type"] === "pairing.resolved")).toBe(false);
 
     stopHeartbeat();
   });

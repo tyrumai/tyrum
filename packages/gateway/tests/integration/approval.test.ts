@@ -302,4 +302,71 @@ describe("Approval routes (with DAL access)", () => {
       type: "approval.resolved",
     });
   });
+
+  it("broadcasts approval.resolved to operator clients but not nodes", async () => {
+    const approval = await container.approvalDal.create({
+      ...approvalScope,
+      approvalKey: "approval-test-node-audience",
+      prompt: "Approve?",
+    });
+
+    const connectionManager = new ConnectionManager();
+    const operatorWs = createMockWs();
+    const nodeWs = createMockWs();
+    connectionManager.addClient(operatorWs as never, ["cli"] as never, {
+      id: "operator-client",
+      role: "client",
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-operator",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+    connectionManager.addClient(nodeWs as never, ["cli"] as never, {
+      id: "node-client",
+      role: "node",
+      authClaims: {
+        token_kind: "admin",
+        token_id: "token-node",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+
+    const approvalApp = new (await import("hono")).Hono();
+    approvalApp.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      return await next();
+    });
+    approvalApp.route(
+      "/",
+      createApprovalRoutes({
+        approvalDal: container.approvalDal,
+        logger: container.logger,
+        ws: { connectionManager },
+      }),
+    );
+
+    const res = await approvalApp.request(`/approvals/${String(approval.approval_id)}/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision: "approved", reason: "looks safe" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(operatorWs.send).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(operatorWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
+      type: "approval.resolved",
+    });
+    expect(nodeWs.send).not.toHaveBeenCalled();
+  });
 });

@@ -18,6 +18,11 @@ import { toApprovalContract } from "../modules/approval/to-contract.js";
 import { isSafeSuggestedOverridePattern } from "../modules/policy/override-guardrails.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import { requireTenantId } from "../modules/auth/claims.js";
+import {
+  APPROVAL_WS_AUDIENCE,
+  POLICY_WS_AUDIENCE,
+  type WsBroadcastAudience,
+} from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
 import {
   ensureApprovalResolvedEvent,
@@ -47,10 +52,15 @@ export interface ApprovalRouteDeps {
   };
 }
 
-function emitEvent(deps: ApprovalRouteDeps, tenantId: string, evt: WsEventEnvelope): void {
+function emitEvent(
+  deps: ApprovalRouteDeps,
+  tenantId: string,
+  evt: WsEventEnvelope,
+  audience: WsBroadcastAudience,
+): void {
   const ws = deps.ws;
   if (!ws) return;
-  broadcastWsEvent(tenantId, evt, { ...ws, logger: deps.logger });
+  broadcastWsEvent(tenantId, evt, { ...ws, logger: deps.logger }, audience);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -309,9 +319,10 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
         const persistedEvent = await ensurePolicyOverrideCreatedEvent({
           tenantId,
           override: row,
+          audience: POLICY_WS_AUDIENCE,
           wsEventDal: deps.wsEventDal,
         });
-        emitEvent(deps, tenantId, persistedEvent.event);
+        emitEvent(deps, tenantId, persistedEvent.event, POLICY_WS_AUDIENCE);
       }
     }
 
@@ -322,7 +333,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
         approval: contract,
         wsEventDal: deps.wsEventDal,
       });
-      emitEvent(deps, tenantId, approvalResolvedEvt.event);
+      emitEvent(deps, tenantId, approvalResolvedEvt.event, APPROVAL_WS_AUDIENCE);
     }
 
     return c.json({

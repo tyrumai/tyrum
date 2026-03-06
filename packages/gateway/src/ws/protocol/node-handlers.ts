@@ -11,6 +11,7 @@ import type {
   NodePairingRequest as NodePairingRequestT,
   WsResponseEnvelope,
 } from "@tyrum/schemas";
+import { PAIRING_WS_AUDIENCE } from "../audience.js";
 import { emitPairingApprovedEvent } from "../pairing-approved.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { ensurePairingResolvedEvent } from "../stable-events.js";
@@ -99,7 +100,7 @@ async function handlePairingMessage(
     pairing: resolved.pairing,
     wsEventDal: deps.wsEventDal,
   });
-  broadcastEvent(tenantId, persistedEvent.event, deps, persistedEvent.audience);
+  broadcastEvent(tenantId, persistedEvent.event, deps, PAIRING_WS_AUDIENCE);
   const result = WsPairingResolveResult.parse({ pairing: resolved.pairing });
   return { request_id: msg.request_id, type: msg.type, ok: true, result };
 }

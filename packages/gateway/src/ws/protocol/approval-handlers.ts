@@ -10,6 +10,7 @@ import type { Approval as ApprovalT, WsResponseEnvelope } from "@tyrum/schemas";
 import type { ApprovalRow } from "../../modules/approval/dal.js";
 import { toApprovalContract } from "../../modules/approval/to-contract.js";
 import { isSafeSuggestedOverridePattern } from "../../modules/policy/override-guardrails.js";
+import { APPROVAL_WS_AUDIENCE, POLICY_WS_AUDIENCE } from "../audience.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { ensureApprovalResolvedEvent, ensurePolicyOverrideCreatedEvent } from "../stable-events.js";
 import { broadcastEvent, errorResponse } from "./helpers.js";
@@ -273,7 +274,7 @@ async function finalizeApprovalResolve(params: {
       approval,
       wsEventDal: deps.wsEventDal,
     });
-    broadcastEvent(tenantId, persistedEvent.event, deps, persistedEvent.audience);
+    broadcastEvent(tenantId, persistedEvent.event, deps, APPROVAL_WS_AUDIENCE);
   }
   return { request_id: msg.request_id, type: msg.type, ok: true, result };
 }
@@ -442,9 +443,10 @@ async function createPolicyOverrides(params: {
     const persistedEvent = await ensurePolicyOverrideCreatedEvent({
       tenantId,
       override: row,
+      audience: POLICY_WS_AUDIENCE,
       wsEventDal: deps.wsEventDal,
     });
-    broadcastEvent(tenantId, persistedEvent.event, deps, persistedEvent.audience);
+    broadcastEvent(tenantId, persistedEvent.event, deps, POLICY_WS_AUDIENCE);
   }
 
   return createdOverrides;
