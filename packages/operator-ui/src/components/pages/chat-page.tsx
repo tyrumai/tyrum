@@ -79,7 +79,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
   const activeTurns = active?.turns ?? [];
 
   return (
-    <div className="grid gap-6" data-testid="chat-page">
+    <div className="flex h-full min-h-0 flex-col gap-6" data-testid="chat-page">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight text-fg">Chat</h1>
         <div className="flex flex-wrap items-center gap-2">
@@ -124,8 +124,11 @@ export function ChatPage({ core }: { core: OperatorCore }) {
         />
       ) : null}
 
-      <div className="grid gap-6 md:grid-cols-[320px_1fr]">
-        <Card className="flex min-h-[32rem] flex-col">
+      <div
+        className="grid min-h-0 flex-1 gap-6 grid-rows-[minmax(0,2fr)_minmax(0,3fr)] md:grid-cols-[320px_minmax(0,1fr)] md:grid-rows-1"
+        data-testid="chat-panels"
+      >
+        <Card className="flex h-full min-h-0 flex-col" data-testid="chat-threads-panel">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-medium text-fg-muted">Threads</div>
@@ -143,7 +146,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
             </div>
           </CardHeader>
           <Separator />
-          <CardContent className="flex-1 overflow-hidden">
+          <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
             {chat.sessions.error ? (
               <Alert
                 variant="error"
@@ -151,51 +154,53 @@ export function ChatPage({ core }: { core: OperatorCore }) {
                 description={chat.sessions.error.message}
               />
             ) : null}
-            {chat.sessions.loading && threads.length === 0 ? (
-              <div className="text-sm text-fg-muted">Loading…</div>
-            ) : threads.length === 0 ? (
-              <div className="text-sm text-fg-muted">No chats yet.</div>
-            ) : (
-              <ScrollArea className="h-full">
-                <div className="grid gap-2 pr-3">
-                  {threads.map((session) => {
-                    const isActive = chat.active.sessionId === session.session_id;
-                    return (
-                      <button
-                        key={session.session_id}
-                        type="button"
-                        data-testid={`chat-thread-${session.session_id}`}
-                        data-active={isActive ? "true" : undefined}
-                        className={cn(
-                          "w-full rounded-xl border px-3 py-2 text-left transition-colors",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-                          isActive
-                            ? "border-border bg-bg-subtle/80"
-                            : "border-border/50 bg-bg-card/40 hover:bg-bg-card/60",
-                        )}
-                        onClick={() => {
-                          void core.chatStore.openSession(session.session_id);
-                        }}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-medium text-fg">
-                              {session.title}
+            <div className="min-h-0 flex-1 overflow-hidden">
+              {chat.sessions.loading && threads.length === 0 ? (
+                <div className="text-sm text-fg-muted">Loading…</div>
+              ) : threads.length === 0 ? (
+                <div className="text-sm text-fg-muted">No chats yet.</div>
+              ) : (
+                <ScrollArea className="h-full">
+                  <div className="grid gap-2 pr-3">
+                    {threads.map((session) => {
+                      const isActive = chat.active.sessionId === session.session_id;
+                      return (
+                        <button
+                          key={session.session_id}
+                          type="button"
+                          data-testid={`chat-thread-${session.session_id}`}
+                          data-active={isActive ? "true" : undefined}
+                          className={cn(
+                            "w-full rounded-xl border px-3 py-2 text-left transition-colors",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+                            isActive
+                              ? "border-border bg-bg-subtle/80"
+                              : "border-border/50 bg-bg-card/40 hover:bg-bg-card/60",
+                          )}
+                          onClick={() => {
+                            void core.chatStore.openSession(session.session_id);
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium text-fg">
+                                {session.title}
+                              </div>
+                              <div className="mt-1 truncate text-xs text-fg-muted">
+                                {session.preview || "—"}
+                              </div>
                             </div>
-                            <div className="mt-1 truncate text-xs text-fg-muted">
-                              {session.preview || "—"}
+                            <div className="shrink-0 text-xs text-fg-muted">
+                              {formatRelativeTime(session.updated_at)}
                             </div>
                           </div>
-                          <div className="shrink-0 text-xs text-fg-muted">
-                            {formatRelativeTime(session.updated_at)}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-            )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
           </CardContent>
           <CardFooter className="justify-between gap-2">
             <Button
@@ -213,7 +218,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
           </CardFooter>
         </Card>
 
-        <Card className="flex min-h-[32rem] flex-col">
+        <Card className="flex h-full min-h-0 flex-col" data-testid="chat-conversation-panel">
           <CardHeader className="pb-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
@@ -223,17 +228,6 @@ export function ChatPage({ core }: { core: OperatorCore }) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  data-testid="chat-compact"
-                  disabled={!active || chat.active.loading}
-                  onClick={() => {
-                    void core.chatStore.compactActive();
-                  }}
-                >
-                  Compact
-                </Button>
                 <Button
                   size="sm"
                   variant="danger"
@@ -249,7 +243,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
             </div>
           </CardHeader>
           <Separator />
-          <CardContent className="flex-1 overflow-hidden">
+          <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
             {chat.active.error ? (
               <Alert
                 variant="error"
@@ -257,36 +251,38 @@ export function ChatPage({ core }: { core: OperatorCore }) {
                 description={chat.active.error.message}
               />
             ) : null}
-            <ScrollArea className="h-full" data-testid="chat-transcript">
-              <div className="grid gap-3 pr-3">
-                {activeTurns.length === 0 ? (
-                  <div className="text-sm text-fg-muted">
-                    {active ? "No messages yet." : "Pick a thread or start a new chat."}
-                  </div>
-                ) : (
-                  activeTurns.map((turn, index) => {
-                    const isUser = turn.role === "user";
-                    return (
-                      <div
-                        key={`${turn.role}-${index}`}
-                        className={cn("flex", isUser ? "justify-end" : "justify-start")}
-                      >
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <ScrollArea className="h-full" data-testid="chat-transcript">
+                <div className="grid gap-3 pr-3">
+                  {activeTurns.length === 0 ? (
+                    <div className="text-sm text-fg-muted">
+                      {active ? "No messages yet." : "Pick a thread or start a new chat."}
+                    </div>
+                  ) : (
+                    activeTurns.map((turn, index) => {
+                      const isUser = turn.role === "user";
+                      return (
                         <div
-                          className={cn(
-                            "max-w-[85%] rounded-2xl border px-4 py-3 text-sm whitespace-pre-wrap",
-                            isUser
-                              ? "border-border bg-bg-subtle/80 text-fg"
-                              : "border-border/50 bg-bg-card/40 text-fg",
-                          )}
+                          key={`${turn.role}-${index}`}
+                          className={cn("flex", isUser ? "justify-end" : "justify-start")}
                         >
-                          {turn.content}
+                          <div
+                            className={cn(
+                              "max-w-[85%] rounded-2xl border px-4 py-3 text-sm whitespace-pre-wrap",
+                              isUser
+                                ? "border-border bg-bg-subtle/80 text-fg"
+                                : "border-border/50 bg-bg-card/40 text-fg",
+                            )}
+                          >
+                            {turn.content}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </ScrollArea>
+                      );
+                    })
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
           </CardContent>
           <Separator />
           <CardFooter className="flex-col items-stretch gap-3">

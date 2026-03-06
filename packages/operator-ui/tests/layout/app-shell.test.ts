@@ -34,4 +34,44 @@ describe("AppShell", () => {
 
     cleanupTestRoot({ container, root });
   });
+
+  it.each([
+    { mode: "desktop", expectedHeightClass: "h-screen" },
+    { mode: "web", expectedHeightClass: "h-dvh" },
+  ] as const)(
+    "supports viewportLocked content in $mode mode without forwarding props to the DOM",
+    ({ mode, expectedHeightClass }) => {
+      const AppShell = (operatorUi as Record<string, unknown>)["AppShell"];
+      expect(AppShell).toBeDefined();
+
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const { container, root } = renderIntoDocument(
+        React.createElement(
+          AppShell as React.ComponentType,
+          {
+            mode,
+            viewportLocked: true,
+            sidebar: React.createElement("div", { "data-testid": "sidebar" }),
+            mobileNav: React.createElement("div", { "data-testid": "mobile-nav" }),
+          },
+          React.createElement("div", { "data-testid": "content" }),
+        ),
+      );
+
+      const outer = container.firstElementChild as HTMLDivElement | null;
+      const main = container.querySelector("main");
+      const contentWrapper = container.querySelector("main > div");
+
+      expect(consoleError).not.toHaveBeenCalled();
+      expect(outer?.className).toContain(expectedHeightClass);
+      expect(main?.className).toContain("min-h-0");
+      expect(main?.className).toContain("overflow-y-hidden");
+      expect(contentWrapper?.className).toContain("h-full");
+      expect(contentWrapper?.className).toContain("min-h-0");
+      expect(contentWrapper?.className).toContain("overflow-hidden");
+
+      cleanupTestRoot({ container, root });
+    },
+  );
 });
