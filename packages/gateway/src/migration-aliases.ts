@@ -19,6 +19,7 @@ export const MIGRATION_FILENAME_ALIASES: Readonly<Record<string, readonly string
   ],
   "113_provider_model_config.sql": ["108_provider_model_config.sql"],
   "114_provider_model_config_indexes.sql": ["109_provider_model_config_indexes.sql"],
+  "117_ws_events.sql": ["116_ws_events.sql"],
 };
 
 export function findAppliedMigrationAlias(

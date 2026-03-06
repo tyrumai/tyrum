@@ -30,4 +30,10 @@ describe("migration aliases", () => {
       ),
     ).toBe("109_provider_model_config_indexes.sql");
   });
+
+  it("treats the renumbered ws-events migration as already applied", () => {
+    expect(findAppliedMigrationAlias("117_ws_events.sql", new Set(["116_ws_events.sql"]))).toBe(
+      "116_ws_events.sql",
+    );
+  });
 });

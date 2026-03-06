@@ -17,6 +17,9 @@ This document defines naming conventions for StateStore tables and migration SQL
 
 - Use `created_at` / `updated_at` for wall-clock timestamps (`TIMESTAMPTZ` on Postgres; `TEXT` in SQLite).
 - Use `*_at_ms` for millisecond epoch timestamps (`BIGINT` on Postgres; `INTEGER` in SQLite).
+- Treat `updated_at` as a semantic mutation clock for rows that mutate in place.
+- DAL update paths MUST write `updated_at` on every semantic change and MUST leave it unchanged for no-op writes.
+- Prefer compare-and-update DAL helpers over relying on column defaults alone so SQLite and Postgres stay aligned.
 
 ## Migration checklist
 

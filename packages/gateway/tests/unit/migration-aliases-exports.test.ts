@@ -26,4 +26,13 @@ describe("migration-aliases exports", () => {
       ),
     ).toBe("109_approval_engine_actions.sql");
   });
+
+  it("exports the ws-events migration alias", () => {
+    expect(
+      migrationAliases.findAppliedMigrationAlias(
+        "117_ws_events.sql",
+        new Set(["116_ws_events.sql"]),
+      ),
+    ).toBe("116_ws_events.sql");
+  });
 });
