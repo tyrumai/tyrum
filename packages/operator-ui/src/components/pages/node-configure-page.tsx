@@ -32,6 +32,12 @@ interface WebConfig {
   headless: boolean;
 }
 
+interface AllowlistDraftState {
+  browserDomains: string;
+  cliCommands: string;
+  cliWorkingDirs: string;
+}
+
 interface SecurityState {
   profile: Profile;
   overrides: Record<string, boolean>;
@@ -57,7 +63,7 @@ interface MacPermissionSnapshot {
 }
 
 const DEFAULT_PROFILE: Profile = "balanced";
-const DEFAULT_CAPABILITIES = capabilitiesForProfile("safe");
+const DEFAULT_CAPABILITIES = capabilitiesForProfile(DEFAULT_PROFILE);
 const DEFAULT_CLI_CONFIG: CliConfig = { allowedCommands: [], allowedWorkingDirs: [] };
 const DEFAULT_WEB_CONFIG: WebConfig = { allowedDomains: [], headless: true };
 
@@ -256,7 +262,7 @@ function DesktopNodeConfigurePage({
           <AllowlistCard
             title="Browser domain allowlist"
             active={model.browserAllowlistActive}
-            value={joinAllowlistLines(model.security.web.allowedDomains)}
+            value={model.browserDomainsDraft}
             onChange={model.updateBrowserDomains}
             placeholder={"example.com\ndocs.example.com\n*"}
             notes={BROWSER_DOMAIN_NOTES}
@@ -304,7 +310,7 @@ function DesktopNodeConfigurePage({
           <AllowlistCard
             title="Allowed commands"
             active={model.shellAllowlistActive}
-            value={joinAllowlistLines(model.security.cli.allowedCommands)}
+            value={model.cliCommandsDraft}
             onChange={(value) => model.updateCliField("allowedCommands", value)}
             placeholder={"git status\nnode --version\n*"}
             notes={SHELL_COMMAND_NOTES}
@@ -317,7 +323,7 @@ function DesktopNodeConfigurePage({
           <AllowlistCard
             title="Allowed working directories"
             active={model.shellAllowlistActive}
-            value={joinAllowlistLines(model.security.cli.allowedWorkingDirs)}
+            value={model.cliWorkingDirsDraft}
             onChange={(value) => model.updateCliField("allowedWorkingDirs", value)}
             placeholder={"/home/user/projects\n*"}
             notes={SHELL_DIRECTORY_NOTES}
@@ -746,6 +752,11 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
     "accessibility" | "screenRecording" | null
   >(null);
   const [macPermissionError, setMacPermissionError] = useState<string | null>(null);
+  const [allowlistDrafts, setAllowlistDrafts] = useState<AllowlistDraftState>({
+    browserDomains: "",
+    cliCommands: "",
+    cliWorkingDirs: "",
+  });
   const saveResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialSecurityRef = useRef<SecurityState | null>(null);
   const initialConnectionRef = useRef<ConnectionState | null>(null);
@@ -769,6 +780,7 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
         const nextSecurity = readSecurityState(config);
         const nextConnection = readConnectionState(config);
         setSecurity(nextSecurity);
+        setAllowlistDrafts(createAllowlistDraftState(nextSecurity));
         setConnection(nextConnection);
         initialSecurityRef.current = cloneSecurityState(nextSecurity);
         initialConnectionRef.current = cloneConnectionState(nextConnection);
@@ -972,13 +984,18 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
     securityDirty,
     browserAllowlistActive: allowlistMode.web === "active",
     shellAllowlistActive: allowlistMode.cli === "active",
+    browserDomainsDraft: allowlistDrafts.browserDomains,
+    cliCommandsDraft: allowlistDrafts.cliCommands,
+    cliWorkingDirsDraft: allowlistDrafts.cliWorkingDirs,
     macPermissionSummary,
     macPermissionChecking,
     requestingMacPermission,
     macPermissionError,
     applyProfile: (profile: DisplayProfile) => {
       if (profile === "custom") return;
-      setSecurity(createProfilePreset(profile));
+      const nextSecurity = createProfilePreset(profile);
+      setSecurity(nextSecurity);
+      setAllowlistDrafts(createAllowlistDraftState(nextSecurity));
       setGeneralSaved(false);
       setSecuritySaved(false);
     },
@@ -995,6 +1012,10 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
         ...current,
         cli: { ...current.cli, [field]: splitAllowlistLines(value) },
       }));
+      setAllowlistDrafts((current) => ({
+        ...current,
+        [field === "allowedCommands" ? "cliCommands" : "cliWorkingDirs"]: value,
+      }));
       setSecuritySaved(false);
     },
     updateBrowserDomains: (value: string) => {
@@ -1002,6 +1023,7 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
         ...current,
         web: { ...current.web, allowedDomains: splitAllowlistLines(value) },
       }));
+      setAllowlistDrafts((current) => ({ ...current, browserDomains: value }));
       setSecuritySaved(false);
     },
     setBrowserHeadless: (headless: boolean) => {
@@ -1077,7 +1099,7 @@ function readSecurityState(config: unknown): SecurityState {
   return {
     profile,
     overrides,
-    capabilities: capabilities ?? DEFAULT_CAPABILITIES,
+    capabilities: capabilities ?? capabilitiesForProfile(profile),
     cli: cli ? cloneCliConfig(cli) : cloneCliConfig(DEFAULT_CLI_CONFIG),
     web: web ? cloneWebConfig(web) : cloneWebConfig(DEFAULT_WEB_CONFIG),
   };
@@ -1219,6 +1241,14 @@ function cloneWebConfig(config: WebConfig): WebConfig {
   return {
     allowedDomains: [...config.allowedDomains],
     headless: config.headless,
+  };
+}
+
+function createAllowlistDraftState(security: SecurityState): AllowlistDraftState {
+  return {
+    browserDomains: joinAllowlistLines(security.web.allowedDomains),
+    cliCommands: joinAllowlistLines(security.cli.allowedCommands),
+    cliWorkingDirs: joinAllowlistLines(security.cli.allowedWorkingDirs),
   };
 }
 

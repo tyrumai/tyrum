@@ -285,6 +285,102 @@ describe("Platform pages", () => {
     }
   });
 
+  it("preserves trailing newlines while editing allowlists and trims them on save", async () => {
+    const setConfig = vi.fn(async () => {});
+    const desktopApi = {
+      getConfig: vi.fn(async () => ({
+        permissions: { profile: "balanced", overrides: {} },
+        capabilities: { desktop: true, playwright: true, cli: true, http: true },
+        cli: { allowedCommands: [], allowedWorkingDirs: [] },
+        web: { allowedDomains: [], headless: true },
+      })),
+      setConfig,
+      gateway: {
+        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
+        start: vi.fn(async () => ({ status: "running", port: 8788 })),
+        stop: vi.fn(async () => ({ status: "stopped" })),
+      },
+      node: {
+        connect: vi.fn(async () => ({ status: "connected" })),
+        disconnect: vi.fn(async () => ({ status: "disconnected" })),
+      },
+      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
+    } satisfies DesktopApi;
+
+    const testRoot = renderWithHost(
+      { kind: "desktop", api: desktopApi },
+      React.createElement(NodeConfigurePage),
+    );
+    try {
+      await flushEffects();
+
+      await act(async () => {
+        clickTab(testRoot.container, "Shell");
+        await Promise.resolve();
+      });
+
+      const commandsTextarea = getTextareaByLabel(testRoot.container, "Allowed commands");
+      act(() => {
+        setNativeValue(commandsTextarea, "git status\n");
+      });
+
+      expect(commandsTextarea.value).toBe("git status\n");
+
+      await act(async () => {
+        clickByTestId(testRoot.container, "node-configure-save-security");
+        await Promise.resolve();
+      });
+
+      expect(setConfig).toHaveBeenCalledTimes(1);
+      expect(setConfig).toHaveBeenCalledWith({
+        permissions: { profile: "balanced", overrides: {} },
+        capabilities: { desktop: true, playwright: true, cli: true, http: true },
+        cli: {
+          allowedCommands: ["git status"],
+          allowedWorkingDirs: [],
+        },
+        web: { allowedDomains: [], headless: true },
+      });
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("uses the loaded profile defaults when capabilities are missing from config", async () => {
+    const desktopApi = {
+      getConfig: vi.fn(async () => ({
+        permissions: { profile: "balanced", overrides: {} },
+      })),
+      setConfig: vi.fn(async () => {}),
+      gateway: {
+        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
+        start: vi.fn(async () => ({ status: "running", port: 8788 })),
+        stop: vi.fn(async () => ({ status: "stopped" })),
+      },
+      node: {
+        connect: vi.fn(async () => ({ status: "connected" })),
+        disconnect: vi.fn(async () => ({ status: "disconnected" })),
+      },
+      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
+    } satisfies DesktopApi;
+
+    const testRoot = renderWithHost(
+      { kind: "desktop", api: desktopApi },
+      React.createElement(NodeConfigurePage),
+    );
+    try {
+      await flushEffects();
+
+      const balancedRadio = testRoot.container.querySelector<HTMLElement>("#node-profile-balanced");
+      const customRadio = testRoot.container.querySelector<HTMLElement>("#node-profile-custom");
+
+      expect(balancedRadio?.getAttribute("data-state")).toBe("checked");
+      expect(customRadio?.getAttribute("data-state")).toBe("unchecked");
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
   it("saves shell allowlist changes through node settings", async () => {
     const setConfig = vi.fn(async () => {});
     const desktopApi = {
