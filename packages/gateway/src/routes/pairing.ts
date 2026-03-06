@@ -107,7 +107,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     const { pairing, scopedToken } = resolved;
 
     if (scopedToken && deps.ws) {
-      emitPairingApprovedEvent(deps.ws, tenantId, {
+      emitPairingApprovedEvent({ ...deps.ws, logger: deps.logger }, tenantId, {
         pairing,
         nodeId: pairing.node.node_id,
         scopedToken,

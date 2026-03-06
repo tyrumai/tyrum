@@ -146,6 +146,7 @@ describe("Pairing routes", () => {
     const connectionManager = new ConnectionManager();
     const slowNodeWs = createMockWs({ bufferedAmount: 11 });
     const healthyClientWs = createMockWs();
+    const logger = { warn: vi.fn() };
 
     connectionManager.addClient(slowNodeWs as never, ["cli"] as never, {
       id: "slow-node",
@@ -186,7 +187,7 @@ describe("Pairing routes", () => {
     wsApp.route(
       "/",
       createPairingRoutes({
-        logger: { warn: vi.fn() } as never,
+        logger: logger as never,
         nodePairingDal,
         ws: { connectionManager, maxBufferedBytes: 10 },
       }),
@@ -206,6 +207,15 @@ describe("Pairing routes", () => {
     expect(slowNodeWs.send).not.toHaveBeenCalled();
     expect(slowNodeWs.close).toHaveBeenCalledWith(1013, "slow consumer");
     expect(connectionManager.getClient("slow-node")).toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "ws.slow_consumer_evicted",
+      expect.objectContaining({
+        delivery_mode: "local_direct",
+        node_id: "node-1",
+        peer_id: "slow-node",
+        topic: "pairing.approved",
+      }),
+    );
     expect(healthyClientWs.send).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String(healthyClientWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
       type: "pairing.resolved",
