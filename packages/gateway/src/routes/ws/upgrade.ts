@@ -6,6 +6,7 @@ import {
   type TrustedProxyAllowlist,
 } from "../../modules/auth/client-ip.js";
 import type { SlidingWindowRateLimiter } from "../../modules/auth/rate-limiter.js";
+import { requestOffersWsBaseSubprotocol, WS_BASE_PROTOCOL } from "./auth.js";
 
 export interface CreateHandleUpgradeOptions {
   wss: WebSocketServer;
@@ -18,6 +19,9 @@ export function createHandleUpgrade(
 ): (req: IncomingMessage, socket: Duplex, head: Buffer) => void {
   return (req, socket, head) => {
     if (rejectRateLimitedUpgrade(req, socket, opts.upgradeRateLimiter, opts.trustedProxies)) {
+      return;
+    }
+    if (rejectMissingBaseProtocolUpgrade(req, socket)) {
       return;
     }
 
@@ -62,6 +66,33 @@ function rejectRateLimitedUpgrade(
     socket.destroy();
   } catch (err) {
     void err;
+  }
+
+  return true;
+}
+
+function rejectMissingBaseProtocolUpgrade(req: IncomingMessage, socket: Duplex): boolean {
+  if (requestOffersWsBaseSubprotocol(req)) return false;
+
+  const body = `Missing required WebSocket subprotocol: ${WS_BASE_PROTOCOL}\n`;
+  const response = [
+    "HTTP/1.1 400 Bad Request",
+    "Connection: close",
+    "Content-Type: text/plain; charset=utf-8",
+    `Content-Length: ${String(Buffer.byteLength(body))}`,
+    "",
+    body,
+  ].join("\r\n");
+
+  try {
+    socket.end(response);
+  } catch (err) {
+    void err;
+    try {
+      socket.destroy();
+    } catch (destroyErr) {
+      void destroyErr;
+    }
   }
 
   return true;

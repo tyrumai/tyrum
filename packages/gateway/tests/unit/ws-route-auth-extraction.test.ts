@@ -83,8 +83,6 @@ describe("WS route auth extraction", () => {
       selectWsSubprotocol(new Set(["tyrum-auth.ignored", "custom-protocol", "tyrum-v1"])),
     ).toBe("tyrum-v1");
 
-    expect(selectWsSubprotocol(new Set(["tyrum-auth.ignored", "custom-protocol"]))).toBe(
-      "custom-protocol",
-    );
+    expect(selectWsSubprotocol(new Set(["tyrum-auth.ignored", "custom-protocol"]))).toBe(false);
   });
 });

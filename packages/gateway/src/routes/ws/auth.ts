@@ -5,7 +5,7 @@ import { toSingleHeaderValue } from "../../modules/auth/client-ip.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "../../modules/auth/http.js";
 import type { NodePairingDal } from "../../modules/node/pairing-dal.js";
 
-const WS_BASE_PROTOCOL = "tyrum-v1";
+export const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
 
 export type WsTokenTransport = "authorization" | "cookie" | "subprotocol" | "missing";
@@ -172,13 +172,12 @@ export function extractWsTokenWithTransport(req: IncomingMessage): WsTokenInfo {
   return { token: undefined, transport: "missing" };
 }
 
+export function requestOffersWsBaseSubprotocol(req: IncomingMessage): boolean {
+  return parseProtocolHeader(req.headers["sec-websocket-protocol"]).includes(WS_BASE_PROTOCOL);
+}
+
 export function selectWsSubprotocol(protocols: Set<string>): string | false {
   if (protocols.has(WS_BASE_PROTOCOL)) return WS_BASE_PROTOCOL;
-  for (const protocol of protocols) {
-    if (!protocol.startsWith(WS_AUTH_PROTOCOL_PREFIX)) {
-      return protocol;
-    }
-  }
   return false;
 }
 

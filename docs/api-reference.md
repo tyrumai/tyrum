@@ -992,7 +992,8 @@ When gateway auth is enabled, the `/ws` upgrade requires a valid token, provided
 - `Authorization: Bearer <token>` header
 - Cookie `tyrum_admin_token=<token>` (same-origin upgrades only)
 - `Sec-WebSocket-Protocol` token transport:
-  - Offer subprotocols including `tyrum-v1` and `tyrum-auth.<base64url(token)>`
+  - Every client MUST offer `tyrum-v1`
+  - Clients using subprotocol token transport additionally offer `tyrum-auth.<base64url(token)>`
 
 ### Handshake (connect.init / connect.proof)
 
