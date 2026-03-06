@@ -68,7 +68,8 @@ interface MacPermissionSnapshot {
 }
 
 const DEFAULT_PROFILE: Profile = "balanced";
-const DEFAULT_CAPABILITIES = capabilitiesForProfile(DEFAULT_PROFILE);
+// Preserve the historical restrictive fallback until the stored config provides capabilities.
+const DEFAULT_CAPABILITIES = capabilitiesForProfile("safe");
 const DEFAULT_CLI_CONFIG: CliConfig = { allowedCommands: [], allowedWorkingDirs: [] };
 const DEFAULT_WEB_CONFIG: WebConfig = { allowedDomains: [], headless: true };
 
@@ -1122,7 +1123,7 @@ function readSecurityState(config: unknown): SecurityState {
   return {
     profile,
     overrides,
-    capabilities: capabilities ?? capabilitiesForProfile(profile),
+    capabilities: capabilities ?? DEFAULT_CAPABILITIES,
     cli: cli ? cloneCliConfig(cli) : cloneCliConfig(DEFAULT_CLI_CONFIG),
     web: web ? cloneWebConfig(web) : cloneWebConfig(DEFAULT_WEB_CONFIG),
   };

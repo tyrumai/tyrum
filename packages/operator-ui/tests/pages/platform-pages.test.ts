@@ -422,7 +422,7 @@ describe("Platform pages", () => {
     }
   });
 
-  it("uses the loaded profile defaults when capabilities are missing from config", async () => {
+  it("preserves the restrictive fallback when capabilities are missing from config", async () => {
     const desktopApi = {
       getConfig: vi.fn(async () => ({
         permissions: { profile: "balanced", overrides: {} },
@@ -449,9 +449,61 @@ describe("Platform pages", () => {
 
       const balancedRadio = testRoot.container.querySelector<HTMLElement>("#node-profile-balanced");
       const customRadio = testRoot.container.querySelector<HTMLElement>("#node-profile-custom");
+      const desktopTab = Array.from(
+        testRoot.container.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+      ).find((element) => element.textContent?.includes("Desktop"));
+      const browserTab = Array.from(
+        testRoot.container.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+      ).find((element) => element.textContent?.includes("Browser"));
+      const shellTab = Array.from(
+        testRoot.container.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+      ).find((element) => element.textContent?.includes("Shell"));
+      const webTab = Array.from(
+        testRoot.container.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+      ).find((element) => element.textContent?.includes("Web"));
 
-      expect(balancedRadio?.getAttribute("data-state")).toBe("checked");
-      expect(customRadio?.getAttribute("data-state")).toBe("unchecked");
+      expect(balancedRadio?.getAttribute("data-state")).toBe("unchecked");
+      expect(customRadio?.getAttribute("data-state")).toBe("checked");
+
+      await act(async () => {
+        desktopTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+        await Promise.resolve();
+      });
+      expect(
+        testRoot.container
+          .querySelector<HTMLButtonElement>('[data-testid="node-capability-desktop"]')
+          ?.getAttribute("aria-checked"),
+      ).toBe("true");
+
+      await act(async () => {
+        browserTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+        await Promise.resolve();
+      });
+      expect(
+        testRoot.container
+          .querySelector<HTMLButtonElement>('[data-testid="node-capability-browser"]')
+          ?.getAttribute("aria-checked"),
+      ).toBe("false");
+
+      await act(async () => {
+        shellTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+        await Promise.resolve();
+      });
+      expect(
+        testRoot.container
+          .querySelector<HTMLButtonElement>('[data-testid="node-capability-shell"]')
+          ?.getAttribute("aria-checked"),
+      ).toBe("false");
+
+      await act(async () => {
+        webTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+        await Promise.resolve();
+      });
+      expect(
+        testRoot.container
+          .querySelector<HTMLButtonElement>('[data-testid="node-capability-web"]')
+          ?.getAttribute("aria-checked"),
+      ).toBe("false");
     } finally {
       cleanupTestRoot(testRoot);
     }
