@@ -2,7 +2,7 @@
 
 This note records the current decision for the reference columns called out by the FK audit in issue `#974`.
 
-The migration pair `packages/gateway/migrations/sqlite/110_fk_audit_policy_approval_refs.sql` and `packages/gateway/migrations/postgres/110_fk_audit_policy_approval_refs.sql` is the implementation source of truth for the enforced subset.
+The migration pair `packages/gateway/migrations/sqlite/111_fk_audit_policy_approval_refs.sql` and `packages/gateway/migrations/postgres/111_fk_audit_policy_approval_refs.sql` is the implementation source of truth for the enforced subset.
 
 ## Matrix
 

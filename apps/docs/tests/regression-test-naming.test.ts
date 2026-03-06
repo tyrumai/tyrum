@@ -10,6 +10,7 @@ const renamedRegressionTests = [
   { file: "api-reference-docs.test.ts", issue: "Issue #842" },
   { file: "desktop-docs.test.ts", issue: "Issue #841" },
   { file: "memory-operator-workflows-docs.test.ts", issue: "Issue #666" },
+  { file: "test-conventions-docs.test.ts", issue: "Issue #998" },
   { file: "ui-bootstrap-and-auth-docs.test.ts", issue: "Issue #568" },
 ];
 

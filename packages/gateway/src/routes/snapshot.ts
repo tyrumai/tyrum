@@ -258,13 +258,18 @@ function prepareApprovalImportWithDeferredExecutionRefs(data: SnapshotTableT): {
         return sanitizedRow;
       }),
     },
-    deferredPatches: data.rows.map((row) => ({
-      tenantId: rowValue(row, "tenant_id"),
-      approvalId: rowValue(row, "approval_id"),
-      runId: rowValue(row, "run_id"),
-      stepId: rowValue(row, "step_id"),
-      attemptId: rowValue(row, "attempt_id"),
-    })),
+    deferredPatches: data.rows.flatMap((row) => {
+      const patch = {
+        tenantId: rowValue(row, "tenant_id"),
+        approvalId: rowValue(row, "approval_id"),
+        runId: rowValue(row, "run_id"),
+        stepId: rowValue(row, "step_id"),
+        attemptId: rowValue(row, "attempt_id"),
+      };
+      return patch.runId === null && patch.stepId === null && patch.attemptId === null
+        ? []
+        : [patch];
+    }),
   };
 }
 

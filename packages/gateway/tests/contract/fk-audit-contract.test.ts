@@ -1063,10 +1063,10 @@ describe("FK audit contract", () => {
 
   it("normalizes legacy orphaned refs during sqlite upgrades", () => {
     const sqlite = createDatabase(":memory:");
-    const pre110Dir = copyMigrationsBefore(sqliteMigrationsDir, "110_");
+    const pre111Dir = copyMigrationsBefore(sqliteMigrationsDir, "111_");
 
     try {
-      migrate(sqlite, pre110Dir);
+      migrate(sqlite, pre111Dir);
       seedSqliteScope(sqlite);
       seedSqliteLegacyOrphans(sqlite);
 
@@ -1103,7 +1103,7 @@ describe("FK audit contract", () => {
         .get(ids.tenantId, "fk-audit:legacy-outbox") as { approval_id: string | null } | undefined;
       expect(outbox).toEqual({ approval_id: null });
     } finally {
-      rmSync(pre110Dir, { recursive: true, force: true });
+      rmSync(pre111Dir, { recursive: true, force: true });
       sqlite.close();
     }
   });
@@ -1112,11 +1112,11 @@ describe("FK audit contract", () => {
     const mem = createPgMemDb();
     const { Client } = mem.adapters.createPg();
     const pg = new Client();
-    const pre110Dir = copyMigrationsBefore(postgresMigrationsDir, "110_");
+    const pre111Dir = copyMigrationsBefore(postgresMigrationsDir, "111_");
     await pg.connect();
 
     try {
-      await migratePostgres(pg, pre110Dir);
+      await migratePostgres(pg, pre111Dir);
       await seedPostgresScope(pg);
       await seedPostgresLegacyOrphans(pg);
 
@@ -1125,7 +1125,7 @@ describe("FK audit contract", () => {
       await applyPostgresMigration(
         pg,
         postgresMigrationsDir,
-        "110_fk_audit_policy_approval_refs.sql",
+        "111_fk_audit_policy_approval_refs.sql",
       );
 
       const approvalRes = await pg.query(
@@ -1156,7 +1156,7 @@ describe("FK audit contract", () => {
       );
       expect(outboxRes.rows[0]).toMatchObject({ approval_id: null });
     } finally {
-      rmSync(pre110Dir, { recursive: true, force: true });
+      rmSync(pre111Dir, { recursive: true, force: true });
       await pg.end();
     }
   });

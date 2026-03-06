@@ -24,6 +24,10 @@ type SeedExecutionRunParams = {
   latestRunId?: string | null;
 };
 
+type SeedApprovalLinkedExecutionRunParams = Omit<SeedExecutionRunParams, "jobId"> & {
+  jobId?: string;
+};
+
 export async function seedPausedExecutionRun({
   db,
   tenantId = DEFAULT_TENANT_ID,
@@ -85,4 +89,16 @@ export async function seedPausedExecutionRun({
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [tenantId, runId, jobId, key, lane, runStatus, attempt, pausedReason, pausedDetail],
   );
+}
+
+export async function seedApprovalLinkedExecutionRun({
+  jobId,
+  runId,
+  ...params
+}: SeedApprovalLinkedExecutionRunParams): Promise<void> {
+  await seedPausedExecutionRun({
+    ...params,
+    jobId: jobId ?? `job-${runId}`,
+    runId,
+  });
 }

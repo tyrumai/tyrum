@@ -5,6 +5,7 @@ import { handleClientMessage } from "../../src/ws/protocol/handler.js";
 import { serializeWsRequest } from "../helpers/ws-protocol-test-helpers.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
+import { seedApprovalLinkedExecutionRun } from "../helpers/execution-fixtures.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -43,6 +44,8 @@ describe("WS approval.resolve idempotency", () => {
   it("does not re-run side effects on duplicate resolves", async () => {
     const db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
+    const runId = randomUUID();
+    await seedApprovalLinkedExecutionRun({ db, runId });
 
     const resumeToken = `resume-${randomUUID()}`;
     const approval = await approvalDal.create({
@@ -54,7 +57,7 @@ describe("WS approval.resolve idempotency", () => {
       prompt: "Approve?",
       context: {},
       resumeToken,
-      runId: randomUUID(),
+      runId,
     });
 
     const cm = new ConnectionManager();
@@ -107,6 +110,8 @@ describe("WS approval.resolve idempotency", () => {
   it("does not call the engine inline (durable action processing)", async () => {
     const db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
+    const runId = randomUUID();
+    await seedApprovalLinkedExecutionRun({ db, runId });
 
     const resumeToken = `resume-${randomUUID()}`;
     const approval = await approvalDal.create({
@@ -118,7 +123,7 @@ describe("WS approval.resolve idempotency", () => {
       prompt: "Approve?",
       context: {},
       resumeToken,
-      runId: randomUUID(),
+      runId,
     });
 
     const cm = new ConnectionManager();

@@ -5,6 +5,7 @@ import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import { ApprovalEngineActionDal } from "../../src/modules/approval/engine-action-dal.js";
 import { ApprovalEngineActionProcessor } from "../../src/modules/approval/engine-action-processor.js";
 import type { ExecutionEngine } from "../../src/modules/execution/engine.js";
+import { seedApprovalLinkedExecutionRun } from "../helpers/execution-fixtures.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -24,6 +25,8 @@ describe("ApprovalEngineActionProcessor", () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
     const actionDal = new ApprovalEngineActionDal(db);
+    const runId = randomUUID();
+    await seedApprovalLinkedExecutionRun({ db, runId });
 
     const approval = await approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
@@ -31,7 +34,7 @@ describe("ApprovalEngineActionProcessor", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Resume run?",
-      runId: randomUUID(),
+      runId,
       resumeToken: `resume-${randomUUID()}`,
     });
 
@@ -87,6 +90,8 @@ describe("ApprovalEngineActionProcessor", () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
     const actionDal = new ApprovalEngineActionDal(db);
+    const runId = randomUUID();
+    await seedApprovalLinkedExecutionRun({ db, runId });
 
     const approval = await approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
@@ -94,7 +99,7 @@ describe("ApprovalEngineActionProcessor", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Cancel run?",
-      runId: randomUUID(),
+      runId,
       resumeToken: `resume-${randomUUID()}`,
     });
 
