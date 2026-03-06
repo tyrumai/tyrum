@@ -5,7 +5,7 @@ vi.mock("electron", () => ({
   app: { isPackaged: false },
 }));
 
-import { resolveGatewayBinPath } from "../src/main/gateway-bin-path.js";
+import { resolveGatewayBin, resolveGatewayBinPath } from "../src/main/gateway-bin-path.js";
 
 describe("resolveGatewayBinPath", () => {
   const moduleDir = join("/repo", "apps", "desktop", "dist", "main");
@@ -14,34 +14,34 @@ describe("resolveGatewayBinPath", () => {
   const packagedGateway = join("/app/resources", "gateway", "index.mjs");
 
   it("uses packaged gateway when app is packaged", () => {
-    const result = resolveGatewayBinPath({
+    const result = resolveGatewayBin({
       moduleDir,
       isPackaged: true,
       resourcesPath: "/app/resources",
       exists: (path) => path === packagedGateway,
     });
 
-    expect(result).toBe(packagedGateway);
+    expect(result).toEqual({ path: packagedGateway, source: "packaged" });
   });
 
   it("uses staged desktop gateway when available", () => {
-    const result = resolveGatewayBinPath({
+    const result = resolveGatewayBin({
       moduleDir,
       isPackaged: false,
       exists: (path) => path === distGateway,
     });
 
-    expect(result).toBe(distGateway);
+    expect(result).toEqual({ path: distGateway, source: "staged" });
   });
 
   it("falls back to monorepo gateway bundle", () => {
-    const result = resolveGatewayBinPath({
+    const result = resolveGatewayBin({
       moduleDir,
       isPackaged: false,
       exists: (path) => path === monorepoGateway,
     });
 
-    expect(result).toBe(monorepoGateway);
+    expect(result).toEqual({ path: monorepoGateway, source: "monorepo" });
   });
 
   it("throws a useful error when no candidate exists", () => {
@@ -52,5 +52,15 @@ describe("resolveGatewayBinPath", () => {
         exists: () => false,
       }),
     ).toThrow("Unable to locate embedded gateway bundle");
+  });
+
+  it("keeps resolveGatewayBinPath for callers that only need the path", () => {
+    const result = resolveGatewayBinPath({
+      moduleDir,
+      isPackaged: false,
+      exists: (path) => path === distGateway,
+    });
+
+    expect(result).toBe(distGateway);
   });
 });

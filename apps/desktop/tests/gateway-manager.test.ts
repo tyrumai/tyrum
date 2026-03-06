@@ -16,6 +16,7 @@ vi.mock("node:child_process", async () => {
 import {
   GatewayManager,
   type GatewayStatus,
+  resolveGatewayLaunchCommand,
   summarizeGatewayStartupFailure,
 } from "../src/main/gateway-manager.js";
 
@@ -161,9 +162,39 @@ describe("GatewayManager", () => {
       "/tmp/test.db",
     ]);
     const env = (options as { env?: Record<string, string> }).env;
-    expect(env?.["ELECTRON_RUN_AS_NODE"]).toBe("1");
+    expect(env?.["ELECTRON_RUN_AS_NODE"]).toBeUndefined();
 
     await gm.stop();
+  });
+
+  it("uses Electron-as-Node for staged gateway bundles", () => {
+    const launch = resolveGatewayLaunchCommand({
+      gatewayBin: "/repo/apps/desktop/dist/gateway/index.mjs",
+      gatewayBinSource: "staged",
+      processExecPath: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
+      versions: { ...process.versions, electron: "40.7.0" },
+      env: {},
+    });
+
+    expect(launch).toEqual({
+      command: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
+      env: { ELECTRON_RUN_AS_NODE: "1" },
+    });
+  });
+
+  it("uses a real Node runtime for the monorepo gateway bundle inside Electron", () => {
+    const launch = resolveGatewayLaunchCommand({
+      gatewayBin: "/repo/packages/gateway/dist/index.mjs",
+      gatewayBinSource: "monorepo",
+      processExecPath: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
+      versions: { ...process.versions, electron: "40.7.0" },
+      env: { TYRUM_DESKTOP_NODE_EXEC_PATH: "/opt/homebrew/bin/node" },
+    });
+
+    expect(launch).toEqual({
+      command: "/opt/homebrew/bin/node",
+      env: {},
+    });
   });
 
   it("preserves CRLF line endings when redacting bootstrap tokens", async () => {
