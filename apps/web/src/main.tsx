@@ -4,7 +4,9 @@ import {
   createElevatedModeStore,
   createBearerTokenAuth,
   createBrowserCookieAuth,
+  createDeviceIdentity,
   createGatewayAuthSession,
+  createOperatorCore,
   createOperatorCoreManager,
 } from "@tyrum/operator-core";
 import { OperatorUiApp, OperatorUiHostProvider } from "@tyrum/operator-ui";
@@ -58,51 +60,63 @@ const container = document.getElementById("root");
 if (!container) {
   throw new Error("Missing root element (#root).");
 }
+const rootContainer = container;
 
-const elevatedModeStore = createElevatedModeStore();
-const httpBaseUrl = resolveGatewayHttpBaseUrl();
-const resolvedAuth = resolveAuthFromLocation(httpBaseUrl);
-const manager = createOperatorCoreManager({
-  wsUrl: resolveGatewayWsUrl(),
-  httpBaseUrl,
-  baselineAuth: resolvedAuth.auth,
-  elevatedModeStore,
-});
+async function bootstrap(): Promise<void> {
+  const deviceIdentity = await createDeviceIdentity();
+  const elevatedModeStore = createElevatedModeStore();
+  const httpBaseUrl = resolveGatewayHttpBaseUrl();
+  const resolvedAuth = resolveAuthFromLocation(httpBaseUrl);
+  const manager = createOperatorCoreManager({
+    wsUrl: resolveGatewayWsUrl(),
+    httpBaseUrl,
+    baselineAuth: resolvedAuth.auth,
+    elevatedModeStore,
+    createCore(coreOptions) {
+      return createOperatorCore({
+        ...coreOptions,
+        deviceIdentity,
+      });
+    },
+  });
 
-if (resolvedAuth.connectOnLoad) {
-  manager.getCore().connect();
+  if (resolvedAuth.connectOnLoad) {
+    manager.getCore().connect();
+  }
+
+  const root = createRoot(rootContainer);
+  const render = (): void => {
+    root.render(
+      <React.StrictMode>
+        <OperatorUiHostProvider value={{ kind: "web" }}>
+          <OperatorUiApp
+            core={manager.getCore()}
+            mode="web"
+            onReloadPage={reloadPage}
+            onReconfigureGateway={(httpUrl, wsUrl) => {
+              try {
+                localStorage.setItem("tyrum-gateway-http", httpUrl);
+                localStorage.setItem("tyrum-gateway-ws", wsUrl);
+              } catch {}
+              reloadPage();
+            }}
+          />
+        </OperatorUiHostProvider>
+      </React.StrictMode>,
+    );
+  };
+
+  const unsubscribe = manager.subscribe(() => {
+    render();
+  });
+
+  window.addEventListener("beforeunload", () => {
+    unsubscribe();
+    manager.dispose();
+    elevatedModeStore.dispose();
+  });
+
+  render();
 }
 
-const root = createRoot(container);
-const render = (): void => {
-  root.render(
-    <React.StrictMode>
-      <OperatorUiHostProvider value={{ kind: "web" }}>
-        <OperatorUiApp
-          core={manager.getCore()}
-          mode="web"
-          onReloadPage={reloadPage}
-          onReconfigureGateway={(httpUrl, wsUrl) => {
-            try {
-              localStorage.setItem("tyrum-gateway-http", httpUrl);
-              localStorage.setItem("tyrum-gateway-ws", wsUrl);
-            } catch {}
-            reloadPage();
-          }}
-        />
-      </OperatorUiHostProvider>
-    </React.StrictMode>,
-  );
-};
-
-const unsubscribe = manager.subscribe(() => {
-  render();
-});
-
-window.addEventListener("beforeunload", () => {
-  unsubscribe();
-  manager.dispose();
-  elevatedModeStore.dispose();
-});
-
-render();
+await bootstrap();

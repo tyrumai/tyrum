@@ -1,6 +1,7 @@
 import { createTyrumHttpClient } from "@tyrum/operator-core";
 import {
   createBearerTokenAuth,
+  createDeviceIdentity,
   createElevatedModeStore,
   createOperatorCore,
   createOperatorCoreManager,
@@ -85,10 +86,12 @@ function createDesktopIpcFetch(api: DesktopApi): DesktopIpcFetch {
 function createDesktopOperatorCoreManager({
   connection,
   ipcFetch,
+  deviceIdentity,
   elevatedModeStore,
 }: {
   connection: OperatorConnectionInfo;
   ipcFetch: DesktopIpcFetch;
+  deviceIdentity: Awaited<ReturnType<typeof createDeviceIdentity>>;
   elevatedModeStore: ElevatedModeStore;
 }): OperatorCoreManager {
   const baselineAuth = createBearerTokenAuth(connection.token);
@@ -107,6 +110,7 @@ function createDesktopOperatorCoreManager({
         wsUrl: coreOptions.wsUrl,
         httpBaseUrl: coreOptions.httpBaseUrl,
         auth: coreOptions.auth,
+        deviceIdentity,
         elevatedModeStore: coreOptions.elevatedModeStore,
         deps: { http },
       });
@@ -202,12 +206,16 @@ async function bootDesktopOperatorCore({
     const connection = (await api.gateway.getOperatorConnection()) as OperatorConnectionInfo;
     if (isDisposed()) return;
 
+    const deviceIdentity = await createDeviceIdentity();
+    if (isDisposed()) return;
+
     const elevatedModeStore = createElevatedModeStore();
     let manager: OperatorCoreManager;
     try {
       manager = createDesktopOperatorCoreManager({
         connection,
         ipcFetch: createDesktopIpcFetch(api),
+        deviceIdentity,
         elevatedModeStore,
       });
     } catch (error) {

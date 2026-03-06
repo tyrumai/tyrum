@@ -1,6 +1,7 @@
 import {
   TyrumClient,
   createTyrumHttpClient,
+  type DeviceIdentity,
   type Approval,
   type ClientCapability,
   type ExecutionAttempt,
@@ -37,6 +38,7 @@ export interface OperatorCoreOptions {
   httpBaseUrl: string;
   auth: OperatorAuthStrategy;
   capabilities?: ClientCapability[];
+  deviceIdentity?: DeviceIdentity;
   elevatedModeStore?: ElevatedModeStore;
   deps?: {
     ws?: OperatorWsClient;
@@ -47,6 +49,7 @@ export interface OperatorCoreOptions {
 export interface OperatorCore {
   wsUrl: string;
   httpBaseUrl: string;
+  deviceId?: string | null;
   ws: OperatorWsClient;
   http: OperatorHttpClient;
   elevatedModeStore: ElevatedModeStore;
@@ -121,6 +124,13 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
       url: options.wsUrl,
       token: wsTokenForAuth(options.auth),
       capabilities: options.capabilities ?? [],
+      device: options.deviceIdentity
+        ? {
+            deviceId: options.deviceIdentity.deviceId,
+            publicKey: options.deviceIdentity.publicKey,
+            privateKey: options.deviceIdentity.privateKey,
+          }
+        : undefined,
     });
 
   const baseHttp: OperatorHttpClient = createTyrumHttpClient({
@@ -458,6 +468,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   return {
     wsUrl: options.wsUrl,
     httpBaseUrl: options.httpBaseUrl,
+    deviceId: options.deviceIdentity?.deviceId ?? null,
     ws,
     http,
     elevatedModeStore,
