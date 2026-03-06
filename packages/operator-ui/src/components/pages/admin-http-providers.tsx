@@ -373,21 +373,26 @@ function ProviderAccountDialog({
               const nextProvider = supportedProviders.find(
                 (provider) => provider.provider_key === event.currentTarget.value,
               );
-              setState((current) => ({
-                providerKey: nextProvider?.provider_key ?? "",
-                methodKey: nextProvider?.methods[0]?.method_key ?? "",
-                displayName: syncDisplayNameOnProviderChange({
-                  currentDisplayName: current.displayName,
-                  currentProviderName: selectedProvider?.name,
-                  nextProviderName: nextProvider?.name,
-                }),
-                configValues: Object.fromEntries(
-                  (nextProvider?.methods[0]?.fields ?? [])
-                    .filter((field) => field.kind === "config" && field.input === "boolean")
-                    .map((field) => [field.key, false]),
-                ),
-                secretValues: {},
-              }));
+              setState((current) => {
+                const currentProviderName = supportedProviders.find(
+                  (provider) => provider.provider_key === current.providerKey,
+                )?.name;
+                return {
+                  providerKey: nextProvider?.provider_key ?? "",
+                  methodKey: nextProvider?.methods[0]?.method_key ?? "",
+                  displayName: syncDisplayNameOnProviderChange({
+                    currentDisplayName: current.displayName,
+                    currentProviderName,
+                    nextProviderName: nextProvider?.name,
+                  }),
+                  configValues: Object.fromEntries(
+                    (nextProvider?.methods[0]?.fields ?? [])
+                      .filter((field) => field.kind === "config" && field.input === "boolean")
+                      .map((field) => [field.key, false]),
+                  ),
+                  secretValues: {},
+                };
+              });
             }}
             helperText={
               state.providerKey && configuredCounts.get(state.providerKey)

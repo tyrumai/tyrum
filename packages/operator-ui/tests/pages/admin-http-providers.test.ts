@@ -22,6 +22,14 @@ function setSelectValue(select: HTMLSelectElement, value: string): void {
   });
 }
 
+function setSelectValueWithoutAct(select: HTMLSelectElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set as
+    | ((this: HTMLSelectElement, value: string) => void)
+    | undefined;
+  setter?.call(select, value);
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 function findLabeledInput(root: ParentNode, labelPrefix: string): HTMLInputElement | null {
   const label = Array.from(root.querySelectorAll<HTMLLabelElement>("label")).find((candidate) =>
     candidate.textContent?.trim().startsWith(labelPrefix),
@@ -247,6 +255,49 @@ describe("AdminHttpProvidersPanel", () => {
     setSelectValue(providerSelect!, "anthropic");
 
     expect(displayNameInput?.value).toBe("Team account");
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("keeps the auto-filled display name aligned during rapid provider changes", async () => {
+    const { core } = createTestCore();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        ElevatedModeProvider,
+        { core, mode: "web" },
+        React.createElement(AdminHttpProvidersPanel, { core }),
+      ),
+    );
+
+    await flush();
+
+    const addButton = container.querySelector<HTMLButtonElement>(
+      "[data-testid='providers-add-open']",
+    );
+    expect(addButton).not.toBeNull();
+    act(() => {
+      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = document.body.querySelector<HTMLElement>(
+      "[data-testid='providers-account-dialog']",
+    );
+    expect(dialog).not.toBeNull();
+
+    const providerSelect = findLabeledSelect(dialog!, "Provider");
+    const displayNameInput = findLabeledInput(dialog!, "Display name");
+    expect(providerSelect).not.toBeNull();
+    expect(displayNameInput).not.toBeNull();
+    expect(displayNameInput?.value).toBe("OpenAI");
+
+    act(() => {
+      setSelectValueWithoutAct(providerSelect!, "anthropic");
+      setSelectValueWithoutAct(providerSelect!, "openai");
+    });
+
+    expect(providerSelect?.value).toBe("openai");
+    expect(displayNameInput?.value).toBe("OpenAI");
 
     cleanupTestRoot({ container, root });
   });
