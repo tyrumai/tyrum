@@ -50,6 +50,17 @@ Transport tables are therefore useful for debugging and best-effort repair, but 
 
 When retained channel logs disagree with session context, repair should rebuild the bounded turn window from transport history without discarding authoritative summarized context. Tyrum exposes this as `/repair [max_turns]`, which reconstructs `sessions.turns_json` from completed `channel_inbox` rows, folds any repaired overflow into the existing `sessions.summary`, prefers `reply_text`, and falls back to ordered outbox chunks when needed.
 
+### Retention contract
+
+The session/message retention contract is explicit:
+
+- `sessions.turns_json` is bounded by agent config `sessions.max_turns`; older turns are compacted into `sessions.summary`.
+- `sessions.summary` is itself bounded by the compaction caps, so session context does not grow without limit after repeated compactions.
+- Inactive sessions are cleaned up by agent config `sessions.ttl_days` during active turns, and by deployment config `lifecycle.sessions.ttlDays` as a background sweep (default `30`); together they make the effective inactivity window explicit.
+- Failed channel transport rows are retained for deployment config `lifecycle.channels.terminalRetentionDays` days (default `7`).
+- Completed `channel_inbox` rows are only deleted after their dependent `channel_outbox` rows are gone, so repair/debug reads stay safe while delivery work still exists.
+- Successful `channel_outbox` rows are deleted immediately after send; they are not part of the durable transcript contract.
+
 ### DM isolation (secure by default for multi-user inboxes)
 
 Tyrum isolates direct-message context by default when more than one distinct sender can reach an agent via DMs. This prevents cross-user context leakage.

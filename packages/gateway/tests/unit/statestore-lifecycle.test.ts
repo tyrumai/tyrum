@@ -239,6 +239,184 @@ describe("StateStoreLifecycleScheduler", () => {
     expect(dedupe).toEqual([{ message_id: "msg-fresh" }]);
   });
 
+  it("retains completed inbox rows until dependent terminal outbox rows are pruned", async () => {
+    db = openTestSqliteDb();
+
+    const now = new Date("2026-02-24T00:00:00.000Z");
+    const nowMs = now.getTime();
+    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+    const oldReceivedAtMs = nowMs - threeDaysMs;
+    const oldIso = new Date(oldReceivedAtMs).toISOString();
+
+    const channelAccountId = randomUUID();
+    await db.run(
+      `INSERT INTO channel_accounts (tenant_id, workspace_id, channel_account_id, connector_key, account_key)
+       VALUES (?, ?, ?, 'telegram', 'default')`,
+      [DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID, channelAccountId],
+    );
+
+    const threadId = randomUUID();
+    await db.run(
+      `INSERT INTO channel_threads (tenant_id, workspace_id, channel_thread_id, channel_account_id, provider_thread_id, container_kind)
+       VALUES (?, ?, ?, ?, ?, 'dm')`,
+      [DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID, threadId, channelAccountId, "thread-retention"],
+    );
+
+    await db.run(
+      `INSERT INTO sessions (
+         tenant_id,
+         session_id,
+         session_key,
+         agent_id,
+         workspace_id,
+         channel_thread_id,
+         summary,
+         turns_json,
+         created_at,
+         updated_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        "session-retention",
+        "session-key-retention",
+        DEFAULT_AGENT_ID,
+        DEFAULT_WORKSPACE_ID,
+        threadId,
+        now.toISOString(),
+        now.toISOString(),
+      ],
+    );
+
+    await db.run(
+      `INSERT INTO channel_inbox (
+         inbox_id,
+         tenant_id,
+         source,
+         thread_id,
+         message_id,
+         key,
+         lane,
+         received_at_ms,
+         payload_json,
+         status,
+         processed_at,
+         reply_text,
+         queue_mode,
+         workspace_id,
+         session_id,
+         channel_thread_id
+       )
+       VALUES (?, ?, 'telegram', 'thread-retention', ?, 'agent:default:telegram:default:dm:thread-retention', 'main', ?, '{}', ?, ?, ?, 'collect', ?, ?, ?)`,
+      [
+        101,
+        DEFAULT_TENANT_ID,
+        "msg-completed",
+        oldReceivedAtMs,
+        "completed",
+        oldIso,
+        "reply",
+        DEFAULT_WORKSPACE_ID,
+        "session-retention",
+        threadId,
+      ],
+    );
+    await db.run(
+      `INSERT INTO channel_inbox (
+         inbox_id,
+         tenant_id,
+         source,
+         thread_id,
+         message_id,
+         key,
+         lane,
+         received_at_ms,
+         payload_json,
+         status,
+         processed_at,
+         error,
+         queue_mode,
+         workspace_id,
+         session_id,
+         channel_thread_id
+       )
+       VALUES (?, ?, 'telegram', 'thread-retention', ?, 'agent:default:telegram:default:dm:thread-retention', 'main', ?, '{}', ?, ?, ?, 'collect', ?, ?, ?)`,
+      [
+        102,
+        DEFAULT_TENANT_ID,
+        "msg-failed",
+        oldReceivedAtMs,
+        "failed",
+        oldIso,
+        "boom",
+        DEFAULT_WORKSPACE_ID,
+        "session-retention",
+        threadId,
+      ],
+    );
+
+    await db.run(
+      `INSERT INTO channel_outbox (
+         outbox_id,
+         tenant_id,
+         inbox_id,
+         source,
+         thread_id,
+         dedupe_key,
+         chunk_index,
+         text,
+         status,
+         created_at,
+         sent_at,
+         error,
+         workspace_id,
+         session_id,
+         channel_thread_id
+       )
+       VALUES (?, ?, ?, 'telegram', 'thread-retention', ?, 0, 'reply', 'failed', ?, ?, 'send failed', ?, ?, ?)`,
+      [
+        201,
+        DEFAULT_TENANT_ID,
+        101,
+        "dedupe-retention-1",
+        oldIso,
+        oldIso,
+        DEFAULT_WORKSPACE_ID,
+        "session-retention",
+        threadId,
+      ],
+    );
+
+    const scheduler = new StateStoreLifecycleScheduler({
+      db,
+      clock: () => ({ nowIso: now.toISOString(), nowMs }),
+      channelTerminalRetentionDays: 2,
+      sessionsTtlDays: 30,
+    });
+
+    await scheduler.tick();
+
+    const inboxAfterFirstTick = await db.all<{ inbox_id: number; status: string }>(
+      "SELECT inbox_id, status FROM channel_inbox WHERE tenant_id = ? ORDER BY inbox_id ASC",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(inboxAfterFirstTick).toEqual([{ inbox_id: 101, status: "completed" }]);
+
+    const outboxAfterFirstTick = await db.all<{ outbox_id: number }>(
+      "SELECT outbox_id FROM channel_outbox WHERE tenant_id = ? ORDER BY outbox_id ASC",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(outboxAfterFirstTick).toEqual([]);
+
+    await scheduler.tick();
+
+    const inboxAfterSecondTick = await db.all<{ inbox_id: number }>(
+      "SELECT inbox_id FROM channel_inbox WHERE tenant_id = ? ORDER BY inbox_id ASC",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(inboxAfterSecondTick).toEqual([]);
+  });
+
   it("does not orphan context reports when session pruning order has timestamp ties", async () => {
     db = openTestSqliteDb();
 

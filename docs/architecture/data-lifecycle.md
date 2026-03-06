@@ -3,7 +3,7 @@
 Tyrum is durable by design: the StateStore is the source of truth for sessions, execution, approvals, and audit evidence.
 That durability must be paired with explicit **retention** and **deletion** rules so deployments remain operable (bounded cost), safe (privacy), and explainable (audit).
 
-This page summarizes lifecycle expectations across the major data surfaces. It is intentionally implementation-agnostic; concrete defaults and knobs belong in deployment configuration and runbooks.
+This page summarizes lifecycle expectations across the major data surfaces. Most sections stay implementation-agnostic, but the session/channel transcript surfaces below document the current retention contract and deployment knobs because they are high-volume by default.
 
 References:
 
@@ -58,6 +58,30 @@ Architecture notes:
 - TTL-derived state is pruned periodically based on explicit expiry timestamps.
 - Session/transcript retention is enforced by configurable lifecycle policies (for example last-activity windows), with safe cascading to dependent derived records.
 - In clustered deployments, retention jobs run under a single-writer lock/lease so pruning is correct and predictable.
+
+## Session + channel transcript retention (current contract)
+
+Tyrum currently applies the first explicit retention contract to the highest-volume session/message surfaces:
+
+- `sessions.turns_json` is bounded by agent config `sessions.max_turns`. Older turns are compacted into `sessions.summary` instead of letting the transcript row grow without limit.
+- `sessions.summary` is also bounded: compaction keeps only the newest summary lines up to the built-in line/character caps, so summary growth stays controlled.
+- Inactive sessions are pruned in two places: agent config `sessions.ttl_days` applies opportunistic per-agent cleanup during active traffic, and deployment config `lifecycle.sessions.ttlDays` (default `30`) provides a background sweep. In practice the shorter effective window wins.
+- Session pruning cascades to dependent rows such as `session_model_overrides`, `session_provider_pins`, and `context_reports`.
+- Terminal channel transport rows are pruned by deployment config `lifecycle.channels.terminalRetentionDays` (default `7`).
+- `channel_inbox` rows in status `failed` are retained for the terminal retention window, then deleted.
+- `channel_inbox` rows in status `completed` are deleted only after dependent `channel_outbox` rows are gone. This keeps repair/debug data available while delivery-side work still exists.
+- Successful `channel_outbox` rows are removed immediately after send. Failed `channel_outbox` rows are retained for the same terminal retention window, then pruned.
+
+Example deployment config:
+
+```json
+{
+  "lifecycle": {
+    "sessions": { "ttlDays": 30 },
+    "channels": { "terminalRetentionDays": 7 }
+  }
+}
+```
 
 ### Artifact bytes (FS/S3)
 

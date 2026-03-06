@@ -11,7 +11,7 @@ const DEFAULT_TICK_MS = 5 * 60_000;
 const DEFAULT_BATCH_SIZE = 10_000;
 const DEFAULT_MAX_BATCHES_PER_TICK = 10;
 const DEFAULT_SESSIONS_TTL_DAYS = 30;
-const DEFAULT_CHANNEL_QUEUE_FAILURE_RETENTION_DAYS = 7;
+const DEFAULT_CHANNEL_TERMINAL_RETENTION_DAYS = 7;
 
 const PG_RETENTION_LOCK_KEY1 = 1959359839; // "tyru" as int-ish
 const PG_RETENTION_LOCK_KEY2 = 1936024435; // "stlr" as int-ish
@@ -30,6 +30,7 @@ export interface StateStoreLifecycleSchedulerOptions {
   batchSize?: number;
   maxBatchesPerTick?: number;
   sessionsTtlDays?: number;
+  channelTerminalRetentionDays?: number;
   keepProcessAlive?: boolean;
   clock?: StateStoreLifecycleSchedulerClockFn;
 }
@@ -45,6 +46,7 @@ export class StateStoreLifecycleScheduler {
   private readonly batchSize: number;
   private readonly maxBatchesPerTick: number;
   private readonly sessionsTtlDays: number;
+  private readonly channelTerminalRetentionDays: number;
   private readonly clock: StateStoreLifecycleSchedulerClockFn;
   private readonly interval: IntervalScheduler;
 
@@ -65,6 +67,13 @@ export class StateStoreLifecycleScheduler {
       typeof sessionsTtl === "number" && Number.isFinite(sessionsTtl) && sessionsTtl > 0
         ? Math.max(1, Math.floor(sessionsTtl))
         : DEFAULT_SESSIONS_TTL_DAYS;
+    const channelTerminalRetentionDays = opts.channelTerminalRetentionDays;
+    this.channelTerminalRetentionDays =
+      typeof channelTerminalRetentionDays === "number" &&
+      Number.isFinite(channelTerminalRetentionDays) &&
+      channelTerminalRetentionDays > 0
+        ? Math.max(1, Math.floor(channelTerminalRetentionDays))
+        : DEFAULT_CHANNEL_TERMINAL_RETENTION_DAYS;
     this.clock = opts.clock ?? defaultClock;
     const keepProcessAlive = opts.keepProcessAlive ?? false;
     this.interval = new IntervalScheduler({
@@ -110,11 +119,10 @@ export class StateStoreLifecycleScheduler {
     const sessionsCutoffIso = new Date(
       nowMs - this.sessionsTtlDays * 24 * 60 * 60 * 1000,
     ).toISOString();
-    const queueFailureCutoffIso = new Date(
-      nowMs - DEFAULT_CHANNEL_QUEUE_FAILURE_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    const channelTerminalCutoffIso = new Date(
+      nowMs - this.channelTerminalRetentionDays * 24 * 60 * 60 * 1000,
     ).toISOString();
-    const queueFailureCutoffMs =
-      nowMs - DEFAULT_CHANNEL_QUEUE_FAILURE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const channelTerminalCutoffMs = nowMs - this.channelTerminalRetentionDays * 24 * 60 * 60 * 1000;
 
     const sessionsPruned = await this.pruneInBatches("sessions", () =>
       this.pruneExpiredSessions(db, { cutoffIso: sessionsCutoffIso }),
@@ -126,13 +134,13 @@ export class StateStoreLifecycleScheduler {
       this.pruneExpiredInboundDedupe(db, { nowMs }),
     );
     const inboxFailedPruned = await this.pruneInBatches("channel_inbox.failed", () =>
-      this.pruneFailedChannelInbox(db, { cutoffMs: queueFailureCutoffMs }),
+      this.pruneFailedChannelInbox(db, { cutoffMs: channelTerminalCutoffMs }),
     );
     const inboxCompletedPruned = await this.pruneInBatches("channel_inbox.completed", () =>
-      this.pruneCompletedChannelInbox(db, { cutoffMs: queueFailureCutoffMs }),
+      this.pruneCompletedChannelInbox(db, { cutoffMs: channelTerminalCutoffMs }),
     );
     const outboxFailedPruned = await this.pruneInBatches("channel_outbox.failed", () =>
-      this.pruneFailedChannelOutbox(db, { cutoffIso: queueFailureCutoffIso }),
+      this.pruneFailedChannelOutbox(db, { cutoffIso: channelTerminalCutoffIso }),
     );
 
     if (

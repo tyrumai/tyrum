@@ -352,8 +352,11 @@ function startBackgroundSchedulers(context: GatewayBootContext): BackgroundSched
     context.role === "all" || context.role === "scheduler"
       ? new StateStoreLifecycleScheduler({
           db: context.container.db,
+          channelTerminalRetentionDays:
+            context.deploymentConfig.lifecycle.channels.terminalRetentionDays,
           keepProcessAlive,
           logger: context.container.logger,
+          sessionsTtlDays: context.deploymentConfig.lifecycle.sessions.ttlDays,
         })
       : undefined;
 
