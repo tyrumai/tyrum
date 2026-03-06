@@ -7,6 +7,7 @@ import type {
   MemorySearchHit,
   MemoryTombstone,
 } from "@tyrum/client";
+import { AgentId } from "@tyrum/schemas";
 import type { OperatorWsClient } from "../deps.js";
 import { toOperatorCoreError, type OperatorCoreError } from "../operator-error.js";
 import { createStore, type ExternalStore } from "../store.js";
@@ -125,28 +126,34 @@ function resolveAgentScope(agentId?: string | null): string {
   return normalizeAgentScope(agentId) ?? "default";
 }
 
+function normalizeResolvedAgentId(agentId?: string | null): string | null {
+  const normalized = normalizeAgentScope(agentId);
+  if (!normalized) return null;
+  return AgentId.safeParse(normalized).success ? normalized : null;
+}
+
 function sameAgentScope(a?: string | null, b?: string | null): boolean {
   return resolveAgentScope(a) === resolveAgentScope(b);
 }
 
 function findKnownAgentId(state: MemoryState): string | null {
-  const inspectAgentId = normalizeAgentScope(state.inspect.item?.agent_id);
+  const inspectAgentId = normalizeResolvedAgentId(state.inspect.item?.agent_id);
   if (inspectAgentId) return inspectAgentId;
 
   const browseResults = state.browse.results;
   if (browseResults?.kind === "list") {
     for (const item of browseResults.items) {
-      const browseAgentId = normalizeAgentScope(item.agent_id);
+      const browseAgentId = normalizeResolvedAgentId(item.agent_id);
       if (browseAgentId) return browseAgentId;
     }
   }
 
   for (const tombstone of state.tombstones.tombstones) {
-    const tombstoneAgentId = normalizeAgentScope(tombstone.agent_id);
+    const tombstoneAgentId = normalizeResolvedAgentId(tombstone.agent_id);
     if (tombstoneAgentId) return tombstoneAgentId;
   }
 
-  return normalizeAgentScope(state.inspect.agentId ?? state.browse.request?.agentId) ?? null;
+  return normalizeResolvedAgentId(state.inspect.agentId ?? state.browse.request?.agentId);
 }
 
 function matchesCurrentScope(state: MemoryState, agentId?: string | null): boolean {

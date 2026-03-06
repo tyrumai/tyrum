@@ -19,19 +19,33 @@ import {
   parseAgentIdFromKey,
 } from "../../lib/status-session-lanes.js";
 
+type AgentOption = {
+  agentKey: string;
+  agentId?: string;
+};
+
 function trimAgentKey(value: string): string {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : "default";
 }
 
-function normalizeAgentKeys(input: string[]): string[] {
-  const keys = new Set<string>();
-  for (const value of input) {
-    const trimmed = value.trim();
+function normalizeAgentOptions(
+  input: Array<{ agent_key: string; agent_id?: string }>,
+): AgentOption[] {
+  const byKey = new Map<string, AgentOption>();
+  for (const agent of input) {
+    const trimmed = agent.agent_key.trim();
     if (!trimmed) continue;
-    keys.add(trimmed);
+    const normalizedAgentId = agent.agent_id?.trim() || undefined;
+    const existing = byKey.get(trimmed);
+    if (!existing || (!existing.agentId && normalizedAgentId)) {
+      byKey.set(trimmed, {
+        agentKey: trimmed,
+        ...(normalizedAgentId ? { agentId: normalizedAgentId } : {}),
+      });
+    }
   }
-  return [...keys.values()].sort((a, b) => a.localeCompare(b));
+  return [...byKey.values()].sort((a, b) => a.agentKey.localeCompare(b.agentKey));
 }
 
 function selectInitialAgentKey(input: {
@@ -325,7 +339,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
   const runs = useOperatorStore(core.runsStore);
   const status = useOperatorStore(core.statusStore);
 
-  const [agentKeys, setAgentKeys] = useState<string[]>([]);
+  const [agentOptions, setAgentOptions] = useState<AgentOption[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [agentsError, setAgentsError] = useState<string | null>(null);
   const [selectedAgentKey, setSelectedAgentKey] = useState(trimAgentKey(agentStatus.agentKey));
@@ -334,6 +348,13 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
   const [activeTab, setActiveTab] = useState("identity");
 
   const isConnected = connection.status === "connected";
+  const agentKeys = useMemo(() => agentOptions.map((agent) => agent.agentKey), [agentOptions]);
+  const selectedAgentScopeId = useMemo(
+    () =>
+      agentOptions.find((agent) => agent.agentKey === selectedAgentKey)?.agentId ??
+      selectedAgentKey,
+    [agentOptions, selectedAgentKey],
+  );
 
   const activeAgentIds = useMemo(() => {
     const ids = new Set<string>();
@@ -355,8 +376,9 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     setAgentsError(null);
     try {
       const response = await core.http.agentList.get({ include_default: true });
-      const nextKeys = normalizeAgentKeys(response.agents.map((agent) => agent.agent_key));
-      setAgentKeys(nextKeys);
+      const nextAgents = normalizeAgentOptions(response.agents);
+      const nextKeys = nextAgents.map((agent) => agent.agentKey);
+      setAgentOptions(nextAgents);
       const nextSelectedAgentKey = selectInitialAgentKey({
         currentAgentKey: selectedAgentKey,
         availableAgentKeys: nextKeys,
@@ -465,19 +487,19 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
           <select
             data-testid="agents-select"
             value={selectedAgentKey}
-            disabled={agentKeys.length === 0}
+            disabled={agentOptions.length === 0}
             onChange={(event) => {
               setSelectionReady(true);
               setSelectedAgentKey(event.currentTarget.value);
             }}
             className="flex h-10 w-full rounded-md border border-border bg-bg-card/40 px-3 py-2 text-sm text-fg shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
-            {agentKeys.length === 0 ? (
+            {agentOptions.length === 0 ? (
               <option value={selectedAgentKey}>{selectedAgentKey}</option>
             ) : (
-              agentKeys.map((agentKey) => (
-                <option key={agentKey} value={agentKey}>
-                  {agentKey}
+              agentOptions.map((agent) => (
+                <option key={agent.agentKey} value={agent.agentKey}>
+                  {agent.agentKey}
                 </option>
               ))
             )}
@@ -498,21 +520,21 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
               <div className="text-sm text-fg-muted" data-testid="agents-list-loading">
                 Loading agents…
               </div>
-            ) : agentKeys.length === 0 ? (
+            ) : agentOptions.length === 0 ? (
               <EmptyState
                 icon={Bot}
                 title="No agents found"
                 description="Agents appear here once the gateway can enumerate them."
               />
             ) : (
-              agentKeys.map((agentKey) => {
-                const active = activeAgentIds.has(agentKey);
-                const selected = agentKey === selectedAgentKey;
+              agentOptions.map((agent) => {
+                const active = activeAgentIds.has(agent.agentKey);
+                const selected = agent.agentKey === selectedAgentKey;
                 return (
                   <button
-                    key={agentKey}
+                    key={agent.agentKey}
                     type="button"
-                    data-testid={`agents-select-${agentKey}`}
+                    data-testid={`agents-select-${agent.agentKey}`}
                     data-active={selected ? "true" : undefined}
                     className={cn(
                       "grid gap-2 rounded-xl border px-3 py-3 text-left transition-colors",
@@ -523,10 +545,10 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                     )}
                     onClick={() => {
                       setSelectionReady(true);
-                      setSelectedAgentKey(agentKey);
+                      setSelectedAgentKey(agent.agentKey);
                     }}
                   >
-                    <div className="font-medium text-fg">{agentKey}</div>
+                    <div className="font-medium text-fg">{agent.agentKey}</div>
                     <div className="flex items-center gap-2 text-xs text-fg-muted">
                       <StatusDot variant={active ? "success" : "neutral"} pulse={active} />
                       {active ? "Active" : "Idle"}
@@ -577,7 +599,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
             </TabsContent>
 
             <TabsContent value="memory">
-              <MemoryInspector core={core} agentId={selectedAgentKey} />
+              <MemoryInspector core={core} agentId={selectedAgentScopeId} />
             </TabsContent>
 
             <TabsContent value="runs">

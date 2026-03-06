@@ -455,10 +455,11 @@ describe("memory-store", () => {
   });
 
   it("forwards agent scope through memory operations and ignores events from other agents", async () => {
+    const scopedAgentId = "11111111-1111-4111-8111-111111111111";
     const ws = {
       memoryList: vi.fn(async () => ({
         v: 1,
-        items: [{ memory_item_id: "m1", agent_id: "agent-2", content: "old" }],
+        items: [{ memory_item_id: "m1", agent_id: scopedAgentId, content: "old" }],
         next_cursor: undefined,
       })),
       memorySearch: vi.fn(async () => ({
@@ -468,11 +469,11 @@ describe("memory-store", () => {
       })),
       memoryGet: vi.fn(async () => ({
         v: 1,
-        item: { memory_item_id: "m1", agent_id: "agent-2", content: "old" },
+        item: { memory_item_id: "m1", agent_id: scopedAgentId, content: "old" },
       })),
       memoryUpdate: vi.fn(async () => ({
         v: 1,
-        item: { memory_item_id: "m1", agent_id: "agent-2", content: "new" },
+        item: { memory_item_id: "m1", agent_id: scopedAgentId, content: "new" },
       })),
       memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 1, tombstones: [] })),
       memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
@@ -480,23 +481,23 @@ describe("memory-store", () => {
 
     const { store, handleMemoryItemUpsert } = createMemoryStore(ws);
 
-    await store.list({ agentId: "agent-2" });
-    await store.search({ agentId: "agent-2", query: "old" });
-    await store.inspect("m1", { agentId: "agent-2" });
-    await store.update("m1", { content: "new" } as any, { agentId: "agent-2" });
-    await store.forget([{ kind: "id", memory_item_id: "m1" }], { agentId: "agent-2" });
-    await store.export({ agentId: "agent-2" });
+    await store.list({ agentId: scopedAgentId });
+    await store.search({ agentId: scopedAgentId, query: "old" });
+    await store.inspect("m1", { agentId: scopedAgentId });
+    await store.update("m1", { content: "new" } as any, { agentId: scopedAgentId });
+    await store.forget([{ kind: "id", memory_item_id: "m1" }], { agentId: scopedAgentId });
+    await store.export({ agentId: scopedAgentId });
 
     expect(ws.memoryList).toHaveBeenCalledWith({
       v: 1,
-      agent_id: "agent-2",
+      agent_id: scopedAgentId,
       filter: undefined,
       limit: undefined,
       cursor: undefined,
     });
     expect(ws.memorySearch).toHaveBeenCalledWith({
       v: 1,
-      agent_id: "agent-2",
+      agent_id: scopedAgentId,
       query: "old",
       filter: undefined,
       limit: undefined,
@@ -504,24 +505,24 @@ describe("memory-store", () => {
     });
     expect(ws.memoryGet).toHaveBeenCalledWith({
       v: 1,
-      agent_id: "agent-2",
+      agent_id: scopedAgentId,
       memory_item_id: "m1",
     });
     expect(ws.memoryUpdate).toHaveBeenCalledWith({
       v: 1,
-      agent_id: "agent-2",
+      agent_id: scopedAgentId,
       memory_item_id: "m1",
       patch: { content: "new" },
     });
     expect(ws.memoryForget).toHaveBeenCalledWith({
       v: 1,
-      agent_id: "agent-2",
+      agent_id: scopedAgentId,
       confirm: "FORGET",
       selectors: [{ kind: "id", memory_item_id: "m1" }],
     });
     expect(ws.memoryExport).toHaveBeenCalledWith({
       v: 1,
-      agent_id: "agent-2",
+      agent_id: scopedAgentId,
       filter: undefined,
       include_tombstones: false,
     });
@@ -532,5 +533,44 @@ describe("memory-store", () => {
       content: "ignored",
     } as any);
     expect((store.getSnapshot().inspect.item as any)?.content).toBe("new");
+  });
+
+  it("does not drop matching inspect events before a scoped agent UUID is learned", async () => {
+    const resolvedAgentId = "33333333-3333-4333-8333-333333333333";
+    const nextGet = deferred<any>();
+    const ws = {
+      memoryList: vi.fn(async () => ({ v: 1, items: [], next_cursor: undefined })),
+      memorySearch: vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined })),
+      memoryGet: vi.fn(async () => nextGet.promise),
+      memoryUpdate: vi.fn(async () => ({ v: 1, item: {} })),
+      memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] })),
+      memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
+    } as any;
+
+    const { store, handleMemoryItemUpsert, handleMemoryTombstone } = createMemoryStore(ws);
+
+    await store.list({ agentId: "agent-2" });
+
+    const inspectPromise = store.inspect("m1", { agentId: "agent-2" });
+    expect(store.getSnapshot().inspect.memoryItemId).toBe("m1");
+
+    handleMemoryItemUpsert({
+      memory_item_id: "m1",
+      agent_id: resolvedAgentId,
+      content: "event-update",
+    } as any);
+    expect((store.getSnapshot().inspect.item as any)?.content).toBe("event-update");
+
+    handleMemoryTombstone({ memory_item_id: "m1", agent_id: resolvedAgentId } as any);
+    expect(store.getSnapshot().inspect.memoryItemId).toBe(null);
+
+    nextGet.resolve({
+      v: 1,
+      item: { memory_item_id: "m1", agent_id: resolvedAgentId, content: "late-response" },
+    });
+    await inspectPromise;
+
+    expect(store.getSnapshot().inspect.memoryItemId).toBe(null);
+    expect(store.getSnapshot().inspect.item).toBe(null);
   });
 });

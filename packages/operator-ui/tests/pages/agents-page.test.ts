@@ -134,7 +134,10 @@ function createCore(agentListGet: ReturnType<typeof vi.fn>): {
 describe("AgentsPage", () => {
   it("loads discovered agents, auto-selects a valid agent, and refreshes on selection changes", async () => {
     const agentListGet = vi.fn(async () => ({
-      agents: [{ agent_key: "default" }, { agent_key: "agent-1" }],
+      agents: [
+        { agent_key: "default", agent_id: "11111111-1111-4111-8111-111111111111" },
+        { agent_key: "agent-1", agent_id: "22222222-2222-4222-8222-222222222222" },
+      ],
     }));
     const { core, setAgentKey, refresh } = createCore(agentListGet);
 

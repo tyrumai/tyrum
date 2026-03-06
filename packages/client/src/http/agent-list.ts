@@ -1,4 +1,4 @@
-import { AgentKey } from "@tyrum/schemas";
+import { AgentId, AgentKey } from "@tyrum/schemas";
 import { z } from "zod";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 
@@ -11,6 +11,7 @@ const AgentListQuery = z
 const AgentListAgent = z
   .object({
     agent_key: AgentKey,
+    agent_id: AgentId.optional(),
     home: z.string().trim().min(1).optional(),
     has_config: z.boolean().optional(),
   })
