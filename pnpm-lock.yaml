@@ -30,6 +30,9 @@ patchedDependencies:
   dmg-license@1.0.11:
     hash: 9de5625782d661750c4261c2f5575c217222758f9f5aac99b523818484696f82
     path: patches/dmg-license@1.0.11.patch
+  usocket@0.3.0:
+    hash: 350501ab4a37805654ff8b4c3af9735d12894fc93b7aa26f58b7813486af5f2f
+    path: patches/usocket@0.3.0.patch
 
 importers:
 
@@ -18309,7 +18312,7 @@ snapshots:
       safe-buffer: 5.2.1
       xml2js: 0.5.0
     optionalDependencies:
-      usocket: 0.3.0
+      usocket: 0.3.0(patch_hash=350501ab4a37805654ff8b4c3af9735d12894fc93b7aa26f58b7813486af5f2f)
     transitivePeerDependencies:
       - supports-color
 
@@ -23405,7 +23408,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.14
 
-  usocket@0.3.0:
+  usocket@0.3.0(patch_hash=350501ab4a37805654ff8b4c3af9735d12894fc93b7aa26f58b7813486af5f2f):
     dependencies:
       bindings: 1.5.0
       nan: 2.25.0
