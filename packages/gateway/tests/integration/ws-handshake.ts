@@ -1,4 +1,4 @@
-import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { createHash, generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import type { WebSocket } from "ws";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
@@ -40,6 +40,22 @@ export function computeDeviceId(pubkeyDer: Buffer): string {
   return deviceIdFromSha256Digest(digest);
 }
 
+export type HandshakeIdentity = {
+  deviceId: string;
+  privateKey: KeyObject;
+  pubkey: string;
+};
+
+export function createHandshakeIdentity(): HandshakeIdentity {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const pubkeyDer = publicKey.export({ format: "der", type: "spki" }) as Buffer;
+  return {
+    deviceId: computeDeviceId(pubkeyDer),
+    privateKey,
+    pubkey: pubkeyDer.toString("base64url"),
+  };
+}
+
 export function buildTranscript(input: {
   protocolRev: number;
   role: "client" | "node";
@@ -65,13 +81,11 @@ export async function completeHandshake(
     capabilities: Parameters<typeof descriptorIdForClientCapability>[0][];
     label?: string;
     protocolRev?: number;
+    identity?: HandshakeIdentity;
   },
 ): Promise<{ clientId: string; deviceId: string }> {
   const protocolRev = input.protocolRev ?? 2;
-  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
-  const pubkeyDer = publicKey.export({ format: "der", type: "spki" }) as Buffer;
-  const pubkeyB64Url = pubkeyDer.toString("base64url");
-  const deviceId = computeDeviceId(pubkeyDer);
+  const identity = input.identity ?? createHandshakeIdentity();
 
   ws.send(
     JSON.stringify({
@@ -80,7 +94,11 @@ export async function completeHandshake(
       payload: {
         protocol_rev: protocolRev,
         role: input.role,
-        device: { device_id: deviceId, pubkey: pubkeyB64Url, label: input.label ?? "test" },
+        device: {
+          device_id: identity.deviceId,
+          pubkey: identity.pubkey,
+          label: input.label ?? "test",
+        },
         capabilities: input.capabilities.map((capability) => ({
           id: descriptorIdForClientCapability(capability),
           version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
@@ -106,11 +124,11 @@ export async function completeHandshake(
   const transcript = buildTranscript({
     protocolRev,
     role: input.role,
-    deviceId,
+    deviceId: identity.deviceId,
     connectionId,
     challenge,
   });
-  const signature = sign(null, transcript, privateKey);
+  const signature = sign(null, transcript, identity.privateKey);
 
   ws.send(
     JSON.stringify({
@@ -131,5 +149,5 @@ export async function completeHandshake(
   );
   expect(proofRes["ok"], JSON.stringify(proofRes)).toBe(true);
 
-  return { clientId: connectionId, deviceId };
+  return { clientId: connectionId, deviceId: identity.deviceId };
 }

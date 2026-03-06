@@ -10,6 +10,7 @@ import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import { emitPairingApprovedEvent } from "../ws/pairing-approved.js";
+import { PAIRING_WS_AUDIENCE } from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
 import { CapabilityDescriptor, NodePairingTrustLevel, type WsEventEnvelope } from "@tyrum/schemas";
 import { getClientIp } from "../modules/auth/client-ip.js";
@@ -34,7 +35,7 @@ export interface PairingRouteDeps {
 function emitEvent(deps: PairingRouteDeps, tenantId: string, evt: WsEventEnvelope): void {
   const ws = deps.ws;
   if (!ws) return;
-  broadcastWsEvent(tenantId, evt, { ...ws, logger: deps.logger });
+  broadcastWsEvent(tenantId, evt, { ...ws, logger: deps.logger }, PAIRING_WS_AUDIENCE);
 }
 
 export function createPairingRoutes(deps: PairingRouteDeps): Hono {

@@ -6,6 +6,8 @@ import type {
 import { PolicyOverride } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
+import { POLICY_WS_AUDIENCE } from "../../ws/audience.js";
+import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
 
 export interface PolicyOverrideRow extends PolicyOverrideT {}
 
@@ -237,11 +239,7 @@ export class PolicyOverrideDal {
           occurred_at: nowIso,
           payload: { override },
         };
-        await tx.run(
-          `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
-           VALUES (?, ?, ?, ?)`,
-          [params.tenantId, "ws.broadcast", null, JSON.stringify({ message: evt })],
-        );
+        await enqueueWsBroadcastMessage(tx, params.tenantId, evt, POLICY_WS_AUDIENCE);
       }
 
       return overrides;

@@ -262,19 +262,23 @@ describe("PluginRegistry", () => {
     );
     const lifecycleEvents = outboxRows
       .map(
-        (row) => JSON.parse(row.payload_json) as { message?: { type?: string; payload?: unknown } },
+        (row) =>
+          JSON.parse(row.payload_json) as {
+            message?: { type?: string; payload?: unknown };
+            audience?: unknown;
+          },
       )
-      .map((row) => row.message)
-      .filter((msg): msg is { type: string; payload: any } =>
-        Boolean(msg && typeof msg.type === "string"),
+      .filter((row): row is { message: { type: string; payload: any }; audience?: unknown } =>
+        Boolean(row.message && typeof row.message.type === "string"),
       );
 
-    const loaded = lifecycleEvents.find((evt) => evt.type === "plugin.lifecycle");
+    const loaded = lifecycleEvents.find((row) => row.message.type === "plugin.lifecycle");
     expect(loaded).toBeTruthy();
-    expect(loaded?.payload?.kind).toBe("loaded");
-    expect(loaded?.payload?.plugin?.id).toBe("echo");
+    expect(loaded?.audience).toEqual({ roles: ["client"] });
+    expect(loaded?.message.payload?.kind).toBe("loaded");
+    expect(loaded?.message.payload?.plugin?.id).toBe("echo");
 
-    const audit = loaded?.payload?.audit as
+    const audit = loaded?.message.payload?.audit as
       | { plan_id: string; step_index: number; event_id: number }
       | undefined;
     expect(audit?.plan_id).toBe("gateway.plugins.lifecycle");
@@ -336,21 +340,25 @@ describe("PluginRegistry", () => {
     );
     const lifecycleEvents = outboxRows
       .map(
-        (row) => JSON.parse(row.payload_json) as { message?: { type?: string; payload?: unknown } },
+        (row) =>
+          JSON.parse(row.payload_json) as {
+            message?: { type?: string; payload?: unknown };
+            audience?: unknown;
+          },
       )
-      .map((row) => row.message)
-      .filter((msg): msg is { type: string; payload: any } =>
-        Boolean(msg && typeof msg.type === "string"),
+      .filter((row): row is { message: { type: string; payload: any }; audience?: unknown } =>
+        Boolean(row.message && typeof row.message.type === "string"),
       );
 
     const failed = lifecycleEvents.find(
-      (evt) => evt.type === "plugin.lifecycle" && evt.payload?.kind === "failed",
+      (row) => row.message.type === "plugin.lifecycle" && row.message.payload?.kind === "failed",
     );
     expect(failed).toBeTruthy();
-    expect(failed?.payload?.plugin?.id).toBe("echo");
-    expect(failed?.payload?.reason).toBe("invalid_config");
+    expect(failed?.audience).toEqual({ roles: ["client"] });
+    expect(failed?.message.payload?.plugin?.id).toBe("echo");
+    expect(failed?.message.payload?.reason).toBe("invalid_config");
 
-    const audit = failed?.payload?.audit as
+    const audit = failed?.message.payload?.audit as
       | { plan_id: string; step_index: number; event_id: number }
       | undefined;
     expect(audit?.plan_id).toBe("gateway.plugins.lifecycle");
@@ -431,15 +439,16 @@ describe("PluginRegistry", () => {
       [DEFAULT_TENANT_ID, "ws.broadcast"],
     );
     const msg = lastOutbox
-      ? (JSON.parse(lastOutbox.payload_json) as { message?: any }).message
+      ? (JSON.parse(lastOutbox.payload_json) as { message?: any; audience?: unknown })
       : undefined;
-    expect(msg?.type).toBe("plugin_tool.invoked");
-    expect(msg?.payload?.plugin_id).toBe("echo");
-    expect(msg?.payload?.tool_id).toBe("plugin.echo.echo");
-    expect(msg?.payload?.tool_call_id).toBe("call-1");
-    expect(msg?.payload?.policy_snapshot_id).toBe("550e8400-e29b-41d4-a716-446655440000");
+    expect(msg?.audience).toEqual({ roles: ["client"] });
+    expect(msg?.message?.type).toBe("plugin_tool.invoked");
+    expect(msg?.message?.payload?.plugin_id).toBe("echo");
+    expect(msg?.message?.payload?.tool_id).toBe("plugin.echo.echo");
+    expect(msg?.message?.payload?.tool_call_id).toBe("call-1");
+    expect(msg?.message?.payload?.policy_snapshot_id).toBe("550e8400-e29b-41d4-a716-446655440000");
 
-    const audit = msg?.payload?.audit as
+    const audit = msg?.message?.payload?.audit as
       | { plan_id: string; step_index: number; event_id: number }
       | undefined;
     expect(audit?.plan_id).toBe("gateway.plugins.tool_invoked:agent-turn-test");

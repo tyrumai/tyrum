@@ -15,7 +15,12 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
 } from "@tyrum/schemas";
-import { buildTranscript, completeHandshake, computeDeviceId } from "./ws-handshake.js";
+import {
+  buildTranscript,
+  completeHandshake,
+  computeDeviceId,
+  createHandshakeIdentity,
+} from "./ws-handshake.js";
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import type { GatewayContainer } from "../../src/container.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
@@ -132,6 +137,18 @@ function waitForJsonMessageMatching(
 
     ws.on("message", onMessage);
   });
+}
+
+function recordJsonMessages(ws: WebSocket): Array<Record<string, unknown>> {
+  const messages: Array<Record<string, unknown>> = [];
+  ws.on("message", (data) => {
+    try {
+      messages.push(JSON.parse(String(data)) as Record<string, unknown>);
+    } catch {
+      // ignore malformed frames
+    }
+  });
+  return messages;
 }
 
 async function createAuthTokens(tyrumHome: string): Promise<{
@@ -954,10 +971,40 @@ describe("WS handler integration", () => {
       });
     });
 
-    const operator = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
+    const operatorIdentity = createHandshakeIdentity();
+    const observerIdentity = createHandshakeIdentity();
+    const operatorToken = await issueDeviceToken(authTokens, {
+      deviceId: operatorIdentity.deviceId,
+      role: "client",
+      scopes: ["operator.pairing"],
+      ttlSeconds: 300,
+    });
+    const observerToken = await issueDeviceToken(authTokens, {
+      deviceId: observerIdentity.deviceId,
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+
+    const operator = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(operatorToken));
     clients.push(operator);
     await waitForOpen(operator);
-    await completeHandshake(operator, { requestIdPrefix: "op", role: "client", capabilities: [] });
+    await completeHandshake(operator, {
+      requestIdPrefix: "op",
+      role: "client",
+      capabilities: [],
+      identity: operatorIdentity,
+    });
+
+    const observer = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(observerToken));
+    clients.push(observer);
+    await waitForOpen(observer);
+    await completeHandshake(observer, {
+      requestIdPrefix: "observer",
+      role: "client",
+      capabilities: [],
+      identity: observerIdentity,
+    });
 
     const node = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
     clients.push(node);
@@ -1029,6 +1076,10 @@ describe("WS handler integration", () => {
     expect(pairing).toBeDefined();
     expect(pairing!.status).toBe("pending");
 
+    const operatorMessages = recordJsonMessages(operator);
+    const observerMessages = recordJsonMessages(observer);
+    const nodeMessages = recordJsonMessages(node);
+
     operator.send(
       JSON.stringify({
         request_id: "r-approve",
@@ -1062,6 +1113,13 @@ describe("WS handler integration", () => {
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       },
     ]);
+    await waitForCondition(
+      () => operatorMessages.some((msg) => msg["type"] === "pairing.resolved"),
+      { description: "operator pairing.resolved event" },
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    expect(observerMessages.some((msg) => msg["type"] === "pairing.resolved")).toBe(false);
+    expect(nodeMessages.some((msg) => msg["type"] === "pairing.resolved")).toBe(false);
 
     stopHeartbeat();
   });

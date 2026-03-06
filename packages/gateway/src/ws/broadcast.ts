@@ -11,16 +11,18 @@ export interface WsBroadcastClusterDeps {
   outboxDal: OutboxDal;
 }
 
+export interface WsBroadcastDeps {
+  connectionManager: ConnectionManager;
+  cluster?: WsBroadcastClusterDeps;
+  logger?: Logger;
+  metrics?: MetricsRegistry;
+  maxBufferedBytes?: number;
+}
+
 export function broadcastWsEvent(
   tenantId: string,
   evt: WsEventEnvelope,
-  deps: {
-    connectionManager: ConnectionManager;
-    cluster?: WsBroadcastClusterDeps;
-    logger?: Logger;
-    metrics?: MetricsRegistry;
-    maxBufferedBytes?: number;
-  },
+  deps: WsBroadcastDeps,
   audience?: WsBroadcastAudience,
 ): void {
   const normalizedTenantId = tenantId.trim();

@@ -7,6 +7,7 @@ import { requiresPostcondition } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { Logger } from "../../observability/logger.js";
 import type { SqlDb } from "../../../statestore/types.js";
+import { APPROVAL_WS_AUDIENCE } from "../../../ws/audience.js";
 import { ApprovalDal } from "../../approval/dal.js";
 import { toApprovalContract } from "../../approval/to-contract.js";
 import { releaseLaneAndWorkspaceLeasesTx } from "./concurrency-manager.js";
@@ -371,7 +372,12 @@ export class ExecutionEngineApprovalManager {
         scope: { kind: "run", run_id: opts.runId },
         payload: { approval: approvalContract },
       };
-      await this.opts.eventEmitter.enqueueWsEvent(tx, opts.tenantId, approvalRequestedEvt);
+      await this.opts.eventEmitter.enqueueWsEvent(
+        tx,
+        opts.tenantId,
+        approvalRequestedEvt,
+        APPROVAL_WS_AUDIENCE,
+      );
     }
 
     const approvalRequest: WsRequestEnvelopeT = {
@@ -386,7 +392,12 @@ export class ExecutionEngineApprovalManager {
         expires_at: approval.expires_at,
       },
     };
-    await this.opts.eventEmitter.enqueueWsMessage(tx, opts.tenantId, approvalRequest);
+    await this.opts.eventEmitter.enqueueWsMessage(
+      tx,
+      opts.tenantId,
+      approvalRequest,
+      APPROVAL_WS_AUDIENCE,
+    );
 
     return { approvalId: approval.approval_id, resumeToken };
   }

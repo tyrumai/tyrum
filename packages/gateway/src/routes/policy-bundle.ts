@@ -23,8 +23,8 @@ import type { PolicyService } from "../modules/policy/service.js";
 import type { WsEventDal } from "../modules/ws-event/dal.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import { requireTenantId } from "../modules/auth/claims.js";
+import { POLICY_WS_AUDIENCE, type WsBroadcastAudience } from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
-import type { WsBroadcastAudience } from "../ws/audience.js";
 import { ensurePolicyOverrideCreatedEvent } from "../ws/stable-events.js";
 
 export interface PolicyBundleRouteDeps {
@@ -41,11 +41,6 @@ export interface PolicyBundleRouteDeps {
     };
   };
 }
-
-const POLICY_WS_AUDIENCE: WsBroadcastAudience = {
-  roles: ["client"],
-  required_scopes: ["operator.admin"],
-};
 
 function emitEvent(
   deps: PolicyBundleRouteDeps,

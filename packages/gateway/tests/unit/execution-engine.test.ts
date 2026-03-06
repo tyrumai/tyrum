@@ -794,6 +794,36 @@ describe("ExecutionEngine (normalized)", () => {
     expect(approval?.status).toBe("pending");
     expect(approval?.resume_token).toBeTruthy();
 
+    const approvalOutbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC",
+      ["ws.broadcast"],
+    );
+    const approvalMessages = approvalOutbox
+      .map(
+        (row) =>
+          JSON.parse(row.payload_json) as { message?: { type?: string }; audience?: unknown },
+      )
+      .filter(
+        (row) =>
+          row.message?.type === "approval.requested" || row.message?.type === "approval.request",
+      );
+    expect(approvalMessages).toEqual([
+      expect.objectContaining({
+        message: expect.objectContaining({ type: "approval.requested" }),
+        audience: {
+          roles: ["client"],
+          required_scopes: ["operator.approvals"],
+        },
+      }),
+      expect.objectContaining({
+        message: expect.objectContaining({ type: "approval.request" }),
+        audience: {
+          roles: ["client"],
+          required_scopes: ["operator.approvals"],
+        },
+      }),
+    ]);
+
     const approvalDal = new ApprovalDal(db);
     await approvalDal.respond({
       tenantId: DEFAULT_TENANT_ID,

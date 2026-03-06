@@ -1,10 +1,12 @@
 import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
 import type { SqlDb } from "../statestore/types.js";
+import type { WsBroadcastAudience } from "./audience.js";
 
 export async function enqueueWsBroadcastMessage(
   db: SqlDb,
   tenantId: string,
   message: WsEventEnvelope | WsRequestEnvelope,
+  audience?: WsBroadcastAudience,
 ): Promise<void> {
   const normalizedTenantId = tenantId.trim();
   if (normalizedTenantId.length === 0) {
@@ -14,6 +16,14 @@ export async function enqueueWsBroadcastMessage(
   await db.run(
     `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
      VALUES (?, ?, ?, ?)`,
-    [normalizedTenantId, "ws.broadcast", null, JSON.stringify({ message })],
+    [
+      normalizedTenantId,
+      "ws.broadcast",
+      null,
+      JSON.stringify({
+        message,
+        ...(audience ? { audience } : {}),
+      }),
+    ],
   );
 }
