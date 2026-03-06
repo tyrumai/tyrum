@@ -149,6 +149,10 @@ function findCommandPath(command: string): string | undefined {
 
 function ensureBuildArtifacts(): void {
   runBuildStep(
+    ["--filter", "@tyrum/desktop-node", "build"],
+    "Failed to build @tyrum/desktop-node for Electron smoke test.",
+  );
+  runBuildStep(
     ["--filter", "tyrum-desktop", "build:gateway"],
     "Failed to stage gateway for Electron smoke test.",
   );
