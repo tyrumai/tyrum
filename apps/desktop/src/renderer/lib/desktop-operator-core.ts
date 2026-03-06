@@ -10,6 +10,10 @@ import {
   type OperatorCore,
   type OperatorCoreManager,
 } from "@tyrum/operator-core";
+import {
+  createPersistentElevatedModeController,
+  type ElevatedModeController,
+} from "@tyrum/operator-ui";
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { toErrorMessage } from "./errors.js";
 
@@ -35,6 +39,7 @@ export function headersToRecord(
 
 export type DesktopOperatorCoreState = {
   core: OperatorCore | null;
+  elevatedModeController: ElevatedModeController | null;
   busy: boolean;
   errorMessage: string | null;
   needsConfiguration: boolean;
@@ -51,16 +56,19 @@ type DesktopIpcFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise
 
 function resetDesktopOperatorCoreState({
   setCore,
+  setElevatedModeController,
   setBusy,
   setErrorMessage,
   setNeedsConfiguration,
 }: {
   setCore: (core: OperatorCore | null) => void;
+  setElevatedModeController: (controller: ElevatedModeController | null) => void;
   setBusy: (busy: boolean) => void;
   setErrorMessage: (message: string | null) => void;
   setNeedsConfiguration: (needsConfiguration: boolean) => void;
 }): void {
   setCore(null);
+  setElevatedModeController(null);
   setBusy(false);
   setErrorMessage(null);
   setNeedsConfiguration(false);
@@ -115,6 +123,30 @@ function createDesktopOperatorCoreManager({
         deps: { http },
       });
     },
+  });
+}
+
+function createDesktopElevatedModeController({
+  connection,
+  ipcFetch,
+  deviceIdentity,
+  elevatedModeStore,
+}: {
+  connection: OperatorConnectionInfo;
+  ipcFetch: DesktopIpcFetch;
+  deviceIdentity: Awaited<ReturnType<typeof createDeviceIdentity>>;
+  elevatedModeStore: ElevatedModeStore;
+}): ElevatedModeController {
+  const baselineAuth = createBearerTokenAuth(connection.token);
+  const http = createTyrumHttpClient({
+    baseUrl: connection.httpBaseUrl,
+    auth: httpAuthForAuth(baselineAuth),
+    fetch: ipcFetch,
+  });
+  return createPersistentElevatedModeController({
+    http,
+    deviceId: deviceIdentity.deviceId,
+    elevatedModeStore,
   });
 }
 
@@ -173,6 +205,7 @@ async function bootDesktopOperatorCore({
   unsubManagerRef,
   elevatedModeStoreRef,
   setCore,
+  setElevatedModeController,
   setBusy,
   setErrorMessage,
   setNeedsConfiguration,
@@ -183,6 +216,7 @@ async function bootDesktopOperatorCore({
   unsubManagerRef: MutableRefObject<(() => void) | null>;
   elevatedModeStoreRef: MutableRefObject<ElevatedModeStore | null>;
   setCore: (core: OperatorCore | null) => void;
+  setElevatedModeController: (controller: ElevatedModeController | null) => void;
   setBusy: (busy: boolean) => void;
   setErrorMessage: (message: string | null) => void;
   setNeedsConfiguration: (needsConfiguration: boolean) => void;
@@ -197,6 +231,7 @@ async function bootDesktopOperatorCore({
     if (!hasConfig) {
       setNeedsConfiguration(true);
       setCore(null);
+      setElevatedModeController(null);
       setErrorMessage(null);
       return;
     }
@@ -209,12 +244,19 @@ async function bootDesktopOperatorCore({
     const deviceIdentity = await createDeviceIdentity();
     if (isDisposed()) return;
 
+    const ipcFetch = createDesktopIpcFetch(api);
     const elevatedModeStore = createElevatedModeStore();
+    const elevatedModeController = createDesktopElevatedModeController({
+      connection,
+      ipcFetch,
+      deviceIdentity,
+      elevatedModeStore,
+    });
     let manager: OperatorCoreManager;
     try {
       manager = createDesktopOperatorCoreManager({
         connection,
-        ipcFetch: createDesktopIpcFetch(api),
+        ipcFetch,
         deviceIdentity,
         elevatedModeStore,
       });
@@ -238,12 +280,14 @@ async function bootDesktopOperatorCore({
       isDisposed,
       setCore,
     });
+    setElevatedModeController(elevatedModeController);
     manager.getCore().connect();
   } catch (error) {
     if (isDisposed()) return;
     setNeedsConfiguration(false);
     setErrorMessage(toErrorMessage(error));
     setCore(null);
+    setElevatedModeController(null);
   } finally {
     if (!isDisposed()) {
       setBusy(false);
@@ -257,6 +301,8 @@ export function useDesktopOperatorCore(
   const api = window.tyrumDesktop;
   const enabled = options?.enabled ?? true;
   const [core, setCore] = useState<OperatorCore | null>(null);
+  const [elevatedModeController, setElevatedModeController] =
+    useState<ElevatedModeController | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [needsConfiguration, setNeedsConfiguration] = useState(false);
@@ -274,7 +320,13 @@ export function useDesktopOperatorCore(
     const isDisposed = () => disposed;
 
     if (!api || !enabled) {
-      resetDesktopOperatorCoreState({ setCore, setBusy, setErrorMessage, setNeedsConfiguration });
+      resetDesktopOperatorCoreState({
+        setCore,
+        setElevatedModeController,
+        setBusy,
+        setErrorMessage,
+        setNeedsConfiguration,
+      });
       return;
     }
 
@@ -285,6 +337,7 @@ export function useDesktopOperatorCore(
       unsubManagerRef,
       elevatedModeStoreRef,
       setCore,
+      setElevatedModeController,
       setBusy,
       setErrorMessage,
       setNeedsConfiguration,
@@ -296,5 +349,5 @@ export function useDesktopOperatorCore(
     };
   }, [api, enabled, retryCount]);
 
-  return { core, busy, errorMessage, needsConfiguration, retry };
+  return { core, elevatedModeController, busy, errorMessage, needsConfiguration, retry };
 }

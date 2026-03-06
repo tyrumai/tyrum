@@ -43,7 +43,9 @@ export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    const ttlSeconds = parsed.data.ttl_seconds ?? MAX_DEVICE_TOKEN_TTL_SECONDS;
+    const ttlSeconds = parsed.data.persistent
+      ? undefined
+      : (parsed.data.ttl_seconds ?? MAX_DEVICE_TOKEN_TTL_SECONDS);
     const issued = await deps.authTokens.issueToken({
       tenantId,
       role: parsed.data.role,
@@ -56,11 +58,6 @@ export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
       }),
     });
 
-    const expiresAt = issued.row.expires_at;
-    if (!expiresAt) {
-      throw new Error("issued device token unexpectedly missing expires_at");
-    }
-
     return c.json(
       DeviceTokenIssueResponse.parse({
         token_kind: "device",
@@ -70,7 +67,7 @@ export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
         role: issued.row.role,
         scopes: JSON.parse(issued.row.scopes_json) as unknown,
         issued_at: issued.row.issued_at,
-        expires_at: expiresAt,
+        expires_at: issued.row.expires_at ?? null,
       }),
       201,
     );

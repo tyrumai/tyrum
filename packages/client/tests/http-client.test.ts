@@ -208,6 +208,39 @@ describe("createTyrumHttpClient", () => {
     expect(getHeader(init, "content-type")).toBe("application/json");
   });
 
+  it("parses persistent device token responses with null expires_at", async () => {
+    const fetch = makeFetchMock(async () =>
+      jsonResponse(
+        {
+          token_kind: "device",
+          token: "tok_1",
+          token_id: "tid_1",
+          device_id: "device-1",
+          role: "client",
+          scopes: ["operator.read"],
+          issued_at: "2026-02-25T12:00:00.000Z",
+          expires_at: null,
+        },
+        201,
+      ),
+    );
+
+    const client = createTyrumHttpClient({
+      baseUrl: "https://gateway.example/",
+      auth: { type: "bearer", token: "root-token" },
+      fetch,
+    });
+
+    const issued = await client.deviceTokens.issue({
+      device_id: "device-1",
+      role: "client",
+      scopes: ["operator.read"],
+      persistent: true,
+    });
+
+    expect(issued.expires_at).toBeNull();
+  });
+
   it("supports cookie auth strategy for browser/session workflows", async () => {
     const fetch = makeFetchMock(async () => jsonResponse({ status: "ok", plugins: [] }));
     const client = createTyrumHttpClient({

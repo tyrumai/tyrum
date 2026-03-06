@@ -11,7 +11,16 @@ export const DeviceTokenIssueRequest = z
     device_id: z.string().trim().min(1),
     role: Role,
     scopes: z.array(Scope).default([]),
+    persistent: z.boolean().optional(),
     ttl_seconds: z.number().int().positive().max(MAX_DEVICE_TOKEN_TTL_SECONDS).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.persistent || value.ttl_seconds === undefined) return;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "persistent device tokens cannot also set ttl_seconds",
+      path: ["ttl_seconds"],
+    });
   })
   .strict();
 export type DeviceTokenIssueRequest = z.infer<typeof DeviceTokenIssueRequest>;
@@ -25,7 +34,7 @@ export const DeviceTokenIssueResponse = z
     role: Role,
     scopes: z.array(Scope),
     issued_at: DateTimeSchema,
-    expires_at: DateTimeSchema,
+    expires_at: DateTimeSchema.nullable(),
   })
   .strict();
 export type DeviceTokenIssueResponse = z.infer<typeof DeviceTokenIssueResponse>;

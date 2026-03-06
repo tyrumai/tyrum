@@ -61,6 +61,36 @@ describe("elevated mode", () => {
     );
   });
 
+  it("supports persistent elevated mode without scheduling timers", () => {
+    vi.useFakeTimers();
+
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+    try {
+      const store = createElevatedModeStore();
+      const baseline = createBearerTokenAuth("baseline-token");
+
+      store.enter({ elevatedToken: "persistent-token", expiresAt: null });
+
+      expect(isElevatedModeActive(store.getSnapshot())).toBe(true);
+      expect(store.getSnapshot()).toMatchObject({
+        status: "active",
+        elevatedToken: "persistent-token",
+        expiresAt: null,
+        remainingMs: null,
+      });
+      expect(selectAuthForElevatedMode({ baseline, elevatedMode: store.getSnapshot() })).toEqual({
+        type: "bearer-token",
+        token: "persistent-token",
+      });
+      expect(setTimeoutSpy).not.toHaveBeenCalled();
+      expect(setIntervalSpy).not.toHaveBeenCalled();
+    } finally {
+      setTimeoutSpy.mockRestore();
+      setIntervalSpy.mockRestore();
+    }
+  });
+
   it("does not select elevated auth when elevated mode is expired", () => {
     const baseline = createBearerTokenAuth("baseline-token");
     const elevatedMode = {
@@ -210,5 +240,14 @@ describe("elevated mode", () => {
         remainingMs: null,
       }),
     ).toBe("1:01");
+  });
+
+  it("returns placeholder remaining time for persistent elevated mode", () => {
+    expect(
+      formatElevatedModeRemaining({
+        expiresAt: null,
+        remainingMs: null,
+      }),
+    ).toBe("--:--");
   });
 });

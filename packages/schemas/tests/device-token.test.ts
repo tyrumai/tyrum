@@ -49,6 +49,24 @@ describe("Device token contracts", () => {
     expect(req.ttl_seconds).toBe(900);
   });
 
+  it("parses persistent issue requests without a ttl", () => {
+    const req = DeviceTokenIssueRequest.parse({
+      device_id: "dev_client_1",
+      role: "client",
+      scopes: ["operator.read"],
+      persistent: true,
+    });
+    expect(req.persistent).toBe(true);
+    expect(req.ttl_seconds).toBeUndefined();
+  });
+
+  it("rejects issue requests that mix persistent and ttl_seconds", () => {
+    expectRejects(DeviceTokenIssueRequest, {
+      ...baseIssueRequest,
+      persistent: true,
+    });
+  });
+
   it("rejects issue request with wrong device_id type", () => {
     expectRejects(DeviceTokenIssueRequest, { ...baseIssueRequest, device_id: 123 });
   });
@@ -61,6 +79,14 @@ describe("Device token contracts", () => {
     const res = DeviceTokenIssueResponse.parse(baseIssueResponse);
     expect(res.token_id).toBe("tok_1");
     expect(res.role).toBe("client");
+  });
+
+  it("parses issue responses for persistent tokens", () => {
+    const res = DeviceTokenIssueResponse.parse({
+      ...baseIssueResponse,
+      expires_at: null,
+    });
+    expect(res.expires_at).toBeNull();
   });
 
   it("rejects issue response missing token", () => {

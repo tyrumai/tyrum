@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type DesktopOperatorCoreState = {
   core: unknown | null;
+  elevatedModeController: { enter: () => Promise<void>; exit: () => Promise<void> } | null;
   busy: boolean;
   errorMessage: string | null;
   needsConfiguration: boolean;
@@ -86,6 +87,7 @@ const {
 
   let operatorCoreState: DesktopOperatorCoreState = {
     core: null,
+    elevatedModeController: null,
     busy: false,
     errorMessage: null,
     needsConfiguration: false,
@@ -183,6 +185,10 @@ describe("desktop renderer main bootstrap", () => {
     const core = { name: "core" };
     setDesktopOperatorCoreState({
       core,
+      elevatedModeController: {
+        enter: vi.fn(async () => {}),
+        exit: vi.fn(async () => {}),
+      },
       busy: false,
       errorMessage: null,
       needsConfiguration: false,
@@ -205,6 +211,7 @@ describe("desktop renderer main bootstrap", () => {
     expect((operatorUiAppElement as ReactElementLike).type).toBe(OperatorUiAppMock);
     expect((operatorUiAppElement as ReactElementLike).props.core).toBe(core);
     expect((operatorUiAppElement as ReactElementLike).props.mode).toBe("desktop");
+    expect((operatorUiAppElement as ReactElementLike).props.elevatedModeController).not.toBeNull();
     expect((operatorUiAppElement as ReactElementLike).props.onReloadPage).toBe(retry);
   });
 
@@ -212,6 +219,7 @@ describe("desktop renderer main bootstrap", () => {
     const retry = vi.fn();
     setDesktopOperatorCoreState({
       core: null,
+      elevatedModeController: null,
       busy: false,
       errorMessage: "boom",
       needsConfiguration: false,
@@ -246,6 +254,7 @@ describe("desktop renderer main bootstrap", () => {
     const retry = vi.fn();
     setDesktopOperatorCoreState({
       core: null,
+      elevatedModeController: null,
       busy: false,
       errorMessage: null,
       needsConfiguration: true,

@@ -43,12 +43,14 @@ import {
   parseAgentIdFromKey,
 } from "./lib/status-session-lanes.js";
 import { useOperatorStore } from "./use-operator-store.js";
+import type { ElevatedModeController } from "./components/elevated-mode/elevated-mode-controller.js";
 
 export type OperatorUiMode = "web" | "desktop";
 
 export interface OperatorUiAppProps {
   core: OperatorCore;
   mode: OperatorUiMode;
+  elevatedModeController?: ElevatedModeController;
   onReloadPage?: () => void;
   onReconfigureGateway?: (httpUrl: string, wsUrl: string) => void;
 }
@@ -120,13 +122,19 @@ function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {
 export function OperatorUiApp({
   core,
   mode,
+  elevatedModeController,
   onReloadPage,
   onReconfigureGateway,
 }: OperatorUiAppProps) {
   return (
     <ErrorBoundary onReloadPage={onReloadPage}>
       <OperatorUiAppHostBoundary mode={mode}>
-        <OperatorUiAppRoot core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />
+        <OperatorUiAppRoot
+          core={core}
+          mode={mode}
+          elevatedModeController={elevatedModeController}
+          onReconfigureGateway={onReconfigureGateway}
+        />
       </OperatorUiAppHostBoundary>
     </ErrorBoundary>
   );
@@ -151,8 +159,9 @@ function OperatorUiAppHostBoundary({
 function OperatorUiAppRoot({
   core,
   mode,
+  elevatedModeController,
   onReconfigureGateway,
-}: Pick<OperatorUiAppProps, "core" | "mode" | "onReconfigureGateway">) {
+}: Pick<OperatorUiAppProps, "core" | "mode" | "elevatedModeController" | "onReconfigureGateway">) {
   const [route, setRoute] = useState<OperatorUiRouteId>("dashboard");
   const connection = useOperatorStore(core.connectionStore);
   const autoSync = useOperatorStore(core.autoSyncStore);
@@ -251,38 +260,38 @@ function OperatorUiAppRoot({
     mode === "web" ? !showOperatorRoutes : !showOperatorRoutes && !isPlatformRoute;
 
   const shell = (
-    <AppShell
-      mode={mode}
-      viewportLocked={route === "chat"}
-      sidebar={
-        showShell ? (
-          <Sidebar
-            items={sidebarItems}
-            secondaryItems={platformItems}
-            secondaryLabel="Platform"
-            activeItemId={route}
-            onNavigate={navigate}
-            connectionStatus={connection.status}
-            onSyncNow={() => {
-              void core.syncAllNow();
-            }}
-            syncNowDisabled={connection.status !== "connected"}
-            syncNowLoading={autoSync.isSyncing}
-          />
-        ) : null
-      }
-      mobileNav={
-        showShell ? (
-          <MobileNav
-            items={mobileItems}
-            overflowItems={mobileOverflowItems}
-            activeItemId={route}
-            onNavigate={navigate}
-          />
-        ) : null
-      }
-    >
-      <ElevatedModeProvider core={core} mode={mode}>
+    <ElevatedModeProvider core={core} mode={mode} elevatedModeController={elevatedModeController}>
+      <AppShell
+        mode={mode}
+        viewportLocked={route === "chat"}
+        sidebar={
+          showShell ? (
+            <Sidebar
+              items={sidebarItems}
+              secondaryItems={platformItems}
+              secondaryLabel="Platform"
+              activeItemId={route}
+              onNavigate={navigate}
+              connectionStatus={connection.status}
+              onSyncNow={() => {
+                void core.syncAllNow();
+              }}
+              syncNowDisabled={connection.status !== "connected"}
+              syncNowLoading={autoSync.isSyncing}
+            />
+          ) : null
+        }
+        mobileNav={
+          showShell ? (
+            <MobileNav
+              items={mobileItems}
+              overflowItems={mobileOverflowItems}
+              activeItemId={route}
+              onNavigate={navigate}
+            />
+          ) : null
+        }
+      >
         {showConnectPage ? (
           <div className="mx-auto mt-20 max-w-md w-full px-4">
             <ConnectPage core={core} mode={mode} onReconfigureGateway={onReconfigureGateway} />
@@ -303,8 +312,8 @@ function OperatorUiAppRoot({
             {route === "browser" && hostKind === "web" && <BrowserCapabilitiesPage />}
           </>
         )}
-      </ElevatedModeProvider>
-    </AppShell>
+      </AppShell>
+    </ElevatedModeProvider>
   );
 
   const app = (

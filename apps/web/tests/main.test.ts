@@ -10,9 +10,22 @@ vi.mock("@tyrum/operator-core", () => ({
   createGatewayAuthSession: vi.fn(),
   createOperatorCore: vi.fn(),
   createOperatorCoreManager: vi.fn(),
+  createTyrumHttpClient: vi.fn(),
+  httpAuthForAuth: vi.fn(),
 }));
 
 vi.mock("@tyrum/operator-ui", () => ({
+  ELEVATED_MODE_SCOPES: [
+    "operator.read",
+    "operator.write",
+    "operator.approvals",
+    "operator.pairing",
+    "operator.admin",
+  ],
+  createPersistentElevatedModeController: vi.fn(() => ({
+    enter: vi.fn(async () => {}),
+    exit: vi.fn(async () => {}),
+  })),
   OperatorUiApp: () => null,
   OperatorUiHostProvider: ({ children }: { children: unknown }) => children ?? null,
   ThemeProvider: ({ children }: { children: unknown }) => children ?? null,
@@ -35,6 +48,10 @@ describe("apps/web main bootstrap", () => {
   type RootMock = { render: ReturnType<typeof vi.fn> };
 
   type OperatorUiAppProps = {
+    elevatedModeController?: {
+      enter: () => Promise<void>;
+      exit: () => Promise<void>;
+    };
     onReloadPage: () => void;
     onReconfigureGateway: (httpUrl: string, wsUrl: string) => void;
   };
@@ -100,6 +117,13 @@ describe("apps/web main bootstrap", () => {
       deviceIdentity as unknown as Awaited<ReturnType<typeof operatorCore.createDeviceIdentity>>,
     );
     vi.mocked(operatorCore.createOperatorCore).mockReturnValue({} as never);
+    vi.mocked(operatorCore.httpAuthForAuth).mockReturnValue({ type: "bearer", token: "baseline" });
+    vi.mocked(operatorCore.createTyrumHttpClient).mockReturnValue({
+      deviceTokens: {
+        issue: vi.fn(),
+        revoke: vi.fn(),
+      },
+    } as never);
 
     const { manager, unsubscribe, core } = makeManagerMock();
     vi.mocked(operatorCore.createOperatorCoreManager).mockReturnValue(
@@ -281,6 +305,8 @@ describe("apps/web main bootstrap", () => {
     expect(root.render).toHaveBeenCalledTimes(2);
 
     const props = getRenderedOperatorUiProps(root);
+    expect(typeof props.elevatedModeController?.enter).toBe("function");
+    expect(typeof props.elevatedModeController?.exit).toBe("function");
     props.onReloadPage();
     props.onReconfigureGateway("http://gateway.internal", "ws://gateway.internal/ws");
 

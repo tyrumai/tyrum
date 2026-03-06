@@ -47,8 +47,8 @@ describe("@tyrum/operator-core auth", () => {
           status: "active",
           elevatedToken: "elevated-token",
           enteredAt: "2026-02-27T00:00:00.000Z",
-          expiresAt: "2026-02-27T00:01:00.000Z",
-          remainingMs: 60_000,
+          expiresAt: null,
+          remainingMs: null,
         },
       }),
     ).toEqual({ type: "bearer-token", token: "elevated-token" });
