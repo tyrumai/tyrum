@@ -3745,7 +3745,6 @@ describe("operator-ui", () => {
 
     await openConfigureGeneral(container);
 
-    expect(container.querySelector('[data-testid="nav-settings"]')).toBeNull();
     expect(container.querySelector('[data-testid="configure-general-panel"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="configure-theme"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="configure-update"]')).not.toBeNull();

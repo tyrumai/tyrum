@@ -221,7 +221,83 @@ describe("Platform pages", () => {
           tlsAllowSelfSigned: true,
         },
       });
+      expect(desktopApi.node.disconnect).toHaveBeenCalledTimes(1);
+      expect(desktopApi.gateway.stop).toHaveBeenCalledTimes(1);
       expect(onReloadPage).toHaveBeenCalledTimes(1);
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("clears general saved feedback after browser or shell edits", async () => {
+    const setConfig = vi.fn(async () => {});
+    const desktopApi = {
+      getConfig: vi.fn(async () => ({
+        mode: "embedded",
+        embedded: { port: 8788 },
+        permissions: { profile: "balanced", overrides: {} },
+        capabilities: { desktop: true, playwright: true, cli: true, http: true },
+        cli: { allowedCommands: [], allowedWorkingDirs: [] },
+        web: { allowedDomains: [], headless: true },
+      })),
+      setConfig,
+      gateway: {
+        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
+        start: vi.fn(async () => ({ status: "running", port: 8788 })),
+        stop: vi.fn(async () => ({ status: "stopped" })),
+      },
+      node: {
+        connect: vi.fn(async () => ({ status: "connected" })),
+        disconnect: vi.fn(async () => ({ status: "disconnected" })),
+      },
+      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
+    } satisfies DesktopApi;
+
+    const testRoot = renderWithHost(
+      { kind: "desktop", api: desktopApi },
+      React.createElement(NodeConfigurePage),
+    );
+    try {
+      await flushEffects();
+
+      const safeLabel = Array.from(testRoot.container.querySelectorAll("label")).find((el) =>
+        el.textContent?.includes("Safe"),
+      );
+      expect(safeLabel).not.toBeUndefined();
+      act(() => {
+        safeLabel?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      await act(async () => {
+        clickByTestId(testRoot.container, "node-configure-save-general");
+        await Promise.resolve();
+      });
+
+      const generalSaveButton = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="node-configure-save-general"]',
+      );
+      expect(generalSaveButton?.textContent).toContain("Saved!");
+
+      await act(async () => {
+        clickTab(testRoot.container, "Shell");
+        await Promise.resolve();
+      });
+
+      const commandsTextarea = getTextareaByLabel(testRoot.container, "Allowed commands");
+      act(() => {
+        setNativeValue(commandsTextarea, "echo hello");
+      });
+
+      await act(async () => {
+        clickTab(testRoot.container, "General");
+        await Promise.resolve();
+      });
+
+      expect(
+        testRoot.container.querySelector<HTMLButtonElement>(
+          '[data-testid="node-configure-save-general"]',
+        )?.textContent,
+      ).toBe("Save General Settings");
     } finally {
       cleanupTestRoot(testRoot);
     }

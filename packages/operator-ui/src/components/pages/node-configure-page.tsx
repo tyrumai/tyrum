@@ -900,10 +900,17 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
     setGeneralError(null);
     setGeneralSaved(false);
 
+    const previousConnection = initialConnectionRef.current
+      ? cloneConnectionState(initialConnectionRef.current)
+      : null;
     const partial = buildGeneralSavePartial(security, connection);
-    const shouldReload = initialConnectionRef.current
-      ? hasConnectionSettingsChanged(initialConnectionRef.current, connection)
+    const shouldReload = previousConnection
+      ? hasConnectionSettingsChanged(previousConnection, connection)
       : true;
+    const shouldStopEmbeddedGateway =
+      previousConnection !== null &&
+      shouldReload &&
+      needsEmbeddedGatewayRestart(previousConnection, connection);
 
     void api
       .setConfig(partial)
@@ -927,6 +934,14 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
         }));
 
         if (shouldReload && onReloadPage) {
+          await api.node.disconnect().catch(() => {
+            // Retry bootstrap will recreate the node connection; disconnect is best-effort.
+          });
+          if (shouldStopEmbeddedGateway) {
+            await api.gateway.stop().catch(() => {
+              // Best-effort stop; retry bootstrap will surface any follow-up connection issue.
+            });
+          }
           onReloadPage();
           return;
         }
@@ -1027,6 +1042,7 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
         ...current,
         [field === "allowedCommands" ? "cliCommands" : "cliWorkingDirs"]: value,
       }));
+      setGeneralSaved(false);
       setSecuritySaved(false);
     },
     updateBrowserDomains: (value: string) => {
@@ -1035,6 +1051,7 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
         web: { ...current.web, allowedDomains: splitAllowlistLines(value) },
       }));
       setAllowlistDrafts((current) => ({ ...current, browserDomains: value }));
+      setGeneralSaved(false);
       setSecuritySaved(false);
     },
     setBrowserHeadless: (headless: boolean) => {
@@ -1042,6 +1059,7 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
         ...current,
         web: { ...current.web, headless },
       }));
+      setGeneralSaved(false);
       setSecuritySaved(false);
     },
     setMode: (mode: ConnectionState["mode"]) => {
@@ -1160,6 +1178,13 @@ function hasConnectionSettingsChanged(
       normalizeTlsFingerprint(currentState.remoteTlsCertFingerprint256) ||
     currentState.remoteToken.trim().length > 0
   );
+}
+
+function needsEmbeddedGatewayRestart(
+  initialState: ConnectionState,
+  currentState: ConnectionState,
+): boolean {
+  return initialState.mode === "embedded" || currentState.mode === "embedded";
 }
 
 function validateConnectionState(state: ConnectionState): string | null {
