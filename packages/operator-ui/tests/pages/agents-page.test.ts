@@ -213,9 +213,9 @@ describe("AgentsPage", () => {
   });
 
   it("waits for a discovered agent scope before loading memory", async () => {
-    let resolveAgentList: ((value: {
-      agents: Array<{ agent_key: string; agent_id?: string }>;
-    }) => void) | null = null;
+    let resolveAgentList:
+      | ((value: { agents: Array<{ agent_key: string; agent_id?: string }> }) => void)
+      | null = null;
     const agentListGet = vi.fn(
       () =>
         new Promise<{ agents: Array<{ agent_key: string; agent_id?: string }> }>((resolve) => {

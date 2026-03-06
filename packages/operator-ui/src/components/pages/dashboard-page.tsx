@@ -215,7 +215,7 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
           loading={status.loading.status && status.status === null}
           value={activeRunsCount === null ? "-" : String(activeRunsCount)}
           badge={
-            activeRunsCount && activeRunsCount > 0 ? (
+            activeRunsCount !== null && activeRunsCount > 0 ? (
               <Badge data-testid="dashboard-runs-badge" variant="default">
                 {activeRunsCount}
               </Badge>
