@@ -6,7 +6,7 @@ The wire shapes are defined by shared, versioned contracts (see [Contracts](../c
 
 ## Event envelope
 
-- `event_id`: unique id for dedupe.
+- `event_id`: unique id for dedupe. For `approval.resolved`, `pairing.resolved`, and `policy_override.created`, the gateway persists event identity so re-emission of the same transition reuses the same `event_id`.
 - `type`: event name (for example `run.updated`, `approval.requested`, `artifact.created`, `capability.ready`, `attempt.evidence`).
 - `occurred_at`: timestamp.
 - `scope`: routing scope (global, agent, session key/lane, run, node, or client).
@@ -103,12 +103,17 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 
 - Some gateway→peer interactions are modeled as **requests** (with responses) rather than events, for example `task.execute` and `approval.request`.
 - Events are **tenant-scoped**. The gateway delivers an event only to peers authenticated within the same `tenant_id`.
+- Stable event identity is currently persisted for:
+  - `approval.resolved` (per approval transition)
+  - `pairing.resolved` (per pairing transition/status)
+  - `policy_override.created` (per override)
 
 ## Delivery expectations
 
 - Events are delivered **at-least-once**. Consumers must tolerate duplicates and implement idempotent handling.
 - Consumers should tolerate **unknown `type` values** (forward-compat) and ignore events they don't recognize.
 - Deduplicate using `event_id` (and treat `occurred_at` as informational, not a strict ordering guarantee).
+- Re-emitting the same `approval.resolved`, `pairing.resolved`, or `policy_override.created` transition preserves the original `event_id`; other event types may still receive fresh ids when independently re-emitted.
 - Clients should tolerate reconnect and resubscribe without losing safety invariants; durable state in the StateStore remains the source of truth.
 
 ### Client SDK semantics

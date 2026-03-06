@@ -51,6 +51,7 @@ import { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "./modules/models/session-pin-dal.js";
 import { ConfiguredModelPresetDal } from "./modules/models/configured-model-preset-dal.js";
 import { ExecutionProfileModelAssignmentDal } from "./modules/models/execution-profile-model-assignment-dal.js";
+import { WsEventDal } from "./modules/ws-event/dal.js";
 import type { Playbook } from "@tyrum/schemas";
 import type { AgentRegistry } from "./modules/agent/registry.js";
 import type { AuthTokenService } from "./modules/auth/auth-token-service.js";
@@ -129,6 +130,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   const configuredModelPresetDal = new ConfiguredModelPresetDal(container.db);
   const executionProfileModelAssignmentDal = new ExecutionProfileModelAssignmentDal(container.db);
   const routingConfigDal = new RoutingConfigDal(container.db);
+  const wsEventDal = new WsEventDal(container.db);
 
   const secretProviderForTenant = opts.secretProviderForTenant;
 
@@ -237,6 +239,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     createPairingRoutes({
       logger: container.logger,
       nodePairingDal: container.nodePairingDal,
+      wsEventDal,
       ws: opts.connectionManager
         ? {
             connectionManager: opts.connectionManager,
@@ -266,6 +269,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       logger: container.logger,
       policyService: container.policyService,
       policyOverrideDal: container.policyOverrideDal,
+      wsEventDal,
       ws: opts.connectionManager
         ? {
             connectionManager: opts.connectionManager,
@@ -387,6 +391,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       approvalDal: container.approvalDal,
       logger: container.logger,
       policyOverrideDal: container.policyOverrideDal,
+      wsEventDal,
       ws: opts.connectionManager
         ? {
             connectionManager: opts.connectionManager,

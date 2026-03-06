@@ -5,6 +5,7 @@
 import { Hono } from "hono";
 import type { NodePairingDal } from "../modules/node/pairing-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
+import type { WsEventDal } from "../modules/ws-event/dal.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
@@ -13,10 +14,12 @@ import { broadcastWsEvent } from "../ws/broadcast.js";
 import { CapabilityDescriptor, NodePairingTrustLevel, type WsEventEnvelope } from "@tyrum/schemas";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import { requireTenantId } from "../modules/auth/claims.js";
+import { ensurePairingResolvedEvent } from "../ws/stable-events.js";
 
 export interface PairingRouteDeps {
   nodePairingDal: NodePairingDal;
   logger?: Logger;
+  wsEventDal?: WsEventDal;
   ws?: {
     connectionManager: ConnectionManager;
     maxBufferedBytes?: number;
@@ -114,12 +117,12 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       });
     }
 
-    emitEvent(deps, tenantId, {
-      event_id: crypto.randomUUID(),
-      type: "pairing.resolved",
-      occurred_at: new Date().toISOString(),
-      payload: { pairing },
+    const persistedEvent = await ensurePairingResolvedEvent({
+      tenantId,
+      pairing,
+      wsEventDal: deps.wsEventDal,
     });
+    emitEvent(deps, tenantId, persistedEvent.event);
 
     return c.json({ status: "ok", pairing });
   });
@@ -148,12 +151,12 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     }
     const { pairing } = resolved;
 
-    emitEvent(deps, tenantId, {
-      event_id: crypto.randomUUID(),
-      type: "pairing.resolved",
-      occurred_at: new Date().toISOString(),
-      payload: { pairing },
+    const persistedEvent = await ensurePairingResolvedEvent({
+      tenantId,
+      pairing,
+      wsEventDal: deps.wsEventDal,
     });
+    emitEvent(deps, tenantId, persistedEvent.event);
 
     return c.json({ status: "ok", pairing });
   });
@@ -180,12 +183,12 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       return c.json({ error: "not_found", message: "pairing not found or not approved" }, 404);
     }
 
-    emitEvent(deps, tenantId, {
-      event_id: crypto.randomUUID(),
-      type: "pairing.resolved",
-      occurred_at: new Date().toISOString(),
-      payload: { pairing },
+    const persistedEvent = await ensurePairingResolvedEvent({
+      tenantId,
+      pairing,
+      wsEventDal: deps.wsEventDal,
     });
+    emitEvent(deps, tenantId, persistedEvent.event);
 
     return c.json({ status: "ok", pairing });
   });

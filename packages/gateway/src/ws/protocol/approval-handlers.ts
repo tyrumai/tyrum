@@ -11,6 +11,7 @@ import type { ApprovalRow } from "../../modules/approval/dal.js";
 import { toApprovalContract } from "../../modules/approval/to-contract.js";
 import { isSafeSuggestedOverridePattern } from "../../modules/policy/override-guardrails.js";
 import type { ConnectedClient } from "../connection-manager.js";
+import { ensureApprovalResolvedEvent, ensurePolicyOverrideCreatedEvent } from "../stable-events.js";
 import { broadcastEvent, errorResponse } from "./helpers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 
@@ -267,16 +268,12 @@ async function finalizeApprovalResolve(params: {
   const result = buildApprovalResolveResult(approval, createdOverrides);
 
   if (transitioned) {
-    broadcastEvent(
+    const persistedEvent = await ensureApprovalResolvedEvent({
       tenantId,
-      {
-        event_id: crypto.randomUUID(),
-        type: "approval.resolved",
-        occurred_at: new Date().toISOString(),
-        payload: { approval },
-      },
-      deps,
-    );
+      approval,
+      wsEventDal: deps.wsEventDal,
+    });
+    broadcastEvent(tenantId, persistedEvent.event, deps, persistedEvent.audience);
   }
   return { request_id: msg.request_id, type: msg.type, ok: true, result };
 }
@@ -442,16 +439,12 @@ async function createPolicyOverrides(params: {
       createdFromPolicySnapshotId: createOverrideContext.policySnapshotId,
     });
     createdOverrides.push(row);
-    broadcastEvent(
+    const persistedEvent = await ensurePolicyOverrideCreatedEvent({
       tenantId,
-      {
-        event_id: crypto.randomUUID(),
-        type: "policy_override.created",
-        occurred_at: new Date().toISOString(),
-        payload: { override: row },
-      },
-      deps,
-    );
+      override: row,
+      wsEventDal: deps.wsEventDal,
+    });
+    broadcastEvent(tenantId, persistedEvent.event, deps, persistedEvent.audience);
   }
 
   return createdOverrides;

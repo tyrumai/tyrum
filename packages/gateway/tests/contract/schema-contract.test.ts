@@ -44,6 +44,7 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
         "canvas_artifacts",
         "outbox",
         "outbox_consumers",
+        "ws_events",
         "connections",
         "presence_entries",
         "node_pairings",

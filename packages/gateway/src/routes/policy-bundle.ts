@@ -20,15 +20,18 @@ import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { PolicyOverrideDal } from "../modules/policy/override-dal.js";
 import type { PolicyService } from "../modules/policy/service.js";
+import type { WsEventDal } from "../modules/ws-event/dal.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
 import type { WsBroadcastAudience } from "../ws/audience.js";
+import { ensurePolicyOverrideCreatedEvent } from "../ws/stable-events.js";
 
 export interface PolicyBundleRouteDeps {
   logger?: Logger;
   policyService: PolicyService;
   policyOverrideDal: PolicyOverrideDal;
+  wsEventDal?: WsEventDal;
   ws?: {
     connectionManager: ConnectionManager;
     maxBufferedBytes?: number;
@@ -44,10 +47,15 @@ const POLICY_WS_AUDIENCE: WsBroadcastAudience = {
   required_scopes: ["operator.admin"],
 };
 
-function emitEvent(deps: PolicyBundleRouteDeps, tenantId: string, evt: WsEventEnvelope): void {
+function emitEvent(
+  deps: PolicyBundleRouteDeps,
+  tenantId: string,
+  evt: WsEventEnvelope,
+  audience?: WsBroadcastAudience,
+): void {
   const ws = deps.ws;
   if (!ws) return;
-  broadcastWsEvent(tenantId, evt, { ...ws, logger: deps.logger }, POLICY_WS_AUDIENCE);
+  broadcastWsEvent(tenantId, evt, { ...ws, logger: deps.logger }, audience ?? POLICY_WS_AUDIENCE);
 }
 
 export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
@@ -118,13 +126,13 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
       expiresAt: parsed.data.expires_at ?? null,
     });
 
-    const evt: WsEventEnvelope = {
-      event_id: crypto.randomUUID(),
-      type: "policy_override.created",
-      occurred_at: new Date().toISOString(),
-      payload: { override: row },
-    };
-    emitEvent(deps, tenantId, evt);
+    const persistedEvent = await ensurePolicyOverrideCreatedEvent({
+      tenantId,
+      override: row,
+      audience: POLICY_WS_AUDIENCE,
+      wsEventDal: deps.wsEventDal,
+    });
+    emitEvent(deps, tenantId, persistedEvent.event, persistedEvent.audience);
 
     const res = PolicyOverrideCreateResponse.parse({ override: row });
     return c.json(res, 201);

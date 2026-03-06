@@ -9,6 +9,7 @@ import { Hono } from "hono";
 import type { ApprovalDal, ApprovalStatus } from "../modules/approval/dal.js";
 import type { PolicyOverrideDal } from "../modules/policy/override-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
+import type { WsEventDal } from "../modules/ws-event/dal.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { WsEventEnvelope } from "@tyrum/schemas";
@@ -18,6 +19,10 @@ import { isSafeSuggestedOverridePattern } from "../modules/policy/override-guard
 import { getClientIp } from "../modules/auth/client-ip.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
+import {
+  ensureApprovalResolvedEvent,
+  ensurePolicyOverrideCreatedEvent,
+} from "../ws/stable-events.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>([
   "pending",
@@ -31,6 +36,7 @@ export interface ApprovalRouteDeps {
   approvalDal: ApprovalDal;
   logger?: Logger;
   policyOverrideDal?: PolicyOverrideDal;
+  wsEventDal?: WsEventDal;
   ws?: {
     connectionManager: ConnectionManager;
     maxBufferedBytes?: number;
@@ -300,25 +306,23 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
         });
         createdOverrides.push(row);
 
-        const evt: WsEventEnvelope = {
-          event_id: crypto.randomUUID(),
-          type: "policy_override.created",
-          occurred_at: new Date().toISOString(),
-          payload: { override: row },
-        };
-        emitEvent(deps, tenantId, evt);
+        const persistedEvent = await ensurePolicyOverrideCreatedEvent({
+          tenantId,
+          override: row,
+          wsEventDal: deps.wsEventDal,
+        });
+        emitEvent(deps, tenantId, persistedEvent.event);
       }
     }
 
     const contract = toApprovalContract(updated);
     if (contract && transitioned) {
-      const approvalResolvedEvt: WsEventEnvelope = {
-        event_id: crypto.randomUUID(),
-        type: "approval.resolved",
-        occurred_at: new Date().toISOString(),
-        payload: { approval: contract },
-      };
-      emitEvent(deps, tenantId, approvalResolvedEvt);
+      const approvalResolvedEvt = await ensureApprovalResolvedEvent({
+        tenantId,
+        approval: contract,
+        wsEventDal: deps.wsEventDal,
+      });
+      emitEvent(deps, tenantId, approvalResolvedEvt.event);
     }
 
     return c.json({
