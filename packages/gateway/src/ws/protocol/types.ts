@@ -19,6 +19,7 @@ import type { AuthAudit } from "../../modules/auth/audit.js";
 import type { MemoryV1Dal } from "../../modules/memory/v1-dal.js";
 import type { ArtifactStore } from "../../modules/artifact/store.js";
 import type { RedactionEngine } from "../../modules/redaction/engine.js";
+import type { WsEventDal } from "../../modules/ws-event/dal.js";
 import type { TaskResultRegistry } from "./task-result-registry.js";
 import type { AgentConfig, WsMessageEnvelope } from "@tyrum/schemas";
 import type { IdentityScopeDal } from "../../modules/identity/scope.js";
@@ -43,6 +44,7 @@ export interface ProtocolDeps {
   logger?: Logger;
   authAudit?: AuthAudit;
   db?: SqlDb;
+  wsEventDal?: WsEventDal;
   identityScopeDal?: IdentityScopeDal;
   redactionEngine?: RedactionEngine;
   memoryV1Dal?: MemoryV1Dal;

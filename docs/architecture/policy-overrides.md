@@ -113,7 +113,7 @@ Policy overrides are durable records separate from approvals. A minimal record s
 
 Overrides are first-class audit objects:
 
-- Creation emits `policy_override.created` with the durable `policy_override_id` and linkage fields.
+- Creation emits `policy_override.created` with the durable `policy_override_id` and linkage fields, and re-emission of the same creation reuses the persisted `event_id`.
 - Revocation emits `policy_override.revoked`.
 - Expiry emits `policy_override.expired`.
 

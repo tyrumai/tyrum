@@ -13,6 +13,7 @@ import type {
 } from "@tyrum/schemas";
 import { emitPairingApprovedEvent } from "../pairing-approved.js";
 import type { ConnectedClient } from "../connection-manager.js";
+import { ensurePairingResolvedEvent } from "../stable-events.js";
 import { broadcastEvent, errorResponse } from "./helpers.js";
 import {
   handleAttemptEvidenceMessage,
@@ -93,16 +94,12 @@ async function handlePairingMessage(
     });
   }
 
-  broadcastEvent(
+  const persistedEvent = await ensurePairingResolvedEvent({
     tenantId,
-    {
-      event_id: crypto.randomUUID(),
-      type: "pairing.resolved",
-      occurred_at: new Date().toISOString(),
-      payload: { pairing: resolved.pairing },
-    },
-    deps,
-  );
+    pairing: resolved.pairing,
+    wsEventDal: deps.wsEventDal,
+  });
+  broadcastEvent(tenantId, persistedEvent.event, deps, persistedEvent.audience);
   const result = WsPairingResolveResult.parse({ pairing: resolved.pairing });
   return { request_id: msg.request_id, type: msg.type, ok: true, result };
 }

@@ -40,6 +40,7 @@ import { createDbSecretProviderFactory } from "../modules/secret/create-secret-p
 import { StateStoreLifecycleScheduler } from "../modules/statestore/lifecycle.js";
 import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
 import { WatcherScheduler } from "../modules/watcher/scheduler.js";
+import { WsEventDal } from "../modules/ws-event/dal.js";
 import { WorkSignalScheduler } from "../modules/workboard/signal-scheduler.js";
 import { createWsHandler } from "../routes/ws.js";
 import { isPostgresDbUri } from "../statestore/db-uri.js";
@@ -418,10 +419,12 @@ async function createProtocolRuntime(
       : undefined;
 
   const taskResults = new TaskResultRegistry();
+  const wsEventDal = new WsEventDal(context.container.db);
   const protocolDeps: ProtocolDeps = {
     connectionManager,
     logger: context.logger,
     db: context.container.db,
+    wsEventDal,
     redactionEngine: context.container.redactionEngine,
     memoryV1Dal: context.container.memoryV1Dal,
     artifactStore: context.container.artifactStore,

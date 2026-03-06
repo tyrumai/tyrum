@@ -565,5 +565,19 @@
     "shape": "any",
     "nullable": false,
     "default": null
+  },
+  {
+    "table": "ws_events",
+    "column": "audience_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "ws_events",
+    "column": "payload_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
   }
 ]
