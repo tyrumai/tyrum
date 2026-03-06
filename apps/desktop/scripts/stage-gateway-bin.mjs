@@ -11,6 +11,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import electronPath from "electron";
+import { createElectronNativeBuildEnv } from "./gateway-native-build-env.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = join(scriptDir, "..");
@@ -109,6 +110,7 @@ const electronTarget = (() => {
 
 const betterSqlite3Dir = join(targetDir, "node_modules/better-sqlite3");
 const prebuildInstallBin = join(betterSqlite3Dir, "node_modules/.bin/prebuild-install");
+const electronNativeBuildEnv = createElectronNativeBuildEnv(process.env);
 
 // Prefer prebuilt binaries for Electron; fall back to node-gyp rebuild.
 const prebuildInstall = spawnSync(
@@ -124,7 +126,11 @@ const prebuildInstall = spawnSync(
     process.platform,
     "--force",
   ],
-  { cwd: betterSqlite3Dir, stdio: "inherit" },
+  {
+    cwd: betterSqlite3Dir,
+    env: electronNativeBuildEnv,
+    stdio: "inherit",
+  },
 );
 if (prebuildInstall.status !== 0) {
   const rebuild = spawnSync(
@@ -136,7 +142,11 @@ if (prebuildInstall.status !== 0) {
       `--arch=${process.arch}`,
       "--dist-url=https://electronjs.org/headers",
     ],
-    { cwd: betterSqlite3Dir, stdio: "inherit" },
+    {
+      cwd: betterSqlite3Dir,
+      env: electronNativeBuildEnv,
+      stdio: "inherit",
+    },
   );
   if (rebuild.status !== 0) {
     throw new Error(
