@@ -5,7 +5,7 @@ import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import { AgentsPage } from "../../src/components/pages/agents-page.js";
-import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
+import { cleanupTestRoot, click, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 function sampleAgentStatus() {
   return {
@@ -61,6 +61,7 @@ function createCore(agentListGet: ReturnType<typeof vi.fn>): {
   core: OperatorCore;
   setAgentKey: ReturnType<typeof vi.fn>;
   refresh: ReturnType<typeof vi.fn>;
+  memoryList: ReturnType<typeof vi.fn>;
 } {
   const { store: connectionStore } = createStore({
     status: "connected",
@@ -102,6 +103,7 @@ function createCore(agentListGet: ReturnType<typeof vi.fn>): {
     setAgentStatusState((prev) => ({ ...prev, agentKey }));
   });
   const refresh = vi.fn().mockResolvedValue(undefined);
+  const memoryList = vi.fn().mockResolvedValue(undefined);
 
   const core = {
     connectionStore,
@@ -116,7 +118,7 @@ function createCore(agentListGet: ReturnType<typeof vi.fn>): {
     },
     memoryStore: {
       ...memoryStore,
-      list: vi.fn().mockResolvedValue(undefined),
+      list: memoryList,
       search: vi.fn().mockResolvedValue(undefined),
       refreshBrowse: vi.fn().mockResolvedValue(undefined),
       loadMore: vi.fn().mockResolvedValue(undefined),
@@ -128,7 +130,7 @@ function createCore(agentListGet: ReturnType<typeof vi.fn>): {
     runsStore,
   } as unknown as OperatorCore;
 
-  return { core, setAgentKey, refresh };
+  return { core, setAgentKey, refresh, memoryList };
 }
 
 describe("AgentsPage", () => {
@@ -206,6 +208,49 @@ describe("AgentsPage", () => {
 
     expect(setAgentKey).toHaveBeenLastCalledWith("agent-2");
     expect(refresh).toHaveBeenCalledTimes(1);
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("waits for a discovered agent scope before loading memory", async () => {
+    let resolveAgentList: ((value: {
+      agents: Array<{ agent_key: string; agent_id?: string }>;
+    }) => void) | null = null;
+    const agentListGet = vi.fn(
+      () =>
+        new Promise<{ agents: Array<{ agent_key: string; agent_id?: string }> }>((resolve) => {
+          resolveAgentList = resolve;
+        }),
+    );
+    const { core, memoryList } = createCore(agentListGet);
+
+    const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
+
+    const memoryTab = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="agents-tab-memory"]',
+    );
+    expect(memoryTab).not.toBeNull();
+
+    await act(async () => {
+      if (memoryTab) click(memoryTab);
+      await Promise.resolve();
+    });
+
+    expect(memoryList).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveAgentList?.({
+        agents: [{ agent_key: "default", agent_id: "11111111-1111-4111-8111-111111111111" }],
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(memoryList).toHaveBeenCalledTimes(1);
+    expect(memoryList).toHaveBeenCalledWith({
+      agentId: "11111111-1111-4111-8111-111111111111",
+      limit: 50,
+    });
 
     cleanupTestRoot(testRoot);
   });

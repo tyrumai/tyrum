@@ -349,11 +349,15 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
 
   const isConnected = connection.status === "connected";
   const agentKeys = useMemo(() => agentOptions.map((agent) => agent.agentKey), [agentOptions]);
+  const selectedAgentOption = useMemo(
+    () => agentOptions.find((agent) => agent.agentKey === selectedAgentKey) ?? null,
+    [agentOptions, selectedAgentKey],
+  );
   const selectedAgentScopeId = useMemo(
     () =>
-      agentOptions.find((agent) => agent.agentKey === selectedAgentKey)?.agentId ??
-      selectedAgentKey,
-    [agentOptions, selectedAgentKey],
+      selectedAgentOption?.agentId ??
+      (selectedAgentOption || agentsError ? selectedAgentKey : undefined),
+    [agentsError, selectedAgentKey, selectedAgentOption],
   );
 
   const activeAgentIds = useMemo(() => {
@@ -599,7 +603,15 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
             </TabsContent>
 
             <TabsContent value="memory">
-              <MemoryInspector core={core} agentId={selectedAgentScopeId} />
+              {selectedAgentScopeId ? (
+                <MemoryInspector core={core} agentId={selectedAgentScopeId} />
+              ) : (
+                <Card data-testid="agents-memory-resolving">
+                  <CardContent className="py-10 text-sm text-fg-muted">
+                    Resolving agent memory scope…
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
 
             <TabsContent value="runs">
