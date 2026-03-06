@@ -243,6 +243,62 @@ describe("Platform pages", () => {
     }
   });
 
+  it("toggles background mode through the desktop api", async () => {
+    const desktopApi = {
+      getConfig: vi.fn(async () => ({ mode: "embedded", embedded: { port: 8788 } })),
+      setConfig: vi.fn(async () => {}),
+      background: {
+        getState: vi.fn(async () => ({
+          enabled: false,
+          supported: true,
+          trayAvailable: true,
+          loginAutoStartActive: false,
+          mode: "embedded",
+        })),
+        setEnabled: vi.fn(async () => ({
+          enabled: true,
+          supported: true,
+          trayAvailable: true,
+          loginAutoStartActive: true,
+          mode: "embedded",
+        })),
+      },
+      gateway: {
+        getStatus: vi.fn(async () => ({ status: "stopped", port: 8788 })),
+        start: vi.fn(async () => ({ status: "running", port: 8788 })),
+        stop: vi.fn(async () => ({ status: "stopped" })),
+      },
+      node: {
+        connect: vi.fn(async () => ({ status: "connected" })),
+        disconnect: vi.fn(async () => ({ status: "disconnected" })),
+      },
+      onStatusChange: vi.fn(() => () => {}),
+    } satisfies DesktopApi;
+
+    const testRoot = renderWithHost(
+      { kind: "desktop", api: desktopApi },
+      React.createElement(PlatformConnectionPage, { core: {} as OperatorCore }),
+    );
+
+    try {
+      await flushEffects();
+      expect(testRoot.container.textContent).toContain("Background mode");
+
+      const toggle = testRoot.container.querySelector<HTMLButtonElement>('[role="switch"]');
+      expect(toggle).not.toBeNull();
+
+      await act(async () => {
+        toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      expect(desktopApi.background.setEnabled).toHaveBeenCalledWith(true);
+      expect(testRoot.container.textContent).toContain("Launch at login is active.");
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
   it("shows gateway errors when starting embedded mode fails", async () => {
     const desktopApi = {
       getConfig: vi.fn(async () => ({ mode: "embedded", embedded: { port: 8788 } })),

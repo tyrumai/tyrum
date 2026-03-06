@@ -4,6 +4,10 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
   configExists: () => ipcRenderer.invoke("config:exists"),
   getConfig: () => ipcRenderer.invoke("config:get"),
   setConfig: (partial: unknown) => ipcRenderer.invoke("config:set", partial),
+  background: {
+    getState: () => ipcRenderer.invoke("background:get-state"),
+    setEnabled: (enabled: boolean) => ipcRenderer.invoke("background:set-enabled", enabled),
+  },
   theme: {
     getState: () => ipcRenderer.invoke("theme:get-state"),
     onChange: (cb: (state: unknown) => void) => {

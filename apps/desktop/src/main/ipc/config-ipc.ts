@@ -7,6 +7,7 @@ import {
   type MacPermissionKind,
 } from "../platform/permissions.js";
 import { normalizeConfigPartialForSave } from "../config/token-ref-normalizer.js";
+import { notifyBackgroundConfigChanged } from "../background-mode.js";
 
 const RENDERER_MUTABLE_PATHS = new Set([
   "mode",
@@ -125,6 +126,7 @@ export function registerConfigIpc(): void {
       deepMerge(current as unknown as Record<string, unknown>, normalizedPartial),
     );
     saveConfig(merged);
+    notifyBackgroundConfigChanged(merged);
     nativeTheme.themeSource = merged.theme.source;
     return sanitizeConfigForRenderer(merged);
   });

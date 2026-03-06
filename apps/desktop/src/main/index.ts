@@ -4,11 +4,17 @@ import { registerGatewayIpc, startEmbeddedGatewayFromConfig } from "./ipc/gatewa
 import { registerNodeIpc, shutdownNodeResources } from "./ipc/node-ipc.js";
 import { registerConfigIpc } from "./ipc/config-ipc.js";
 import { registerUpdateIpc } from "./ipc/update-ipc.js";
+import { registerBackgroundIpc } from "./ipc/background-ipc.js";
 import { registerDeepLinkIpc, setPendingDeepLinkUrl } from "./ipc/deep-link-ipc.js";
 import { registerThemeIpc } from "./ipc/theme-ipc.js";
 import type { GatewayManager } from "./gateway-manager.js";
 import { MAIN_WINDOW_OPTIONS } from "./window-options.js";
 import { configExists, loadConfig } from "./config/store.js";
+import {
+  BackgroundModeController,
+  setBackgroundModeController,
+  type BackgroundModeState,
+} from "./background-mode.js";
 import { setWindowsAppUserModelId, setupSingleInstance } from "./single-instance.js";
 import { configureMacAboutPanel } from "./platform/os-integrations.js";
 import { buildApplicationMenuTemplate } from "./menu.js";
@@ -29,6 +35,8 @@ app.setName?.("Tyrum");
 let mainWindow: BrowserWindow | null = null;
 let gatewayManager: GatewayManager | null = null;
 let workItemNotificationService: WorkItemNotificationService | null = null;
+let backgroundModeController: BackgroundModeController | null = null;
+let gatewayBackgroundStatusListenerAttached = false;
 let isQuitting = false;
 let isQuittingForUpdate = false;
 let mainWindowReadyToShow = false;
@@ -72,6 +80,41 @@ function handleDeepLink(rawUrl: string): void {
   if (!win) return;
   if (win.isDestroyed() || win.webContents.isDestroyed()) return;
   win.webContents.send("deeplink:open", rawUrl);
+}
+
+function emitBackgroundStateChange(state: BackgroundModeState): void {
+  const win = mainWindow;
+  if (!win) return;
+  if (win.isDestroyed() || win.webContents.isDestroyed()) return;
+  win.webContents.send("status:change", { backgroundState: state });
+}
+
+function requestConnectionNavigation(): void {
+  requestMainWindowFocus();
+
+  const win = mainWindow;
+  if (!win) return;
+  if (win.isDestroyed() || win.webContents.isDestroyed()) return;
+  win.webContents.send("navigation:request", { pageId: "connection" });
+}
+
+function ensureBackgroundController(): BackgroundModeController {
+  if (backgroundModeController) {
+    return backgroundModeController;
+  }
+
+  backgroundModeController = new BackgroundModeController({
+    onShowMainWindow: requestMainWindowFocus,
+    onRequestNavigate: requestConnectionNavigation,
+    onStateChange: emitBackgroundStateChange,
+  });
+  setBackgroundModeController(backgroundModeController);
+  try {
+    backgroundModeController.initialize();
+  } catch (error) {
+    console.error("Failed to initialize background mode", error);
+  }
+  return backgroundModeController;
 }
 
 setWindowsAppUserModelId(app);
@@ -258,7 +301,20 @@ function installWindowStatePersistence(options: {
 function registerMainWindowIpc(window: BrowserWindow): void {
   registerDeepLinkIpc();
   registerConfigIpc();
+  registerBackgroundIpc();
   gatewayManager = registerGatewayIpc(window);
+  if (gatewayManager) {
+    backgroundModeController?.setGatewayStatus(gatewayManager.status);
+    if (
+      !gatewayBackgroundStatusListenerAttached &&
+      typeof (gatewayManager as { on?: unknown }).on === "function"
+    ) {
+      gatewayManager.on("status-change", (status) => {
+        backgroundModeController?.setGatewayStatus(status);
+      });
+      gatewayBackgroundStatusListenerAttached = true;
+    }
+  }
   registerNodeIpc(window);
   registerUpdateIpc(window, {
     beforeInstall: shutdownAppResources,
@@ -290,7 +346,8 @@ function ensureWorkItemNotifications(): void {
   void workItemNotificationService.start();
 }
 
-function createWindow(): void {
+function createWindow(options?: { startHidden?: boolean }): void {
+  const startHidden = options?.startHidden ?? false;
   const userDataPath = app.getPath("userData");
   const persistedState = loadWindowState(userDataPath);
 
@@ -315,7 +372,9 @@ function createWindow(): void {
 
   window.once("ready-to-show", () => {
     mainWindowReadyToShow = true;
-    window.show();
+    if (!startHidden || mainWindowPendingFocus) {
+      window.show();
+    }
     if (mainWindowPendingFocus) {
       mainWindowPendingFocus = false;
       window.focus();
@@ -328,6 +387,17 @@ function createWindow(): void {
 
   void maybeAutoStartEmbeddedGatewayOnLaunch();
   ensureWorkItemNotifications();
+
+  window.on("close", (event) => {
+    if (isQuitting || isQuittingForUpdate) {
+      return;
+    }
+    if (!backgroundModeController?.shouldHideOnClose()) {
+      return;
+    }
+    event.preventDefault();
+    window.hide();
+  });
 
   window.on("closed", () => {
     cleanupWindowStatePersistence();
@@ -349,6 +419,7 @@ if (didAcquireSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    const backgroundController = ensureBackgroundController();
     configureMacAboutPanel(app, process.platform);
     Menu.setApplicationMenu(
       Menu.buildFromTemplate(
@@ -382,13 +453,17 @@ if (didAcquireSingleInstanceLock) {
         }),
       ),
     );
-    createWindow();
+    createWindow({ startHidden: backgroundController.shouldStartHiddenOnLaunch() });
   });
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
   });
   app.on("activate", () => {
-    if (mainWindow === null) createWindow();
+    if (mainWindow === null) {
+      createWindow();
+      return;
+    }
+    requestMainWindowFocus();
   });
   app.on("before-quit", (event) => {
     if (isQuittingForUpdate) return;

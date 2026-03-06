@@ -10,6 +10,11 @@ export type PermissionProfile = z.infer<typeof PermissionProfile>;
 export const DesktopNodeConfig = z.object({
   version: z.literal(1).default(1),
   mode: z.enum(["embedded", "remote"]).default("embedded"),
+  background: z
+    .object({
+      enabled: z.boolean().default(false),
+    })
+    .default({ enabled: false }),
   theme: z
     .object({
       source: z.enum(["system", "light", "dark"]).default("system"),
