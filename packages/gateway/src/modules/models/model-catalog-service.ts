@@ -8,6 +8,7 @@ import {
   type CatalogProviderOverrideRow,
 } from "./catalog-override-dal.js";
 import type { ModelsDevLoadResult, ModelsDevService } from "./models-dev-service.js";
+import { normalizeProviderScopedModelId } from "./provider-model-id.js";
 
 function normalizeOptionalString(raw: string | null | undefined): string | undefined {
   const trimmed = raw?.trim();
@@ -80,10 +81,39 @@ function groupModelOverrides(
   const byProvider = new Map<string, Map<string, CatalogModelOverrideRow>>();
   for (const row of rows) {
     const inner = byProvider.get(row.provider_id) ?? new Map<string, CatalogModelOverrideRow>();
-    inner.set(row.model_id, row);
+    const normalizedModelId = normalizeProviderScopedModelId(row.provider_id, row.model_id);
+    const existing = inner.get(normalizedModelId);
+    if (!existing || row.model_id === normalizedModelId) {
+      inner.set(normalizedModelId, row);
+    }
     byProvider.set(row.provider_id, inner);
   }
   return byProvider;
+}
+
+function normalizeBaseModels(
+  providerId: string,
+  models: Record<string, unknown>,
+): Map<string, Record<string, unknown>> {
+  const normalized = new Map<string, Record<string, unknown>>();
+
+  for (const [rawModelId, rawModel] of Object.entries(models)) {
+    const normalizedModelId = normalizeProviderScopedModelId(providerId, rawModelId);
+    const modelRecord =
+      rawModel && typeof rawModel === "object" && !Array.isArray(rawModel)
+        ? { ...(rawModel as Record<string, unknown>) }
+        : {};
+    const embeddedModelId =
+      typeof modelRecord["id"] === "string" ? modelRecord["id"] : normalizedModelId;
+    modelRecord["id"] = normalizeProviderScopedModelId(providerId, embeddedModelId);
+
+    const existing = normalized.get(normalizedModelId);
+    if (!existing || rawModelId === normalizedModelId) {
+      normalized.set(normalizedModelId, modelRecord);
+    }
+  }
+
+  return normalized;
 }
 
 export class ModelCatalogService {
@@ -190,16 +220,18 @@ export class ModelCatalogService {
         delete provider["headers"];
       }
 
-      const baseModels =
-        (baseProvider as { models?: Record<string, unknown> } | undefined)?.models ?? {};
+      const baseModels = normalizeBaseModels(
+        providerId,
+        (baseProvider as { models?: Record<string, unknown> } | undefined)?.models ?? {},
+      );
       const overrideModels =
         modelOverridesByProvider.get(providerId) ?? new Map<string, CatalogModelOverrideRow>();
-      const modelIds = new Set<string>([...Object.keys(baseModels), ...overrideModels.keys()]);
+      const modelIds = new Set<string>([...baseModels.keys(), ...overrideModels.keys()]);
 
       const models: Record<string, unknown> = {};
       const sortedModelIds = Array.from(modelIds).toSorted((a, b) => a.localeCompare(b));
       for (const modelId of sortedModelIds) {
-        const baseModel = baseModels[modelId] as Record<string, unknown> | undefined;
+        const baseModel = baseModels.get(modelId);
         const modelOverride = overrideModels.get(modelId);
         const modelEnabled = modelOverride ? modelOverride.enabled : true;
 

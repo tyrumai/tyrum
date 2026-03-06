@@ -711,7 +711,7 @@ describe("ConfigurePage (HTTP) policy + config", () => {
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(saveButton?.disabled).toBe(true);
 
     cleanupTestRoot({ container, root });
@@ -761,8 +761,7 @@ describe("ConfigurePage (HTTP) policy + config", () => {
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
-      expect(url).toBe("http://example.test/config/models/presets");
-      expect(init?.method).toBe("POST");
+      const method = init?.method ?? "GET";
 
       const headers = new Headers(init?.headers);
       expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
@@ -777,18 +776,61 @@ describe("ConfigurePage (HTTP) policy + config", () => {
         created_at: "2026-03-01T00:00:00.000Z",
         updated_at: "2026-03-01T00:00:00.000Z",
       };
-      const bodyRaw = String(init?.body ?? "");
-      expect(JSON.parse(bodyRaw)).toEqual({
-        display_name: "GPT-4.1 Mini",
-        provider_key: "openai",
-        model_id: "gpt-4.1-mini",
-        options: { reasoning_effort: "high" },
-      });
-      presets = [createdPreset];
 
-      return new Response(JSON.stringify({ status: "ok", preset: createdPreset }), {
-        status: 201,
-      });
+      if (method === "POST" && url === "http://example.test/config/models/presets") {
+        const bodyRaw = String(init?.body ?? "");
+        expect(JSON.parse(bodyRaw)).toEqual({
+          display_name: "GPT-4.1 Mini",
+          provider_key: "openai",
+          model_id: "gpt-4.1-mini",
+          options: { reasoning_effort: "high" },
+        });
+        presets = [createdPreset];
+        return new Response(JSON.stringify({ status: "ok", preset: createdPreset }), {
+          status: 201,
+        });
+      }
+
+      if (method === "GET" && url === "http://example.test/config/models/presets") {
+        return new Response(JSON.stringify({ status: "ok", presets }), { status: 200 });
+      }
+
+      if (method === "GET" && url === "http://example.test/config/models/presets/available") {
+        return new Response(
+          JSON.stringify({
+            status: "ok",
+            models: [
+              {
+                provider_key: "openai",
+                provider_name: "OpenAI",
+                model_id: "gpt-4.1",
+                model_name: "GPT-4.1",
+                family: null,
+                reasoning: true,
+                tool_call: true,
+                modalities: { output: ["text"] },
+              },
+              {
+                provider_key: "openai",
+                provider_name: "OpenAI",
+                model_id: "gpt-4.1-mini",
+                model_name: "GPT-4.1 Mini",
+                family: null,
+                reasoning: true,
+                tool_call: true,
+                modalities: { output: ["text"] },
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (method === "GET" && url === "http://example.test/config/models/assignments") {
+        return new Response(JSON.stringify({ status: "ok", assignments: [] }), { status: 200 });
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -837,7 +879,132 @@ describe("ConfigurePage (HTTP) policy + config", () => {
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(container.textContent).toContain("GPT-4.1 Mini");
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("refreshes configured models with the elevated client after creating a preset", async () => {
+    const { core } = createTestCore();
+    const modelConfig = core.http.modelConfig as {
+      listPresets: ReturnType<typeof vi.fn>;
+      listAvailable: ReturnType<typeof vi.fn>;
+      listAssignments: ReturnType<typeof vi.fn>;
+    };
+    const availableModels = [
+      {
+        provider_key: "openai",
+        provider_name: "OpenAI",
+        model_id: "gpt-4.1-mini",
+        model_name: "GPT-4.1 Mini",
+        family: null,
+        reasoning: true,
+        tool_call: true,
+        modalities: { output: ["text"] },
+      },
+    ];
+    const createdPreset = {
+      preset_id: "00000000-0000-4000-8000-000000000022",
+      preset_key: "preset-gpt-4-1-mini",
+      display_name: "GPT-4.1 Mini",
+      provider_key: "openai",
+      model_id: "gpt-4.1-mini",
+      options: {},
+      created_at: "2026-03-01T00:00:00.000Z",
+      updated_at: "2026-03-01T00:00:00.000Z",
+    };
+    modelConfig.listPresets = vi.fn(async () => ({
+      status: "ok",
+      presets: [],
+    }));
+    modelConfig.listAvailable = vi.fn(async () => ({
+      status: "ok",
+      models: availableModels,
+    }));
+    modelConfig.listAssignments = vi.fn(async () => ({
+      status: "ok",
+      assignments: [],
+    }));
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      const method = init?.method ?? "GET";
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
+
+      if (method === "POST" && url === "http://example.test/config/models/presets") {
+        expect(JSON.parse(String(init?.body ?? ""))).toEqual({
+          display_name: "GPT-4.1 Mini",
+          provider_key: "openai",
+          model_id: "gpt-4.1-mini",
+          options: {},
+        });
+        return new Response(JSON.stringify({ status: "ok", preset: createdPreset }), {
+          status: 201,
+        });
+      }
+
+      if (method === "GET" && url === "http://example.test/config/models/presets") {
+        return new Response(JSON.stringify({ status: "ok", presets: [createdPreset] }), {
+          status: 200,
+        });
+      }
+
+      if (method === "GET" && url === "http://example.test/config/models/presets/available") {
+        return new Response(JSON.stringify({ status: "ok", models: availableModels }), {
+          status: 200,
+        });
+      }
+
+      if (method === "GET" && url === "http://example.test/config/models/assignments") {
+        return new Response(JSON.stringify({ status: "ok", assignments: [] }), { status: 200 });
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(ElevatedModeProvider, { core, mode: "web" }, [
+        React.createElement(ConfigurePage, { key: "page", core }),
+      ]),
+    );
+
+    await switchHttpTab(container, "admin-http-tab-models");
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const addButton = container.querySelector<HTMLButtonElement>("[data-testid='models-add-open']");
+    expect(addButton).not.toBeNull();
+
+    act(() => {
+      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = document.body.querySelector<HTMLElement>("[data-testid='models-preset-dialog']");
+    expect(dialog).not.toBeNull();
+
+    const dialogSelects = Array.from(dialog?.querySelectorAll<HTMLSelectElement>("select") ?? []);
+    expect(dialogSelects.length).toBe(2);
+    setSelectValue(dialogSelects[0]!, "openai/gpt-4.1-mini");
+
+    const saveButton = document.body.querySelector<HTMLButtonElement>(
+      "[data-testid='models-save']",
+    );
+    expect(saveButton).not.toBeNull();
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(modelConfig.listPresets).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(container.textContent).toContain("GPT-4.1 Mini");
 
     cleanupTestRoot({ container, root });
@@ -888,27 +1055,59 @@ describe("ConfigurePage (HTTP) policy + config", () => {
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
-      expect(url).toBe("http://example.test/config/models/presets/legacy-openai");
-      expect(init?.method).toBe("PATCH");
+      const method = init?.method ?? "GET";
 
       const headers = new Headers(init?.headers);
       expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
 
-      const bodyRaw = String(init?.body ?? "");
-      expect(JSON.parse(bodyRaw)).toEqual({
-        display_name: "Renamed preset",
-        options: { reasoning_effort: "medium" },
-      });
-
-      presets = [
-        {
-          ...presets[0],
+      if (method === "PATCH" && url === "http://example.test/config/models/presets/legacy-openai") {
+        const bodyRaw = String(init?.body ?? "");
+        expect(JSON.parse(bodyRaw)).toEqual({
           display_name: "Renamed preset",
           options: { reasoning_effort: "medium" },
-        },
-      ];
+        });
 
-      return new Response(JSON.stringify({ status: "ok", preset: presets[0] }), { status: 200 });
+        presets = [
+          {
+            ...presets[0],
+            display_name: "Renamed preset",
+            options: { reasoning_effort: "medium" },
+          },
+        ];
+
+        return new Response(JSON.stringify({ status: "ok", preset: presets[0] }), { status: 200 });
+      }
+
+      if (method === "GET" && url === "http://example.test/config/models/presets") {
+        return new Response(JSON.stringify({ status: "ok", presets }), { status: 200 });
+      }
+
+      if (method === "GET" && url === "http://example.test/config/models/presets/available") {
+        return new Response(
+          JSON.stringify({
+            status: "ok",
+            models: [
+              {
+                provider_key: "anthropic",
+                provider_name: "Anthropic",
+                model_id: "claude-3.7-sonnet",
+                model_name: "Claude 3.7 Sonnet",
+                family: null,
+                reasoning: true,
+                tool_call: true,
+                modalities: { output: ["text"] },
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (method === "GET" && url === "http://example.test/config/models/assignments") {
+        return new Response(JSON.stringify({ status: "ok", assignments: [] }), { status: 200 });
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -966,7 +1165,7 @@ describe("ConfigurePage (HTTP) policy + config", () => {
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(container.textContent).toContain("Renamed preset");
 
     cleanupTestRoot({ container, root });
@@ -1172,7 +1371,7 @@ describe("ConfigurePage (HTTP) policy + config", () => {
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(container.textContent).not.toContain("Default (openai/gpt-4.1)");
 
     cleanupTestRoot({ container, root });
