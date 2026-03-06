@@ -348,6 +348,7 @@ export function parseScheduleConfig(raw: string): NormalizedScheduleConfig | und
   try {
     parsed = JSON.parse(raw) as unknown;
   } catch {
+    // Intentional: invalid persisted schedule config should be ignored by readers.
     return undefined;
   }
   if (!isRecord(parsed)) return undefined;
@@ -396,6 +397,7 @@ export function parseScheduleConfig(raw: string): NormalizedScheduleConfig | und
       key: typeof parsed["key"] === "string" ? parsed["key"] : undefined,
     });
   } catch {
+    // Intentional: malformed persisted schedule config should be skipped instead of crashing reads.
     return undefined;
   }
 }

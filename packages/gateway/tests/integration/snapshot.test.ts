@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createTestApp } from "./helpers.js";
+import { ScheduleService } from "../../src/modules/automation/schedule-service.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
 import { seedPausedExecutionRun } from "../helpers/execution-fixtures.js";
 import {
@@ -64,6 +65,59 @@ describe("snapshot routes", () => {
       sessionId: seededSession.session_id,
     });
     expect(nextApproval.approval_id).not.toBe(approval.approval_id);
+
+    await container.db.close();
+    await container2.db.close();
+  });
+
+  it("imports snapshot bundles after pruning seeded default heartbeat schedules on the target", async () => {
+    const { app, container } = await createTestApp({
+      deploymentConfig: { snapshots: { importEnabled: true } },
+    });
+    const sourceScheduleService = new ScheduleService(container.db, container.identityScopeDal);
+    await sourceScheduleService.ensureDefaultHeartbeatScheduleForMembership({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      nowMs: Date.UTC(2026, 2, 6, 10, 0, 0),
+    });
+
+    const exportRes = await app.request("/snapshot/export");
+    expect(exportRes.status).toBe(200);
+    const bundle = (await exportRes.json()) as Record<string, unknown>;
+
+    const { app: app2, container: container2 } = await createTestApp({
+      deploymentConfig: { snapshots: { importEnabled: true } },
+    });
+    const targetScheduleService = new ScheduleService(container2.db, container2.identityScopeDal);
+    await targetScheduleService.ensureDefaultHeartbeatScheduleForMembership({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      nowMs: Date.UTC(2026, 2, 6, 10, 5, 0),
+    });
+
+    const targetWatcherCountBefore = await container2.db.get<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM watchers",
+    );
+    expect(targetWatcherCountBefore?.count).toBe(1);
+
+    const importRes = await app2.request("/snapshot/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ confirm: "IMPORT", bundle }),
+    });
+    expect(importRes.status).toBe(200);
+
+    const targetWatcherCountAfter = await container2.db.get<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM watchers",
+    );
+    expect(targetWatcherCountAfter?.count).toBe(1);
+
+    const importedWatcher = await container2.db.get<{ watcher_key: string }>(
+      "SELECT watcher_key FROM watchers LIMIT 1",
+    );
+    expect(importedWatcher?.watcher_key).toContain("schedule:default-heartbeat");
 
     await container.db.close();
     await container2.db.close();

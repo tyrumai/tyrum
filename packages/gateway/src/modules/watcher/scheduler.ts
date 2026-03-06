@@ -225,6 +225,7 @@ export class WatcherScheduler {
     try {
       parsed = JSON.parse(raw) as unknown;
     } catch {
+      // Intentional: malformed watcher configs are ignored so one bad row does not break scheduling.
       return undefined;
     }
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
