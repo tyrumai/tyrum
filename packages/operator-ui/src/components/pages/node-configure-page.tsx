@@ -38,6 +38,11 @@ interface AllowlistDraftState {
   cliWorkingDirs: string;
 }
 
+interface SaveResetTimers {
+  general: ReturnType<typeof setTimeout> | null;
+  security: ReturnType<typeof setTimeout> | null;
+}
+
 interface SecurityState {
   profile: Profile;
   overrides: Record<string, boolean>;
@@ -757,15 +762,20 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
     cliCommands: "",
     cliWorkingDirs: "",
   });
-  const saveResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveResetTimers = useRef<SaveResetTimers>({
+    general: null,
+    security: null,
+  });
   const initialSecurityRef = useRef<SecurityState | null>(null);
   const initialConnectionRef = useRef<ConnectionState | null>(null);
 
   useEffect(() => {
     return () => {
-      if (saveResetTimer.current) {
-        clearTimeout(saveResetTimer.current);
-        saveResetTimer.current = null;
+      for (const key of ["general", "security"] as const) {
+        if (saveResetTimers.current[key]) {
+          clearTimeout(saveResetTimers.current[key]);
+          saveResetTimers.current[key] = null;
+        }
       }
     };
   }, []);
@@ -837,17 +847,18 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
   );
 
   const saveSucceeded = (
+    channel: keyof SaveResetTimers,
     setSaved: (saved: boolean) => void,
     setError: (message: string | null) => void,
   ) => {
     setError(null);
     setSaved(true);
-    if (saveResetTimer.current) {
-      clearTimeout(saveResetTimer.current);
+    if (saveResetTimers.current[channel]) {
+      clearTimeout(saveResetTimers.current[channel]);
     }
-    saveResetTimer.current = setTimeout(() => {
+    saveResetTimers.current[channel] = setTimeout(() => {
       setSaved(false);
-      saveResetTimer.current = null;
+      saveResetTimers.current[channel] = null;
     }, 2_000);
   };
 
@@ -870,7 +881,7 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
     setSecurityError(null);
     setSecuritySaved(false);
     void persistSecurity()
-      .then(() => saveSucceeded(setSecuritySaved, setSecurityError))
+      .then(() => saveSucceeded("security", setSecuritySaved, setSecurityError))
       .catch((error: unknown) => setSecurityError(formatErrorMessage(error)))
       .finally(() => setSecuritySaving(false));
   };
@@ -920,7 +931,7 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
           return;
         }
 
-        saveSucceeded(setGeneralSaved, setGeneralError);
+        saveSucceeded("general", setGeneralSaved, setGeneralError);
       })
       .catch((error: unknown) => setGeneralError(formatErrorMessage(error)))
       .finally(() => setGeneralSaving(false));
