@@ -167,18 +167,18 @@ describe("GatewayManager", () => {
     await gm.stop();
   });
 
-  it("uses Electron-as-Node for staged gateway bundles", () => {
+  it("uses a real Node runtime for staged gateway bundles inside Electron", () => {
     const launch = resolveGatewayLaunchCommand({
       gatewayBin: "/repo/apps/desktop/dist/gateway/index.mjs",
       gatewayBinSource: "staged",
       processExecPath: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
       versions: { ...process.versions, electron: "40.7.0" },
-      env: {},
+      env: { TYRUM_DESKTOP_NODE_EXEC_PATH: "/opt/homebrew/bin/node" },
     });
 
     expect(launch).toEqual({
-      command: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
-      env: { ELECTRON_RUN_AS_NODE: "1" },
+      command: "/opt/homebrew/bin/node",
+      env: {},
     });
   });
 
@@ -194,6 +194,21 @@ describe("GatewayManager", () => {
     expect(launch).toEqual({
       command: "/opt/homebrew/bin/node",
       env: {},
+    });
+  });
+
+  it("uses Electron-as-Node for packaged gateway bundles", () => {
+    const launch = resolveGatewayLaunchCommand({
+      gatewayBin: "/Applications/Tyrum.app/Contents/Resources/gateway/index.mjs",
+      gatewayBinSource: "packaged",
+      processExecPath: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
+      versions: { ...process.versions, electron: "40.7.0" },
+      env: { TYRUM_DESKTOP_NODE_EXEC_PATH: "/opt/homebrew/bin/node" },
+    });
+
+    expect(launch).toEqual({
+      command: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
+      env: { ELECTRON_RUN_AS_NODE: "1" },
     });
   });
 

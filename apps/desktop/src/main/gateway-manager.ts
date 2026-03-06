@@ -198,12 +198,13 @@ export function resolveGatewayLaunchCommand(options: {
     return { command: processExecPath, env: {} };
   }
 
-  if (options.gatewayBinSource === "monorepo") {
+  if (options.gatewayBinSource === "staged" || options.gatewayBinSource === "monorepo") {
     return { command: resolveNodeCommand(env), env: {} };
   }
 
-  // In development, the monorepo gateway bundle resolves better-sqlite3 from the
-  // workspace install, which is built for Node rather than Electron.
+  // In development, repo-local gateway bundles resolve native modules from the
+  // workspace install or staged deploy tree, both of which are built for Node
+  // rather than the Electron runtime used by the desktop shell.
   if (!options.gatewayBinSource && isMonorepoGatewayBundlePath(options.gatewayBin)) {
     return { command: resolveNodeCommand(env), env: {} };
   }
