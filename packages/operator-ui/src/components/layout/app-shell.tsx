@@ -9,6 +9,7 @@ export interface AppShellProps extends React.HTMLAttributes<HTMLDivElement> {
   sidebar: React.ReactNode;
   mobileNav: React.ReactNode;
   fullBleed?: boolean;
+  viewportLocked?: boolean;
 }
 
 export function AppShell({
@@ -16,6 +17,7 @@ export function AppShell({
   sidebar,
   mobileNav,
   fullBleed = false,
+  viewportLocked = false,
   children,
   className,
   ...props
@@ -23,31 +25,38 @@ export function AppShell({
   const mdUp = useMediaQuery("(min-width: 768px)");
   const showSidebar = mode === "desktop" || mdUp;
   const showMobileNav = mode === "web" && !mdUp;
+  const lockViewport = mode === "desktop" || viewportLocked;
 
   return (
     <div
       className={cn(
         "bg-bg text-fg font-sans antialiased overflow-hidden",
-        mode === "desktop" ? "h-screen" : "min-h-screen",
+        mode === "desktop" ? "h-screen" : lockViewport ? "h-dvh" : "min-h-screen",
         className,
       )}
       style={{ backgroundImage: "var(--tyrum-app-bg-image)" }}
       {...props}
     >
-      <div className={cn("flex", mode === "desktop" ? "h-full" : "min-h-screen")}>
+      <div className={cn("flex", lockViewport ? "h-full min-h-0" : "min-h-screen")}>
         {showSidebar ? sidebar : null}
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <main
             className={cn(
-              "flex-1 overflow-x-hidden",
-              fullBleed ? "overflow-y-hidden" : "overflow-y-auto",
+              "flex-1 min-h-0 overflow-x-hidden",
+              fullBleed || viewportLocked ? "overflow-y-hidden" : "overflow-y-auto",
               showMobileNav ? "pb-[calc(4rem+env(safe-area-inset-bottom))]" : null,
             )}
           >
             {fullBleed ? (
               children
             ) : (
-              <div className={cn("min-w-0 px-4 py-6", mode === "web" ? "mx-auto max-w-6xl" : null)}>
+              <div
+                className={cn(
+                  "min-w-0 px-4 py-6",
+                  mode === "web" ? "mx-auto max-w-6xl" : null,
+                  viewportLocked ? "flex h-full min-h-0 flex-col overflow-hidden" : null,
+                )}
+              >
                 {children}
               </div>
             )}

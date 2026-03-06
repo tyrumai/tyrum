@@ -276,6 +276,7 @@ function OperatorUiAppRoot({
   const shell = (
     <AppShell
       mode={mode}
+      viewportLocked={route === "chat"}
       sidebar={
         showShell ? (
           <Sidebar
