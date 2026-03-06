@@ -26,6 +26,7 @@ import {
   listOrderedEligibleProfilesForProvider,
   OAUTH_REFRESH_LEASE_UNAVAILABLE,
   parseProviderModelId,
+  providerRequiresConfiguredAccount,
   resolveProfileSecrets,
   resolveProviderBaseURL,
 } from "./provider-resolution.js";
@@ -225,6 +226,20 @@ export async function resolveSessionModel(
     throw new Error(`model not found in models.dev catalog: ${attemptedLabel}`);
   }
 
+  const specsByCandidate = resolvedCandidates.map((candidate) => ({
+    candidateId: `${candidate.providerId}/${candidate.modelId}`,
+    specificationVersion: expectedSpecificationVersionForNpm(candidate.npm),
+  }));
+  const distinctSpecs = Array.from(
+    new Set(specsByCandidate.map((entry) => entry.specificationVersion)),
+  );
+  if (distinctSpecs.length > 1) {
+    const details = specsByCandidate
+      .map((entry) => `${entry.candidateId} (${entry.specificationVersion})`)
+      .join(", ");
+    throw new Error(`configured model candidates must share one specification version: ${details}`);
+  }
+
   const fetchImpl = input.fetchImpl ?? deps.fetchImpl;
   const {
     secretProvider,
@@ -280,12 +295,10 @@ export async function resolveSessionModel(
     const expectedSpec = expectedSpecificationVersionForNpm(chosen.npm);
     const providerLabel = `${chosen.providerId}/${chosen.modelId}`;
     const supportedUrls: PromiseLike<Record<string, RegExp[]>> = Promise.resolve({});
-    const providerEnv = (chosen.provider as { env?: unknown }).env;
-    const providerRequiresConfiguredAccount =
-      /\$\{[A-Z0-9_]+\}/.test(chosen.api ?? "") ||
-      (Array.isArray(providerEnv)
-        ? providerEnv.some((entry) => typeof entry === "string" && entry.trim().length > 0)
-        : true);
+    const requiresConfiguredAccount = providerRequiresConfiguredAccount({
+      providerApi: chosen.api,
+      providerEnv: (chosen.provider as { env?: unknown }).env,
+    });
 
     async function buildModelFromProfile(
       profile?: AuthProfileRow,
@@ -369,7 +382,7 @@ export async function resolveSessionModel(
       });
 
       if (orderedProfiles.length === 0) {
-        if (providerRequiresConfiguredAccount) {
+        if (requiresConfiguredAccount) {
           throw new Error(
             `no active auth profiles with credentials configured for provider '${chosen.providerId}'`,
           );

@@ -9,6 +9,7 @@ import {
   listOrderedEligibleProfilesForProvider,
   OAUTH_REFRESH_LEASE_UNAVAILABLE,
   parseProviderModelId,
+  providerRequiresConfiguredAccount,
   resolveProfileSecrets,
   resolveProviderBaseURL,
 } from "./provider-resolution.js";
@@ -168,16 +169,6 @@ async function resolveProviderAccount(input: {
   return undefined;
 }
 
-function providerRequiresConfiguredAccount(candidate: ResolvedEmbeddingCandidate): boolean {
-  if (/\$\{[A-Z0-9_]+\}/.test(candidate.api ?? "")) {
-    return true;
-  }
-  const providerEnv = (candidate.provider as { env?: unknown }).env;
-  return Array.isArray(providerEnv)
-    ? providerEnv.some((entry) => typeof entry === "string" && entry.trim().length > 0)
-    : true;
-}
-
 function buildEmbeddingPipeline(input: {
   db: GatewayContainer["db"];
   fetchImpl: typeof fetch;
@@ -252,7 +243,15 @@ export async function resolveEmbeddingPipeline(input: {
         sessionId: input.sessionId,
         providerId: candidate.providerId,
       });
-      if (!providerAccount && providerRequiresConfiguredAccount(candidate)) continue;
+      if (
+        !providerAccount &&
+        providerRequiresConfiguredAccount({
+          providerApi: candidate.api,
+          providerEnv: (candidate.provider as { env?: unknown }).env,
+        })
+      ) {
+        continue;
+      }
 
       const pipeline = buildEmbeddingPipeline({
         db: input.container.db,

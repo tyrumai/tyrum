@@ -114,6 +114,19 @@ export function resolveProviderBaseURL(input: {
   return undefined;
 }
 
+export function providerRequiresConfiguredAccount(input: {
+  providerApi: string | undefined;
+  providerEnv: unknown;
+}): boolean {
+  if (/\$\{[A-Z0-9_]+\}/.test(input.providerApi ?? "")) {
+    return true;
+  }
+
+  return Array.isArray(input.providerEnv)
+    ? input.providerEnv.some((entry) => typeof entry === "string" && entry.trim().length > 0)
+    : true;
+}
+
 export async function listOrderedEligibleProfilesForProvider(input: {
   tenantId: string;
   sessionId: string;
@@ -230,7 +243,10 @@ export async function resolveProfileSecrets(
   const selection = pickSecretSlots(profile);
   let refreshLeaseUnavailable = false;
 
-  const maybeRefresh = async (): Promise<string | null> => {
+  const maybeRefresh = async (): Promise<{
+    accessToken: string;
+    refreshToken: string;
+  } | null> => {
     if (profile.type !== "oauth") return null;
     if (!selection.authSecretKey || !selection.refreshTokenKey) return null;
 
@@ -288,13 +304,17 @@ export async function resolveProfileSecrets(
 
       const accessToken = token.access_token?.trim();
       if (!accessToken) return null;
+      const nextRefreshToken = token.refresh_token?.trim() || refreshToken;
 
       await deps.secretProvider!.store(selection.authSecretKey, accessToken);
       if (token.refresh_token?.trim()) {
-        await deps.secretProvider!.store(selection.refreshTokenKey, token.refresh_token.trim());
+        await deps.secretProvider!.store(selection.refreshTokenKey, nextRefreshToken);
       }
 
-      return accessToken;
+      return {
+        accessToken,
+        refreshToken: nextRefreshToken,
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       deps.logger.warn("oauth.refresh_failed", {
@@ -314,15 +334,30 @@ export async function resolveProfileSecrets(
     }
   };
 
+  let forcedRefreshResult:
+    | {
+        accessToken: string;
+        refreshToken: string;
+      }
+    | undefined;
   if (opts?.forceOAuthRefresh && profile.type === "oauth") {
     const refreshed = await maybeRefresh();
     if (!refreshed) {
       return refreshLeaseUnavailable ? OAUTH_REFRESH_LEASE_UNAVAILABLE : null;
     }
+    forcedRefreshResult = refreshed;
   }
 
   const resolvedSecrets: Record<string, string> = {};
   for (const [slot, secretKey] of slotEntries) {
+    if (forcedRefreshResult && slot === "access_token") {
+      resolvedSecrets[slot] = forcedRefreshResult.accessToken;
+      continue;
+    }
+    if (forcedRefreshResult && slot === "refresh_token") {
+      resolvedSecrets[slot] = forcedRefreshResult.refreshToken;
+      continue;
+    }
     const value = await deps.secretProvider.resolve(buildDbHandle(secretKey));
     if (!value) continue;
     resolvedSecrets[slot] = value;
@@ -336,15 +371,8 @@ export async function resolveProfileSecrets(
   ) {
     const refreshed = await maybeRefresh();
     if (refreshed) {
-      resolvedSecrets["access_token"] = refreshed;
-      if (selection.refreshTokenKey) {
-        const refreshTokenValue = await deps.secretProvider.resolve(
-          buildDbHandle(selection.refreshTokenKey),
-        );
-        if (refreshTokenValue) {
-          resolvedSecrets["refresh_token"] = refreshTokenValue;
-        }
-      }
+      resolvedSecrets["access_token"] = refreshed.accessToken;
+      resolvedSecrets["refresh_token"] = refreshed.refreshToken;
     }
   }
 

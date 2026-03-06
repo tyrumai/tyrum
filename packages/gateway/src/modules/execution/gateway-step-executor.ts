@@ -11,6 +11,7 @@ import { AuthProfileDal } from "../models/auth-profile-dal.js";
 import { createProviderFromNpm } from "../models/provider-factory.js";
 import {
   OAUTH_REFRESH_LEASE_UNAVAILABLE,
+  providerRequiresConfiguredAccount,
   resolveProfileSecrets,
   resolveProviderBaseURL,
 } from "../agent/runtime/provider-resolution.js";
@@ -293,13 +294,11 @@ async function resolveLanguageModel(input: {
     break;
   }
 
-  const providerEnv = (provider as { env?: unknown }).env;
-  const providerRequiresConfiguredAccount =
-    /\$\{[A-Z0-9_]+\}/.test(api ?? "") ||
-    (Array.isArray(providerEnv)
-      ? providerEnv.some((entry) => typeof entry === "string" && entry.trim().length > 0)
-      : true);
-  if (!selectedProfile && providerRequiresConfiguredAccount) {
+  const requiresConfiguredAccount = providerRequiresConfiguredAccount({
+    providerApi: api,
+    providerEnv: (provider as { env?: unknown }).env,
+  });
+  if (!selectedProfile && requiresConfiguredAccount) {
     throw new Error(
       `no active auth profiles with credentials configured for provider '${parsed.providerId}'`,
     );
