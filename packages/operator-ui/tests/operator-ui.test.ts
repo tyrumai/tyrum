@@ -19,12 +19,23 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 type Handler = (data: unknown) => void;
 
-function openSettings(container: HTMLElement): void {
-  const settingsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-settings"]');
-  expect(settingsLink).not.toBeNull();
+async function openConfigureGeneral(container: HTMLElement): Promise<void> {
+  const configureLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-configure"]');
+  expect(configureLink).not.toBeNull();
 
-  act(() => {
-    settingsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  await act(async () => {
+    configureLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await Promise.resolve();
+  });
+
+  const generalTab = container.querySelector<HTMLButtonElement>(
+    '[data-testid="configure-tab-general"]',
+  );
+  expect(generalTab).not.toBeNull();
+
+  await act(async () => {
+    generalTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    await Promise.resolve();
   });
 }
 
@@ -255,6 +266,51 @@ function sampleUsageResponse() {
   } as const;
 }
 
+function sampleAgentStatusResponse() {
+  return {
+    enabled: true,
+    home: "/tmp/agents/default",
+    identity: {
+      name: "Default Agent",
+      description: "Primary operator agent",
+    },
+    model: {
+      model: "openai/gpt-4.1",
+      variant: "balanced",
+      fallback: ["openai/gpt-4.1-mini"],
+    },
+    skills: ["review", "deploy"],
+    workspace_skills_trusted: true,
+    mcp: [
+      {
+        id: "filesystem",
+        name: "Filesystem",
+        enabled: true,
+        transport: "stdio",
+      },
+    ],
+    tools: ["shell", "http"],
+    sessions: {
+      ttl_days: 30,
+      max_turns: 20,
+      context_pruning: {
+        max_messages: 32,
+        tool_prune_keep_last_messages: 4,
+      },
+      loop_detection: {
+        within_turn: {
+          consecutive_repeat_limit: 2,
+          cycle_repeat_limit: 3,
+        },
+        cross_turn: {
+          window_assistant_messages: 8,
+          similarity_threshold: 0.92,
+        },
+      },
+    },
+  } as const;
+}
+
 function samplePresenceResponse() {
   return {
     status: "ok",
@@ -336,7 +392,7 @@ function sampleExecutionRun() {
   return {
     run_id: "11111111-1111-1111-1111-deadbeefcafe",
     job_id: "22222222-2222-2222-2222-222222222222",
-    key: "key-1",
+    key: "agent:default:main",
     lane: "main",
     status: "running",
     attempt: 1,
@@ -451,7 +507,7 @@ function createFakeHttpClient(): {
     async () => ({ status: "ok", pairing: samplePairingRequestPending() }) as const,
   );
   const agentListGet = vi.fn(async () => ({ agents: [{ agent_key: "default" }] }) as const);
-  const agentStatusGet = vi.fn(async () => ({ status: "ok" }) as const);
+  const agentStatusGet = vi.fn(async () => sampleAgentStatusResponse());
   const modelAssignmentsUpdate = vi.fn(async () => ({
     status: "ok",
     assignments: EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
@@ -711,11 +767,13 @@ describe("operator-ui", () => {
     expect(container.querySelector(".stack")).toBeNull();
     expect(container.querySelector(".alert")).toBeNull();
 
-    const settingsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-settings"]');
-    expect(settingsLink).not.toBeNull();
+    const configureLink = container.querySelector<HTMLButtonElement>(
+      '[data-testid="nav-configure"]',
+    );
+    expect(configureLink).not.toBeNull();
 
     act(() => {
-      settingsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      configureLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(container.querySelector(".card")).toBeNull();
@@ -886,6 +944,7 @@ describe("operator-ui", () => {
       expect(container.querySelector("[data-testid='configure-page']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-tab-http']")).toBeNull();
       expect(container.querySelector("[data-testid='admin-tab-ws']")).toBeNull();
+      expect(container.querySelector("[data-testid='configure-tab-general']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-http-tab-policy']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-http-tab-providers']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-http-tab-models']")).not.toBeNull();
@@ -897,7 +956,7 @@ describe("operator-ui", () => {
       expect(container.querySelector("[data-testid='admin-http-tab-plugins']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-http-tab-gateway']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-ws-tab-commands']")).not.toBeNull();
-      expect(container.querySelector("[data-testid='configure-read-only-notice']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='configure-read-only-notice']")).toBeNull();
     } finally {
       act(() => {
         root?.unmount();
@@ -2581,7 +2640,8 @@ describe("operator-ui", () => {
     expect(container.textContent).toContain("Pending Approvals");
     expect(container.textContent).not.toContain("Instance ID");
     expect(container.textContent).not.toContain("Tokens Used");
-    expect(container.textContent).not.toContain("Active Runs");
+    expect(container.textContent).toContain("Active Runs");
+    expect(container.textContent).toContain("Pending Pairings");
 
     const approvalsBadge = container.querySelector<HTMLSpanElement>(
       '[data-testid="dashboard-approvals-badge"]',
@@ -2702,7 +2762,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("supports Cmd/Ctrl+1-6 page navigation shortcuts", () => {
+  it("supports Cmd/Ctrl+1-7 page navigation shortcuts", () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -2735,7 +2795,7 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("ignores Cmd/Ctrl+1-6 shortcuts while disconnected and lands on dashboard after reconnect", async () => {
+  it("ignores Cmd/Ctrl+1-7 shortcuts while disconnected and lands on dashboard after reconnect", async () => {
     const ws = new FakeWsClient(false);
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -3480,7 +3540,7 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("renders incoming runs on the runs page", async () => {
+  it("renders incoming runs on the agent runs tab", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:02:00.000Z"));
 
@@ -3502,15 +3562,24 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    const runsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-runs"]');
-    expect(runsLink).not.toBeNull();
+    const agentsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-agents"]');
+    expect(agentsLink).not.toBeNull();
 
     act(() => {
-      runsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      agentsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const runsTab = container.querySelector<HTMLButtonElement>('[data-testid="agents-tab-runs"]');
+    expect(runsTab).not.toBeNull();
+
+    act(() => {
+      runsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
     });
 
     expect(container.textContent).toContain("No runs yet");
-    expect(container.textContent).toContain("Runs appear here when agents start executing.");
+    expect(container.textContent).toContain(
+      "Runs for this agent appear here when it starts executing.",
+    );
 
     act(() => {
       ws.emit("run.updated", { payload: { run: sampleExecutionRun() } });
@@ -3615,9 +3684,9 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("refreshes usage in settings", async () => {
+  it("renders theme and update cards in Configure general", async () => {
     const ws = new FakeWsClient();
-    const { http, usageGet } = createFakeHttpClient();
+    const { http } = createFakeHttpClient();
     const core = createOperatorCore({
       wsUrl: "ws://example.test/ws",
       httpBaseUrl: "http://example.test",
@@ -3634,32 +3703,12 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    openSettings(container);
+    await openConfigureGeneral(container);
 
-    const generalCard = container.querySelector('[data-testid="settings-general"]');
-    expect(generalCard).not.toBeNull();
-    expect(generalCard?.textContent).toContain("desktop");
-    expect(generalCard?.textContent).toContain("http://example.test");
-    expect(container.querySelector('[data-testid="settings-usage"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="settings-theme"]')).not.toBeNull();
-
-    expect(container.querySelector('[data-testid="settings-refresh-usage"]')).toBeNull();
-
-    const tokensValue = container.querySelector('[data-testid="settings-usage-total-tokens"]');
-    expect(tokensValue).not.toBeNull();
-
-    const syncButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="sidebar-sync-now"]',
-    );
-    expect(syncButton).not.toBeNull();
-
-    await act(async () => {
-      syncButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(usageGet.mock.calls.length).toBeGreaterThanOrEqual(1);
-    expect(tokensValue?.textContent).toContain("0");
+    expect(container.querySelector('[data-testid="nav-settings"]')).toBeNull();
+    expect(container.querySelector('[data-testid="configure-general-panel"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="configure-theme"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="configure-update"]')).not.toBeNull();
 
     act(() => {
       root?.unmount();
@@ -3667,7 +3716,7 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("switches theme mode from Settings", async () => {
+  it("switches theme mode from Configure general", async () => {
     const localStorageMock = {
       getItem: vi.fn((key: string) => (key === "tyrum.themeMode" ? "dark" : null)),
       setItem: vi.fn(),
@@ -3693,10 +3742,10 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    openSettings(container);
+    await openConfigureGeneral(container);
 
     const lightOption = container.querySelector<HTMLButtonElement>(
-      '[data-testid="settings-theme-light"]',
+      '[data-testid="configure-theme-light"]',
     );
     expect(lightOption).not.toBeNull();
 
@@ -3765,7 +3814,7 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("gates an admin-only Settings action behind Elevated Mode", async () => {
+  it("gates an admin-only Configure action behind Elevated Mode", async () => {
     const expectedScopes = [
       "operator.read",
       "operator.write",
@@ -3790,16 +3839,20 @@ describe("operator-ui", () => {
     let root: Root | null = null;
     act(() => {
       root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    openSettings(container);
+    await openConfigureTab(container, "admin-http-tab-gateway");
 
-    expect(container.querySelector('[data-testid="settings-admin-command-execute"]')).toBeNull();
-    expect(container.textContent).toContain("Enter Elevated Mode to continue");
+    const issueButtonBeforeElevated = container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-http-device-tokens-issue"]',
+    );
+    expect(issueButtonBeforeElevated).not.toBeNull();
+    expect(issueButtonBeforeElevated?.disabled).toBe(true);
+    expect(container.textContent).toContain("Enter Elevated Mode to enable mutation actions.");
 
     const enterButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="elevated-mode-enter"]',
+      '[data-testid="configure-read-only-enter"]',
     );
     expect(enterButton).not.toBeNull();
 
@@ -3839,12 +3892,19 @@ describe("operator-ui", () => {
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
     expect(container.querySelector('[data-testid="elevated-mode-banner"]')).not.toBeNull();
-    expect(
-      container.querySelector('[data-testid="settings-admin-command-execute"]'),
-    ).not.toBeNull();
+
+    const commandsTab = container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-ws-tab-commands"]',
+    );
+    expect(commandsTab).not.toBeNull();
+
+    await act(async () => {
+      commandsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+      await Promise.resolve();
+    });
 
     const commandInput = container.querySelector<HTMLInputElement>(
-      '[data-testid="settings-admin-command-input"]',
+      '[data-testid="admin-ws-command-input"]',
     );
     expect(commandInput).not.toBeNull();
     act(() => {
@@ -3853,7 +3913,7 @@ describe("operator-ui", () => {
     });
 
     const executeButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="settings-admin-command-execute"]',
+      '[data-testid="admin-ws-command-run"]',
     );
     expect(executeButton).not.toBeNull();
 

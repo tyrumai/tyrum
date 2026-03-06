@@ -1,4 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
+import { useState } from "react";
 import { AuditPanel } from "../admin-http/audit-panel.js";
 import { PageHeader } from "../layout/page-header.js";
 import { Alert } from "../ui/alert.js";
@@ -13,6 +14,8 @@ import { AdminHttpPolicyAuthPanels } from "./admin-http-policy-auth-panels.js";
 import { AdminHttpRoutingConfigPanel } from "./admin-http-routing-config.js";
 import { AdminHttpSecretsPanel } from "./admin-http-secrets.js";
 import { AdminWsCommandPanel } from "./admin-ws-command-panel.js";
+import { ConfigureGeneralPanel } from "./configure-general-panel.js";
+import { ThemeProvider, useThemeOptional } from "../../hooks/use-theme.js";
 
 export interface ConfigurePageProps {
   core: OperatorCore;
@@ -43,14 +46,16 @@ function ReadOnlyNotice({ onEnterElevatedMode }: { onEnterElevatedMode: () => vo
   );
 }
 
-export function ConfigurePage({ core }: ConfigurePageProps) {
+function ConfigurePageContent({ core }: ConfigurePageProps) {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
+  const [activeTab, setActiveTab] = useState("general");
+  const showReadOnlyNotice = !canMutate && activeTab !== "general";
 
   return (
     <div className="grid gap-6" data-testid="configure-page">
       <PageHeader title="Configure" />
 
-      {!canMutate ? (
+      {showReadOnlyNotice ? (
         <ReadOnlyNotice
           onEnterElevatedMode={() => {
             requestEnter();
@@ -58,8 +63,11 @@ export function ConfigurePage({ core }: ConfigurePageProps) {
         />
       ) : null}
 
-      <Tabs defaultValue="policy" className="grid gap-3">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="grid gap-3">
         <TabsList aria-label="Configure sections">
+          <TabsTrigger value="general" data-testid="configure-tab-general">
+            General
+          </TabsTrigger>
           <TabsTrigger value="policy" data-testid="admin-http-tab-policy">
             Policy
           </TabsTrigger>
@@ -88,6 +96,10 @@ export function ConfigurePage({ core }: ConfigurePageProps) {
             Commands
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="general">
+          <ConfigureGeneralPanel />
+        </TabsContent>
 
         <TabsContent value="policy">
           <AdminHttpPolicyAuthPanels core={core} />
@@ -127,4 +139,10 @@ export function ConfigurePage({ core }: ConfigurePageProps) {
       </Tabs>
     </div>
   );
+}
+
+export function ConfigurePage(props: ConfigurePageProps) {
+  const existingTheme = useThemeOptional();
+  const page = <ConfigurePageContent {...props} />;
+  return existingTheme ? page : <ThemeProvider>{page}</ThemeProvider>;
 }

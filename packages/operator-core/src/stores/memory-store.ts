@@ -7,6 +7,7 @@ import type {
   MemorySearchHit,
   MemoryTombstone,
 } from "@tyrum/client";
+import { AgentId } from "@tyrum/schemas";
 import type { OperatorWsClient } from "../deps.js";
 import { toOperatorCoreError, type OperatorCoreError } from "../operator-error.js";
 import { createStore, type ExternalStore } from "../store.js";
@@ -14,11 +15,13 @@ import { createStore, type ExternalStore } from "../store.js";
 export type MemoryBrowseRequest =
   | {
       kind: "list";
+      agentId?: string;
       filter?: MemoryItemFilter;
       limit?: number;
     }
   | {
       kind: "search";
+      agentId?: string;
       query: string;
       filter?: MemoryItemFilter;
       limit?: number;
@@ -59,6 +62,7 @@ export function completeBrowseSuccess(
 }
 
 export interface MemoryInspectState {
+  agentId: string | null;
   memoryItemId: MemoryItemId | null;
   item: MemoryItem | null;
   loading: boolean;
@@ -86,18 +90,78 @@ export interface MemoryState {
 }
 
 export interface MemoryStore extends ExternalStore<MemoryState> {
-  list(input?: { filter?: MemoryItemFilter; limit?: number }): Promise<void>;
-  search(input: { query: string; filter?: MemoryItemFilter; limit?: number }): Promise<void>;
+  list(input?: { agentId?: string; filter?: MemoryItemFilter; limit?: number }): Promise<void>;
+  search(input: {
+    agentId?: string;
+    query: string;
+    filter?: MemoryItemFilter;
+    limit?: number;
+  }): Promise<void>;
   refreshBrowse(): Promise<void>;
   loadMore(): Promise<void>;
-  inspect(memoryItemId: MemoryItemId): Promise<void>;
-  update(memoryItemId: MemoryItemId, patch: MemoryItemPatch): Promise<MemoryItem>;
-  forget(selectors: MemoryForgetSelector[]): Promise<void>;
-  export(input?: { filter?: MemoryItemFilter; includeTombstones?: boolean }): Promise<void>;
+  inspect(memoryItemId: MemoryItemId, input?: { agentId?: string }): Promise<void>;
+  update(
+    memoryItemId: MemoryItemId,
+    patch: MemoryItemPatch,
+    input?: { agentId?: string },
+  ): Promise<MemoryItem>;
+  forget(selectors: MemoryForgetSelector[], input?: { agentId?: string }): Promise<void>;
+  export(input?: {
+    agentId?: string;
+    filter?: MemoryItemFilter;
+    includeTombstones?: boolean;
+  }): Promise<void>;
 }
 
 function toCursor(value: string | undefined): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function normalizeAgentScope(agentId?: string | null): string | undefined {
+  const trimmed = agentId?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
+function resolveAgentScope(agentId?: string | null): string {
+  return normalizeAgentScope(agentId) ?? "default";
+}
+
+function normalizeResolvedAgentId(agentId?: string | null): string | null {
+  const normalized = normalizeAgentScope(agentId);
+  if (!normalized) return null;
+  return AgentId.safeParse(normalized).success ? normalized : null;
+}
+
+function sameAgentScope(a?: string | null, b?: string | null): boolean {
+  return resolveAgentScope(a) === resolveAgentScope(b);
+}
+
+function findKnownAgentId(state: MemoryState): string | null {
+  const inspectAgentId = normalizeResolvedAgentId(state.inspect.item?.agent_id);
+  if (inspectAgentId) return inspectAgentId;
+
+  const browseResults = state.browse.results;
+  if (browseResults?.kind === "list") {
+    for (const item of browseResults.items) {
+      const browseAgentId = normalizeResolvedAgentId(item.agent_id);
+      if (browseAgentId) return browseAgentId;
+    }
+  }
+
+  for (const tombstone of state.tombstones.tombstones) {
+    const tombstoneAgentId = normalizeResolvedAgentId(tombstone.agent_id);
+    if (tombstoneAgentId) return tombstoneAgentId;
+  }
+
+  return normalizeResolvedAgentId(state.inspect.agentId ?? state.browse.request?.agentId);
+}
+
+function matchesCurrentScope(state: MemoryState, agentId?: string | null): boolean {
+  const incomingAgentId = normalizeAgentScope(agentId);
+  if (!incomingAgentId) return true;
+  const currentAgentId = findKnownAgentId(state);
+  if (!currentAgentId) return true;
+  return currentAgentId === incomingAgentId;
 }
 
 function findItemInBrowseResults(
@@ -222,6 +286,7 @@ export function createMemoryStore(ws: OperatorWsClient): {
       lastSyncedAt: null,
     },
     inspect: {
+      agentId: null,
       memoryItemId: null,
       item: null,
       loading: false,
@@ -261,31 +326,53 @@ export function createMemoryStore(ws: OperatorWsClient): {
   let exportRunId = 0;
   let activeExportRunId: number | null = null;
 
-  async function list(input?: { filter?: MemoryItemFilter; limit?: number }): Promise<void> {
+  async function list(input?: {
+    agentId?: string;
+    filter?: MemoryItemFilter;
+    limit?: number;
+  }): Promise<void> {
     const runId = ++browseRunId;
     activeBrowseRunId = runId;
     resetBrowseBuffers();
+    const agentId = normalizeAgentScope(input?.agentId);
 
     const request: MemoryBrowseRequest = {
       kind: "list",
+      agentId,
       filter: input?.filter,
       limit: input?.limit,
     };
 
-    setState((prev) => ({
-      ...prev,
-      browse: {
-        ...prev.browse,
-        request,
-        results: null,
-        loading: true,
-        error: null,
-      },
-    }));
+    setState((prev) => {
+      const scopeChanged = !sameAgentScope(prev.inspect.agentId, agentId);
+      return {
+        ...prev,
+        browse: {
+          ...prev.browse,
+          request,
+          results: null,
+          loading: true,
+          error: null,
+        },
+        inspect: scopeChanged
+          ? {
+              agentId: agentId ?? null,
+              memoryItemId: null,
+              item: null,
+              loading: false,
+              error: null,
+            }
+          : { ...prev.inspect, agentId: agentId ?? null },
+        tombstones: scopeChanged
+          ? { ...prev.tombstones, tombstones: [], loading: false, error: null }
+          : prev.tombstones,
+      };
+    });
 
     try {
       const result = await ws.memoryList({
         v: 1,
+        agent_id: agentId,
         filter: input?.filter,
         limit: input?.limit,
         cursor: undefined,
@@ -334,6 +421,7 @@ export function createMemoryStore(ws: OperatorWsClient): {
   }
 
   async function search(input: {
+    agentId?: string;
     query: string;
     filter?: MemoryItemFilter;
     limit?: number;
@@ -341,28 +429,46 @@ export function createMemoryStore(ws: OperatorWsClient): {
     const runId = ++browseRunId;
     activeBrowseRunId = runId;
     resetBrowseBuffers();
+    const agentId = normalizeAgentScope(input.agentId);
 
     const request: MemoryBrowseRequest = {
       kind: "search",
+      agentId,
       query: input.query,
       filter: input.filter,
       limit: input.limit,
     };
 
-    setState((prev) => ({
-      ...prev,
-      browse: {
-        ...prev.browse,
-        request,
-        results: null,
-        loading: true,
-        error: null,
-      },
-    }));
+    setState((prev) => {
+      const scopeChanged = !sameAgentScope(prev.inspect.agentId, agentId);
+      return {
+        ...prev,
+        browse: {
+          ...prev.browse,
+          request,
+          results: null,
+          loading: true,
+          error: null,
+        },
+        inspect: scopeChanged
+          ? {
+              agentId: agentId ?? null,
+              memoryItemId: null,
+              item: null,
+              loading: false,
+              error: null,
+            }
+          : { ...prev.inspect, agentId: agentId ?? null },
+        tombstones: scopeChanged
+          ? { ...prev.tombstones, tombstones: [], loading: false, error: null }
+          : prev.tombstones,
+      };
+    });
 
     try {
       const result = await ws.memorySearch({
         v: 1,
+        agent_id: agentId,
         query: input.query,
         filter: input.filter,
         limit: input.limit,
@@ -430,6 +536,7 @@ export function createMemoryStore(ws: OperatorWsClient): {
       if (request.kind === "list") {
         const result = await ws.memoryList({
           v: 1,
+          agent_id: request.agentId,
           filter: request.filter,
           limit: request.limit,
           cursor: undefined,
@@ -464,6 +571,7 @@ export function createMemoryStore(ws: OperatorWsClient): {
 
       const result = await ws.memorySearch({
         v: 1,
+        agent_id: request.agentId,
         query: request.query,
         filter: request.filter,
         limit: request.limit,
@@ -538,6 +646,7 @@ export function createMemoryStore(ws: OperatorWsClient): {
       if (request.kind === "list") {
         const next = await ws.memoryList({
           v: 1,
+          agent_id: request.agentId,
           filter: request.filter,
           limit: request.limit,
           cursor,
@@ -598,6 +707,7 @@ export function createMemoryStore(ws: OperatorWsClient): {
 
       const next = await ws.memorySearch({
         v: 1,
+        agent_id: request.agentId,
         query: request.query,
         filter: request.filter,
         limit: request.limit,
@@ -650,14 +760,16 @@ export function createMemoryStore(ws: OperatorWsClient): {
     }
   }
 
-  async function inspect(memoryItemId: MemoryItemId): Promise<void> {
+  async function inspect(memoryItemId: MemoryItemId, input?: { agentId?: string }): Promise<void> {
     const runId = ++inspectRunId;
     activeInspectRunId = runId;
+    const agentId = normalizeAgentScope(input?.agentId ?? store.getSnapshot().inspect.agentId);
 
     setState((prev) => ({
       ...prev,
       inspect: {
         ...prev.inspect,
+        agentId: agentId ?? null,
         memoryItemId,
         item: findItemInBrowseResults(prev.browse.results, memoryItemId),
         loading: true,
@@ -666,7 +778,7 @@ export function createMemoryStore(ws: OperatorWsClient): {
     }));
 
     try {
-      const result = await ws.memoryGet({ v: 1, memory_item_id: memoryItemId });
+      const result = await ws.memoryGet({ v: 1, agent_id: agentId, memory_item_id: memoryItemId });
       if (activeInspectRunId !== runId) return;
       setState((prev) => ({
         ...prev,
@@ -694,9 +806,13 @@ export function createMemoryStore(ws: OperatorWsClient): {
     }
   }
 
-  async function forget(selectors: MemoryForgetSelector[]): Promise<void> {
+  async function forget(
+    selectors: MemoryForgetSelector[],
+    input?: { agentId?: string },
+  ): Promise<void> {
     const runId = ++forgetRunId;
     activeForgetRunId = runId;
+    const agentId = normalizeAgentScope(input?.agentId ?? store.getSnapshot().inspect.agentId);
 
     setState((prev) => ({
       ...prev,
@@ -704,7 +820,12 @@ export function createMemoryStore(ws: OperatorWsClient): {
     }));
 
     try {
-      const result = await ws.memoryForget({ v: 1, confirm: "FORGET", selectors });
+      const result = await ws.memoryForget({
+        v: 1,
+        agent_id: agentId,
+        confirm: "FORGET",
+        selectors,
+      });
       if (activeForgetRunId !== runId) return;
 
       const deletedIds = new Set<string>(result.tombstones.map((t) => t.memory_item_id));
@@ -753,18 +874,30 @@ export function createMemoryStore(ws: OperatorWsClient): {
     }
   }
 
-  async function update(memoryItemId: MemoryItemId, patch: MemoryItemPatch): Promise<MemoryItem> {
-    const result = await ws.memoryUpdate({ v: 1, memory_item_id: memoryItemId, patch });
+  async function update(
+    memoryItemId: MemoryItemId,
+    patch: MemoryItemPatch,
+    input?: { agentId?: string },
+  ): Promise<MemoryItem> {
+    const agentId = normalizeAgentScope(input?.agentId ?? store.getSnapshot().inspect.agentId);
+    const result = await ws.memoryUpdate({
+      v: 1,
+      agent_id: agentId,
+      memory_item_id: memoryItemId,
+      patch,
+    });
     handleMemoryItemUpsert(result.item);
     return result.item;
   }
 
   async function exportMemory(input?: {
+    agentId?: string;
     filter?: MemoryItemFilter;
     includeTombstones?: boolean;
   }): Promise<void> {
     const runId = ++exportRunId;
     activeExportRunId = runId;
+    const agentId = normalizeAgentScope(input?.agentId ?? store.getSnapshot().inspect.agentId);
 
     setState((prev) => ({
       ...prev,
@@ -779,6 +912,7 @@ export function createMemoryStore(ws: OperatorWsClient): {
     try {
       const result = await ws.memoryExport({
         v: 1,
+        agent_id: agentId,
         filter: input?.filter,
         include_tombstones: input?.includeTombstones ?? false,
       });
@@ -810,6 +944,10 @@ export function createMemoryStore(ws: OperatorWsClient): {
   }
 
   function handleMemoryItemUpsert(item: MemoryItem): void {
+    const snapshot = store.getSnapshot();
+    if (!matchesCurrentScope(snapshot, item.agent_id)) {
+      return;
+    }
     if (activeBrowseRunId !== null) {
       bufferedItemUpserts.set(item.memory_item_id, item);
     }
@@ -842,6 +980,10 @@ export function createMemoryStore(ws: OperatorWsClient): {
   }
 
   function handleMemoryTombstone(tombstone: MemoryTombstone): void {
+    const snapshot = store.getSnapshot();
+    if (!matchesCurrentScope(snapshot, tombstone.agent_id)) {
+      return;
+    }
     if (activeBrowseRunId !== null) {
       bufferedDeletedIds.add(tombstone.memory_item_id);
     }
@@ -864,6 +1006,10 @@ export function createMemoryStore(ws: OperatorWsClient): {
   }
 
   function handleMemoryConsolidated(fromMemoryItemIds: MemoryItemId[], item: MemoryItem): void {
+    const snapshot = store.getSnapshot();
+    if (!matchesCurrentScope(snapshot, item.agent_id)) {
+      return;
+    }
     const fromIds = new Set<string>(fromMemoryItemIds);
     if (activeBrowseRunId !== null) {
       for (const id of fromMemoryItemIds) {

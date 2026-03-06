@@ -6,6 +6,7 @@ import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createElevatedModeStore } from "../../../operator-core/src/stores/elevated-mode-store.js";
 import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { ConfigurePage } from "../../src/components/pages/configure-page.js";
+import { ThemeProvider } from "../../src/hooks/use-theme.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 afterEach(() => {
@@ -177,15 +178,22 @@ describe("ConfigurePage (strict admin tabs)", () => {
 
     const testRoot = renderIntoDocument(
       React.createElement(
-        ElevatedModeProvider,
-        { core, mode: "web" },
-        React.createElement(ConfigurePage, { core }),
+        ThemeProvider,
+        null,
+        React.createElement(
+          ElevatedModeProvider,
+          { core, mode: "web" },
+          React.createElement(ConfigurePage, { core }),
+        ),
       ),
     );
 
     try {
       expect(testRoot.container.querySelector("[data-testid='admin-tab-http']")).toBeNull();
       expect(testRoot.container.querySelector("[data-testid='admin-tab-ws']")).toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='configure-tab-general']"),
+      ).not.toBeNull();
 
       expect(
         testRoot.container.querySelector("[data-testid='admin-http-tab-policy']"),
@@ -224,18 +232,25 @@ describe("ConfigurePage (strict admin tabs)", () => {
 
     const testRoot = renderIntoDocument(
       React.createElement(
-        ElevatedModeProvider,
-        { core, mode: "web" },
-        React.createElement(ConfigurePage, { core }),
+        ThemeProvider,
+        null,
+        React.createElement(
+          ElevatedModeProvider,
+          { core, mode: "web" },
+          React.createElement(ConfigurePage, { core }),
+        ),
       ),
     );
 
     try {
       expect(
         testRoot.container.querySelector("[data-testid='configure-read-only-notice']"),
-      ).not.toBeNull();
+      ).toBeNull();
 
       await switchAdminTab(testRoot.container, "admin-http-tab-plugins");
+      expect(
+        testRoot.container.querySelector("[data-testid='configure-read-only-notice']"),
+      ).not.toBeNull();
       const listPluginsButton = testRoot.container.querySelector<HTMLButtonElement>(
         "[data-testid='admin-http-plugins-list']",
       );
@@ -283,9 +298,13 @@ describe("ConfigurePage (strict admin tabs)", () => {
 
     const testRoot = renderIntoDocument(
       React.createElement(
-        ElevatedModeProvider,
-        { core, mode: "web" },
-        React.createElement(ConfigurePage, { core }),
+        ThemeProvider,
+        null,
+        React.createElement(
+          ElevatedModeProvider,
+          { core, mode: "web" },
+          React.createElement(ConfigurePage, { core }),
+        ),
       ),
     );
 
@@ -337,9 +356,13 @@ describe("ConfigurePage (strict admin tabs)", () => {
 
     const testRoot = renderIntoDocument(
       React.createElement(
-        ElevatedModeProvider,
-        { core, mode: "web" },
-        React.createElement(ConfigurePage, { core }),
+        ThemeProvider,
+        null,
+        React.createElement(
+          ElevatedModeProvider,
+          { core, mode: "web" },
+          React.createElement(ConfigurePage, { core }),
+        ),
       ),
     );
 

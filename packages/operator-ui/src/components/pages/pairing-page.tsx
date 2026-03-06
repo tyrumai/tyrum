@@ -300,7 +300,8 @@ export function PairingPage({ core }: { core: OperatorCore }) {
         <h1 className="text-2xl font-semibold tracking-tight text-fg">Pairings</h1>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-3">
+        <h2 className="text-lg font-medium text-fg">Pairing requests</h2>
         {pending.length === 0 ? (
           <Card>
             <EmptyState
@@ -319,16 +320,25 @@ export function PairingPage({ core }: { core: OperatorCore }) {
         )}
       </div>
 
-      {approved.length > 0 ? (
-        <div className="grid gap-3">
-          <h2 className="text-lg font-medium text-fg">Trusted devices</h2>
+      <div className="grid gap-3">
+        <h2 className="text-lg font-medium text-fg">Existing pairings</h2>
+        {approved.length === 0 ? (
+          <Card>
+            <EmptyState
+              data-testid="pairing-approved-empty-state"
+              icon={Link2}
+              title="No existing pairings"
+              description="Approved pairings appear here after you trust a device."
+            />
+          </Card>
+        ) : (
           <div className="grid gap-4">
             {approved.map((entry) => (
               <ApprovedPairingCard key={entry.pairing_id} core={core} pairing={entry} />
             ))}
           </div>
-        </div>
-      ) : null}
+        )}
+      </div>
     </div>
   );
 }

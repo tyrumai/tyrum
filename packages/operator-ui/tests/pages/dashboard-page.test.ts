@@ -60,12 +60,20 @@ describe("DashboardPage", () => {
       attemptIdsByStepId: {},
     });
 
+    const { store: workboardStore } = createStore({
+      items: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+
     const core = {
       connectionStore,
       statusStore,
       approvalsStore,
       pairingStore,
       runsStore,
+      workboardStore,
     } as unknown as OperatorCore;
 
     const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
@@ -98,5 +106,96 @@ describe("DashboardPage", () => {
     expect(getConnectionDot().className).not.toContain("animate-pulse");
 
     cleanupTestRoot({ container, root });
+  });
+
+  it("shows the active-runs badge only when the computed count is positive", () => {
+    const { store: connectionStore } = createStore({
+      status: "connected",
+      clientId: null,
+      lastDisconnect: null,
+      transportError: null,
+    });
+
+    const { store: statusStore, setState: setStatusState } = createStore({
+      status: {
+        queue_depth: {
+          execution_runs: {
+            queued: 0,
+            running: 0,
+            paused: 0,
+          },
+        },
+      },
+      usage: null,
+      presenceByInstanceId: {},
+      loading: { status: false, usage: false, presence: false },
+      error: { status: null, usage: null, presence: null },
+      lastSyncedAt: null,
+    });
+
+    const { store: approvalsStore } = createStore({
+      byId: {},
+      pendingIds: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+
+    const { store: pairingStore } = createStore({
+      byId: {},
+      pendingIds: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+
+    const { store: runsStore } = createStore({
+      runsById: {},
+      stepsById: {},
+      attemptsById: {},
+      stepIdsByRunId: {},
+      attemptIdsByStepId: {},
+    });
+
+    const { store: workboardStore } = createStore({
+      items: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+
+    const core = {
+      connectionStore,
+      statusStore,
+      approvalsStore,
+      pairingStore,
+      runsStore,
+      workboardStore,
+    } as unknown as OperatorCore;
+
+    const testRoot = renderIntoDocument(React.createElement(DashboardPage, { core }));
+
+    expect(testRoot.container.querySelector('[data-testid="dashboard-runs-badge"]')).toBeNull();
+
+    act(() => {
+      setStatusState((prev) => ({
+        ...prev,
+        status: {
+          queue_depth: {
+            execution_runs: {
+              queued: 1,
+              running: 1,
+              paused: 0,
+            },
+          },
+        },
+      }));
+    });
+
+    const badge = testRoot.container.querySelector('[data-testid="dashboard-runs-badge"]');
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toBe("2");
+
+    cleanupTestRoot(testRoot);
   });
 });

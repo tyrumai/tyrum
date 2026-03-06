@@ -2,16 +2,16 @@
 
 import { describe, expect, it, vi } from "vitest";
 import React from "react";
-import { LayoutDashboard, Play, Settings, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, MessageSquare, ShieldCheck, SquareKanban } from "lucide-react";
 import * as operatorUi from "../../src/index.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 describe("MobileNav", () => {
   const items = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
+    { id: "chat", label: "Chat", icon: MessageSquare, testId: "nav-chat" },
     { id: "approvals", label: "Approvals", icon: ShieldCheck, testId: "nav-approvals" },
-    { id: "runs", label: "Runs", icon: Play, testId: "nav-runs" },
-    { id: "settings", label: "Settings", icon: Settings, testId: "nav-settings" },
+    { id: "workboard", label: "Work", icon: SquareKanban, testId: "nav-workboard" },
   ];
 
   it("renders primary tabs and a More overflow trigger", () => {
@@ -24,7 +24,7 @@ describe("MobileNav", () => {
       React.createElement(MobileNav as React.ComponentType, {
         items,
         overflowItems: [],
-        activeItemId: "runs",
+        activeItemId: "workboard",
         onNavigate,
       }),
     );
@@ -32,7 +32,7 @@ describe("MobileNav", () => {
     const tabs = container.querySelectorAll("button[data-testid^='nav-']");
     expect(tabs.length).toBe(5);
 
-    const active = container.querySelector("[data-testid='nav-runs']");
+    const active = container.querySelector("[data-testid='nav-workboard']");
     expect(active?.getAttribute("data-active")).toBe("true");
 
     const dashboard = container.querySelector<HTMLButtonElement>("[data-testid='nav-dashboard']");
@@ -54,7 +54,7 @@ describe("MobileNav", () => {
       React.createElement(MobileNav as React.ComponentType, {
         items,
         overflowItems: [],
-        activeItemId: "runs",
+        activeItemId: "workboard",
         onNavigate: vi.fn(),
       }),
     );

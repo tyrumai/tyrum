@@ -67,11 +67,11 @@ function createFakeHttpClient(): OperatorHttpClient {
   };
 }
 
-function sampleNote(memoryItemId: string, body: string): MemoryItem {
+function sampleNote(memoryItemId: string, body: string, agentId = "default"): MemoryItem {
   return {
     v: 1,
     memory_item_id: memoryItemId,
-    agent_id: "agent-1",
+    agent_id: agentId,
     kind: "note",
     tags: ["demo"],
     sensitivity: "private",
@@ -81,11 +81,11 @@ function sampleNote(memoryItemId: string, body: string): MemoryItem {
   };
 }
 
-function sampleProcedure(memoryItemId: string, body: string): MemoryItem {
+function sampleProcedure(memoryItemId: string, body: string, agentId = "default"): MemoryItem {
   return {
     v: 1,
     memory_item_id: memoryItemId,
-    agent_id: "agent-1",
+    agent_id: agentId,
     kind: "procedure",
     tags: ["demo"],
     sensitivity: "private",
@@ -95,11 +95,11 @@ function sampleProcedure(memoryItemId: string, body: string): MemoryItem {
   };
 }
 
-function sampleEpisode(memoryItemId: string, summary: string): MemoryItem {
+function sampleEpisode(memoryItemId: string, summary: string, agentId = "default"): MemoryItem {
   return {
     v: 1,
     memory_item_id: memoryItemId,
-    agent_id: "agent-1",
+    agent_id: agentId,
     kind: "episode",
     tags: ["demo"],
     sensitivity: "private",
@@ -110,11 +110,16 @@ function sampleEpisode(memoryItemId: string, summary: string): MemoryItem {
   };
 }
 
-function sampleFact(memoryItemId: string, key: string, value: unknown): MemoryItem {
+function sampleFact(
+  memoryItemId: string,
+  key: string,
+  value: unknown,
+  agentId = "default",
+): MemoryItem {
   return {
     v: 1,
     memory_item_id: memoryItemId,
-    agent_id: "agent-1",
+    agent_id: agentId,
     kind: "fact",
     tags: ["demo"],
     sensitivity: "private",
@@ -198,6 +203,53 @@ describe("MemoryInspector", () => {
     );
     expect(provenance).not.toBeNull();
     expect(provenance?.textContent).toContain("operator");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("scopes browse and inspect requests to the selected agent", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+    const item = sampleNote("123e4567-e89b-12d3-a456-426614174260", "Scoped body", "agent-2");
+
+    ws.memoryList = vi.fn(async () => ({ v: 1, items: [item], next_cursor: undefined }) as unknown);
+    ws.memoryGet = vi.fn(async () => ({ v: 1, item }) as unknown);
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const testRoot = renderIntoDocument(
+      React.createElement(MemoryInspector, { core, agentId: "agent-2" }),
+    );
+
+    await act(async () => {});
+
+    expect(ws.memoryList).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: "agent-2",
+      filter: undefined,
+      limit: 50,
+      cursor: undefined,
+    });
+
+    const itemButton = testRoot.container.querySelector<HTMLButtonElement>(
+      `[data-testid="memory-item-${item.memory_item_id}"]`,
+    );
+    expect(itemButton).not.toBeNull();
+
+    await act(async () => {
+      click(itemButton!);
+    });
+
+    expect(ws.memoryGet).toHaveBeenCalledWith({
+      v: 1,
+      agent_id: "agent-2",
+      memory_item_id: item.memory_item_id,
+    });
 
     cleanupTestRoot(testRoot);
   });

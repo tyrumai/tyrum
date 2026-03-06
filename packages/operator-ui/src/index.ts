@@ -143,6 +143,7 @@ export { MemoryInspector } from "./components/memory/memory-inspector.js";
 // ── Page components (for direct rendering outside OperatorUiApp) ────────────
 export type { DashboardPageProps } from "./components/pages/dashboard-page.js";
 export { DashboardPage } from "./components/pages/dashboard-page.js";
+export { AgentsPage } from "./components/pages/agents-page.js";
 export { ApprovalsPage } from "./components/pages/approvals-page.js";
 export { RunsPage } from "./components/pages/runs-page.js";
 export type { WorkBoardPageProps } from "./components/pages/workboard-page.js";

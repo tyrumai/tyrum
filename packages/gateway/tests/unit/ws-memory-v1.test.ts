@@ -8,7 +8,7 @@ import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { FsArtifactStore } from "../../src/modules/artifact/store.js";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -302,6 +302,209 @@ describe("WS memory v1 handlers", () => {
     expect(res).toBeDefined();
     expect((res as unknown as { ok: boolean }).ok).toBe(false);
     expect((res as unknown as { error: { code: string } }).error.code).toBe("forbidden");
+  });
+
+  it("uses payload.agent_id to access non-default agent memory", async () => {
+    const cm = new ConnectionManager();
+    const { id: requesterId } = makeClient(cm);
+    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
+    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
+    (deps as unknown as { artifactStore: FsArtifactStore }).artifactStore = artifactStore;
+
+    const requester = cm.getClient(requesterId)!;
+    const identityScopeDal = new IdentityScopeDal(db);
+    const agentId = await identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "agent-2");
+    const defaultAgentId = await identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "default");
+
+    const created = await memoryV1Dal.create(
+      {
+        kind: "note",
+        body_md: "Scoped memory",
+        tags: ["project"],
+        sensitivity: "private",
+        provenance: { source_kind: "operator" },
+      },
+      { tenantId: DEFAULT_TENANT_ID, agentId },
+    );
+    const defaultCreated = await memoryV1Dal.create(
+      {
+        kind: "note",
+        body_md: "Default memory",
+        tags: ["default-only"],
+        sensitivity: "private",
+        provenance: { source_kind: "operator" },
+      },
+      { tenantId: DEFAULT_TENANT_ID, agentId: defaultAgentId },
+    );
+
+    const listRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-list-agent-2",
+        type: "memory.list",
+        payload: { v: 1, agent_id: "agent-2", limit: 50 },
+      }),
+      deps,
+    );
+    expect((listRes as { ok: boolean }).ok).toBe(true);
+    expect(
+      (listRes as { result: { items: Array<{ memory_item_id: string }> } }).result.items,
+    ).toEqual([expect.objectContaining({ memory_item_id: created.memory_item_id })]);
+
+    const defaultListRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-list-default",
+        type: "memory.list",
+        payload: { v: 1, limit: 50 },
+      }),
+      deps,
+    );
+    expect((defaultListRes as { ok: boolean }).ok).toBe(true);
+    expect(
+      (defaultListRes as { result: { items: Array<{ memory_item_id: string }> } }).result.items,
+    ).toEqual([expect.objectContaining({ memory_item_id: defaultCreated.memory_item_id })]);
+
+    const searchRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-search-agent-2",
+        type: "memory.search",
+        payload: { v: 1, agent_id: "agent-2", query: "Scoped", limit: 50 },
+      }),
+      deps,
+    );
+    expect((searchRes as { ok: boolean }).ok).toBe(true);
+    expect(
+      (searchRes as { result: { hits: Array<{ memory_item_id: string }> } }).result.hits,
+    ).toEqual([expect.objectContaining({ memory_item_id: created.memory_item_id })]);
+
+    const getRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-get-agent-2",
+        type: "memory.get",
+        payload: { v: 1, agent_id: "agent-2", memory_item_id: created.memory_item_id },
+      }),
+      deps,
+    );
+    expect((getRes as { ok: boolean }).ok).toBe(true);
+
+    const updateRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-update-agent-2",
+        type: "memory.update",
+        payload: {
+          v: 1,
+          agent_id: "agent-2",
+          memory_item_id: created.memory_item_id,
+          patch: { body_md: "Scoped memory updated" },
+        },
+      }),
+      deps,
+    );
+    expect((updateRes as { ok: boolean }).ok).toBe(true);
+    expect((updateRes as { result: { item: { body_md: string } } }).result.item.body_md).toBe(
+      "Scoped memory updated",
+    );
+
+    const exportRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-export-agent-2",
+        type: "memory.export",
+        payload: { v: 1, agent_id: "agent-2", include_tombstones: false },
+      }),
+      deps,
+    );
+    expect((exportRes as { ok: boolean }).ok).toBe(true);
+    const artifactId = (exportRes as { result: { artifact_id: string } }).result.artifact_id;
+    const artifact = await artifactStore.get(artifactId);
+    expect(artifact).not.toBeNull();
+    const body = artifact!.body.toString("utf8");
+    expect(body).toContain("Scoped memory updated");
+    expect(body).not.toContain("Default memory");
+
+    const forgetRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-forget-agent-2",
+        type: "memory.forget",
+        payload: {
+          v: 1,
+          agent_id: "agent-2",
+          confirm: "FORGET",
+          selectors: [{ kind: "tag", tag: "project" }],
+        },
+      }),
+      deps,
+    );
+    expect((forgetRes as { ok: boolean }).ok).toBe(true);
+
+    const afterForgetListRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-list-agent-2-after-forget",
+        type: "memory.list",
+        payload: { v: 1, agent_id: "agent-2", limit: 50 },
+      }),
+      deps,
+    );
+    expect((afterForgetListRes as { ok: boolean }).ok).toBe(true);
+    expect(
+      (afterForgetListRes as { result: { items: Array<{ memory_item_id: string }> } }).result.items,
+    ).toEqual([]);
+
+    const afterForgetDefaultListRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-list-default-after-forget",
+        type: "memory.list",
+        payload: { v: 1, limit: 50 },
+      }),
+      deps,
+    );
+    expect((afterForgetDefaultListRes as { ok: boolean }).ok).toBe(true);
+    expect(
+      (afterForgetDefaultListRes as { result: { items: Array<{ memory_item_id: string }> } }).result
+        .items,
+    ).toEqual([expect.objectContaining({ memory_item_id: defaultCreated.memory_item_id })]);
+  });
+
+  it("passes only resolved scope and DAL search fields into memoryV1Dal.search", async () => {
+    const cm = new ConnectionManager();
+    const { id: requesterId } = makeClient(cm);
+    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
+    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
+
+    const requester = cm.getClient(requesterId)!;
+    const identityScopeDal = new IdentityScopeDal(db);
+    const agentId = await identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "agent-2");
+
+    const searchSpy = vi.spyOn(memoryV1Dal, "search");
+
+    const searchRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-search-agent-2-spy",
+        type: "memory.search",
+        payload: { v: 1, agent_id: "agent-2", query: "Scoped", limit: 50 },
+      }),
+      deps,
+    );
+
+    expect((searchRes as { ok: boolean }).ok).toBe(true);
+    expect(searchSpy).toHaveBeenCalledTimes(1);
+
+    const [input, scope] = searchSpy.mock.calls[0]!;
+    expect(input).toEqual({
+      query: "Scoped",
+      filter: undefined,
+      limit: 50,
+      cursor: undefined,
+    });
+    expect(scope).toEqual({ tenantId: DEFAULT_TENANT_ID, agentId });
   });
 
   it("handles memory.forget and emits memory.item.forgotten", async () => {

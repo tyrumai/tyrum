@@ -1777,7 +1777,7 @@ describe("TyrumClient", () => {
       return await pending;
     }
 
-    const searchPayload = { v: 1, query: "remember", limit: 1 };
+    const searchPayload = { v: 1, agent_id: "agent-2", query: "remember", limit: 1 };
     const searchRes = await expectMemoryRequest(
       () => client!.memorySearch(searchPayload),
       "memory.search",
@@ -1787,7 +1787,7 @@ describe("TyrumClient", () => {
     expect(searchRes.v).toBe(1);
     expect(searchRes.hits[0].memory_item_id).toBe(noteItem.memory_item_id);
 
-    const listPayload = { v: 1, limit: 1 };
+    const listPayload = { v: 1, agent_id: "agent-2", limit: 1 };
     const listRes = await expectMemoryRequest(
       () => client!.memoryList(listPayload),
       "memory.list",
@@ -1796,7 +1796,7 @@ describe("TyrumClient", () => {
     );
     expect(listRes.items[0].memory_item_id).toBe(noteItem.memory_item_id);
 
-    const getPayload = { v: 1, memory_item_id: noteItem.memory_item_id };
+    const getPayload = { v: 1, agent_id: "agent-2", memory_item_id: noteItem.memory_item_id };
     const getRes = await expectMemoryRequest(
       () => client!.memoryGet(getPayload),
       "memory.get",
@@ -1807,6 +1807,7 @@ describe("TyrumClient", () => {
 
     const createPayload = {
       v: 1,
+      agent_id: "agent-2",
       item: {
         kind: "note",
         tags: ["demo"],
@@ -1825,6 +1826,7 @@ describe("TyrumClient", () => {
 
     const updatePayload = {
       v: 1,
+      agent_id: "agent-2",
       memory_item_id: noteItem.memory_item_id,
       patch: { body_md: "Updated memory." },
     };
@@ -1839,7 +1841,12 @@ describe("TyrumClient", () => {
     );
     expect(updateRes.item.body_md).toBe("Updated memory.");
 
-    const deletePayload = { v: 1, memory_item_id: noteItem.memory_item_id, reason: "cleanup" };
+    const deletePayload = {
+      v: 1,
+      agent_id: "agent-2",
+      memory_item_id: noteItem.memory_item_id,
+      reason: "cleanup",
+    };
     const deleteRes = await expectMemoryRequest(
       () => client!.memoryDelete(deletePayload),
       "memory.delete",
@@ -1850,6 +1857,7 @@ describe("TyrumClient", () => {
 
     const forgetPayload = {
       v: 1,
+      agent_id: "agent-2",
       confirm: "FORGET",
       selectors: [{ kind: "id", memory_item_id: noteItem.memory_item_id }],
     };
@@ -1861,7 +1869,7 @@ describe("TyrumClient", () => {
     );
     expect(forgetRes.deleted_count).toBe(1);
 
-    const exportPayload = { v: 1, include_tombstones: false };
+    const exportPayload = { v: 1, agent_id: "agent-2", include_tombstones: false };
     const exportRes = await expectMemoryRequest(
       () => client!.memoryExport(exportPayload),
       "memory.export",

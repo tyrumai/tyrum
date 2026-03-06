@@ -5,15 +5,28 @@ import { EmptyState } from "../ui/empty-state.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { buildRunTimeline, sortRunsByCreatedAt } from "./runs-page.lib.js";
 import { RunsPageCard } from "./runs-page-card.js";
+import { parseAgentIdFromKey } from "../../lib/status-session-lanes.js";
+import { PageHeader } from "../layout/page-header.js";
 
-export function RunsPage({ core }: { core: OperatorCore }) {
+export interface RunsPageProps {
+  core: OperatorCore;
+  agentId?: string;
+  hideHeader?: boolean;
+  title?: string;
+}
+
+export function RunsPage({ core, agentId, hideHeader = false, title = "Runs" }: RunsPageProps) {
   const runsState = useOperatorStore(core.runsStore);
   const [expandedRunIds, setExpandedRunIds] = useState<Set<string>>(() => new Set());
 
-  const runs = useMemo(
-    () => sortRunsByCreatedAt(Object.values(runsState.runsById)),
-    [runsState.runsById],
-  );
+  const runs = useMemo(() => {
+    const allRuns = Object.values(runsState.runsById);
+    const filteredRuns =
+      typeof agentId === "string" && agentId.trim().length > 0
+        ? allRuns.filter((run) => parseAgentIdFromKey(run.key) === agentId)
+        : allRuns;
+    return sortRunsByCreatedAt(filteredRuns);
+  }, [agentId, runsState.runsById]);
 
   const toggleRun = (runId: string): void => {
     setExpandedRunIds((prev) => {
@@ -29,13 +42,17 @@ export function RunsPage({ core }: { core: OperatorCore }) {
 
   return (
     <div className="grid gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-fg">Runs</h1>
+      {hideHeader ? null : <PageHeader title={title} className="mb-0" />}
 
       {runs.length === 0 ? (
         <EmptyState
           icon={Play}
           title="No runs yet"
-          description="Runs appear here when agents start executing."
+          description={
+            agentId
+              ? "Runs for this agent appear here when it starts executing."
+              : "Runs appear here when agents start executing."
+          }
         />
       ) : (
         <div className="grid gap-4">

@@ -483,7 +483,13 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   }
 
   if (opts.agents) {
-    app.route("/", createAgentRoutes(opts.agents));
+    app.route(
+      "/",
+      createAgentRoutes({
+        agents: opts.agents,
+        identityScopeDal: container.identityScopeDal,
+      }),
+    );
     app.route(
       "/",
       createContextRoutes({
