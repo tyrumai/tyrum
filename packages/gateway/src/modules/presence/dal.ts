@@ -1,6 +1,14 @@
 import type { SqlDb } from "../../statestore/types.js";
+import { Logger } from "../observability/logger.js";
+import { gatewayMetrics } from "../observability/metrics.js";
+import {
+  parsePersistedJson,
+  stringifyPersistedJson,
+  type PersistedJsonObserver,
+} from "../observability/persisted-json.js";
 
 export type PresenceRole = "gateway" | "client" | "node";
+const logger = new Logger({ base: { module: "presence.dal" } });
 
 export interface PresenceRow {
   instance_id: string;
@@ -32,16 +40,20 @@ interface RawPresenceRow {
   expires_at_ms: number;
 }
 
-function parseMetadata(raw: string): unknown {
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    // Intentional: treat invalid JSON metadata as an empty object.
-    return {};
-  }
+export interface PresenceDalOptions extends PersistedJsonObserver {}
+
+function parseMetadata(raw: string, observer: PersistedJsonObserver): unknown {
+  return parsePersistedJson<Record<string, unknown>>({
+    raw,
+    fallback: {},
+    table: "presence_entries",
+    column: "metadata_json",
+    shape: "object",
+    observer,
+  });
 }
 
-function toPresenceRow(raw: RawPresenceRow): PresenceRow {
+function toPresenceRow(raw: RawPresenceRow, observer: PersistedJsonObserver): PresenceRow {
   const role = raw.role === "gateway" || raw.role === "node" ? raw.role : "client";
   return {
     instance_id: raw.instance_id,
@@ -52,7 +64,7 @@ function toPresenceRow(raw: RawPresenceRow): PresenceRow {
     version: raw.version,
     mode: raw.mode,
     last_input_seconds: raw.last_input_seconds,
-    metadata: parseMetadata(raw.metadata_json),
+    metadata: parseMetadata(raw.metadata_json, observer),
     connected_at_ms: raw.connected_at_ms,
     last_seen_at_ms: raw.last_seen_at_ms,
     expires_at_ms: raw.expires_at_ms,
@@ -60,7 +72,17 @@ function toPresenceRow(raw: RawPresenceRow): PresenceRow {
 }
 
 export class PresenceDal {
-  constructor(private readonly db: SqlDb) {}
+  private readonly jsonObserver: PersistedJsonObserver;
+
+  constructor(
+    private readonly db: SqlDb,
+    opts?: PresenceDalOptions,
+  ) {
+    this.jsonObserver = {
+      logger: opts?.logger ?? logger,
+      metrics: opts?.metrics ?? gatewayMetrics,
+    };
+  }
 
   async upsert(params: {
     instanceId: string;
@@ -76,7 +98,12 @@ export class PresenceDal {
     ttlMs: number;
   }): Promise<PresenceRow> {
     const expiresAtMs = params.nowMs + Math.max(1, params.ttlMs);
-    const metadataJson = JSON.stringify(params.metadata ?? {});
+    const metadataJson = stringifyPersistedJson({
+      value: params.metadata ?? {},
+      table: "presence_entries",
+      column: "metadata_json",
+      shape: "object",
+    });
     const nowIso = new Date().toISOString();
 
     await this.db.run(
@@ -165,7 +192,7 @@ export class PresenceDal {
        WHERE instance_id = ?`,
       [instanceId],
     );
-    return row ? toPresenceRow(row) : undefined;
+    return row ? toPresenceRow(row, this.jsonObserver) : undefined;
   }
 
   async listNonExpired(nowMs: number, limit = 200): Promise<PresenceRow[]> {
@@ -177,7 +204,7 @@ export class PresenceDal {
        LIMIT ?`,
       [nowMs, Math.max(1, Math.min(1000, limit))],
     );
-    return rows.map(toPresenceRow);
+    return rows.map((row) => toPresenceRow(row, this.jsonObserver));
   }
 
   async pruneExpired(nowMs: number): Promise<string[]> {

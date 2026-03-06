@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { VectorDal, type VectorScope } from "../../src/modules/memory/vector-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
@@ -7,6 +7,7 @@ import {
   DEFAULT_TENANT_ID,
   IdentityScopeDal,
 } from "../../src/modules/identity/scope.js";
+import { MetricsRegistry } from "../../src/modules/observability/metrics.js";
 
 describe("VectorDal", () => {
   let db: SqliteDb;
@@ -98,6 +99,30 @@ describe("VectorDal", () => {
 
       const defaultResults = await dal.searchByCosineSimilarity([0, 1], 10, defaultScope);
       expect(defaultResults.map((r) => r.row.label)).toEqual(["default-tenant"]);
+    });
+
+    it("rejects non-object metadata on write", async () => {
+      await expect(
+        dal.insertEmbedding("bad-meta", [1, 0], "model", "not-an-object" as unknown, defaultScope),
+      ).rejects.toThrow("vector_metadata.metadata_json must be a JSON object");
+    });
+
+    it("rejects invalid numeric vectors on write", async () => {
+      await expect(
+        dal.insertEmbedding("bad-vector", [1, Number.NaN], "model", undefined, defaultScope),
+      ).rejects.toThrow("vector_metadata.vector_data contains an invalid JSON value");
+    });
+
+    it("rejects metadata that serializes to the wrong JSON shape", async () => {
+      await expect(
+        dal.insertEmbedding(
+          "date-meta",
+          [1, 0],
+          "model",
+          new Date("2026-01-02T03:04:05.000Z"),
+          defaultScope,
+        ),
+      ).rejects.toThrow("vector_metadata.metadata_json must serialize to a JSON object");
     });
   });
 
@@ -195,6 +220,54 @@ describe("VectorDal", () => {
     it("returns empty when no embeddings exist", async () => {
       const items = await dal.list(defaultScope);
       expect(items).toHaveLength(0);
+    });
+
+    it("flags malformed persisted metadata and vector payloads while returning safe defaults", async () => {
+      const logger = { warn: vi.fn() };
+      const metrics = new MetricsRegistry();
+      const observedDal = new VectorDal(db, { logger, metrics });
+      const id = await observedDal.insertEmbedding(
+        "broken",
+        [1, 2],
+        "model",
+        undefined,
+        defaultScope,
+      );
+
+      await db.run(
+        "UPDATE vector_metadata SET metadata_json = ?, vector_data = ? WHERE tenant_id = ? AND embedding_id = ?",
+        ["{ not: json", '{"not":"an-array"}', defaultScope.tenantId, id],
+      );
+
+      const row = await observedDal.getById(id, defaultScope);
+      expect(row?.metadata).toEqual({});
+      expect(row?.vector).toEqual([]);
+      expect(logger.warn).toHaveBeenCalledWith(
+        "persisted_json.read_failed",
+        expect.objectContaining({
+          table: "vector_metadata",
+          column: "metadata_json",
+          reason: "invalid_json",
+        }),
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        "persisted_json.read_failed",
+        expect.objectContaining({
+          table: "vector_metadata",
+          column: "vector_data",
+          reason: "unexpected_shape",
+        }),
+      );
+
+      const metricsText = await metrics.registry.getSingleMetricAsString(
+        "persisted_json_read_failures_total",
+      );
+      expect(metricsText).toContain(
+        'table="vector_metadata",column="metadata_json",reason="invalid_json"',
+      );
+      expect(metricsText).toContain(
+        'table="vector_metadata",column="vector_data",reason="unexpected_shape"',
+      );
     });
   });
 

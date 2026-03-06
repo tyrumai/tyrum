@@ -14,9 +14,15 @@ import {
 } from "../channels/interface.js";
 import { renderNormalizedThreadMessageText } from "./session-message-text.js";
 import { Logger } from "../observability/logger.js";
+import { gatewayMetrics } from "../observability/metrics.js";
+import {
+  parsePersistedJson,
+  reportPersistedJsonReadFailure,
+  stringifyPersistedJson,
+  type PersistedJsonObserver,
+} from "../observability/persisted-json.js";
 
 const logger = new Logger({ base: { module: "agent.session_dal" } });
-let warnedTurnsJsonParse = false;
 
 export interface SessionMessage {
   role: "user" | "assistant";
@@ -79,9 +85,7 @@ interface RawSessionListRow {
   connector_key: string;
   provider_thread_id: string;
   summary: string;
-  turns_count: number | string;
-  last_turn_role: string | null;
-  last_turn_content: string | null;
+  turns_json: string;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -102,6 +106,8 @@ interface RawChannelTranscriptRow {
   processed_at: string | Date | null;
 }
 
+export interface SessionDalOptions extends PersistedJsonObserver {}
+
 export interface SessionRepairResult {
   source_rows: number;
   rebuilt_messages: number;
@@ -120,41 +126,53 @@ function normalizeTime(value: string | Date): string {
   return value;
 }
 
-function parseTurns(raw: string): SessionMessage[] {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    const safe: SessionMessage[] = [];
-    for (const entry of parsed) {
-      if (
-        entry &&
-        typeof entry === "object" &&
-        ((entry as Record<string, unknown>)["role"] === "user" ||
-          (entry as Record<string, unknown>)["role"] === "assistant") &&
-        typeof (entry as Record<string, unknown>)["content"] === "string" &&
-        typeof (entry as Record<string, unknown>)["timestamp"] === "string"
-      ) {
-        safe.push({
-          role: (entry as Record<string, unknown>)["role"] as "user" | "assistant",
-          content: (entry as Record<string, unknown>)["content"] as string,
-          timestamp: (entry as Record<string, unknown>)["timestamp"] as string,
-        });
-      }
-    }
-    return safe;
-  } catch (err) {
-    if (!warnedTurnsJsonParse) {
-      warnedTurnsJsonParse = true;
-      const message = err instanceof Error ? err.message : String(err);
-      logger.warn("sessions.turns_json_parse_failed", { error: message });
-    }
-    return [];
-  }
+function isSessionMessage(value: unknown): value is SessionMessage {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    ((value as Record<string, unknown>)["role"] === "user" ||
+      (value as Record<string, unknown>)["role"] === "assistant") &&
+    typeof (value as Record<string, unknown>)["content"] === "string" &&
+    typeof (value as Record<string, unknown>)["timestamp"] === "string"
+  );
 }
 
-function toSessionRow(raw: RawSessionRow): SessionRow {
+function isSessionMessageArray(value: unknown): value is SessionMessage[] {
+  return Array.isArray(value) && value.every(isSessionMessage);
+}
+
+function parseTurns(raw: string, observer: PersistedJsonObserver): SessionMessage[] {
+  const parsed = parsePersistedJson<unknown[]>({
+    raw,
+    fallback: [],
+    table: "sessions",
+    column: "turns_json",
+    shape: "array",
+    observer,
+  });
+
+  const safe: SessionMessage[] = [];
+  let invalidItems = 0;
+  for (const entry of parsed) {
+    if (!isSessionMessage(entry)) {
+      invalidItems += 1;
+      continue;
+    }
+    safe.push(entry);
+  }
+  if (invalidItems > 0) {
+    reportPersistedJsonReadFailure({
+      observer,
+      table: "sessions",
+      column: "turns_json",
+      reason: "invalid_value",
+      extra: { invalid_items: invalidItems },
+    });
+  }
+  return safe;
+}
+
+function toSessionRow(raw: RawSessionRow, observer: PersistedJsonObserver): SessionRow {
   return {
     tenant_id: raw.tenant_id,
     session_id: raw.session_id,
@@ -163,7 +181,7 @@ function toSessionRow(raw: RawSessionRow): SessionRow {
     workspace_id: raw.workspace_id,
     channel_thread_id: raw.channel_thread_id,
     summary: raw.summary,
-    turns: parseTurns(raw.turns_json),
+    turns: parseTurns(raw.turns_json, observer),
     created_at: normalizeTime(raw.created_at),
     updated_at: normalizeTime(raw.updated_at),
   };
@@ -174,22 +192,15 @@ function normalizeContainerKind(value: string): NormalizedContainerKind {
   return "channel";
 }
 
-function asNumber(value: number | string): number {
-  if (typeof value === "number") return value;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function toSessionListRow(raw: RawSessionListRow): SessionListRow {
+function toSessionListRow(raw: RawSessionListRow, observer: PersistedJsonObserver): SessionListRow {
   const createdAt = normalizeTime(raw.created_at);
   const updatedAt = normalizeTime(raw.updated_at);
-  const turnsCount = asNumber(raw.turns_count);
-
-  const role = raw.last_turn_role;
-  const content = raw.last_turn_content;
+  const turns = parseTurns(raw.turns_json, observer);
+  const turnsCount = turns.length;
+  const lastMessage = turns.at(-1);
   let lastTurn: { role: "user" | "assistant"; content: string } | null = null;
-  if ((role === "user" || role === "assistant") && typeof content === "string") {
-    lastTurn = { role, content };
+  if (lastMessage) {
+    lastTurn = { role: lastMessage.role, content: lastMessage.content };
   }
 
   return {
@@ -268,11 +279,19 @@ function normalizeRepairTimestamp(
 }
 
 export class SessionDal {
+  private readonly jsonObserver: PersistedJsonObserver;
+
   constructor(
     private readonly db: SqlDb,
     private readonly identityScopeDal: IdentityScopeDal,
     private readonly channelThreadDal: ChannelThreadDal,
-  ) {}
+    opts?: SessionDalOptions,
+  ) {
+    this.jsonObserver = {
+      logger: opts?.logger ?? logger,
+      metrics: opts?.metrics ?? gatewayMetrics,
+    };
+  }
 
   private static encodeCursor(input: { updated_at: string; session_id: string }): string {
     const payload = { updated_at: input.updated_at, session_id: input.session_id };
@@ -304,10 +323,10 @@ export class SessionDal {
        FROM sessions
        WHERE tenant_id = ?
          AND session_id = ?
-       LIMIT 1`,
+      LIMIT 1`,
       [input.tenantId, input.sessionId],
     );
-    return row ? toSessionRow(row) : undefined;
+    return row ? toSessionRow(row, this.jsonObserver) : undefined;
   }
 
   async getByKey(input: { tenantId: string; sessionKey: string }): Promise<SessionRow | undefined> {
@@ -316,10 +335,10 @@ export class SessionDal {
        FROM sessions
        WHERE tenant_id = ?
          AND session_key = ?
-       LIMIT 1`,
+      LIMIT 1`,
       [input.tenantId, input.sessionKey],
     );
-    return row ? toSessionRow(row) : undefined;
+    return row ? toSessionRow(row, this.jsonObserver) : undefined;
   }
 
   async getWithDeliveryByKey(input: {
@@ -357,7 +376,7 @@ export class SessionDal {
     );
     if (!row) return undefined;
     return {
-      session: toSessionRow(row),
+      session: toSessionRow(row, this.jsonObserver),
       agent_key: row.agent_key,
       workspace_key: row.workspace_key,
       connector_key: row.connector_key,
@@ -424,13 +443,13 @@ export class SessionDal {
          turns_json,
          created_at,
          updated_at
-       )
-       VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?)
+      )
+      VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?)
        ON CONFLICT (tenant_id, session_key) DO NOTHING
       RETURNING *`,
       [tenantId, randomUUID(), sessionKey, agentId, workspaceId, channelThreadId, nowIso, nowIso],
     );
-    if (inserted) return toSessionRow(inserted);
+    if (inserted) return toSessionRow(inserted, this.jsonObserver);
 
     const created = await this.getByKey({ tenantId, sessionKey });
     if (!created) {
@@ -470,32 +489,16 @@ export class SessionDal {
       params.push(cursor.updated_at, cursor.updated_at, cursor.session_id);
     }
 
-    const listSql =
-      this.db.kind === "sqlite"
-        ? `SELECT
+    const listSql = `SELECT
              s.session_id,
              s.session_key,
              ag.agent_key,
              ca.connector_key,
              ct.provider_thread_id,
              s.summary,
+             s.turns_json,
              s.created_at,
-             s.updated_at,
-             CASE
-               WHEN json_valid(s.turns_json)
-                 THEN json_array_length(s.turns_json)
-               ELSE 0
-             END AS turns_count,
-             CASE
-               WHEN json_valid(s.turns_json)
-                 THEN json_extract(s.turns_json, '$[#-1].role')
-               ELSE NULL
-             END AS last_turn_role,
-             CASE
-               WHEN json_valid(s.turns_json)
-                 THEN json_extract(s.turns_json, '$[#-1].content')
-               ELSE NULL
-             END AS last_turn_content
+             s.updated_at
            FROM sessions s
            JOIN agents ag
              ON ag.tenant_id = s.tenant_id
@@ -510,56 +513,11 @@ export class SessionDal {
             AND ca.channel_account_id = ct.channel_account_id
            WHERE ${where.join(" AND ")}
            ORDER BY s.updated_at DESC, s.session_id DESC
-           LIMIT ?`
-        : `SELECT
-             session_id,
-             session_key,
-             agent_key,
-             connector_key,
-             provider_thread_id,
-             summary,
-             created_at,
-             updated_at,
-             CASE
-               WHEN jsonb_typeof(turns) = 'array' THEN jsonb_array_length(turns)
-               ELSE 0
-             END AS turns_count,
-             (turns -> -1 ->> 'role') AS last_turn_role,
-             (turns -> -1 ->> 'content') AS last_turn_content
-           FROM (
-             SELECT
-               s.session_id,
-               s.session_key,
-               ag.agent_key,
-               ca.connector_key,
-               ct.provider_thread_id,
-               s.summary,
-               s.created_at,
-               s.updated_at,
-               CASE
-                 WHEN pg_input_is_valid(s.turns_json, 'jsonb') THEN s.turns_json::jsonb
-                 ELSE '[]'::jsonb
-               END AS turns
-             FROM sessions s
-             JOIN agents ag
-               ON ag.tenant_id = s.tenant_id
-              AND ag.agent_id = s.agent_id
-             JOIN channel_threads ct
-               ON ct.tenant_id = s.tenant_id
-              AND ct.workspace_id = s.workspace_id
-              AND ct.channel_thread_id = s.channel_thread_id
-             JOIN channel_accounts ca
-               ON ca.tenant_id = ct.tenant_id
-              AND ca.workspace_id = ct.workspace_id
-              AND ca.channel_account_id = ct.channel_account_id
-             WHERE ${where.join(" AND ")}
-           ) sessions_with_turns
-           ORDER BY updated_at DESC, session_id DESC
            LIMIT ?`;
 
     const rows = await this.db.all<RawSessionListRow>(listSql, [...params, limit + 1]);
     const selectedRows = rows.slice(0, limit);
-    const sessions = selectedRows.map(toSessionListRow);
+    const sessions = selectedRows.map((row) => toSessionListRow(row, this.jsonObserver));
 
     const hasMore = rows.length > limit;
     const last = selectedRows.at(-1);
@@ -623,7 +581,19 @@ export class SessionDal {
       `UPDATE sessions
        SET turns_json = ?, summary = ?, updated_at = ?
        WHERE tenant_id = ? AND session_id = ?`,
-      [JSON.stringify(stored.turns), stored.summary, nowIso, input.tenantId, input.sessionId],
+      [
+        stringifyPersistedJson({
+          value: stored.turns,
+          table: "sessions",
+          column: "turns_json",
+          shape: "array",
+          validate: isSessionMessageArray,
+        }),
+        stored.summary,
+        nowIso,
+        input.tenantId,
+        input.sessionId,
+      ],
     );
 
     const updated = await this.getById({ tenantId: input.tenantId, sessionId: input.sessionId });
@@ -655,7 +625,19 @@ export class SessionDal {
       `UPDATE sessions
        SET turns_json = ?, summary = ?, updated_at = ?
        WHERE tenant_id = ? AND session_id = ?`,
-      [JSON.stringify(stored.turns), stored.summary, nowIso, input.tenantId, input.sessionId],
+      [
+        stringifyPersistedJson({
+          value: stored.turns,
+          table: "sessions",
+          column: "turns_json",
+          shape: "array",
+          validate: isSessionMessageArray,
+        }),
+        stored.summary,
+        nowIso,
+        input.tenantId,
+        input.sessionId,
+      ],
     );
 
     return { droppedMessages: stored.droppedMessages, keptMessages: stored.turns.length };
@@ -724,7 +706,19 @@ export class SessionDal {
       `UPDATE sessions
        SET turns_json = ?, summary = ?, updated_at = ?
        WHERE tenant_id = ? AND session_id = ?`,
-      [JSON.stringify(stored.turns), stored.summary, updatedAt, input.tenantId, input.sessionId],
+      [
+        stringifyPersistedJson({
+          value: stored.turns,
+          table: "sessions",
+          column: "turns_json",
+          shape: "array",
+          validate: isSessionMessageArray,
+        }),
+        stored.summary,
+        updatedAt,
+        input.tenantId,
+        input.sessionId,
+      ],
     );
 
     return {
