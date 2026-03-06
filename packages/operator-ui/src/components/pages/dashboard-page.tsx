@@ -1,7 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useState } from "react";
 import type * as React from "react";
-import { Activity, Bot, Hash, Link2, Play, ShieldCheck, Tag, Wallet } from "lucide-react";
+import { Activity, Bot, Link2, ShieldCheck, Tag } from "lucide-react";
 import { PageHeader } from "../layout/page-header.js";
 import { Badge } from "../ui/badge.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -12,7 +12,6 @@ import { cn } from "../../lib/cn.js";
 import { getConnectionDisplay } from "../../lib/connection-display.js";
 import {
   getActiveAgentIdsFromSessionLanes,
-  getActiveExecutionRunsCountFromQueueDepth,
   parseAgentIdFromKey,
 } from "../../lib/status-session-lanes.js";
 import { useHostApiOptional } from "../../host/host-api.js";
@@ -143,15 +142,6 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
     };
   }, [desktopApi]);
 
-  const activeRunsLiveCount = Object.values(runs.runsById).filter(
-    (run) => run.status === "queued" || run.status === "running" || run.status === "paused",
-  ).length;
-  const activeRunsSeedCount = getActiveExecutionRunsCountFromQueueDepth(status.status?.queue_depth);
-  const activeRunsCount =
-    activeRunsSeedCount === null
-      ? activeRunsLiveCount
-      : Math.max(activeRunsLiveCount, activeRunsSeedCount);
-
   const agentIds = new Set<string>();
   const activeAgentIds = new Set<string>();
   for (const run of Object.values(runs.runsById)) {
@@ -173,10 +163,6 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
   const totalAgentsCount = totalAgentIds.size;
   const activeAgentsText =
     totalAgentsCount > 0 ? `${activeAgentsCount}/${totalAgentsCount}` : `${activeAgentsCount}/-`;
-
-  const tokensUsed = status.usage?.local.totals.total_tokens;
-  const tokensUsedText =
-    typeof tokensUsed === "number" ? new Intl.NumberFormat().format(tokensUsed) : "-";
 
   const connectionDisplay = getConnectionDisplay(connection.status);
   const connectionVariant = connectionDisplay.variant;
@@ -229,22 +215,6 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
           }}
           testId="dashboard-card-version"
         />
-
-        <StatCard
-          label="Instance ID"
-          icon={Hash}
-          loading={status.loading.status && status.status === null}
-          value={status.status?.instance_id ?? "-"}
-        />
-
-        <StatCard
-          label="Tokens Used"
-          icon={Wallet}
-          loading={status.loading.usage && status.usage === null}
-          value={tokensUsedText}
-        />
-
-        <StatCard label="Active Runs" icon={Play} value={String(activeRunsCount)} />
 
         <StatCard
           label="Active Agents"

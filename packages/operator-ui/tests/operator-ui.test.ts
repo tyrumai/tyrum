@@ -2578,9 +2578,10 @@ describe("operator-ui", () => {
     expect(presenceList.mock.calls.length).toBeGreaterThanOrEqual(1);
     expect(pairingsList.mock.calls.length).toBeGreaterThanOrEqual(1);
     expect(ws.approvalList.mock.calls.length).toBeGreaterThanOrEqual(1);
-    expect(container.textContent).toContain("gateway-1");
-    expect(container.textContent).toContain("Tokens Used");
     expect(container.textContent).toContain("Pending Approvals");
+    expect(container.textContent).not.toContain("Instance ID");
+    expect(container.textContent).not.toContain("Tokens Used");
+    expect(container.textContent).not.toContain("Active Runs");
 
     const approvalsBadge = container.querySelector<HTMLSpanElement>(
       '[data-testid="dashboard-approvals-badge"]',
