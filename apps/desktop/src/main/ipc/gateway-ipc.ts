@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { createWindowSender } from "./window-sender.js";
-import { resolveGatewayBinPath } from "../gateway-bin-path.js";
+import { resolveGatewayBin } from "../gateway-bin-path.js";
 import type { DesktopNodeConfig } from "../config/schema.js";
 import { getGatewayStatusSnapshot } from "./gateway-status.js";
 
@@ -418,10 +418,11 @@ async function startEmbeddedGatewayWithConfig(
 
   const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
   const dbPath = resolveEmbeddedGatewayDbPath(config, tyrumHome);
-  const gatewayBin = resolveGatewayBinPath();
+  const gatewayBin = resolveGatewayBin();
 
   const starter = mgr.start({
-    gatewayBin,
+    gatewayBin: gatewayBin.path,
+    gatewayBinSource: gatewayBin.source,
     port: config.embedded.port,
     dbPath,
     home: tyrumHome,

@@ -48,14 +48,26 @@
     },
     "patchedDependencies": {
       "@develar/schema-utils@2.6.5": "patches/@develar__schema-utils@2.6.5.patch",
-      "dmg-license@1.0.11": "patches/dmg-license@1.0.11.patch"
+      "dmg-license@1.0.11": "patches/dmg-license@1.0.11.patch",
+      "usocket@0.3.0": "patches/usocket@0.3.0.patch"
     },
     "allowUnusedPatches": true,
     "auditConfig": {
       "ignoreCves": [
         "CVE-2026-0540"
       ]
-    }
+    },
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "core-js",
+      "core-js-pure",
+      "electron",
+      "electron-winstaller",
+      "esbuild",
+      "protobufjs",
+      "tesseract.js",
+      "usocket"
+    ]
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

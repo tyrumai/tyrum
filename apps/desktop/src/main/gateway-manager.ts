@@ -2,9 +2,11 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { GatewayBinSource } from "./gateway-bin-path.js";
 
 export interface GatewayManagerOptions {
   gatewayBin: string;
+  gatewayBinSource?: GatewayBinSource;
   port: number;
   dbPath: string;
   home?: string;
@@ -160,6 +162,59 @@ function inferHomeFromDbPath(dbPath: string): string | undefined {
   }
 }
 
+function isElectronRuntime(versions: NodeJS.ProcessVersions = process.versions): boolean {
+  return typeof versions.electron === "string" && versions.electron.length > 0;
+}
+
+function isMonorepoGatewayBundlePath(gatewayBin: string): boolean {
+  return gatewayBin.replaceAll("\\", "/").includes("/packages/gateway/dist/");
+}
+
+function resolveNodeCommand(env: NodeJS.ProcessEnv = process.env): string {
+  const preferredNode =
+    env["TYRUM_DESKTOP_NODE_EXEC_PATH"]?.trim() ||
+    env["npm_node_execpath"]?.trim() ||
+    env["VOLTA_NODE"]?.trim();
+  return preferredNode || "node";
+}
+
+export interface GatewayLaunchCommand {
+  command: string;
+  env: Record<string, string>;
+}
+
+export function resolveGatewayLaunchCommand(options: {
+  gatewayBin: string;
+  gatewayBinSource?: GatewayBinSource;
+  processExecPath?: string;
+  versions?: NodeJS.ProcessVersions;
+  env?: NodeJS.ProcessEnv;
+}): GatewayLaunchCommand {
+  const processExecPath = options.processExecPath ?? process.execPath;
+  const versions = options.versions ?? process.versions;
+  const env = options.env ?? process.env;
+
+  if (!isElectronRuntime(versions)) {
+    return { command: processExecPath, env: {} };
+  }
+
+  if (options.gatewayBinSource === "staged" || options.gatewayBinSource === "monorepo") {
+    return { command: resolveNodeCommand(env), env: {} };
+  }
+
+  // In development, repo-local gateway bundles resolve native modules from the
+  // workspace install or staged deploy tree, both of which are built for Node
+  // rather than the Electron runtime used by the desktop shell.
+  if (!options.gatewayBinSource && isMonorepoGatewayBundlePath(options.gatewayBin)) {
+    return { command: resolveNodeCommand(env), env: {} };
+  }
+
+  return {
+    command: processExecPath,
+    env: { ELECTRON_RUN_AS_NODE: "1" },
+  };
+}
+
 export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
   private process: ChildProcess | null = null;
   private stoppingProcess: ChildProcess | null = null;
@@ -211,10 +266,14 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     args.push("--db", opts.dbPath);
     if (migrationsDir) args.push("--migrations-dir", migrationsDir);
 
-    const proc = spawn(process.execPath, args, {
+    const launch = resolveGatewayLaunchCommand({
+      gatewayBin: opts.gatewayBin,
+      gatewayBinSource: opts.gatewayBinSource,
+    });
+    const proc = spawn(launch.command, args, {
       env: {
         ...process.env,
-        ELECTRON_RUN_AS_NODE: "1",
+        ...launch.env,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

@@ -1,0 +1,13 @@
+diff --git a/index.js b/index.js
+index 34afad11a5da1187149b9b9fae3431854c6b9f46..64b34f9f6f0fe92e4cc21387f2862df7bd3e95ce 100644
+--- a/index.js
++++ b/index.js
+@@ -61,7 +61,7 @@ USocket.prototype._write = function(chunk, encoding, callback) {
+ 
+ 	debug("USocket._write", data && data.length, fds);
+ 	var r = this._wrap.write(data, fds);
+-	if (util.isError(r)) {
++	if (r instanceof Error) {
+ 		debug("USocket._write error", r);
+ 		return callback(r);
+ 	}
