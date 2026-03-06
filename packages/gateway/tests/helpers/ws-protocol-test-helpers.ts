@@ -19,7 +19,7 @@ export function createAdminWsClient(
     protocol_rev: 1,
     capabilities: [],
     readyCapabilities: overrides?.readyCapabilities ?? new Set(),
-    lastPong: Date.now(),
+    lastWsPongAt: Date.now(),
     ...overrides,
   };
 }

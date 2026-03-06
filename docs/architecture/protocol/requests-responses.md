@@ -16,7 +16,7 @@ The wire shapes are defined by shared, versioned contracts (see [Contracts](../c
 The gateway, clients, and nodes support these request types:
 
 - `connect.init` / `connect.proof` — handshake and device proof (see [Handshake](./handshake.md)).
-- `ping` — gateway heartbeat request (peer replies with `ok: true`).
+- `ping` — client-initiated protocol health-check request (gateway replies with `ok: true`); connection heartbeat and eviction use WebSocket ping/pong control frames.
 - `session.send` — send a message into a session (chat input).
 - `workflow.run` — start a deterministic workflow run (playbook file or inline pipeline).
 - `workflow.resume` — resume a paused workflow run using a resume token (after an approval decision).

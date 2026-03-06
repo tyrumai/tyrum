@@ -53,7 +53,7 @@ describe("scope normalization", () => {
       protocol_rev: 1,
       capabilities: [],
       readyCapabilities: new Set(),
-      lastPong: 0,
+      lastWsPongAt: 0,
     } satisfies ConnectedClient;
 
     const approvalId = randomUUID();

@@ -22,7 +22,7 @@ export async function handleControlPlaneMessage(
   deps: ProtocolDeps,
 ): Promise<WsResponseEnvelope | undefined> {
   if (msg.type === "ping") {
-    return handlePingMessage(client, msg);
+    return handlePingMessage(msg);
   }
 
   if (msg.type === "command.execute") {
@@ -44,17 +44,13 @@ export async function handleControlPlaneMessage(
   return handleWorkflowCancelMessage(client, msg, deps);
 }
 
-function handlePingMessage(
-  client: ConnectedClient,
-  msg: ProtocolRequestEnvelope,
-): WsResponseEnvelope {
+function handlePingMessage(msg: ProtocolRequestEnvelope): WsResponseEnvelope {
   const parsedReq = WsPingRequest.safeParse(msg);
   if (!parsedReq.success) {
     return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
       issues: parsedReq.error.issues,
     });
   }
-  client.lastPong = Date.now();
   return {
     request_id: msg.request_id,
     type: msg.type,

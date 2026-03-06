@@ -1038,10 +1038,11 @@ Client-sent events are rejected.
 
 - Direction:
   - client → gateway (request)
-  - gateway → client (request) and client → gateway (response) (heartbeat)
+  - gateway → client (response)
 - Scope (device tokens): allowed (no scopes required)
 - Schema: `WsPingRequest`
 - Result: none (`ok: true`)
+- Notes: This is a protocol-level health-check request initiated by clients. Gateway connection liveness and eviction use WebSocket ping/pong control frames, not protocol `ping`, and the gateway does not send protocol `ping` heartbeats.
 
 #### `approval.list`
 
