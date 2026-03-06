@@ -802,8 +802,11 @@ export class TyrumClient {
   }
 
   private buildProtocols(): string[] {
-    const token = toBase64UrlUtf8(this.opts.token);
-    return [WS_BASE_PROTOCOL, `${WS_AUTH_PROTOCOL_PREFIX}${token}`];
+    const token = this.opts.token;
+    if (token.trim().length === 0) {
+      return [WS_BASE_PROTOCOL];
+    }
+    return [WS_BASE_PROTOCOL, `${WS_AUTH_PROTOCOL_PREFIX}${toBase64UrlUtf8(token)}`];
   }
 
   private destroyPinnedDispatcher(ws: WebSocket): void {

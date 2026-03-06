@@ -2793,6 +2793,32 @@ describe("TyrumClient", () => {
     expect(client.connected).toBe(true);
   });
 
+  it("builds websocket protocols without auth metadata when token is empty", () => {
+    client = new TyrumClient({
+      url: "ws://127.0.0.1:65535",
+      token: "   ",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    const protocols = (client as unknown as { buildProtocols(): string[] }).buildProtocols();
+
+    expect(protocols).toEqual(["tyrum-v1"]);
+  });
+
+  it("builds websocket protocols with auth metadata when token is present", () => {
+    client = new TyrumClient({
+      url: "ws://127.0.0.1:65535",
+      token: "my-token",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    const protocols = (client as unknown as { buildProtocols(): string[] }).buildProtocols();
+
+    expect(protocols).toEqual(["tyrum-v1", "tyrum-auth.bXktdG9rZW4"]);
+  });
+
   it("does not reconnect after intentional disconnect", async () => {
     server = createTestServer();
     client = new TyrumClient({
