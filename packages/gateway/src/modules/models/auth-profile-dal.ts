@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { stableJsonStringify } from "../policy/canonical-json.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { buildUpdatedAtMutation } from "../../statestore/updated-at.js";
 
 export type AuthProfileType = "api_key" | "oauth" | "token";
 export type AuthProfileStatus = "active" | "disabled";
@@ -107,6 +109,29 @@ function normalizeMethodKey(value: string): string {
     throw new Error("method_key is required");
   }
   return trimmed;
+}
+
+function normalizeStoredJsonText(value: unknown): string {
+  return stableJsonStringify(parseJson(value, {}));
+}
+
+function toSecretKeyRecord(entries: readonly { slotKey: string; secretKey: string }[]) {
+  const record: Record<string, string> = {};
+  for (const entry of entries) {
+    record[entry.slotKey] = entry.secretKey;
+  }
+  return record;
+}
+
+function sameSecretKeyMapping(
+  current: Record<string, string>,
+  next: readonly { slotKey: string; secretKey: string }[],
+): boolean {
+  const nextRecord = toSecretKeyRecord(next);
+  const currentKeys = Object.keys(current);
+  const nextKeys = Object.keys(nextRecord);
+  if (currentKeys.length !== nextKeys.length) return false;
+  return nextKeys.every((slotKey) => current[slotKey] === nextRecord[slotKey]);
 }
 
 async function loadSecretKeysByProfileId(db: SqlDb, tenantId: string, authProfileIds: string[]) {
@@ -328,8 +353,8 @@ export class AuthProfileDal {
           }));
 
     await this.db.transaction(async (tx) => {
-      const existing = await tx.get<{ auth_profile_id: string }>(
-        `SELECT auth_profile_id
+      const existing = await tx.get<RawAuthProfileRow>(
+        `SELECT *
          FROM auth_profiles
          WHERE tenant_id = ? AND auth_profile_key = ?
          LIMIT 1`,
@@ -337,34 +362,71 @@ export class AuthProfileDal {
       );
       if (!existing) return;
 
-      const updates: string[] = ["updated_at = ?"];
-      const values: unknown[] = [nowIso];
-
-      if (input.displayName !== undefined) {
-        updates.push("display_name = ?");
-        values.push(normalizeDisplayName(input.displayName));
-      }
-      if (input.methodKey !== undefined) {
-        updates.push("method_key = ?");
-        values.push(normalizeMethodKey(input.methodKey));
-      }
-      if (input.config !== undefined) {
-        updates.push("config_json = ?");
-        values.push(JSON.stringify(input.config));
-      }
-      if (input.labels !== undefined) {
-        updates.push("labels_json = ?");
-        values.push(JSON.stringify(input.labels));
-      }
-
-      await tx.run(
-        `UPDATE auth_profiles
-         SET ${updates.join(", ")}
-         WHERE tenant_id = ? AND auth_profile_id = ?`,
-        [...values, input.tenantId, existing.auth_profile_id],
+      const mutation = buildUpdatedAtMutation(
+        [
+          ...(input.displayName === undefined
+            ? []
+            : [
+                {
+                  column: "display_name",
+                  currentValue: existing.display_name?.trim() || existing.auth_profile_key,
+                  nextValue: normalizeDisplayName(input.displayName),
+                },
+              ]),
+          ...(input.methodKey === undefined
+            ? []
+            : [
+                {
+                  column: "method_key",
+                  currentValue:
+                    existing.method_key?.trim() || normalizeAuthProfileType(existing.type),
+                  nextValue: normalizeMethodKey(input.methodKey),
+                },
+              ]),
+          ...(input.config === undefined
+            ? []
+            : [
+                {
+                  column: "config_json",
+                  currentValue: normalizeStoredJsonText(existing.config_json),
+                  nextValue: stableJsonStringify(input.config),
+                },
+              ]),
+          ...(input.labels === undefined
+            ? []
+            : [
+                {
+                  column: "labels_json",
+                  currentValue: normalizeStoredJsonText(existing.labels_json),
+                  nextValue: stableJsonStringify(input.labels),
+                },
+              ]),
+        ],
+        nowIso,
       );
 
-      if (desiredSecretKeys === undefined) return;
+      const existingSecretKeys =
+        desiredSecretKeys === undefined
+          ? undefined
+          : ((await loadSecretKeysByProfileId(tx, input.tenantId, [existing.auth_profile_id])).get(
+              existing.auth_profile_id,
+            ) ?? {});
+      const secretKeysChanged =
+        desiredSecretKeys !== undefined &&
+        !sameSecretKeyMapping(existingSecretKeys ?? {}, desiredSecretKeys);
+
+      if (mutation || secretKeysChanged) {
+        const assignments = mutation?.assignments ?? ["updated_at = ?"];
+        const values = mutation?.values ?? [nowIso];
+        await tx.run(
+          `UPDATE auth_profiles
+           SET ${assignments.join(", ")}
+           WHERE tenant_id = ? AND auth_profile_id = ?`,
+          [...values, input.tenantId, existing.auth_profile_id],
+        );
+      }
+
+      if (!secretKeysChanged || desiredSecretKeys === undefined) return;
 
       await tx.run(
         `DELETE FROM auth_profile_secrets
@@ -414,12 +476,15 @@ export class AuthProfileDal {
     authProfileKey: string;
   }): Promise<AuthProfileRow | undefined> {
     const nowIso = new Date().toISOString();
-    await this.db.run(
+    const result = await this.db.run(
       `UPDATE auth_profiles
        SET status = 'disabled', updated_at = ?
-       WHERE tenant_id = ? AND auth_profile_key = ?`,
+       WHERE tenant_id = ? AND auth_profile_key = ? AND status <> 'disabled'`,
       [nowIso, input.tenantId, input.authProfileKey],
     );
+    if (result.changes === 0) {
+      return await this.getByKey(input);
+    }
     return await this.getByKey(input);
   }
 
@@ -428,12 +493,15 @@ export class AuthProfileDal {
     authProfileKey: string;
   }): Promise<AuthProfileRow | undefined> {
     const nowIso = new Date().toISOString();
-    await this.db.run(
+    const result = await this.db.run(
       `UPDATE auth_profiles
        SET status = 'active', updated_at = ?
-       WHERE tenant_id = ? AND auth_profile_key = ?`,
+       WHERE tenant_id = ? AND auth_profile_key = ? AND status <> 'active'`,
       [nowIso, input.tenantId, input.authProfileKey],
     );
+    if (result.changes === 0) {
+      return await this.getByKey(input);
+    }
     return await this.getByKey(input);
   }
 

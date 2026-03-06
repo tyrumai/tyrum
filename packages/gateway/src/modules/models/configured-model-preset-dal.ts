@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { stableJsonStringify } from "../policy/canonical-json.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { buildUpdatedAtMutation } from "../../statestore/updated-at.js";
 import { safeJsonParse } from "../../utils/json.js";
 
 export interface ConfiguredModelPresetRow {
@@ -35,6 +37,10 @@ function parseOptions(value: string): Record<string, unknown> {
   return parsed && typeof parsed === "object" && !Array.isArray(parsed)
     ? (parsed as Record<string, unknown>)
     : {};
+}
+
+function normalizeStoredOptionsJson(value: string): string {
+  return stableJsonStringify(parseOptions(value));
 }
 
 function toRow(raw: RawConfiguredModelPresetRow): ConfiguredModelPresetRow {
@@ -136,23 +142,47 @@ export class ConfiguredModelPresetDal {
     displayName?: string;
     options?: Record<string, unknown>;
   }): Promise<ConfiguredModelPresetRow | undefined> {
-    const updates: string[] = ["updated_at = ?"];
-    const values: unknown[] = [new Date().toISOString()];
+    const existing = await this.db.get<RawConfiguredModelPresetRow>(
+      `SELECT *
+       FROM configured_model_presets
+       WHERE tenant_id = ? AND preset_key = ?
+       LIMIT 1`,
+      [input.tenantId, input.presetKey],
+    );
+    if (!existing) return undefined;
 
-    if (input.displayName !== undefined) {
-      updates.push("display_name = ?");
-      values.push(input.displayName.trim());
-    }
-    if (input.options !== undefined) {
-      updates.push("options_json = ?");
-      values.push(JSON.stringify(input.options));
+    const mutation = buildUpdatedAtMutation(
+      [
+        ...(input.displayName === undefined
+          ? []
+          : [
+              {
+                column: "display_name",
+                currentValue: existing.display_name,
+                nextValue: input.displayName.trim(),
+              },
+            ]),
+        ...(input.options === undefined
+          ? []
+          : [
+              {
+                column: "options_json",
+                currentValue: normalizeStoredOptionsJson(existing.options_json),
+                nextValue: stableJsonStringify(input.options),
+              },
+            ]),
+      ],
+      new Date().toISOString(),
+    );
+    if (!mutation) {
+      return toRow(existing);
     }
 
     await this.db.run(
       `UPDATE configured_model_presets
-       SET ${updates.join(", ")}
+       SET ${mutation.assignments.join(", ")}
        WHERE tenant_id = ? AND preset_key = ?`,
-      [...values, input.tenantId, input.presetKey],
+      [...mutation.values, input.tenantId, input.presetKey],
     );
     return await this.getByKey({ tenantId: input.tenantId, presetKey: input.presetKey });
   }
