@@ -1,5 +1,6 @@
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
+import type { MetricsRegistry } from "../observability/metrics.js";
 import {
   IntervalScheduler,
   pruneInBatches,
@@ -25,6 +26,7 @@ export type OutboxLifecycleSchedulerClockFn = () => OutboxLifecycleSchedulerCloc
 export interface OutboxLifecycleSchedulerOptions {
   db: SqlDb;
   logger?: Logger;
+  metrics?: MetricsRegistry;
   retentionMs?: number;
   tickMs?: number;
   batchSize?: number;
@@ -36,6 +38,7 @@ export interface OutboxLifecycleSchedulerOptions {
 export class OutboxLifecycleScheduler {
   private readonly db: SqlDb;
   private readonly logger?: Logger;
+  private readonly metrics?: MetricsRegistry;
   private readonly retentionMs: number;
   private readonly batchSize: number;
   private readonly maxBatchesPerTick: number;
@@ -45,6 +48,7 @@ export class OutboxLifecycleScheduler {
   constructor(opts: OutboxLifecycleSchedulerOptions) {
     this.db = opts.db;
     this.logger = opts.logger;
+    this.metrics = opts.metrics;
     const tickMs = resolvePositiveInt(opts.tickMs, DEFAULT_TICK_MS);
     this.retentionMs = resolvePositiveInt(opts.retentionMs, DEFAULT_RETENTION_MS);
     this.batchSize = Math.max(
@@ -61,6 +65,7 @@ export class OutboxLifecycleScheduler {
       tickMs,
       keepProcessAlive,
       onTickError: (err) => {
+        this.metrics?.recordLifecycleTickError("outbox");
         const message = err instanceof Error ? err.message : String(err);
         this.logger?.error("outbox.lifecycle_tick_failed", { error: message });
       },
@@ -96,29 +101,45 @@ export class OutboxLifecycleScheduler {
   }
 
   private async runCompaction(db: SqlDb): Promise<void> {
-    if (this.clock) {
-      const { nowMs } = this.clock();
-      const cutoffIso = new Date(nowMs - this.retentionMs).toISOString();
-      await this.pruneInBatches("outbox_consumers", () =>
+    const tickTime = this.clock?.();
+    const observedAtIso = tickTime?.nowIso ?? new Date().toISOString();
+    let outboxConsumersPruned = 0;
+    let outboxPruned = 0;
+
+    if (tickTime) {
+      const cutoffIso = new Date(tickTime.nowMs - this.retentionMs).toISOString();
+      outboxConsumersPruned = await this.pruneInBatches("outbox_consumers", () =>
         this.pruneOutboxConsumers(db, { cutoffIso }),
       );
-      await this.pruneInBatches("outbox", () => this.pruneOutboxRows(db, { cutoffIso }));
-      return;
+      outboxPruned = await this.pruneInBatches("outbox", () =>
+        this.pruneOutboxRows(db, { cutoffIso }),
+      );
+    } else {
+      outboxConsumersPruned = await this.pruneInBatches("outbox_consumers", () =>
+        this.pruneOutboxConsumers(db, { retentionMs: this.retentionMs }),
+      );
+      outboxPruned = await this.pruneInBatches("outbox", () =>
+        this.pruneOutboxRows(db, { retentionMs: this.retentionMs }),
+      );
     }
 
-    await this.pruneInBatches("outbox_consumers", () =>
-      this.pruneOutboxConsumers(db, { retentionMs: this.retentionMs }),
-    );
-    await this.pruneInBatches("outbox", () =>
-      this.pruneOutboxRows(db, { retentionMs: this.retentionMs }),
-    );
+    this.metrics?.recordLifecyclePruneRows("outbox", "outbox_consumers", outboxConsumersPruned);
+    this.metrics?.recordLifecyclePruneRows("outbox", "outbox", outboxPruned);
+
+    if (outboxConsumersPruned + outboxPruned > 0) {
+      this.logger?.info("outbox.lifecycle_pruned", {
+        now: observedAtIso,
+        outbox_consumers: outboxConsumersPruned,
+        outbox: outboxPruned,
+      });
+    }
   }
 
   private async pruneInBatches(
     table: "outbox" | "outbox_consumers",
     pruneOnce: () => Promise<number>,
-  ): Promise<void> {
-    await pruneInBatches(
+  ): Promise<number> {
+    return await pruneInBatches(
       {
         batchSize: this.batchSize,
         maxBatchesPerTick: this.maxBatchesPerTick,

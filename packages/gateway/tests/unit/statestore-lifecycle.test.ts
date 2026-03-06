@@ -4,6 +4,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 import { StateStoreLifecycleScheduler } from "../../src/modules/statestore/lifecycle.js";
+import { MetricsRegistry } from "../../src/modules/observability/metrics.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -237,6 +238,218 @@ describe("StateStoreLifecycleScheduler", () => {
       [DEFAULT_TENANT_ID],
     );
     expect(dedupe).toEqual([{ message_id: "msg-fresh" }]);
+  });
+
+  it("prunes expired operational rows and records prune metrics", async () => {
+    db = openTestSqliteDb();
+
+    const now = new Date("2026-02-24T00:00:00.000Z");
+    const nowMs = now.getTime();
+    const metrics = new MetricsRegistry();
+
+    await db.run(
+      `INSERT INTO presence_entries (
+         instance_id,
+         role,
+         connection_id,
+         host,
+         ip,
+         version,
+         mode,
+         last_input_seconds,
+         metadata_json,
+         connected_at_ms,
+         last_seen_at_ms,
+         expires_at_ms,
+         updated_at
+       )
+       VALUES (?, 'client', NULL, NULL, NULL, NULL, NULL, NULL, '{}', ?, ?, ?, ?)`,
+      ["presence-expired", nowMs - 10_000, nowMs - 10_000, nowMs - 1, now.toISOString()],
+    );
+    await db.run(
+      `INSERT INTO presence_entries (
+         instance_id,
+         role,
+         connection_id,
+         host,
+         ip,
+         version,
+         mode,
+         last_input_seconds,
+         metadata_json,
+         connected_at_ms,
+         last_seen_at_ms,
+         expires_at_ms,
+         updated_at
+       )
+       VALUES (?, 'client', NULL, NULL, NULL, NULL, NULL, NULL, '{}', ?, ?, ?, ?)`,
+      ["presence-fresh", nowMs - 10_000, nowMs - 10_000, nowMs + 60_000, now.toISOString()],
+    );
+
+    await db.run(
+      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "lane-old", "main", "worker-a", nowMs - 1],
+    );
+    await db.run(
+      `INSERT INTO lane_leases (tenant_id, key, lane, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, "lane-new", "main", "worker-b", nowMs + 60_000],
+    );
+
+    await db.run(
+      `INSERT INTO workspace_leases (tenant_id, workspace_id, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID, "worker-a", nowMs - 1],
+    );
+
+    const extraWorkspaceId = randomUUID();
+    await db.run(
+      `INSERT INTO workspaces (tenant_id, workspace_id, workspace_key)
+       VALUES (?, ?, ?)`,
+      [DEFAULT_TENANT_ID, extraWorkspaceId, "extra-workspace"],
+    );
+    await db.run(
+      `INSERT INTO workspace_leases (tenant_id, workspace_id, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, extraWorkspaceId, "worker-b", nowMs + 60_000],
+    );
+
+    await db.run(
+      `INSERT INTO oauth_pending (
+         tenant_id,
+         state,
+         provider_id,
+         agent_key,
+         created_at,
+         expires_at,
+         pkce_verifier,
+         redirect_uri,
+         scopes,
+         mode,
+         metadata_json
+       )
+       VALUES (?, ?, 'openai', 'agent:default', ?, ?, 'verifier', 'http://localhost/callback', '[]', 'auth_code', '{}')`,
+      [
+        DEFAULT_TENANT_ID,
+        "oauth-expired",
+        new Date(nowMs - 60_000).toISOString(),
+        new Date(nowMs - 1).toISOString(),
+      ],
+    );
+    await db.run(
+      `INSERT INTO oauth_pending (
+         tenant_id,
+         state,
+         provider_id,
+         agent_key,
+         created_at,
+         expires_at,
+         pkce_verifier,
+         redirect_uri,
+         scopes,
+         mode,
+         metadata_json
+       )
+       VALUES (?, ?, 'openai', 'agent:default', ?, ?, 'verifier', 'http://localhost/callback', '[]', 'auth_code', '{}')`,
+      [
+        DEFAULT_TENANT_ID,
+        "oauth-fresh",
+        new Date(nowMs - 60_000).toISOString(),
+        new Date(nowMs + 60_000).toISOString(),
+      ],
+    );
+
+    const expiredAuthProfileId = randomUUID();
+    const freshAuthProfileId = randomUUID();
+    await db.run(
+      `INSERT INTO auth_profiles (tenant_id, auth_profile_id, auth_profile_key, provider_key, type, status)
+       VALUES (?, ?, ?, 'openai', 'api_key', 'active')`,
+      [DEFAULT_TENANT_ID, expiredAuthProfileId, "profile-expired"],
+    );
+    await db.run(
+      `INSERT INTO auth_profiles (tenant_id, auth_profile_id, auth_profile_key, provider_key, type, status)
+       VALUES (?, ?, ?, 'openai', 'api_key', 'active')`,
+      [DEFAULT_TENANT_ID, freshAuthProfileId, "profile-fresh"],
+    );
+
+    await db.run(
+      `INSERT INTO oauth_refresh_leases (tenant_id, auth_profile_id, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, expiredAuthProfileId, "refresh-worker-a", nowMs - 1],
+    );
+    await db.run(
+      `INSERT INTO oauth_refresh_leases (tenant_id, auth_profile_id, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [DEFAULT_TENANT_ID, freshAuthProfileId, "refresh-worker-b", nowMs + 60_000],
+    );
+
+    await db.run(
+      `INSERT INTO models_dev_refresh_leases (key, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?)`,
+      ["models-expired", "catalog-worker-a", nowMs - 1],
+    );
+    await db.run(
+      `INSERT INTO models_dev_refresh_leases (key, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?)`,
+      ["models-fresh", "catalog-worker-b", nowMs + 60_000],
+    );
+
+    const scheduler = new StateStoreLifecycleScheduler({
+      db,
+      clock: () => ({ nowIso: now.toISOString(), nowMs }),
+      metrics,
+      sessionsTtlDays: 30,
+    });
+
+    await scheduler.tick();
+
+    const presence = await db.all<{ instance_id: string }>(
+      "SELECT instance_id FROM presence_entries ORDER BY instance_id ASC",
+    );
+    expect(presence).toEqual([{ instance_id: "presence-fresh" }]);
+
+    const laneLeases = await db.all<{ key: string }>(
+      "SELECT key FROM lane_leases WHERE tenant_id = ? ORDER BY key ASC",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(laneLeases).toEqual([{ key: "lane-new" }]);
+
+    const workspaceLeases = await db.all<{ workspace_id: string }>(
+      "SELECT workspace_id FROM workspace_leases WHERE tenant_id = ? ORDER BY workspace_id ASC",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(workspaceLeases).toEqual([{ workspace_id: extraWorkspaceId }]);
+
+    const oauthPending = await db.all<{ state: string }>(
+      "SELECT state FROM oauth_pending WHERE tenant_id = ? ORDER BY state ASC",
+      [DEFAULT_TENANT_ID],
+    );
+    expect(oauthPending).toEqual([{ state: "oauth-fresh" }]);
+
+    const oauthRefreshLeases = await db.all<{ auth_profile_id: string }>(
+      `SELECT auth_profile_id
+       FROM oauth_refresh_leases
+       WHERE tenant_id = ?
+       ORDER BY auth_profile_id ASC`,
+      [DEFAULT_TENANT_ID],
+    );
+    expect(oauthRefreshLeases).toEqual([{ auth_profile_id: freshAuthProfileId }]);
+
+    const modelsRefreshLeases = await db.all<{ key: string }>(
+      "SELECT key FROM models_dev_refresh_leases ORDER BY key ASC",
+    );
+    expect(modelsRefreshLeases).toEqual([{ key: "models-fresh" }]);
+
+    const lifecycleMetrics = await metrics.registry.getSingleMetricAsString(
+      "lifecycle_prune_rows_total",
+    );
+    expect(lifecycleMetrics).toContain('scheduler="statestore",table="presence_entries"');
+    expect(lifecycleMetrics).toContain('scheduler="statestore",table="lane_leases"');
+    expect(lifecycleMetrics).toContain('scheduler="statestore",table="workspace_leases"');
+    expect(lifecycleMetrics).toContain('scheduler="statestore",table="oauth_pending"');
+    expect(lifecycleMetrics).toContain('scheduler="statestore",table="oauth_refresh_leases"');
+    expect(lifecycleMetrics).toContain('scheduler="statestore",table="models_dev_refresh_leases"');
   });
 
   it("retains completed inbox rows until dependent terminal outbox rows are pruned", async () => {

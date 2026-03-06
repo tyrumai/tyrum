@@ -1,5 +1,6 @@
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
+import type { MetricsRegistry } from "../observability/metrics.js";
 import {
   IntervalScheduler,
   pruneInBatches,
@@ -26,6 +27,7 @@ export type StateStoreLifecycleSchedulerClockFn = () => StateStoreLifecycleSched
 export interface StateStoreLifecycleSchedulerOptions {
   db: SqlDb;
   logger?: Logger;
+  metrics?: MetricsRegistry;
   tickMs?: number;
   batchSize?: number;
   maxBatchesPerTick?: number;
@@ -43,6 +45,7 @@ function defaultClock(): StateStoreLifecycleSchedulerClock {
 export class StateStoreLifecycleScheduler {
   private readonly db: SqlDb;
   private readonly logger?: Logger;
+  private readonly metrics?: MetricsRegistry;
   private readonly batchSize: number;
   private readonly maxBatchesPerTick: number;
   private readonly sessionsTtlDays: number;
@@ -53,6 +56,7 @@ export class StateStoreLifecycleScheduler {
   constructor(opts: StateStoreLifecycleSchedulerOptions) {
     this.db = opts.db;
     this.logger = opts.logger;
+    this.metrics = opts.metrics;
     const tickMs = resolvePositiveInt(opts.tickMs, DEFAULT_TICK_MS);
     this.batchSize = Math.max(
       1,
@@ -80,6 +84,7 @@ export class StateStoreLifecycleScheduler {
       tickMs,
       keepProcessAlive,
       onTickError: (err) => {
+        this.metrics?.recordLifecycleTickError("statestore");
         const message = err instanceof Error ? err.message : String(err);
         this.logger?.error("statestore.lifecycle_tick_failed", { error: message });
       },
@@ -127,39 +132,98 @@ export class StateStoreLifecycleScheduler {
     const sessionsPruned = await this.pruneInBatches("sessions", () =>
       this.pruneExpiredSessions(db, { cutoffIso: sessionsCutoffIso }),
     );
+    this.metrics?.recordLifecyclePruneRows("statestore", "sessions", sessionsPruned);
     const connectionsPruned = await this.pruneInBatches("connections", () =>
       this.pruneExpiredConnections(db, { nowMs }),
     );
+    this.metrics?.recordLifecyclePruneRows("statestore", "connections", connectionsPruned);
+    const presencePruned = await this.pruneInBatches("presence_entries", () =>
+      this.pruneExpiredPresenceEntries(db, { nowMs }),
+    );
+    this.metrics?.recordLifecyclePruneRows("statestore", "presence_entries", presencePruned);
     const dedupePruned = await this.pruneInBatches("channel_inbound_dedupe", () =>
       this.pruneExpiredInboundDedupe(db, { nowMs }),
     );
+    this.metrics?.recordLifecyclePruneRows("statestore", "channel_inbound_dedupe", dedupePruned);
     const inboxFailedPruned = await this.pruneInBatches("channel_inbox.failed", () =>
       this.pruneFailedChannelInbox(db, { cutoffMs: channelTerminalCutoffMs }),
     );
+    this.metrics?.recordLifecyclePruneRows("statestore", "channel_inbox.failed", inboxFailedPruned);
     const inboxCompletedPruned = await this.pruneInBatches("channel_inbox.completed", () =>
       this.pruneCompletedChannelInbox(db, { cutoffMs: channelTerminalCutoffMs }),
     );
+    this.metrics?.recordLifecyclePruneRows(
+      "statestore",
+      "channel_inbox.completed",
+      inboxCompletedPruned,
+    );
     const outboxFailedPruned = await this.pruneInBatches("channel_outbox.failed", () =>
       this.pruneFailedChannelOutbox(db, { cutoffIso: channelTerminalCutoffIso }),
+    );
+    this.metrics?.recordLifecyclePruneRows(
+      "statestore",
+      "channel_outbox.failed",
+      outboxFailedPruned,
+    );
+    const laneLeasesPruned = await this.pruneInBatches("lane_leases", () =>
+      this.pruneExpiredLaneLeases(db, { nowMs }),
+    );
+    this.metrics?.recordLifecyclePruneRows("statestore", "lane_leases", laneLeasesPruned);
+    const workspaceLeasesPruned = await this.pruneInBatches("workspace_leases", () =>
+      this.pruneExpiredWorkspaceLeases(db, { nowMs }),
+    );
+    this.metrics?.recordLifecyclePruneRows("statestore", "workspace_leases", workspaceLeasesPruned);
+    const oauthPendingPruned = await this.pruneInBatches("oauth_pending", () =>
+      this.pruneExpiredOauthPending(db, { nowIso }),
+    );
+    this.metrics?.recordLifecyclePruneRows("statestore", "oauth_pending", oauthPendingPruned);
+    const oauthRefreshLeasesPruned = await this.pruneInBatches("oauth_refresh_leases", () =>
+      this.pruneExpiredOauthRefreshLeases(db, { nowMs }),
+    );
+    this.metrics?.recordLifecyclePruneRows(
+      "statestore",
+      "oauth_refresh_leases",
+      oauthRefreshLeasesPruned,
+    );
+    const modelsDevRefreshLeasesPruned = await this.pruneInBatches(
+      "models_dev_refresh_leases",
+      () => this.pruneExpiredModelsDevRefreshLeases(db, { nowMs }),
+    );
+    this.metrics?.recordLifecyclePruneRows(
+      "statestore",
+      "models_dev_refresh_leases",
+      modelsDevRefreshLeasesPruned,
     );
 
     if (
       sessionsPruned +
         connectionsPruned +
+        presencePruned +
         dedupePruned +
         inboxFailedPruned +
         inboxCompletedPruned +
-        outboxFailedPruned >
+        outboxFailedPruned +
+        laneLeasesPruned +
+        workspaceLeasesPruned +
+        oauthPendingPruned +
+        oauthRefreshLeasesPruned +
+        modelsDevRefreshLeasesPruned >
       0
     ) {
       this.logger?.info("statestore.lifecycle_pruned", {
         now: nowIso,
         sessions: sessionsPruned,
         connections: connectionsPruned,
+        presence_entries: presencePruned,
         channel_inbound_dedupe: dedupePruned,
         channel_inbox_failed: inboxFailedPruned,
         channel_inbox_completed: inboxCompletedPruned,
         channel_outbox_failed: outboxFailedPruned,
+        lane_leases: laneLeasesPruned,
+        workspace_leases: workspaceLeasesPruned,
+        oauth_pending: oauthPendingPruned,
+        oauth_refresh_leases: oauthRefreshLeasesPruned,
+        models_dev_refresh_leases: modelsDevRefreshLeasesPruned,
       });
     }
   }
@@ -257,6 +321,22 @@ export class StateStoreLifecycleScheduler {
     ).changes;
   }
 
+  private async pruneExpiredPresenceEntries(db: SqlDb, input: { nowMs: number }): Promise<number> {
+    return (
+      await db.run(
+        `DELETE FROM presence_entries
+         WHERE instance_id IN (
+           SELECT instance_id
+           FROM presence_entries
+           WHERE expires_at_ms <= ?
+           ORDER BY expires_at_ms ASC, instance_id ASC
+           LIMIT ?
+         )`,
+        [input.nowMs, this.batchSize],
+      )
+    ).changes;
+  }
+
   private async pruneExpiredInboundDedupe(db: SqlDb, input: { nowMs: number }): Promise<number> {
     return (
       await db.run(
@@ -268,6 +348,92 @@ export class StateStoreLifecycleScheduler {
          ORDER BY expires_at_ms ASC
          LIMIT ?
        )`,
+        [input.nowMs, this.batchSize],
+      )
+    ).changes;
+  }
+
+  private async pruneExpiredLaneLeases(db: SqlDb, input: { nowMs: number }): Promise<number> {
+    return (
+      await db.run(
+        `DELETE FROM lane_leases
+         WHERE (tenant_id, key, lane) IN (
+           SELECT tenant_id, key, lane
+           FROM lane_leases
+           WHERE lease_expires_at_ms <= ?
+           ORDER BY lease_expires_at_ms ASC, tenant_id ASC, key ASC, lane ASC
+           LIMIT ?
+         )`,
+        [input.nowMs, this.batchSize],
+      )
+    ).changes;
+  }
+
+  private async pruneExpiredWorkspaceLeases(db: SqlDb, input: { nowMs: number }): Promise<number> {
+    return (
+      await db.run(
+        `DELETE FROM workspace_leases
+         WHERE (tenant_id, workspace_id) IN (
+           SELECT tenant_id, workspace_id
+           FROM workspace_leases
+           WHERE lease_expires_at_ms <= ?
+           ORDER BY lease_expires_at_ms ASC, tenant_id ASC, workspace_id ASC
+           LIMIT ?
+         )`,
+        [input.nowMs, this.batchSize],
+      )
+    ).changes;
+  }
+
+  private async pruneExpiredOauthPending(db: SqlDb, input: { nowIso: string }): Promise<number> {
+    return (
+      await db.run(
+        `DELETE FROM oauth_pending
+         WHERE (tenant_id, state) IN (
+           SELECT tenant_id, state
+           FROM oauth_pending
+           WHERE expires_at <= ?
+           ORDER BY expires_at ASC, tenant_id ASC, state ASC
+           LIMIT ?
+         )`,
+        [input.nowIso, this.batchSize],
+      )
+    ).changes;
+  }
+
+  private async pruneExpiredOauthRefreshLeases(
+    db: SqlDb,
+    input: { nowMs: number },
+  ): Promise<number> {
+    return (
+      await db.run(
+        `DELETE FROM oauth_refresh_leases
+         WHERE (tenant_id, auth_profile_id) IN (
+           SELECT tenant_id, auth_profile_id
+           FROM oauth_refresh_leases
+           WHERE lease_expires_at_ms <= ?
+           ORDER BY lease_expires_at_ms ASC, tenant_id ASC, auth_profile_id ASC
+           LIMIT ?
+         )`,
+        [input.nowMs, this.batchSize],
+      )
+    ).changes;
+  }
+
+  private async pruneExpiredModelsDevRefreshLeases(
+    db: SqlDb,
+    input: { nowMs: number },
+  ): Promise<number> {
+    return (
+      await db.run(
+        `DELETE FROM models_dev_refresh_leases
+         WHERE key IN (
+           SELECT key
+           FROM models_dev_refresh_leases
+           WHERE lease_expires_at_ms <= ?
+           ORDER BY lease_expires_at_ms ASC, key ASC
+           LIMIT ?
+         )`,
         [input.nowMs, this.batchSize],
       )
     ).changes;
