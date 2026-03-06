@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { jsonSchema, tool as aiTool } from "ai";
 import type { ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
 import type { Decision, SecretHandle as SecretHandleT } from "@tyrum/schemas";
-import type { ToolDescriptor } from "../tools.js";
+import { buildModelToolNameMap, registerModelTool, type ToolDescriptor } from "../tools.js";
 import type { ToolExecutor, ToolResult } from "../tool-executor.js";
 import { tagContent } from "../provenance.js";
 import { sanitizeForModel, containsInjectionPatterns } from "../sanitizer.js";
@@ -119,6 +119,7 @@ export class ToolSetBuilder {
     toolCallPolicyStates?: Map<string, ToolCallPolicyState>,
   ): ToolSet {
     const result: Record<string, Tool> = {};
+    const modelToolNames = buildModelToolNameMap(tools.map((tool) => tool.id));
     let approvalStepIndex = 0;
     let drivingProvenance: { source: string; trusted: boolean } = {
       source: "user",
@@ -261,7 +262,7 @@ export class ToolSetBuilder {
     for (const toolDesc of tools) {
       const schema = toolDesc.inputSchema ?? { type: "object", additionalProperties: true };
 
-      result[toolDesc.id] = aiTool({
+      const modelTool = aiTool({
         description: toolDesc.description,
         inputSchema: jsonSchema(schema),
         needsApproval: toolExecutionContext.execution
@@ -563,6 +564,7 @@ export class ToolSetBuilder {
           return content;
         },
       });
+      registerModelTool(result, toolDesc.id, modelTool, modelToolNames);
     }
 
     return result;

@@ -29,6 +29,7 @@ import {
 } from "../ai-sdk/message-utils.js";
 import { generateText, jsonSchema, stepCountIs, tool as aiTool } from "ai";
 import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
+import { buildModelToolNameMap, registerModelTool } from "../agent/tools.js";
 import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
 import {
   evaluateDomain,
@@ -380,6 +381,7 @@ function buildToolSet(input: {
 }): ToolSet {
   const allowed = new Set(input.allowedToolIds);
   const tools: Record<string, Tool> = {};
+  const modelToolNames = buildModelToolNameMap(Array.from(allowed));
 
   const accountToolCall = (toolCallId: string): void => {
     const id = toolCallId.trim();
@@ -645,7 +647,7 @@ function buildToolSet(input: {
     });
 
   if (allowed.has("tool.exec")) {
-    tools["tool.exec"] = createPolicyAwareTool({
+    const modelTool = createPolicyAwareTool({
       toolId: "tool.exec",
       description: "Execute a shell command in the workspace sandbox.",
       inputSchema: {
@@ -674,10 +676,11 @@ function buildToolSet(input: {
         };
       },
     });
+    registerModelTool(tools, "tool.exec", modelTool, modelToolNames);
   }
 
   if (allowed.has("tool.http.fetch")) {
-    tools["tool.http.fetch"] = createPolicyAwareTool({
+    const modelTool = createPolicyAwareTool({
       toolId: "tool.http.fetch",
       description: "Fetch an HTTP URL (SSRF protected, output capped).",
       inputSchema: {
@@ -711,6 +714,7 @@ function buildToolSet(input: {
         };
       },
     });
+    registerModelTool(tools, "tool.http.fetch", modelTool, modelToolNames);
   }
 
   return tools;

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export type ToolRisk = "low" | "medium" | "high";
 
 export interface ToolDescriptor {
@@ -120,6 +122,64 @@ const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     },
   },
 ];
+
+function shortToolIdHash(toolId: string): string {
+  return createHash("sha256").update(toolId).digest("hex").slice(0, 8);
+}
+
+function sanitizeToolIdForModel(toolId: string): string {
+  const sanitized = toolId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return sanitized.length > 0 ? sanitized : `tool_${shortToolIdHash(toolId)}`;
+}
+
+export function buildModelToolNameMap(toolIds: readonly string[]): Map<string, string> {
+  const names = new Map<string, string>();
+  const usedNames = new Set<string>();
+
+  for (const rawToolId of toolIds) {
+    const toolId = rawToolId.trim();
+    if (toolId.length === 0 || names.has(toolId)) continue;
+
+    const baseName = sanitizeToolIdForModel(toolId);
+    let candidate = baseName;
+    if (usedNames.has(candidate)) {
+      candidate = `${baseName}_${shortToolIdHash(toolId)}`;
+    }
+
+    let suffix = 1;
+    while (usedNames.has(candidate)) {
+      candidate = `${baseName}_${String(suffix)}`;
+      suffix += 1;
+    }
+
+    names.set(toolId, candidate);
+    usedNames.add(candidate);
+  }
+
+  return names;
+}
+
+export function registerModelTool<T>(
+  toolSet: Record<string, T>,
+  toolId: string,
+  tool: T,
+  modelToolNames: ReadonlyMap<string, string>,
+): string {
+  const canonicalToolId = toolId.trim();
+  const modelToolName = modelToolNames.get(canonicalToolId) ?? canonicalToolId;
+
+  toolSet[modelToolName] = tool;
+  if (modelToolName !== canonicalToolId) {
+    Object.defineProperty(toolSet, canonicalToolId, {
+      value: tool,
+      enumerable: false,
+      configurable: true,
+      writable: false,
+    });
+  }
+
+  return modelToolName;
+}
 
 export function isToolAllowed(allowlist: readonly string[], toolId: string): boolean {
   for (const entry of allowlist) {
