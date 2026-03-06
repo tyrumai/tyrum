@@ -23,7 +23,7 @@ export interface ConnectedClient {
   readonly protocol_rev: number;
   readonly capabilities: readonly ClientCapability[];
   readyCapabilities: Set<ClientCapability>;
-  lastPong: number;
+  lastWsPongAt: number;
 }
 
 export interface ConnectionStats {
@@ -80,10 +80,10 @@ export class ConnectionManager {
       protocol_rev: opts?.protocolRev ?? 1,
       capabilities,
       readyCapabilities,
-      lastPong: Date.now(),
+      lastWsPongAt: Date.now(),
     };
     ws.on("pong", () => {
-      client.lastPong = Date.now();
+      client.lastWsPongAt = Date.now();
     });
     this.clients.set(id, client);
     this.updateWsConnectionsActive();
@@ -170,7 +170,7 @@ export class ConnectionManager {
         changed = true;
         continue;
       }
-      if (now - client.lastPong > HEARTBEAT_TIMEOUT_MS) {
+      if (now - client.lastWsPongAt > HEARTBEAT_TIMEOUT_MS) {
         try {
           client.ws.terminate();
         } catch (_err) {

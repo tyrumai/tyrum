@@ -166,10 +166,10 @@ describe("ConnectionManager", () => {
       const ws = createMockWs();
       const id = cm.addClient(ws as never, ["playwright"]);
 
-      // Simulate a stale client by setting lastPong to the past.
+      // Simulate a stale client by setting the WS pong timestamp to the past.
       const client = cm.getClient(id);
       expect(client).toBeDefined();
-      client!.lastPong = Date.now() - 20_000; // 20 seconds ago
+      client!.lastWsPongAt = Date.now() - 20_000; // 20 seconds ago
 
       cm.heartbeat();
 
@@ -186,7 +186,7 @@ describe("ConnectionManager", () => {
       // Client just ponged.
       const client = cm.getClient(id);
       expect(client).toBeDefined();
-      client!.lastPong = Date.now();
+      client!.lastWsPongAt = Date.now();
 
       cm.heartbeat();
 
@@ -195,20 +195,20 @@ describe("ConnectionManager", () => {
       expect(cm.getClient(id)).toBeDefined();
     });
 
-    it("updates lastPong on websocket pong frames", () => {
+    it("updates lastWsPongAt on websocket pong frames", () => {
       const cm = new ConnectionManager();
       const ws = createMockWs();
       const id = cm.addClient(ws as never, ["playwright"]);
       const client = cm.getClient(id);
       expect(client).toBeDefined();
 
-      client!.lastPong = 1000;
+      client!.lastWsPongAt = 1000;
       const before = Date.now();
       ws.emitPong();
       const after = Date.now();
 
-      expect(client!.lastPong).toBeGreaterThanOrEqual(before);
-      expect(client!.lastPong).toBeLessThanOrEqual(after);
+      expect(client!.lastWsPongAt).toBeGreaterThanOrEqual(before);
+      expect(client!.lastWsPongAt).toBeLessThanOrEqual(after);
     });
   });
 

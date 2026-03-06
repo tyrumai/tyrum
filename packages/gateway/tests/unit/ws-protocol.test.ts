@@ -1104,49 +1104,43 @@ describe("handleClientMessage", () => {
     expect(payload.code).toBe("invalid_approval_decision");
   });
 
-  it("updates lastPong on ping response", async () => {
+  it("does not update lastWsPongAt on ping response", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const deps = makeDeps(cm);
 
-    // Set lastPong to something old.
-    client.lastPong = 1000;
+    client.lastWsPongAt = 1000;
 
-    const before = Date.now();
     const result = await handleClientMessage(
       client,
       JSON.stringify({ request_id: "ping-1", type: "ping", ok: true }),
       deps,
     );
-    const after = Date.now();
 
     expect(result).toBeUndefined();
-    expect(client.lastPong).toBeGreaterThanOrEqual(before);
-    expect(client.lastPong).toBeLessThanOrEqual(after);
+    expect(client.lastWsPongAt).toBe(1000);
   });
 
-  it("responds to ping requests with pong", async () => {
+  it("responds to ping requests without updating lastWsPongAt", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const deps = makeDeps(cm);
 
-    const before = Date.now();
+    client.lastWsPongAt = 1000;
     const result = await handleClientMessage(
       client,
       JSON.stringify({ request_id: "ping-req-1", type: "ping", payload: {} }),
       deps,
     );
-    const after = Date.now();
 
     expect(result).toEqual({
       request_id: "ping-req-1",
       type: "ping",
       ok: true,
     });
-    expect(client.lastPong).toBeGreaterThanOrEqual(before);
-    expect(client.lastPong).toBeLessThanOrEqual(after);
+    expect(client.lastWsPongAt).toBe(1000);
   });
 
   it("handles approval.list requests when approvalDal is configured", async () => {

@@ -10,11 +10,6 @@ export async function handleResponseMessage(
   msg: ProtocolResponseEnvelope,
   deps: ProtocolDeps,
 ): Promise<WsResponseEnvelope | WsEventEnvelope | undefined> {
-  if (msg.type === "ping" && msg.ok === true) {
-    client.lastPong = Date.now();
-    return undefined;
-  }
-
   if (msg.type === "task.execute") {
     return handleTaskExecuteResponse(client, msg, deps);
   }

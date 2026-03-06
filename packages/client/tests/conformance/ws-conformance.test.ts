@@ -120,7 +120,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
 
     await withTimeout(result.connectedP, TIMEOUT, "connected");
 
-    // ping() sends a ping request and awaits the pong — resolves without error
+    // ping() sends a protocol health-check request and awaits the ack.
     await withTimeout(client.ping(), TIMEOUT, "ping");
   });
 

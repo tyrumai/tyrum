@@ -552,7 +552,7 @@ export class TyrumClient {
     return this.request("command.execute", payload, WsCommandExecuteResult);
   }
 
-  /** Send a heartbeat ping request to the gateway. */
+  /** Send a protocol-level health-check ping request to the gateway. */
   ping(): Promise<void> {
     return this.requestVoid("ping", {});
   }
@@ -1310,7 +1310,7 @@ export class TyrumClient {
     // Requests (gateway -> client)
     switch (msg.type) {
       case "ping":
-        // heartbeat: reply with an ok response
+        // Protocol-level health check: acknowledge without affecting WS heartbeat state.
         this.send({
           request_id: msg.request_id,
           type: "ping",
