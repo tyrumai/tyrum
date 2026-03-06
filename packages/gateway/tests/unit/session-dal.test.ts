@@ -4,6 +4,9 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
 import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
+import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
+import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
+import { seedCompletedTelegramTurn } from "../helpers/channel-session-repair.js";
 
 describe("SessionDal", () => {
   let db: SqliteDb | undefined;
@@ -156,6 +159,86 @@ describe("SessionDal", () => {
     expect(third.summary).toContain("u1");
     expect(third.summary).toContain("u2");
     expect(third.summary).not.toContain("u3");
+  });
+
+  it("repairs bounded session turns and summary from retained channel logs", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-02-17T00:10:00.000Z"));
+
+      const dal = createDal();
+      const session = await dal.getOrCreate({
+        connectorKey: "telegram",
+        providerThreadId: "thread-repair",
+        containerKind: "channel",
+      });
+      const inboxDal = new ChannelInboxDal(db!, dal);
+      const outboxDal = new ChannelOutboxDal(db!);
+
+      await seedCompletedTelegramTurn({
+        inboxDal,
+        outboxDal,
+        session,
+        threadId: "thread-repair",
+        messageId: "msg-1",
+        userText: "u1",
+        assistantText: "a1",
+        receivedAtMs: Date.parse("2026-02-17T00:00:00.000Z"),
+      });
+      await seedCompletedTelegramTurn({
+        inboxDal,
+        outboxDal,
+        session,
+        threadId: "thread-repair",
+        messageId: "msg-2",
+        userText: "u2",
+        assistantText: "a2",
+        receivedAtMs: Date.parse("2026-02-17T00:01:00.000Z"),
+      });
+
+      await db!.run(
+        `UPDATE sessions
+         SET turns_json = ?, summary = ?, updated_at = ?
+         WHERE tenant_id = ? AND session_id = ?`,
+        [
+          JSON.stringify([
+            { role: "user", content: "stale", timestamp: "2026-02-17T00:00:00.000Z" },
+          ]),
+          "stale-summary",
+          "2026-02-17T00:02:00.000Z",
+          session.tenant_id,
+          session.session_id,
+        ],
+      );
+
+      const repaired = await dal.repairFromChannelLogs({
+        tenantId: session.tenant_id,
+        sessionId: session.session_id,
+        maxTurns: 1,
+      });
+
+      expect(repaired).toEqual({
+        source_rows: 2,
+        rebuilt_messages: 4,
+        kept_messages: 2,
+        dropped_messages: 2,
+      });
+
+      const updated = await dal.getById({
+        tenantId: session.tenant_id,
+        sessionId: session.session_id,
+      });
+      expect(updated?.summary).toContain("stale-summary");
+      expect(updated?.summary).toContain("u1");
+      expect(updated?.summary).toContain("a1");
+      expect(updated?.summary).not.toContain("u2");
+      expect(updated?.turns).toEqual([
+        { role: "user", content: "u2", timestamp: "2026-02-17T00:10:00.000Z" },
+        { role: "assistant", content: "a2", timestamp: "2026-02-17T00:10:00.000Z" },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("deletes expired sessions using ttl days", async () => {

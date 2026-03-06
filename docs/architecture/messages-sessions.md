@@ -38,6 +38,18 @@ Connectors treat inbound content as **data**, not instructions. Provenance is pr
 
 Sessions are durable conversation containers with stored transcripts and metadata. Session keys are stable and chosen by Tyrum, not by the model.
 
+### Transcript source of truth
+
+For channel-backed conversations, Tyrum keeps conversation content in more than one place on purpose, but those copies do not have equal authority:
+
+- `sessions.turns_json` plus `sessions.summary` are the authoritative session context used for future model turns.
+- `channel_inbox.payload_json` and `channel_inbox.reply_text` are transport/audit records for a specific inbound delivery.
+- `channel_outbox.text` / `response_json` are delivery-side artifacts and may be chunked, retried, failed, or deleted after send.
+
+Transport tables are therefore useful for debugging and best-effort repair, but they are not the canonical conversation state. Queue cleanup and outbox delivery may delete rows, so the runtime must continue to work even when transport logs are incomplete.
+
+When retained channel logs disagree with session context, repair should rebuild the bounded turn window from transport history without discarding authoritative summarized context. Tyrum exposes this as `/repair [max_turns]`, which reconstructs `sessions.turns_json` from completed `channel_inbox` rows, folds any repaired overflow into the existing `sessions.summary`, prefers `reply_text`, and falls back to ordered outbox chunks when needed.
+
 ### DM isolation (secure by default for multi-user inboxes)
 
 Tyrum isolates direct-message context by default when more than one distinct sender can reach an agent via DMs. This prevents cross-user context leakage.

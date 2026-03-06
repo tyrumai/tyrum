@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { executeCommand } from "../../src/modules/commands/dispatcher.js";
 import { SessionDal } from "../../src/modules/agent/session-dal.js";
@@ -9,7 +9,10 @@ import {
   IdentityScopeDal,
 } from "../../src/modules/identity/scope.js";
 import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
+import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
+import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { seedCompletedTelegramTurn } from "../helpers/channel-session-repair.js";
 
 describe("session command primitives", () => {
   let db: ReturnType<typeof openTestSqliteDb> | undefined;
@@ -243,6 +246,119 @@ describe("session command primitives", () => {
     );
     expect(defaultUpdated?.summary).toBe("default-summary");
     expect(defaultUpdated?.turns_json).toBe(JSON.stringify(defaultTurns));
+  });
+
+  it("supports /repair (rebuilds session context from retained channel logs)", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-02-17T00:10:00.000Z"));
+      db = openTestSqliteDb();
+
+      const session = await ensureSession({
+        agentKey: "default",
+        channel: "telegram",
+        threadId: "thread-repair",
+        containerKind: "channel",
+      });
+      const inboxDal = new ChannelInboxDal(db);
+      const outboxDal = new ChannelOutboxDal(db);
+
+      await seedCompletedTelegramTurn({
+        inboxDal,
+        outboxDal,
+        session,
+        threadId: "thread-repair",
+        messageId: "repair-1",
+        userText: "user-one",
+        assistantText: "assistant-one",
+        receivedAtMs: Date.parse("2026-02-17T00:00:00.000Z"),
+      });
+
+      await db.run(
+        `UPDATE sessions
+         SET turns_json = ?, summary = ?, updated_at = ?
+         WHERE tenant_id = ? AND session_id = ?`,
+        ["[]", "stale-summary", "2026-02-17T00:00:01.000Z", DEFAULT_TENANT_ID, session.session_id],
+      );
+
+      const result = await executeCommand("/repair", {
+        db,
+        commandContext: { agentId: "default", channel: "telegram", threadId: "thread-repair" },
+      });
+
+      expect(result.data).toMatchObject({
+        agent_id: "default",
+        session_id: session.session_id,
+        source_rows: 1,
+        rebuilt_messages: 2,
+        kept_messages: 2,
+        dropped_messages: 0,
+      });
+
+      const updated = await db.get<{ summary: string; turns_json: string }>(
+        `SELECT summary, turns_json
+         FROM sessions
+         WHERE tenant_id = ? AND session_id = ?`,
+        [DEFAULT_TENANT_ID, session.session_id],
+      );
+      expect(updated?.summary).toBe("stale-summary");
+      expect(updated?.turns_json).toContain("user-one");
+      expect(updated?.turns_json).toContain("assistant-one");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("supports /repair for dm sessions when the command is resolved from a dm key", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-02-17T00:10:00.000Z"));
+      db = openTestSqliteDb();
+
+      const session = await ensureSession({
+        agentKey: "default",
+        channel: "telegram",
+        threadId: "dm-repair",
+        containerKind: "dm",
+      });
+      const inboxDal = new ChannelInboxDal(db);
+      const outboxDal = new ChannelOutboxDal(db);
+
+      await seedCompletedTelegramTurn({
+        inboxDal,
+        outboxDal,
+        session,
+        threadId: "dm-repair",
+        messageId: "repair-dm-1",
+        userText: "dm-user",
+        assistantText: "dm-assistant",
+        receivedAtMs: Date.parse("2026-02-17T00:00:00.000Z"),
+        threadKind: "private",
+      });
+
+      await db.run(
+        `UPDATE sessions
+         SET turns_json = ?, summary = ?
+         WHERE tenant_id = ? AND session_id = ?`,
+        ["[]", "", DEFAULT_TENANT_ID, session.session_id],
+      );
+
+      const result = await executeCommand("/repair", {
+        db,
+        commandContext: { agentId: "default", key: session.session_key },
+      });
+
+      expect(result.data).toMatchObject({
+        agent_id: "default",
+        session_id: session.session_id,
+        source_rows: 1,
+        rebuilt_messages: 2,
+        kept_messages: 2,
+        dropped_messages: 0,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("supports /stop (cancels active run + clears queued inbox)", async () => {

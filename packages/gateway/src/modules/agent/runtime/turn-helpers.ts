@@ -8,7 +8,6 @@ import type {
 } from "@ai-sdk/provider";
 import type {
   AgentTurnRequest as AgentTurnRequestT,
-  NormalizedAttachment as NormalizedAttachmentT,
   NormalizedContainerKind,
   NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
 } from "@tyrum/schemas";
@@ -18,6 +17,7 @@ import { coerceRecord } from "../../util/coerce.js";
 import { buildAgentTurnKey } from "../turn-key.js";
 import type { PolicyService } from "../../policy/service.js";
 import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../../sandbox/elevated-execution.js";
+import { renderEnvelopeMessageText } from "../session-message-text.js";
 import type { LaneQueueScope } from "./turn-engine-bridge.js";
 
 export function createStaticLanguageModelV3(text: string): LanguageModelV3 {
@@ -145,20 +145,6 @@ export type ResolvedAgentTurnInput = {
   metadata?: Record<string, unknown>;
 };
 
-function formatNormalizedAttachment(attachment: NormalizedAttachmentT): string {
-  const fields = [`kind=${attachment.kind}`];
-  if (attachment.mime_type) fields.push(`mime_type=${attachment.mime_type}`);
-  if (typeof attachment.size_bytes === "number")
-    fields.push(`size_bytes=${String(attachment.size_bytes)}`);
-  if (attachment.sha256) fields.push(`sha256=${attachment.sha256}`);
-  return `- ${fields.join(" ")}`;
-}
-
-function formatAttachmentSummary(attachments: NormalizedAttachmentT[]): string | undefined {
-  if (!attachments || attachments.length === 0) return undefined;
-  return `Attachments:\n${attachments.map(formatNormalizedAttachment).join("\n")}`;
-}
-
 export function resolveAgentTurnInput(input: AgentTurnRequestT): ResolvedAgentTurnInput {
   const envelope = input.envelope;
   const channel = envelope?.delivery.channel ?? input.channel;
@@ -171,14 +157,10 @@ export function resolveAgentTurnInput(input: AgentTurnRequestT): ResolvedAgentTu
     throw new Error("thread_id is required");
   }
 
-  const baseText = (input.message ?? envelope?.content.text ?? "").trim();
-  const attachmentsSummary = envelope
-    ? formatAttachmentSummary(envelope.content.attachments)
-    : undefined;
-  const message = [baseText, attachmentsSummary]
-    .filter((part) => part && part.trim().length > 0)
-    .join("\n\n")
-    .trim();
+  const message = renderEnvelopeMessageText({
+    envelope,
+    fallbackText: input.message ?? envelope?.content.text ?? "",
+  });
 
   if (message.length === 0) {
     throw new Error("message is required (either message text or envelope content)");

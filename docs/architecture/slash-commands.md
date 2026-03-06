@@ -18,6 +18,7 @@ Commands are handled by the gateway (not by the model). This keeps control-plane
 - `/reset` — reset the current session state (policy-defined).
 - `/stop` — cancel the active run and clear queued followups for the current session.
 - `/compact` — request compaction of older history into a summary.
+- `/repair [max_turns]` — rebuild session context from retained channel transport logs.
 
 ### Context and usage
 
