@@ -91,8 +91,10 @@ import { resolveSandboxHardeningProfile } from "../../sandbox/hardening.js";
 import { LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
 import { resolveWorkspaceKey } from "../../workspace/id.js";
 import { WorkboardDal } from "../../workboard/dal.js";
+import { ChannelOutboxDal } from "../../channels/outbox-dal.js";
 import { parseChannelSourceKey } from "../../channels/interface.js";
 import { DEFAULT_TENANT_ID } from "../../identity/scope.js";
+import { ScheduleService } from "../../automation/schedule-service.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -144,6 +146,51 @@ const NOOP_APPROVAL_NOTIFIER: ApprovalNotifier = {
   },
 };
 
+type AutomationTurnMetadata = {
+  schedule_id?: string;
+  watcher_key?: string;
+  schedule_kind?: "heartbeat" | "cron";
+  fired_at?: string;
+  previous_fired_at?: string | null;
+  cadence?: unknown;
+  delivery_mode?: "quiet" | "notify";
+  instruction?: string;
+  seeded_default?: boolean;
+};
+
+function resolveAutomationMetadata(
+  metadata: Record<string, unknown> | undefined,
+): AutomationTurnMetadata | undefined {
+  const automation = coerceRecord(metadata?.["automation"]);
+  if (!automation) return undefined;
+
+  const kindRaw = automation["schedule_kind"];
+  const deliveryModeRaw = automation["delivery_mode"];
+  const scheduleKind = kindRaw === "heartbeat" || kindRaw === "cron" ? kindRaw : undefined;
+  const deliveryMode =
+    deliveryModeRaw === "quiet" || deliveryModeRaw === "notify" ? deliveryModeRaw : undefined;
+  if (!scheduleKind) return undefined;
+
+  return {
+    schedule_id:
+      typeof automation["schedule_id"] === "string" ? automation["schedule_id"] : undefined,
+    watcher_key:
+      typeof automation["watcher_key"] === "string" ? automation["watcher_key"] : undefined,
+    schedule_kind: scheduleKind,
+    fired_at: typeof automation["fired_at"] === "string" ? automation["fired_at"] : undefined,
+    previous_fired_at:
+      typeof automation["previous_fired_at"] === "string" ||
+      automation["previous_fired_at"] === null
+        ? (automation["previous_fired_at"] as string | null)
+        : undefined,
+    cadence: automation["cadence"],
+    delivery_mode: deliveryMode,
+    instruction:
+      typeof automation["instruction"] === "string" ? automation["instruction"] : undefined,
+    seeded_default: automation["seeded_default"] === true,
+  };
+}
+
 export class AgentRuntime {
   private readonly home: string;
   private readonly sessionDal: SessionDal;
@@ -166,6 +213,7 @@ export class AgentRuntime {
   private readonly turnEngineWaitMs: number;
   private lastContextReport: AgentContextReport | undefined;
   private cleanupAtMs = 0;
+  private readonly defaultHeartbeatSeededScopes = new Set<string>();
 
   constructor(private readonly opts: AgentRuntimeOptions) {
     this.home = opts.home ?? resolveTyrumHome();
@@ -314,6 +362,7 @@ export class AgentRuntime {
       agentId,
       workspaceId,
     );
+    await this.ensureDefaultHeartbeatSchedule(agentId, workspaceId);
     const config = await this.loadAgentConfigFromDb({
       tenantId: this.tenantId,
       agentId,
@@ -406,6 +455,7 @@ export class AgentRuntime {
   private resolveTurnReply(
     rawReply: string,
     withinTurnLoop: ReturnType<typeof detectWithinTurnToolLoop> | undefined,
+    opts?: { allowEmpty?: boolean },
   ): string {
     if (withinTurnLoop) {
       if (rawReply.trim().length === 0) return WITHIN_TURN_LOOP_STOP_REPLY;
@@ -413,6 +463,7 @@ export class AgentRuntime {
       return `${rawReply}\n\n${WITHIN_TURN_LOOP_STOP_REPLY}`;
     }
     if (rawReply.length > 0) return rawReply;
+    if (opts?.allowEmpty) return "";
     return "No assistant response returned.";
   }
 
@@ -519,7 +570,10 @@ export class AgentRuntime {
     const finalize = async (): Promise<AgentTurnResponseT> => {
       const result = await streamResult;
       const rawReply = (await result.text) || "";
-      const reply = this.resolveTurnReply(rawReply, withinTurnLoop.value);
+      const automation = resolveAutomationMetadata(resolved.metadata);
+      const reply = this.resolveTurnReply(rawReply, withinTurnLoop.value, {
+        allowEmpty: automation?.delivery_mode === "quiet",
+      });
       this.lastContextReport = contextReport;
       return await finalizeTurn({
         container: this.opts.container,
@@ -538,6 +592,81 @@ export class AgentRuntime {
 
   async turn(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
     return await this.turnViaExecutionEngine(input);
+  }
+
+  async executeDecideAction(
+    input: AgentTurnRequestT,
+    opts?: { abortSignal?: AbortSignal; timeoutMs?: number; execution?: TurnExecutionContext },
+  ): Promise<AgentTurnResponseT> {
+    const response = await this.turnDirect(input, opts);
+    const automation = resolveAutomationMetadata(input.metadata);
+    if (automation && response.reply.trim().length > 0) {
+      await this.maybeDeliverAutomationReply({
+        input,
+        response,
+        automation,
+      });
+    }
+    return response;
+  }
+
+  private async maybeDeliverAutomationReply(input: {
+    input: AgentTurnRequestT;
+    response: AgentTurnResponseT;
+    automation: AutomationTurnMetadata;
+  }): Promise<void> {
+    const tenantId = this.tenantId;
+    const agentKey = input.input.agent_key?.trim() || this.agentId;
+    const workspaceKey = input.input.workspace_key?.trim() || this.workspaceId;
+    const agentId = await this.opts.container.identityScopeDal.ensureAgentId(tenantId, agentKey);
+    const workspaceId = await this.opts.container.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      workspaceKey,
+    );
+    const workboard = new WorkboardDal(this.opts.container.db);
+    const activity = await workboard.getScopeActivity({
+      scope: { tenant_id: tenantId, agent_id: agentId, workspace_id: workspaceId },
+    });
+    const targetSessionKey = activity?.last_active_session_key?.trim();
+    if (!targetSessionKey) return;
+
+    const route = await this.opts.container.db.get<{
+      inbox_id: number;
+      tenant_id: string;
+      source: string;
+      thread_id: string;
+      workspace_id: string;
+      session_id: string;
+      channel_thread_id: string;
+    }>(
+      `SELECT inbox_id, tenant_id, source, thread_id, workspace_id, session_id, channel_thread_id
+       FROM channel_inbox
+       WHERE tenant_id = ? AND key = ?
+       ORDER BY received_at_ms DESC, inbox_id DESC
+       LIMIT 1`,
+      [tenantId, targetSessionKey],
+    );
+    if (!route) return;
+
+    const dedupeKey = [
+      "automation.reply",
+      input.automation.schedule_id ?? "unknown",
+      input.automation.fired_at ?? "unknown",
+      input.response.session_id,
+    ].join(":");
+    const outbox = new ChannelOutboxDal(this.opts.container.db);
+    await outbox.enqueue({
+      tenant_id: route.tenant_id,
+      inbox_id: route.inbox_id,
+      source: route.source,
+      thread_id: route.thread_id,
+      dedupe_key: dedupeKey,
+      chunk_index: 0,
+      text: input.response.reply,
+      workspace_id: route.workspace_id,
+      session_id: route.session_id,
+      channel_thread_id: route.channel_thread_id,
+    });
   }
 
   private async maybeStoreToolApprovalArgsHandle(input: {
@@ -822,7 +951,8 @@ export class AgentRuntime {
 
     const remainingSteps = this.maxSteps - stepsUsedSoFar;
     if (remainingSteps <= 0) {
-      const reply = "No assistant response returned.";
+      const automation = resolveAutomationMetadata(resolved.metadata);
+      const reply = automation?.delivery_mode === "quiet" ? "" : "No assistant response returned.";
       this.lastContextReport = contextReport;
       return await finalizeTurn({
         container: this.opts.container,
@@ -934,7 +1064,10 @@ export class AgentRuntime {
     }
 
     const rawReply = result.text || "";
-    const reply = this.resolveTurnReply(rawReply, withinTurnLoop.value);
+    const automation = resolveAutomationMetadata(resolved.metadata);
+    const reply = this.resolveTurnReply(rawReply, withinTurnLoop.value, {
+      allowEmpty: automation?.delivery_mode === "quiet",
+    });
     this.lastContextReport = contextReport;
     return await finalizeTurn({
       container: this.opts.container,
@@ -1008,6 +1141,117 @@ export class AgentRuntime {
     }
   }
 
+  private async buildAutomationDigest(input: {
+    scope: WorkScope;
+    automation: AutomationTurnMetadata;
+  }): Promise<string> {
+    const workboard = new WorkboardDal(this.opts.container.db, this.opts.container.redactionEngine);
+    const [itemsResult, signalsResult, activity, pendingApprovals, recentEvents] =
+      await Promise.all([
+        workboard.listItems({
+          scope: input.scope,
+          statuses: ["doing", "blocked", "ready", "backlog"],
+          limit: 10,
+        }),
+        workboard.listSignals({
+          scope: input.scope,
+          statuses: ["active"],
+          limit: 10,
+        }),
+        workboard.getScopeActivity({ scope: input.scope }),
+        this.opts.container.db.all<{
+          approval_id: string;
+          kind: string;
+          prompt: string;
+          created_at: string;
+        }>(
+          `SELECT approval_id, kind, prompt, created_at
+           FROM approvals
+           WHERE tenant_id = ?
+             AND agent_id = ?
+             AND workspace_id = ?
+             AND status = 'pending'
+           ORDER BY created_at DESC
+           LIMIT 10`,
+          [input.scope.tenant_id, input.scope.agent_id, input.scope.workspace_id],
+        ),
+        input.automation.previous_fired_at
+          ? this.opts.container.db.all<{
+              work_item_id: string;
+              title: string;
+              kind: string;
+              created_at: string;
+            }>(
+              `SELECT e.work_item_id, i.title, e.kind, e.created_at
+               FROM work_item_events e
+               JOIN work_items i
+                 ON i.tenant_id = e.tenant_id
+                AND i.work_item_id = e.work_item_id
+               WHERE i.tenant_id = ?
+                 AND i.agent_id = ?
+                 AND i.workspace_id = ?
+                 AND e.created_at > ?
+               ORDER BY e.created_at DESC
+               LIMIT 10`,
+              [
+                input.scope.tenant_id,
+                input.scope.agent_id,
+                input.scope.workspace_id,
+                input.automation.previous_fired_at,
+              ],
+            )
+          : Promise.resolve([]),
+      ]);
+
+    const lines: string[] = [];
+    lines.push("Automation digest:");
+    lines.push(
+      `- Schedule kind: ${input.automation.schedule_kind ?? "unknown"}${input.automation.seeded_default ? " (seeded default)" : ""}`,
+    );
+    lines.push(`- Last active session: ${activity?.last_active_session_key ?? "none"}`);
+    lines.push(`- Active work items: ${String(itemsResult.items.length)}`);
+    for (const item of itemsResult.items.slice(0, 5)) {
+      lines.push(`  - [${item.status}] ${item.title}`);
+    }
+    lines.push(`- Active signals: ${String(signalsResult.signals.length)}`);
+    for (const signal of signalsResult.signals.slice(0, 5)) {
+      lines.push(`  - ${signal.trigger_kind} (${signal.signal_id})`);
+    }
+    lines.push(`- Pending approvals: ${String(pendingApprovals.length)}`);
+    for (const approval of pendingApprovals.slice(0, 5)) {
+      lines.push(`  - ${approval.kind}: ${approval.prompt}`);
+    }
+    if (recentEvents.length > 0) {
+      lines.push("- Recent work item events since previous automation run:");
+      for (const event of recentEvents.slice(0, 5)) {
+        lines.push(`  - ${event.created_at}: ${event.kind} on ${event.title}`);
+      }
+    }
+
+    return lines.join("\n");
+  }
+
+  private async ensureDefaultHeartbeatSchedule(
+    agentId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    const scopeKey = `${this.tenantId}:${agentId}:${workspaceId}`;
+    if (this.defaultHeartbeatSeededScopes.has(scopeKey)) {
+      return;
+    }
+
+    const scheduleService = new ScheduleService(
+      this.opts.container.db,
+      this.opts.container.identityScopeDal,
+    );
+    await scheduleService.ensureDefaultHeartbeatScheduleForMembership({
+      tenantId: this.tenantId,
+      agentId,
+      workspaceId,
+    });
+    this.defaultHeartbeatSeededScopes.add(scopeKey);
+  }
+
   private async prepareTurn(
     input: AgentTurnRequestT,
     exec?: TurnExecutionContext,
@@ -1027,6 +1271,7 @@ export class AgentRuntime {
     resolved: ResolvedAgentTurnInput;
   }> {
     const resolved = resolveAgentTurnInput(input);
+    const automation = resolveAutomationMetadata(resolved.metadata);
     const laneQueueScope = resolveLaneQueueScope(resolved.metadata);
     const agentKey = input.agent_key?.trim() || this.agentId;
     const workspaceKey = input.workspace_key?.trim() || this.workspaceId;
@@ -1044,6 +1289,7 @@ export class AgentRuntime {
       agentId,
       workspaceId,
     );
+    await this.ensureDefaultHeartbeatSchedule(agentId, workspaceId);
 
     const config = await this.loadAgentConfigFromDb({
       tenantId: this.tenantId,
@@ -1210,6 +1456,7 @@ export class AgentRuntime {
       },
       nodeDispatchService,
       this.opts.container.artifactStore,
+      this.opts.container.identityScopeDal,
     );
 
     const sessionCtx = formatSessionContext(session.summary, session.turns);
@@ -1247,6 +1494,28 @@ export class AgentRuntime {
     const workFocusText = `Work focus digest:\n${workFocusDigest}`;
     const memoryTagged = tagContent(memoryDigestResult.digest, "memory", false);
     const memoryText = `Memory digest:\n${sanitizeForModel(memoryTagged)}`;
+    const automationTriggerText = automation
+      ? `Automation trigger:\n${[
+          `Schedule kind: ${automation.schedule_kind ?? "unknown"}`,
+          `Schedule id: ${automation.schedule_id ?? "unknown"}`,
+          `Fired at: ${automation.fired_at ?? "unknown"}`,
+          `Previous fired at: ${automation.previous_fired_at ?? "never"}`,
+          `Delivery mode: ${automation.delivery_mode ?? "notify"}`,
+          automation.instruction ? `Instruction: ${automation.instruction}` : undefined,
+        ]
+          .filter((line): line is string => Boolean(line))
+          .join("\n")}`
+      : undefined;
+    const automationDigestText = automation
+      ? await this.buildAutomationDigest({
+          scope: {
+            tenant_id: session.tenant_id,
+            agent_id: session.agent_id,
+            workspace_id: session.workspace_id,
+          },
+          automation,
+        })
+      : undefined;
 
     const toolSchemaParts = filteredTools.map((t) => {
       const schema = t.inputSchema ?? { type: "object", additionalProperties: true };
@@ -1285,6 +1554,12 @@ export class AgentRuntime {
         { id: "session_context", chars: sessionText.length },
         { id: "work_focus_digest", chars: workFocusText.length },
         { id: "memory_digest", chars: memoryText.length },
+        ...(automationTriggerText
+          ? [{ id: "automation_trigger", chars: automationTriggerText.length }]
+          : []),
+        ...(automationDigestText
+          ? [{ id: "automation_digest", chars: automationDigestText.length }]
+          : []),
         { id: "message", chars: resolved.message.length },
       ],
       selected_tools: filteredTools.map((t) => t.id),
@@ -1294,6 +1569,15 @@ export class AgentRuntime {
       tool_schema_total_chars: toolSchemaTotalChars,
       enabled_skills: ctx.skills.map((s) => s.meta.id),
       mcp_servers: ctx.mcpServers.map((s) => s.id),
+      ...(automation
+        ? {
+            automation: {
+              schedule_kind: automation.schedule_kind,
+              schedule_id: automation.schedule_id,
+              delivery_mode: automation.delivery_mode,
+            },
+          }
+        : {}),
       memory: {
         keyword_hits: memoryDigestResult.keyword_hit_count,
         semantic_hits: memoryDigestResult.semantic_hit_count,
@@ -1362,6 +1646,22 @@ export class AgentRuntime {
         type: "text",
         text: memoryText,
       },
+      ...(automationTriggerText
+        ? [
+            {
+              type: "text" as const,
+              text: automationTriggerText,
+            },
+          ]
+        : []),
+      ...(automationDigestText
+        ? [
+            {
+              type: "text" as const,
+              text: automationDigestText,
+            },
+          ]
+        : []),
       {
         type: "text",
         text: resolved.message,

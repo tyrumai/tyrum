@@ -16,6 +16,25 @@ Automation lets Tyrum act on schedules and triggers while keeping behavior obser
 - Use **cron** for independent, narrow tasks that should run on a fixed schedule.
 - WorkSignals can be realized as heartbeat-driven checks (context-aware) or as cron/watchers (narrow); the key invariant is that firings are durable, deduped, and policy-gated.
 
+## Schedule model
+
+- User-facing automation is exposed as **schedules** even though v1 reuses the `watchers` storage tables internally.
+- A schedule has:
+  - a **kind** (`heartbeat` or `cron`)
+  - a **cadence** (`interval` or `cron`)
+  - an **execution mode** (`agent_turn`, `playbook`, or explicit `steps`)
+  - a **delivery mode** (`quiet` or `notify`)
+- `active=false` means the schedule was deleted (tombstoned). `enabled=false` means it is paused but still present.
+- The scheduler translates schedules into durable watcher firings and execution jobs so retries, leases, and auditing remain shared across automation types.
+
+## Default heartbeat
+
+- Automation is enabled by default.
+- Each agent/workspace membership gets one seeded default heartbeat schedule.
+- The default heartbeat runs every 30 minutes, uses `agent_turn` execution, and defaults to `quiet` delivery.
+- Seeded defaults are idempotent: restarting the gateway or revisiting the same scope does not create duplicates.
+- Deleting the seeded default heartbeat leaves a tombstone so it is not recreated automatically. Pausing it keeps the schedule but prevents future firings until resumed.
+
 ## Safety expectations
 
 - Automation must be idempotent where possible.

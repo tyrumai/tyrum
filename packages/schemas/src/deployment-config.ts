@@ -141,7 +141,7 @@ export type DeploymentConfigAgent = z.infer<typeof DeploymentConfigAgent>;
 
 export const DeploymentConfigAutomation = z
   .object({
-    enabled: z.boolean().default(false),
+    enabled: z.boolean().default(true),
   })
   .strict();
 export type DeploymentConfigAutomation = z.infer<typeof DeploymentConfigAutomation>;

@@ -1,11 +1,12 @@
 import type {
   ActionPrimitive as ActionPrimitiveT,
+  AgentTurnRequest as AgentTurnRequestT,
   AttemptCost as AttemptCostT,
   Decision as DecisionT,
   PolicyBundle as PolicyBundleT,
   SecretHandle as SecretHandleT,
 } from "@tyrum/schemas";
-import { PolicyBundle } from "@tyrum/schemas";
+import { AgentTurnRequest, PolicyBundle } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../container.js";
 import { AuthProfileDal } from "../models/auth-profile-dal.js";
 import { createProviderFromNpm } from "../models/provider-factory.js";
@@ -1074,6 +1075,13 @@ export function createGatewayStepExecutor(input: {
   toolExecutor: StepExecutor;
   /** Optional LanguageModel override (primarily for tests). */
   languageModel?: LanguageModel;
+  decideExecutor?: (input: {
+    request: AgentTurnRequestT;
+    planId: string;
+    stepIndex: number;
+    timeoutMs: number;
+    context: StepExecutionContext;
+  }) => Promise<StepResult>;
 }): StepExecutor {
   return {
     execute: async (
@@ -1093,6 +1101,25 @@ export function createGatewayStepExecutor(input: {
           toolExecutor: input.toolExecutor,
           executionContext: context,
           languageModelOverride: input.languageModel,
+        });
+      }
+
+      if (action.type === "Decide") {
+        if (!input.decideExecutor) {
+          return { success: false, error: "decide execution is not configured" };
+        }
+
+        const parsed = AgentTurnRequest.safeParse(action.args ?? {});
+        if (!parsed.success) {
+          return { success: false, error: `invalid agent turn request: ${parsed.error.message}` };
+        }
+
+        return await input.decideExecutor({
+          request: parsed.data,
+          planId,
+          stepIndex,
+          timeoutMs,
+          context,
         });
       }
 

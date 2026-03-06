@@ -14,7 +14,7 @@ import type {
   Playbook,
   PolicyBundle as PolicyBundleT,
 } from "@tyrum/schemas";
-import { ActionPrimitive as ActionPrimitiveSchema, Lane, PolicyBundle } from "@tyrum/schemas";
+import { ActionPrimitive as ActionPrimitiveSchema, PolicyBundle } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlActiveWhereClause } from "../../statestore/sql.js";
 import type { MemoryV1Dal } from "../memory/v1-dal.js";
@@ -24,6 +24,12 @@ import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "../policy/service.js";
 import type { PlaybookRunner } from "../playbook/runner.js";
 import { WatcherFiringDal, type WatcherFiringRow } from "./firing-dal.js";
+import {
+  defaultHeartbeatInstruction,
+  parseScheduleConfig,
+  resolvePendingScheduleFireMs,
+  type NormalizedScheduleConfig,
+} from "../automation/schedule-service.js";
 
 const DEFAULT_TICK_MS = 60_000;
 const DEFAULT_FIRING_LEASE_TTL_MS = 60_000;
@@ -50,15 +56,10 @@ interface RawPeriodicWatcherRow {
   updated_at: string;
 }
 
-export interface PeriodicTriggerConfig {
-  intervalMs: number;
-  planId?: string;
-  playbook_id?: string;
-  key?: string;
+type SchedulerPeriodicConfig = Omit<NormalizedScheduleConfig, "lane"> & {
   lane?: LaneT;
   laneRaw?: string;
-  steps?: unknown;
-}
+};
 
 export interface WatcherSchedulerOptions {
   db: SqlDb;
@@ -152,9 +153,15 @@ export class WatcherScheduler {
     for (const watcher of watchers) {
       const config = this.parsePeriodicConfig(watcher.trigger_config_json);
       if (!config) continue;
-      const slotMs = this.computeSlot(now, config.intervalMs);
-      const lastFiredAt = watcher.last_fired_at_ms ?? 0;
-      if (slotMs <= lastFiredAt) continue;
+      const slotMs = resolvePendingScheduleFireMs({
+        config: {
+          ...config,
+          lane: config.lane ?? "cron",
+        },
+        lastFiredAtMs: watcher.last_fired_at_ms ?? null,
+        nowMs: now,
+      });
+      if (slotMs === undefined) continue;
 
       try {
         const created = await this.firingDal.createIfAbsent({
@@ -175,7 +182,7 @@ export class WatcherScheduler {
         if (created.created) {
           this.logger?.info("watcher.firing_created", {
             watcher_id: watcher.watcher_id,
-            plan_id: config.planId ?? null,
+            schedule_kind: config.schedule_kind,
             firing_id: created.row.watcher_firing_id,
             scheduled_at_ms: slotMs,
           });
@@ -184,7 +191,7 @@ export class WatcherScheduler {
         const message = err instanceof Error ? err.message : String(err);
         this.logger?.warn("watcher.firing_create_failed", {
           watcher_id: watcher.watcher_id,
-          plan_id: config.planId ?? null,
+          schedule_kind: config.schedule_kind,
           error: message,
         });
       }
@@ -213,52 +220,73 @@ export class WatcherScheduler {
     );
   }
 
-  private parsePeriodicConfig(raw: string): PeriodicTriggerConfig | undefined {
-    let cfg: unknown;
+  private parsePeriodicConfig(raw: string): SchedulerPeriodicConfig | undefined {
+    let parsed: unknown;
     try {
-      cfg = JSON.parse(raw) as unknown;
+      parsed = JSON.parse(raw) as unknown;
     } catch {
-      // Intentional: treat invalid JSON trigger configs as absent/invalid.
       return undefined;
     }
-    if (!cfg || typeof cfg !== "object") return undefined;
-    const intervalMs = (cfg as Record<string, unknown>)["intervalMs"];
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+
+    const record = parsed as Record<string, unknown>;
+    const laneRaw = typeof record["lane"] === "string" ? record["lane"].trim() : undefined;
+    const parsedLane = laneRaw === "heartbeat" || laneRaw === "cron" ? laneRaw : undefined;
+    const normalized = parseScheduleConfig(raw);
+    if (normalized) {
+      if (laneRaw && !parsedLane && record["schedule_kind"] === undefined) {
+        return { ...normalized, lane: undefined, laneRaw };
+      }
+      return { ...normalized, laneRaw };
+    }
+
+    const intervalMs = record["intervalMs"];
     if (typeof intervalMs !== "number" || !Number.isFinite(intervalMs) || intervalMs <= 0) {
       return undefined;
     }
-    const playbookId = (cfg as Record<string, unknown>)["playbook_id"];
-    const planId = (cfg as Record<string, unknown>)["planId"];
-    const key = (cfg as Record<string, unknown>)["key"];
-    const lane = (cfg as Record<string, unknown>)["lane"];
-    const steps = (cfg as Record<string, unknown>)["steps"];
-    return {
-      intervalMs: Math.floor(intervalMs),
-      planId: typeof planId === "string" && planId.trim().length > 0 ? planId.trim() : undefined,
-      playbook_id:
-        typeof playbookId === "string" && playbookId.trim().length > 0
-          ? playbookId.trim()
-          : undefined,
-      key: typeof key === "string" && key.trim().length > 0 ? key.trim() : undefined,
-      lane: (() => {
-        if (typeof lane !== "string") return undefined;
-        const trimmed = lane.trim();
-        if (!trimmed) return undefined;
-        const normalized = trimmed.toLowerCase();
-        const parsed = Lane.safeParse(normalized);
-        return parsed.success ? parsed.data : undefined;
-      })(),
-      laneRaw: (() => {
-        if (typeof lane !== "string") return undefined;
-        const trimmed = lane.trim();
-        return trimmed ? trimmed : undefined;
-      })(),
-      steps,
-    };
-  }
 
-  private computeSlot(nowMs: number, intervalMs: number): number {
-    const intv = Math.max(1, Math.floor(intervalMs));
-    return Math.floor(nowMs / intv) * intv;
+    let execution: NormalizedScheduleConfig["execution"] | undefined;
+    if (Array.isArray(record["steps"])) {
+      const steps: ActionPrimitive[] = [];
+      for (const entry of record["steps"]) {
+        const parsedStep = ActionPrimitiveSchema.safeParse(entry);
+        if (!parsedStep.success) return undefined;
+        steps.push(parsedStep.data);
+      }
+      if (steps.length > 0) {
+        execution = { kind: "steps", steps };
+      }
+    }
+    if (!execution) {
+      const playbookId =
+        typeof record["playbook_id"] === "string"
+          ? record["playbook_id"].trim()
+          : typeof record["planId"] === "string"
+            ? record["planId"].trim()
+            : "";
+      if (playbookId) {
+        execution = { kind: "playbook", playbook_id: playbookId };
+      }
+    }
+    if (!execution) {
+      return undefined;
+    }
+
+    return {
+      v: 1,
+      schedule_kind: parsedLane === "heartbeat" ? "heartbeat" : "cron",
+      enabled: record["enabled"] === false ? false : true,
+      cadence: { type: "interval", interval_ms: Math.floor(intervalMs) },
+      execution,
+      delivery: { mode: parsedLane === "heartbeat" ? "quiet" : "notify" },
+      ...(typeof record["key"] === "string" && record["key"].trim()
+        ? { key: record["key"].trim() }
+        : {}),
+      ...(parsedLane ? { lane: parsedLane } : {}),
+      laneRaw,
+    };
   }
 
   private isAutomationExecutionEnabled(): boolean {
@@ -279,15 +307,66 @@ export class WatcherScheduler {
     });
   }
 
-  private parseInlineSteps(raw: unknown): ActionPrimitive[] | undefined {
-    if (!Array.isArray(raw) || raw.length === 0) return undefined;
-    const out: ActionPrimitive[] = [];
-    for (const entry of raw) {
-      const parsed = ActionPrimitiveSchema.safeParse(entry);
-      if (!parsed.success) return undefined;
-      out.push(parsed.data);
+  private buildAutomationTurnRequest(input: {
+    watcher: RawPeriodicWatcherRow;
+    firing: WatcherFiringRow;
+    config: SchedulerPeriodicConfig;
+    tenantKey: string;
+    agentKey: string;
+    workspaceKey: string;
+  }): Record<string, unknown> {
+    const kind = input.config.schedule_kind;
+    const instruction =
+      input.config.execution.kind === "agent_turn"
+        ? input.config.execution.instruction?.trim() || defaultHeartbeatInstruction()
+        : undefined;
+    const previousFiredAtIso = input.watcher.last_fired_at_ms
+      ? new Date(input.watcher.last_fired_at_ms).toISOString()
+      : null;
+    const firedAtIso = new Date(input.firing.scheduled_at_ms).toISOString();
+
+    const messageLines = [
+      `Automation trigger: ${kind}`,
+      `Schedule id: ${input.watcher.watcher_id}`,
+      `Watcher key: ${input.watcher.watcher_key}`,
+      `Fired at: ${firedAtIso}`,
+      `Previous fired at: ${previousFiredAtIso ?? "never"}`,
+      `Delivery mode: ${input.config.delivery.mode}`,
+      `Cadence: ${
+        input.config.cadence.type === "interval"
+          ? `every ${String(input.config.cadence.interval_ms)}ms`
+          : `${input.config.cadence.expression} (${input.config.cadence.timezone})`
+      }`,
+      "",
+      "Instruction:",
+      instruction ?? "Review context and act according to the configured automation schedule.",
+    ];
+    if (kind === "heartbeat" && input.config.delivery.mode === "quiet") {
+      messageLines.push("", "Return an empty reply when there is no useful user-facing action.");
     }
-    return out;
+
+    return {
+      tenant_key: input.tenantKey,
+      agent_key: input.agentKey,
+      workspace_key: input.workspaceKey,
+      channel: "automation:default",
+      thread_id: `schedule-${input.watcher.watcher_id}`,
+      container_kind: "channel",
+      message: messageLines.join("\n"),
+      metadata: {
+        automation: {
+          schedule_id: input.watcher.watcher_id,
+          watcher_key: input.watcher.watcher_key,
+          schedule_kind: kind,
+          fired_at: firedAtIso,
+          previous_fired_at: previousFiredAtIso,
+          cadence: input.config.cadence,
+          delivery_mode: input.config.delivery.mode,
+          seeded_default: input.config.seeded_default === true,
+          instruction,
+        },
+      },
+    };
   }
 
   private async processFiring(firing: WatcherFiringRow): Promise<void> {
@@ -308,15 +387,13 @@ export class WatcherScheduler {
     }
 
     const triggerType = watcher.trigger_type;
-    const planId = (() => {
-      try {
-        const parsed = JSON.parse(watcher.trigger_config_json) as Record<string, unknown>;
-        return typeof parsed["planId"] === "string" ? (parsed["planId"] as string) : "";
-      } catch {
-        // Intentional: watcher trigger config may be invalid JSON; treat the plan id as absent.
-        return "";
-      }
-    })();
+    const cfg = this.parsePeriodicConfig(watcher.trigger_config_json);
+    const planId =
+      cfg?.execution.kind === "playbook"
+        ? cfg.execution.playbook_id
+        : cfg?.execution.kind === "agent_turn"
+          ? cfg.schedule_kind
+          : "";
 
     if (triggerType === "webhook") {
       // Webhook firings already have an operator-visible episode recorded at ingestion time.
@@ -406,10 +483,18 @@ export class WatcherScheduler {
       return;
     }
 
-    const cfg = this.parsePeriodicConfig(watcher.trigger_config_json);
+    if (!cfg) {
+      await this.firingDal.markFailed({
+        tenantId: firing.tenant_id,
+        watcherFiringId: firing.watcher_firing_id,
+        owner: this.owner,
+        error: "invalid periodic schedule config",
+      });
+      return;
+    }
 
-    const key = cfg?.key ?? `cron:watcher-${String(firing.watcher_id)}`;
-    if (cfg?.laneRaw && !cfg.lane) {
+    const key = cfg.key ?? `cron:watcher-${String(firing.watcher_id)}`;
+    if (cfg.laneRaw && !cfg.lane) {
       await this.firingDal.markFailed({
         tenantId: firing.tenant_id,
         watcherFiringId: firing.watcher_firing_id,
@@ -418,14 +503,45 @@ export class WatcherScheduler {
       });
       return;
     }
+    const lane = cfg.lane ?? "cron";
+    const playbookId = cfg.execution.kind === "playbook" ? cfg.execution.playbook_id : planId;
+    const scopeKeys = await this.db.get<{
+      tenant_key: string;
+      workspace_key: string;
+      agent_key: string;
+    }>(
+      `SELECT t.tenant_key, ws.workspace_key, ag.agent_key
+       FROM tenants t
+       JOIN workspaces ws
+         ON ws.tenant_id = t.tenant_id
+       JOIN agents ag
+         ON ag.tenant_id = ws.tenant_id
+       WHERE t.tenant_id = ?
+         AND ws.workspace_id = ?
+         AND ag.agent_id = ?
+       LIMIT 1`,
+      [firing.tenant_id, watcher.workspace_id, watcher.agent_id],
+    );
 
-    const lane = cfg?.lane ?? "cron";
-    const playbookId = cfg?.playbook_id ?? cfg?.planId ?? planId;
-
-    let steps: ActionPrimitive[] | undefined = cfg?.steps
-      ? this.parseInlineSteps(cfg.steps)
-      : undefined;
+    let steps: ActionPrimitive[] | undefined =
+      cfg.execution.kind === "steps" ? cfg.execution.steps : undefined;
     let playbook: Playbook | undefined;
+
+    if (!steps && cfg.execution.kind === "agent_turn") {
+      steps = [
+        {
+          type: "Decide",
+          args: this.buildAutomationTurnRequest({
+            watcher,
+            firing,
+            config: cfg,
+            tenantKey: scopeKeys?.tenant_key ?? "default",
+            agentKey: scopeKeys?.agent_key ?? "default",
+            workspaceKey: scopeKeys?.workspace_key ?? "default",
+          }),
+        },
+      ];
+    }
 
     if (!steps) {
       playbook = this.playbooksById.get(playbookId);
@@ -453,11 +569,6 @@ export class WatcherScheduler {
     const automationPlanId = `automation-${firing.watcher_firing_id}`;
     const requestId = `automation-${firing.watcher_firing_id}`;
 
-    const workspaceKey = await this.db.get<{ workspace_key: string }>(
-      "SELECT workspace_key FROM workspaces WHERE tenant_id = ? AND workspace_id = ? LIMIT 1",
-      [firing.tenant_id, watcher.workspace_id],
-    );
-
     const playbookBundle = playbook ? this.resolvePlaybookBundle(playbook) : undefined;
     const effective = await this.policyService.loadEffectiveBundle({ playbookBundle });
     const snapshot = await this.policyService.getOrCreateSnapshot(
@@ -484,7 +595,7 @@ export class WatcherScheduler {
           lane,
           planId: automationPlanId,
           requestId,
-          workspaceId: workspaceKey?.workspace_key ?? "default",
+          workspaceId: scopeKeys?.workspace_key ?? "default",
           steps: steps!,
           policySnapshotId: snapshot.policy_snapshot_id,
           trigger: {
@@ -492,6 +603,8 @@ export class WatcherScheduler {
             key,
             lane,
             metadata: {
+              schedule_kind: cfg.schedule_kind,
+              schedule_id: watcher.watcher_id,
               firing_id: firing.watcher_firing_id,
               watcher_id: firing.watcher_id,
               plan_id: planId,

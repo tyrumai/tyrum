@@ -5,6 +5,7 @@ import { wireContainer, type GatewayContainer } from "../container.js";
 import { createApp } from "../app.js";
 import { NodeDispatchService } from "../modules/agent/node-dispatch-service.js";
 import { AgentRegistry } from "../modules/agent/registry.js";
+import { ToolExecutionApprovalRequiredError } from "../modules/agent/runtime/turn-helpers.js";
 import { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import { AuthAudit } from "../modules/auth/audit.js";
 import { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
@@ -36,10 +37,13 @@ import { createMemoryV1BudgetsProvider } from "../modules/memory/v1-budgets-prov
 import { gatewayMetrics } from "../modules/observability/metrics.js";
 import { maybeStartOtel, type OtelRuntime } from "../modules/observability/otel.js";
 import { PluginRegistry } from "../modules/plugins/registry.js";
+import { loadAllPlaybooks } from "../modules/playbook/loader.js";
+import { PlaybookRunner } from "../modules/playbook/runner.js";
 import { createDbSecretProviderFactory } from "../modules/secret/create-secret-provider.js";
 import { StateStoreLifecycleScheduler } from "../modules/statestore/lifecycle.js";
 import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
 import { WatcherScheduler } from "../modules/watcher/scheduler.js";
+import { ScheduleService } from "../modules/automation/schedule-service.js";
 import { WsEventDal } from "../modules/ws-event/dal.js";
 import { WorkSignalScheduler } from "../modules/workboard/signal-scheduler.js";
 import { createWsHandler } from "../routes/ws.js";
@@ -127,6 +131,11 @@ interface EdgeRuntime {
   outboxPoller?: OutboxPoller;
   telegramProcessor?: TelegramChannelProcessor;
   server?: GatewayServer;
+}
+
+interface WorkerRuntime {
+  loop?: ExecutionWorkerLoop;
+  agents?: AgentRegistry;
 }
 
 function createExecutionEngine(
@@ -316,8 +325,27 @@ async function createGatewayBootContext(
   };
 }
 
-function startBackgroundSchedulers(context: GatewayBootContext): BackgroundSchedulers {
+async function startBackgroundSchedulers(
+  context: GatewayBootContext,
+): Promise<BackgroundSchedulers> {
   const keepProcessAlive = context.role === "scheduler";
+  const scheduleService = new ScheduleService(
+    context.container.db,
+    context.container.identityScopeDal,
+  );
+  if (context.role === "all" || context.role === "scheduler") {
+    await scheduleService.seedDefaultHeartbeatSchedules();
+  }
+
+  const watcherPlaybooks =
+    context.container.config.tyrumHome !== undefined
+      ? loadAllPlaybooks(`${context.container.config.tyrumHome}/playbooks`)
+      : [];
+  const watcherPlaybookRunner = new PlaybookRunner();
+  const watcherEngine =
+    context.role === "all" || context.role === "scheduler"
+      ? createExecutionEngine(context)
+      : undefined;
 
   const watcherScheduler =
     context.role === "all" || context.role === "scheduler"
@@ -325,6 +353,11 @@ function startBackgroundSchedulers(context: GatewayBootContext): BackgroundSched
           db: context.container.db,
           memoryV1Dal: context.container.memoryV1Dal,
           eventBus: context.container.eventBus,
+          logger: context.logger,
+          engine: watcherEngine,
+          policyService: context.container.policyService,
+          playbooks: watcherPlaybooks,
+          playbookRunner: watcherPlaybookRunner,
           automationEnabled: context.deploymentConfig.automation.enabled,
           keepProcessAlive,
         })
@@ -711,12 +744,13 @@ async function startEdgeRuntime(
   };
 }
 
-function createWorkerLoop(
+async function createWorkerRuntime(
   context: GatewayBootContext,
   protocol: ProtocolRuntime,
-): ExecutionWorkerLoop | undefined {
+  edge: EdgeRuntime,
+): Promise<WorkerRuntime> {
   if (!context.shouldRunWorker) {
-    return undefined;
+    return {};
   }
 
   const engine = createExecutionEngine(context);
@@ -756,17 +790,71 @@ function createWorkerLoop(
     nodeDispatchService: new NodeDispatchService(protocol.protocolDeps),
     fallback: toolExecutor,
   }) satisfies ExecutionStepExecutor;
+
+  let workerAgents = edge.agents;
+  if (!workerAgents && context.deploymentConfig.agent.enabled) {
+    const plugins = await PluginRegistry.load({
+      home: context.tyrumHome,
+      userHome: context.tyrumHome,
+      logger: context.logger,
+      container: context.container,
+    });
+    protocol.protocolDeps.plugins = protocol.protocolDeps.plugins ?? plugins;
+    workerAgents = new AgentRegistry({
+      container: context.container,
+      baseHome: context.tyrumHome,
+      secretProviderForTenant: context.secretProviderForTenant,
+      defaultPolicyService: context.container.policyService,
+      approvalNotifier: protocol.approvalNotifier,
+      plugins,
+      protocolDeps: protocol.protocolDeps,
+      logger: context.logger,
+    });
+  }
+
   const executor = createGatewayStepExecutor({
     container: context.container,
     toolExecutor: nodeDispatchExecutor,
+    decideExecutor: async (input) => {
+      if (!workerAgents) {
+        return { success: false, error: "agent runtime is not configured" };
+      }
+
+      try {
+        const runtime = await workerAgents.getRuntime({
+          tenantId: input.context.tenantId,
+          agentKey: input.request.agent_key?.trim() || "default",
+        });
+        const response = await runtime.executeDecideAction(input.request, {
+          timeoutMs: input.timeoutMs,
+          execution: {
+            planId: input.planId,
+            runId: input.context.runId,
+            stepIndex: input.stepIndex,
+            stepId: input.context.stepId,
+            stepApprovalId: input.context.approvalId ?? undefined,
+          },
+        });
+        return { success: true, result: response };
+      } catch (err) {
+        if (err instanceof ToolExecutionApprovalRequiredError) {
+          return { success: true, pause: err.pause };
+        }
+        const message = err instanceof Error ? err.message : String(err);
+        return { success: false, error: message };
+      }
+    },
   }) satisfies ExecutionStepExecutor;
 
-  return startExecutionWorkerLoop({
-    engine,
-    workerId: context.instanceId,
-    executor,
-    logger: context.logger,
-  });
+  return {
+    loop: startExecutionWorkerLoop({
+      engine,
+      workerId: context.instanceId,
+      executor,
+      logger: context.logger,
+    }),
+    agents: workerAgents && workerAgents !== edge.agents ? workerAgents : undefined,
+  };
 }
 
 function fireGatewayStartHook(context: GatewayBootContext, protocol: ProtocolRuntime): void {
@@ -793,7 +881,7 @@ function createShutdownHandler(
     background: BackgroundSchedulers;
     protocol: ProtocolRuntime;
     edge: EdgeRuntime;
-    workerLoop?: ExecutionWorkerLoop;
+    worker: WorkerRuntime;
     otel: OtelRuntime;
   },
 ): (signal: string) => void {
@@ -871,7 +959,7 @@ function createShutdownHandler(
         : Promise.resolve([]);
 
     const stopWorker = (async () => {
-      if (!runtime.workerLoop) return;
+      if (!runtime.worker.loop) return;
       try {
         const runIds = await shutdownHookRuns;
         if (runIds.length > 0) {
@@ -879,8 +967,8 @@ function createShutdownHandler(
           await waitForRunsToStart(runIds, remainingMs);
         }
       } finally {
-        runtime.workerLoop.stop();
-        await runtime.workerLoop.done;
+        runtime.worker.loop.stop();
+        await runtime.worker.loop.done;
       }
     })();
 
@@ -910,6 +998,7 @@ function createShutdownHandler(
         closeWss,
         shutdownHookRuns,
         runtime.edge.agents?.shutdown() ?? Promise.resolve(),
+        runtime.worker.agents?.shutdown() ?? Promise.resolve(),
         runtime.otel.shutdown(),
         stopWorker,
       ],
@@ -931,7 +1020,7 @@ export async function runShutdownCleanup(
 
 export async function main(input?: GatewayRole | GatewayStartOptions): Promise<void> {
   const context = await createGatewayBootContext(input);
-  const background = startBackgroundSchedulers(context);
+  const background = await startBackgroundSchedulers(context);
   const otel = await maybeStartOtel({
     serviceName: "tyrum-gateway",
     serviceVersion: VERSION,
@@ -943,7 +1032,7 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
   }
   const protocol = await createProtocolRuntime(context, otel);
   const edge = await startEdgeRuntime(context, protocol, otel);
-  const workerLoop = createWorkerLoop(context, protocol);
+  const worker = await createWorkerRuntime(context, protocol, edge);
 
   fireGatewayStartHook(context, protocol);
 
@@ -951,7 +1040,7 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
     background,
     protocol,
     edge,
-    workerLoop,
+    worker,
     otel,
   });
   process.once("SIGINT", () => shutdown("SIGINT"));
