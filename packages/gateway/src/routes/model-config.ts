@@ -26,6 +26,7 @@ import {
   ExecutionProfileModelAssignmentDal,
   type ExecutionProfileModelAssignmentRow,
 } from "../modules/models/execution-profile-model-assignment-dal.js";
+import { normalizeProviderScopedModelId } from "../modules/models/provider-model-id.js";
 import { coerceRecord, coerceString } from "../modules/util/coerce.js";
 import { createUniqueKey, slugifyKey } from "./config-key-utils.js";
 
@@ -199,7 +200,7 @@ export function createModelConfigRoutes(deps: ModelConfigRouteDeps): Hono {
           .map((model) => ({
             provider_key: provider.id,
             provider_name: provider.name,
-            model_id: model.id,
+            model_id: normalizeProviderScopedModelId(provider.id, model.id),
             model_name: model.name,
             family: model.family ?? null,
             reasoning: typeof model.reasoning === "boolean" ? model.reasoning : null,
@@ -239,8 +240,12 @@ export function createModelConfigRoutes(deps: ModelConfigRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: "provider is not configured" }, 400);
     }
 
+    const normalizedModelId = normalizeProviderScopedModelId(
+      parsed.data.provider_key,
+      parsed.data.model_id,
+    );
     const provider = loaded.catalog[parsed.data.provider_key];
-    const model = provider?.models?.[parsed.data.model_id];
+    const model = provider?.models?.[normalizedModelId] ?? provider?.models?.[parsed.data.model_id];
     if (!provider || !model || !isLanguageModel(model as Record<string, unknown>)) {
       return c.json({ error: "invalid_request", message: "model is not available" }, 400);
     }
@@ -254,7 +259,7 @@ export function createModelConfigRoutes(deps: ModelConfigRouteDeps): Hono {
       presetKey,
       displayName: parsed.data.display_name,
       providerKey: parsed.data.provider_key,
-      modelId: parsed.data.model_id,
+      modelId: normalizedModelId,
       options: parsed.data.options,
     });
 

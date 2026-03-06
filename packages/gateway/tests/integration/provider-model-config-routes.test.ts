@@ -325,6 +325,116 @@ describe("provider + model config routes", () => {
     ).toBe(true);
   });
 
+  it("normalizes legacy self-prefixed OpenRouter model ids in available and preset routes", async () => {
+    const { app, container } = await createTestApp();
+    await seedCatalog(new ModelsDevCacheDal(container.db), {
+      openrouter: {
+        id: "openrouter",
+        name: "OpenRouter",
+        env: ["OPENROUTER_API_KEY"],
+        npm: "@openrouter/ai-sdk-provider",
+        api: "https://openrouter.ai/api/v1",
+        doc: "https://openrouter.ai/docs/api-reference/overview",
+        models: {
+          "openrouter/openai/gpt-5.4": {
+            id: "openrouter/openai/gpt-5.4",
+            name: "GPT-5.4",
+            modalities: { output: ["text"] },
+            reasoning: true,
+            tool_call: true,
+          },
+        },
+      },
+    });
+
+    await container.db.run(
+      `INSERT INTO auth_profiles (
+         tenant_id,
+         auth_profile_id,
+         auth_profile_key,
+         provider_key,
+         type,
+         status
+       ) VALUES (?, ?, ?, ?, 'api_key', 'active')`,
+      [DEFAULT_TENANT_ID, randomUUID(), "openrouter-primary", "openrouter"],
+    );
+
+    const nowIso = "2026-03-01T00:00:00.000Z";
+    await container.db.run(
+      `INSERT INTO configured_model_presets (
+         tenant_id,
+         preset_id,
+         preset_key,
+         display_name,
+         provider_key,
+         model_id,
+         options_json,
+         created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        randomUUID(),
+        "legacy-openrouter",
+        "Legacy OpenRouter",
+        "openrouter",
+        "openrouter/openai/gpt-5.4",
+        "{}",
+        nowIso,
+        nowIso,
+      ],
+    );
+
+    const availableRes = await app.request("/config/models/presets/available");
+    expect(availableRes.status).toBe(200);
+    const available = (await availableRes.json()) as {
+      models: Array<{ provider_key: string; model_id: string }>;
+    };
+    expect(available.models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          provider_key: "openrouter",
+          model_id: "openai/gpt-5.4",
+        }),
+      ]),
+    );
+
+    const presetListRes = await app.request("/config/models/presets");
+    expect(presetListRes.status).toBe(200);
+    const presetList = (await presetListRes.json()) as {
+      presets: Array<{ preset_key: string; model_id: string }>;
+    };
+    expect(presetList.presets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          preset_key: "legacy-openrouter",
+          model_id: "openai/gpt-5.4",
+        }),
+      ]),
+    );
+
+    const createRes = await app.request("/config/models/presets", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        display_name: "GPT-5.4",
+        provider_key: "openrouter",
+        model_id: "openai/gpt-5.4",
+        options: {},
+      }),
+    });
+    expect(createRes.status).toBe(201);
+    const created = (await createRes.json()) as {
+      preset: { provider_key: string; model_id: string };
+    };
+    expect(created.preset).toEqual(
+      expect.objectContaining({
+        provider_key: "openrouter",
+        model_id: "openai/gpt-5.4",
+      }),
+    );
+  });
+
   it("returns 400 when assignments reference a missing preset", async () => {
     const { app } = await createTestApp();
 

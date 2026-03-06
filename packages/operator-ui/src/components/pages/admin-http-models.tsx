@@ -58,6 +58,7 @@ type AvailableModel = Awaited<
 type Assignment = Awaited<
   ReturnType<AdminHttpClient["modelConfig"]["listAssignments"]>
 >["assignments"][number];
+type ModelConfigHttpClient = Pick<AdminHttpClient, "modelConfig">;
 
 type ModelDialogState = {
   displayName: string;
@@ -371,63 +372,66 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
   const [editingPreset, setEditingPreset] = React.useState<ModelPreset | null>(null);
   const [deletingPreset, setDeletingPreset] = React.useState<DeletePresetDialogState>(null);
 
-  const refresh = React.useCallback(async (): Promise<void> => {
-    setRefreshing(true);
-    setExecutionProfilesErrorMessage(null);
-    setAvailableModelsErrorMessage(null);
+  const refresh = React.useCallback(
+    async (httpClient: ModelConfigHttpClient = readHttp): Promise<void> => {
+      setRefreshing(true);
+      setExecutionProfilesErrorMessage(null);
+      setAvailableModelsErrorMessage(null);
 
-    const [presetResult, availableResult, assignmentResult] = await Promise.allSettled([
-      readHttp.modelConfig.listPresets(),
-      readHttp.modelConfig.listAvailable(),
-      readHttp.modelConfig.listAssignments(),
-    ]);
+      const [presetResult, availableResult, assignmentResult] = await Promise.allSettled([
+        httpClient.modelConfig.listPresets(),
+        httpClient.modelConfig.listAvailable(),
+        httpClient.modelConfig.listAssignments(),
+      ]);
 
-    let nextExecutionProfilesErrorMessage: string | null = null;
-    let nextAvailableModelsErrorMessage: string | null = null;
-    let nextPresetCount = 0;
+      let nextExecutionProfilesErrorMessage: string | null = null;
+      let nextAvailableModelsErrorMessage: string | null = null;
+      let nextPresetCount = 0;
 
-    if (presetResult.status === "fulfilled") {
-      setPresets(presetResult.value.presets);
-      nextPresetCount = presetResult.value.presets.length;
-    } else {
-      nextExecutionProfilesErrorMessage = formatErrorMessage(presetResult.reason);
-      setPresets([]);
-    }
-
-    if (availableResult.status === "fulfilled") {
-      setAvailableModels(availableResult.value.models);
-    } else {
-      nextAvailableModelsErrorMessage = formatErrorMessage(availableResult.reason);
-      setAvailableModels([]);
-    }
-
-    if (assignmentResult.status === "fulfilled") {
-      setAssignments(assignmentResult.value.assignments);
-      setAssignmentDraft(
-        Object.fromEntries(
-          assignmentResult.value.assignments.map((assignment) => [
-            assignment.execution_profile_id,
-            assignment.preset_key,
-          ]),
-        ),
-      );
-    } else {
-      setAssignments([]);
-      setAssignmentDraft({});
-      if (!nextExecutionProfilesErrorMessage && nextPresetCount > 0) {
-        nextExecutionProfilesErrorMessage = formatErrorMessage(assignmentResult.reason);
+      if (presetResult.status === "fulfilled") {
+        setPresets(presetResult.value.presets);
+        nextPresetCount = presetResult.value.presets.length;
+      } else {
+        nextExecutionProfilesErrorMessage = formatErrorMessage(presetResult.reason);
+        setPresets([]);
       }
-    }
 
-    setExecutionProfilesErrorMessage(nextExecutionProfilesErrorMessage);
-    setAvailableModelsErrorMessage(nextAvailableModelsErrorMessage);
-    setLoading(false);
-    setRefreshing(false);
-  }, [readHttp.modelConfig]);
+      if (availableResult.status === "fulfilled") {
+        setAvailableModels(availableResult.value.models);
+      } else {
+        nextAvailableModelsErrorMessage = formatErrorMessage(availableResult.reason);
+        setAvailableModels([]);
+      }
+
+      if (assignmentResult.status === "fulfilled") {
+        setAssignments(assignmentResult.value.assignments);
+        setAssignmentDraft(
+          Object.fromEntries(
+            assignmentResult.value.assignments.map((assignment) => [
+              assignment.execution_profile_id,
+              assignment.preset_key,
+            ]),
+          ),
+        );
+      } else {
+        setAssignments([]);
+        setAssignmentDraft({});
+        if (!nextExecutionProfilesErrorMessage && nextPresetCount > 0) {
+          nextExecutionProfilesErrorMessage = formatErrorMessage(assignmentResult.reason);
+        }
+      }
+
+      setExecutionProfilesErrorMessage(nextExecutionProfilesErrorMessage);
+      setAvailableModelsErrorMessage(nextAvailableModelsErrorMessage);
+      setLoading(false);
+      setRefreshing(false);
+    },
+    [readHttp],
+  );
 
   React.useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    void refresh(readHttp);
+  }, [readHttp, refresh]);
 
   const assignmentPresetKeys = new Map(
     assignments.map((assignment) => [assignment.execution_profile_id, assignment.preset_key]),
@@ -446,7 +450,7 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
     setExecutionProfilesErrorMessage(null);
     try {
       await mutationHttp.modelConfig.updateAssignments({ assignments: assignmentDraft });
-      await refresh();
+      await refresh(mutationHttp);
     } catch (error) {
       setExecutionProfilesErrorMessage(formatErrorMessage(error));
     } finally {
@@ -484,7 +488,7 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
     }
 
     setDeletingPreset(null);
-    await refresh();
+    await refresh(mutationHttp);
   };
 
   const candidatePresets = deletingPreset
@@ -508,7 +512,7 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
                 variant="secondary"
                 isLoading={refreshing}
                 onClick={() => {
-                  void refresh();
+                  void refresh(readHttp);
                 }}
               >
                 Refresh
@@ -708,7 +712,9 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
         }}
         preset={editingPreset}
         availableModels={availableModels}
-        onSaved={refresh}
+        onSaved={async () => {
+          await refresh(mutationHttp);
+        }}
         canMutate={canMutate}
         core={core}
       />

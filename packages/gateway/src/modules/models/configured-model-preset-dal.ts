@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { stableJsonStringify } from "../policy/canonical-json.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { buildUpdatedAtMutation } from "../../statestore/updated-at.js";
 import { safeJsonParse } from "../../utils/json.js";
+import { normalizeProviderScopedModelId } from "./provider-model-id.js";
 
 export interface ConfiguredModelPresetRow {
   tenant_id: string;
@@ -29,7 +31,7 @@ interface RawConfiguredModelPresetRow {
 }
 
 function normalizeTime(value: string | Date): string {
-  return value instanceof Date ? value.toISOString() : value;
+  return normalizeDbDateTime(value) ?? new Date().toISOString();
 }
 
 function parseOptions(value: string): Record<string, unknown> {
@@ -50,7 +52,7 @@ function toRow(raw: RawConfiguredModelPresetRow): ConfiguredModelPresetRow {
     preset_key: raw.preset_key,
     display_name: raw.display_name,
     provider_key: raw.provider_key,
-    model_id: raw.model_id,
+    model_id: normalizeProviderScopedModelId(raw.provider_key, raw.model_id),
     options: parseOptions(raw.options_json),
     created_at: normalizeTime(raw.created_at),
     updated_at: normalizeTime(raw.updated_at),
@@ -107,6 +109,7 @@ export class ConfiguredModelPresetDal {
   }): Promise<ConfiguredModelPresetRow> {
     const presetId = randomUUID();
     const nowIso = new Date().toISOString();
+    const normalizedModelId = normalizeProviderScopedModelId(input.providerKey, input.modelId);
     await this.db.run(
       `INSERT INTO configured_model_presets (
          tenant_id,
@@ -125,7 +128,7 @@ export class ConfiguredModelPresetDal {
         input.presetKey,
         input.displayName,
         input.providerKey,
-        input.modelId,
+        normalizedModelId,
         JSON.stringify(input.options),
         nowIso,
         nowIso,
