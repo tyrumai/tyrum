@@ -42,12 +42,41 @@ type PersistedElevatedModeState = {
   expiresAt: string | null;
 };
 
-function readPersistedElevatedModeState(): PersistedElevatedModeState | null {
+function getStorage(candidate: "localStorage" | "sessionStorage"): Storage | null {
   try {
-    const storage = globalThis.localStorage;
+    const storage = globalThis[candidate];
     if (!storage || typeof storage.getItem !== "function") return null;
-    const raw = storage.getItem(ELEVATED_MODE_STORAGE_KEY);
-    if (!raw) return null;
+    return storage;
+  } catch {
+    return null;
+  }
+}
+
+function getPreferredStorage(mode: OperatorUiMode): Storage | null {
+  if (mode === "web") {
+    return getStorage("sessionStorage") ?? getStorage("localStorage");
+  }
+  return getStorage("localStorage") ?? getStorage("sessionStorage");
+}
+
+function getLegacyStorage(mode: OperatorUiMode, preferred: Storage | null): Storage | null {
+  if (mode !== "web") return null;
+  const localStorage = getStorage("localStorage");
+  if (!localStorage || localStorage === preferred) return null;
+  return localStorage;
+}
+
+function clearStorageKey(storage: Storage | null): void {
+  try {
+    if (!storage || typeof storage.removeItem !== "function") return;
+    storage.removeItem(ELEVATED_MODE_STORAGE_KEY);
+  } catch {
+    // storage unavailable
+  }
+}
+
+function parsePersistedElevatedModeState(raw: string): PersistedElevatedModeState | null {
+  try {
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
     const record = parsed as Record<string, unknown>;
@@ -60,6 +89,7 @@ function readPersistedElevatedModeState(): PersistedElevatedModeState | null {
     }
     const expiresAt = record["expiresAt"];
     if (expiresAt !== null && typeof expiresAt !== "string") return null;
+    if (typeof expiresAt === "string" && !Number.isFinite(Date.parse(expiresAt))) return null;
     return {
       httpBaseUrl: record["httpBaseUrl"],
       deviceId: record["deviceId"],
@@ -71,24 +101,52 @@ function readPersistedElevatedModeState(): PersistedElevatedModeState | null {
   }
 }
 
-function persistElevatedModeState(state: PersistedElevatedModeState): void {
+function readPersistedElevatedModeState(mode: OperatorUiMode): PersistedElevatedModeState | null {
+  const preferred = getPreferredStorage(mode);
+  const legacy = getLegacyStorage(mode, preferred);
+
+  const readFromStorage = (storage: Storage | null): PersistedElevatedModeState | null => {
+    try {
+      if (!storage || typeof storage.getItem !== "function") return null;
+      const raw = storage.getItem(ELEVATED_MODE_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = parsePersistedElevatedModeState(raw);
+      if (parsed) return parsed;
+      clearStorageKey(storage);
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const preferredState = readFromStorage(preferred);
+  if (preferredState) return preferredState;
+
+  const legacyState = readFromStorage(legacy);
+  if (!legacyState) return null;
+
+  persistElevatedModeState(mode, legacyState);
+  clearStorageKey(legacy);
+  return legacyState;
+}
+
+function persistElevatedModeState(mode: OperatorUiMode, state: PersistedElevatedModeState): void {
+  const preferred = getPreferredStorage(mode);
+  const legacy = getLegacyStorage(mode, preferred);
   try {
-    const storage = globalThis.localStorage;
-    if (!storage || typeof storage.setItem !== "function") return;
-    storage.setItem(ELEVATED_MODE_STORAGE_KEY, JSON.stringify(state));
+    if (!preferred || typeof preferred.setItem !== "function") return;
+    preferred.setItem(ELEVATED_MODE_STORAGE_KEY, JSON.stringify(state));
+    clearStorageKey(legacy);
   } catch {
-    // localStorage unavailable
+    // storage unavailable
   }
 }
 
-function clearPersistedElevatedModeState(): void {
-  try {
-    const storage = globalThis.localStorage;
-    if (!storage || typeof storage.removeItem !== "function") return;
-    storage.removeItem(ELEVATED_MODE_STORAGE_KEY);
-  } catch {
-    // localStorage unavailable
-  }
+function clearPersistedElevatedModeState(mode: OperatorUiMode): void {
+  const preferred = getPreferredStorage(mode);
+  const legacy = getLegacyStorage(mode, preferred);
+  clearStorageKey(preferred);
+  clearStorageKey(legacy);
 }
 
 const ElevatedModeUiContext = createContext<ElevatedModeUiContextValue | null>(null);
@@ -127,7 +185,7 @@ export function ElevatedModeProvider({
     if (!elevatedModeController) return;
     if (isElevatedModeActive(core.elevatedModeStore.getSnapshot())) return;
 
-    const persisted = readPersistedElevatedModeState();
+    const persisted = readPersistedElevatedModeState(mode);
     const deviceId = core.deviceId?.trim();
     if (
       !persisted ||
@@ -136,20 +194,31 @@ export function ElevatedModeProvider({
       persisted.httpBaseUrl !== core.httpBaseUrl
     ) {
       if (persisted) {
-        clearPersistedElevatedModeState();
+        clearPersistedElevatedModeState(mode);
       }
       restorePendingRef.current = false;
       restoredTokenRef.current = null;
       return;
     }
 
-    restorePendingRef.current = true;
-    restoredTokenRef.current = persisted.elevatedToken;
-    core.elevatedModeStore.enter({
-      elevatedToken: persisted.elevatedToken,
-      expiresAt: persisted.expiresAt,
-    });
-  }, [core, elevatedModeController]);
+    try {
+      restorePendingRef.current = true;
+      restoredTokenRef.current = persisted.elevatedToken;
+      core.elevatedModeStore.enter({
+        elevatedToken: persisted.elevatedToken,
+        expiresAt: persisted.expiresAt,
+      });
+      if (!isElevatedModeActive(core.elevatedModeStore.getSnapshot())) {
+        restorePendingRef.current = false;
+        restoredTokenRef.current = null;
+        clearPersistedElevatedModeState(mode);
+      }
+    } catch {
+      restorePendingRef.current = false;
+      restoredTokenRef.current = null;
+      clearPersistedElevatedModeState(mode);
+    }
+  }, [core, elevatedModeController, mode]);
 
   useEffect(() => {
     if (!restorePendingRef.current) return;
@@ -162,26 +231,24 @@ export function ElevatedModeProvider({
 
     if (!isElevatedModeActive(elevatedMode)) {
       if (restorePendingRef.current) return;
-      clearPersistedElevatedModeState();
+      clearPersistedElevatedModeState(mode);
       return;
     }
 
     const deviceId = core.deviceId?.trim();
     if (!deviceId) return;
 
-    persistElevatedModeState({
+    persistElevatedModeState(mode, {
       httpBaseUrl: core.httpBaseUrl,
       deviceId,
       elevatedToken: elevatedMode.elevatedToken!,
       expiresAt: elevatedMode.expiresAt ?? null,
     });
-  }, [core.deviceId, core.httpBaseUrl, elevatedMode, elevatedModeController]);
+  }, [core.deviceId, core.httpBaseUrl, elevatedMode, elevatedModeController, mode]);
 
   useEffect(() => {
-    const restoredToken = restoredTokenRef.current;
-    if (!restoredToken) return;
+    if (!elevatedModeController) return;
     if (!isElevatedModeActive(elevatedMode)) return;
-    if (elevatedMode.elevatedToken !== restoredToken) return;
 
     if (connection.status === "connected") {
       restoredTokenRef.current = null;
@@ -192,9 +259,9 @@ export function ElevatedModeProvider({
 
     restorePendingRef.current = false;
     restoredTokenRef.current = null;
-    clearPersistedElevatedModeState();
+    clearPersistedElevatedModeState(mode);
     core.elevatedModeStore.exit();
-  }, [connection.lastDisconnect, connection.status, core.elevatedModeStore, elevatedMode]);
+  }, [connection.lastDisconnect, connection.status, core.elevatedModeStore, elevatedMode, mode]);
 
   const enterElevatedMode = async (): Promise<void> => {
     if (elevatedModeController) {

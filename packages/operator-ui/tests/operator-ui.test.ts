@@ -129,6 +129,39 @@ function stubUrlObjectUrls(): { restore: () => void } {
   };
 }
 
+function createStorageMock(storage: Map<string, string>): Storage {
+  return {
+    getItem: vi.fn((key: string) => storage.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      storage.set(key, value);
+    }),
+    removeItem: vi.fn((key: string) => {
+      storage.delete(key);
+    }),
+    clear: vi.fn(() => {
+      storage.clear();
+    }),
+    key: vi.fn((index: number) => Array.from(storage.keys())[index] ?? null),
+    get length() {
+      return storage.size;
+    },
+  } as unknown as Storage;
+}
+
+function stubPersistentStorage(params?: {
+  session?: Map<string, string>;
+  local?: Map<string, string>;
+}): {
+  session: Map<string, string>;
+  local: Map<string, string>;
+} {
+  const session = params?.session ?? new Map<string, string>();
+  const local = params?.local ?? new Map<string, string>();
+  vi.stubGlobal("sessionStorage", createStorageMock(session));
+  vi.stubGlobal("localStorage", createStorageMock(local));
+  return { session, local };
+}
+
 function createDeferred<T>(): {
   promise: Promise<T>;
   resolve: (value: T) => void;
@@ -3931,17 +3964,7 @@ describe("operator-ui", () => {
   });
 
   it("uses a provided elevated mode controller to enter persistent mode and persist it", async () => {
-    const storage = new Map<string, string>();
-    const localStorageMock = {
-      getItem: vi.fn((key: string) => storage.get(key) ?? null),
-      setItem: vi.fn((key: string, value: string) => {
-        storage.set(key, value);
-      }),
-      removeItem: vi.fn((key: string) => {
-        storage.delete(key);
-      }),
-    };
-    vi.stubGlobal("localStorage", localStorageMock as unknown as Storage);
+    const { session, local } = stubPersistentStorage();
 
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -4017,7 +4040,7 @@ describe("operator-ui", () => {
     expect(container.querySelector('[data-testid="elevated-mode-frame"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="danger-action"]')).not.toBeNull();
 
-    const persistedRaw = storage.get("tyrum.operator-ui.elevated-mode.v1");
+    const persistedRaw = session.get("tyrum.operator-ui.elevated-mode.v1");
     expect(persistedRaw).toBeTruthy();
     expect(JSON.parse(persistedRaw!)).toEqual({
       httpBaseUrl: "http://example.test",
@@ -4025,6 +4048,7 @@ describe("operator-ui", () => {
       elevatedToken: "persistent-token",
       expiresAt: null,
     });
+    expect(local.has("tyrum.operator-ui.elevated-mode.v1")).toBe(false);
 
     act(() => {
       root?.unmount();
@@ -4032,9 +4056,9 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("rehydrates persistent elevated mode from localStorage when a controller is present", async () => {
-    const storage = new Map<string, string>();
-    storage.set(
+  it("rehydrates persistent elevated mode from sessionStorage when a controller is present", async () => {
+    const session = new Map<string, string>();
+    session.set(
       "tyrum.operator-ui.elevated-mode.v1",
       JSON.stringify({
         httpBaseUrl: "http://example.test",
@@ -4043,16 +4067,7 @@ describe("operator-ui", () => {
         expiresAt: null,
       }),
     );
-    const localStorageMock = {
-      getItem: vi.fn((key: string) => storage.get(key) ?? null),
-      setItem: vi.fn((key: string, value: string) => {
-        storage.set(key, value);
-      }),
-      removeItem: vi.fn((key: string) => {
-        storage.delete(key);
-      }),
-    };
-    vi.stubGlobal("localStorage", localStorageMock as unknown as Storage);
+    stubPersistentStorage({ session });
 
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -4107,9 +4122,105 @@ describe("operator-ui", () => {
     container.remove();
   });
 
+  it("clears current-session persistent elevated mode on unauthorized disconnect", async () => {
+    const { session } = stubPersistentStorage();
+
+    const ws = new FakeWsClient(false);
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deviceIdentity: TEST_DEVICE_IDENTITY,
+      deps: { ws, http },
+    });
+    const controller = {
+      enter: vi.fn(async () => {
+        core.elevatedModeStore.enter({ elevatedToken: "persistent-token", expiresAt: null });
+      }),
+      exit: vi.fn(async () => {
+        core.elevatedModeStore.exit();
+      }),
+    };
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(
+          ElevatedModeProvider,
+          {
+            core,
+            mode: "web",
+            elevatedModeController: controller,
+          },
+          React.createElement(
+            ElevatedModeGate,
+            null,
+            React.createElement("button", { type: "button", "data-testid": "danger-action" }, "Go"),
+          ),
+        ),
+      );
+      await Promise.resolve();
+    });
+
+    const enterButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="elevated-mode-enter"]',
+    );
+    expect(enterButton).not.toBeNull();
+
+    act(() => {
+      enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const confirmCheckbox = document.querySelector<HTMLInputElement>(
+      '[data-testid="elevated-mode-confirm"]',
+    );
+    expect(confirmCheckbox).not.toBeNull();
+    act(() => {
+      confirmCheckbox!.checked = true;
+      confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const submitButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="elevated-mode-submit"]',
+    );
+    expect(submitButton).not.toBeNull();
+
+    await act(async () => {
+      submitButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(core.elevatedModeStore.getSnapshot()).toMatchObject({
+      status: "active",
+      elevatedToken: "persistent-token",
+      expiresAt: null,
+    });
+    expect(session.has("tyrum.operator-ui.elevated-mode.v1")).toBe(true);
+
+    await act(async () => {
+      ws.emit("disconnected", { code: 4001, reason: "unauthorized" });
+      await Promise.resolve();
+    });
+
+    expect(core.elevatedModeStore.getSnapshot().status).toBe("inactive");
+    expect(container.querySelector('[data-testid="elevated-mode-frame"]')).toBeNull();
+    expect(container.querySelector('[data-testid="danger-action"]')).toBeNull();
+    expect(session.has("tyrum.operator-ui.elevated-mode.v1")).toBe(false);
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
   it("clears restored persistent elevated mode on unauthorized disconnect", async () => {
-    const storage = new Map<string, string>();
-    storage.set(
+    const session = new Map<string, string>();
+    session.set(
       "tyrum.operator-ui.elevated-mode.v1",
       JSON.stringify({
         httpBaseUrl: "http://example.test",
@@ -4118,16 +4229,7 @@ describe("operator-ui", () => {
         expiresAt: null,
       }),
     );
-    const localStorageMock = {
-      getItem: vi.fn((key: string) => storage.get(key) ?? null),
-      setItem: vi.fn((key: string, value: string) => {
-        storage.set(key, value);
-      }),
-      removeItem: vi.fn((key: string) => {
-        storage.delete(key);
-      }),
-    };
-    vi.stubGlobal("localStorage", localStorageMock as unknown as Storage);
+    stubPersistentStorage({ session });
 
     const ws = new FakeWsClient(false);
     const { http } = createFakeHttpClient();
@@ -4175,7 +4277,192 @@ describe("operator-ui", () => {
     expect(core.elevatedModeStore.getSnapshot().status).toBe("inactive");
     expect(container.querySelector('[data-testid="elevated-mode-frame"]')).toBeNull();
     expect(container.querySelector('[data-testid="danger-action"]')).toBeNull();
-    expect(storage.has("tyrum.operator-ui.elevated-mode.v1")).toBe(false);
+    expect(session.has("tyrum.operator-ui.elevated-mode.v1")).toBe(false);
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("migrates legacy web persistence from localStorage into sessionStorage", async () => {
+    const local = new Map<string, string>();
+    local.set(
+      "tyrum.operator-ui.elevated-mode.v1",
+      JSON.stringify({
+        httpBaseUrl: "http://example.test",
+        deviceId: TEST_DEVICE_IDENTITY.deviceId,
+        elevatedToken: "legacy-token",
+        expiresAt: null,
+      }),
+    );
+    const { session } = stubPersistentStorage({ local });
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deviceIdentity: TEST_DEVICE_IDENTITY,
+      deps: { ws, http },
+    });
+    const controller = {
+      enter: vi.fn(async () => {}),
+      exit: vi.fn(async () => {}),
+    };
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(
+          ElevatedModeProvider,
+          {
+            core,
+            mode: "web",
+            elevatedModeController: controller,
+          },
+          React.createElement("div", null, "child"),
+        ),
+      );
+      await Promise.resolve();
+    });
+
+    expect(core.elevatedModeStore.getSnapshot()).toMatchObject({
+      status: "active",
+      elevatedToken: "legacy-token",
+      expiresAt: null,
+    });
+    expect(session.get("tyrum.operator-ui.elevated-mode.v1")).toBeTruthy();
+    expect(local.has("tyrum.operator-ui.elevated-mode.v1")).toBe(false);
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("clears invalid persisted elevated mode state during restore", async () => {
+    const session = new Map<string, string>();
+    session.set(
+      "tyrum.operator-ui.elevated-mode.v1",
+      JSON.stringify({
+        httpBaseUrl: "http://example.test",
+        deviceId: TEST_DEVICE_IDENTITY.deviceId,
+        elevatedToken: "bad-token",
+        expiresAt: "not-an-iso-date",
+      }),
+    );
+    stubPersistentStorage({ session });
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deviceIdentity: TEST_DEVICE_IDENTITY,
+      deps: { ws, http },
+    });
+    const controller = {
+      enter: vi.fn(async () => {}),
+      exit: vi.fn(async () => {}),
+    };
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(
+          ElevatedModeProvider,
+          {
+            core,
+            mode: "web",
+            elevatedModeController: controller,
+          },
+          React.createElement(
+            ElevatedModeGate,
+            null,
+            React.createElement("button", { type: "button", "data-testid": "danger-action" }, "Go"),
+          ),
+        ),
+      );
+      await Promise.resolve();
+    });
+
+    expect(core.elevatedModeStore.getSnapshot().status).toBe("inactive");
+    expect(session.has("tyrum.operator-ui.elevated-mode.v1")).toBe(false);
+    expect(container.querySelector('[data-testid="elevated-mode-frame"]')).toBeNull();
+    expect(container.querySelector('[data-testid="danger-action"]')).toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("clears expired persisted elevated mode state during restore", async () => {
+    const session = new Map<string, string>();
+    session.set(
+      "tyrum.operator-ui.elevated-mode.v1",
+      JSON.stringify({
+        httpBaseUrl: "http://example.test",
+        deviceId: TEST_DEVICE_IDENTITY.deviceId,
+        elevatedToken: "expired-token",
+        expiresAt: "2020-01-01T00:00:00.000Z",
+      }),
+    );
+    stubPersistentStorage({ session });
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deviceIdentity: TEST_DEVICE_IDENTITY,
+      deps: { ws, http },
+    });
+    const controller = {
+      enter: vi.fn(async () => {}),
+      exit: vi.fn(async () => {}),
+    };
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(
+          ElevatedModeProvider,
+          {
+            core,
+            mode: "web",
+            elevatedModeController: controller,
+          },
+          React.createElement(
+            ElevatedModeGate,
+            null,
+            React.createElement("button", { type: "button", "data-testid": "danger-action" }, "Go"),
+          ),
+        ),
+      );
+      await Promise.resolve();
+    });
+
+    expect(core.elevatedModeStore.getSnapshot().status).toBe("inactive");
+    expect(session.has("tyrum.operator-ui.elevated-mode.v1")).toBe(false);
+    expect(container.querySelector('[data-testid="elevated-mode-frame"]')).toBeNull();
+    expect(container.querySelector('[data-testid="danger-action"]')).toBeNull();
 
     act(() => {
       root?.unmount();

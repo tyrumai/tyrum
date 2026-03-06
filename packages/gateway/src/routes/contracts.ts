@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const TRANSIENT_READ_MAX_ATTEMPTS = 25;
+const TRANSIENT_READ_MAX_ATTEMPTS = 50;
 const TRANSIENT_READ_DELAY_MS = 100;
 
 function resolveSchemasJsonSchemaDir(): string {
@@ -79,6 +79,28 @@ function resolveSchemaDirState(): {
       jsonSchemaDirResolved: undefined,
     };
   }
+}
+
+let cachedSchemaDirState:
+  | {
+      jsonSchemaDir: string | undefined;
+      jsonSchemaDirResolved: string | undefined;
+    }
+  | undefined;
+
+function getSchemaDirState(): {
+  jsonSchemaDir: string | undefined;
+  jsonSchemaDirResolved: string | undefined;
+} {
+  if (cachedSchemaDirState?.jsonSchemaDir && cachedSchemaDirState.jsonSchemaDirResolved) {
+    return cachedSchemaDirState;
+  }
+
+  const resolved = resolveSchemaDirState();
+  if (resolved.jsonSchemaDir && resolved.jsonSchemaDirResolved) {
+    cachedSchemaDirState = resolved;
+  }
+  return resolved;
 }
 
 function unavailableResponse(c: Context, message: string): Response {
@@ -177,14 +199,15 @@ async function handleSchemaRequest(
 
 export function createContractRoutes(): Hono {
   const contracts = new Hono();
-  const { jsonSchemaDir, jsonSchemaDirResolved } = resolveSchemaDirState();
 
-  contracts.get("/contracts/jsonschema/catalog.json", (c) =>
-    handleCatalogRequest(c, jsonSchemaDir),
-  );
-  contracts.get("/contracts/jsonschema/:file", (c) =>
-    handleSchemaRequest(c, jsonSchemaDirResolved),
-  );
+  contracts.get("/contracts/jsonschema/catalog.json", (c) => {
+    const { jsonSchemaDir } = getSchemaDirState();
+    return handleCatalogRequest(c, jsonSchemaDir);
+  });
+  contracts.get("/contracts/jsonschema/:file", (c) => {
+    const { jsonSchemaDirResolved } = getSchemaDirState();
+    return handleSchemaRequest(c, jsonSchemaDirResolved);
+  });
 
   return contracts;
 }
