@@ -75,6 +75,27 @@ describe("TelegramChannelProcessor approval-gated outbox robustness", () => {
     expect(typeof inboxRow?.inbox_id).toBe("number");
 
     await db.run(
+      `INSERT INTO approvals (
+         tenant_id,
+         approval_id,
+         approval_key,
+         agent_id,
+         workspace_id,
+         kind,
+         status,
+         prompt
+       ) VALUES (?, ?, ?, ?, ?, 'connector.send', 'pending', ?)`,
+      [
+        session.tenant_id,
+        approvalId,
+        `approval:${approvalId}`,
+        session.agent_id,
+        session.workspace_id,
+        "Approve outbound Telegram send",
+      ],
+    );
+
+    await db.run(
       `INSERT INTO channel_outbox (
          tenant_id,
          inbox_id,

@@ -488,10 +488,23 @@ describe("gateway startup process", () => {
             ).run(DEFAULT_TENANT_ID, resumeToken, runId, nowIso);
 
             db.prepare(
+              `INSERT INTO execution_steps (
+		                 tenant_id,
+		                 step_id,
+		                 run_id,
+		                 step_index,
+		                 status,
+		                 action_json,
+		                 created_at,
+		                 approval_id
+		               ) VALUES (?, ?, ?, 0, 'paused', ?, ?, NULL)`,
+            ).run(DEFAULT_TENANT_ID, stepId, runId, actionJson, nowIso);
+
+            db.prepare(
               `INSERT INTO approvals (
-	                 tenant_id,
-	                 approval_id,
-	                 approval_key,
+		                 tenant_id,
+		                 approval_id,
+		                 approval_key,
 	                 agent_id,
 	                 workspace_id,
 	                 kind,
@@ -519,17 +532,8 @@ describe("gateway startup process", () => {
             );
 
             db.prepare(
-              `INSERT INTO execution_steps (
-	                 tenant_id,
-	                 step_id,
-	                 run_id,
-	                 step_index,
-	                 status,
-	                 action_json,
-	                 created_at,
-	                 approval_id
-	               ) VALUES (?, ?, ?, 0, 'paused', ?, ?, ?)`,
-            ).run(DEFAULT_TENANT_ID, stepId, runId, actionJson, nowIso, approvalId);
+              "UPDATE execution_steps SET approval_id = ? WHERE tenant_id = ? AND step_id = ?",
+            ).run(approvalId, DEFAULT_TENANT_ID, stepId);
 
             const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(tenantAdminToken));
             try {
@@ -699,10 +703,23 @@ describe("gateway startup process", () => {
             ).run(DEFAULT_TENANT_ID, runId, jobId, key, lane, nowIso, nowIso);
 
             db.prepare(
+              `INSERT INTO execution_steps (
+		                 tenant_id,
+		                 step_id,
+		                 run_id,
+		                 step_index,
+		                 status,
+		                 action_json,
+		                 created_at,
+		                 approval_id
+		               ) VALUES (?, ?, ?, 0, 'paused', ?, ?, NULL)`,
+            ).run(DEFAULT_TENANT_ID, stepId, runId, actionJson, nowIso);
+
+            db.prepare(
               `INSERT INTO approvals (
-	                 tenant_id,
-	                 approval_id,
-	                 approval_key,
+		                 tenant_id,
+		                 approval_id,
+		                 approval_key,
 	                 agent_id,
 	                 workspace_id,
 	                 kind,
@@ -729,17 +746,8 @@ describe("gateway startup process", () => {
             );
 
             db.prepare(
-              `INSERT INTO execution_steps (
-	                 tenant_id,
-	                 step_id,
-	                 run_id,
-	                 step_index,
-	                 status,
-	                 action_json,
-	                 created_at,
-	                 approval_id
-	               ) VALUES (?, ?, ?, 0, 'paused', ?, ?, ?)`,
-            ).run(DEFAULT_TENANT_ID, stepId, runId, actionJson, nowIso, approvalId);
+              "UPDATE execution_steps SET approval_id = ? WHERE tenant_id = ? AND step_id = ?",
+            ).run(approvalId, DEFAULT_TENANT_ID, stepId);
 
             const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(tenantAdminToken));
             try {
