@@ -58,6 +58,57 @@ function waitForClose(ws: WebSocket, timeoutMs = 5_000): Promise<{ code: number;
   });
 }
 
+function waitForUnexpectedResponse(
+  ws: WebSocket,
+  timeoutMs = 5_000,
+): Promise<{ statusCode: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("unexpected response timeout"));
+    }, timeoutMs);
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      ws.off("open", onOpen);
+      ws.off("error", onError);
+      ws.off("unexpected-response", onUnexpectedResponse);
+    };
+
+    const onOpen = () => {
+      cleanup();
+      reject(new Error("unexpectedly upgraded connection"));
+    };
+    const onError = (err: Error) => {
+      cleanup();
+      reject(err);
+    };
+    const onUnexpectedResponse = (
+      _request: unknown,
+      response: NodeJS.ReadableStream & { statusCode?: number },
+    ) => {
+      let body = "";
+      response.setEncoding?.("utf8");
+      response.on("data", (chunk: string | Buffer) => {
+        body += chunk.toString();
+      });
+      response.on("end", () => {
+        cleanup();
+        resolve({ statusCode: response.statusCode ?? 0, body });
+      });
+      response.on("error", (err) => {
+        cleanup();
+        reject(err instanceof Error ? err : new Error(String(err)));
+      });
+      response.resume?.();
+    };
+
+    ws.on("open", onOpen);
+    ws.on("error", onError);
+    ws.on("unexpected-response", onUnexpectedResponse);
+  });
+}
+
 function waitForJsonMessage(ws: WebSocket): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("message timeout")), 5_000);
@@ -351,6 +402,42 @@ describe("WS handler integration", () => {
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
     expect(stats.capabilityCounts["playwright"]).toBe(1);
+
+    stopHeartbeat();
+  });
+
+  it("rejects upgrades that omit the tyrum-v1 base subprotocol", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      authTokens,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, ["custom-protocol"], {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+
+    const response = await waitForUnexpectedResponse(ws, 2_000);
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toContain("tyrum-v1");
+    expect(connectionManager.getStats().totalClients).toBe(0);
 
     stopHeartbeat();
   });

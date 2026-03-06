@@ -67,7 +67,8 @@ Tokens MUST NOT be placed in URLs.
 
 ### Subprotocol fallback
 
-When using the fallback, the token is conveyed in the `Sec-WebSocket-Protocol` header. Clients should offer both:
+All WebSocket clients MUST offer `tyrum-v1` in `Sec-WebSocket-Protocol`.
+When using the fallback, the token is conveyed in the same header. Those clients additionally offer:
 
 - `tyrum-v1`
 - `tyrum-auth.<base64url(token)>`
