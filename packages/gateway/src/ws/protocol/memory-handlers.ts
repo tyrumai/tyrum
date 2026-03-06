@@ -163,7 +163,15 @@ export async function handleMemoryMessage(
       const payload = parsedReq.data.payload;
       const scope = await resolveScope(payload.agent_id);
       const limit = Math.max(1, Math.min(500, payload.limit ?? 50));
-      const res = await deps.memoryV1Dal.search({ ...payload, limit }, scope);
+      const res = await deps.memoryV1Dal.search(
+        {
+          query: payload.query,
+          filter: payload.filter,
+          limit,
+          cursor: payload.cursor,
+        },
+        scope,
+      );
       const result = WsMemorySearchResult.parse(res);
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     }

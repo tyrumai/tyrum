@@ -472,6 +472,41 @@ describe("WS memory v1 handlers", () => {
     ).toEqual([expect.objectContaining({ memory_item_id: defaultCreated.memory_item_id })]);
   });
 
+  it("passes only resolved scope and DAL search fields into memoryV1Dal.search", async () => {
+    const cm = new ConnectionManager();
+    const { id: requesterId } = makeClient(cm);
+    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
+    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
+
+    const requester = cm.getClient(requesterId)!;
+    const identityScopeDal = new IdentityScopeDal(db);
+    const agentId = await identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "agent-2");
+
+    const searchSpy = vi.spyOn(memoryV1Dal, "search");
+
+    const searchRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-search-agent-2-spy",
+        type: "memory.search",
+        payload: { v: 1, agent_id: "agent-2", query: "Scoped", limit: 50 },
+      }),
+      deps,
+    );
+
+    expect((searchRes as { ok: boolean }).ok).toBe(true);
+    expect(searchSpy).toHaveBeenCalledTimes(1);
+
+    const [input, scope] = searchSpy.mock.calls[0]!;
+    expect(input).toEqual({
+      query: "Scoped",
+      filter: undefined,
+      limit: 50,
+      cursor: undefined,
+    });
+    expect(scope).toEqual({ tenantId: DEFAULT_TENANT_ID, agentId });
+  });
+
   it("handles memory.forget and emits memory.item.forgotten", async () => {
     const cm = new ConnectionManager();
     const { id: requesterId, ws: requesterWs } = makeClient(cm);
