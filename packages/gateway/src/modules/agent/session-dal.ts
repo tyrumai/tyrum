@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { NormalizedThreadMessage as NormalizedThreadMessageSchema } from "@tyrum/schemas";
 import type { NormalizedContainerKind } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { safeJsonParse } from "../../utils/json.js";
 import { buildAgentTurnKey } from "./turn-key.js";
 import type { IdentityScopeDal, ScopeKeys } from "../identity/scope.js";
 import { DEFAULT_TENANT_KEY, normalizeScopeKeys } from "../identity/scope.js";
@@ -10,6 +12,7 @@ import {
   normalizeAccountId,
   normalizeConnectorId,
 } from "../channels/interface.js";
+import { renderNormalizedThreadMessageText } from "./session-message-text.js";
 import { Logger } from "../observability/logger.js";
 
 const logger = new Logger({ base: { module: "agent.session_dal" } });
@@ -90,6 +93,20 @@ interface RawSessionWithDeliveryRow extends RawSessionRow {
   account_key: string;
   provider_thread_id: string;
   container_kind: string;
+}
+
+interface RawChannelTranscriptRow {
+  inbox_id: number;
+  payload_json: string;
+  reply_text: string | null;
+  processed_at: string | Date | null;
+}
+
+export interface SessionRepairResult {
+  source_rows: number;
+  rebuilt_messages: number;
+  kept_messages: number;
+  dropped_messages: number;
 }
 
 function normalizeTime(value: string | Date): string {
@@ -220,6 +237,34 @@ function compactSessionSummary(
   }
 
   return lines.join("\n");
+}
+
+function buildStoredTranscript(input: {
+  turns: readonly SessionMessage[];
+  keepLastMessages: number;
+  previousSummary?: string;
+}): { turns: SessionMessage[]; summary: string; droppedMessages: number } {
+  const keepLastMessages = Math.max(1, input.keepLastMessages);
+  const overflow = input.turns.length - keepLastMessages;
+  const dropped = overflow > 0 ? input.turns.slice(0, overflow) : [];
+  const turns = input.turns.slice(-keepLastMessages);
+  const previousSummary = input.previousSummary ?? "";
+  const summary =
+    dropped.length > 0 ? compactSessionSummary(previousSummary, dropped) : previousSummary;
+
+  return {
+    turns: turns.slice(),
+    summary,
+    droppedMessages: dropped.length,
+  };
+}
+
+function normalizeRepairTimestamp(
+  processedAt: string | Date | null,
+  fallbackTimestamp: string | undefined,
+): string {
+  if (processedAt) return normalizeTime(processedAt);
+  return fallbackTimestamp?.trim() || new Date().toISOString();
 }
 
 export class SessionDal {
@@ -567,19 +612,18 @@ export class SessionDal {
       timestamp: input.timestamp,
     });
 
-    const maxMessages = Math.max(1, input.maxTurns) * 2;
-    const overflow = turns.length - maxMessages;
-    const dropped = overflow > 0 ? turns.slice(0, overflow) : [];
-    const bounded = turns.slice(-maxMessages);
-    const summary =
-      dropped.length > 0 ? compactSessionSummary(session.summary, dropped) : session.summary;
+    const stored = buildStoredTranscript({
+      turns,
+      keepLastMessages: Math.max(1, input.maxTurns) * 2,
+      previousSummary: session.summary,
+    });
 
     const nowIso = new Date().toISOString();
     await this.db.run(
       `UPDATE sessions
        SET turns_json = ?, summary = ?, updated_at = ?
        WHERE tenant_id = ? AND session_id = ?`,
-      [JSON.stringify(bounded), summary, nowIso, input.tenantId, input.sessionId],
+      [JSON.stringify(stored.turns), stored.summary, nowIso, input.tenantId, input.sessionId],
     );
 
     const updated = await this.getById({ tenantId: input.tenantId, sessionId: input.sessionId });
@@ -600,21 +644,95 @@ export class SessionDal {
     }
 
     const keepLastMessages = Math.max(2, input.keepLastMessages);
-    const overflow = session.turns.length - keepLastMessages;
-    const dropped = overflow > 0 ? session.turns.slice(0, overflow) : [];
-    const bounded = session.turns.slice(-keepLastMessages);
-    const summary =
-      dropped.length > 0 ? compactSessionSummary(session.summary, dropped) : session.summary;
+    const stored = buildStoredTranscript({
+      turns: session.turns,
+      keepLastMessages,
+      previousSummary: session.summary,
+    });
 
     const nowIso = new Date().toISOString();
     await this.db.run(
       `UPDATE sessions
        SET turns_json = ?, summary = ?, updated_at = ?
        WHERE tenant_id = ? AND session_id = ?`,
-      [JSON.stringify(bounded), summary, nowIso, input.tenantId, input.sessionId],
+      [JSON.stringify(stored.turns), stored.summary, nowIso, input.tenantId, input.sessionId],
     );
 
-    return { droppedMessages: dropped.length, keptMessages: bounded.length };
+    return { droppedMessages: stored.droppedMessages, keptMessages: stored.turns.length };
+  }
+
+  async repairFromChannelLogs(input: {
+    tenantId: string;
+    sessionId: string;
+    maxTurns: number;
+  }): Promise<SessionRepairResult | null> {
+    const session = await this.getById({ tenantId: input.tenantId, sessionId: input.sessionId });
+    if (!session) {
+      throw new Error(`session '${input.sessionId}' not found`);
+    }
+
+    const rows = await this.db.all<RawChannelTranscriptRow>(
+      `SELECT inbox_id, payload_json, reply_text, processed_at
+       FROM channel_inbox
+       WHERE tenant_id = ?
+         AND session_id = ?
+         AND status = 'completed'
+       ORDER BY received_at_ms ASC, inbox_id ASC`,
+      [input.tenantId, input.sessionId],
+    );
+
+    const rebuiltTurns: SessionMessage[] = [];
+    let sourceRows = 0;
+
+    for (const row of rows) {
+      const parsed = NormalizedThreadMessageSchema.safeParse(safeJsonParse(row.payload_json, {}));
+      if (!parsed.success) continue;
+
+      const userMessage = renderNormalizedThreadMessageText(parsed.data);
+      if (userMessage.length === 0) continue;
+
+      const assistantMessage =
+        row.reply_text !== null
+          ? row.reply_text
+          : await this.loadOutboxReplyText({
+              tenantId: input.tenantId,
+              inboxId: row.inbox_id,
+            });
+      if (assistantMessage === undefined) continue;
+
+      const timestamp = normalizeRepairTimestamp(
+        row.processed_at,
+        parsed.data.message.envelope?.received_at ?? parsed.data.message.timestamp,
+      );
+      rebuiltTurns.push(
+        { role: "user", content: userMessage, timestamp },
+        { role: "assistant", content: assistantMessage, timestamp },
+      );
+      sourceRows += 1;
+    }
+
+    if (sourceRows === 0) return null;
+
+    const stored = buildStoredTranscript({
+      turns: rebuiltTurns,
+      keepLastMessages: Math.max(1, input.maxTurns) * 2,
+      previousSummary: session.summary,
+    });
+    const updatedAt = stored.turns.at(-1)?.timestamp ?? session.updated_at;
+
+    await this.db.run(
+      `UPDATE sessions
+       SET turns_json = ?, summary = ?, updated_at = ?
+       WHERE tenant_id = ? AND session_id = ?`,
+      [JSON.stringify(stored.turns), stored.summary, updatedAt, input.tenantId, input.sessionId],
+    );
+
+    return {
+      source_rows: sourceRows,
+      rebuilt_messages: rebuiltTurns.length,
+      kept_messages: stored.turns.length,
+      dropped_messages: stored.droppedMessages,
+    };
   }
 
   async deleteExpired(ttlDays: number, agentKey?: string): Promise<number> {
@@ -648,5 +766,20 @@ export class SessionDal {
       agentId ? [tenantId, agentId, cutoffIso] : [tenantId, cutoffIso],
     );
     return res.changes;
+  }
+
+  private async loadOutboxReplyText(input: {
+    tenantId: string;
+    inboxId: number;
+  }): Promise<string | undefined> {
+    const rows = await this.db.all<{ text: string }>(
+      `SELECT text
+       FROM channel_outbox
+       WHERE tenant_id = ? AND inbox_id = ?
+       ORDER BY chunk_index ASC, outbox_id ASC`,
+      [input.tenantId, input.inboxId],
+    );
+    if (rows.length === 0) return undefined;
+    return rows.map((row) => row.text).join("");
   }
 }

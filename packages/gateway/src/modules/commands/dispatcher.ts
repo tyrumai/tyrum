@@ -109,6 +109,8 @@ type UsageTotals = {
   usd_micros: number;
 };
 
+const DEFAULT_REPAIR_MAX_TURNS = 20;
+
 async function resolveKeyLane(
   db: SqlDb,
   ctx: CommandDeps["commandContext"] | undefined,
@@ -262,6 +264,26 @@ async function resolveFallbackKeyLane(
     }),
     lane: "main",
   };
+}
+
+function resolveContainerKindFromSessionKey(key: string | undefined): "dm" | "group" | "channel" {
+  if (!key) return "channel";
+
+  try {
+    const parsed = parseTyrumKey(key as never);
+    if (
+      parsed.kind === "agent" &&
+      (parsed.thread_kind === "dm" ||
+        parsed.thread_kind === "group" ||
+        parsed.thread_kind === "channel")
+    ) {
+      return parsed.thread_kind;
+    }
+  } catch {
+    // Intentional: fall back to channel-scoped sessions for legacy/unknown keys.
+  }
+
+  return "channel";
 }
 
 async function cancelRunsAndClearQueuedInbox(input: {
@@ -460,6 +482,7 @@ function helpText(): string {
     "- /reset",
     "- /stop",
     "- /compact",
+    "- /repair [max_turns]",
     "- /status",
     "- /presence",
     "- /approvals [pending|approved|denied|expired]",
@@ -588,6 +611,68 @@ export async function executeCommand(
     return { output: jsonBlock(payload), data: payload };
   }
 
+  if (cmd === "repair") {
+    if (!deps.db) {
+      return { output: "Sessions are not available on this gateway instance.", data: null };
+    }
+
+    const ctx = deps.commandContext;
+    const agentId = resolveAgentId(ctx);
+    const resolved = await resolveChannelThread(deps.db, ctx);
+    if (!resolved) {
+      return {
+        output: "Usage: /repair [max_turns] (requires key or channel/thread context)",
+        data: null,
+      };
+    }
+
+    const maxTurnsRaw = toks[1]?.trim();
+    let maxTurns = DEFAULT_REPAIR_MAX_TURNS;
+    if (maxTurnsRaw) {
+      if (!/^[0-9]+$/.test(maxTurnsRaw)) {
+        return {
+          output: "Usage: /repair [max_turns] (max_turns must be a positive integer)",
+          data: null,
+        };
+      }
+      maxTurns = Math.min(500, Math.max(1, Number(maxTurnsRaw)));
+    }
+
+    const { channel, accountKey, threadId } = resolved;
+    const keyLane =
+      (await resolveKeyLane(deps.db, ctx)) ?? (await resolveFallbackKeyLane(deps.db, ctx, agentId));
+    const sessionDal = new SessionDal(
+      deps.db,
+      new IdentityScopeDal(deps.db),
+      new ChannelThreadDal(deps.db),
+    );
+    const session = await sessionDal.getOrCreate({
+      scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
+      connectorKey: channel,
+      accountKey,
+      providerThreadId: threadId,
+      containerKind: resolveContainerKindFromSessionKey(keyLane?.key),
+    });
+    const repaired = await sessionDal.repairFromChannelLogs({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      maxTurns,
+    });
+    if (!repaired) {
+      return {
+        output: "No completed retained channel logs were found for this session.",
+        data: null,
+      };
+    }
+
+    const payload = {
+      agent_id: agentId,
+      session_id: session.session_id,
+      ...repaired,
+    };
+    return { output: jsonBlock(payload), data: payload };
+  }
+
   if (cmd === "stop") {
     if (!deps.db) {
       return { output: "Stop is not available on this gateway instance.", data: null };
@@ -640,22 +725,6 @@ export async function executeCommand(
         lane: "main",
       };
 
-    // Prefer the container kind from the resolved key (so /reset works for dm/group keys too).
-    let containerKind: "dm" | "group" | "channel" = "channel";
-    try {
-      const parsed = parseTyrumKey(keyLane.key as never);
-      if (
-        parsed.kind === "agent" &&
-        (parsed.thread_kind === "dm" ||
-          parsed.thread_kind === "group" ||
-          parsed.thread_kind === "channel")
-      ) {
-        containerKind = parsed.thread_kind;
-      }
-    } catch {
-      // Intentional: fall back to channel-scoped sessions.
-    }
-
     const sessionDal = new SessionDal(
       deps.db,
       new IdentityScopeDal(deps.db),
@@ -666,7 +735,7 @@ export async function executeCommand(
       connectorKey: channel,
       accountKey,
       providerThreadId: threadId,
-      containerKind,
+      containerKind: resolveContainerKindFromSessionKey(keyLane.key),
     });
 
     if (keyLane?.key) {
