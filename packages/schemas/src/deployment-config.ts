@@ -154,6 +154,28 @@ export const DeploymentConfigContext = z
   .strict();
 export type DeploymentConfigContext = z.infer<typeof DeploymentConfigContext>;
 
+export const DeploymentConfigLifecycleSessions = z
+  .object({
+    ttlDays: z.number().int().positive().default(30),
+  })
+  .strict();
+export type DeploymentConfigLifecycleSessions = z.infer<typeof DeploymentConfigLifecycleSessions>;
+
+export const DeploymentConfigLifecycleChannels = z
+  .object({
+    terminalRetentionDays: z.number().int().positive().default(7),
+  })
+  .strict();
+export type DeploymentConfigLifecycleChannels = z.infer<typeof DeploymentConfigLifecycleChannels>;
+
+export const DeploymentConfigLifecycle = z
+  .object({
+    sessions: DeploymentConfigLifecycleSessions.prefault({}),
+    channels: DeploymentConfigLifecycleChannels.prefault({}),
+  })
+  .strict();
+export type DeploymentConfigLifecycle = z.infer<typeof DeploymentConfigLifecycle>;
+
 export const DeploymentConfigLogging = z
   .object({
     level: z.enum(["debug", "info", "warn", "error", "silent"]).optional(),
@@ -176,6 +198,7 @@ export const DeploymentConfig = z
     automation: DeploymentConfigAutomation.prefault({}),
     snapshots: DeploymentConfigSnapshots.prefault({}),
     context: DeploymentConfigContext.prefault({}),
+    lifecycle: DeploymentConfigLifecycle.prefault({}),
     logging: DeploymentConfigLogging.prefault({}),
     toolrunner: DeploymentConfigToolRunner.prefault({}),
   })

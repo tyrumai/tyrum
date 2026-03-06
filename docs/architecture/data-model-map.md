@@ -149,22 +149,22 @@ Purpose: durable agent memory (canonical content) plus derived indexes (embeddin
 
 The table below is intentionally coarse-grained: it’s meant to help operators decide what needs strict retention/redaction controls and what can be safely pruned when a deployment is under storage pressure.
 
-| Area (bounded context)  | Typical retention         | PII/sensitive content?    | Primary “hot” tables to watch                                      | Notes / pruning posture                                                           |
-| ----------------------- | ------------------------- | ------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| Identity + scope        | Durable                   | Low                       | `tenants`, `agents`, `workspaces`                                  | Keep; small cardinality.                                                          |
-| Channels + sessions     | Durable + bounded queues  | High (user content)       | `sessions`, `channel_inbox`, `channel_outbox`                      | Transcripts and connector payloads live here; queues must be bounded.             |
-| Secrets + auth          | Durable                   | **Secrets**               | `secret_versions`, `auth_profile_secrets`                          | Treat as highly sensitive even if encrypted-at-rest.                              |
-| Policy + approvals      | Durable                   | Medium–High               | `approvals`, `policy_snapshots`, `policy_overrides`                | Approvals/prompts can contain user content; policy bundles are security-critical. |
-| Execution engine        | Durable + bounded logs    | Medium–High               | `execution_attempts`, `execution_artifacts`, `idempotency_records` | Outputs/errors may contain user data; prune/compact under explicit policy.        |
-| Automation (watchers)   | Durable + bounded history | Low–Medium                | `watcher_firings`                                                  | History can grow; safe to prune old firings.                                      |
-| Canvas artifacts        | Durable (budgeted)        | Medium–High               | `canvas_artifacts`                                                 | Human-authored content; bound by budgets/retention.                               |
-| Context reports         | Bounded                   | Medium–High               | `context_reports`                                                  | Debug payloads can contain user content; keep short retention by default.         |
-| Secret resolution audit | Bounded                   | Medium                    | `secret_resolutions`                                               | Keep for audit/security; prune with policy if needed.                             |
-| Presence + backplane    | TTL + bounded replay      | Medium                    | `presence_entries`, `connections`, `outbox`                        | Presence/connections are TTL; outbox is durable but must be compacted.            |
-| Pairing + OAuth         | TTL + bounded             | High (tokens/identifiers) | `oauth_pending`, `node_pairings`                                   | OAuth pending rows are short-lived; pairing contains device metadata.             |
-| Routing + model cache   | Durable + TTL leases      | Low–Medium                | `routing_configs`, `models_dev_cache`                              | Config may contain endpoints/keys-by-handle; treat as sensitive metadata.         |
-| WorkBoard               | Durable (budgeted)        | Medium–High               | `work_artifacts`, `work_decisions`, `work_item_events`             | Evidence/decisions can include user content; history can grow without budgets.    |
-| Memory                  | Durable + derived indexes | High (user content)       | `memory_items`, `memory_item_embeddings`                           | Canonical memory is durable; embeddings/vectors are derived and can be rebuilt.   |
+| Area (bounded context)  | Typical retention         | PII/sensitive content?    | Primary “hot” tables to watch                                      | Notes / pruning posture                                                                           |
+| ----------------------- | ------------------------- | ------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| Identity + scope        | Durable                   | Low                       | `tenants`, `agents`, `workspaces`                                  | Keep; small cardinality.                                                                          |
+| Channels + sessions     | Durable + bounded queues  | High (user content)       | `sessions`, `channel_inbox`, `channel_outbox`                      | Session turns are bounded by compaction; terminal channel rows follow explicit lifecycle windows. |
+| Secrets + auth          | Durable                   | **Secrets**               | `secret_versions`, `auth_profile_secrets`                          | Treat as highly sensitive even if encrypted-at-rest.                                              |
+| Policy + approvals      | Durable                   | Medium–High               | `approvals`, `policy_snapshots`, `policy_overrides`                | Approvals/prompts can contain user content; policy bundles are security-critical.                 |
+| Execution engine        | Durable + bounded logs    | Medium–High               | `execution_attempts`, `execution_artifacts`, `idempotency_records` | Outputs/errors may contain user data; prune/compact under explicit policy.                        |
+| Automation (watchers)   | Durable + bounded history | Low–Medium                | `watcher_firings`                                                  | History can grow; safe to prune old firings.                                                      |
+| Canvas artifacts        | Durable (budgeted)        | Medium–High               | `canvas_artifacts`                                                 | Human-authored content; bound by budgets/retention.                                               |
+| Context reports         | Bounded                   | Medium–High               | `context_reports`                                                  | Debug payloads can contain user content; keep short retention by default.                         |
+| Secret resolution audit | Bounded                   | Medium                    | `secret_resolutions`                                               | Keep for audit/security; prune with policy if needed.                                             |
+| Presence + backplane    | TTL + bounded replay      | Medium                    | `presence_entries`, `connections`, `outbox`                        | Presence/connections are TTL; outbox is durable but must be compacted.                            |
+| Pairing + OAuth         | TTL + bounded             | High (tokens/identifiers) | `oauth_pending`, `node_pairings`                                   | OAuth pending rows are short-lived; pairing contains device metadata.                             |
+| Routing + model cache   | Durable + TTL leases      | Low–Medium                | `routing_configs`, `models_dev_cache`                              | Config may contain endpoints/keys-by-handle; treat as sensitive metadata.                         |
+| WorkBoard               | Durable (budgeted)        | Medium–High               | `work_artifacts`, `work_decisions`, `work_item_events`             | Evidence/decisions can include user content; history can grow without budgets.                    |
+| Memory                  | Durable + derived indexes | High (user content)       | `memory_items`, `memory_item_embeddings`                           | Canonical memory is durable; embeddings/vectors are derived and can be rebuilt.                   |
 
 ## Pruning checklist
 
@@ -178,7 +178,7 @@ When storage pressure increases, prune in this order (least risky → most sensi
    - `memory_item_embeddings`, `vector_metadata` (derived; safe to rebuild)
 
 2. **Queue history + high-volume operational logs**
-   - `channel_inbox`, `channel_outbox` (retain only what’s needed for delivery/audit; prune completed/sent/failed beyond your window)
+   - `channel_inbox`, `channel_outbox` (retain only what’s needed for delivery/audit; prune terminal rows under the configured lifecycle windows)
    - `watcher_firings` (prune old, terminal firings)
    - `context_reports` (short retention; prune aggressively)
    - `idempotency_records`, `concurrency_slots` (bounded retention; prune old terminal rows)
