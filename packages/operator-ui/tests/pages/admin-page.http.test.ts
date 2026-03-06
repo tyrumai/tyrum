@@ -35,6 +35,16 @@ async function switchHttpTab(
   return button!;
 }
 
+function setSelectValue(select: HTMLSelectElement, value: string): void {
+  act(() => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set as
+      | ((this: HTMLSelectElement, value: string) => void)
+      | undefined;
+    setter?.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
 function openPolicyTab(container: HTMLElement): void {
   const trigger = container.querySelector<HTMLButtonElement>(
     "[data-testid='admin-http-tab-policy']",
@@ -524,6 +534,610 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     const addButton = container.querySelector<HTMLButtonElement>("[data-testid='models-add-open']");
     expect(addButton).not.toBeNull();
     expect(addButton?.disabled).toBe(true);
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("saves execution-profile assignments from the models tab", async () => {
+    const { core } = createTestCore();
+    const modelConfig = core.http.modelConfig as {
+      listPresets: ReturnType<typeof vi.fn>;
+      listAvailable: ReturnType<typeof vi.fn>;
+      listAssignments: ReturnType<typeof vi.fn>;
+    };
+    const presetDefault = {
+      preset_id: "00000000-0000-4000-8000-000000000011",
+      preset_key: "preset-default",
+      display_name: "Default",
+      provider_key: "openai",
+      model_id: "gpt-4.1",
+      options: {},
+      created_at: "2026-03-01T00:00:00.000Z",
+      updated_at: "2026-03-01T00:00:00.000Z",
+    };
+    const presetReview = {
+      preset_id: "00000000-0000-4000-8000-000000000012",
+      preset_key: "preset-review",
+      display_name: "Review",
+      provider_key: "openai",
+      model_id: "gpt-4.1-mini",
+      options: {},
+      created_at: "2026-03-01T00:00:00.000Z",
+      updated_at: "2026-03-01T00:00:00.000Z",
+    };
+    let assignments = EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
+      execution_profile_id,
+      preset_key: presetDefault.preset_key,
+      preset_display_name: presetDefault.display_name,
+      provider_key: presetDefault.provider_key,
+      model_id: presetDefault.model_id,
+    }));
+    modelConfig.listPresets = vi.fn(async () => ({
+      status: "ok",
+      presets: [presetDefault, presetReview],
+    }));
+    modelConfig.listAvailable = vi.fn(async () => ({
+      status: "ok",
+      models: [
+        {
+          provider_key: "openai",
+          provider_name: "OpenAI",
+          model_id: "gpt-4.1",
+          model_name: "GPT-4.1",
+          family: null,
+          reasoning: true,
+          tool_call: true,
+          modalities: { output: ["text"] },
+        },
+        {
+          provider_key: "openai",
+          provider_name: "OpenAI",
+          model_id: "gpt-4.1-mini",
+          model_name: "GPT-4.1 Mini",
+          family: null,
+          reasoning: true,
+          tool_call: true,
+          modalities: { output: ["text"] },
+        },
+      ],
+    }));
+    modelConfig.listAssignments = vi.fn(async () => ({
+      status: "ok",
+      assignments,
+    }));
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      expect(url).toBe("http://example.test/config/models/assignments");
+      expect(init?.method).toBe("PUT");
+
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
+
+      const bodyRaw = String(init?.body ?? "");
+      expect(JSON.parse(bodyRaw)).toEqual({
+        assignments: Object.fromEntries(
+          EXECUTION_PROFILE_IDS.map((profileId) => [
+            profileId,
+            profileId === "interaction" ? presetReview.preset_key : presetDefault.preset_key,
+          ]),
+        ),
+      });
+
+      assignments = EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
+        execution_profile_id,
+        preset_key:
+          execution_profile_id === "interaction"
+            ? presetReview.preset_key
+            : presetDefault.preset_key,
+        preset_display_name:
+          execution_profile_id === "interaction"
+            ? presetReview.display_name
+            : presetDefault.display_name,
+        provider_key:
+          execution_profile_id === "interaction"
+            ? presetReview.provider_key
+            : presetDefault.provider_key,
+        model_id:
+          execution_profile_id === "interaction" ? presetReview.model_id : presetDefault.model_id,
+      }));
+
+      return new Response(JSON.stringify({ status: "ok", assignments }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(ElevatedModeProvider, { core, mode: "web" }, [
+        React.createElement(ConfigurePage, { key: "page", core }),
+      ]),
+    );
+
+    await switchHttpTab(container, "admin-http-tab-models");
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const selects = Array.from(container.querySelectorAll<HTMLSelectElement>("select"));
+    expect(selects.length).toBe(EXECUTION_PROFILE_IDS.length);
+    setSelectValue(selects[0]!, presetReview.preset_key);
+
+    const saveButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="models-assignments-save"]',
+    );
+    expect(saveButton).not.toBeNull();
+    expect(saveButton?.disabled).toBe(false);
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(saveButton?.disabled).toBe(true);
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("creates a model preset from the models dialog", async () => {
+    const { core } = createTestCore();
+    const modelConfig = core.http.modelConfig as {
+      listPresets: ReturnType<typeof vi.fn>;
+      listAvailable: ReturnType<typeof vi.fn>;
+      listAssignments: ReturnType<typeof vi.fn>;
+    };
+    let presets: Array<Record<string, unknown>> = [];
+    modelConfig.listPresets = vi.fn(async () => ({
+      status: "ok",
+      presets,
+    }));
+    modelConfig.listAvailable = vi.fn(async () => ({
+      status: "ok",
+      models: [
+        {
+          provider_key: "openai",
+          provider_name: "OpenAI",
+          model_id: "gpt-4.1",
+          model_name: "GPT-4.1",
+          family: null,
+          reasoning: true,
+          tool_call: true,
+          modalities: { output: ["text"] },
+        },
+        {
+          provider_key: "openai",
+          provider_name: "OpenAI",
+          model_id: "gpt-4.1-mini",
+          model_name: "GPT-4.1 Mini",
+          family: null,
+          reasoning: true,
+          tool_call: true,
+          modalities: { output: ["text"] },
+        },
+      ],
+    }));
+    modelConfig.listAssignments = vi.fn(async () => ({
+      status: "ok",
+      assignments: [],
+    }));
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      expect(url).toBe("http://example.test/config/models/presets");
+      expect(init?.method).toBe("POST");
+
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
+
+      const createdPreset = {
+        preset_id: "00000000-0000-4000-8000-000000000021",
+        preset_key: "preset-gpt-4-1-mini",
+        display_name: "GPT-4.1 Mini",
+        provider_key: "openai",
+        model_id: "gpt-4.1-mini",
+        options: { reasoning_effort: "high" },
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+      };
+      const bodyRaw = String(init?.body ?? "");
+      expect(JSON.parse(bodyRaw)).toEqual({
+        display_name: "GPT-4.1 Mini",
+        provider_key: "openai",
+        model_id: "gpt-4.1-mini",
+        options: { reasoning_effort: "high" },
+      });
+      presets = [createdPreset];
+
+      return new Response(JSON.stringify({ status: "ok", preset: createdPreset }), {
+        status: 201,
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(ElevatedModeProvider, { core, mode: "web" }, [
+        React.createElement(ConfigurePage, { key: "page", core }),
+      ]),
+    );
+
+    await switchHttpTab(container, "admin-http-tab-models");
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const addButton = container.querySelector<HTMLButtonElement>("[data-testid='models-add-open']");
+    expect(addButton).not.toBeNull();
+
+    act(() => {
+      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = document.body.querySelector<HTMLElement>("[data-testid='models-preset-dialog']");
+    expect(dialog).not.toBeNull();
+
+    const textInputs = Array.from(dialog?.querySelectorAll<HTMLInputElement>("input") ?? []).filter(
+      (input) => input.type !== "hidden" && !input.readOnly,
+    );
+    expect(textInputs[0]?.value).toBe("");
+
+    const dialogSelects = Array.from(dialog?.querySelectorAll<HTMLSelectElement>("select") ?? []);
+    expect(dialogSelects.length).toBe(2);
+    setSelectValue(dialogSelects[0]!, "openai/gpt-4.1-mini");
+    expect(textInputs[0]?.value).toBe("GPT-4.1 Mini");
+    setSelectValue(dialogSelects[1]!, "high");
+
+    const saveButton = document.body.querySelector<HTMLButtonElement>(
+      "[data-testid='models-save']",
+    );
+    expect(saveButton).not.toBeNull();
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("GPT-4.1 Mini");
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("shows provider warnings and updates an existing preset", async () => {
+    const { core } = createTestCore();
+    const modelConfig = core.http.modelConfig as {
+      listPresets: ReturnType<typeof vi.fn>;
+      listAvailable: ReturnType<typeof vi.fn>;
+      listAssignments: ReturnType<typeof vi.fn>;
+    };
+    let presets = [
+      {
+        preset_id: "00000000-0000-4000-8000-000000000031",
+        preset_key: "legacy-openai",
+        display_name: "Legacy OpenAI",
+        provider_key: "openai",
+        model_id: "gpt-4.1",
+        options: {},
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+      },
+    ];
+    modelConfig.listPresets = vi.fn(async () => ({
+      status: "ok",
+      presets,
+    }));
+    modelConfig.listAvailable = vi.fn(async () => ({
+      status: "ok",
+      models: [
+        {
+          provider_key: "anthropic",
+          provider_name: "Anthropic",
+          model_id: "claude-3.7-sonnet",
+          model_name: "Claude 3.7 Sonnet",
+          family: null,
+          reasoning: true,
+          tool_call: true,
+          modalities: { output: ["text"] },
+        },
+      ],
+    }));
+    modelConfig.listAssignments = vi.fn(async () => ({
+      status: "ok",
+      assignments: [],
+    }));
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      expect(url).toBe("http://example.test/config/models/presets/legacy-openai");
+      expect(init?.method).toBe("PATCH");
+
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
+
+      const bodyRaw = String(init?.body ?? "");
+      expect(JSON.parse(bodyRaw)).toEqual({
+        display_name: "Renamed preset",
+        options: { reasoning_effort: "medium" },
+      });
+
+      presets = [
+        {
+          ...presets[0],
+          display_name: "Renamed preset",
+          options: { reasoning_effort: "medium" },
+        },
+      ];
+
+      return new Response(JSON.stringify({ status: "ok", preset: presets[0] }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(ElevatedModeProvider, { core, mode: "web" }, [
+        React.createElement(ConfigurePage, { key: "page", core }),
+      ]),
+    );
+
+    await switchHttpTab(container, "admin-http-tab-models");
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Provider unavailable");
+
+    const editButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.trim() === "Edit",
+    );
+    expect(editButton).toBeDefined();
+
+    act(() => {
+      editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = document.body.querySelector<HTMLElement>("[data-testid='models-preset-dialog']");
+    expect(dialog).not.toBeNull();
+
+    const dialogInputs = Array.from(
+      dialog?.querySelectorAll<HTMLInputElement>("input") ?? [],
+    ).filter((input) => input.type !== "hidden");
+    const displayNameInput = dialogInputs.find((input) => !input.readOnly);
+    const modelInput = dialogInputs.find((input) => input.readOnly);
+    expect(displayNameInput?.value).toBe("Legacy OpenAI");
+    expect(modelInput?.value).toBe("openai/gpt-4.1");
+
+    act(() => {
+      setNativeValue(displayNameInput!, "Renamed preset");
+    });
+
+    const dialogSelect = dialog?.querySelector<HTMLSelectElement>("select");
+    expect(dialogSelect).not.toBeNull();
+    setSelectValue(dialogSelect!, "medium");
+
+    const saveButton = document.body.querySelector<HTMLButtonElement>(
+      "[data-testid='models-save']",
+    );
+    expect(saveButton).not.toBeNull();
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("Renamed preset");
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("requires replacements before deleting a preset and handles assignment conflicts", async () => {
+    const { core } = createTestCore();
+    const modelConfig = core.http.modelConfig as {
+      listPresets: ReturnType<typeof vi.fn>;
+      listAvailable: ReturnType<typeof vi.fn>;
+      listAssignments: ReturnType<typeof vi.fn>;
+    };
+    let presets = [
+      {
+        preset_id: "00000000-0000-4000-8000-000000000041",
+        preset_key: "preset-default",
+        display_name: "Default",
+        provider_key: "openai",
+        model_id: "gpt-4.1",
+        options: {},
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+      },
+      {
+        preset_id: "00000000-0000-4000-8000-000000000042",
+        preset_key: "preset-review",
+        display_name: "Review",
+        provider_key: "openai",
+        model_id: "gpt-4.1-mini",
+        options: {},
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+      },
+    ];
+    let assignments = [
+      {
+        execution_profile_id: "interaction",
+        preset_key: "preset-default",
+        preset_display_name: "Default",
+        provider_key: "openai",
+        model_id: "gpt-4.1",
+      },
+    ];
+    modelConfig.listPresets = vi.fn(async () => ({
+      status: "ok",
+      presets,
+    }));
+    modelConfig.listAvailable = vi.fn(async () => ({
+      status: "ok",
+      models: [
+        {
+          provider_key: "openai",
+          provider_name: "OpenAI",
+          model_id: "gpt-4.1",
+          model_name: "GPT-4.1",
+          family: null,
+          reasoning: true,
+          tool_call: true,
+          modalities: { output: ["text"] },
+        },
+        {
+          provider_key: "openai",
+          provider_name: "OpenAI",
+          model_id: "gpt-4.1-mini",
+          model_name: "GPT-4.1 Mini",
+          family: null,
+          reasoning: true,
+          tool_call: true,
+          modalities: { output: ["text"] },
+        },
+      ],
+    }));
+    modelConfig.listAssignments = vi.fn(async () => ({
+      status: "ok",
+      assignments,
+    }));
+
+    let deleteAttempt = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      expect(url).toBe("http://example.test/config/models/presets/preset-default");
+      expect(init?.method).toBe("DELETE");
+
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
+
+      deleteAttempt += 1;
+      const bodyRaw = String(init?.body ?? "");
+      const body = JSON.parse(bodyRaw);
+
+      if (deleteAttempt === 1) {
+        expect(body).toEqual({
+          replacement_assignments: { interaction: "preset-review" },
+        });
+        return new Response(
+          JSON.stringify({
+            error: "assignment_required",
+            message: "Planner still requires a replacement.",
+            required_execution_profile_ids: ["planner"],
+          }),
+          { status: 409 },
+        );
+      }
+
+      expect(body).toEqual({
+        replacement_assignments: {
+          interaction: "preset-review",
+          planner: "preset-review",
+        },
+      });
+      presets = [presets[1]!];
+      assignments = [
+        {
+          execution_profile_id: "interaction",
+          preset_key: "preset-review",
+          preset_display_name: "Review",
+          provider_key: "openai",
+          model_id: "gpt-4.1-mini",
+        },
+        {
+          execution_profile_id: "planner",
+          preset_key: "preset-review",
+          preset_display_name: "Review",
+          provider_key: "openai",
+          model_id: "gpt-4.1-mini",
+        },
+      ];
+
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(ElevatedModeProvider, { core, mode: "web" }, [
+        React.createElement(ConfigurePage, { key: "page", core }),
+      ]),
+    );
+
+    await switchHttpTab(container, "admin-http-tab-models");
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const removeButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.trim() === "Remove",
+    );
+    expect(removeButton).toBeDefined();
+
+    act(() => {
+      removeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const confirmDialog = document.body.querySelector<HTMLElement>(
+      "[data-testid='confirm-danger-dialog']",
+    );
+    const confirmCheckbox = document.body.querySelector<HTMLElement>(
+      "[data-testid='confirm-danger-checkbox']",
+    );
+    const confirmButton = document.body.querySelector<HTMLButtonElement>(
+      "[data-testid='confirm-danger-confirm']",
+    );
+    expect(confirmDialog).not.toBeNull();
+    expect(confirmCheckbox).not.toBeNull();
+    expect(confirmButton).not.toBeNull();
+
+    act(() => {
+      confirmCheckbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expect(document.body.textContent).toContain(
+      "Select a replacement preset for every required execution profile.",
+    );
+
+    let replacementSelect = confirmDialog?.querySelector<HTMLSelectElement>("select");
+    expect(replacementSelect).not.toBeNull();
+    setSelectValue(replacementSelect!, "preset-review");
+
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).toContain(
+      "Select replacement presets before removing this model.",
+    );
+
+    replacementSelect = confirmDialog?.querySelector<HTMLSelectElement>("select");
+    expect(replacementSelect).not.toBeNull();
+    setSelectValue(replacementSelect!, "preset-review");
+
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(container.textContent).not.toContain("Default (openai/gpt-4.1)");
 
     cleanupTestRoot({ container, root });
   });

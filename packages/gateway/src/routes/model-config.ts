@@ -395,17 +395,21 @@ export function createModelConfigRoutes(deps: ModelConfigRouteDeps): Hono {
     }
 
     const presetsByKey = await loadPresetByKey(deps.configuredModelPresetDal, tenantId);
-    const assignments = EXECUTION_PROFILE_IDS.map((executionProfileId: string) => {
+    const assignments = [];
+    for (const executionProfileId of EXECUTION_PROFILE_IDS) {
       const presetKey = assignmentRecord[executionProfileId];
       const preset = presetKey ? presetsByKey.get(presetKey) : undefined;
       if (!preset) {
-        throw new Error(`preset '${presetKey ?? ""}' not found`);
+        return c.json(
+          { error: "invalid_request", message: `preset '${presetKey}' not found` },
+          400,
+        );
       }
-      return {
+      assignments.push({
         executionProfileId,
         presetKey: preset.preset_key,
-      };
-    });
+      });
+    }
 
     try {
       await deps.executionProfileModelAssignmentDal.upsertMany({

@@ -292,6 +292,25 @@ describe("provider + model config routes", () => {
     ).toBe(true);
   });
 
+  it("returns 400 when assignments reference a missing preset", async () => {
+    const { app } = await createTestApp();
+
+    const assignmentsRes = await app.request("/config/models/assignments", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        assignments: Object.fromEntries(
+          EXECUTION_PROFILE_IDS.map((profileId) => [profileId, "missing-preset"]),
+        ),
+      }),
+    });
+
+    expect(assignmentsRes.status).toBe(400);
+    const body = (await assignmentsRes.json()) as { error: string; message: string };
+    expect(body.error).toBe("invalid_request");
+    expect(body.message).toContain("missing-preset");
+  });
+
   it("blocks deleting the last provider account while presets still reference the provider", async () => {
     const { app, container } = await createTestApp();
     await seedCatalog(new ModelsDevCacheDal(container.db), {
