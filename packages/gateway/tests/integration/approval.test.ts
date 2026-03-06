@@ -35,6 +35,22 @@ function createMockWs(options?: { bufferedAmount?: number; readyState?: number }
   };
 }
 
+function createDeviceClaims(input: {
+  tokenId: string;
+  scopes: string[];
+  role?: "client" | "node";
+  deviceId?: string;
+}) {
+  return {
+    token_kind: "device" as const,
+    token_id: input.tokenId,
+    tenant_id: DEFAULT_TENANT_ID,
+    role: input.role ?? "client",
+    scopes: input.scopes,
+    ...(input.deviceId ? { device_id: input.deviceId } : {}),
+  };
+}
+
 describe("Approval routes", () => {
   let app: Hono;
 
@@ -303,7 +319,7 @@ describe("Approval routes (with DAL access)", () => {
     });
   });
 
-  it("broadcasts approval.resolved to operator clients but not nodes", async () => {
+  it("broadcasts approval.resolved to approval-scoped operators but not read-only clients or nodes", async () => {
     const approval = await container.approvalDal.create({
       ...approvalScope,
       approvalKey: "approval-test-node-audience",
@@ -312,39 +328,47 @@ describe("Approval routes (with DAL access)", () => {
 
     const connectionManager = new ConnectionManager();
     const operatorWs = createMockWs();
+    const readOnlyWs = createMockWs();
     const nodeWs = createMockWs();
     connectionManager.addClient(operatorWs as never, ["cli"] as never, {
       id: "operator-client",
       role: "client",
-      authClaims: {
-        token_kind: "admin",
-        token_id: "token-operator",
-        tenant_id: DEFAULT_TENANT_ID,
-        role: "admin",
-        scopes: ["*"],
-      },
+      authClaims: createDeviceClaims({
+        tokenId: "token-operator",
+        scopes: ["operator.approvals"],
+        deviceId: "dev-operator-1",
+      }),
+    });
+    connectionManager.addClient(readOnlyWs as never, ["cli"] as never, {
+      id: "readonly-client",
+      role: "client",
+      authClaims: createDeviceClaims({
+        tokenId: "token-readonly",
+        scopes: ["operator.read"],
+        deviceId: "dev-readonly-1",
+      }),
     });
     connectionManager.addClient(nodeWs as never, ["cli"] as never, {
       id: "node-client",
       role: "node",
-      authClaims: {
-        token_kind: "admin",
-        token_id: "token-node",
-        tenant_id: DEFAULT_TENANT_ID,
-        role: "admin",
-        scopes: ["*"],
-      },
+      authClaims: createDeviceClaims({
+        tokenId: "token-node",
+        role: "node",
+        scopes: ["operator.approvals"],
+        deviceId: "dev-node-1",
+      }),
     });
 
     const approvalApp = new (await import("hono")).Hono();
     approvalApp.use("*", async (c, next) => {
-      c.set("authClaims", {
-        token_kind: "admin",
-        token_id: "token-1",
-        tenant_id: DEFAULT_TENANT_ID,
-        role: "admin",
-        scopes: ["*"],
-      });
+      c.set(
+        "authClaims",
+        createDeviceClaims({
+          tokenId: "token-1",
+          scopes: ["operator.approvals"],
+          deviceId: "dev-requester-1",
+        }),
+      );
       return await next();
     });
     approvalApp.route(
@@ -367,6 +391,118 @@ describe("Approval routes (with DAL access)", () => {
     expect(JSON.parse(String(operatorWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
       type: "approval.resolved",
     });
+    expect(readOnlyWs.send).not.toHaveBeenCalled();
+    expect(nodeWs.send).not.toHaveBeenCalled();
+  });
+
+  it("broadcasts approval-created policy overrides to approval and admin operators only", async () => {
+    const approval = await container.approvalDal.create({
+      ...approvalScope,
+      approvalKey: "approval-test-policy-override-audience",
+      prompt: "Approve always?",
+      context: {
+        policy: {
+          agent_id: DEFAULT_AGENT_ID,
+          suggested_overrides: [
+            {
+              tool_id: "tool.exec",
+              pattern: "echo hi",
+              workspace_id: DEFAULT_WORKSPACE_ID,
+            },
+          ],
+        },
+      },
+    });
+
+    const connectionManager = new ConnectionManager();
+    const approvalOperatorWs = createMockWs();
+    const policyAdminWs = createMockWs();
+    const readOnlyWs = createMockWs();
+    const nodeWs = createMockWs();
+    connectionManager.addClient(approvalOperatorWs as never, ["cli"] as never, {
+      id: "approval-operator-client",
+      role: "client",
+      authClaims: createDeviceClaims({
+        tokenId: "token-approval-operator",
+        scopes: ["operator.approvals"],
+        deviceId: "dev-approval-operator",
+      }),
+    });
+    connectionManager.addClient(policyAdminWs as never, ["cli"] as never, {
+      id: "policy-admin-client",
+      role: "client",
+      authClaims: createDeviceClaims({
+        tokenId: "token-policy-admin",
+        scopes: ["operator.admin"],
+        deviceId: "dev-policy-admin",
+      }),
+    });
+    connectionManager.addClient(readOnlyWs as never, ["cli"] as never, {
+      id: "readonly-client",
+      role: "client",
+      authClaims: createDeviceClaims({
+        tokenId: "token-readonly",
+        scopes: ["operator.read"],
+        deviceId: "dev-readonly-2",
+      }),
+    });
+    connectionManager.addClient(nodeWs as never, ["cli"] as never, {
+      id: "node-client",
+      role: "node",
+      authClaims: createDeviceClaims({
+        tokenId: "token-node-admin",
+        role: "node",
+        scopes: ["operator.admin"],
+        deviceId: "dev-node-2",
+      }),
+    });
+
+    const approvalApp = new (await import("hono")).Hono();
+    approvalApp.use("*", async (c, next) => {
+      c.set(
+        "authClaims",
+        createDeviceClaims({
+          tokenId: "token-request-approval",
+          scopes: ["operator.approvals"],
+          deviceId: "dev-request-approval",
+        }),
+      );
+      return await next();
+    });
+    approvalApp.route(
+      "/",
+      createApprovalRoutes({
+        approvalDal: container.approvalDal,
+        policyOverrideDal: container.policyOverrideDal,
+        logger: container.logger,
+        ws: { connectionManager },
+      }),
+    );
+
+    const res = await approvalApp.request(`/approvals/${String(approval.approval_id)}/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        decision: "approved",
+        mode: "always",
+        overrides: [
+          {
+            tool_id: "tool.exec",
+            pattern: "echo hi",
+            workspace_id: DEFAULT_WORKSPACE_ID,
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(
+      approvalOperatorWs.send.mock.calls.map((call) => JSON.parse(String(call[0]))["type"]),
+    ).toEqual(["policy_override.created", "approval.resolved"]);
+    expect(
+      policyAdminWs.send.mock.calls.map((call) => JSON.parse(String(call[0]))["type"]),
+    ).toEqual(["policy_override.created"]);
+    expect(readOnlyWs.send).not.toHaveBeenCalled();
     expect(nodeWs.send).not.toHaveBeenCalled();
   });
 });

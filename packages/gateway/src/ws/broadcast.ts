@@ -3,11 +3,7 @@ import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { MetricsRegistry } from "../modules/observability/metrics.js";
 import type { ConnectionManager } from "./connection-manager.js";
-import {
-  OPERATOR_WS_AUDIENCE,
-  shouldDeliverToWsAudience,
-  type WsBroadcastAudience,
-} from "./audience.js";
+import { shouldDeliverToWsAudience, type WsBroadcastAudience } from "./audience.js";
 import { safeSendWs } from "./safe-send.js";
 
 export interface WsBroadcastClusterDeps {
@@ -60,12 +56,4 @@ export function broadcastWsEvent(
         // Intentional: cluster broadcast enqueue is best-effort; failures may drop this event for remote peers.
       });
   }
-}
-
-export function broadcastToOperators(
-  tenantId: string,
-  evt: WsEventEnvelope,
-  deps: WsBroadcastDeps,
-): void {
-  broadcastWsEvent(tenantId, evt, deps, OPERATOR_WS_AUDIENCE);
 }

@@ -16,6 +16,11 @@ export const APPROVAL_WS_AUDIENCE = {
   required_scopes: ["operator.approvals"],
 } as const satisfies WsBroadcastAudience;
 
+export const APPROVAL_POLICY_OVERRIDE_WS_AUDIENCE = {
+  roles: ["client"],
+  required_scopes: ["operator.approvals", "operator.admin"],
+} as const satisfies WsBroadcastAudience;
+
 export const PAIRING_WS_AUDIENCE = {
   roles: ["client"],
   required_scopes: ["operator.pairing"],

@@ -55,22 +55,35 @@ describe("policy overrides expiry events", () => {
     const ws = createMockWs();
     connectionManager.addClient(ws as never, ["cli"], {
       authClaims: {
-        token_kind: "admin",
-        token_id: "token-1",
+        token_kind: "device",
+        token_id: "token-admin-1",
         tenant_id: DEFAULT_TENANT_ID,
-        role: "admin",
-        scopes: ["*"],
+        role: "client",
+        device_id: "dev-admin-1",
+        scopes: ["operator.admin"],
+      },
+    });
+    const approvalWs = createMockWs();
+    connectionManager.addClient(approvalWs as never, ["cli"], {
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-approval-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "client",
+        device_id: "dev-approval-1",
+        scopes: ["operator.approvals"],
       },
     });
     const nodeWs = createMockWs();
     connectionManager.addClient(nodeWs as never, ["cli"], {
       role: "node",
       authClaims: {
-        token_kind: "admin",
+        token_kind: "device",
         token_id: "token-node-1",
         tenant_id: DEFAULT_TENANT_ID,
-        role: "admin",
-        scopes: ["*"],
+        role: "node",
+        device_id: "dev-node-1",
+        scopes: ["operator.admin"],
       },
     });
 
@@ -89,11 +102,12 @@ describe("policy overrides expiry events", () => {
     const app = new Hono();
     app.use("*", async (c, next) => {
       c.set("authClaims", {
-        token_kind: "admin",
-        token_id: "token-1",
+        token_kind: "device",
+        token_id: "token-admin-1",
         tenant_id: DEFAULT_TENANT_ID,
-        role: "admin",
-        scopes: ["*"],
+        role: "client",
+        device_id: "dev-admin-1",
+        scopes: ["operator.admin"],
       });
       return await next();
     });
@@ -104,6 +118,7 @@ describe("policy overrides expiry events", () => {
 
     await outboxPoller.tick();
     expect(ws.send).toHaveBeenCalledTimes(1);
+    expect(approvalWs.send).not.toHaveBeenCalled();
     expect(nodeWs.send).not.toHaveBeenCalled();
 
     const evt1 = JSON.parse(String(ws.send.mock.calls[0]?.[0] ?? "{}")) as {

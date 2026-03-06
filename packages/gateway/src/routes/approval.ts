@@ -19,8 +19,8 @@ import { isSafeSuggestedOverridePattern } from "../modules/policy/override-guard
 import { getClientIp } from "../modules/auth/client-ip.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 import {
+  APPROVAL_POLICY_OVERRIDE_WS_AUDIENCE,
   APPROVAL_WS_AUDIENCE,
-  POLICY_WS_AUDIENCE,
   type WsBroadcastAudience,
 } from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
@@ -319,10 +319,10 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
         const persistedEvent = await ensurePolicyOverrideCreatedEvent({
           tenantId,
           override: row,
-          audience: POLICY_WS_AUDIENCE,
+          audience: APPROVAL_POLICY_OVERRIDE_WS_AUDIENCE,
           wsEventDal: deps.wsEventDal,
         });
-        emitEvent(deps, tenantId, persistedEvent.event, POLICY_WS_AUDIENCE);
+        emitEvent(deps, tenantId, persistedEvent.event, APPROVAL_POLICY_OVERRIDE_WS_AUDIENCE);
       }
     }
 
