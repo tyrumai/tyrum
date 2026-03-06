@@ -20,7 +20,7 @@ export type CliCommand =
   | { kind: "config_show" }
   | { kind: "identity_init" }
   | { kind: "identity_show" }
-  | { kind: "elevated_mode_enter"; elevated_token: string; ttl_seconds?: number }
+  | { kind: "elevated_mode_enter"; ttl_seconds?: number }
   | { kind: "elevated_mode_status" }
   | { kind: "elevated_mode_exit" }
   | { kind: "approvals_list"; limit: number }

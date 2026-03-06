@@ -59,7 +59,11 @@ export async function handleElevatedModeEnter(
     const config = await requireOperatorConfig(home);
     const http = createTyrumHttpClient({
       baseUrl: config.gateway_url,
-      auth: { type: "bearer", token: command.elevated_token },
+      auth: { type: "bearer", token: config.auth_token },
+      ...(config.tls_cert_fingerprint256
+        ? { tlsCertFingerprint256: config.tls_cert_fingerprint256 }
+        : {}),
+      ...(config.tls_allow_self_signed ? { tlsAllowSelfSigned: true } : {}),
     });
 
     const issued = await http.deviceTokens.issue({

@@ -10,7 +10,7 @@ export function printCliHelp(): void {
       "  tyrum-cli config set --gateway-url <url> --token <token> [--tls-fingerprint256 <hex>] [--tls-allow-self-signed]",
       "  tyrum-cli identity show",
       "  tyrum-cli identity init",
-      "  tyrum-cli elevated-mode enter --elevated-token <token> [--ttl-seconds <n>]",
+      "  tyrum-cli elevated-mode enter [--ttl-seconds <n>]",
       "  tyrum-cli elevated-mode status",
       "  tyrum-cli elevated-mode exit",
       "  tyrum-cli approvals list [--limit <n>]",

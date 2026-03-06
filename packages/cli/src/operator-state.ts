@@ -151,7 +151,7 @@ export async function requireElevatedModeToken(
   if (state) return state.elevatedToken;
 
   throw new Error(
-    "Elevated Mode required: run 'tyrum-cli elevated-mode enter --elevated-token <token>' " +
+    "Elevated Mode required: run 'tyrum-cli elevated-mode enter' " +
       "or pass --elevated-token <token> explicitly for this command.",
   );
 }

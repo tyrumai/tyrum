@@ -70,6 +70,12 @@ function setControlledInputValue(input: HTMLInputElement, value: string): void {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+function requestInfoToUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
 function stubUrlObjectUrls(): { restore: () => void } {
   const originalCreateObjectURL = (URL as unknown as { createObjectURL?: unknown }).createObjectURL;
   const originalRevokeObjectURL = (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL;
@@ -395,6 +401,7 @@ function sampleExecutionAttempt({
 
 function createFakeHttpClient(): {
   http: OperatorHttpClient;
+  deviceTokensIssue: ReturnType<typeof vi.fn>;
   statusGet: ReturnType<typeof vi.fn>;
   usageGet: ReturnType<typeof vi.fn>;
   presenceList: ReturnType<typeof vi.fn>;
@@ -406,6 +413,22 @@ function createFakeHttpClient(): {
   agentStatusGet: ReturnType<typeof vi.fn>;
   modelAssignmentsUpdate: ReturnType<typeof vi.fn>;
 } {
+  const deviceTokensIssue = vi.fn(async () => ({
+    token_kind: "device" as const,
+    token: "elevated-device-token",
+    token_id: "token-1",
+    device_id: "operator-ui",
+    role: "client" as const,
+    scopes: [
+      "operator.read",
+      "operator.write",
+      "operator.approvals",
+      "operator.pairing",
+      "operator.admin",
+    ],
+    issued_at: "2026-02-27T00:00:00.000Z",
+    expires_at: "2099-01-01T00:00:00.000Z",
+  }));
   const statusGet = vi.fn(async () => sampleStatusResponse());
   const usageGet = vi.fn(async () => sampleUsageResponse());
   const presenceList = vi.fn(async () => samplePresenceResponse());
@@ -435,6 +458,10 @@ function createFakeHttpClient(): {
   }));
 
   const http: OperatorHttpClient = {
+    deviceTokens: {
+      issue: deviceTokensIssue,
+      revoke: vi.fn(async () => ({ revoked: true })),
+    },
     status: { get: statusGet },
     usage: { get: usageGet },
     presence: { list: presenceList },
@@ -554,6 +581,7 @@ function createFakeHttpClient(): {
 
   return {
     http,
+    deviceTokensIssue,
     statusGet,
     usageGet,
     presenceList,
@@ -3731,11 +3759,6 @@ describe("operator-ui", () => {
   });
 
   it("gates an admin-only Settings action behind Elevated Mode", async () => {
-    const issuedAt = "2026-02-27T00:00:00.000Z";
-    const expiresAt = "2026-02-27T00:10:00.000Z";
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(issuedAt));
-
     const expectedScopes = [
       "operator.read",
       "operator.write",
@@ -3744,29 +3767,8 @@ describe("operator-ui", () => {
       "operator.admin",
     ];
 
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      const headers = new Headers(init?.headers);
-      expect(init?.method).toBe("POST");
-      expect(headers.get("authorization")).toBe("Bearer admin-token");
-
-      return new Response(
-        JSON.stringify({
-          token_kind: "device",
-          token: "elevated-device-token",
-          token_id: "token-1",
-          device_id: "operator-ui",
-          role: "client",
-          scopes: expectedScopes,
-          issued_at: issuedAt,
-          expires_at: expiresAt,
-        }),
-        { status: 201, headers: { "content-type": "application/json" } },
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-
     const ws = new FakeWsClient();
-    const { http } = createFakeHttpClient();
+    const { http, deviceTokensIssue } = createFakeHttpClient();
     const core = createOperatorCore({
       wsUrl: "ws://example.test/ws",
       httpBaseUrl: "http://example.test",
@@ -3797,14 +3799,6 @@ describe("operator-ui", () => {
       enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const tokenField = document.querySelector<HTMLInputElement>(
-      '[data-testid="elevated-mode-token"]',
-    );
-    expect(tokenField).not.toBeNull();
-    act(() => {
-      tokenField!.value = "admin-token";
-    });
-
     const confirmCheckbox = document.querySelector<HTMLInputElement>(
       '[data-testid="elevated-mode-confirm"]',
     );
@@ -3824,19 +3818,17 @@ describe("operator-ui", () => {
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [, callInit] = fetchMock.mock.calls[0] ?? [];
-    const bodyText = typeof callInit?.body === "string" ? callInit.body : "";
-    const body = JSON.parse(bodyText) as { scopes?: unknown; ttl_seconds?: unknown };
-    expect(body).toMatchObject({
+    expect(deviceTokensIssue).toHaveBeenCalledTimes(1);
+    expect(deviceTokensIssue).toHaveBeenCalledWith({
+      device_id: "operator-ui",
+      role: "client",
+      scopes: expectedScopes,
       ttl_seconds: 60 * 10,
     });
-    expect(body.scopes).toEqual(expect.arrayContaining(expectedScopes));
-    expect(body.scopes).toHaveLength(expectedScopes.length);
     expect(core.elevatedModeStore.getSnapshot()).toMatchObject({
       status: "active",
       elevatedToken: "elevated-device-token",
-      expiresAt,
+      expiresAt: "2099-01-01T00:00:00.000Z",
     });
     expect(container.querySelector('[data-testid="elevated-mode-banner"]')).not.toBeNull();
     expect(
@@ -3870,17 +3862,13 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("gates admin-only actions behind a shared Elevated Mode flow", async () => {
+  it("uses baseline bearer auth to enter Elevated Mode", async () => {
     const issuedAt = "2026-02-27T00:00:00.000Z";
     const expiresAt = "2026-02-27T00:10:00.000Z";
     vi.useFakeTimers();
     vi.setSystemTime(new Date(issuedAt));
 
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      const headers = new Headers(init?.headers);
-      expect(init?.method).toBe("POST");
-      expect(headers.get("authorization")).toBe("Bearer admin-token");
-
+    const fetchMock = vi.fn(async () => {
       return new Response(
         JSON.stringify({
           token_kind: "device",
@@ -3898,12 +3886,11 @@ describe("operator-ui", () => {
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const ws = new FakeWsClient();
-    const { http } = createFakeHttpClient();
     const core = createOperatorCore({
       wsUrl: "ws://example.test/ws",
       httpBaseUrl: "http://example.test",
       auth: createBearerTokenAuth("baseline"),
-      deps: { ws, http },
+      deps: { ws },
     });
 
     const container = document.createElement("div");
@@ -3944,28 +3931,106 @@ describe("operator-ui", () => {
     const dialog = document.querySelector('[data-testid="elevated-mode-dialog"]');
     expect(dialog).not.toBeNull();
 
-    const tokenField = document.querySelector<HTMLInputElement>(
-      '[data-testid="elevated-mode-token"]',
+    const confirmCheckbox = document.querySelector<HTMLInputElement>(
+      '[data-testid="elevated-mode-confirm"]',
     );
-    expect(tokenField).not.toBeNull();
-    expect(tokenField!.type).toBe("password");
-    expect(tokenField!.getAttribute("autocomplete")).toBe("off");
+    expect(confirmCheckbox).not.toBeNull();
+    act(() => {
+      confirmCheckbox!.checked = true;
+      confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
 
-    const toggleTokenButton = document.querySelector<HTMLButtonElement>(
-      '[data-testid="elevated-mode-token-toggle"]',
+    const submitButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="elevated-mode-submit"]',
     );
-    expect(toggleTokenButton).not.toBeNull();
-    act(() => {
-      toggleTokenButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(submitButton).not.toBeNull();
+
+    await act(async () => {
+      submitButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
     });
-    expect(tokenField!.type).toBe("text");
-    act(() => {
-      toggleTokenButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    const issueCalls = fetchMock.mock.calls.filter(([input]) =>
+      requestInfoToUrl(input).endsWith("/auth/device-tokens/issue"),
+    );
+    expect(issueCalls).toHaveLength(1);
+    const [, callInit] = issueCalls[0] ?? [];
+    const headers = new Headers(callInit?.headers);
+    expect(callInit?.method).toBe("POST");
+    expect(headers.get("authorization")).toBe("Bearer baseline");
+    expect(core.elevatedModeStore.getSnapshot()).toMatchObject({
+      status: "active",
+      elevatedToken: "elevated-device-token",
+      expiresAt,
     });
-    expect(tokenField!.type).toBe("password");
+
+    expect(container.querySelector('[data-testid="elevated-mode-banner"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="danger-action"]')).not.toBeNull();
 
     act(() => {
-      tokenField!.value = "  admin-token  ";
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("uses baseline cookie auth to enter Elevated Mode in web mode", async () => {
+    const issuedAt = "2026-02-27T00:00:00.000Z";
+    const expiresAt = "2026-02-27T00:10:00.000Z";
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          token_kind: "device",
+          token: "elevated-device-token",
+          token_id: "token-1",
+          device_id: "operator-ui",
+          role: "client",
+          scopes: ["operator.admin"],
+          issued_at: issuedAt,
+          expires_at: expiresAt,
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const ws = new FakeWsClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBrowserCookieAuth(),
+      deps: { ws },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(ElevatedModeProvider, {
+          core,
+          mode: "web",
+          children: React.createElement(
+            ElevatedModeGate,
+            null,
+            React.createElement(
+              "button",
+              { type: "button", "data-testid": "danger-action" },
+              "Danger action",
+            ),
+          ),
+        }),
+      );
+    });
+
+    const enterButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="elevated-mode-enter"]',
+    );
+    expect(enterButton).not.toBeNull();
+
+    act(() => {
+      enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const confirmCheckbox = document.querySelector<HTMLInputElement>(
@@ -3987,15 +4052,14 @@ describe("operator-ui", () => {
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(core.elevatedModeStore.getSnapshot()).toMatchObject({
-      status: "active",
-      elevatedToken: "elevated-device-token",
-      expiresAt,
-    });
-
-    expect(container.querySelector('[data-testid="elevated-mode-banner"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="danger-action"]')).not.toBeNull();
+    const issueCalls = fetchMock.mock.calls.filter(([input]) =>
+      requestInfoToUrl(input).endsWith("/auth/device-tokens/issue"),
+    );
+    expect(issueCalls).toHaveLength(1);
+    const [, callInit] = issueCalls[0] ?? [];
+    const headers = new Headers(callInit?.headers);
+    expect(headers.has("authorization")).toBe(false);
+    expect(callInit?.credentials).toBe("include");
 
     act(() => {
       root?.unmount();
@@ -4052,14 +4116,8 @@ describe("operator-ui", () => {
     expect(dialog?.getAttribute("aria-modal")).toBe("true");
     expect(dialog?.getAttribute("aria-labelledby")).toBeTruthy();
 
-    const tokenField = document.querySelector<HTMLInputElement>(
-      '[data-testid="elevated-mode-token"]',
-    );
-    expect(tokenField).not.toBeNull();
-    expect(tokenField!.type).toBe("password");
-
     act(() => {
-      tokenField?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
 
     expect(document.querySelector('[data-testid="elevated-mode-dialog"]')).toBeNull();
