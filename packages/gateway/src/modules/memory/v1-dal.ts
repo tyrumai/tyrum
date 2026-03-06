@@ -78,6 +78,9 @@ interface RawSearchRow {
   metadata_json: string | null;
 }
 
+type MemorySearchInput = Pick<MemorySearchRequest, "query" | "filter" | "limit" | "cursor"> &
+  Partial<Pick<MemorySearchRequest, "v" | "agent_id">>;
+
 function normalizeTime(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value;
 }
@@ -1145,7 +1148,7 @@ export class MemoryV1Dal {
   }
 
   async search(
-    input: MemorySearchRequest,
+    input: MemorySearchInput,
     scope?: { tenantId?: string; agentId?: string } | string,
   ): Promise<MemorySearchResponse> {
     const normalizedScope = this.normalizeScope(scope);
