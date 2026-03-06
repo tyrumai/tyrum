@@ -67,8 +67,40 @@ describe("model tool naming", () => {
   it("deduplicates model-facing names when sanitized ids would collide", () => {
     const names = buildModelToolNameMap(["tool.a.b", "tool_a_b"]);
 
-    expect(names.get("tool.a.b")).toBe("tool_a_b");
-    expect(names.get("tool_a_b")).toMatch(/^tool_a_b_/);
-    expect(names.get("tool_a_b")).not.toBe("tool_a_b");
+    expect(names.get("tool.a.b")).toMatch(/^tool_a_b_/);
+    expect(names.get("tool.a.b")).not.toBe("tool_a_b");
+    expect(names.get("tool_a_b")).toBe("tool_a_b");
+  });
+
+  it("avoids colliding with another tool's canonical id", () => {
+    const names = buildModelToolNameMap(["tool.fs.read", "tool_fs_read"]);
+    const toolSet: Record<string, { id: string }> = {};
+    const firstTool = { id: "tool.fs.read" };
+    const secondTool = { id: "tool_fs_read" };
+    const firstModelToolName = names.get("tool.fs.read");
+
+    registerModelTool(toolSet, "tool.fs.read", firstTool, names);
+    registerModelTool(toolSet, "tool_fs_read", secondTool, names);
+
+    expect(firstModelToolName).toBeDefined();
+    expect(Object.keys(toolSet)).toEqual([firstModelToolName, "tool_fs_read"]);
+    expect(toolSet[firstModelToolName ?? ""]).toBe(firstTool);
+    expect(toolSet["tool.fs.read"]).toBe(firstTool);
+    expect(toolSet["tool_fs_read"]).toBe(secondTool);
+  });
+
+  it("throws when alias registration would overwrite another tool", () => {
+    const toolSet: Record<string, { id: string }> = {
+      tool_fs_read: { id: "existing" },
+    };
+
+    expect(() =>
+      registerModelTool(
+        toolSet,
+        "tool_fs_read",
+        { id: "tool_fs_read" },
+        new Map([["tool_fs_read", "tool_fs_read_1234"]]),
+      ),
+    ).toThrow("model tool alias collision");
   });
 });
