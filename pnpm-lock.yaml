@@ -397,6 +397,9 @@ importers:
       venice-ai-sdk-provider:
         specifier: ^1.1.18
         version: 1.1.18(ai@6.0.116(zod@4.3.6))(zod@4.3.6)
+      verror:
+        specifier: ^1.10.1
+        version: 1.10.1
       ws:
         specifier: ^8.19.0
         version: 8.19.0

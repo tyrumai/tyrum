@@ -1,4 +1,9 @@
-import { isElevatedModeActive, type OperatorCore } from "@tyrum/operator-core";
+import {
+  isElevatedModeActive,
+  type ConnectionState,
+  type ExternalStore,
+  type OperatorCore,
+} from "@tyrum/operator-core";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { OperatorUiMode } from "../../app.js";
 import { useOperatorStore } from "../../use-operator-store.js";
@@ -17,6 +22,18 @@ type ElevatedModeUiContextValue = {
 };
 
 const ELEVATED_MODE_STORAGE_KEY = "tyrum.operator-ui.elevated-mode.v1";
+const DISCONNECTED_CONNECTION_STATE: ConnectionState = {
+  status: "disconnected",
+  recovering: false,
+  nextRetryAtMs: null,
+  clientId: null,
+  lastDisconnect: null,
+  transportError: null,
+};
+const DISCONNECTED_CONNECTION_STORE: ExternalStore<ConnectionState> = {
+  subscribe: () => () => {},
+  getSnapshot: () => DISCONNECTED_CONNECTION_STATE,
+};
 
 type PersistedElevatedModeState = {
   httpBaseUrl: string;
@@ -99,7 +116,10 @@ export function ElevatedModeProvider({
 }: ElevatedModeProviderProps) {
   const [isEnterOpen, setIsEnterOpen] = useState(false);
   const elevatedMode = useOperatorStore(core.elevatedModeStore);
-  const connection = useOperatorStore(core.connectionStore);
+  const connection = useOperatorStore(
+    (core as { connectionStore?: ExternalStore<ConnectionState> }).connectionStore ??
+      DISCONNECTED_CONNECTION_STORE,
+  );
   const restorePendingRef = useRef(false);
   const restoredTokenRef = useRef<string | null>(null);
 
@@ -193,6 +213,9 @@ export function ElevatedModeProvider({
       scopes: [...ELEVATED_MODE_SCOPES],
       ttl_seconds: 60 * 10,
     });
+    if (!issued.expires_at) {
+      throw new Error("Gateway returned a timed elevated-mode token without expires_at.");
+    }
 
     core.elevatedModeStore.enter({
       elevatedToken: issued.token,

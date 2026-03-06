@@ -4360,6 +4360,98 @@ describe("operator-ui", () => {
     container.remove();
   });
 
+  it("rejects a timed fallback Elevated Mode token without expires_at", async () => {
+    const issuedAt = "2026-02-27T00:00:00.000Z";
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          token_kind: "device",
+          token: "elevated-device-token",
+          token_id: "token-1",
+          device_id: TEST_DEVICE_IDENTITY.deviceId,
+          role: "client",
+          scopes: ["operator.admin"],
+          issued_at: issuedAt,
+          expires_at: null,
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const ws = new FakeWsClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deviceIdentity: TEST_DEVICE_IDENTITY,
+      deps: { ws },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(ElevatedModeProvider, {
+          core,
+          mode: "web",
+          children: React.createElement(
+            ElevatedModeGate,
+            null,
+            React.createElement(
+              "button",
+              { type: "button", "data-testid": "danger-action" },
+              "Danger action",
+            ),
+          ),
+        }),
+      );
+    });
+
+    const enterButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="elevated-mode-enter"]',
+    );
+    expect(enterButton).not.toBeNull();
+
+    act(() => {
+      enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const confirmCheckbox = document.querySelector<HTMLInputElement>(
+      '[data-testid="elevated-mode-confirm"]',
+    );
+    expect(confirmCheckbox).not.toBeNull();
+    act(() => {
+      confirmCheckbox!.checked = true;
+      confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const submitButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="elevated-mode-submit"]',
+    );
+    expect(submitButton).not.toBeNull();
+
+    await act(async () => {
+      submitButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(core.elevatedModeStore.getSnapshot().status).toBe("inactive");
+    expect(container.querySelector('[data-testid="elevated-mode-frame"]')).toBeNull();
+    expect(container.querySelector('[data-testid="danger-action"]')).toBeNull();
+    expect(document.body.textContent).toContain(
+      "Gateway returned a timed elevated-mode token without expires_at.",
+    );
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
   it("uses baseline cookie auth to enter Elevated Mode in web mode", async () => {
     const issuedAt = "2026-02-27T00:00:00.000Z";
     const expiresAt = "2026-02-27T00:10:00.000Z";
