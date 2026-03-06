@@ -831,20 +831,14 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
     () => getAllowlistMode(security.profile, security.capabilities),
     [security.capabilities, security.profile],
   );
-  const securityDirty = useMemo(
-    () =>
-      initialSecurityRef.current === null
-        ? false
-        : !areSecurityStatesEqual(initialSecurityRef.current, security),
-    [security],
-  );
-  const generalDirty = useMemo(
-    () =>
-      initialConnectionRef.current === null
-        ? false
-        : hasConnectionSettingsChanged(initialConnectionRef.current, connection),
-    [connection],
-  );
+  const securityDirty =
+    initialSecurityRef.current === null
+      ? false
+      : !areSecurityStatesEqual(initialSecurityRef.current, security);
+  const generalDirty =
+    initialConnectionRef.current === null
+      ? false
+      : hasConnectionSettingsChanged(initialConnectionRef.current, connection);
 
   const saveSucceeded = (
     channel: keyof SaveResetTimers,

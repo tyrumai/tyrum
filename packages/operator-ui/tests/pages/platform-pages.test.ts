@@ -602,6 +602,64 @@ describe("Platform pages", () => {
     }
   });
 
+  it("disables the security save button after a successful save", async () => {
+    const desktopApi = {
+      getConfig: vi.fn(async () => ({
+        permissions: { profile: "balanced", overrides: {} },
+        capabilities: { desktop: true, playwright: true, cli: true, http: true },
+        cli: { allowedCommands: [], allowedWorkingDirs: [] },
+        web: { allowedDomains: [], headless: true },
+      })),
+      setConfig: vi.fn(async () => {}),
+      gateway: {
+        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
+        start: vi.fn(async () => ({ status: "running", port: 8788 })),
+        stop: vi.fn(async () => ({ status: "stopped" })),
+      },
+      node: {
+        connect: vi.fn(async () => ({ status: "connected" })),
+        disconnect: vi.fn(async () => ({ status: "disconnected" })),
+      },
+      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
+    } satisfies DesktopApi;
+
+    const testRoot = renderWithHost(
+      { kind: "desktop", api: desktopApi },
+      React.createElement(NodeConfigurePage),
+    );
+    try {
+      await flushEffects();
+
+      await act(async () => {
+        clickTab(testRoot.container, "Shell");
+        await Promise.resolve();
+      });
+
+      const commandsTextarea = getTextareaByLabel(testRoot.container, "Allowed commands");
+      act(() => {
+        setNativeValue(commandsTextarea, "git status");
+      });
+
+      const saveButtonBeforeSave = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="node-configure-save-security"]',
+      );
+      expect(saveButtonBeforeSave?.disabled).toBe(false);
+
+      await act(async () => {
+        clickByTestId(testRoot.container, "node-configure-save-security");
+        await Promise.resolve();
+      });
+
+      const saveButtonAfterSave = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="node-configure-save-security"]',
+      );
+      expect(saveButtonAfterSave?.textContent).toContain("Saved!");
+      expect(saveButtonAfterSave?.disabled).toBe(true);
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
   it("keeps mac permission request errors visible", async () => {
     const desktopApi = {
       getConfig: vi.fn(async () => ({
