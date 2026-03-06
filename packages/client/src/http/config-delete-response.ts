@@ -1,7 +1,4 @@
-import {
-  ModelConfigDeleteConflictResponse,
-  ModelConfigDeleteResponse,
-} from "@tyrum/schemas";
+import { ModelConfigDeleteConflictResponse, ModelConfigDeleteResponse } from "@tyrum/schemas";
 import { z } from "zod";
 import { validateOrThrow } from "./shared.js";
 
@@ -18,11 +15,7 @@ export async function parseModelConfigDeleteResponse(
 ): Promise<ParsedModelConfigDeleteResponse> {
   const body = (await response.json().catch(() => undefined)) as unknown;
   if (response.status === 409) {
-    return validateOrThrow(
-      ModelConfigDeleteConflictResponse,
-      body,
-      input.conflictContext,
-    );
+    return validateOrThrow(ModelConfigDeleteConflictResponse, body, input.conflictContext);
   }
   return validateOrThrow(ModelConfigDeleteResponse, body, input.responseContext);
 }
