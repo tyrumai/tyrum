@@ -33,8 +33,13 @@ export function ElevatedModeEnterDialog() {
   }, [isEnterOpen]);
 
   const issueDeviceToken = async (): Promise<void> => {
+    const deviceId = core.deviceId?.trim();
+    if (!deviceId) {
+      throw new Error("Current client device identity is unavailable.");
+    }
+
     const issued = await core.http.deviceTokens.issue({
-      device_id: "operator-ui",
+      device_id: deviceId,
       role: "client",
       scopes: [
         "operator.read",

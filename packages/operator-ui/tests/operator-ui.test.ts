@@ -59,6 +59,12 @@ const EXECUTION_PROFILE_IDS = [
   "integrator",
 ] as const;
 
+const TEST_DEVICE_IDENTITY = {
+  deviceId: "operator-ui-device-1",
+  publicKey: "test-public-key",
+  privateKey: "test-private-key",
+} as const;
+
 function setControlledInputValue(input: HTMLInputElement, value: string): void {
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set as
     | ((this: HTMLInputElement, value: string) => void)
@@ -417,7 +423,7 @@ function createFakeHttpClient(): {
     token_kind: "device" as const,
     token: "elevated-device-token",
     token_id: "token-1",
-    device_id: "operator-ui",
+    device_id: TEST_DEVICE_IDENTITY.deviceId,
     role: "client" as const,
     scopes: [
       "operator.read",
@@ -3773,6 +3779,7 @@ describe("operator-ui", () => {
       wsUrl: "ws://example.test/ws",
       httpBaseUrl: "http://example.test",
       auth: createBearerTokenAuth("baseline"),
+      deviceIdentity: TEST_DEVICE_IDENTITY,
       deps: { ws, http },
     });
 
@@ -3820,7 +3827,7 @@ describe("operator-ui", () => {
 
     expect(deviceTokensIssue).toHaveBeenCalledTimes(1);
     expect(deviceTokensIssue).toHaveBeenCalledWith({
-      device_id: "operator-ui",
+      device_id: TEST_DEVICE_IDENTITY.deviceId,
       role: "client",
       scopes: expectedScopes,
       ttl_seconds: 60 * 10,
@@ -3874,7 +3881,7 @@ describe("operator-ui", () => {
           token_kind: "device",
           token: "elevated-device-token",
           token_id: "token-1",
-          device_id: "operator-ui",
+          device_id: TEST_DEVICE_IDENTITY.deviceId,
           role: "client",
           scopes: ["operator.admin"],
           issued_at: issuedAt,
@@ -3890,6 +3897,7 @@ describe("operator-ui", () => {
       wsUrl: "ws://example.test/ws",
       httpBaseUrl: "http://example.test",
       auth: createBearerTokenAuth("baseline"),
+      deviceIdentity: TEST_DEVICE_IDENTITY,
       deps: { ws },
     });
 
@@ -3958,6 +3966,10 @@ describe("operator-ui", () => {
     const headers = new Headers(callInit?.headers);
     expect(callInit?.method).toBe("POST");
     expect(headers.get("authorization")).toBe("Bearer baseline");
+    expect(JSON.parse(String(callInit?.body))).toMatchObject({
+      device_id: TEST_DEVICE_IDENTITY.deviceId,
+      role: "client",
+    });
     expect(core.elevatedModeStore.getSnapshot()).toMatchObject({
       status: "active",
       elevatedToken: "elevated-device-token",
@@ -3982,7 +3994,7 @@ describe("operator-ui", () => {
           token_kind: "device",
           token: "elevated-device-token",
           token_id: "token-1",
-          device_id: "operator-ui",
+          device_id: TEST_DEVICE_IDENTITY.deviceId,
           role: "client",
           scopes: ["operator.admin"],
           issued_at: issuedAt,
@@ -3998,6 +4010,7 @@ describe("operator-ui", () => {
       wsUrl: "ws://example.test/ws",
       httpBaseUrl: "http://example.test",
       auth: createBrowserCookieAuth(),
+      deviceIdentity: TEST_DEVICE_IDENTITY,
       deps: { ws },
     });
 
@@ -4060,6 +4073,10 @@ describe("operator-ui", () => {
     const headers = new Headers(callInit?.headers);
     expect(headers.has("authorization")).toBe(false);
     expect(callInit?.credentials).toBe("include");
+    expect(JSON.parse(String(callInit?.body))).toMatchObject({
+      device_id: TEST_DEVICE_IDENTITY.deviceId,
+      role: "client",
+    });
 
     act(() => {
       root?.unmount();

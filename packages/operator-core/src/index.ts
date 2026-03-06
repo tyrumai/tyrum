@@ -116,11 +116,13 @@ export {
   TyrumClient,
   autoExecute,
   normalizeFingerprint256,
+  createDeviceIdentity,
   createTyrumHttpClient,
   createNodeFileDeviceIdentityStorage,
   loadOrCreateDeviceIdentity,
 } from "@tyrum/client";
 export type {
+  DeviceIdentity,
   CapabilityProvider,
   ExecutionAttempt,
   ExecutionRun,

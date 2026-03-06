@@ -5,8 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@tyrum/operator-core", () => ({
   createBearerTokenAuth: vi.fn(),
   createBrowserCookieAuth: vi.fn(),
+  createDeviceIdentity: vi.fn(),
   createElevatedModeStore: vi.fn(),
   createGatewayAuthSession: vi.fn(),
+  createOperatorCore: vi.fn(),
   createOperatorCoreManager: vi.fn(),
 }));
 
@@ -89,6 +91,15 @@ describe("apps/web main bootstrap", () => {
     vi.mocked(operatorCore.createElevatedModeStore).mockReturnValue(
       elevatedModeStore as unknown as ReturnType<typeof operatorCore.createElevatedModeStore>,
     );
+    const deviceIdentity = {
+      deviceId: "web-device-1",
+      publicKey: "test-public-key",
+      privateKey: "test-private-key",
+    };
+    vi.mocked(operatorCore.createDeviceIdentity).mockResolvedValue(
+      deviceIdentity as unknown as Awaited<ReturnType<typeof operatorCore.createDeviceIdentity>>,
+    );
+    vi.mocked(operatorCore.createOperatorCore).mockReturnValue({} as never);
 
     const { manager, unsubscribe, core } = makeManagerMock();
     vi.mocked(operatorCore.createOperatorCoreManager).mockReturnValue(
@@ -100,6 +111,7 @@ describe("apps/web main bootstrap", () => {
 
     return {
       elevatedModeStore,
+      deviceIdentity,
       manager,
       operatorCore,
       replaceStateSpy,
@@ -139,6 +151,7 @@ describe("apps/web main bootstrap", () => {
     const {
       elevatedModeStore,
       core,
+      deviceIdentity,
       manager,
       operatorCore,
       replaceStateSpy,
@@ -171,14 +184,30 @@ describe("apps/web main bootstrap", () => {
         httpBaseUrl: expectedHttpBaseUrl,
       }),
     );
+    expect(operatorCore.createDeviceIdentity).toHaveBeenCalledTimes(1);
     expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
       expect.objectContaining({
         wsUrl: expectedWsUrl,
         httpBaseUrl: expectedHttpBaseUrl,
         baselineAuth: bearerAuth,
         elevatedModeStore,
+        createCore: expect.any(Function),
       }),
     );
+    const managerArgs = vi.mocked(operatorCore.createOperatorCoreManager).mock.calls[0]?.[0];
+    managerArgs?.createCore?.({
+      wsUrl: expectedWsUrl,
+      httpBaseUrl: expectedHttpBaseUrl,
+      auth: bearerAuth,
+      elevatedModeStore,
+    });
+    expect(operatorCore.createOperatorCore).toHaveBeenCalledWith({
+      wsUrl: expectedWsUrl,
+      httpBaseUrl: expectedHttpBaseUrl,
+      auth: bearerAuth,
+      elevatedModeStore,
+      deviceIdentity,
+    });
     expect(core.connect).toHaveBeenCalledTimes(1);
     expect(replaceStateSpy).toHaveBeenCalledWith(expect.anything(), "", "/ui#hash");
     expect(root.render).toHaveBeenCalled();
@@ -209,12 +238,14 @@ describe("apps/web main bootstrap", () => {
     await import("../src/main.tsx");
 
     expect(operatorCore.createBrowserCookieAuth).toHaveBeenCalledTimes(1);
+    expect(operatorCore.createDeviceIdentity).toHaveBeenCalledTimes(1);
     expect(operatorCore.createBearerTokenAuth).not.toHaveBeenCalled();
     expect(operatorCore.createGatewayAuthSession).not.toHaveBeenCalled();
     expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
       expect.objectContaining({
         baselineAuth: cookieAuth,
         elevatedModeStore,
+        createCore: expect.any(Function),
       }),
     );
     expect(core.connect).not.toHaveBeenCalled();
