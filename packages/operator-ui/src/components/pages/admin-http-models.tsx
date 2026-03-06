@@ -361,37 +361,68 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [savingAssignments, setSavingAssignments] = React.useState(false);
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [executionProfilesErrorMessage, setExecutionProfilesErrorMessage] = React.useState<
+    string | null
+  >(null);
+  const [availableModelsErrorMessage, setAvailableModelsErrorMessage] = React.useState<
+    string | null
+  >(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editingPreset, setEditingPreset] = React.useState<ModelPreset | null>(null);
   const [deletingPreset, setDeletingPreset] = React.useState<DeletePresetDialogState>(null);
 
   const refresh = React.useCallback(async (): Promise<void> => {
     setRefreshing(true);
-    setErrorMessage(null);
-    try {
-      const [presetResult, availableResult, assignmentResult] = await Promise.all([
-        readHttp.modelConfig.listPresets(),
-        readHttp.modelConfig.listAvailable(),
-        readHttp.modelConfig.listAssignments(),
-      ]);
-      setPresets(presetResult.presets);
-      setAvailableModels(availableResult.models);
-      setAssignments(assignmentResult.assignments);
+    setExecutionProfilesErrorMessage(null);
+    setAvailableModelsErrorMessage(null);
+
+    const [presetResult, availableResult, assignmentResult] = await Promise.allSettled([
+      readHttp.modelConfig.listPresets(),
+      readHttp.modelConfig.listAvailable(),
+      readHttp.modelConfig.listAssignments(),
+    ]);
+
+    let nextExecutionProfilesErrorMessage: string | null = null;
+    let nextAvailableModelsErrorMessage: string | null = null;
+    let nextPresetCount = 0;
+
+    if (presetResult.status === "fulfilled") {
+      setPresets(presetResult.value.presets);
+      nextPresetCount = presetResult.value.presets.length;
+    } else {
+      nextExecutionProfilesErrorMessage = formatErrorMessage(presetResult.reason);
+      setPresets([]);
+    }
+
+    if (availableResult.status === "fulfilled") {
+      setAvailableModels(availableResult.value.models);
+    } else {
+      nextAvailableModelsErrorMessage = formatErrorMessage(availableResult.reason);
+      setAvailableModels([]);
+    }
+
+    if (assignmentResult.status === "fulfilled") {
+      setAssignments(assignmentResult.value.assignments);
       setAssignmentDraft(
         Object.fromEntries(
-          assignmentResult.assignments.map((assignment) => [
+          assignmentResult.value.assignments.map((assignment) => [
             assignment.execution_profile_id,
             assignment.preset_key,
           ]),
         ),
       );
-    } catch (error) {
-      setErrorMessage(formatErrorMessage(error));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    } else {
+      setAssignments([]);
+      setAssignmentDraft({});
+      if (!nextExecutionProfilesErrorMessage && nextPresetCount > 0) {
+        nextExecutionProfilesErrorMessage = formatErrorMessage(assignmentResult.reason);
+      }
     }
+
+    setExecutionProfilesErrorMessage(nextExecutionProfilesErrorMessage);
+    setAvailableModelsErrorMessage(nextAvailableModelsErrorMessage);
+    setLoading(false);
+    setRefreshing(false);
   }, [readHttp.modelConfig]);
 
   React.useEffect(() => {
@@ -412,12 +443,12 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
       return;
     }
     setSavingAssignments(true);
-    setErrorMessage(null);
+    setExecutionProfilesErrorMessage(null);
     try {
       await mutationHttp.modelConfig.updateAssignments({ assignments: assignmentDraft });
       await refresh();
     } catch (error) {
-      setErrorMessage(formatErrorMessage(error));
+      setExecutionProfilesErrorMessage(formatErrorMessage(error));
     } finally {
       setSavingAssignments(false);
     }
@@ -497,12 +528,14 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {errorMessage ? (
-            <Alert variant="error" title="Model config failed" description={errorMessage} />
-          ) : null}
-
           {loading ? (
             <div className="text-sm text-fg-muted">Loading model config…</div>
+          ) : executionProfilesErrorMessage ? (
+            <Alert
+              variant="error"
+              title="Model config failed"
+              description={executionProfilesErrorMessage}
+            />
           ) : presets.length === 0 ? (
             <Alert
               variant="info"
@@ -577,7 +610,15 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {availableModels.length === 0 ? (
+          {availableModelsErrorMessage ? (
+            <Alert
+              variant="error"
+              title="Available model discovery failed"
+              description={availableModelsErrorMessage}
+            />
+          ) : null}
+
+          {!availableModelsErrorMessage && availableModels.length === 0 ? (
             <Alert
               variant="warning"
               title="No configured provider models available"

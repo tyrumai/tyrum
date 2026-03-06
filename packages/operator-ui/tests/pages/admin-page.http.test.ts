@@ -538,6 +538,42 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     cleanupTestRoot({ container, root });
   });
 
+  it("keeps execution profiles in the empty state when provider models fail to load before any preset exists", async () => {
+    const { core } = createTestCore();
+    const modelConfig = core.http.modelConfig as {
+      listPresets: ReturnType<typeof vi.fn>;
+      listAvailable: ReturnType<typeof vi.fn>;
+      listAssignments: ReturnType<typeof vi.fn>;
+    };
+    modelConfig.listPresets = vi.fn(async () => ({
+      status: "ok",
+      presets: [],
+    }));
+    modelConfig.listAvailable = vi.fn(async () => {
+      throw new Error("Catalog unavailable");
+    });
+    modelConfig.listAssignments = vi.fn(async () => {
+      throw new Error("Assignments unavailable");
+    });
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(ElevatedModeProvider, { core, mode: "web" }, [
+        React.createElement(ConfigurePage, { key: "page", core }),
+      ]),
+    );
+
+    await switchHttpTab(container, "admin-http-tab-models");
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("No models configured");
+    expect(container.textContent).toContain("Available model discovery failed");
+    expect(container.textContent).not.toContain("Model config failed");
+
+    cleanupTestRoot({ container, root });
+  });
+
   it("saves execution-profile assignments from the models tab", async () => {
     const { core } = createTestCore();
     const modelConfig = core.http.modelConfig as {
