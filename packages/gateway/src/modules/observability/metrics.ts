@@ -6,6 +6,7 @@ type HttpRequestTotalLabels = "method" | "path" | "status";
 type HttpRequestDurationLabels = "method" | "path";
 type LifecyclePruneRowsLabels = "scheduler" | "table";
 type LifecycleTickErrorsLabels = "scheduler";
+type PersistedJsonReadFailuresLabels = "table" | "column" | "reason";
 
 export type LifecycleSchedulerName = "outbox" | "statestore";
 
@@ -15,6 +16,7 @@ export class MetricsRegistry {
   readonly httpRequestDurationSeconds: Histogram<HttpRequestDurationLabels>;
   readonly lifecyclePruneRowsTotal: Counter<LifecyclePruneRowsLabels>;
   readonly lifecycleTickErrorsTotal: Counter<LifecycleTickErrorsLabels>;
+  readonly persistedJsonReadFailuresTotal: Counter<PersistedJsonReadFailuresLabels>;
   readonly wsConnectionsActive: Gauge<never>;
 
   constructor() {
@@ -48,6 +50,13 @@ export class MetricsRegistry {
       registers: [this.registry],
     });
 
+    this.persistedJsonReadFailuresTotal = new Counter<PersistedJsonReadFailuresLabels>({
+      name: "persisted_json_read_failures_total",
+      help: "Persisted JSON read failures by table, column, and reason.",
+      labelNames: ["table", "column", "reason"] as const,
+      registers: [this.registry],
+    });
+
     this.wsConnectionsActive = new Gauge<never>({
       name: "ws_connections_active",
       help: "Number of active WebSocket connections.",
@@ -73,6 +82,14 @@ export class MetricsRegistry {
       this.lifecycleTickErrorsTotal.inc({ scheduler });
     } catch {
       // Intentional: error accounting must not make a failed lifecycle tick worse.
+    }
+  }
+
+  recordPersistedJsonReadFailure(table: string, column: string, reason: string): void {
+    try {
+      this.persistedJsonReadFailuresTotal.inc({ table, column, reason });
+    } catch {
+      // Intentional: read-path observability must not break normal request handling.
     }
   }
 }

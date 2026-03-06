@@ -7,6 +7,7 @@ import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
 import { seedCompletedTelegramTurn } from "../helpers/channel-session-repair.js";
+import { MetricsRegistry } from "../../src/modules/observability/metrics.js";
 
 describe("SessionDal", () => {
   let db: SqliteDb | undefined;
@@ -159,6 +160,43 @@ describe("SessionDal", () => {
     expect(third.summary).toContain("u1");
     expect(third.summary).toContain("u2");
     expect(third.summary).not.toContain("u3");
+  });
+
+  it("flags malformed turns_json on direct reads while keeping the session usable", async () => {
+    db = openTestSqliteDb();
+    const logger = { warn: vi.fn() };
+    const metrics = new MetricsRegistry();
+    const identityScopeDal = new IdentityScopeDal(db, { cacheTtlMs: 60_000 });
+    const channelThreadDal = new ChannelThreadDal(db);
+    const dal = new SessionDal(db, identityScopeDal, channelThreadDal, { logger, metrics });
+
+    const session = await dal.getOrCreate({
+      connectorKey: "telegram",
+      providerThreadId: "thread-corrupt",
+      containerKind: "group",
+    });
+
+    await db.run("UPDATE sessions SET turns_json = ? WHERE tenant_id = ? AND session_id = ?", [
+      "{ not: json",
+      session.tenant_id,
+      session.session_id,
+    ]);
+
+    const row = await dal.getById({ tenantId: session.tenant_id, sessionId: session.session_id });
+    expect(row?.turns).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "persisted_json.read_failed",
+      expect.objectContaining({
+        table: "sessions",
+        column: "turns_json",
+        reason: "invalid_json",
+      }),
+    );
+
+    const metricsText = await metrics.registry.getSingleMetricAsString(
+      "persisted_json_read_failures_total",
+    );
+    expect(metricsText).toContain('table="sessions",column="turns_json",reason="invalid_json"');
   });
 
   it("repairs bounded session turns and summary from retained channel logs", async () => {

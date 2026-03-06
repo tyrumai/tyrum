@@ -7,6 +7,13 @@
 
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
+import { Logger } from "../observability/logger.js";
+import { gatewayMetrics } from "../observability/metrics.js";
+import {
+  parsePersistedJson,
+  stringifyPersistedJson,
+  type PersistedJsonObserver,
+} from "../observability/persisted-json.js";
 
 export interface VectorRow {
   id: number;
@@ -29,25 +36,39 @@ interface RawVectorRow {
   vector_data: string | null;
   created_at: string | Date;
 }
+const logger = new Logger({ base: { module: "memory.vector_dal" } });
+
+export interface VectorDalOptions extends PersistedJsonObserver {}
 
 function normalizeTime(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value;
 }
 
-function toVectorRow(raw: RawVectorRow): VectorRow {
-  let metadata: unknown = {};
-  try {
-    if (raw.metadata_json) metadata = JSON.parse(raw.metadata_json) as unknown;
-  } catch {
-    // Intentional: treat invalid JSON metadata as an empty object.
-  }
+function isFiniteNumberArray(value: unknown): value is number[] {
+  return (
+    Array.isArray(value) &&
+    value.every((entry) => typeof entry === "number" && Number.isFinite(entry))
+  );
+}
 
-  let vector: number[] = [];
-  try {
-    if (raw.vector_data) vector = JSON.parse(raw.vector_data) as number[];
-  } catch {
-    // Intentional: treat invalid JSON vectors as an empty array.
-  }
+function toVectorRow(raw: RawVectorRow, observer: PersistedJsonObserver): VectorRow {
+  const metadata = parsePersistedJson<Record<string, unknown>>({
+    raw: raw.metadata_json,
+    fallback: {},
+    table: "vector_metadata",
+    column: "metadata_json",
+    shape: "object",
+    observer,
+  });
+  const vector = parsePersistedJson<number[]>({
+    raw: raw.vector_data,
+    fallback: [],
+    table: "vector_metadata",
+    column: "vector_data",
+    shape: "array",
+    observer,
+    validate: isFiniteNumberArray,
+  });
 
   return {
     id: raw.vector_metadata_id,
@@ -100,7 +121,17 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 export class VectorDal {
-  constructor(private readonly db: SqlDb) {}
+  private readonly jsonObserver: PersistedJsonObserver;
+
+  constructor(
+    private readonly db: SqlDb,
+    opts?: VectorDalOptions,
+  ) {
+    this.jsonObserver = {
+      logger: opts?.logger ?? logger,
+      metrics: opts?.metrics ?? gatewayMetrics,
+    };
+  }
 
   /** Insert a vector embedding. Returns the embedding_id. */
   async insertEmbedding(
@@ -145,8 +176,21 @@ export class VectorDal {
         embeddingId,
         model,
         label,
-        metadata !== undefined ? JSON.stringify(metadata) : null,
-        JSON.stringify(vector),
+        metadata !== undefined
+          ? stringifyPersistedJson({
+              value: metadata,
+              table: "vector_metadata",
+              column: "metadata_json",
+              shape: "object",
+            })
+          : null,
+        stringifyPersistedJson({
+          value: vector,
+          table: "vector_metadata",
+          column: "vector_data",
+          shape: "array",
+          validate: isFiniteNumberArray,
+        }),
       ],
     );
 
@@ -171,7 +215,7 @@ export class VectorDal {
     const scored: VectorSearchResult[] = [];
 
     for (const raw of rows) {
-      const row = toVectorRow(raw);
+      const row = toVectorRow(raw, this.jsonObserver);
       if (row.vector.length === 0) continue;
       const similarity = cosineSimilarity(queryVector, row.vector);
       scored.push({ row, similarity });
@@ -200,7 +244,7 @@ export class VectorDal {
       [resolved.tenantId, resolved.agentId, embeddingId],
     );
 
-    return raw ? toVectorRow(raw) : undefined;
+    return raw ? toVectorRow(raw, this.jsonObserver) : undefined;
   }
 
   /** List all embeddings, ordered by creation time descending. */
@@ -210,6 +254,6 @@ export class VectorDal {
       "SELECT * FROM vector_metadata WHERE tenant_id = ? AND agent_id = ? ORDER BY created_at DESC, vector_metadata_id DESC",
       [resolved.tenantId, resolved.agentId],
     );
-    return rows.map(toVectorRow);
+    return rows.map((row) => toVectorRow(row, this.jsonObserver));
   }
 }
