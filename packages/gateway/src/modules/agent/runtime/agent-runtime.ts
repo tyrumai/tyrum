@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { LanguageModelV3 } from "@ai-sdk/provider";
 import { generateText, stepCountIs, streamText } from "ai";
 import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import type {
@@ -268,7 +267,7 @@ export class AgentRuntime {
     executionProfileId?: ExecutionProfileId;
     profileModelId?: string;
     fetchImpl?: typeof fetch;
-  }): Promise<LanguageModelV3> {
+  }): Promise<LanguageModel> {
     return await resolveSessionModelImpl(
       {
         container: this.opts.container,

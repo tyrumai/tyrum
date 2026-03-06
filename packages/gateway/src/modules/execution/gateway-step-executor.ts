@@ -11,7 +11,7 @@ import { AuthProfileDal } from "../models/auth-profile-dal.js";
 import { createProviderFromNpm } from "../models/provider-factory.js";
 import {
   OAUTH_REFRESH_LEASE_UNAVAILABLE,
-  resolveProfileApiKey,
+  resolveProfileSecrets,
   resolveProviderBaseURL,
 } from "../agent/runtime/provider-resolution.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
@@ -28,7 +28,6 @@ import {
 } from "../ai-sdk/message-utils.js";
 import { generateText, jsonSchema, stepCountIs, tool as aiTool } from "ai";
 import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
-import type { LanguageModelV3 } from "@ai-sdk/provider";
 import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
 import {
   evaluateDomain,
@@ -239,7 +238,7 @@ async function resolveLanguageModel(input: {
   tenantId: string;
   secretProvider?: SecretProvider;
   model: string;
-}): Promise<{ model: LanguageModelV3; providerId: string; modelId: string }> {
+}): Promise<{ model: LanguageModel; providerId: string; modelId: string }> {
   const parsed = parseProviderModelId(input.model);
   const loaded = await input.container.modelCatalog.getEffectiveCatalog({
     tenantId: input.tenantId,
@@ -270,21 +269,16 @@ async function resolveLanguageModel(input: {
     throw new Error(`provider npm package missing for ${parsed.providerId}/${parsed.modelId}`);
   }
 
-  if (!input.secretProvider) {
-    throw new Error(
-      `secret provider unavailable; cannot resolve credentials for provider '${parsed.providerId}'`,
-    );
-  }
-
   const authProfiles = await new AuthProfileDal(input.container.db).list({
     tenantId: input.tenantId,
     providerKey: parsed.providerId,
     status: "active",
   });
 
-  let apiKey: string | undefined;
+  let selectedProfile: (typeof authProfiles)[number] | undefined;
+  let selectedSecrets: Record<string, string> | undefined;
   for (const profile of authProfiles) {
-    const resolved = await resolveProfileApiKey(profile, {
+    const resolved = await resolveProfileSecrets(profile, {
       tenantId: input.tenantId,
       secretProvider: input.secretProvider,
       oauthProviderRegistry: input.container.oauthProviderRegistry,
@@ -293,13 +287,19 @@ async function resolveLanguageModel(input: {
       logger: input.container.logger,
       fetchImpl: fetch,
     });
-    if (!resolved) continue;
-    if (resolved === OAUTH_REFRESH_LEASE_UNAVAILABLE) continue;
-    apiKey = resolved;
+    if (!resolved || resolved === OAUTH_REFRESH_LEASE_UNAVAILABLE) continue;
+    selectedProfile = profile;
+    selectedSecrets = resolved;
     break;
   }
 
-  if (!apiKey) {
+  const providerEnv = (provider as { env?: unknown }).env;
+  const providerRequiresConfiguredAccount =
+    /\$\{[A-Z0-9_]+\}/.test(api ?? "") ||
+    (Array.isArray(providerEnv)
+      ? providerEnv.some((entry) => typeof entry === "string" && entry.trim().length > 0)
+      : true);
+  if (!selectedProfile && providerRequiresConfiguredAccount) {
     throw new Error(
       `no active auth profiles with credentials configured for provider '${parsed.providerId}'`,
     );
@@ -319,7 +319,21 @@ async function resolveLanguageModel(input: {
       ? { ...providerHeaders, ...modelHeaders, ...optionHeaders }
       : undefined;
 
-  const baseURL = resolveProviderBaseURL({ providerApi: api, options: mergedOptions });
+  const profileConfig =
+    selectedProfile?.config && typeof selectedProfile.config === "object"
+      ? (selectedProfile.config as Record<string, unknown>)
+      : undefined;
+  const apiKey =
+    selectedSecrets?.["api_key"] ??
+    selectedSecrets?.["token"] ??
+    selectedSecrets?.["access_token"] ??
+    undefined;
+  const baseURL = resolveProviderBaseURL({
+    providerApi: api,
+    options: mergedOptions,
+    config: profileConfig,
+    secrets: selectedSecrets,
+  });
 
   const providerImpl = createProviderFromNpm({
     npm,
@@ -329,6 +343,8 @@ async function resolveLanguageModel(input: {
     headers,
     options: mergedOptions,
     fetchImpl: fetch,
+    config: profileConfig,
+    secrets: selectedSecrets,
   });
 
   const raw = providerImpl.languageModel(parsed.modelId);
@@ -337,13 +353,8 @@ async function resolveLanguageModel(input: {
       `provider returned string model id for '${parsed.providerId}/${parsed.modelId}'`,
     );
   }
-  if ((raw as Partial<LanguageModelV3>).specificationVersion !== "v3") {
-    throw new Error(
-      `provider model '${parsed.providerId}/${parsed.modelId}' is not specificationVersion v3`,
-    );
-  }
 
-  return { model: raw as LanguageModelV3, providerId: parsed.providerId, modelId: parsed.modelId };
+  return { model: raw as LanguageModel, providerId: parsed.providerId, modelId: parsed.modelId };
 }
 
 type ToolCallPolicyState = {
@@ -727,7 +738,7 @@ async function executeLlmAction(input: {
   toolExecutor: StepExecutor;
   executionContext: StepExecutionContext;
   secretProvider?: SecretProvider;
-  languageModelOverride?: LanguageModelV3;
+  languageModelOverride?: LanguageModel;
 }): Promise<StepResult> {
   const startedAt = Date.now();
 
@@ -1059,7 +1070,7 @@ export function createGatewayStepExecutor(input: {
   container: GatewayContainer;
   toolExecutor: StepExecutor;
   /** Optional LanguageModel override (primarily for tests). */
-  languageModel?: LanguageModelV3;
+  languageModel?: LanguageModel;
 }): StepExecutor {
   return {
     execute: async (

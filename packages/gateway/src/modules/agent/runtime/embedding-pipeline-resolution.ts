@@ -7,8 +7,9 @@ import type { SecretProvider } from "../../secret/provider.js";
 import {
   buildProviderResolutionSetup,
   listOrderedEligibleProfilesForProvider,
+  OAUTH_REFRESH_LEASE_UNAVAILABLE,
   parseProviderModelId,
-  resolveProfileApiKey,
+  resolveProfileSecrets,
   resolveProviderBaseURL,
 } from "./provider-resolution.js";
 
@@ -129,12 +130,18 @@ function resolveSdkEmbeddingModel(sdk: unknown, modelId: string): EmbeddingModel
   return undefined;
 }
 
-async function resolveProviderApiKey(input: {
+async function resolveProviderAccount(input: {
   deps: ProviderResolutionDeps;
   tenantId: string;
   sessionId: string;
   providerId: string;
-}): Promise<string | undefined> {
+}): Promise<
+  | {
+      profile: Awaited<ReturnType<typeof listOrderedEligibleProfilesForProvider>>[number];
+      secrets: Record<string, string>;
+    }
+  | undefined
+> {
   const orderedProfiles = await listOrderedEligibleProfilesForProvider({
     tenantId: input.tenantId,
     sessionId: input.sessionId,
@@ -144,7 +151,7 @@ async function resolveProviderApiKey(input: {
   });
 
   for (const profile of orderedProfiles) {
-    const apiKey = await resolveProfileApiKey(profile, {
+    const secrets = await resolveProfileSecrets(profile, {
       tenantId: input.tenantId,
       secretProvider: input.deps.secretProvider,
       oauthProviderRegistry: input.deps.oauthProviderRegistry,
@@ -153,14 +160,19 @@ async function resolveProviderApiKey(input: {
       logger: input.deps.logger,
       fetchImpl: input.deps.fetchImpl,
     });
-    if (apiKey) return apiKey;
+    if (secrets && secrets !== OAUTH_REFRESH_LEASE_UNAVAILABLE) {
+      return { profile, secrets };
+    }
   }
 
   return undefined;
 }
 
-function providerRequiresApiKey(provider: ProviderEntry): boolean {
-  const providerEnv = (provider as { env?: unknown }).env;
+function providerRequiresConfiguredAccount(candidate: ResolvedEmbeddingCandidate): boolean {
+  if (/\$\{[A-Z0-9_]+\}/.test(candidate.api ?? "")) {
+    return true;
+  }
+  const providerEnv = (candidate.provider as { env?: unknown }).env;
   return Array.isArray(providerEnv)
     ? providerEnv.some((entry) => typeof entry === "string" && entry.trim().length > 0)
     : true;
@@ -172,14 +184,30 @@ function buildEmbeddingPipeline(input: {
   candidate: ResolvedEmbeddingCandidate;
   tenantId: string;
   agentId: string;
-  apiKey: string | undefined;
+  providerAccount?: {
+    profile: Awaited<ReturnType<typeof listOrderedEligibleProfilesForProvider>>[number];
+    secrets: Record<string, string>;
+  };
 }): EmbeddingPipeline | undefined {
+  const profileConfig =
+    input.providerAccount?.profile.config &&
+    typeof input.providerAccount.profile.config === "object"
+      ? (input.providerAccount.profile.config as Record<string, unknown>)
+      : undefined;
+  const secrets = input.providerAccount?.secrets;
+  const apiKey = secrets?.["api_key"] ?? secrets?.["token"] ?? secrets?.["access_token"];
   const sdk = createProviderFromNpm({
     npm: input.candidate.npm,
     providerId: input.candidate.providerId,
-    apiKey: input.apiKey,
-    baseURL: resolveProviderBaseURL({ providerApi: input.candidate.api }),
+    apiKey,
+    baseURL: resolveProviderBaseURL({
+      providerApi: input.candidate.api,
+      config: profileConfig,
+      secrets,
+    }),
     fetchImpl: input.fetchImpl,
+    config: profileConfig,
+    secrets,
   });
   const embeddingModel = resolveSdkEmbeddingModel(sdk, input.candidate.modelId);
   if (!embeddingModel) return undefined;
@@ -218,13 +246,13 @@ export async function resolveEmbeddingPipeline(input: {
       const candidate = resolveEmbeddingCandidate(catalog, providerId);
       if (!candidate) continue;
 
-      const apiKey = await resolveProviderApiKey({
+      const providerAccount = await resolveProviderAccount({
         deps,
         tenantId: input.tenantId,
         sessionId: input.sessionId,
         providerId: candidate.providerId,
       });
-      if (!apiKey && providerRequiresApiKey(candidate.provider)) continue;
+      if (!providerAccount && providerRequiresConfiguredAccount(candidate)) continue;
 
       const pipeline = buildEmbeddingPipeline({
         db: input.container.db,
@@ -232,7 +260,7 @@ export async function resolveEmbeddingPipeline(input: {
         candidate,
         tenantId: input.tenantId,
         agentId: input.agentId,
-        apiKey,
+        providerAccount,
       });
       if (pipeline) return pipeline;
     }

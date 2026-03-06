@@ -279,6 +279,7 @@ function ProviderAccountDialog({
 }): React.ReactElement {
   const api = (useAdminHttpClient() ?? core.http).providerConfig;
   const [state, setState] = React.useState<ProviderFormState>(emptyFormState());
+  const [providerFilter, setProviderFilter] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
@@ -296,6 +297,22 @@ function ProviderAccountDialog({
   const selectedProvider = supportedProviders.find(
     (provider) => provider.provider_key === state.providerKey,
   );
+  const filteredSupportedProviders = React.useMemo(() => {
+    const query = providerFilter.trim().toLowerCase();
+    if (!query) return supportedProviders;
+    const filtered = supportedProviders.filter((provider) => {
+      const name = provider.name.toLowerCase();
+      const key = provider.provider_key.toLowerCase();
+      return name.includes(query) || key.includes(query);
+    });
+    if (
+      selectedProvider &&
+      !filtered.some((provider) => provider.provider_key === selectedProvider.provider_key)
+    ) {
+      return [selectedProvider, ...filtered];
+    }
+    return filtered;
+  }, [providerFilter, selectedProvider, supportedProviders]);
   const selectedMethod =
     selectedProvider?.methods.find((method) => method.method_key === state.methodKey) ??
     selectedProvider?.methods[0];
@@ -303,6 +320,7 @@ function ProviderAccountDialog({
 
   React.useEffect(() => {
     if (!open) return;
+    setProviderFilter("");
     setErrorMessage(null);
     setSaving(false);
     setState(
@@ -365,6 +383,17 @@ function ProviderAccountDialog({
         </DialogHeader>
 
         <div className="grid gap-4">
+          {!account ? (
+            <Input
+              label="Filter providers"
+              value={providerFilter}
+              helperText="Search by provider name or key."
+              onChange={(event) => {
+                setProviderFilter(event.currentTarget.value);
+              }}
+            />
+          ) : null}
+
           <Select
             label="Provider"
             value={state.providerKey}
@@ -400,7 +429,7 @@ function ProviderAccountDialog({
                 : undefined
             }
           >
-            {supportedProviders.map((provider) => (
+            {filteredSupportedProviders.map((provider) => (
               <option key={provider.provider_key} value={provider.provider_key}>
                 {provider.name}
               </option>

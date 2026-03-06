@@ -45,6 +45,19 @@ describe("provider + model config routes", () => {
           "claude-3.5-sonnet": { id: "claude-3.5-sonnet", name: "Claude 3.5 Sonnet" },
         },
       },
+      "cloudflare-workers-ai": {
+        id: "cloudflare-workers-ai",
+        name: "Cloudflare Workers AI",
+        env: ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_KEY"],
+        npm: "@ai-sdk/openai-compatible",
+        api: "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+        models: {
+          "@cf/meta/llama-3.1-8b-instruct": {
+            id: "@cf/meta/llama-3.1-8b-instruct",
+            name: "Llama 3.1 8B Instruct",
+          },
+        },
+      },
       unsupported: {
         id: "unsupported",
         name: "Unsupported",
@@ -72,6 +85,25 @@ describe("provider + model config routes", () => {
       expect.arrayContaining([
         expect.objectContaining({
           method_key: "api_key",
+        }),
+      ]),
+    );
+    expect(
+      registryBody.providers.find((provider) => provider.provider_key === "cloudflare-workers-ai")
+        ?.supported,
+    ).toBe(true);
+    expect(
+      registryBody.providers.find((provider) => provider.provider_key === "cloudflare-workers-ai")
+        ?.methods,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method_key: "api_key",
+          fields: expect.arrayContaining([
+            expect.objectContaining({ key: "api_key" }),
+            expect.objectContaining({ key: "baseURL" }),
+            expect.objectContaining({ key: "CLOUDFLARE_ACCOUNT_ID" }),
+          ]),
         }),
       ]),
     );

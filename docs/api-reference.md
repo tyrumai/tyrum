@@ -412,6 +412,73 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
   - `403` if admin token is missing/invalid
   - `404` token not found / already revoked
 
+### Provider config
+
+These routes manage provider accounts used by model execution. Provider-account `config`
+stores non-secret provider settings such as `baseURL`, region, project, or account IDs.
+Provider-account `secrets` stores managed secret slots defined by the provider registry.
+
+#### GET /config/providers/registry
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.admin`
+- Request: None
+- Response:
+  - `200` JSON `ProviderRegistryResponse`
+  - `401`, `403`
+
+#### GET /config/providers
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.admin`
+- Request: None
+- Response:
+  - `200` JSON `ConfiguredProviderListResponse`
+  - `401`, `403`
+
+#### POST /config/providers/accounts
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.admin`
+- Request: JSON `ProviderAccountCreateRequest`
+- Response:
+  - `201` JSON `ProviderAccountMutateResponse`
+  - `400` unsupported provider or invalid config/secrets
+  - `401`, `403`
+
+#### PATCH /config/providers/accounts/:key
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.admin`
+- Request: JSON `ProviderAccountUpdateRequest`
+- Response:
+  - `200` JSON `ProviderAccountMutateResponse`
+  - `404` provider account not found
+  - `400` invalid config/secrets or unsupported method
+  - `401`, `403`
+
+#### DELETE /config/providers/accounts/:key
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.admin`
+- Request: None
+- Response:
+  - `200` JSON `{ status: "ok", deleted: true }`
+  - `404` provider account not found
+  - `401`, `403`
+
+#### DELETE /config/providers/:provider
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.admin`
+- Request: Optional JSON `ModelConfigDeleteRequest`
+  - Use `replacement_assignments` when the provider still owns presets assigned to execution profiles.
+- Response:
+  - `200` JSON `ModelConfigDeleteResponse`
+  - `409` JSON `ModelConfigDeleteConflictResponse` when replacement presets are required
+  - `404` provider not found
+  - `401`, `403`
+
 ### Provider OAuth (authorization code + PKCE)
 
 #### POST /providers/:provider/oauth/authorize
