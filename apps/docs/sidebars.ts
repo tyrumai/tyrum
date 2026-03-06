@@ -57,6 +57,12 @@ const sidebars: SidebarsConfig = {
           items: [
             "architecture/gateway/index",
             "architecture/gateway/statestore-dialects",
+            "architecture/gateway/postgres-json-fields",
+            "architecture/data-model-map",
+            "architecture/data-model-fk-audit",
+            "architecture/db-naming-conventions",
+            "architecture/db-enum-constraints",
+            "architecture/db-json-hygiene",
             "architecture/client",
             "architecture/node",
           ],
@@ -124,6 +130,7 @@ const sidebars: SidebarsConfig = {
           type: "category",
           label: "Operations & Observability",
           items: [
+            "architecture/operational-maintenance",
             "architecture/observability",
             "architecture/index-tuning",
             "architecture/presence",
