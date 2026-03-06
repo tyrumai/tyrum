@@ -314,6 +314,39 @@ describe("createTyrumHttpClient", () => {
     expect(init.method).toBe("DELETE");
   });
 
+  it("returns structured delete-provider conflicts for replacement-required flows", async () => {
+    const fetch = makeFetchMock(async () =>
+      jsonResponse(
+        {
+          error: "assignment_required",
+          message: "replacement preset assignments are required before deleting this provider",
+          required_execution_profile_ids: ["interaction", "planner"],
+        },
+        409,
+      ),
+    );
+    const client = createTyrumHttpClient({
+      baseUrl: "https://gateway.example",
+      auth: { type: "bearer", token: "root-token" },
+      fetch,
+    });
+
+    const result = await client.providerConfig.deleteProvider("openai");
+
+    expect(result).toEqual({
+      error: "assignment_required",
+      message: "replacement preset assignments are required before deleting this provider",
+      required_execution_profile_ids: ["interaction", "planner"],
+    });
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://gateway.example/config/providers/openai");
+    expect(init.method).toBe("DELETE");
+  });
+
   it("validates requests before network calls", async () => {
     const fetch = makeFetchMock(async () => jsonResponse({ status: "ok" }));
     const client = createTyrumHttpClient({

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
@@ -445,5 +446,87 @@ describe("provider + model config routes", () => {
       [DEFAULT_TENANT_ID, "anthropic/claude-3.5-sonnet"],
     );
     expect(override?.count).toBe(0);
+  });
+
+  it("escapes provider keys when deleting direct session model overrides", async () => {
+    const { app, container } = await createTestApp();
+    const wildcardProviderKey = "open_ai";
+    const otherProviderKey = "openxai";
+
+    await container.db.run(
+      `INSERT INTO auth_profiles (
+         tenant_id,
+         auth_profile_id,
+         auth_profile_key,
+         provider_key,
+         type,
+         status
+       ) VALUES (?, ?, ?, ?, 'api_key', 'active')`,
+      [DEFAULT_TENANT_ID, randomUUID(), "wildcard-account", wildcardProviderKey],
+    );
+    await container.db.run(
+      `INSERT INTO auth_profiles (
+         tenant_id,
+         auth_profile_id,
+         auth_profile_key,
+         provider_key,
+         type,
+         status
+       ) VALUES (?, ?, ?, ?, 'api_key', 'active')`,
+      [DEFAULT_TENANT_ID, randomUUID(), "other-account", otherProviderKey],
+    );
+
+    const wildcardSession = await container.sessionDal.getOrCreate({
+      scopeKeys: { tenantKey: "default", agentKey: "default", workspaceKey: "default" },
+      connectorKey: "ui",
+      providerThreadId: "thread-wildcard",
+      containerKind: "dm",
+    });
+    const otherSession = await container.sessionDal.getOrCreate({
+      scopeKeys: { tenantKey: "default", agentKey: "default", workspaceKey: "default" },
+      connectorKey: "ui",
+      providerThreadId: "thread-other",
+      containerKind: "dm",
+    });
+
+    await container.db.run(
+      `INSERT INTO session_model_overrides (
+         tenant_id,
+         session_id,
+         model_id,
+         preset_key,
+         pinned_at,
+         updated_at
+       ) VALUES (?, ?, ?, NULL, datetime('now'), datetime('now'))`,
+      [DEFAULT_TENANT_ID, wildcardSession.session_id, `${wildcardProviderKey}/gpt-4.1`],
+    );
+    await container.db.run(
+      `INSERT INTO session_model_overrides (
+         tenant_id,
+         session_id,
+         model_id,
+         preset_key,
+         pinned_at,
+         updated_at
+       ) VALUES (?, ?, ?, NULL, datetime('now'), datetime('now'))`,
+      [DEFAULT_TENANT_ID, otherSession.session_id, `${otherProviderKey}/gpt-4.1`],
+    );
+
+    const deleteRes = await app.request(
+      `/config/providers/${encodeURIComponent(wildcardProviderKey)}`,
+      {
+        method: "DELETE",
+      },
+    );
+    expect(deleteRes.status).toBe(200);
+
+    const overrides = await container.db.all<{ model_id: string }>(
+      `SELECT model_id
+       FROM session_model_overrides
+       WHERE tenant_id = ?
+       ORDER BY model_id ASC`,
+      [DEFAULT_TENANT_ID],
+    );
+    expect(overrides).toEqual([{ model_id: `${otherProviderKey}/gpt-4.1` }]);
   });
 });

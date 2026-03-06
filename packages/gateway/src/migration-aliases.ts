@@ -17,8 +17,8 @@ export const MIGRATION_FILENAME_ALIASES: Readonly<Record<string, readonly string
     "108_approval_engine_actions.sql",
     "109_approval_engine_actions.sql",
   ],
-  "111_provider_model_config.sql": ["108_provider_model_config.sql"],
-  "112_provider_model_config_indexes.sql": ["109_provider_model_config_indexes.sql"],
+  "113_provider_model_config.sql": ["108_provider_model_config.sql"],
+  "114_provider_model_config_indexes.sql": ["109_provider_model_config_indexes.sql"],
 };
 
 export function findAppliedMigrationAlias(

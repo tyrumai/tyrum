@@ -30,6 +30,10 @@ function toRow(raw: RawExecutionProfileModelAssignmentRow): ExecutionProfileMode
 export class ExecutionProfileModelAssignmentDal {
   constructor(private readonly db: SqlDb) {}
 
+  protected createTxDal(tx: SqlDb): ExecutionProfileModelAssignmentDal {
+    return new ExecutionProfileModelAssignmentDal(tx);
+  }
+
   async list(input: { tenantId: string }): Promise<ExecutionProfileModelAssignmentRow[]> {
     const rows = await this.db.all<RawExecutionProfileModelAssignmentRow>(
       `SELECT *
@@ -59,23 +63,31 @@ export class ExecutionProfileModelAssignmentDal {
     tenantId: string;
     assignments: Array<{ executionProfileId: string; presetKey: string }>;
   }): Promise<ExecutionProfileModelAssignmentRow[]> {
-    const nowIso = new Date().toISOString();
-    await this.db.transaction(async (tx) => {
-      for (const assignment of input.assignments) {
-        await tx.run(
-          `INSERT INTO execution_profile_model_assignments (
-             tenant_id,
-             execution_profile_id,
-             preset_key,
-             updated_at
-           ) VALUES (?, ?, ?, ?)
-           ON CONFLICT (tenant_id, execution_profile_id) DO UPDATE SET
-             preset_key = excluded.preset_key,
-             updated_at = excluded.updated_at`,
-          [input.tenantId, assignment.executionProfileId, assignment.presetKey, nowIso],
-        );
-      }
+    return await this.db.transaction(async (tx) => {
+      const dal = tx === this.db ? this : this.createTxDal(tx);
+      await dal.upsertManyTx(input);
+      return await dal.list({ tenantId: input.tenantId });
     });
-    return await this.list({ tenantId: input.tenantId });
+  }
+
+  async upsertManyTx(input: {
+    tenantId: string;
+    assignments: Array<{ executionProfileId: string; presetKey: string }>;
+  }): Promise<void> {
+    const nowIso = new Date().toISOString();
+    for (const assignment of input.assignments) {
+      await this.db.run(
+        `INSERT INTO execution_profile_model_assignments (
+           tenant_id,
+           execution_profile_id,
+           preset_key,
+           updated_at
+         ) VALUES (?, ?, ?, ?)
+         ON CONFLICT (tenant_id, execution_profile_id) DO UPDATE SET
+           preset_key = excluded.preset_key,
+           updated_at = excluded.updated_at`,
+        [input.tenantId, assignment.executionProfileId, assignment.presetKey, nowIso],
+      );
+    }
   }
 }

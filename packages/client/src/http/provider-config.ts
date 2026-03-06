@@ -1,6 +1,5 @@
 import {
   ConfiguredProviderListResponse,
-  ModelConfigDeleteConflictResponse,
   ModelConfigDeleteRequest,
   ModelConfigDeleteResponse,
   ProviderAccountCreateRequest,
@@ -12,9 +11,13 @@ import { z } from "zod";
 import {
   HttpTransport,
   NonEmptyString,
-  validateOrThrow,
   type TyrumRequestOptions,
+  validateOrThrow,
 } from "./shared.js";
+import {
+  parseModelConfigDeleteResponse,
+  type ParsedModelConfigDeleteResponse,
+} from "./config-delete-response.js";
 
 const ProviderPathKey = NonEmptyString;
 
@@ -23,21 +26,7 @@ export type ConfiguredProviderListResult = z.output<typeof ConfiguredProviderLis
 export type ProviderAccountCreateInput = z.input<typeof ProviderAccountCreateRequest>;
 export type ProviderAccountUpdateInput = z.input<typeof ProviderAccountUpdateRequest>;
 export type ProviderDeleteInput = z.input<typeof ModelConfigDeleteRequest>;
-export type ProviderDeleteResult =
-  | z.output<typeof ModelConfigDeleteResponse>
-  | z.output<typeof ModelConfigDeleteConflictResponse>;
-
-async function parseDeleteResponse(response: Response): Promise<ProviderDeleteResult> {
-  const body = (await response.json().catch(() => undefined)) as unknown;
-  if (response.status === 409) {
-    return validateOrThrow(
-      ModelConfigDeleteConflictResponse,
-      body,
-      "provider delete conflict response",
-    );
-  }
-  return validateOrThrow(ModelConfigDeleteResponse, body, "provider delete response");
-}
+export type ProviderDeleteResult = ParsedModelConfigDeleteResponse;
 
 export interface ProviderConfigApi {
   listRegistry(options?: TyrumRequestOptions): Promise<ProviderRegistryResult>;
@@ -136,7 +125,10 @@ export function createProviderConfigApi(transport: HttpTransport): ProviderConfi
         expectedStatus: [200, 409],
         signal: options?.signal,
       });
-      return await parseDeleteResponse(response);
+      return await parseModelConfigDeleteResponse(response, {
+        conflictContext: "provider delete conflict response",
+        responseContext: "provider delete response",
+      });
     },
   };
 }

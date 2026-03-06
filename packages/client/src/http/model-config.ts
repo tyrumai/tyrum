@@ -7,17 +7,19 @@ import {
   ExecutionProfileModelAssignmentListResponse,
   ExecutionProfileModelAssignmentUpdateRequest,
   ExecutionProfileModelAssignmentUpdateResponse,
-  ModelConfigDeleteConflictResponse,
   ModelConfigDeleteRequest,
-  ModelConfigDeleteResponse,
 } from "@tyrum/schemas";
 import { z } from "zod";
 import {
   HttpTransport,
   NonEmptyString,
-  validateOrThrow,
   type TyrumRequestOptions,
+  validateOrThrow,
 } from "./shared.js";
+import {
+  parseModelConfigDeleteResponse,
+  type ParsedModelConfigDeleteResponse,
+} from "./config-delete-response.js";
 
 const PresetPathKey = NonEmptyString;
 
@@ -31,21 +33,7 @@ export type ExecutionProfileAssignmentUpdateInput = z.input<
   typeof ExecutionProfileModelAssignmentUpdateRequest
 >;
 export type ModelPresetDeleteInput = z.input<typeof ModelConfigDeleteRequest>;
-export type ModelPresetDeleteResult =
-  | z.output<typeof ModelConfigDeleteResponse>
-  | z.output<typeof ModelConfigDeleteConflictResponse>;
-
-async function parseDeleteResponse(response: Response): Promise<ModelPresetDeleteResult> {
-  const body = (await response.json().catch(() => undefined)) as unknown;
-  if (response.status === 409) {
-    return validateOrThrow(
-      ModelConfigDeleteConflictResponse,
-      body,
-      "model preset delete conflict response",
-    );
-  }
-  return validateOrThrow(ModelConfigDeleteResponse, body, "model preset delete response");
-}
+export type ModelPresetDeleteResult = ParsedModelConfigDeleteResponse;
 
 export interface ModelConfigApi {
   listPresets(options?: TyrumRequestOptions): Promise<ConfiguredModelPresetListResult>;
@@ -137,7 +125,10 @@ export function createModelConfigApi(transport: HttpTransport): ModelConfigApi {
         expectedStatus: [200, 409],
         signal: options?.signal,
       });
-      return await parseDeleteResponse(response);
+      return await parseModelConfigDeleteResponse(response, {
+        conflictContext: "model preset delete conflict response",
+        responseContext: "model preset delete response",
+      });
     },
 
     async listAssignments(options) {

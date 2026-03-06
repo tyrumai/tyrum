@@ -328,7 +328,7 @@ export function createModelConfigRoutes(deps: ModelConfigRouteDeps): Hono {
         }
 
         await deps.db.transaction(async (tx) => {
-          await new ExecutionProfileModelAssignmentDal(tx).upsertMany({
+          await new ExecutionProfileModelAssignmentDal(tx).upsertManyTx({
             tenantId,
             assignments: replacementAssignments.assignments,
           });

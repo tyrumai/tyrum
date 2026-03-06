@@ -26,6 +26,7 @@ import {
 import type { SecretProvider } from "../modules/secret/provider.js";
 import { coerceString } from "../modules/util/coerce.js";
 import { createUniqueKey, slugifyKey } from "./config-key-utils.js";
+import { escapeLikePattern } from "../utils/sql-like.js";
 
 type ReplacementAssignments = Record<string, string>;
 
@@ -580,7 +581,7 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
 
       await deps.db.transaction(async (tx) => {
         if (resolved.replacementAssignments.length > 0) {
-          await new ExecutionProfileModelAssignmentDal(tx).upsertMany({
+          await new ExecutionProfileModelAssignmentDal(tx).upsertManyTx({
             tenantId,
             assignments: resolved.replacementAssignments,
           });
@@ -603,8 +604,8 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
         await tx.run(
           `DELETE FROM session_model_overrides
            WHERE tenant_id = ?
-             AND model_id LIKE ?`,
-          [tenantId, `${providerKey}/%`],
+             AND model_id LIKE ? ESCAPE '\\'`,
+          [tenantId, `${escapeLikePattern(providerKey)}/%`],
         );
         if (profileIds.length > 0) {
           const profilePlaceholders = profileIds.map(() => "?").join(", ");
