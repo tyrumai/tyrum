@@ -931,6 +931,8 @@ describe("WorkboardDal", () => {
   it("creates and updates a work signal", async () => {
     const dal = createDal();
     const scope = await resolveScope();
+    const createdAtIso = "2026-02-27T00:00:00.000Z";
+    const updatedAtIso = "2026-02-27T00:00:02.000Z";
 
     const signal = await dal.createSignal({
       scope,
@@ -939,7 +941,7 @@ describe("WorkboardDal", () => {
         trigger_spec_json: { on: "approval.resolved" },
         payload_json: { notify: true },
       },
-      createdAtIso: "2026-02-27T00:00:00.000Z",
+      createdAtIso,
     });
 
     const other = await dal.createSignal({
@@ -951,17 +953,70 @@ describe("WorkboardDal", () => {
       createdAtIso: "2026-02-27T00:00:00.500Z",
     });
 
+    const createdRow = await db!.get<{ created_at: string; updated_at: string }>(
+      `SELECT created_at, updated_at
+       FROM work_signals
+       WHERE tenant_id = ?
+         AND signal_id = ?`,
+      [scope.tenant_id, signal.signal_id],
+    );
+    expect(createdRow).toEqual({
+      created_at: createdAtIso,
+      updated_at: createdAtIso,
+    });
+
     const updated = await dal.updateSignal({
       scope,
       signal_id: signal.signal_id,
       patch: { status: "paused" },
+      updatedAtIso,
     });
     expect(updated).toBeDefined();
-    expect(updated!.status).toBe("paused");
+    expect(updated!.changed).toBe(true);
+    expect(updated!.signal.status).toBe("paused");
 
     const fetched = await dal.getSignal({ scope, signal_id: signal.signal_id });
     expect(fetched).toBeDefined();
     expect(fetched!.status).toBe("paused");
+
+    const updatedRow = await db!.get<{ created_at: string; updated_at: string }>(
+      `SELECT created_at, updated_at
+       FROM work_signals
+       WHERE tenant_id = ?
+         AND signal_id = ?`,
+      [scope.tenant_id, signal.signal_id],
+    );
+    expect(updatedRow).toEqual({
+      created_at: createdAtIso,
+      updated_at: updatedAtIso,
+    });
+
+    const noOp = await dal.updateSignal({
+      scope,
+      signal_id: signal.signal_id,
+      patch: { status: "paused" },
+      updatedAtIso: "2026-02-27T00:00:03.000Z",
+    });
+    expect(noOp).toBeDefined();
+    expect(noOp).toMatchObject({
+      changed: false,
+      signal: {
+        signal_id: signal.signal_id,
+        status: "paused",
+      },
+    });
+
+    const unchangedRow = await db!.get<{ created_at: string; updated_at: string }>(
+      `SELECT created_at, updated_at
+       FROM work_signals
+       WHERE tenant_id = ?
+         AND signal_id = ?`,
+      [scope.tenant_id, signal.signal_id],
+    );
+    expect(unchangedRow).toEqual({
+      created_at: createdAtIso,
+      updated_at: updatedAtIso,
+    });
 
     const listed = await dal.listSignals({ scope });
     expect(listed.signals.map((s) => s.signal_id)).toEqual([other.signal_id, signal.signal_id]);

@@ -61,9 +61,10 @@ export class WorkboardSignalsDal {
          payload_json,
          status,
          created_at,
+         updated_at,
          last_fired_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       [
         signalId,
@@ -77,6 +78,7 @@ export class WorkboardSignalsDal {
           ? null
           : JSON.stringify(params.signal.payload_json),
         status,
+        createdAtIso,
         createdAtIso,
         null,
       ],
@@ -95,40 +97,52 @@ export class WorkboardSignalsDal {
       payload_json?: unknown;
       status?: WorkSignalStatus;
     };
-  }): Promise<WorkSignal | undefined> {
+    updatedAtIso?: string;
+  }): Promise<{ signal: WorkSignal; changed: boolean } | undefined> {
+    const existing = await this.db.get<DalHelpers.RawWorkSignalRow>(
+      `SELECT *
+       FROM work_signals
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND signal_id = ?`,
+      [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.signal_id],
+    );
+    if (!existing) return undefined;
+
     const set: string[] = [];
     const values: unknown[] = [];
 
     if (params.patch.trigger_spec_json !== undefined) {
-      set.push("trigger_spec_json = ?");
-      values.push(JSON.stringify(params.patch.trigger_spec_json));
+      const triggerSpecJson = JSON.stringify(params.patch.trigger_spec_json);
+      if (triggerSpecJson !== existing.trigger_spec_json) {
+        set.push("trigger_spec_json = ?");
+        values.push(triggerSpecJson);
+      }
     }
     if (params.patch.payload_json !== undefined) {
-      set.push("payload_json = ?");
-      values.push(JSON.stringify(params.patch.payload_json));
+      const payloadJson = JSON.stringify(params.patch.payload_json);
+      if (payloadJson !== existing.payload_json) {
+        set.push("payload_json = ?");
+        values.push(payloadJson);
+      }
     }
     if (params.patch.status !== undefined) {
-      set.push("status = ?");
-      values.push(params.patch.status);
+      if (params.patch.status !== existing.status) {
+        set.push("status = ?");
+        values.push(params.patch.status);
+      }
     }
 
     if (set.length === 0) {
-      const existing = await this.db.get<DalHelpers.RawWorkSignalRow>(
-        `SELECT *
-         FROM work_signals
-         WHERE tenant_id = ?
-           AND agent_id = ?
-           AND workspace_id = ?
-           AND signal_id = ?`,
-        [
-          params.scope.tenant_id,
-          params.scope.agent_id,
-          params.scope.workspace_id,
-          params.signal_id,
-        ],
-      );
-      return existing ? dalHelpers.toWorkSignal(existing) : undefined;
+      return {
+        signal: dalHelpers.toWorkSignal(existing),
+        changed: false,
+      };
     }
+
+    set.push("updated_at = ?");
+    values.push(params.updatedAtIso ?? new Date().toISOString());
 
     const row = await this.db.get<DalHelpers.RawWorkSignalRow>(
       `UPDATE work_signals
@@ -146,7 +160,12 @@ export class WorkboardSignalsDal {
         params.signal_id,
       ],
     );
-    return row ? dalHelpers.toWorkSignal(row) : undefined;
+    return row
+      ? {
+          signal: dalHelpers.toWorkSignal(row),
+          changed: true,
+        }
+      : undefined;
   }
 
   async markSignalFired(params: {
@@ -160,7 +179,7 @@ export class WorkboardSignalsDal {
 
     const row = await this.db.get<DalHelpers.RawWorkSignalRow>(
       `UPDATE work_signals
-       SET status = ?, last_fired_at = ?
+       SET status = ?, last_fired_at = ?, updated_at = ?
        WHERE tenant_id = ?
          AND agent_id = ?
          AND workspace_id = ?
@@ -168,6 +187,7 @@ export class WorkboardSignalsDal {
        RETURNING *`,
       [
         status,
+        firedAtIso,
         firedAtIso,
         params.scope.tenant_id,
         params.scope.agent_id,

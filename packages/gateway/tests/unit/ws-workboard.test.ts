@@ -1464,6 +1464,25 @@ describe("handleClientMessage (work.*)", () => {
       expect(updatedEvt.type).toBe("work.signal.updated");
       expect(updatedEvt.payload?.signal?.signal_id).toBe(signal.signal_id);
       expect(updatedEvt.payload?.signal?.status).toBe("paused");
+
+      ws.send.mockClear();
+      const noOpRes = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-signal-update-noop",
+          type: "work.signal.update",
+          payload: {
+            tenant_key: "default",
+            agent_key: "default",
+            workspace_key: "default",
+            signal_id: signal.signal_id,
+            patch: { status: "paused" },
+          },
+        }),
+        deps,
+      );
+      expect((noOpRes as unknown as { ok: boolean }).ok).toBe(true);
+      expect(ws.send).not.toHaveBeenCalled();
     } finally {
       await db.close();
     }

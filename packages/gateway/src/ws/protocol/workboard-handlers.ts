@@ -820,27 +820,30 @@ export async function handleWorkboardMessage(
     try {
       const payload = parsedReq.data.payload;
       const { scope } = await resolveWorkScope({ deps, tenantId, payload });
-      const signal = await dal.updateSignal({
+      const updated = await dal.updateSignal({
         scope,
         signal_id: payload.signal_id,
         patch: payload.patch,
       });
-      if (!signal) {
+      if (!updated) {
         return errorResponse(msg.request_id, msg.type, "not_found", "signal not found");
       }
+      const { signal, changed } = updated;
 
-      broadcastEvent(
-        scope.tenant_id,
-        {
-          event_id: crypto.randomUUID(),
-          type: "work.signal.updated",
-          occurred_at: new Date().toISOString(),
-          scope: { kind: "agent", agent_id: signal.agent_id },
-          payload: { signal },
-        },
-        deps,
-        WORKBOARD_WS_AUDIENCE,
-      );
+      if (changed) {
+        broadcastEvent(
+          scope.tenant_id,
+          {
+            event_id: crypto.randomUUID(),
+            type: "work.signal.updated",
+            occurred_at: new Date().toISOString(),
+            scope: { kind: "agent", agent_id: signal.agent_id },
+            payload: { signal },
+          },
+          deps,
+          WORKBOARD_WS_AUDIENCE,
+        );
+      }
 
       const result = WsWorkSignalUpdateResult.parse({ signal });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };

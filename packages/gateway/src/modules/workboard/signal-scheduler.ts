@@ -457,11 +457,13 @@ export class WorkSignalScheduler {
           firingId: firing.firing_id,
         });
         if (current?.status === "failed") {
+          const updatedAtIso = new Date(nowMs).toISOString();
           await this.db.run(
             `UPDATE work_signals
-             SET status = 'paused'
+             SET status = 'paused',
+                 updated_at = ?
              WHERE tenant_id = ? AND signal_id = ? AND status = 'active'`,
-            [firing.tenant_id, firing.signal_id],
+            [updatedAtIso, firing.tenant_id, firing.signal_id],
           );
         }
       } catch (pauseErr) {
