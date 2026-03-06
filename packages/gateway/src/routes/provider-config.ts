@@ -18,7 +18,7 @@ import { ConfiguredModelPresetDal } from "../modules/models/configured-model-pre
 import { ExecutionProfileModelAssignmentDal } from "../modules/models/execution-profile-model-assignment-dal.js";
 import {
   buildManagedProviderSecretKey,
-  getProviderMethodSpec,
+  findProviderMethodSpec,
   listProviderRegistrySpecs,
   type ProviderMethodSpec,
   type ProviderRegistrySpec,
@@ -329,9 +329,7 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
 
     const registrySpecs = await loadRegistrySpecs(deps.modelCatalog, tenantId);
     const providerSpec = registrySpecs.get(parsed.data.provider_key);
-    const method = providerSpec
-      ? getProviderMethodSpec(parsed.data.provider_key, parsed.data.method_key)
-      : undefined;
+    const method = findProviderMethodSpec(providerSpec, parsed.data.method_key);
     if (!providerSpec || !providerSpec.supported || !method) {
       return c.json(
         { error: "invalid_request", message: "provider or authentication method is not supported" },
@@ -407,7 +405,9 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
       return c.json({ error: "not_found", message: "provider account not found" }, 404);
     }
 
-    const method = getProviderMethodSpec(existing.provider_key, existing.method_key);
+    const registrySpecs = await loadRegistrySpecs(deps.modelCatalog, tenantId);
+    const providerSpec = registrySpecs.get(existing.provider_key);
+    const method = findProviderMethodSpec(providerSpec, existing.method_key);
     if (!method) {
       return c.json(
         { error: "invalid_request", message: "provider account is using an unsupported method" },

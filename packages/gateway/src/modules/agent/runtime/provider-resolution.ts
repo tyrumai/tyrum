@@ -58,11 +58,16 @@ export function getStopFallbackApiCallError(err: unknown): APICallError | undefi
 export function resolveProviderBaseURL(input: {
   providerApi: string | undefined;
   options?: Record<string, unknown> | undefined;
+  config?: Record<string, unknown> | undefined;
+  secrets?: Record<string, string | undefined> | undefined;
 }): string | undefined {
   const raw =
     input.options?.["baseURL"] ??
     input.options?.["baseUrl"] ??
     input.options?.["base_url"] ??
+    input.config?.["baseURL"] ??
+    input.config?.["baseUrl"] ??
+    input.config?.["base_url"] ??
     undefined;
   if (typeof raw === "string" && raw.trim().length > 0) {
     return raw.trim();
@@ -70,7 +75,40 @@ export function resolveProviderBaseURL(input: {
 
   const api = input.providerApi?.trim();
   if (api && api.length > 0) {
-    return api;
+    const templateValues = Object.assign(
+      {},
+      Object.fromEntries(
+        Object.entries(input.config ?? {}).filter(
+          (entry): entry is [string, string] =>
+            typeof entry[1] === "string" && entry[1].trim().length > 0,
+        ),
+      ),
+      Object.fromEntries(
+        Object.entries(input.secrets ?? {}).filter(
+          (entry): entry is [string, string] =>
+            typeof entry[1] === "string" && entry[1].trim().length > 0,
+        ),
+      ),
+    );
+    const unresolved = new Set<string>();
+    const interpolated = api.replace(/\$\{([A-Z0-9_]+)\}/g, (_match, variable: string) => {
+      const value = templateValues[variable];
+      if (typeof value === "string" && value.trim().length > 0) {
+        return value.trim();
+      }
+      unresolved.add(variable);
+      return _match;
+    });
+
+    if (unresolved.size > 0) {
+      throw new Error(
+        `provider base URL template requires values for ${Array.from(unresolved)
+          .sort((left, right) => left.localeCompare(right))
+          .join(", ")}`,
+      );
+    }
+
+    return interpolated;
   }
 
   return undefined;
@@ -144,8 +182,8 @@ function buildDbHandle(secretKey: string): SecretHandle {
   };
 }
 
-function pickSecretKey(profile: AuthProfileRow): {
-  apiKey?: string;
+function pickSecretSlots(profile: AuthProfileRow): {
+  authSecretKey?: string;
   refreshTokenKey?: string;
 } {
   const slots = profile.secret_keys ?? {};
@@ -153,21 +191,34 @@ function pickSecretKey(profile: AuthProfileRow): {
   const singleton = values.length === 1 ? values[0] : undefined;
 
   if (profile.type === "api_key") {
-    return { apiKey: slots["api_key"] ?? singleton };
+    return { authSecretKey: slots["api_key"] ?? singleton };
   }
 
   if (profile.type === "token") {
-    return { apiKey: slots["token"] ?? slots["api_key"] ?? singleton };
+    return { authSecretKey: slots["token"] ?? slots["api_key"] ?? singleton };
   }
 
   // oauth
   return {
-    apiKey: slots["access_token"] ?? singleton,
+    authSecretKey: slots["access_token"] ?? singleton,
     refreshTokenKey: slots["refresh_token"],
   };
 }
 
-export async function resolveProfileApiKey(
+function resolvePrimarySecretValue(
+  profile: AuthProfileRow,
+  resolvedSecrets: Record<string, string>,
+): string | undefined {
+  if (profile.type === "oauth") {
+    return resolvedSecrets["access_token"] ?? resolvedSecrets["api_key"];
+  }
+  if (profile.type === "token") {
+    return resolvedSecrets["token"] ?? resolvedSecrets["api_key"];
+  }
+  return resolvedSecrets["api_key"];
+}
+
+export async function resolveProfileSecrets(
   profile: AuthProfileRow,
   deps: {
     tenantId: string;
@@ -179,15 +230,22 @@ export async function resolveProfileApiKey(
     fetchImpl: typeof fetch;
   },
   opts?: { forceOAuthRefresh?: boolean },
-): Promise<string | null> {
+): Promise<Record<string, string> | null | typeof OAUTH_REFRESH_LEASE_UNAVAILABLE> {
+  const slotEntries = Object.entries(profile.secret_keys ?? {}).filter(
+    (entry): entry is [string, string] =>
+      typeof entry[1] === "string" && entry[1].trim().length > 0,
+  );
+  if (slotEntries.length === 0 && !opts?.forceOAuthRefresh) {
+    return {};
+  }
   if (!deps.secretProvider) return null;
 
-  const selection = pickSecretKey(profile);
+  const selection = pickSecretSlots(profile);
   let refreshLeaseUnavailable = false;
 
   const maybeRefresh = async (): Promise<string | null> => {
     if (profile.type !== "oauth") return null;
-    if (!selection.apiKey || !selection.refreshTokenKey) return null;
+    if (!selection.authSecretKey || !selection.refreshTokenKey) return null;
 
     const nowMs = Date.now();
     const acquired = await deps.oauthRefreshLeaseDal.tryAcquire({
@@ -244,7 +302,7 @@ export async function resolveProfileApiKey(
       const accessToken = token.access_token?.trim();
       if (!accessToken) return null;
 
-      await deps.secretProvider!.store(selection.apiKey, accessToken);
+      await deps.secretProvider!.store(selection.authSecretKey, accessToken);
       if (token.refresh_token?.trim()) {
         await deps.secretProvider!.store(selection.refreshTokenKey, token.refresh_token.trim());
       }
@@ -269,16 +327,60 @@ export async function resolveProfileApiKey(
     }
   };
 
-  if (opts?.forceOAuthRefresh) {
-    if (profile.type === "oauth") {
-      // When we're forcing a refresh (usually after a 401/403), return only a refreshed token.
-      // If refresh can't run, do not fall back to the same (likely invalid) access token.
-      const refreshed = await maybeRefresh();
-      if (refreshed) return refreshed;
+  if (opts?.forceOAuthRefresh && profile.type === "oauth") {
+    const refreshed = await maybeRefresh();
+    if (!refreshed) {
       return refreshLeaseUnavailable ? OAUTH_REFRESH_LEASE_UNAVAILABLE : null;
     }
   }
 
-  if (!selection.apiKey) return null;
-  return await deps.secretProvider.resolve(buildDbHandle(selection.apiKey));
+  const resolvedSecrets: Record<string, string> = {};
+  for (const [slot, secretKey] of slotEntries) {
+    const value = await deps.secretProvider.resolve(buildDbHandle(secretKey));
+    if (!value) continue;
+    resolvedSecrets[slot] = value;
+  }
+
+  if (
+    !opts?.forceOAuthRefresh &&
+    profile.type === "oauth" &&
+    Object.keys(resolvedSecrets).length === 0 &&
+    selection.authSecretKey
+  ) {
+    const refreshed = await maybeRefresh();
+    if (refreshed) {
+      resolvedSecrets["access_token"] = refreshed;
+      if (selection.refreshTokenKey) {
+        const refreshTokenValue = await deps.secretProvider.resolve(
+          buildDbHandle(selection.refreshTokenKey),
+        );
+        if (refreshTokenValue) {
+          resolvedSecrets["refresh_token"] = refreshTokenValue;
+        }
+      }
+    }
+  }
+
+  return Object.keys(resolvedSecrets).length > 0 ? resolvedSecrets : null;
+}
+
+export async function resolveProfileApiKey(
+  profile: AuthProfileRow,
+  deps: {
+    tenantId: string;
+    secretProvider: SecretProvider | undefined;
+    oauthProviderRegistry: GatewayContainer["oauthProviderRegistry"];
+    oauthRefreshLeaseDal: GatewayContainer["oauthRefreshLeaseDal"];
+    oauthLeaseOwner: string;
+    logger: GatewayContainer["logger"];
+    fetchImpl: typeof fetch;
+  },
+  opts?: { forceOAuthRefresh?: boolean },
+): Promise<string | null> {
+  const resolvedSecrets = await resolveProfileSecrets(profile, deps, opts);
+  if (resolvedSecrets === OAUTH_REFRESH_LEASE_UNAVAILABLE) {
+    return OAUTH_REFRESH_LEASE_UNAVAILABLE;
+  }
+  if (!resolvedSecrets) return null;
+  return resolvePrimarySecretValue(profile, resolvedSecrets) ?? null;
 }
