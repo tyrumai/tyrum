@@ -1,7 +1,7 @@
 import * as electron from "electron";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, posix as posixPath } from "node:path";
 import type { DesktopNodeConfig } from "./config/schema.js";
 import { loadConfig, saveConfig } from "./config/store.js";
 import {
@@ -120,8 +120,8 @@ export function resolveLinuxAutostartPath(
   env: NodeJS.ProcessEnv = process.env,
   home = homedir(),
 ): string {
-  const configHome = env["XDG_CONFIG_HOME"]?.trim() || join(home, ".config");
-  return join(configHome, "autostart", LINUX_AUTOSTART_FILENAME);
+  const configHome = env["XDG_CONFIG_HOME"]?.trim() || posixPath.join(home, ".config");
+  return posixPath.join(configHome, "autostart", LINUX_AUTOSTART_FILENAME);
 }
 
 export function renderLinuxAutostartEntry(command: AutoLaunchCommand): string {
