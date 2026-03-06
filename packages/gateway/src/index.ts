@@ -25,11 +25,9 @@ export {
   assertSplitRoleUsesPostgres,
   buildStartupDefaultDeploymentConfig,
   ensureDatabaseDirectory,
-  parseCliArgs,
-  resolveGatewayUpdateTarget,
   resolveSnapshotImportEnabled,
-  runCli,
-} from "./bootstrap/cli.js";
+} from "./bootstrap/config.js";
+export { parseCliArgs, resolveGatewayUpdateTarget, runCli } from "./bootstrap/cli.js";
 export { assertNonLoopbackDeploymentGuardrails, splitHostAndPort } from "./bootstrap/network.js";
 export type { NonLoopbackTransportPolicy } from "./bootstrap/network.js";
 

@@ -594,11 +594,3 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   });
   return 0;
 }
-
-export {
-  applyStartCommandDeploymentOverrides,
-  assertSplitRoleUsesPostgres,
-  buildStartupDefaultDeploymentConfig,
-  ensureDatabaseDirectory,
-  resolveSnapshotImportEnabled,
-} from "./config.js";
