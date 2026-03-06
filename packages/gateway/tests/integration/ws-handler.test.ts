@@ -19,6 +19,7 @@ import { buildTranscript, completeHandshake, computeDeviceId } from "./ws-handsh
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import type { GatewayContainer } from "../../src/container.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { waitForCondition } from "../helpers/wait-for.js";
 
 function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
@@ -1420,4 +1421,137 @@ describe("WS handler integration", () => {
 
     stopHeartbeat();
   }, 15_000);
+
+  it("stores resolved and raw client IPs for WS presence and pairing when proxies are trusted", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager, nodePairingDal: container.nodePairingDal },
+      authTokens,
+      trustedProxies: "127.0.0.1",
+      presenceDal: container.presenceDal,
+      nodePairingDal: container.nodePairingDal,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const node = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken), {
+      headers: { "x-forwarded-for": "203.0.113.9" },
+    });
+    clients.push(node);
+    await waitForOpen(node);
+
+    const { deviceId } = await completeHandshake(node, {
+      requestIdPrefix: "node",
+      role: "node",
+      capabilities: ["cli"],
+      label: "node-1",
+    });
+
+    await waitForCondition(
+      async () => {
+        const presence = await container.presenceDal.getByInstanceId(deviceId);
+        const pairing = await container.nodePairingDal.getByNodeId(deviceId);
+        return Boolean(presence && pairing);
+      },
+      { description: "ws presence and pairing records" },
+    );
+
+    const presence = await container.presenceDal.getByInstanceId(deviceId);
+    expect(presence?.ip).toBe("203.0.113.9");
+    expect(presence?.metadata).toMatchObject({
+      raw_remote_ip: "127.0.0.1",
+      resolved_client_ip: "203.0.113.9",
+    });
+
+    const pairing = await container.nodePairingDal.getByNodeId(deviceId);
+    const pairingMetadata = pairing?.node.metadata as Record<string, unknown> | undefined;
+    expect(pairingMetadata).toMatchObject({
+      ip: "203.0.113.9",
+      raw_remote_ip: "127.0.0.1",
+      resolved_client_ip: "203.0.113.9",
+    });
+
+    stopHeartbeat();
+  });
+
+  it("ignores forwarded WS headers for presence and pairing when proxies are untrusted", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(homeDir);
+    containers.push(container);
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager, nodePairingDal: container.nodePairingDal },
+      authTokens,
+      presenceDal: container.presenceDal,
+      nodePairingDal: container.nodePairingDal,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const node = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken), {
+      headers: { "x-forwarded-for": "203.0.113.9" },
+    });
+    clients.push(node);
+    await waitForOpen(node);
+
+    const { deviceId } = await completeHandshake(node, {
+      requestIdPrefix: "node",
+      role: "node",
+      capabilities: ["cli"],
+      label: "node-1",
+    });
+
+    await waitForCondition(
+      async () => {
+        const presence = await container.presenceDal.getByInstanceId(deviceId);
+        const pairing = await container.nodePairingDal.getByNodeId(deviceId);
+        return Boolean(presence && pairing);
+      },
+      { description: "ws presence and pairing records" },
+    );
+
+    const presence = await container.presenceDal.getByInstanceId(deviceId);
+    expect(presence?.ip).toBe("127.0.0.1");
+    expect(presence?.metadata).toMatchObject({
+      raw_remote_ip: "127.0.0.1",
+      resolved_client_ip: "127.0.0.1",
+    });
+
+    const pairing = await container.nodePairingDal.getByNodeId(deviceId);
+    const pairingMetadata = pairing?.node.metadata as Record<string, unknown> | undefined;
+    expect(pairingMetadata).toMatchObject({
+      ip: "127.0.0.1",
+      raw_remote_ip: "127.0.0.1",
+      resolved_client_ip: "127.0.0.1",
+    });
+
+    stopHeartbeat();
+  });
 });

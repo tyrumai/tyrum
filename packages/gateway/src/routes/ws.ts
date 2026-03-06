@@ -27,9 +27,7 @@ export function createWsHandler(opts: WsRouteOptions): {
   handleUpgrade: ReturnType<typeof createHandleUpgrade>;
   stopHeartbeat: () => void;
 } {
-  const trustedProxies = opts.upgradeRateLimiter
-    ? createTrustedProxyAllowlistFromEnv(opts.trustedProxies)
-    : undefined;
+  const trustedProxies = createTrustedProxyAllowlistFromEnv(opts.trustedProxies);
   const connectionTtlMs = opts.cluster?.connectionTtlMs ?? 30_000;
   const presenceTtlMs = opts.presence?.ttlMs ?? 60_000;
   const presenceMaxEntries = opts.presence?.maxEntries ?? 500;
@@ -55,6 +53,7 @@ export function createWsHandler(opts: WsRouteOptions): {
     authTokens: opts.authTokens,
     cluster: opts.cluster,
     connectionTtlMs,
+    trustedProxies,
     presenceDal: opts.presenceDal,
     nodePairingDal: opts.nodePairingDal,
     presenceTtlMs,

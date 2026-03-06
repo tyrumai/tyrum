@@ -202,6 +202,11 @@ function parseXRealIpHeaderIps(value: string): string[] {
   return [];
 }
 
+export function toSingleHeaderValue(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return typeof value === "string" ? value : undefined;
+}
+
 export function resolveClientIp(input: {
   remoteAddress: string | undefined;
   forwardedHeader: string | undefined;
@@ -239,9 +244,24 @@ export function resolveClientIp(input: {
   return chain[chain.length - 1] ?? remoteAddress;
 }
 
-function resolveSocketRemoteAddress(c: Context): string | undefined {
-  const incoming = (c.env as { incoming?: IncomingMessage } | undefined)?.incoming;
-  return normalizeIp(incoming?.socket?.remoteAddress);
+export function resolveClientIpFromRequest(
+  req: Pick<IncomingMessage, "headers" | "socket">,
+  trustedProxies: TrustedProxyAllowlist | undefined,
+): {
+  rawRemoteIp: string | undefined;
+  resolvedClientIp: string | undefined;
+} {
+  const rawRemoteIp = normalizeIp(req.socket.remoteAddress);
+  return {
+    rawRemoteIp,
+    resolvedClientIp: resolveClientIp({
+      remoteAddress: rawRemoteIp,
+      forwardedHeader: toSingleHeaderValue(req.headers.forwarded),
+      xForwardedForHeader: toSingleHeaderValue(req.headers["x-forwarded-for"]),
+      xRealIpHeader: toSingleHeaderValue(req.headers["x-real-ip"]),
+      trustedProxies,
+    }),
+  };
 }
 
 export function createClientIpMiddleware(
@@ -250,13 +270,10 @@ export function createClientIpMiddleware(
   } = {},
 ): (c: Context, next: Next) => Promise<void> {
   return async (c, next) => {
-    const clientIp = resolveClientIp({
-      remoteAddress: resolveSocketRemoteAddress(c),
-      forwardedHeader: c.req.header("forwarded") ?? undefined,
-      xForwardedForHeader: c.req.header("x-forwarded-for") ?? undefined,
-      xRealIpHeader: c.req.header("x-real-ip") ?? undefined,
-      trustedProxies: opts.trustedProxies,
-    });
+    const incoming = (c.env as { incoming?: IncomingMessage } | undefined)?.incoming;
+    const clientIp = incoming
+      ? resolveClientIpFromRequest(incoming, opts.trustedProxies).resolvedClientIp
+      : undefined;
 
     c.set("clientIp", clientIp);
     await next();

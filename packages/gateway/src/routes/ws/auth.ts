@@ -1,6 +1,7 @@
 import type { IncomingMessage } from "node:http";
 import type { AuthTokenClaims } from "@tyrum/schemas";
 import type { AuthTokenService } from "../../modules/auth/auth-token-service.js";
+import { toSingleHeaderValue } from "../../modules/auth/client-ip.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "../../modules/auth/http.js";
 import type { NodePairingDal } from "../../modules/node/pairing-dal.js";
 
@@ -137,11 +138,6 @@ export function parseRemoteIp(req: IncomingMessage): string | undefined {
   const ip = req.socket.remoteAddress?.trim();
   if (!ip) return undefined;
   return ip;
-}
-
-export function toSingleHeaderValue(value: string | string[] | undefined): string | undefined {
-  if (Array.isArray(value)) return value[0];
-  return typeof value === "string" ? value : undefined;
 }
 
 export function parseRequestPath(req: IncomingMessage): string | undefined {

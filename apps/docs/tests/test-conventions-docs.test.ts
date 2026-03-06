@@ -18,7 +18,7 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-describe("Issue #998 test conventions", () => {
+describe("Test conventions docs (Issue #998)", () => {
   it("documents where each test scope belongs", async () => {
     const contributing = await readFile(resolve(repoRoot, "CONTRIBUTING.md"), "utf8");
 

@@ -76,4 +76,30 @@ describe("WS route composition extraction", () => {
     expect(handler.handleUpgrade).toBe(handleUpgrade);
     expect(handler.stopHeartbeat).toBe(stopHeartbeatMock);
   });
+
+  it("wires trusted proxies into both upgrade and connection handlers without a rate limiter", async () => {
+    const connectionManager = new ConnectionManager();
+    const authTokens = { authenticate: vi.fn() } as never;
+    const protocolDeps = { connectionManager };
+
+    createHeartbeatControllerMock.mockReturnValue({ stopHeartbeat: stopHeartbeatMock });
+    createHandleUpgradeMock.mockReturnValue(vi.fn());
+
+    const { createWsHandler } = await import("../../src/routes/ws.js");
+    createWsHandler({
+      connectionManager,
+      authTokens,
+      protocolDeps,
+      trustedProxies: "127.0.0.1",
+    });
+
+    const upgradeTrustedProxies = createHandleUpgradeMock.mock.calls[0]?.[0]?.trustedProxies as
+      | { isTrustedProxy(ip: string): boolean }
+      | undefined;
+    expect(upgradeTrustedProxies?.isTrustedProxy("127.0.0.1")).toBe(true);
+
+    const connectionTrustedProxies = bindWsConnectionHandlerMock.mock.calls[0]?.[0]
+      ?.trustedProxies as { isTrustedProxy(ip: string): boolean } | undefined;
+    expect(connectionTrustedProxies?.isTrustedProxy("127.0.0.1")).toBe(true);
+  });
 });

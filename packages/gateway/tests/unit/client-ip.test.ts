@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import type { IncomingMessage } from "node:http";
 import type { Context } from "hono";
 import {
   createTrustedProxyAllowlistFromEnv,
   getClientIp,
+  resolveClientIpFromRequest,
   resolveClientIp,
 } from "../../src/modules/auth/client-ip.js";
 
@@ -36,6 +38,33 @@ describe("trusted proxy allowlist parsing", () => {
     });
 
     expect(ip).toBe("198.51.100.10");
+  });
+
+  it("returns raw and resolved request IPs when a trusted proxy forwards the client IP", () => {
+    const allowlist = createTrustedProxyAllowlistFromEnv("127.0.0.1");
+    expect(allowlist).toBeDefined();
+
+    const request = {
+      socket: { remoteAddress: "127.0.0.1" },
+      headers: { "x-forwarded-for": "203.0.113.9" },
+    } as IncomingMessage;
+
+    expect(resolveClientIpFromRequest(request, allowlist)).toEqual({
+      rawRemoteIp: "127.0.0.1",
+      resolvedClientIp: "203.0.113.9",
+    });
+  });
+
+  it("ignores forwarded request headers when the remote peer is not trusted", () => {
+    const request = {
+      socket: { remoteAddress: "127.0.0.1" },
+      headers: { "x-forwarded-for": "203.0.113.9" },
+    } as IncomingMessage;
+
+    expect(resolveClientIpFromRequest(request, undefined)).toEqual({
+      rawRemoteIp: "127.0.0.1",
+      resolvedClientIp: "127.0.0.1",
+    });
   });
 });
 

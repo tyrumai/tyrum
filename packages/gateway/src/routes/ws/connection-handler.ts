@@ -12,6 +12,11 @@ import {
 } from "@tyrum/schemas";
 import type { WebSocket, WebSocketServer } from "ws";
 import type { AuthTokenService } from "../../modules/auth/auth-token-service.js";
+import {
+  resolveClientIpFromRequest,
+  toSingleHeaderValue,
+  type TrustedProxyAllowlist,
+} from "../../modules/auth/client-ip.js";
 import type { NodePairingDal } from "../../modules/node/pairing-dal.js";
 import type { PresenceDal } from "../../modules/presence/dal.js";
 import { broadcastWsEvent } from "../../ws/broadcast.js";
@@ -25,7 +30,6 @@ import {
   parseRemoteIp,
   parseRequestPath,
   resolveWsAuth,
-  toSingleHeaderValue,
 } from "./auth.js";
 import {
   PAIRING_REQUESTED_AUDIENCE,
@@ -48,6 +52,7 @@ interface BindWsConnectionHandlerOptions {
   authTokens: AuthTokenService;
   cluster?: WsClusterOptions;
   connectionTtlMs: number;
+  trustedProxies?: TrustedProxyAllowlist;
   presenceDal?: PresenceDal;
   nodePairingDal?: NodePairingDal;
   presenceTtlMs: number;
@@ -63,6 +68,7 @@ export function bindWsConnectionHandler(opts: BindWsConnectionHandlerOptions): v
       authTokens: opts.authTokens,
       cluster: opts.cluster,
       connectionTtlMs: opts.connectionTtlMs,
+      trustedProxies: opts.trustedProxies,
       presenceDal: opts.presenceDal,
       nodePairingDal: opts.nodePairingDal,
       presenceTtlMs: opts.presenceTtlMs,
@@ -91,6 +97,7 @@ class WsConnectionSession {
       authTokens: AuthTokenService;
       cluster?: WsClusterOptions;
       connectionTtlMs: number;
+      trustedProxies?: TrustedProxyAllowlist;
       presenceDal?: PresenceDal;
       nodePairingDal?: NodePairingDal;
       presenceTtlMs: number;
@@ -368,10 +375,10 @@ class WsConnectionSession {
       authClaims: claims ?? undefined,
     });
 
-    const remoteIp = parseRemoteIp(this.req);
+    const clientIp = resolveClientIpFromRequest(this.req, this.input.trustedProxies);
     this.persistClusterConnection(pending, claims);
-    this.upsertPresenceOnConnect(pending, remoteIp);
-    this.upsertNodePairingOnConnect(pending, remoteIp, claims);
+    this.upsertPresenceOnConnect(pending, clientIp);
+    this.upsertNodePairingOnConnect(pending, clientIp, claims);
     this.ws.on("close", () => {
       this.handleConnectedClose(claims);
     });
@@ -403,22 +410,30 @@ class WsConnectionSession {
       .catch(() => {});
   }
 
-  private upsertPresenceOnConnect(pending: PendingInit, remoteIp: string | undefined): void {
+  private upsertPresenceOnConnect(
+    pending: PendingInit,
+    clientIp: {
+      rawRemoteIp: string | undefined;
+      resolvedClientIp: string | undefined;
+    },
+  ): void {
     if (!this.input.presenceDal || !this.clientId || !this.deviceId) return;
 
     const nowMs = Date.now();
+    const persistedClientIp = toPersistedClientIp(clientIp);
     void this.input.presenceDal
       .upsert({
         instanceId: this.deviceId,
         role: pending.role,
         connectionId: this.clientId,
         host: pending.label ?? null,
-        ip: remoteIp ?? null,
+        ip: persistedClientIp.ip,
         version: pending.version ?? null,
         mode: pending.mode ?? null,
         metadata: {
           capabilities: pending.capabilities,
           edge_id: this.input.cluster?.instanceId ?? null,
+          ...persistedClientIp.metadata,
         },
         nowMs,
         ttlMs: this.input.presenceTtlMs,
@@ -431,13 +446,17 @@ class WsConnectionSession {
 
   private upsertNodePairingOnConnect(
     pending: PendingInit,
-    remoteIp: string | undefined,
+    clientIp: {
+      rawRemoteIp: string | undefined;
+      resolvedClientIp: string | undefined;
+    },
     claims: AuthTokenClaims | undefined,
   ): void {
     if (!this.input.nodePairingDal || pending.role !== "node") return;
 
     const nowIso = new Date().toISOString();
     const nodeId = pending.deviceId;
+    const persistedClientIp = toPersistedClientIp(clientIp);
     void this.input.nodePairingDal
       .getByNodeId(nodeId)
       .then((previous) => {
@@ -448,7 +467,8 @@ class WsConnectionSession {
             label: pending.label ?? null,
             capabilities: pending.capabilities,
             metadata: {
-              ip: remoteIp ?? null,
+              ip: persistedClientIp.ip,
+              ...persistedClientIp.metadata,
               platform: pending.platform ?? null,
               version: pending.version ?? null,
               mode: pending.mode ?? null,
@@ -541,4 +561,24 @@ class WsConnectionSession {
       })
       .catch(() => {});
   }
+}
+
+function toPersistedClientIp(input: {
+  rawRemoteIp: string | undefined;
+  resolvedClientIp: string | undefined;
+}): {
+  ip: string | null;
+  metadata: {
+    raw_remote_ip: string | null;
+    resolved_client_ip: string | null;
+  };
+} {
+  const ip = input.resolvedClientIp ?? input.rawRemoteIp ?? null;
+  return {
+    ip,
+    metadata: {
+      raw_remote_ip: input.rawRemoteIp ?? null,
+      resolved_client_ip: ip,
+    },
+  };
 }
