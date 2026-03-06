@@ -53,7 +53,7 @@ export function signatureForToolStep(
   const callSigs = toolCalls
     .map(safeToolCallSignature)
     .filter((sig): sig is string => typeof sig === "string" && sig.length > 0)
-    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    .toSorted((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
   if (callSigs.length === 0) return undefined;
   return { signature: callSigs.join("|"), toolNames };

@@ -172,8 +172,8 @@ export class MarkdownMemoryStore {
       .filter((entry) => entry.isFile())
       .map((entry) => entry.name)
       .filter((name) => /^\d{4}-\d{2}-\d{2}\.md$/.test(name))
-      .sort()
-      .reverse();
+      .toSorted()
+      .toReversed();
 
     for (const name of dailyFiles) {
       if (hits.length >= limit) break;

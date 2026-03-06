@@ -672,14 +672,12 @@ function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBu
   const maxBytesDefaultValue =
     maxBytesDefault.length > 0 ? Math.min(...maxBytesDefault) : undefined;
 
-  const provenanceValues = bundles
-    .map((b) => b?.provenance?.untrusted_shell_requires_approval)
-    .filter((v): v is boolean => typeof v === "boolean");
-  const provenanceShellApproval = provenanceValues.includes(true)
-    ? true
-    : provenanceValues.includes(false)
-      ? false
-      : true;
+  const provenanceValues = new Set(
+    bundles
+      .map((b) => b?.provenance?.untrusted_shell_requires_approval)
+      .filter((v): v is boolean => typeof v === "boolean"),
+  );
+  const provenanceShellApproval = provenanceValues.has(true) || !provenanceValues.has(false);
 
   return PolicyBundle.parse({
     v: 1,

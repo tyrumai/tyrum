@@ -322,11 +322,9 @@ export async function buildMemoryV1Digest(params: {
     });
   }
 
-  const semanticSorted = semanticHits
-    .slice()
-    .sort((a, b) =>
-      b.score !== a.score ? b.score - a.score : a.memory_item_id.localeCompare(b.memory_item_id),
-    );
+  const semanticSorted = semanticHits.toSorted((a, b) =>
+    b.score !== a.score ? b.score - a.score : a.memory_item_id.localeCompare(b.memory_item_id),
+  );
   for (const hit of semanticSorted) {
     candidates.push({
       memory_item_id: hit.memory_item_id,

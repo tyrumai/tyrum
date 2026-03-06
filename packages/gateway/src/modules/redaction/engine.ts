@@ -14,7 +14,7 @@ function normalizedSecrets(input: readonly string[]): string[] {
     const s = typeof raw === "string" ? raw : "";
     if (s.length > 0) unique.add(s);
   }
-  return Array.from(unique).sort((a, b) => {
+  return Array.from(unique).toSorted((a, b) => {
     const len = b.length - a.length;
     if (len !== 0) return len;
     return a.localeCompare(b);

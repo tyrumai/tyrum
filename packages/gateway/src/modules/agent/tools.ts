@@ -179,7 +179,7 @@ export function selectToolDirectory(
   const normalizedPrompt = userPrompt.toLowerCase();
   return available
     .map((tool) => ({ tool, score: scoreTool(tool, normalizedPrompt) }))
-    .sort((a, b) => b.score - a.score || a.tool.id.localeCompare(b.tool.id))
+    .toSorted((a, b) => b.score - a.score || a.tool.id.localeCompare(b.tool.id))
     .slice(0, limit)
     .map((entry) => entry.tool);
 }

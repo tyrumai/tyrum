@@ -1086,7 +1086,7 @@ export async function executeCommand(
 
     const row = await deps.db.transaction(async (tx) => {
       const modelOverrideDal = new SessionModelOverrideDal(tx);
-      const row = await modelOverrideDal.upsert({
+      const overrideRow = await modelOverrideDal.upsert({
         tenantId: session.tenant_id,
         sessionId: session.session_id,
         modelId: modelIdRaw,
@@ -1097,7 +1097,7 @@ export async function executeCommand(
         sessionId: session.session_id,
         providerKey: providerId,
       });
-      return row;
+      return overrideRow;
     });
 
     const payload = {

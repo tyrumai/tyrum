@@ -38,13 +38,12 @@ function recencyWeight(lastSuccessAt: string | null): number {
 }
 
 function normalizeUrl(identifier: string): string {
-  try {
-    new URL(identifier);
+  if (URL.canParse(identifier)) {
     return identifier;
-  } catch {
-    // Intentional: bare domain or path — assume https.
-    return `https://${identifier}`;
   }
+
+  // Intentional: bare domain or path — assume https.
+  return `https://${identifier}`;
 }
 
 function matchesQuery(row: CapabilityMemoryRow, query: string): boolean {

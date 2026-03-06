@@ -37,7 +37,7 @@ export function migrate(db: Database.Database, migrationsDir: string): void {
 
   const files = readdirSync(migrationsDir)
     .filter((f) => f.endsWith(".sql"))
-    .sort();
+    .toSorted();
 
   for (const file of files) {
     if (applied.has(file)) continue;

@@ -438,9 +438,9 @@ export class TelegramChannelQueue {
             : {}),
         },
       };
-      const parsed = WsChannelQueueOverflowEvent.safeParse(candidate);
-      if (parsed.success) {
-        this.emitWsEvent(row.tenant_id, parsed.data);
+      const overflowEvent = WsChannelQueueOverflowEvent.safeParse(candidate);
+      if (overflowEvent.success) {
+        this.emitWsEvent(row.tenant_id, overflowEvent.data);
       }
     }
 
@@ -1069,8 +1069,8 @@ export class TelegramChannelProcessor {
             text: "Sorry, something went wrong. Please try again later.",
             parseMode: "HTML",
           })
-          .catch((err) => {
-            const message2 = err instanceof Error ? err.message : String(err);
+          .catch((sendErr) => {
+            const message2 = sendErr instanceof Error ? sendErr.message : String(sendErr);
             this.logger?.warn("channels.telegram.send_error_reply_failed", {
               channel_id: connectorId,
               message_id: leader.message_id,

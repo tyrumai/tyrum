@@ -64,10 +64,10 @@ export function requestApproval(
           audience: APPROVAL_WS_AUDIENCE,
         })
         .catch((err) => {
-          const message = err instanceof Error ? err.message : String(err);
+          const errorMessage = err instanceof Error ? err.message : String(err);
           deps.logger?.error("outbox.enqueue_failed", {
             topic: "ws.broadcast",
-            error: message,
+            error: errorMessage,
           });
         });
     }
@@ -82,10 +82,10 @@ export function requestApproval(
         audience: APPROVAL_WS_AUDIENCE,
       })
       .catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
+        const errorMessage = err instanceof Error ? err.message : String(err);
         deps.logger?.error("outbox.enqueue_failed", {
           topic: "ws.broadcast",
-          error: message,
+          error: errorMessage,
         });
       });
   }

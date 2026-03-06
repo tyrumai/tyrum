@@ -84,7 +84,7 @@ export function createModelsDevRoutes(deps: ModelsDevRouteDeps): Hono {
           model_count: modelCount,
         };
       })
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .toSorted((a, b) => a.id.localeCompare(b.id));
 
     return c.json({
       status: "ok",
@@ -132,7 +132,7 @@ export function createModelsDevRoutes(deps: ModelsDevRouteDeps): Hono {
         modalities: model.modalities ?? null,
         limit: model.limit ?? null,
       }))
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .toSorted((a, b) => a.id.localeCompare(b.id));
 
     return c.json({
       status: "ok",

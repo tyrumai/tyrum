@@ -37,9 +37,7 @@ function toContractPin(row: SessionProviderPinRow) {
   return SessionProviderPin.parse(rest);
 }
 
-export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
-  const app = new Hono();
-
+function registerProfileListRoute(app: Hono, deps: AuthProfileRouteDeps): void {
   app.get("/auth/profiles", async (c) => {
     const tenantId = requireTenantId(c);
     const providerKey = c.req.query("provider_key")?.trim() || undefined;
@@ -54,7 +52,9 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
     const profiles = rows.map(toContractProfile);
     return c.json(AuthProfileListResponse.parse({ profiles }));
   });
+}
 
+function registerProfileCreateAndUpdateRoutes(app: Hono, deps: AuthProfileRouteDeps): void {
   app.post("/auth/profiles", async (c) => {
     const tenantId = requireTenantId(c);
     const body = (await c.req.json()) as unknown;
@@ -97,7 +97,9 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
 
     return c.json({ status: "ok", profile: toContractProfile(updated) });
   });
+}
 
+function registerProfileStatusRoutes(app: Hono, deps: AuthProfileRouteDeps): void {
   app.post("/auth/profiles/:key/disable", async (c) => {
     const tenantId = requireTenantId(c);
     const authProfileKey = c.req.param("key");
@@ -139,7 +141,9 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
 
     return c.json({ status: "ok", profile: toContractProfile(updated) });
   });
+}
 
+function registerPinRoutes(app: Hono, deps: AuthProfileRouteDeps): void {
   app.get("/auth/pins", async (c) => {
     const tenantId = requireTenantId(c);
     const sessionId = c.req.query("session_id")?.trim() || undefined;
@@ -185,6 +189,14 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
     });
     return c.json({ status: "ok", pin: toContractPin(pin) }, 201);
   });
+}
+
+export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
+  const app = new Hono();
+  registerProfileListRoute(app, deps);
+  registerProfileCreateAndUpdateRoutes(app, deps);
+  registerProfileStatusRoutes(app, deps);
+  registerPinRoutes(app, deps);
 
   return app;
 }

@@ -119,7 +119,7 @@ function decodeCursor(raw: string): Cursor {
 }
 
 function uniqSortedStrings(values: readonly string[]): string[] {
-  return [...new Set(values.map((v) => v.trim()).filter((v) => v.length > 0))].sort();
+  return [...new Set(values.map((v) => v.trim()).filter((v) => v.length > 0))].toSorted();
 }
 
 type MemoryV1BudgetLimits = {
@@ -1315,14 +1315,26 @@ export class MemoryV1Dal {
     const scored = rows.map((row) => {
       const provenance: MemoryProvenance = {
         source_kind: row.source_kind,
-        ...(row.channel ? { channel: row.channel } : {}),
-        ...(row.thread_id ? { thread_id: row.thread_id } : {}),
-        ...(row.session_id ? { session_id: row.session_id } : {}),
-        ...(row.message_id ? { message_id: row.message_id } : {}),
-        ...(row.tool_call_id ? { tool_call_id: row.tool_call_id } : {}),
         refs: parseJson<string[]>(row.refs_json),
-        ...(row.metadata_json ? { metadata: parseJson<unknown>(row.metadata_json) } : {}),
       };
+      if (row.channel) {
+        provenance.channel = row.channel;
+      }
+      if (row.thread_id) {
+        provenance.thread_id = row.thread_id;
+      }
+      if (row.session_id) {
+        provenance.session_id = row.session_id;
+      }
+      if (row.message_id) {
+        provenance.message_id = row.message_id;
+      }
+      if (row.tool_call_id) {
+        provenance.tool_call_id = row.tool_call_id;
+      }
+      if (row.metadata_json) {
+        provenance.metadata = parseJson<unknown>(row.metadata_json);
+      }
 
       const title = row.title ?? "";
       const key = row.key ?? "";
@@ -1360,14 +1372,24 @@ export class MemoryV1Dal {
       const snippet =
         snippetSource.length > 0 ? buildSnippet(snippetSource, terms, 240) : undefined;
 
-      return {
+      const hit: {
+        memory_item_id: string;
+        kind: MemoryItemKind;
+        score: number;
+        provenance: MemoryProvenance;
+        _created_at: string;
+        snippet?: string;
+      } = {
         memory_item_id: row.memory_item_id,
         kind: row.kind,
         score: Math.max(0, score),
-        ...(snippet ? { snippet } : {}),
         provenance,
         _created_at: normalizeTime(row.created_at),
       };
+      if (snippet) {
+        hit.snippet = snippet;
+      }
+      return hit;
     });
 
     scored.sort((a, b) => {
@@ -1605,7 +1627,7 @@ export class MemoryV1Dal {
     if (rows.some((row) => row.kind === "episode") && overBudget(usage, limits)) {
       const episodes = rows
         .filter((row) => row.kind === "episode" && row.summary_md && row.occurred_at)
-        .sort((a, b) => {
+        .toSorted((a, b) => {
           const oa = a.occurred_at ?? "";
           const ob = b.occurred_at ?? "";
           if (oa !== ob) return oa.localeCompare(ob);
@@ -1768,7 +1790,7 @@ export class MemoryV1Dal {
         usage.total.chars > limits.max_total_chars ||
         usage.per_kind[kind].chars > limits.per_kind[kind].max_chars;
 
-      const sorted = candidates.slice().sort((a, b) => {
+      const sorted = candidates.toSorted((a, b) => {
         const charsA = memoryItemCharCount(a);
         const charsB = memoryItemCharCount(b);
 

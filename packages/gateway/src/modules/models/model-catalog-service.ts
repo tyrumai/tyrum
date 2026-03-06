@@ -119,7 +119,7 @@ export class ModelCatalogService {
 
     const effectiveCatalog: Record<string, unknown> = {};
 
-    const sortedProviderIds = Array.from(providerIds).sort((a, b) => a.localeCompare(b));
+    const sortedProviderIds = Array.from(providerIds).toSorted((a, b) => a.localeCompare(b));
     for (const providerId of sortedProviderIds) {
       const baseProvider = base.catalog[providerId];
       const providerOverride = providerOverrideById.get(providerId);
@@ -197,7 +197,7 @@ export class ModelCatalogService {
       const modelIds = new Set<string>([...Object.keys(baseModels), ...overrideModels.keys()]);
 
       const models: Record<string, unknown> = {};
-      const sortedModelIds = Array.from(modelIds).sort((a, b) => a.localeCompare(b));
+      const sortedModelIds = Array.from(modelIds).toSorted((a, b) => a.localeCompare(b));
       for (const modelId of sortedModelIds) {
         const baseModel = baseModels[modelId] as Record<string, unknown> | undefined;
         const modelOverride = overrideModels.get(modelId);

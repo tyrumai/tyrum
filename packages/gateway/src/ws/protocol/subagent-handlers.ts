@@ -327,8 +327,8 @@ export async function handleSubagentMessage(
               WORKBOARD_WS_AUDIENCE,
             );
           }
-        } catch (err) {
-          const updateMessage = err instanceof Error ? err.message : String(err);
+        } catch (updateErr) {
+          const updateMessage = updateErr instanceof Error ? updateErr.message : String(updateErr);
           deps.logger?.warn("ws.subagent_failure_update_failed", {
             request_id: msg.request_id,
             client_id: client.id,
