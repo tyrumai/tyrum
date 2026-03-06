@@ -10,7 +10,10 @@ import {
   APPROVAL_WS_AUDIENCE,
   type WsBroadcastAudience,
 } from "../../ws/audience.js";
-import { ensureApprovalResolvedEvent, ensurePolicyOverrideCreatedEvent } from "../../ws/stable-events.js";
+import {
+  ensureApprovalResolvedEvent,
+  ensurePolicyOverrideCreatedEvent,
+} from "../../ws/stable-events.js";
 
 type NormalizedSelectedOverride = {
   tool_id: string;
@@ -105,7 +108,9 @@ function normalizeSelectedOverrides(
       typeof entry?.workspace_id === "string" ? entry.workspace_id.trim() : undefined;
     if (!toolId || !pattern) continue;
     normalized.push(
-      workspaceId ? { tool_id: toolId, pattern, workspace_id: workspaceId } : { tool_id: toolId, pattern },
+      workspaceId
+        ? { tool_id: toolId, pattern, workspace_id: workspaceId }
+        : { tool_id: toolId, pattern },
     );
   }
 
@@ -260,7 +265,8 @@ export async function resolveApproval(
   return {
     ok: true,
     approval: resolved.approval,
-    createdOverrides: createdOverrides && createdOverrides.length > 0 ? createdOverrides : undefined,
+    createdOverrides:
+      createdOverrides && createdOverrides.length > 0 ? createdOverrides : undefined,
     transitioned: resolved.transitioned,
   };
 }

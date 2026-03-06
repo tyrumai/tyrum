@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolveApproval } from "../../src/modules/approval/resolve-service.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
-import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
