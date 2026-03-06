@@ -294,9 +294,11 @@ async function resolveLanguageModel(input: {
   }
 
   const providerEnv = (provider as { env?: unknown }).env;
-  const providerRequiresConfiguredAccount = Array.isArray(providerEnv)
-    ? providerEnv.some((entry) => typeof entry === "string" && entry.trim().length > 0)
-    : true;
+  const providerRequiresConfiguredAccount =
+    /\$\{[A-Z0-9_]+\}/.test(api ?? "") ||
+    (Array.isArray(providerEnv)
+      ? providerEnv.some((entry) => typeof entry === "string" && entry.trim().length > 0)
+      : true);
   if (!selectedProfile && providerRequiresConfiguredAccount) {
     throw new Error(
       `no active auth profiles with credentials configured for provider '${parsed.providerId}'`,

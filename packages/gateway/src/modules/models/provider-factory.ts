@@ -114,7 +114,19 @@ function parseJsonSecret(secret: string, label: string): Record<string, unknown>
   }
 }
 
+let sapEnvScopeTail: Promise<void> = Promise.resolve();
+
 async function withScopedEnv<T>(env: Record<string, string>, fn: () => Promise<T> | T): Promise<T> {
+  // SAP's V2 provider currently reads auth from process.env, so serialize those
+  // calls to prevent concurrent requests from leaking each other's service keys.
+  const previousScope = sapEnvScopeTail;
+  let releaseScope!: () => void;
+  sapEnvScopeTail = new Promise<void>((resolve) => {
+    releaseScope = resolve;
+  });
+
+  await previousScope;
+
   const previous = new Map<string, string | undefined>();
   for (const [key, value] of Object.entries(env)) {
     previous.set(key, process.env[key]);
@@ -130,6 +142,7 @@ async function withScopedEnv<T>(env: Record<string, string>, fn: () => Promise<T
         process.env[key] = value;
       }
     }
+    releaseScope();
   }
 }
 

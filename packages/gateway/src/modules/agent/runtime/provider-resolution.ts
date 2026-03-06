@@ -205,19 +205,6 @@ function pickSecretSlots(profile: AuthProfileRow): {
   };
 }
 
-function resolvePrimarySecretValue(
-  profile: AuthProfileRow,
-  resolvedSecrets: Record<string, string>,
-): string | undefined {
-  if (profile.type === "oauth") {
-    return resolvedSecrets["access_token"] ?? resolvedSecrets["api_key"];
-  }
-  if (profile.type === "token") {
-    return resolvedSecrets["token"] ?? resolvedSecrets["api_key"];
-  }
-  return resolvedSecrets["api_key"];
-}
-
 export async function resolveProfileSecrets(
   profile: AuthProfileRow,
   deps: {
@@ -362,25 +349,4 @@ export async function resolveProfileSecrets(
   }
 
   return Object.keys(resolvedSecrets).length > 0 ? resolvedSecrets : null;
-}
-
-export async function resolveProfileApiKey(
-  profile: AuthProfileRow,
-  deps: {
-    tenantId: string;
-    secretProvider: SecretProvider | undefined;
-    oauthProviderRegistry: GatewayContainer["oauthProviderRegistry"];
-    oauthRefreshLeaseDal: GatewayContainer["oauthRefreshLeaseDal"];
-    oauthLeaseOwner: string;
-    logger: GatewayContainer["logger"];
-    fetchImpl: typeof fetch;
-  },
-  opts?: { forceOAuthRefresh?: boolean },
-): Promise<string | null> {
-  const resolvedSecrets = await resolveProfileSecrets(profile, deps, opts);
-  if (resolvedSecrets === OAUTH_REFRESH_LEASE_UNAVAILABLE) {
-    return OAUTH_REFRESH_LEASE_UNAVAILABLE;
-  }
-  if (!resolvedSecrets) return null;
-  return resolvePrimarySecretValue(profile, resolvedSecrets) ?? null;
 }
