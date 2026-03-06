@@ -116,6 +116,10 @@ vi.mock("../src/main/config/token-store.js", () => ({
 }));
 
 vi.mock("../src/main/gateway-bin-path.js", () => ({
+  resolveGatewayBin: vi.fn(() => ({
+    path: "/tmp/mock-gateway-bin.mjs",
+    source: "monorepo",
+  })),
   resolveGatewayBinPath: vi.fn(() => "/tmp/mock-gateway-bin.mjs"),
 }));
 
@@ -250,7 +254,13 @@ describe("registerGatewayIpc handlers", () => {
 
       await operatorConnectionHandler!({} as never);
 
-      expect(mgr.lastStartOptions).toEqual(expect.objectContaining({ dbPath: legacyDbPath }));
+      expect(mgr.lastStartOptions).toEqual(
+        expect.objectContaining({
+          dbPath: legacyDbPath,
+          gatewayBin: "/tmp/mock-gateway-bin.mjs",
+          gatewayBinSource: "monorepo",
+        }),
+      );
     } finally {
       if (prevHome === undefined) {
         delete process.env["TYRUM_HOME"];
