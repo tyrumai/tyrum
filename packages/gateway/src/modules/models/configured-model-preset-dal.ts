@@ -142,49 +142,52 @@ export class ConfiguredModelPresetDal {
     displayName?: string;
     options?: Record<string, unknown>;
   }): Promise<ConfiguredModelPresetRow | undefined> {
-    const existing = await this.db.get<RawConfiguredModelPresetRow>(
-      `SELECT *
-       FROM configured_model_presets
-       WHERE tenant_id = ? AND preset_key = ?
-       LIMIT 1`,
-      [input.tenantId, input.presetKey],
-    );
-    if (!existing) return undefined;
+    return await this.db.transaction(async (tx) => {
+      const existing = await tx.get<RawConfiguredModelPresetRow>(
+        `SELECT *
+         FROM configured_model_presets
+         WHERE tenant_id = ? AND preset_key = ?
+         LIMIT 1`,
+        [input.tenantId, input.presetKey],
+      );
+      if (!existing) return undefined;
 
-    const mutation = buildUpdatedAtMutation(
-      [
-        ...(input.displayName === undefined
-          ? []
-          : [
-              {
-                column: "display_name",
-                currentValue: existing.display_name,
-                nextValue: input.displayName.trim(),
-              },
-            ]),
-        ...(input.options === undefined
-          ? []
-          : [
-              {
-                column: "options_json",
-                currentValue: normalizeStoredOptionsJson(existing.options_json),
-                nextValue: stableJsonStringify(input.options),
-              },
-            ]),
-      ],
-      new Date().toISOString(),
-    );
-    if (!mutation) {
-      return toRow(existing);
-    }
+      const mutation = buildUpdatedAtMutation(
+        [
+          ...(input.displayName === undefined
+            ? []
+            : [
+                {
+                  column: "display_name",
+                  currentValue: existing.display_name,
+                  nextValue: input.displayName.trim(),
+                },
+              ]),
+          ...(input.options === undefined
+            ? []
+            : [
+                {
+                  column: "options_json",
+                  currentValue: normalizeStoredOptionsJson(existing.options_json),
+                  nextValue: stableJsonStringify(input.options),
+                },
+              ]),
+        ],
+        new Date().toISOString(),
+      );
+      if (!mutation) {
+        return toRow(existing);
+      }
 
-    await this.db.run(
-      `UPDATE configured_model_presets
-       SET ${mutation.assignments.join(", ")}
-       WHERE tenant_id = ? AND preset_key = ?`,
-      [...mutation.values, input.tenantId, input.presetKey],
-    );
-    return await this.getByKey({ tenantId: input.tenantId, presetKey: input.presetKey });
+      const row = await tx.get<RawConfiguredModelPresetRow>(
+        `UPDATE configured_model_presets
+         SET ${mutation.assignments.join(", ")}
+         WHERE tenant_id = ? AND preset_key = ?
+         RETURNING *`,
+        [...mutation.values, input.tenantId, input.presetKey],
+      );
+      return row ? toRow(row) : undefined;
+    });
   }
 
   async deleteByKey(input: { tenantId: string; presetKey: string }): Promise<boolean> {

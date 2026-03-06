@@ -476,15 +476,12 @@ export class AuthProfileDal {
     authProfileKey: string;
   }): Promise<AuthProfileRow | undefined> {
     const nowIso = new Date().toISOString();
-    const result = await this.db.run(
+    await this.db.run(
       `UPDATE auth_profiles
        SET status = 'disabled', updated_at = ?
        WHERE tenant_id = ? AND auth_profile_key = ? AND status <> 'disabled'`,
       [nowIso, input.tenantId, input.authProfileKey],
     );
-    if (result.changes === 0) {
-      return await this.getByKey(input);
-    }
     return await this.getByKey(input);
   }
 
@@ -493,15 +490,12 @@ export class AuthProfileDal {
     authProfileKey: string;
   }): Promise<AuthProfileRow | undefined> {
     const nowIso = new Date().toISOString();
-    const result = await this.db.run(
+    await this.db.run(
       `UPDATE auth_profiles
        SET status = 'active', updated_at = ?
        WHERE tenant_id = ? AND auth_profile_key = ? AND status <> 'active'`,
       [nowIso, input.tenantId, input.authProfileKey],
     );
-    if (result.changes === 0) {
-      return await this.getByKey(input);
-    }
     return await this.getByKey(input);
   }
 
