@@ -167,7 +167,7 @@ describe("GatewayManager", () => {
     await gm.stop();
   });
 
-  it("uses a real Node runtime for staged gateway bundles inside Electron", () => {
+  it("uses Electron-as-Node for staged gateway bundles inside Electron", () => {
     const launch = resolveGatewayLaunchCommand({
       gatewayBin: "/repo/apps/desktop/dist/gateway/index.mjs",
       gatewayBinSource: "staged",
@@ -177,8 +177,8 @@ describe("GatewayManager", () => {
     });
 
     expect(launch).toEqual({
-      command: "/opt/homebrew/bin/node",
-      env: {},
+      command: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
+      env: { ELECTRON_RUN_AS_NODE: "1" },
     });
   });
 

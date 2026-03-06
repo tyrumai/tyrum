@@ -198,13 +198,22 @@ export function resolveGatewayLaunchCommand(options: {
     return { command: processExecPath, env: {} };
   }
 
-  if (options.gatewayBinSource === "staged" || options.gatewayBinSource === "monorepo") {
+  if (options.gatewayBinSource === "monorepo") {
     return { command: resolveNodeCommand(env), env: {} };
   }
 
-  // In development, repo-local gateway bundles resolve native modules from the
-  // workspace install or staged deploy tree, both of which are built for Node
-  // rather than the Electron runtime used by the desktop shell.
+  // The staged desktop gateway bundle is produced by build:gateway, which
+  // rebuilds native modules like better-sqlite3 against Electron.
+  if (options.gatewayBinSource === "staged") {
+    return {
+      command: processExecPath,
+      env: { ELECTRON_RUN_AS_NODE: "1" },
+    };
+  }
+
+  // In development, the repo-local monorepo gateway bundle resolves native
+  // modules from the workspace install, which is built for Node rather than
+  // the Electron runtime used by the desktop shell.
   if (!options.gatewayBinSource && isMonorepoGatewayBundlePath(options.gatewayBin)) {
     return { command: resolveNodeCommand(env), env: {} };
   }
