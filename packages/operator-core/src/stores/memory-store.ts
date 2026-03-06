@@ -1081,18 +1081,20 @@ export function createMemoryStore(ws: OperatorWsClient): {
     }));
   }
 
+  const memoryStore: MemoryStore = {
+    ...store,
+    list,
+    search,
+    refreshBrowse,
+    loadMore,
+    inspect,
+    update,
+    forget,
+    export: exportMemory,
+  };
+
   return {
-    store: {
-      ...store,
-      list,
-      search,
-      refreshBrowse,
-      loadMore,
-      inspect,
-      update,
-      forget,
-      export: exportMemory,
-    },
+    store: memoryStore,
     handleMemoryItemUpsert,
     handleMemoryTombstone,
     handleMemoryConsolidated,
