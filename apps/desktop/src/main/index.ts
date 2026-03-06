@@ -39,17 +39,22 @@ let backgroundModeController: BackgroundModeController | null = null;
 let gatewayBackgroundStatusListenerAttached = false;
 let isQuitting = false;
 let isQuittingForUpdate = false;
+let appReady = false;
 let mainWindowReadyToShow = false;
 let mainWindowPendingFocus = false;
 let shouldFocusWindowOnCreate = false;
+let pendingNavigationRequest: NavigationRequest | null = null;
 
-function requestMainWindowFocus(): void {
-  const win = mainWindow;
-  if (!win) {
+function requestMainWindowFocus(): BrowserWindow | null {
+  let win = mainWindow;
+  if (!win || win.isDestroyed()) {
+    mainWindow = null;
     shouldFocusWindowOnCreate = true;
-    return;
+    if (!appReady) {
+      return null;
+    }
+    win = createWindow();
   }
-  if (win.isDestroyed()) return;
 
   if (win.isMinimized()) {
     win.restore();
@@ -57,11 +62,33 @@ function requestMainWindowFocus(): void {
 
   if (!mainWindowReadyToShow) {
     mainWindowPendingFocus = true;
-    return;
+    return win;
   }
 
   win.show();
   win.focus();
+  return win;
+}
+
+function flushPendingNavigationRequest(): void {
+  const request = pendingNavigationRequest;
+  if (!request) return;
+
+  const win = mainWindow;
+  if (!win) return;
+  if (win.isDestroyed() || win.webContents.isDestroyed()) return;
+
+  pendingNavigationRequest = null;
+  win.webContents.send("navigation:request", request);
+}
+
+function requestNavigation(request: NavigationRequest): void {
+  pendingNavigationRequest = request;
+  const win = requestMainWindowFocus();
+  if (!win) return;
+  if (win.isDestroyed() || win.webContents.isDestroyed()) return;
+  if (!mainWindowReadyToShow) return;
+  flushPendingNavigationRequest();
 }
 
 function handleDeepLink(rawUrl: string): void {
@@ -70,15 +97,11 @@ function handleDeepLink(rawUrl: string): void {
   }
 
   setPendingDeepLinkUrl(rawUrl);
-  requestMainWindowFocus();
+  const win = requestMainWindowFocus();
 
-  if (mainWindow === null && app.isReady?.()) {
-    createWindow();
-  }
-
-  const win = mainWindow;
   if (!win) return;
   if (win.isDestroyed() || win.webContents.isDestroyed()) return;
+  if (!mainWindowReadyToShow) return;
   win.webContents.send("deeplink:open", rawUrl);
 }
 
@@ -90,12 +113,7 @@ function emitBackgroundStateChange(state: BackgroundModeState): void {
 }
 
 function requestConnectionNavigation(): void {
-  requestMainWindowFocus();
-
-  const win = mainWindow;
-  if (!win) return;
-  if (win.isDestroyed() || win.webContents.isDestroyed()) return;
-  win.webContents.send("navigation:request", { pageId: "connection" });
+  requestNavigation({ pageId: "connection" });
 }
 
 function ensureBackgroundController(): BackgroundModeController {
@@ -346,7 +364,7 @@ function ensureWorkItemNotifications(): void {
   void workItemNotificationService.start();
 }
 
-function createWindow(options?: { startHidden?: boolean }): void {
+function createWindow(options?: { startHidden?: boolean }): BrowserWindow {
   const startHidden = options?.startHidden ?? false;
   const userDataPath = app.getPath("userData");
   const persistedState = loadWindowState(userDataPath);
@@ -379,6 +397,7 @@ function createWindow(options?: { startHidden?: boolean }): void {
       mainWindowPendingFocus = false;
       window.focus();
     }
+    flushPendingNavigationRequest();
   });
 
   registerNavigationGuardrails(window);
@@ -403,6 +422,8 @@ function createWindow(options?: { startHidden?: boolean }): void {
     cleanupWindowStatePersistence();
     mainWindow = null;
   });
+
+  return window;
 }
 
 if (didAcquireSingleInstanceLock) {
@@ -419,6 +440,7 @@ if (didAcquireSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    appReady = true;
     const backgroundController = ensureBackgroundController();
     configureMacAboutPanel(app, process.platform);
     Menu.setApplicationMenu(
@@ -444,12 +466,7 @@ if (didAcquireSingleInstanceLock) {
 
             void dialog.showMessageBox(options);
           },
-          onRequestNavigate: (request) => {
-            const win = mainWindow;
-            if (!win) return;
-            if (win.isDestroyed() || win.webContents.isDestroyed()) return;
-            win.webContents.send("navigation:request", request);
-          },
+          onRequestNavigate: requestNavigation,
         }),
       ),
     );
