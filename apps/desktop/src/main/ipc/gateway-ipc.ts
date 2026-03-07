@@ -1,5 +1,9 @@
 import { ipcMain, type BrowserWindow } from "electron";
-import { normalizeFingerprint256 } from "@tyrum/operator-core";
+import {
+  createPinnedNodeTransportState,
+  destroyPinnedNodeDispatcher,
+  normalizeFingerprint256,
+} from "@tyrum/operator-core/node";
 import { GatewayManager } from "../gateway-manager.js";
 import { configExists, loadConfig, saveConfig } from "../config/store.js";
 import { decryptToken, encryptToken } from "../config/token-store.js";
@@ -39,87 +43,8 @@ function resolveTlsPinSettings(config: DesktopNodeConfig): {
 
 async function destroyPinnedGatewayFetchState(): Promise<void> {
   if (!pinnedGatewayFetchState) return;
-  try {
-    await pinnedGatewayFetchState.dispatcher.destroy?.();
-  } catch {
-    // ignore
-  }
+  await destroyPinnedNodeDispatcher(pinnedGatewayFetchState.dispatcher);
   pinnedGatewayFetchState = null;
-}
-
-function createTlsPinnedConnect(options: {
-  tls: typeof import("node:tls");
-  expectedFingerprint256: string;
-  allowSelfSigned: boolean;
-  pinRaw: string;
-}): (opts: any, callback: any) => void {
-  const { tls, expectedFingerprint256, allowSelfSigned, pinRaw } = options;
-
-  return (opts, callback) => {
-    const portRaw = opts.port;
-    const port = typeof portRaw === "number" ? portRaw : Number.parseInt(String(portRaw ?? ""), 10);
-    const hostnameRaw = opts.hostname;
-    const hostname = typeof hostnameRaw === "string" ? hostnameRaw : String(hostnameRaw ?? "");
-    const servername =
-      typeof opts.servername === "string" && opts.servername.trim() ? opts.servername : hostname;
-
-    if (!hostname || !Number.isFinite(port)) {
-      callback(new Error("Invalid TLS connector options"), null);
-      return;
-    }
-
-    const rejectUnauthorized = !allowSelfSigned;
-
-    let settled = false;
-    const finishError = (err: Error): void => {
-      if (settled) return;
-      settled = true;
-      callback(err, null);
-    };
-    const finishSuccess = (socket: import("node:tls").TLSSocket): void => {
-      if (settled) return;
-      settled = true;
-      callback(null, socket);
-    };
-
-    const socket = tls.connect({
-      host: hostname,
-      port,
-      servername,
-      rejectUnauthorized,
-    }) as import("node:tls").TLSSocket;
-
-    socket.unref();
-
-    socket.once("error", (err: Error) => {
-      finishError(err);
-    });
-
-    socket.once("secureConnect", () => {
-      try {
-        const cert = socket.getPeerCertificate();
-        const identityErr = tls.checkServerIdentity(servername, cert);
-        if (identityErr) throw identityErr;
-
-        const actualRaw = typeof cert.fingerprint256 === "string" ? cert.fingerprint256 : "";
-        const actual = normalizeFingerprint256(actualRaw);
-        if (!actual) {
-          throw new Error("TLS peer certificate missing fingerprint256.");
-        }
-        if (actual !== expectedFingerprint256) {
-          throw new Error(
-            `TLS certificate fingerprint mismatch (expected ${pinRaw}, got ${actualRaw}).`,
-          );
-        }
-
-        finishSuccess(socket);
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        socket.destroy(error);
-        finishError(error);
-      }
-    });
-  };
 }
 
 async function createPinnedGatewayFetchState(options: {
@@ -128,22 +53,16 @@ async function createPinnedGatewayFetchState(options: {
   pinRaw: string;
   key: string;
 }): Promise<PinnedGatewayFetchState> {
-  const undici = await import("undici");
-  const tls = await import("node:tls");
-
-  const agent = new undici.Agent({
-    connect: createTlsPinnedConnect({
-      tls,
-      expectedFingerprint256: options.expectedFingerprint256,
-      allowSelfSigned: options.allowSelfSigned,
-      pinRaw: options.pinRaw,
-    }),
+  const transport = await createPinnedNodeTransportState({
+    pinRaw: options.pinRaw,
+    expectedFingerprint256: options.expectedFingerprint256,
+    allowSelfSigned: options.allowSelfSigned,
   });
 
   return {
     key: options.key,
-    fetchImpl: undici.fetch as unknown as typeof fetch,
-    dispatcher: agent,
+    fetchImpl: transport.fetchImpl as typeof fetch,
+    dispatcher: transport.dispatcher,
   };
 }
 

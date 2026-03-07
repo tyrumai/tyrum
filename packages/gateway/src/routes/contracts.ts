@@ -1,16 +1,18 @@
 import { Hono, type Context } from "hono";
 import { readFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { ZodTypeAny } from "zod";
 
 const TRANSIENT_READ_MAX_ATTEMPTS = 50;
 const TRANSIENT_READ_DELAY_MS = 100;
 
 function resolveSchemasJsonSchemaDir(): string {
-  const entrypointUrl = import.meta.resolve("@tyrum/schemas");
-  const entrypointPath = fileURLToPath(entrypointUrl);
-  const pkgRoot = dirname(dirname(entrypointPath));
-  return join(pkgRoot, "dist", "jsonschema");
+  return fileURLToPath(new URL("../../../schemas/dist/jsonschema", import.meta.url));
+}
+
+function resolveSchemasPackageJsonPath(): string {
+  return fileURLToPath(new URL("../../../schemas/package.json", import.meta.url));
 }
 
 function delay(ms: number): Promise<void> {
@@ -147,12 +149,123 @@ function sanitizeCatalogPayload(parsed: unknown): unknown {
   return { ...(parsed as Record<string, unknown>), schemas };
 }
 
+interface GeneratedContractCatalogSchemaEntry {
+  name: string;
+  file: string;
+  $id: string;
+}
+
+interface GeneratedContractCatalog {
+  format: "tyrum.contracts.jsonschema.catalog.v1";
+  generated_at: string;
+  package: {
+    name: "@tyrum/schemas";
+    version: string;
+  };
+  schemas: GeneratedContractCatalogSchemaEntry[];
+  errors?: Array<{ name: string; error: string }>;
+}
+
+interface GeneratedContractState {
+  catalog: GeneratedContractCatalog;
+  schemasByFile: Map<string, unknown>;
+}
+
+let generatedContractStatePromise: Promise<GeneratedContractState> | undefined;
+
+async function getGeneratedContractState(): Promise<GeneratedContractState> {
+  if (!generatedContractStatePromise) {
+    generatedContractStatePromise = buildGeneratedContractState().catch((err) => {
+      generatedContractStatePromise = undefined;
+      throw err;
+    });
+  }
+
+  return await generatedContractStatePromise;
+}
+
+function hasToJsonSchema(value: unknown): value is ZodTypeAny & {
+  toJSONSchema: (opts?: { io?: "input" | "output" }) => Record<string, unknown> | undefined;
+} {
+  if (!value || typeof value !== "object") return false;
+  return typeof (value as { toJSONSchema?: unknown }).toJSONSchema === "function";
+}
+
+async function buildGeneratedContractState(): Promise<GeneratedContractState> {
+  const [schemasModule, schemasPackageRaw] = await Promise.all([
+    import("@tyrum/schemas"),
+    readFile(resolveSchemasPackageJsonPath(), "utf-8").catch(() => undefined),
+  ]);
+
+  const generatedAt = new Date().toISOString();
+  const schemasByFile = new Map<string, unknown>();
+  const catalogSchemas: GeneratedContractCatalogSchemaEntry[] = [];
+  const errors: Array<{ name: string; error: string }> = [];
+  const packageVersion = (() => {
+    if (!schemasPackageRaw) return "0.0.0-dev";
+    try {
+      const parsed = JSON.parse(schemasPackageRaw) as { version?: unknown };
+      return typeof parsed.version === "string" ? parsed.version : "0.0.0-dev";
+    } catch (err) {
+      void err;
+      return "0.0.0-dev";
+    }
+  })();
+
+  for (const [name, value] of Object.entries(schemasModule)) {
+    if (!hasToJsonSchema(value)) continue;
+
+    try {
+      const schema = value.toJSONSchema({ io: "input" });
+      if (!schema || typeof schema !== "object") continue;
+
+      const file = `${name}.json`;
+      const id = `https://schemas.tyrum.dev/${packageVersion}/${encodeURIComponent(name)}.json`;
+      if (!("$id" in schema)) {
+        schema.$id = id;
+      }
+      if (!("title" in schema)) {
+        schema.title = name;
+      }
+
+      schemasByFile.set(file, schema);
+      catalogSchemas.push({ name, file, $id: id });
+    } catch (err) {
+      errors.push({
+        name,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  catalogSchemas.sort((left, right) => left.name.localeCompare(right.name));
+
+  return {
+    catalog: {
+      format: "tyrum.contracts.jsonschema.catalog.v1",
+      generated_at: generatedAt,
+      package: {
+        name: "@tyrum/schemas",
+        version: packageVersion,
+      },
+      schemas: catalogSchemas,
+      errors: errors.length > 0 ? errors : undefined,
+    },
+    schemasByFile,
+  };
+}
+
 async function handleCatalogRequest(
   c: Context,
   jsonSchemaDir: string | undefined,
 ): Promise<Response> {
   if (!jsonSchemaDir) {
-    return unavailableResponse(c, "JSON Schema catalog unavailable.");
+    try {
+      return c.json((await getGeneratedContractState()).catalog);
+    } catch (err) {
+      void err;
+      return unavailableResponse(c, "JSON Schema catalog unavailable.");
+    }
   }
 
   try {
@@ -161,8 +274,13 @@ async function handleCatalogRequest(
     });
     return c.json(sanitizeCatalogPayload(parsed));
   } catch (err) {
-    void err;
-    return unavailableResponse(c, "JSON Schema catalog unavailable.");
+    try {
+      return c.json((await getGeneratedContractState()).catalog);
+    } catch (fallbackErr) {
+      void err;
+      void fallbackErr;
+      return unavailableResponse(c, "JSON Schema catalog unavailable.");
+    }
   }
 }
 
@@ -171,7 +289,16 @@ async function handleSchemaRequest(
   jsonSchemaDirResolved: string | undefined,
 ): Promise<Response> {
   if (!jsonSchemaDirResolved) {
-    return unavailableResponse(c, "Contract schema unavailable.");
+    try {
+      const generatedSchema = (await getGeneratedContractState()).schemasByFile.get(
+        c.req.param("file")?.trim() || "",
+      );
+      if (!generatedSchema) return notFoundResponse(c);
+      return c.json(generatedSchema);
+    } catch (err) {
+      void err;
+      return unavailableResponse(c, "Contract schema unavailable.");
+    }
   }
 
   const file = c.req.param("file")?.trim() || "";
@@ -190,10 +317,24 @@ async function handleSchemaRequest(
     return c.json(parsed);
   } catch (err) {
     if (errorCode(err) === "ENOENT") {
-      return notFoundResponse(c);
+      try {
+        const generatedSchema = (await getGeneratedContractState()).schemasByFile.get(file);
+        if (!generatedSchema) return notFoundResponse(c);
+        return c.json(generatedSchema);
+      } catch (fallbackErr) {
+        void fallbackErr;
+        return notFoundResponse(c);
+      }
     }
 
-    return unavailableResponse(c, "Contract schema unavailable.");
+    try {
+      const generatedSchema = (await getGeneratedContractState()).schemasByFile.get(file);
+      if (!generatedSchema) return notFoundResponse(c);
+      return c.json(generatedSchema);
+    } catch (fallbackErr) {
+      void fallbackErr;
+      return unavailableResponse(c, "Contract schema unavailable.");
+    }
   }
 }
 

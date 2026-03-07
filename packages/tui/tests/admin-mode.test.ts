@@ -10,7 +10,7 @@ import {
   createNodeFileDeviceIdentityStorage,
   createTyrumHttpClient,
   loadOrCreateDeviceIdentity,
-} from "@tyrum/client";
+} from "@tyrum/client/node";
 
 function waitForConnectionStatus(
   store: {

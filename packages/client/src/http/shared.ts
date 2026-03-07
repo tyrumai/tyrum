@@ -184,15 +184,22 @@ function isNodeRuntime(): boolean {
   );
 }
 
+type NodePinnedTransportModule = typeof import("../node/pinned-transport.js");
+
+async function loadNodePinnedTransportModule(): Promise<NodePinnedTransportModule> {
+  const globalAny = globalThis as unknown as Record<PropertyKey, unknown>;
+  const specifier =
+    "../node/pinned-transport.js" +
+    String(globalAny[Symbol.for("tyrum:node-pinned-transport")] ?? "");
+  return (await import(specifier)) as NodePinnedTransportModule;
+}
+
 function createPinnedNodeFetch(options: {
   pinRaw: string;
   expectedFingerprint256: string;
   allowSelfSigned: boolean;
   caCertPem?: string;
 }): TyrumHttpFetch {
-  const { expectedFingerprint256, pinRaw, allowSelfSigned } = options;
-  const caCertPem = options.caCertPem;
-
   let initPromise:
     | Promise<{
         fetchImpl: (
@@ -210,83 +217,8 @@ function createPinnedNodeFetch(options: {
     ) => Promise<Response>;
     dispatcher: { destroy?: () => Promise<void> | void };
   }> {
-    // Avoid bundlers eagerly resolving Node-only modules in browser builds.
-    const globalAny = globalThis as unknown as Record<PropertyKey, unknown>;
-    const undiciSpecifier = "undici" + String(globalAny[Symbol.for("tyrum:undici")] ?? "");
-    const tlsSpecifier = "node:tls" + String(globalAny[Symbol.for("tyrum:tls")] ?? "");
-
-    const undici = await import(undiciSpecifier);
-    const tls = await import(tlsSpecifier);
-
-    const agent = new undici.Agent({
-      connect: (
-        opts: { port?: unknown; hostname?: unknown; servername?: unknown },
-        callback: (err: Error | null, socket: unknown | null) => void,
-      ) => {
-        const port = Number.parseInt(String(opts.port ?? ""), 10);
-        const hostname = String(opts.hostname ?? "");
-        const servername =
-          typeof opts.servername === "string" && opts.servername.trim()
-            ? opts.servername
-            : hostname;
-
-        if (!hostname || !Number.isFinite(port)) {
-          callback(new Error("Invalid TLS connector options"), null);
-          return;
-        }
-
-        let settled = false;
-        const done = (err: Error | null, socket: unknown | null) => {
-          if (settled) return;
-          settled = true;
-          callback(err, socket);
-        };
-
-        const rejectUnauthorized = !(allowSelfSigned && caCertPem === undefined);
-
-        const socket = tls.connect({
-          host: hostname,
-          port,
-          servername,
-          ca: caCertPem,
-          rejectUnauthorized,
-        }) as import("node:tls").TLSSocket;
-
-        socket.unref();
-
-        socket.once("error", (err: Error) => {
-          done(err, null);
-        });
-
-        socket.once("secureConnect", () => {
-          try {
-            const cert = socket.getPeerCertificate();
-            const identityErr = tls.checkServerIdentity(servername, cert);
-            if (identityErr) throw identityErr;
-
-            const actualRaw = typeof cert.fingerprint256 === "string" ? cert.fingerprint256 : "";
-            const actual = normalizeFingerprint256(actualRaw);
-            if (!actual) {
-              throw new Error("TLS peer certificate missing fingerprint256.");
-            }
-            if (actual !== expectedFingerprint256) {
-              throw new Error(
-                `TLS certificate fingerprint mismatch (expected ${pinRaw}, got ${actualRaw}).`,
-              );
-            }
-
-            done(null, socket);
-          } catch (err) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            socket.destroy(error);
-            done(error, null);
-          }
-        });
-      },
-    });
-
-    const fetchImpl = undici.fetch as typeof fetch;
-    return { fetchImpl: fetchImpl as any, dispatcher: agent };
+    const nodeTransport = await loadNodePinnedTransportModule();
+    return await nodeTransport.createPinnedNodeTransportState(options);
   }
 
   return async (input, initOptions) => {

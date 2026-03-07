@@ -63,9 +63,10 @@ const {
   httpPolicyRevokeOverrideSpy: vi.fn(),
 }));
 
-vi.mock("@tyrum/client", async () => {
-  const actual = await vi.importActual<typeof import("@tyrum/client")>("@tyrum/client");
-
+async function createMockClientModule(
+  specifier: "@tyrum/client" | "@tyrum/client/node",
+): Promise<Record<string, unknown>> {
+  const actual = await vi.importActual(specifier);
   class TyrumClient {
     private readonly handlers = new Map<string, Set<(data: unknown) => void>>();
 
@@ -188,7 +189,10 @@ vi.mock("@tyrum/client", async () => {
       };
     },
   };
-});
+}
+
+vi.mock("@tyrum/client", async () => await createMockClientModule("@tyrum/client"));
+vi.mock("@tyrum/client/node", async () => await createMockClientModule("@tyrum/client/node"));
 
 describe("@tyrum/cli operator commands", () => {
   const prevHome = process.env["TYRUM_HOME"];

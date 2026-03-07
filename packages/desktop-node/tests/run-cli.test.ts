@@ -29,7 +29,7 @@ const {
   backendCtorSpy: vi.fn(),
 }));
 
-vi.mock("@tyrum/client", () => {
+vi.mock("@tyrum/client/node", () => {
   class TyrumClient {
     private readonly handlers = new Map<string, Set<(data: unknown) => void>>();
 

@@ -341,6 +341,17 @@ const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
 const DEFAULT_PROTOCOL_REV = 2;
 const TERMINAL_RECONNECT_CLOSE_CODES = new Set<number>([4005, 4006, 4007, 4008]);
+
+type NodePinnedTransportModule = typeof import("./node/pinned-transport.js");
+
+async function loadNodePinnedTransportModule(): Promise<NodePinnedTransportModule> {
+  const globalAny = globalThis as unknown as Record<PropertyKey, unknown>;
+  const specifier =
+    "./node/pinned-transport.js" +
+    String(globalAny[Symbol.for("tyrum:node-pinned-transport")] ?? "");
+  return (await import(specifier)) as NodePinnedTransportModule;
+}
+
 const WS_ACK_RESULT = {
   safeParse: (
     input: unknown,
@@ -849,7 +860,9 @@ export class TyrumClient {
     const dispatcher = anyWs.__tyrumDispatcher;
     if (!dispatcher || typeof dispatcher.destroy !== "function") return;
     anyWs.__tyrumDispatcher = null;
-    void Promise.resolve(dispatcher.destroy()).catch(() => {});
+    void loadNodePinnedTransportModule()
+      .then((module) => module.destroyPinnedNodeDispatcher(dispatcher as any))
+      .catch(() => {});
   }
 
   private openSocket(): void {
@@ -890,98 +903,28 @@ export class TyrumClient {
       throw new Error("tlsCertFingerprint256 is supported only in Node.js clients.");
     }
 
-    // Avoid bundlers eagerly resolving Node-only modules in browser builds.
-    const globalAny = globalThis as unknown as Record<PropertyKey, unknown>;
-    const undiciSpecifier = "undici" + String(globalAny[Symbol.for("tyrum:undici")] ?? "");
-    const tlsSpecifier = "node:tls" + String(globalAny[Symbol.for("tyrum:tls")] ?? "");
-
-    const undici = await import(undiciSpecifier);
-    const tls = await import(tlsSpecifier);
-
-    const agent = new undici.Agent({
-      connect: (
-        opts: { port?: unknown; hostname?: unknown; servername?: unknown },
-        callback: (err: Error | null, socket: unknown | null) => void,
-      ) => {
-        const port = Number.parseInt(String(opts.port ?? ""), 10);
-        const hostname = String(opts.hostname ?? "");
-        const servername =
-          typeof opts.servername === "string" && opts.servername.trim()
-            ? opts.servername
-            : hostname;
-
-        if (!hostname || !Number.isFinite(port)) {
-          callback(new Error("Invalid TLS connector options"), null);
-          return;
-        }
-
-        let settled = false;
-        const done = (err: Error | null, socket: unknown | null) => {
-          if (settled) return;
-          settled = true;
-          callback(err, socket);
-        };
-
-        const caCertPemRaw =
-          typeof this.opts.tlsCaCertPem === "string" ? this.opts.tlsCaCertPem : "";
-        const caCertPemTrimmed = caCertPemRaw.trim();
-        const caCertPem = caCertPemTrimmed.length ? caCertPemTrimmed : undefined;
-        const rejectUnauthorized = !(allowSelfSigned && caCertPem === undefined);
-
-        const socket = tls.connect({
-          host: hostname,
-          port,
-          servername,
-          ca: caCertPem,
-          rejectUnauthorized,
-        }) as import("node:tls").TLSSocket;
-
-        socket.once("error", (err: Error) => {
-          this.transportErrorHint = err.message;
-          done(err, null);
-        });
-        socket.once("secureConnect", () => {
-          try {
-            const cert = socket.getPeerCertificate();
-            const identityErr = tls.checkServerIdentity(servername, cert);
-            if (identityErr) throw identityErr;
-
-            const actualRaw = typeof cert.fingerprint256 === "string" ? cert.fingerprint256 : "";
-            const actual = normalizeFingerprint256(actualRaw);
-            if (!actual) {
-              throw new Error("TLS peer certificate missing fingerprint256.");
-            }
-            if (actual !== expected) {
-              throw new Error(
-                `TLS certificate fingerprint mismatch (expected ${pinRaw}, got ${actualRaw}).`,
-              );
-            }
-
-            done(null, socket);
-          } catch (err) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            this.transportErrorHint = error.message;
-            this.suppressReconnect = true;
-            socket.destroy(error);
-            done(error, null);
-          }
-        });
-      },
-    });
-
-    const WebSocketCtor = undici.WebSocket as unknown as new (...args: any[]) => WebSocket;
+    const caCertPemRaw = typeof this.opts.tlsCaCertPem === "string" ? this.opts.tlsCaCertPem : "";
+    const caCertPemTrimmed = caCertPemRaw.trim();
+    const caCertPem = caCertPemTrimmed.length ? caCertPemTrimmed : undefined;
+    const nodeTransport = await loadNodePinnedTransportModule();
     try {
-      const ws = new WebSocketCtor(this.opts.url, {
+      const { ws, dispatcher } = await nodeTransport.createPinnedNodeWebSocket({
+        url: this.opts.url,
         protocols: this.buildProtocols(),
-        dispatcher: agent,
+        pinRaw,
+        expectedFingerprint256: expected,
+        allowSelfSigned,
+        caCertPem,
+        onTransportError: (message) => {
+          this.transportErrorHint = message;
+        },
+        onPinFailure: () => {
+          this.suppressReconnect = true;
+        },
       });
-      (ws as unknown as { __tyrumDispatcher?: unknown }).__tyrumDispatcher = agent;
+      (ws as unknown as { __tyrumDispatcher?: unknown }).__tyrumDispatcher = dispatcher;
       return ws;
     } catch (err) {
-      const dispatcher = agent as unknown as { destroy?: () => unknown };
-      if (typeof dispatcher.destroy === "function") {
-        void Promise.resolve(dispatcher.destroy()).catch(() => {});
-      }
       throw err;
     }
   }

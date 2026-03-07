@@ -26,7 +26,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-vi.mock("@tyrum/client", () => {
+vi.mock("@tyrum/operator-core/node", () => {
   class TyrumClient {
     on = vi.fn();
     off = offSpy;

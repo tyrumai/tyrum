@@ -10,7 +10,7 @@ import {
   createOperatorCoreManager,
   createTyrumHttpClient,
   httpAuthForAuth,
-} from "@tyrum/operator-core";
+} from "@tyrum/operator-core/browser";
 import {
   OperatorUiApp,
   OperatorUiHostProvider,

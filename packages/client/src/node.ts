@@ -1,39 +1,47 @@
-// Client SDK shared entry point
-export const VERSION = "0.1.0";
-
-export { autoExecute } from "./capability.js";
-export { normalizeFingerprint256 } from "./tls/fingerprint.js";
-export { TyrumClient, TyrumHttpClientError, createTyrumHttpClient } from "./browser.js";
-export type {
-  BrowserTyrumClientOptions as TyrumClientOptions,
-  BrowserTyrumHttpClientOptions,
-} from "./browser.js";
-export {
-  DeviceIdentityError,
+import {
   buildConnectProofTranscript,
   computeDeviceIdFromPublicKeyDer,
   createBrowserLocalStorageDeviceIdentityStorage,
   createDeviceIdentity,
+  DeviceIdentityError,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
   signProofWithPrivateKey,
+  type DeviceIdentity,
+  type DeviceIdentityStorage,
 } from "./device-identity.js";
-export type { DeviceIdentity, DeviceIdentityStorage } from "./device-identity.js";
-export type {
-  TyrumHttpAuthStrategy,
-  TyrumHttpClient,
-  TyrumHttpClientOperator,
-  TyrumHttpErrorCode,
-  TyrumHttpFetch,
-  TyrumRequestOptions,
+import { createNodeFileDeviceIdentityStorage } from "./device-identity-node.js";
+import {
+  createTyrumHttpClient,
+  TyrumHttpClientError,
+  type TyrumHttpAuthStrategy,
+  type TyrumHttpClient,
+  type TyrumHttpClientOperator,
+  type TyrumHttpClientOptions as NodeTyrumHttpClientOptions,
+  type TyrumHttpErrorCode,
+  type TyrumHttpFetch,
+  type TyrumRequestOptions,
 } from "./http/index.js";
-export type {
-  TyrumClientEvents,
-  TyrumClientProtocolErrorInfo,
-  TyrumClientProtocolErrorKind,
+import {
+  createPinnedNodeTransportState,
+  createPinnedNodeWebSocket,
+  destroyPinnedNodeDispatcher,
+  type NodePinnedTlsOptions,
+  type NodePinnedTransportState,
+  type NodePinnedWebSocketOptions,
+} from "./node/pinned-transport.js";
+import { normalizeFingerprint256 } from "./tls/fingerprint.js";
+import {
+  TyrumClient,
+  type TyrumClientEvents,
+  type TyrumClientOptions as NodeTyrumClientOptions,
+  type TyrumClientProtocolErrorInfo,
+  type TyrumClientProtocolErrorKind,
 } from "./ws-client.js";
-export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "./capability.js";
 
+export { VERSION } from "./index.js";
+export { autoExecute } from "./capability.js";
+export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "./capability.js";
 export type {
   StatusResponse,
   UsageResponse,
@@ -59,7 +67,6 @@ export type {
   ArtifactBytesResult,
   HealthResponse,
 } from "./http/index.js";
-
 export type {
   Approval,
   ClientCapability,
@@ -132,3 +139,40 @@ export type {
   PlanRequest,
   PlanResponse,
 } from "./types.js";
+
+export {
+  TyrumClient,
+  normalizeFingerprint256,
+  buildConnectProofTranscript,
+  computeDeviceIdFromPublicKeyDer,
+  createBrowserLocalStorageDeviceIdentityStorage,
+  createDeviceIdentity,
+  createNodeFileDeviceIdentityStorage,
+  createPinnedNodeTransportState,
+  createPinnedNodeWebSocket,
+  destroyPinnedNodeDispatcher,
+  DeviceIdentityError,
+  formatDeviceIdentityError,
+  loadOrCreateDeviceIdentity,
+  createTyrumHttpClient,
+  TyrumHttpClientError,
+  signProofWithPrivateKey,
+};
+export type {
+  DeviceIdentity,
+  DeviceIdentityStorage,
+  NodePinnedTlsOptions,
+  NodePinnedTransportState,
+  NodePinnedWebSocketOptions,
+  NodeTyrumClientOptions,
+  NodeTyrumHttpClientOptions,
+  TyrumClientEvents,
+  TyrumClientProtocolErrorInfo,
+  TyrumClientProtocolErrorKind,
+  TyrumHttpAuthStrategy,
+  TyrumHttpClient,
+  TyrumHttpClientOperator,
+  TyrumHttpErrorCode,
+  TyrumHttpFetch,
+  TyrumRequestOptions,
+};

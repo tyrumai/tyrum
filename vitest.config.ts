@@ -70,9 +70,18 @@ export default defineConfig({
   resolve: {
     alias: {
       "@tyrum/schemas": resolve(__dirname, "packages/schemas/src/index.ts"),
+      "@tyrum/client/browser": resolve(__dirname, "packages/client/src/browser.ts"),
+      "@tyrum/client/node": resolve(__dirname, "packages/client/src/node.ts"),
       "@tyrum/client": resolve(__dirname, "packages/client/src/index.ts"),
       "@tyrum/gateway": resolve(__dirname, "packages/gateway/src/index.ts"),
       "@tyrum/desktop-node": resolve(__dirname, "packages/desktop-node/src/index.ts"),
+      "@tyrum/operator-core/browser": resolve(__dirname, "packages/operator-core/src/browser.ts"),
+      "@tyrum/operator-core/node": resolve(__dirname, "packages/operator-core/src/node.ts"),
+      "@tyrum/operator-core": resolve(__dirname, "packages/operator-core/src/index.ts"),
+      "@tyrum/operator-ui/globals.css": resolve(__dirname, "packages/operator-ui/src/globals.css"),
+      "@tyrum/operator-ui": resolve(__dirname, "packages/operator-ui/src/index.ts"),
+      "@tyrum/cli": resolve(__dirname, "packages/cli/src/index.ts"),
+      "@tyrum/tui": resolve(__dirname, "packages/tui/src/index.ts"),
     },
   },
   test: {

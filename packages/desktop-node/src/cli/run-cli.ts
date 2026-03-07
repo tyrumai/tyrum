@@ -9,7 +9,7 @@ import {
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
   normalizeFingerprint256,
-} from "@tyrum/client";
+} from "@tyrum/client/node";
 
 import { DesktopProvider } from "../providers/desktop-provider.js";
 import { NutJsDesktopBackend } from "../providers/backends/nutjs-desktop-backend.js";

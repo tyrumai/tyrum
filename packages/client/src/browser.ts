@@ -1,39 +1,38 @@
-// Client SDK shared entry point
-export const VERSION = "0.1.0";
-
-export { autoExecute } from "./capability.js";
-export { normalizeFingerprint256 } from "./tls/fingerprint.js";
-export { TyrumClient, TyrumHttpClientError, createTyrumHttpClient } from "./browser.js";
-export type {
-  BrowserTyrumClientOptions as TyrumClientOptions,
-  BrowserTyrumHttpClientOptions,
-} from "./browser.js";
-export {
-  DeviceIdentityError,
+import {
   buildConnectProofTranscript,
   computeDeviceIdFromPublicKeyDer,
   createBrowserLocalStorageDeviceIdentityStorage,
   createDeviceIdentity,
+  DeviceIdentityError,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
   signProofWithPrivateKey,
+  type DeviceIdentity,
+  type DeviceIdentityStorage,
 } from "./device-identity.js";
-export type { DeviceIdentity, DeviceIdentityStorage } from "./device-identity.js";
-export type {
-  TyrumHttpAuthStrategy,
-  TyrumHttpClient,
-  TyrumHttpClientOperator,
-  TyrumHttpErrorCode,
-  TyrumHttpFetch,
-  TyrumRequestOptions,
+import {
+  createTyrumHttpClient as createBaseTyrumHttpClient,
+  TyrumHttpClientError,
+  type TyrumHttpAuthStrategy,
+  type TyrumHttpClient,
+  type TyrumHttpClientOperator,
+  type TyrumHttpErrorCode,
+  type TyrumHttpFetch,
+  type TyrumRequestOptions,
 } from "./http/index.js";
-export type {
-  TyrumClientEvents,
-  TyrumClientProtocolErrorInfo,
-  TyrumClientProtocolErrorKind,
+import type { TyrumHttpClientOptions as BaseTyrumHttpClientOptions } from "./http/shared.js";
+import {
+  TyrumClient as BaseTyrumClient,
+  type TyrumClientEvents,
+  type TyrumClientOptions as BaseTyrumClientOptions,
+  type TyrumClientProtocolErrorInfo,
+  type TyrumClientProtocolErrorKind,
 } from "./ws-client.js";
-export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "./capability.js";
+import { normalizeFingerprint256 } from "./tls/fingerprint.js";
 
+export { VERSION } from "./index.js";
+export { autoExecute } from "./capability.js";
+export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "./capability.js";
 export type {
   StatusResponse,
   UsageResponse,
@@ -59,7 +58,6 @@ export type {
   ArtifactBytesResult,
   HealthResponse,
 } from "./http/index.js";
-
 export type {
   Approval,
   ClientCapability,
@@ -132,3 +130,51 @@ export type {
   PlanRequest,
   PlanResponse,
 } from "./types.js";
+
+export type BrowserTyrumHttpClientOptions = Omit<
+  BaseTyrumHttpClientOptions,
+  "tlsCertFingerprint256" | "tlsAllowSelfSigned" | "tlsCaCertPem"
+>;
+
+export type BrowserTyrumClientOptions = Omit<
+  BaseTyrumClientOptions,
+  "tlsCertFingerprint256" | "tlsAllowSelfSigned" | "tlsCaCertPem"
+>;
+
+export class TyrumClient extends BaseTyrumClient {
+  constructor(options: BrowserTyrumClientOptions) {
+    super(options as BaseTyrumClientOptions);
+  }
+}
+
+export function createTyrumHttpClient(
+  options: BrowserTyrumHttpClientOptions,
+): TyrumHttpClientOperator {
+  return createBaseTyrumHttpClient(options);
+}
+
+export {
+  normalizeFingerprint256,
+  buildConnectProofTranscript,
+  computeDeviceIdFromPublicKeyDer,
+  createBrowserLocalStorageDeviceIdentityStorage,
+  createDeviceIdentity,
+  DeviceIdentityError,
+  formatDeviceIdentityError,
+  loadOrCreateDeviceIdentity,
+  signProofWithPrivateKey,
+  TyrumHttpClientError,
+};
+export type {
+  DeviceIdentity,
+  DeviceIdentityStorage,
+  TyrumClientEvents,
+  TyrumClientProtocolErrorInfo,
+  TyrumClientProtocolErrorKind,
+  TyrumHttpAuthStrategy,
+  TyrumHttpClient,
+  TyrumHttpClientOperator,
+  TyrumHttpErrorCode,
+  TyrumHttpFetch,
+  TyrumRequestOptions,
+};

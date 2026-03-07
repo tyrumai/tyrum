@@ -3,7 +3,7 @@ import {
   createNodeFileDeviceIdentityStorage,
   createTyrumHttpClient,
   loadOrCreateDeviceIdentity,
-} from "@tyrum/operator-core";
+} from "@tyrum/operator-core/node";
 import {
   createBearerTokenAuth,
   createElevatedModeStore,

@@ -1,4 +1,4 @@
-import { normalizeFingerprint256 } from "@tyrum/client";
+import { normalizeFingerprint256 } from "@tyrum/client/node";
 
 import type { CliCommand } from "../cli-command.js";
 

@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@tyrum/operator-core", () => ({
+vi.mock("@tyrum/operator-core/browser", () => ({
   createBearerTokenAuth: vi.fn(),
   createBrowserCookieAuth: vi.fn(),
   createDeviceIdentity: vi.fn(),
@@ -99,7 +99,7 @@ describe("apps/web main bootstrap", () => {
   const arrangeBootstrap = async (initialUrl: string) => {
     const replaceStateSpy = setupDom(initialUrl);
 
-    const operatorCore = await import("@tyrum/operator-core");
+    const operatorCore = await import("@tyrum/operator-core/browser");
     const reloadPage = await import("../src/reload-page.js");
     const urlAuth = await import("../src/url-auth.js");
     const reactDomClient = await import("react-dom/client");

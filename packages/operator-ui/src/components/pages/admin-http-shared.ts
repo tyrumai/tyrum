@@ -1,5 +1,5 @@
 import { isElevatedModeActive, type OperatorCore } from "@tyrum/operator-core";
-import { createTyrumHttpClient } from "@tyrum/client";
+import { createTyrumHttpClient } from "@tyrum/client/browser";
 import { useMemo } from "react";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { resolveTyrumHttpFetch } from "../../utils/tyrum-http-fetch.js";

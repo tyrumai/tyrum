@@ -19,6 +19,22 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 type Handler = (data: unknown) => void;
 
+async function waitForSelector<T extends Element>(
+  container: HTMLElement,
+  selector: string,
+  attempts = 50,
+): Promise<T> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const element = container.querySelector<T>(selector);
+    if (element) return element;
+    await act(async () => {
+      await Promise.resolve();
+      await vi.dynamicImportSettled();
+    });
+  }
+  throw new Error(`Timed out waiting for selector: ${selector}`);
+}
+
 async function openConfigureGeneral(container: HTMLElement): Promise<void> {
   const configureLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-configure"]');
   expect(configureLink).not.toBeNull();
@@ -28,10 +44,10 @@ async function openConfigureGeneral(container: HTMLElement): Promise<void> {
     await Promise.resolve();
   });
 
-  const generalTab = container.querySelector<HTMLButtonElement>(
+  const generalTab = await waitForSelector<HTMLButtonElement>(
+    container,
     '[data-testid="configure-tab-general"]',
   );
-  expect(generalTab).not.toBeNull();
 
   await act(async () => {
     generalTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
@@ -51,8 +67,7 @@ async function openConfigureTab(
     await Promise.resolve();
   });
 
-  const tab = container.querySelector<HTMLButtonElement>(`[data-testid="${tabTestId}"]`);
-  expect(tab).not.toBeNull();
+  const tab = await waitForSelector<HTMLButtonElement>(container, `[data-testid="${tabTestId}"]`);
 
   await act(async () => {
     tab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
@@ -964,7 +979,7 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("renders a Configure nav item and strict admin section tabs", () => {
+  it("renders a Configure nav item and strict admin section tabs", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -989,25 +1004,24 @@ describe("operator-ui", () => {
       );
       expect(configureLink).not.toBeNull();
 
-      act(() => {
+      await act(async () => {
         configureLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
       });
 
-      expect(container.querySelector("[data-testid='configure-page']")).not.toBeNull();
+      expect(await waitForSelector(container, "[data-testid='configure-page']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-tab-http']")).toBeNull();
       expect(container.querySelector("[data-testid='admin-tab-ws']")).toBeNull();
-      expect(container.querySelector("[data-testid='configure-tab-general']")).not.toBeNull();
-      expect(container.querySelector("[data-testid='admin-http-tab-policy']")).not.toBeNull();
-      expect(container.querySelector("[data-testid='admin-http-tab-providers']")).not.toBeNull();
-      expect(container.querySelector("[data-testid='admin-http-tab-models']")).not.toBeNull();
-      expect(container.querySelector("[data-testid='admin-http-tab-audit']")).not.toBeNull();
-      expect(
-        container.querySelector("[data-testid='admin-http-tab-routing-config']"),
-      ).not.toBeNull();
-      expect(container.querySelector("[data-testid='admin-http-tab-secrets']")).not.toBeNull();
-      expect(container.querySelector("[data-testid='admin-http-tab-plugins']")).not.toBeNull();
-      expect(container.querySelector("[data-testid='admin-http-tab-gateway']")).not.toBeNull();
-      expect(container.querySelector("[data-testid='admin-ws-tab-commands']")).not.toBeNull();
+      expect(await waitForSelector(container, "[data-testid='configure-tab-general']")).not.toBeNull();
+      expect(await waitForSelector(container, "[data-testid='admin-http-tab-policy']")).not.toBeNull();
+      expect(await waitForSelector(container, "[data-testid='admin-http-tab-providers']")).not.toBeNull();
+      expect(await waitForSelector(container, "[data-testid='admin-http-tab-models']")).not.toBeNull();
+      expect(await waitForSelector(container, "[data-testid='admin-http-tab-audit']")).not.toBeNull();
+      expect(await waitForSelector(container, "[data-testid='admin-http-tab-routing-config']")).not.toBeNull();
+      expect(await waitForSelector(container, "[data-testid='admin-http-tab-secrets']")).not.toBeNull();
+      expect(await waitForSelector(container, "[data-testid='admin-http-tab-plugins']")).not.toBeNull();
+      expect(await waitForSelector(container, "[data-testid='admin-http-tab-gateway']")).not.toBeNull();
+      expect(await waitForSelector(container, "[data-testid='admin-ws-tab-commands']")).not.toBeNull();
       expect(container.querySelector("[data-testid='configure-read-only-notice']")).toBeNull();
     } finally {
       act(() => {
@@ -2901,6 +2915,7 @@ describe("operator-ui", () => {
       window.dispatchEvent(
         new KeyboardEvent("keydown", { key: "7", ctrlKey: true, bubbles: true }),
       );
+      await vi.dynamicImportSettled();
       await Promise.resolve();
     });
 
@@ -2910,6 +2925,7 @@ describe("operator-ui", () => {
       window.dispatchEvent(
         new KeyboardEvent("keydown", { key: "9", ctrlKey: true, bubbles: true }),
       );
+      await vi.dynamicImportSettled();
       await Promise.resolve();
     });
 
@@ -2919,6 +2935,7 @@ describe("operator-ui", () => {
       window.dispatchEvent(
         new KeyboardEvent("keydown", { key: "0", ctrlKey: true, bubbles: true }),
       );
+      await vi.dynamicImportSettled();
       await Promise.resolve();
     });
 
@@ -3700,12 +3717,15 @@ describe("operator-ui", () => {
     const agentsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-agents"]');
     expect(agentsLink).not.toBeNull();
 
-    act(() => {
+    await act(async () => {
       agentsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
     });
 
-    const runsTab = container.querySelector<HTMLButtonElement>('[data-testid="agents-tab-runs"]');
-    expect(runsTab).not.toBeNull();
+    const runsTab = await waitForSelector<HTMLButtonElement>(
+      container,
+      '[data-testid="agents-tab-runs"]',
+    );
 
     act(() => {
       runsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));

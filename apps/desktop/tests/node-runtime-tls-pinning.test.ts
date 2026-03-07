@@ -4,7 +4,7 @@ const { ctorSpy } = vi.hoisted(() => ({
   ctorSpy: vi.fn(),
 }));
 
-vi.mock("@tyrum/client", () => {
+vi.mock("@tyrum/operator-core/node", () => {
   class TyrumClient {
     on = vi.fn();
     connect = vi.fn();
