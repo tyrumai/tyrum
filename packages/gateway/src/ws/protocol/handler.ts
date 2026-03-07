@@ -26,6 +26,8 @@ type ParsedMessageResult =
   | { ok: true; msg: ProtocolRequestEnvelope | ProtocolResponseEnvelope }
   | { ok: false; response: WsEventEnvelope };
 
+const NODE_DEVICE_REQUEST_TYPES = new Set(["attempt.evidence", "capability.ready"]);
+
 /**
  * Parse and dispatch a raw WebSocket message from a connected client.
  *
@@ -97,6 +99,18 @@ async function authorizeRequest(
   if (authClaims.token_kind === "device") {
     const requiredScopes = resolveWsRequestRequiredScopes(msg.type);
     if (!requiredScopes) {
+      if (
+        client.role === "node" &&
+        authClaims.role === "node" &&
+        NODE_DEVICE_REQUEST_TYPES.has(msg.type)
+      ) {
+        try {
+          requireTenantIdValue(authClaims.tenant_id, "tenant token required");
+        } catch {
+          return errorResponse(msg.request_id, msg.type, "unauthorized", "tenant token required");
+        }
+        return undefined;
+      }
       await deps.authAudit?.recordAuthzDenied({
         surface: "ws",
         reason: "not_scope_authorized",

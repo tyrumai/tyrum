@@ -328,7 +328,7 @@ class WsConnectionSession {
       tenant_id: auth.tenantId,
       device_id: auth.expectedNodeId,
       role: "node",
-      scopes: ["*"],
+      scopes: [],
     };
   }
 

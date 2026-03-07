@@ -236,15 +236,10 @@ export class ToolExecutor {
     resolved: string | null,
   ): Promise<void> {
     if (!audit || !this.secretResolutionAuditDal) return;
-    const tenantId = (() => {
-      try {
-        return requireTenantIdValue(this.workspaceLease?.tenantId);
-      } catch {
-        // Intentional: secret execution can proceed without an audit row when tenant scope is absent.
-        return undefined;
-      }
-    })();
-    if (!tenantId) return;
+    const tenantId = requireTenantIdValue(
+      this.workspaceLease?.tenantId,
+      "tenantId is required for secret resolution audit",
+    );
     try {
       await this.secretResolutionAuditDal.record({
         tenantId,

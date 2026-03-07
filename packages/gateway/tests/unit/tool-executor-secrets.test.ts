@@ -177,7 +177,7 @@ describe("ToolExecutor secret resolution", () => {
     );
   });
 
-  it("does not write secret audit rows when tenant context is missing", async () => {
+  it("fails secret resolution when tenant context is missing for audit", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
     db = openTestSqliteDb();
 
@@ -209,7 +209,7 @@ describe("ToolExecutor secret resolution", () => {
       },
     );
 
-    await executor.execute(
+    const result = await executor.execute(
       "tool.http.fetch",
       "call-missing-tenant-audit",
       {
@@ -222,6 +222,8 @@ describe("ToolExecutor secret resolution", () => {
       },
     );
 
+    expect(result.error).toBe("tenantId is required for secret resolution audit");
+    expect(mockFetch).not.toHaveBeenCalled();
     expect(auditDal.record).not.toHaveBeenCalled();
   });
 
