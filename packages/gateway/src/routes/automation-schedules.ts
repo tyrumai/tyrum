@@ -133,7 +133,7 @@ export function createAutomationScheduleRoutes(container: GatewayContainer): Hon
         agentKey: typeof body["agent_key"] === "string" ? body["agent_key"] : undefined,
         workspaceKey: typeof body["workspace_key"] === "string" ? body["workspace_key"] : undefined,
         kind: kind as ScheduleKind,
-        enabled: body["enabled"] === false ? false : true,
+        enabled: body["enabled"] !== false,
         cadence,
         execution,
         delivery: {

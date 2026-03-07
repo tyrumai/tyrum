@@ -16,10 +16,7 @@ import {
   type ModelConfigHttpClient,
   type ModelPreset,
 } from "./admin-http-models.shared.js";
-import {
-  useAdminHttpClient,
-  useAdminMutationAccess,
-} from "./admin-http-shared.js";
+import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
 
 export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.ReactElement {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);

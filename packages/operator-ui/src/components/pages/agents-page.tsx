@@ -13,7 +13,10 @@ import { StatusDot } from "../ui/status-dot.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { RunsPage } from "./runs-page.js";
 import { cn } from "../../lib/cn.js";
-import { getActiveAgentIdsFromSessionLanes, parseAgentIdFromKey } from "../../lib/status-session-lanes.js";
+import {
+  getActiveAgentIdsFromSessionLanes,
+  parseAgentIdFromKey,
+} from "../../lib/status-session-lanes.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 
 type AgentOption = {
@@ -55,16 +58,52 @@ function selectInitialAgentKey(input: {
   return input.availableAgentKeys[0] ?? current;
 }
 
-function IdentityField({ label, value, valueClassName }: { label: string; value: ReactNode; valueClassName?: string }) {
-  return <div><div className="text-xs font-medium uppercase tracking-wide text-fg-muted">{label}</div><div className={cn("text-sm text-fg", valueClassName)}>{value}</div></div>;
+function IdentityField({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: ReactNode;
+  valueClassName?: string;
+}) {
+  return (
+    <div>
+      <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">{label}</div>
+      <div className={cn("text-sm text-fg", valueClassName)}>{value}</div>
+    </div>
+  );
 }
 
-function SessionStat({ label, value, valueClassName }: { label: string; value: ReactNode; valueClassName?: string }) {
-  return <div className="rounded-lg border border-border/70 px-3 py-2"><div className="text-xs font-medium uppercase tracking-wide text-fg-muted">{label}</div><div className={cn("text-base font-medium text-fg", valueClassName)}>{value}</div></div>;
+function SessionStat({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: ReactNode;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border/70 px-3 py-2">
+      <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">{label}</div>
+      <div className={cn("text-base font-medium text-fg", valueClassName)}>{value}</div>
+    </div>
+  );
 }
 
 function OutlineBadgeList({ emptyText, items }: { emptyText: string; items: string[] }) {
-  return items.length === 0 ? <div className="text-fg-muted">{emptyText}</div> : <div className="flex flex-wrap gap-2">{items.map((item) => <Badge key={item} variant="outline">{item}</Badge>)}</div>;
+  return items.length === 0 ? (
+    <div className="text-fg-muted">{emptyText}</div>
+  ) : (
+    <div className="flex flex-wrap gap-2">
+      {items.map((item) => (
+        <Badge key={item} variant="outline">
+          {item}
+        </Badge>
+      ))}
+    </div>
+  );
 }
 
 function AgentIdentityPanel({
@@ -103,8 +142,17 @@ function AgentIdentityPanel({
   const detailedSkills = status.skills_detailed ?? [];
   const overviewFields: Array<{ label: string; value: ReactNode; valueClassName?: string }> = [
     { label: "Name", value: status.identity.name, valueClassName: "text-base font-medium" },
-    ...(status.identity.description ? [{ label: "Description", value: status.identity.description }] : []),
-    { label: "Home", value: <code className="break-all rounded bg-bg-subtle px-2 py-1 text-xs text-fg">{status.home}</code> },
+    ...(status.identity.description
+      ? [{ label: "Description", value: status.identity.description }]
+      : []),
+    {
+      label: "Home",
+      value: (
+        <code className="break-all rounded bg-bg-subtle px-2 py-1 text-xs text-fg">
+          {status.home}
+        </code>
+      ),
+    },
   ];
   const modelFields: Array<{ label: string; value: ReactNode; valueClassName?: string }> = [
     { label: "Primary", value: status.model.model, valueClassName: "text-base font-medium" },
@@ -114,56 +162,120 @@ function AgentIdentityPanel({
     { label: "TTL", value: `${status.sessions.ttl_days} days` },
     { label: "Max turns", value: status.sessions.max_turns },
     { label: "Context window", value: `${status.sessions.context_pruning.max_messages} messages` },
-    { label: "Tool prune keep", value: `${status.sessions.context_pruning.tool_prune_keep_last_messages} messages` },
+    {
+      label: "Tool prune keep",
+      value: `${status.sessions.context_pruning.tool_prune_keep_last_messages} messages`,
+    },
   ];
   const sessionPolicies = [
-    { label: "Within-turn limits", value: `${status.sessions.loop_detection.within_turn.consecutive_repeat_limit} consecutive • ${status.sessions.loop_detection.within_turn.cycle_repeat_limit} cycle`, valueClassName: "text-sm font-normal" },
-    { label: "Cross-turn detection", value: `${status.sessions.loop_detection.cross_turn.window_assistant_messages} msgs • ${status.sessions.loop_detection.cross_turn.similarity_threshold} similarity`, valueClassName: "text-sm font-normal" },
+    {
+      label: "Within-turn limits",
+      value: `${status.sessions.loop_detection.within_turn.consecutive_repeat_limit} consecutive • ${status.sessions.loop_detection.within_turn.cycle_repeat_limit} cycle`,
+      valueClassName: "text-sm font-normal",
+    },
+    {
+      label: "Cross-turn detection",
+      value: `${status.sessions.loop_detection.cross_turn.window_assistant_messages} msgs • ${status.sessions.loop_detection.cross_turn.similarity_threshold} similarity`,
+      valueClassName: "text-sm font-normal",
+    },
   ];
 
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm text-fg-muted">Identity, runtime model, tool access, memory support, and session policy for the selected agent.</div>
-        <Button type="button" size="sm" variant="secondary" data-testid="agents-status-refresh" disabled={loading} isLoading={loading} onClick={onRefresh}><RefreshCw className="h-3.5 w-3.5" />Refresh</Button>
+        <div className="text-sm text-fg-muted">
+          Identity, runtime model, tool access, memory support, and session policy for the selected
+          agent.
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          data-testid="agents-status-refresh"
+          disabled={loading}
+          isLoading={loading}
+          onClick={onRefresh}
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          Refresh
+        </Button>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card data-testid="agents-identity-overview">
-          <CardHeader className="pb-4"><div className="text-sm font-medium text-fg">Overview</div></CardHeader>
+          <CardHeader className="pb-4">
+            <div className="text-sm font-medium text-fg">Overview</div>
+          </CardHeader>
           <CardContent className="grid gap-3 text-sm">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={status.enabled ? "success" : "outline"}>{status.enabled ? "Enabled" : "Disabled"}</Badge>
-              {status.workspace_skills_trusted ? <Badge variant="outline">Workspace skills trusted</Badge> : null}
+              <Badge variant={status.enabled ? "success" : "outline"}>
+                {status.enabled ? "Enabled" : "Disabled"}
+              </Badge>
+              {status.workspace_skills_trusted ? (
+                <Badge variant="outline">Workspace skills trusted</Badge>
+              ) : null}
             </div>
-            {overviewFields.map((field) => <IdentityField key={field.label} label={field.label} value={field.value} valueClassName={field.valueClassName} />)}
+            {overviewFields.map((field) => (
+              <IdentityField
+                key={field.label}
+                label={field.label}
+                value={field.value}
+                valueClassName={field.valueClassName}
+              />
+            ))}
           </CardContent>
         </Card>
 
         <Card data-testid="agents-identity-model">
-          <CardHeader className="pb-4"><div className="text-sm font-medium text-fg">Model</div></CardHeader>
+          <CardHeader className="pb-4">
+            <div className="text-sm font-medium text-fg">Model</div>
+          </CardHeader>
           <CardContent className="grid gap-3 text-sm">
-            {modelFields.map((field) => <IdentityField key={field.label} label={field.label} value={field.value} valueClassName={field.valueClassName} />)}
+            {modelFields.map((field) => (
+              <IdentityField
+                key={field.label}
+                label={field.label}
+                value={field.value}
+                valueClassName={field.valueClassName}
+              />
+            ))}
             {status.model.fallback && status.model.fallback.length > 0 ? (
               <div className="grid gap-2">
-                <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">Fallbacks</div>
-                <div className="flex flex-wrap gap-2">{status.model.fallback.map((model) => <Badge key={model} variant="outline">{model}</Badge>)}</div>
+                <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
+                  Fallbacks
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {status.model.fallback.map((model) => (
+                    <Badge key={model} variant="outline">
+                      {model}
+                    </Badge>
+                  ))}
+                </div>
               </div>
             ) : null}
           </CardContent>
         </Card>
 
         <Card data-testid="agents-identity-skills">
-          <CardHeader className="pb-4"><div className="text-sm font-medium text-fg">Skills</div></CardHeader>
+          <CardHeader className="pb-4">
+            <div className="text-sm font-medium text-fg">Skills</div>
+          </CardHeader>
           <CardContent className="grid gap-3 text-sm">
             <OutlineBadgeList emptyText="No skills configured." items={status.skills} />
             {detailedSkills.length > 0 ? (
               <div className="grid gap-2">
                 {detailedSkills.map((skill) => (
-                  <div key={skill.id} className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2">
+                  <div
+                    key={skill.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
+                  >
                     <div className="min-w-0">
-                      <div className="truncate font-medium text-fg">{skill.name} <span className="text-fg-muted">({skill.id})</span></div>
-                      <div className="text-xs text-fg-muted">{skill.source} • v{skill.version}</div>
+                      <div className="truncate font-medium text-fg">
+                        {skill.name} <span className="text-fg-muted">({skill.id})</span>
+                      </div>
+                      <div className="text-xs text-fg-muted">
+                        {skill.source} • v{skill.version}
+                      </div>
                     </div>
                     <Badge variant="outline">Installed</Badge>
                   </div>
@@ -174,23 +286,36 @@ function AgentIdentityPanel({
         </Card>
 
         <Card data-testid="agents-identity-tools">
-          <CardHeader className="pb-4"><div className="text-sm font-medium text-fg">Tools</div></CardHeader>
-          <CardContent className="grid gap-3 text-sm"><OutlineBadgeList emptyText="No tools configured." items={status.tools} /></CardContent>
+          <CardHeader className="pb-4">
+            <div className="text-sm font-medium text-fg">Tools</div>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm">
+            <OutlineBadgeList emptyText="No tools configured." items={status.tools} />
+          </CardContent>
         </Card>
 
         <Card data-testid="agents-identity-mcp">
-          <CardHeader className="pb-4"><div className="text-sm font-medium text-fg">MCP</div></CardHeader>
+          <CardHeader className="pb-4">
+            <div className="text-sm font-medium text-fg">MCP</div>
+          </CardHeader>
           <CardContent className="grid gap-2 text-sm">
             {status.mcp.length === 0 ? (
               <div className="text-fg-muted">No MCP servers configured.</div>
             ) : (
               status.mcp.map((server) => (
-                <div key={server.id} className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2">
+                <div
+                  key={server.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
+                >
                   <div className="min-w-0">
                     <div className="truncate font-medium text-fg">{server.name}</div>
-                    <div className="text-xs text-fg-muted">{server.id} • {server.transport}</div>
+                    <div className="text-xs text-fg-muted">
+                      {server.id} • {server.transport}
+                    </div>
                   </div>
-                  <Badge variant={server.enabled ? "success" : "outline"}>{server.enabled ? "On" : "Off"}</Badge>
+                  <Badge variant={server.enabled ? "success" : "outline"}>
+                    {server.enabled ? "On" : "Off"}
+                  </Badge>
                 </div>
               ))
             )}
@@ -198,11 +323,24 @@ function AgentIdentityPanel({
         </Card>
 
         <Card data-testid="agents-identity-sessions">
-          <CardHeader className="pb-4"><div className="text-sm font-medium text-fg">Sessions</div></CardHeader>
+          <CardHeader className="pb-4">
+            <div className="text-sm font-medium text-fg">Sessions</div>
+          </CardHeader>
           <CardContent className="grid gap-3 text-sm">
-            <div className="grid gap-2 sm:grid-cols-2">{sessionStats.map((stat) => <SessionStat key={stat.label} label={stat.label} value={stat.value} />)}</div>
             <div className="grid gap-2 sm:grid-cols-2">
-              {sessionPolicies.map((stat) => <SessionStat key={stat.label} label={stat.label} value={stat.value} valueClassName={stat.valueClassName} />)}
+              {sessionStats.map((stat) => (
+                <SessionStat key={stat.label} label={stat.label} value={stat.value} />
+              ))}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {sessionPolicies.map((stat) => (
+                <SessionStat
+                  key={stat.label}
+                  label={stat.label}
+                  value={stat.value}
+                  valueClassName={stat.valueClassName}
+                />
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -307,11 +445,30 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
       <PageHeader
         title="Agents"
         actions={
-          <Button type="button" size="sm" variant="secondary" data-testid="agents-refresh" disabled={!isConnected || agentsLoading} isLoading={agentsLoading} onClick={() => { void refreshAgentList(); }}><RefreshCw className="h-3.5 w-3.5" />Refresh list</Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            data-testid="agents-refresh"
+            disabled={!isConnected || agentsLoading}
+            isLoading={agentsLoading}
+            onClick={() => {
+              void refreshAgentList();
+            }}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Refresh list
+          </Button>
         }
       />
 
-      {!isConnected ? <Alert variant="warning" title="Not connected" description="Connect to the gateway to inspect agents." /> : null}
+      {!isConnected ? (
+        <Alert
+          variant="warning"
+          title="Not connected"
+          description="Connect to the gateway to inspect agents."
+        />
+      ) : null}
 
       {agentsError ? (
         <Card data-testid="agents-list-error">
@@ -322,9 +479,25 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
           <CardContent className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
             <label className="grid gap-2 text-sm">
               <span className="font-medium text-fg">Agent key</span>
-              <input value={manualAgentKey} onChange={(event) => { setManualAgentKey(event.currentTarget.value); }} className="flex h-10 w-full rounded-md border border-border bg-bg-card/40 px-3 py-2 text-sm text-fg shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg" />
+              <input
+                value={manualAgentKey}
+                onChange={(event) => {
+                  setManualAgentKey(event.currentTarget.value);
+                }}
+                className="flex h-10 w-full rounded-md border border-border bg-bg-card/40 px-3 py-2 text-sm text-fg shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+              />
             </label>
-            <Button type="button" variant="secondary" data-testid="agents-select-apply" onClick={() => { setSelectionReady(true); setSelectedAgentKey(trimAgentKey(manualAgentKey)); }}>Open agent</Button>
+            <Button
+              type="button"
+              variant="secondary"
+              data-testid="agents-select-apply"
+              onClick={() => {
+                setSelectionReady(true);
+                setSelectedAgentKey(trimAgentKey(manualAgentKey));
+              }}
+            >
+              Open agent
+            </Button>
           </CardContent>
         </Card>
       ) : null}
@@ -332,8 +505,25 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
       <div className="lg:hidden">
         <label className="grid gap-2 text-sm">
           <span className="font-medium text-fg">Selected agent</span>
-          <select data-testid="agents-select" value={selectedAgentKey} disabled={agentOptions.length === 0} onChange={(event) => { setSelectionReady(true); setSelectedAgentKey(event.currentTarget.value); }} className="flex h-10 w-full rounded-md border border-border bg-bg-card/40 px-3 py-2 text-sm text-fg shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
-            {agentOptions.length === 0 ? <option value={selectedAgentKey}>{selectedAgentKey}</option> : agentOptions.map((agent) => <option key={agent.agentKey} value={agent.agentKey}>{agent.agentKey}</option>)}
+          <select
+            data-testid="agents-select"
+            value={selectedAgentKey}
+            disabled={agentOptions.length === 0}
+            onChange={(event) => {
+              setSelectionReady(true);
+              setSelectedAgentKey(event.currentTarget.value);
+            }}
+            className="flex h-10 w-full rounded-md border border-border bg-bg-card/40 px-3 py-2 text-sm text-fg shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          >
+            {agentOptions.length === 0 ? (
+              <option value={selectedAgentKey}>{selectedAgentKey}</option>
+            ) : (
+              agentOptions.map((agent) => (
+                <option key={agent.agentKey} value={agent.agentKey}>
+                  {agent.agentKey}
+                </option>
+              ))
+            )}
           </select>
         </label>
       </div>
@@ -342,21 +532,48 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
         <Card className="hidden lg:flex lg:min-h-[40rem] lg:flex-col">
           <CardHeader className="pb-4">
             <div className="text-sm font-medium text-fg">Agents</div>
-            <div className="text-sm text-fg-muted">Pick an agent to inspect identity, memory, and runs.</div>
+            <div className="text-sm text-fg-muted">
+              Pick an agent to inspect identity, memory, and runs.
+            </div>
           </CardHeader>
           <CardContent className="grid gap-2">
             {agentsLoading && agentKeys.length === 0 ? (
-              <div className="text-sm text-fg-muted" data-testid="agents-list-loading">Loading agents…</div>
+              <div className="text-sm text-fg-muted" data-testid="agents-list-loading">
+                Loading agents…
+              </div>
             ) : agentOptions.length === 0 ? (
-              <EmptyState icon={Bot} title="No agents found" description="Agents appear here once the gateway can enumerate them." />
+              <EmptyState
+                icon={Bot}
+                title="No agents found"
+                description="Agents appear here once the gateway can enumerate them."
+              />
             ) : (
               agentOptions.map((agent) => {
                 const active = activeAgentIds.has(agent.agentKey);
                 const selected = agent.agentKey === selectedAgentKey;
                 return (
-                  <button key={agent.agentKey} type="button" data-testid={`agents-select-${agent.agentKey}`} data-active={selected ? "true" : undefined} className={cn("grid gap-2 rounded-xl border px-3 py-3 text-left transition-colors", "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg", selected ? "border-primary bg-primary-dim/20" : "border-border/70 bg-bg-card/40 hover:bg-bg-card/60")} onClick={() => { setSelectionReady(true); setSelectedAgentKey(agent.agentKey); }}>
+                  <button
+                    key={agent.agentKey}
+                    type="button"
+                    data-testid={`agents-select-${agent.agentKey}`}
+                    data-active={selected ? "true" : undefined}
+                    className={cn(
+                      "grid gap-2 rounded-xl border px-3 py-3 text-left transition-colors",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+                      selected
+                        ? "border-primary bg-primary-dim/20"
+                        : "border-border/70 bg-bg-card/40 hover:bg-bg-card/60",
+                    )}
+                    onClick={() => {
+                      setSelectionReady(true);
+                      setSelectedAgentKey(agent.agentKey);
+                    }}
+                  >
                     <div className="font-medium text-fg">{agent.agentKey}</div>
-                    <div className="flex items-center gap-2 text-xs text-fg-muted"><StatusDot variant={active ? "success" : "neutral"} pulse={active} />{active ? "Active" : "Idle"}</div>
+                    <div className="flex items-center gap-2 text-xs text-fg-muted">
+                      <StatusDot variant={active ? "success" : "neutral"} pulse={active} />
+                      {active ? "Active" : "Idle"}
+                    </div>
                   </button>
                 );
               })
@@ -370,27 +587,47 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
               {selectedAgentKey}
             </Badge>
             <div className="flex items-center gap-2 text-sm text-fg-muted">
-              <StatusDot variant={selectedAgentActive ? "success" : "neutral"} pulse={selectedAgentActive} />
+              <StatusDot
+                variant={selectedAgentActive ? "success" : "neutral"}
+                pulse={selectedAgentActive}
+              />
               {selectedAgentActive ? "Currently active" : "Currently idle"}
             </div>
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="grid gap-4">
             <TabsList aria-label="Agent sections">
-              <TabsTrigger value="identity" data-testid="agents-tab-identity">Identity</TabsTrigger>
-              <TabsTrigger value="memory" data-testid="agents-tab-memory">Memory</TabsTrigger>
-              <TabsTrigger value="runs" data-testid="agents-tab-runs">Runs</TabsTrigger>
+              <TabsTrigger value="identity" data-testid="agents-tab-identity">
+                Identity
+              </TabsTrigger>
+              <TabsTrigger value="memory" data-testid="agents-tab-memory">
+                Memory
+              </TabsTrigger>
+              <TabsTrigger value="runs" data-testid="agents-tab-runs">
+                Runs
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="identity">
-              <AgentIdentityPanel loading={agentStatus.loading} error={agentStatus.error} status={agentStatus.status as AgentStatusResponse | null} onRefresh={() => { void core.agentStatusStore.refresh(); }} />
+              <AgentIdentityPanel
+                loading={agentStatus.loading}
+                error={agentStatus.error}
+                status={agentStatus.status as AgentStatusResponse | null}
+                onRefresh={() => {
+                  void core.agentStatusStore.refresh();
+                }}
+              />
             </TabsContent>
 
             <TabsContent value="memory">
               {selectedAgentScopeId ? (
                 <MemoryInspector core={core} agentId={selectedAgentScopeId} />
               ) : (
-                <Card data-testid="agents-memory-resolving"><CardContent className="py-10 text-sm text-fg-muted">Resolving agent memory scope…</CardContent></Card>
+                <Card data-testid="agents-memory-resolving">
+                  <CardContent className="py-10 text-sm text-fg-muted">
+                    Resolving agent memory scope…
+                  </CardContent>
+                </Card>
               )}
             </TabsContent>
 

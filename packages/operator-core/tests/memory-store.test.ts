@@ -141,8 +141,12 @@ describe("memory-store", () => {
     const ws = createWs({
       memoryList: vi
         .fn()
-        .mockResolvedValueOnce(listResponse([{ memory_item_id: "m1", agent_id: "agent-2" }], "cursor-1"))
-        .mockResolvedValueOnce(listResponse([{ memory_item_id: "m2", agent_id: "agent-2" }], "cursor-2"))
+        .mockResolvedValueOnce(
+          listResponse([{ memory_item_id: "m1", agent_id: "agent-2" }], "cursor-1"),
+        )
+        .mockResolvedValueOnce(
+          listResponse([{ memory_item_id: "m2", agent_id: "agent-2" }], "cursor-2"),
+        )
         .mockResolvedValueOnce(listResponse([{ memory_item_id: "m3", agent_id: "agent-2" }])),
     });
 
@@ -302,7 +306,9 @@ describe("memory-store", () => {
       memoryList: vi.fn(async () => ({ v: 1, items: [], next_cursor: undefined })),
       memorySearch: vi
         .fn()
-        .mockResolvedValueOnce(searchResponse([{ memory_item_id: "h1" }, { memory_item_id: "from" }], "cursor-1"))
+        .mockResolvedValueOnce(
+          searchResponse([{ memory_item_id: "h1" }, { memory_item_id: "from" }], "cursor-1"),
+        )
         .mockImplementationOnce(async () => nextPage.promise),
     } as any;
     const { store, handleMemoryConsolidated, handleMemoryTombstone } = createMemoryStore(ws);
@@ -379,7 +385,9 @@ describe("memory-store", () => {
 
   it("forget()/export() surface ws errors and handle export completion events", async () => {
     const ws = createWs({
-      memoryList: vi.fn(async () => listResponse([{ memory_item_id: "m1" }, { memory_item_id: "m2" }])),
+      memoryList: vi.fn(async () =>
+        listResponse([{ memory_item_id: "m1" }, { memory_item_id: "m2" }]),
+      ),
       memoryGet: vi.fn(async () => itemResponse({ memory_item_id: "m1" })),
       memoryForget: vi.fn(async () => {
         throw new Error("nope");

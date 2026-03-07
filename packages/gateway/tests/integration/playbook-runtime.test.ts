@@ -59,7 +59,11 @@ async function waitForRunStatus(
 }
 
 async function createRuntimeContext(homeDir: string) {
-  const container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+  const container = await createContainer({
+    dbPath: ":memory:",
+    migrationsDir,
+    tyrumHome: homeDir,
+  });
   const engine = new ExecutionEngine({
     db: container.db,
     redactionEngine: container.redactionEngine,
@@ -132,6 +136,8 @@ steps:
 describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
+  let engine: ExecutionEngine | undefined;
+  let app: ReturnType<typeof createApp> | undefined;
 
   const originalEnv = {
     TYRUM_POLICY_ENABLED: process.env["TYRUM_POLICY_ENABLED"],
@@ -155,6 +161,8 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
     await container?.db.close();
     container = undefined;
+    engine = undefined;
+    app = undefined;
 
     if (homeDir) {
       await rm(homeDir, { recursive: true, force: true });

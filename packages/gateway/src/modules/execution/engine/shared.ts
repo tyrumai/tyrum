@@ -79,10 +79,7 @@ export interface RunControlDeps extends RunEventDeps {
   clock: ClockFn;
   redactText(text: string): string;
   concurrencyLimits?: import("./types.js").ExecutionConcurrencyLimits;
-  emitRunResumedTx(
-    tx: import("../../../statestore/types.js").SqlDb,
-    runId: string,
-  ): Promise<void>;
+  emitRunResumedTx(tx: import("../../../statestore/types.js").SqlDb, runId: string): Promise<void>;
   emitRunCancelledTx(
     tx: import("../../../statestore/types.js").SqlDb,
     opts: { runId: string; reason?: string },

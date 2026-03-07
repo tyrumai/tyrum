@@ -388,7 +388,7 @@ export function parseScheduleConfig(raw: string): NormalizedScheduleConfig | und
   try {
     return normalizeScheduleConfig({
       kind,
-      enabled: parsed["enabled"] === false ? false : true,
+      enabled: parsed["enabled"] !== false,
       cadence,
       execution,
       delivery: {

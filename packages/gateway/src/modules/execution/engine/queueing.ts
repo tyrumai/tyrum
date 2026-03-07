@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ExecutionTrigger as ExecutionTriggerT } from "@tyrum/schemas";
-import { parseTyrumKey } from "@tyrum/schemas";
+import { parseTyrumKey, WorkspaceKey } from "@tyrum/schemas";
 import { IdentityScopeDal } from "../../identity/scope.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { normalizeWorkspaceKey } from "./db.js";
@@ -18,8 +18,6 @@ export async function enqueuePlanInTx(
   if (!tenantId) {
     throw new Error("tenantId is required to enqueue execution plans");
   }
-  const workspaceKey = normalizeWorkspaceKey(input.workspaceId);
-
   let agentKey = "default";
   try {
     const parsedKey = parseTyrumKey(input.key as never);
@@ -32,7 +30,7 @@ export async function enqueuePlanInTx(
 
   const identityScopeDal = new IdentityScopeDal(tx);
   const agentId = await identityScopeDal.ensureAgentId(tenantId, agentKey);
-  const workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, workspaceKey);
+  const workspaceId = await resolveWorkspaceId(identityScopeDal, tx, tenantId, input);
   await identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
 
   const baseMetadata = {
@@ -204,4 +202,35 @@ export async function enqueuePlan(
     steps_count: input.steps.length,
   });
   return res;
+}
+
+async function resolveWorkspaceId(
+  identityScopeDal: IdentityScopeDal,
+  tx: SqlDb,
+  tenantId: string,
+  input: EnqueuePlanInput,
+): Promise<string> {
+  const explicitWorkspaceKey = input.workspaceKey?.trim();
+  if (explicitWorkspaceKey) {
+    return await identityScopeDal.ensureWorkspaceId(tenantId, explicitWorkspaceKey);
+  }
+
+  const legacyWorkspace = input.workspaceId?.trim();
+  if (!legacyWorkspace) {
+    return await identityScopeDal.ensureWorkspaceId(tenantId, normalizeWorkspaceKey(undefined));
+  }
+
+  const existing = await tx.get<{ workspace_id: string }>(
+    "SELECT workspace_id FROM workspaces WHERE tenant_id = ? AND workspace_id = ? LIMIT 1",
+    [tenantId, legacyWorkspace],
+  );
+  if (existing?.workspace_id) {
+    return existing.workspace_id;
+  }
+
+  if (WorkspaceKey.safeParse(legacyWorkspace).success) {
+    return await identityScopeDal.ensureWorkspaceId(tenantId, legacyWorkspace);
+  }
+
+  return await identityScopeDal.ensureWorkspaceId(tenantId, normalizeWorkspaceKey(legacyWorkspace));
 }

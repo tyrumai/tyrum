@@ -108,8 +108,12 @@ class WsConnectionSession {
     this.token = this.tokenInfo.token;
   }
 
-  private get ws(): WebSocket { return this.input.ws; }
-  private get req(): IncomingMessage { return this.input.req; }
+  private get ws(): WebSocket {
+    return this.input.ws;
+  }
+  private get req(): IncomingMessage {
+    return this.input.req;
+  }
 
   attach(): void {
     this.ws.once("close", () => this.clearHandshakeTimeout());
@@ -161,7 +165,11 @@ class WsConnectionSession {
   }
 
   private async closeUnauthorized(): Promise<void> {
-    try { await this.recordUpgradeAuthFailed(); } finally { this.ws.close(4001, "unauthorized"); }
+    try {
+      await this.recordUpgradeAuthFailed();
+    } finally {
+      this.ws.close(4001, "unauthorized");
+    }
   }
 
   private async recordUpgradeAuthFailed(): Promise<void> {
@@ -272,7 +280,12 @@ class WsConnectionSession {
       challenge,
     };
 
-    const response: WsResponseEnvelope = { request_id: init.request_id, type: "connect.init", ok: true, result: { connection_id: connectionId, challenge } };
+    const response: WsResponseEnvelope = {
+      request_id: init.request_id,
+      type: "connect.init",
+      ok: true,
+      result: { connection_id: connectionId, challenge },
+    };
     this.ws.send(JSON.stringify(response));
   }
 
@@ -427,7 +440,12 @@ class WsConnectionSession {
     const tenantId = claims?.tenant_id;
     if (!tenantId) return;
 
-    const event = { event_id: crypto.randomUUID(), type: "pairing.requested", occurred_at: new Date().toISOString(), payload: { pairing } } satisfies WsEventEnvelope;
+    const event = {
+      event_id: crypto.randomUUID(),
+      type: "pairing.requested",
+      occurred_at: new Date().toISOString(),
+      payload: { pairing },
+    } satisfies WsEventEnvelope;
 
     broadcastWsEvent(
       tenantId,

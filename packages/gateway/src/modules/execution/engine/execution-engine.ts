@@ -19,7 +19,17 @@ import { ExecutionEngineArtifactRecorder } from "./artifact-recorder.js";
 import { executeWithTimeout as executeWithTimeoutFn } from "./concurrency-manager.js";
 import { ExecutionEngineEventEmitter } from "./event-emitter.js";
 import { parsePlanIdFromTriggerJson } from "./db.js";
-import type { ClockFn, EnqueuePlanInput, EnqueuePlanResult, ExecutionClock, ExecutionConcurrencyLimits, StepExecutionContext, StepExecutor, StepResult, WorkerTickInput } from "./types.js";
+import type {
+  ClockFn,
+  EnqueuePlanInput,
+  EnqueuePlanResult,
+  ExecutionClock,
+  ExecutionConcurrencyLimits,
+  StepExecutionContext,
+  StepExecutor,
+  StepResult,
+  WorkerTickInput,
+} from "./types.js";
 import { listRunnableRunCandidates, tryAcquireRunLaneLease } from "./leasing.js";
 import { enqueuePlan, enqueuePlanInTx } from "./queueing.js";
 import { cancelRun, resumeRun } from "./run-control.js";
@@ -46,7 +56,16 @@ export class ExecutionEngine {
   private readonly attemptRunner: ExecutionAttemptRunner;
   private readonly concurrencyLimits?: ExecutionConcurrencyLimits;
 
-  constructor(opts: { db: SqlDb; clock?: ClockFn; redactionEngine?: RedactionEngine; secretProviderForTenant?: (tenantId: string) => SecretProvider; logger?: Logger; policyService?: PolicyService; eventsEnabled?: boolean; concurrencyLimits?: ExecutionConcurrencyLimits }) {
+  constructor(opts: {
+    db: SqlDb;
+    clock?: ClockFn;
+    redactionEngine?: RedactionEngine;
+    secretProviderForTenant?: (tenantId: string) => SecretProvider;
+    logger?: Logger;
+    policyService?: PolicyService;
+    eventsEnabled?: boolean;
+    concurrencyLimits?: ExecutionConcurrencyLimits;
+  }) {
     this.db = opts.db;
     this.clock = opts.clock ?? defaultClock;
     this.redactionEngine = opts.redactionEngine;
@@ -79,10 +98,14 @@ export class ExecutionEngine {
       redactText: (text) => this.redactText(text),
       redactUnknown: (value) => this.redactUnknown(value),
       executeWithTimeout: async (...args) => await this.executeWithTimeout(...args),
-      resolveSecretScopesFromArgs: async (tenantId, args, context) => await this.resolveSecretScopesFromArgs(tenantId, args, context),
-      retryOrFailStep: async (retryOptions) => await this.approvalManager.maybeRetryOrFailStep(retryOptions),
-      pauseRunForApproval: async (tx, pauseOptions, input) => await this.approvalManager.pauseRunForApproval(tx, pauseOptions, input),
-      recordArtifactsTx: async (tx, scope, artifacts) => await this.recordArtifactsTx(tx, scope, artifacts),
+      resolveSecretScopesFromArgs: async (tenantId, args, context) =>
+        await this.resolveSecretScopesFromArgs(tenantId, args, context),
+      retryOrFailStep: async (retryOptions) =>
+        await this.approvalManager.maybeRetryOrFailStep(retryOptions),
+      pauseRunForApproval: async (tx, pauseOptions, input) =>
+        await this.approvalManager.pauseRunForApproval(tx, pauseOptions, input),
+      recordArtifactsTx: async (tx, scope, artifacts) =>
+        await this.recordArtifactsTx(tx, scope, artifacts),
       emitAttemptUpdatedTx: async (tx, attemptId) => await this.emitAttemptUpdatedTx(tx, attemptId),
       emitStepUpdatedTx: async (tx, stepId) => await this.emitStepUpdatedTx(tx, stepId),
     });
@@ -126,29 +149,82 @@ export class ExecutionEngine {
       return [...scopes];
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger?.warn("execution.secret_provider_list_failed", { tenant_id: tenantId, run_id: context?.runId, step_id: context?.stepId, attempt_id: context?.attemptId, error: message });
+      this.logger?.warn("execution.secret_provider_list_failed", {
+        tenant_id: tenantId,
+        run_id: context?.runId,
+        step_id: context?.stepId,
+        attempt_id: context?.attemptId,
+        error: message,
+      });
       return handleIds;
     }
   }
 
-  private async isApprovedPolicyGateTx(tx: SqlDb, tenantId: string, approvalId: string | null): Promise<boolean> {
+  private async isApprovedPolicyGateTx(
+    tx: SqlDb,
+    tenantId: string,
+    approvalId: string | null,
+  ): Promise<boolean> {
     if (approvalId === null) return false;
-    const row = await tx.get<{ kind: string; status: string }>("SELECT kind, status FROM approvals WHERE tenant_id = ? AND approval_id = ? LIMIT 1", [tenantId, approvalId]);
+    const row = await tx.get<{ kind: string; status: string }>(
+      "SELECT kind, status FROM approvals WHERE tenant_id = ? AND approval_id = ? LIMIT 1",
+      [tenantId, approvalId],
+    );
     if (!row) return false;
     return row.kind === "policy" && row.status === "approved";
   }
 
-  private async emitRunUpdatedTx(tx: SqlDb, runId: string): Promise<void> { await this.eventEmitter.emitRunUpdatedTx(tx, runId); }
-  private async emitStepUpdatedTx(tx: SqlDb, stepId: string): Promise<void> { await this.eventEmitter.emitStepUpdatedTx(tx, stepId); }
-  private async emitAttemptUpdatedTx(tx: SqlDb, attemptId: string): Promise<void> { await this.eventEmitter.emitAttemptUpdatedTx(tx, attemptId); }
-  private async emitRunIdEventTx(tx: SqlDb, type: "run.queued" | "run.started" | "run.resumed" | "run.completed" | "run.failed", runId: string): Promise<void> { await this.eventEmitter.emitRunIdEventTx(tx, type, runId); }
-  private async emitRunQueuedTx(tx: SqlDb, runId: string): Promise<void> { await this.emitRunIdEventTx(tx, "run.queued", runId); }
-  private async emitRunStartedTx(tx: SqlDb, runId: string): Promise<void> { await this.emitRunIdEventTx(tx, "run.started", runId); }
-  private async emitRunResumedTx(tx: SqlDb, runId: string): Promise<void> { await this.emitRunIdEventTx(tx, "run.resumed", runId); }
-  private async emitRunCompletedTx(tx: SqlDb, runId: string): Promise<void> { await this.emitRunIdEventTx(tx, "run.completed", runId); }
-  private async emitRunFailedTx(tx: SqlDb, runId: string): Promise<void> { await this.emitRunIdEventTx(tx, "run.failed", runId); }
-  private async emitRunCancelledTx(tx: SqlDb, opts: { runId: string; reason?: string }): Promise<void> { await this.eventEmitter.emitRunCancelledTx(tx, opts); }
-  private async recordArtifactsTx(tx: SqlDb, scope: { tenantId: string; runId: string; stepId: string; attemptId: string; workspaceId: string; agentId: string | null }, artifacts: ArtifactRefT[]): Promise<void> { await this.artifactRecorder.recordArtifactsTx(tx, scope, artifacts); }
+  private async emitRunUpdatedTx(tx: SqlDb, runId: string): Promise<void> {
+    await this.eventEmitter.emitRunUpdatedTx(tx, runId);
+  }
+  private async emitStepUpdatedTx(tx: SqlDb, stepId: string): Promise<void> {
+    await this.eventEmitter.emitStepUpdatedTx(tx, stepId);
+  }
+  private async emitAttemptUpdatedTx(tx: SqlDb, attemptId: string): Promise<void> {
+    await this.eventEmitter.emitAttemptUpdatedTx(tx, attemptId);
+  }
+  private async emitRunIdEventTx(
+    tx: SqlDb,
+    type: "run.queued" | "run.started" | "run.resumed" | "run.completed" | "run.failed",
+    runId: string,
+  ): Promise<void> {
+    await this.eventEmitter.emitRunIdEventTx(tx, type, runId);
+  }
+  private async emitRunQueuedTx(tx: SqlDb, runId: string): Promise<void> {
+    await this.emitRunIdEventTx(tx, "run.queued", runId);
+  }
+  private async emitRunStartedTx(tx: SqlDb, runId: string): Promise<void> {
+    await this.emitRunIdEventTx(tx, "run.started", runId);
+  }
+  private async emitRunResumedTx(tx: SqlDb, runId: string): Promise<void> {
+    await this.emitRunIdEventTx(tx, "run.resumed", runId);
+  }
+  private async emitRunCompletedTx(tx: SqlDb, runId: string): Promise<void> {
+    await this.emitRunIdEventTx(tx, "run.completed", runId);
+  }
+  private async emitRunFailedTx(tx: SqlDb, runId: string): Promise<void> {
+    await this.emitRunIdEventTx(tx, "run.failed", runId);
+  }
+  private async emitRunCancelledTx(
+    tx: SqlDb,
+    opts: { runId: string; reason?: string },
+  ): Promise<void> {
+    await this.eventEmitter.emitRunCancelledTx(tx, opts);
+  }
+  private async recordArtifactsTx(
+    tx: SqlDb,
+    scope: {
+      tenantId: string;
+      runId: string;
+      stepId: string;
+      attemptId: string;
+      workspaceId: string;
+      agentId: string | null;
+    },
+    artifacts: ArtifactRefT[],
+  ): Promise<void> {
+    await this.artifactRecorder.recordArtifactsTx(tx, scope, artifacts);
+  }
 
   async enqueuePlanInTx(tx: SqlDb, input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
     return await enqueuePlanInTx(
@@ -158,7 +234,8 @@ export class ExecutionEngine {
         emitRunUpdatedTx: async (innerTx, runId) => await this.emitRunUpdatedTx(innerTx, runId),
         emitRunQueuedTx: async (innerTx, runId) => await this.emitRunQueuedTx(innerTx, runId),
         emitStepUpdatedTx: async (innerTx, stepId) => await this.emitStepUpdatedTx(innerTx, stepId),
-        emitAttemptUpdatedTx: async (innerTx, attemptId) => await this.emitAttemptUpdatedTx(innerTx, attemptId),
+        emitAttemptUpdatedTx: async (innerTx, attemptId) =>
+          await this.emitAttemptUpdatedTx(innerTx, attemptId),
       },
       tx,
       input,
@@ -173,7 +250,8 @@ export class ExecutionEngine {
         emitRunUpdatedTx: async (tx, runId) => await this.emitRunUpdatedTx(tx, runId),
         emitRunQueuedTx: async (tx, runId) => await this.emitRunQueuedTx(tx, runId),
         emitStepUpdatedTx: async (tx, stepId) => await this.emitStepUpdatedTx(tx, stepId),
-        emitAttemptUpdatedTx: async (tx, attemptId) => await this.emitAttemptUpdatedTx(tx, attemptId),
+        emitAttemptUpdatedTx: async (tx, attemptId) =>
+          await this.emitAttemptUpdatedTx(tx, attemptId),
       },
       input,
     );
@@ -193,7 +271,8 @@ export class ExecutionEngine {
         concurrencyLimits: this.concurrencyLimits,
         emitRunUpdatedTx: async (tx, runId) => await this.emitRunUpdatedTx(tx, runId),
         emitStepUpdatedTx: async (tx, stepId) => await this.emitStepUpdatedTx(tx, stepId),
-        emitAttemptUpdatedTx: async (tx, attemptId) => await this.emitAttemptUpdatedTx(tx, attemptId),
+        emitAttemptUpdatedTx: async (tx, attemptId) =>
+          await this.emitAttemptUpdatedTx(tx, attemptId),
         emitRunResumedTx: async (tx, runId) => await this.emitRunResumedTx(tx, runId),
         emitRunCancelledTx: async (tx, opts) => await this.emitRunCancelledTx(tx, opts),
       },
@@ -213,7 +292,8 @@ export class ExecutionEngine {
         concurrencyLimits: this.concurrencyLimits,
         emitRunUpdatedTx: async (tx, runIdValue) => await this.emitRunUpdatedTx(tx, runIdValue),
         emitStepUpdatedTx: async (tx, stepId) => await this.emitStepUpdatedTx(tx, stepId),
-        emitAttemptUpdatedTx: async (tx, attemptId) => await this.emitAttemptUpdatedTx(tx, attemptId),
+        emitAttemptUpdatedTx: async (tx, attemptId) =>
+          await this.emitAttemptUpdatedTx(tx, attemptId),
         emitRunResumedTx: async (tx, runIdValue) => await this.emitRunResumedTx(tx, runIdValue),
         emitRunCancelledTx: async (tx, opts) => await this.emitRunCancelledTx(tx, opts),
       },
@@ -242,13 +322,17 @@ export class ExecutionEngine {
             redactUnknown: (value) => this.redactUnknown(value),
             emitRunUpdatedTx: async (tx, runId) => await this.emitRunUpdatedTx(tx, runId),
             emitStepUpdatedTx: async (tx, stepId) => await this.emitStepUpdatedTx(tx, stepId),
-            emitAttemptUpdatedTx: async (tx, attemptId) => await this.emitAttemptUpdatedTx(tx, attemptId),
+            emitAttemptUpdatedTx: async (tx, attemptId) =>
+              await this.emitAttemptUpdatedTx(tx, attemptId),
             emitRunStartedTx: async (tx, runId) => await this.emitRunStartedTx(tx, runId),
             emitRunCompletedTx: async (tx, runId) => await this.emitRunCompletedTx(tx, runId),
             emitRunFailedTx: async (tx, runId) => await this.emitRunFailedTx(tx, runId),
-            isApprovedPolicyGateTx: async (tx, tenantId, approvalId) => await this.isApprovedPolicyGateTx(tx, tenantId, approvalId),
-            resolveSecretScopesFromArgs: async (tenantId, args, context) => await this.resolveSecretScopesFromArgs(tenantId, args, context),
-            maybePauseForToolIntentGuardrailTx: async (tx, opts) => await this.maybePauseForToolIntentGuardrailTx(tx, opts),
+            isApprovedPolicyGateTx: async (tx, tenantId, approvalId) =>
+              await this.isApprovedPolicyGateTx(tx, tenantId, approvalId),
+            resolveSecretScopesFromArgs: async (tenantId, args, context) =>
+              await this.resolveSecretScopesFromArgs(tenantId, args, context),
+            maybePauseForToolIntentGuardrailTx: async (tx, opts) =>
+              await this.maybePauseForToolIntentGuardrailTx(tx, opts),
           },
           run,
           input.workerId,
@@ -308,7 +392,17 @@ export class ExecutionEngine {
     return await this.attemptRunner.executeAttempt(opts);
   }
 
-  private async maybePauseForToolIntentGuardrailTx(tx: SqlDb, opts: { run: RunnableRunRow; step: StepRow; actionType: ActionPrimitiveT["type"] | undefined; action: ActionPrimitiveT | undefined; clock: ExecutionClock; workerId: string }): Promise<{ approvalId: string } | undefined> {
+  private async maybePauseForToolIntentGuardrailTx(
+    tx: SqlDb,
+    opts: {
+      run: RunnableRunRow;
+      step: StepRow;
+      actionType: ActionPrimitiveT["type"] | undefined;
+      action: ActionPrimitiveT | undefined;
+      clock: ExecutionClock;
+      workerId: string;
+    },
+  ): Promise<{ approvalId: string } | undefined> {
     if (!opts.actionType) return undefined;
     if (!requiresPostcondition(opts.actionType)) return undefined;
 
@@ -317,7 +411,10 @@ export class ExecutionEngine {
     const workItemId = typeof workItemIdRaw === "string" ? workItemIdRaw.trim() : "";
     if (workItemId.length === 0) return undefined;
 
-    const existingApproval = await tx.get<{ n: number }>(`SELECT 1 AS n FROM approvals WHERE tenant_id = ? AND run_id = ? AND step_id = ? AND kind = 'intent' AND status = 'approved' LIMIT 1`, [opts.run.tenant_id, opts.run.run_id, opts.step.step_id]);
+    const existingApproval = await tx.get<{ n: number }>(
+      `SELECT 1 AS n FROM approvals WHERE tenant_id = ? AND run_id = ? AND step_id = ? AND kind = 'intent' AND status = 'approved' LIMIT 1`,
+      [opts.run.tenant_id, opts.run.run_id, opts.step.step_id],
+    );
     if (existingApproval) return undefined;
 
     const scope = {
@@ -445,9 +542,13 @@ export class ExecutionEngine {
       evidenceSavepointCreated = true;
 
       const reportLines = [
-        "Blocked side-effecting step due to ToolIntent deviation.", "", `- run_id: \`${opts.run.run_id}\``,
-        `- step_index: \`${String(opts.step.step_index)}\``, `- action_type: \`${opts.actionType}\``,
-        `- reason: ${error}`, `- intent_graph_sha256: \`${intentGraphSha256}\``,
+        "Blocked side-effecting step due to ToolIntent deviation.",
+        "",
+        `- run_id: \`${opts.run.run_id}\``,
+        `- step_index: \`${String(opts.step.step_index)}\``,
+        `- action_type: \`${opts.actionType}\``,
+        `- reason: ${error}`,
+        `- intent_graph_sha256: \`${intentGraphSha256}\``,
         toolIntent ? `- tool_intent_artifact_id: \`${toolIntent.artifact_id}\`` : undefined,
       ];
       const report = await dal.createArtifact({
@@ -459,7 +560,16 @@ export class ExecutionEngine {
           body_md: reportLines.filter((line): line is string => Boolean(line)).join("\n"),
           refs: [`run:${opts.run.run_id}`, `step:${String(opts.step.step_index)}`],
           created_by_run_id: opts.run.run_id,
-          provenance_json: { v: 1, kind: "intent_guardrail", reason: error, intent_graph_sha256: intentGraphSha256, run_id: opts.run.run_id, step_index: opts.step.step_index, action_type: opts.actionType, tool_intent_artifact_id: toolIntent?.artifact_id },
+          provenance_json: {
+            v: 1,
+            kind: "intent_guardrail",
+            reason: error,
+            intent_graph_sha256: intentGraphSha256,
+            run_id: opts.run.run_id,
+            step_index: opts.step.step_index,
+            action_type: opts.actionType,
+            tool_intent_artifact_id: toolIntent?.artifact_id,
+          },
         },
         createdAtIso: opts.clock.nowIso,
       });
@@ -467,7 +577,10 @@ export class ExecutionEngine {
 
       const rationaleLines = [
         "Pausing execution before a side-effecting step because ToolIntent validation failed.",
-        "", `Reason: ${error}`, "", `Expected intent graph hash: \`${intentGraphSha256}\``,
+        "",
+        `Reason: ${error}`,
+        "",
+        `Expected intent graph hash: \`${intentGraphSha256}\``,
         artifactId ? `Evidence artifact: \`${artifactId}\`` : undefined,
       ];
       const decision = await dal.createDecision({
@@ -494,14 +607,22 @@ export class ExecutionEngine {
         } catch (rollbackErr) {
           const rollbackMessage =
             rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
-          this.logger?.warn("intent_guardrail.evidence_rollback_failed", { run_id: opts.run.run_id, step_id: opts.step.step_id, error: rollbackMessage });
+          this.logger?.warn("intent_guardrail.evidence_rollback_failed", {
+            run_id: opts.run.run_id,
+            step_id: opts.step.step_id,
+            error: rollbackMessage,
+          });
         }
       }
 
       artifactId = undefined;
       decisionId = undefined;
       const message = err instanceof Error ? err.message : String(err);
-      this.logger?.warn("intent_guardrail.evidence_write_failed", { run_id: opts.run.run_id, step_id: opts.step.step_id, error: message });
+      this.logger?.warn("intent_guardrail.evidence_write_failed", {
+        run_id: opts.run.run_id,
+        step_id: opts.step.step_id,
+        error: message,
+      });
     }
 
     const paused = await this.approvalManager.pauseRunForApproval(
@@ -519,7 +640,20 @@ export class ExecutionEngine {
         lane: opts.run.lane,
         workerId: opts.workerId,
       },
-      { kind: "intent", prompt: "Intent guardrail — ToolIntent required", detail: error, context: { work_item_id: workItemId, action_type: opts.actionType, step_index: opts.step.step_index, intent_graph_sha256: intentGraphSha256, tool_intent_artifact_id: toolIntent?.artifact_id, work_artifact_id: artifactId, decision_id: decisionId } },
+      {
+        kind: "intent",
+        prompt: "Intent guardrail — ToolIntent required",
+        detail: error,
+        context: {
+          work_item_id: workItemId,
+          action_type: opts.actionType,
+          step_index: opts.step.step_index,
+          intent_graph_sha256: intentGraphSha256,
+          tool_intent_artifact_id: toolIntent?.artifact_id,
+          work_artifact_id: artifactId,
+          decision_id: decisionId,
+        },
+      },
     );
     return { approvalId: paused.approvalId };
   }

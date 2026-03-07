@@ -41,7 +41,10 @@ function closeCallbackTarget(
   });
 }
 
-export function createShutdownHandler(context: GatewayBootContext, runtime: GatewayRuntime): (signal: string) => void {
+export function createShutdownHandler(
+  context: GatewayBootContext,
+  runtime: GatewayRuntime,
+): (signal: string) => void {
   let shuttingDown = false;
 
   return (signal: string): void => {
@@ -73,7 +76,10 @@ export function createShutdownHandler(context: GatewayBootContext, runtime: Gate
             })
             .catch((err) => {
               const message = err instanceof Error ? err.message : String(err);
-              context.logger.warn("hooks.fire_failed", { event: "gateway.shutdown", error: message });
+              context.logger.warn("hooks.fire_failed", {
+                event: "gateway.shutdown",
+                error: message,
+              });
               return [];
             })
         : Promise.resolve([]);

@@ -196,19 +196,19 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     console.log(`desktop-node: connected device_id=${identity.deviceId}${suffix}`);
   });
 
-  client.on("disconnected", (info) => {
+  client.on("disconnected", (info: { code: number; reason: string }) => {
     console.log(`desktop-node: disconnected code=${info.code} reason=${info.reason}`);
   });
 
-  client.on("transport_error", (msg) => {
+  client.on("transport_error", (msg: { message: string }) => {
     console.error(`desktop-node: transport_error: ${msg.message}`);
   });
 
-  client.on("error", (msg) => {
+  client.on("error", (msg: { payload: { message: string } }) => {
     console.error(`desktop-node: gateway_error: ${msg.payload.message}`);
   });
 
-  client.on("pairing.approved", (evt) => {
+  client.on("pairing.approved", (evt: { payload?: { scoped_token?: unknown } }) => {
     const scoped = (evt.payload as { scoped_token?: unknown } | undefined)?.scoped_token;
     if (typeof scoped === "string" && scoped.trim()) {
       console.log("desktop-node: pairing approved (scoped token issued)");

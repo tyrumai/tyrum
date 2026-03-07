@@ -132,16 +132,14 @@ describe("useDesktopOperatorCore", () => {
     const desktopApi = (window as unknown as { tyrumDesktop: ReturnType<typeof createDesktopApi> })
       .tyrumDesktop;
     desktopApi.gateway.getOperatorConnection = retryingConnectionMock;
-    retryingConnectionMock
-      .mockRejectedValueOnce(new Error("boom"))
-      .mockResolvedValue({
-        mode: "embedded",
-        wsUrl: "ws://127.0.0.1:8788/ws",
-        httpBaseUrl: "http://127.0.0.1:8788",
-        token: "desktop-token",
-        tlsCertFingerprint256: "",
-        tlsAllowSelfSigned: false,
-      });
+    retryingConnectionMock.mockRejectedValueOnce(new Error("boom")).mockResolvedValue({
+      mode: "embedded",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      token: "desktop-token",
+      tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
+    });
 
     const { useDesktopOperatorCore } = await import("../src/renderer/lib/desktop-operator-core.js");
     const { container, root } = createTestRoot();

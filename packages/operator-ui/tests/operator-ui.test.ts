@@ -1012,16 +1012,36 @@ describe("operator-ui", () => {
       expect(await waitForSelector(container, "[data-testid='configure-page']")).not.toBeNull();
       expect(container.querySelector("[data-testid='admin-tab-http']")).toBeNull();
       expect(container.querySelector("[data-testid='admin-tab-ws']")).toBeNull();
-      expect(await waitForSelector(container, "[data-testid='configure-tab-general']")).not.toBeNull();
-      expect(await waitForSelector(container, "[data-testid='admin-http-tab-policy']")).not.toBeNull();
-      expect(await waitForSelector(container, "[data-testid='admin-http-tab-providers']")).not.toBeNull();
-      expect(await waitForSelector(container, "[data-testid='admin-http-tab-models']")).not.toBeNull();
-      expect(await waitForSelector(container, "[data-testid='admin-http-tab-audit']")).not.toBeNull();
-      expect(await waitForSelector(container, "[data-testid='admin-http-tab-routing-config']")).not.toBeNull();
-      expect(await waitForSelector(container, "[data-testid='admin-http-tab-secrets']")).not.toBeNull();
-      expect(await waitForSelector(container, "[data-testid='admin-http-tab-plugins']")).not.toBeNull();
-      expect(await waitForSelector(container, "[data-testid='admin-http-tab-gateway']")).not.toBeNull();
-      expect(await waitForSelector(container, "[data-testid='admin-ws-tab-commands']")).not.toBeNull();
+      expect(
+        await waitForSelector(container, "[data-testid='configure-tab-general']"),
+      ).not.toBeNull();
+      expect(
+        await waitForSelector(container, "[data-testid='admin-http-tab-policy']"),
+      ).not.toBeNull();
+      expect(
+        await waitForSelector(container, "[data-testid='admin-http-tab-providers']"),
+      ).not.toBeNull();
+      expect(
+        await waitForSelector(container, "[data-testid='admin-http-tab-models']"),
+      ).not.toBeNull();
+      expect(
+        await waitForSelector(container, "[data-testid='admin-http-tab-audit']"),
+      ).not.toBeNull();
+      expect(
+        await waitForSelector(container, "[data-testid='admin-http-tab-routing-config']"),
+      ).not.toBeNull();
+      expect(
+        await waitForSelector(container, "[data-testid='admin-http-tab-secrets']"),
+      ).not.toBeNull();
+      expect(
+        await waitForSelector(container, "[data-testid='admin-http-tab-plugins']"),
+      ).not.toBeNull();
+      expect(
+        await waitForSelector(container, "[data-testid='admin-http-tab-gateway']"),
+      ).not.toBeNull();
+      expect(
+        await waitForSelector(container, "[data-testid='admin-ws-tab-commands']"),
+      ).not.toBeNull();
       expect(container.querySelector("[data-testid='configure-read-only-notice']")).toBeNull();
     } finally {
       act(() => {

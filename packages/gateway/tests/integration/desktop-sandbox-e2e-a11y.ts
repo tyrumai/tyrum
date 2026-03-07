@@ -86,7 +86,8 @@ export async function runZenityA11ySmoke(params: {
   scope: ExecutionScopeIds;
   truncate: (text: string, maxChars: number) => string;
 }): Promise<void> {
-  const hasZenity = params.dockerExec(params.containerName, "command -v zenity >/dev/null 2>&1").status === 0;
+  const hasZenity =
+    params.dockerExec(params.containerName, "command -v zenity >/dev/null 2>&1").status === 0;
   if (!hasZenity) return;
 
   const context: DesktopDispatchContext = {
@@ -213,8 +214,7 @@ export async function runZenityA11ySmoke(params: {
       candidate.node.states.some((state) => state.trim().toLowerCase() === "is_default"),
     );
     const chosen =
-      defaultButton ??
-      buttonCandidates.toSorted((a, b) => b.node.bounds.x - a.node.bounds.x)[0];
+      defaultButton ?? buttonCandidates.toSorted((a, b) => b.node.bounds.x - a.node.bounds.x)[0];
     if (!chosen) {
       throw new Error("Desktop a11y could not locate a dialog button to click.");
     }

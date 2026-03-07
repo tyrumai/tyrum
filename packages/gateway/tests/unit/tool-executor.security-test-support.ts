@@ -78,7 +78,11 @@ const ssrfUrlCases = [
   { name: "blocks 169.254.x.x (link-local)", url: "http://169.254.169.254/", blocked: true },
   { name: "blocks 127.0.0.1", url: "http://127.0.0.1/", blocked: true },
   { name: "blocks localhost", url: "http://localhost/", blocked: true },
-  { name: "allows public hostname https://example.com", url: "https://example.com", blocked: false },
+  {
+    name: "allows public hostname https://example.com",
+    url: "https://example.com",
+    blocked: false,
+  },
   { name: "allows public IP 8.8.8.8", url: "http://8.8.8.8/", blocked: false },
   { name: "blocks non-http URL schemes", url: "file:///etc/passwd", blocked: true },
 ] as const;

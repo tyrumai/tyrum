@@ -59,14 +59,9 @@ export function createDesktopApi(options: DesktopApiOptions = {}): DesktopApi {
       disconnect: vi.fn(async () => ({ status: "disconnected" })),
       ...options.node,
     },
-    onStatusChange:
-      options.onStatusChange ?? vi.fn((_cb: (status: unknown) => void) => () => {}),
-    ...(options.checkMacPermissions
-      ? { checkMacPermissions: options.checkMacPermissions }
-      : {}),
-    ...(options.requestMacPermission
-      ? { requestMacPermission: options.requestMacPermission }
-      : {}),
+    onStatusChange: options.onStatusChange ?? vi.fn((_cb: (status: unknown) => void) => () => {}),
+    ...(options.checkMacPermissions ? { checkMacPermissions: options.checkMacPermissions } : {}),
+    ...(options.requestMacPermission ? { requestMacPermission: options.requestMacPermission } : {}),
   } satisfies DesktopApi;
 }
 
@@ -84,19 +79,13 @@ export async function clickButtonAndFlush(container: HTMLElement, label: string)
   await clickElementAndFlush(button);
 }
 
-export async function clickByTestIdAndFlush(
-  container: HTMLElement,
-  testId: string,
-): Promise<void> {
+export async function clickByTestIdAndFlush(container: HTMLElement, testId: string): Promise<void> {
   const button = container.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
   expect(button).not.toBeNull();
   await clickElementAndFlush(button);
 }
 
-export async function clickLabelAndFlush(
-  container: HTMLElement,
-  labelText: string,
-): Promise<void> {
+export async function clickLabelAndFlush(container: HTMLElement, labelText: string): Promise<void> {
   const label = Array.from(container.querySelectorAll<HTMLLabelElement>("label")).find((el) =>
     el.textContent?.includes(labelText),
   );
@@ -104,11 +93,10 @@ export async function clickLabelAndFlush(
   await clickElementAndFlush(label);
 }
 
-export async function clickSwitchAndFlush(
-  container: HTMLElement,
-  index: number,
-): Promise<void> {
-  const toggle = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="switch"]'))[index];
+export async function clickSwitchAndFlush(container: HTMLElement, index: number): Promise<void> {
+  const toggle = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="switch"]'))[
+    index
+  ];
   expect(toggle).not.toBeUndefined();
   await clickElementAndFlush(toggle);
 }
@@ -136,10 +124,7 @@ export function getInputByLabel(container: HTMLElement, labelText: string): HTML
   return input!;
 }
 
-export function getTextareaByLabel(
-  container: HTMLElement,
-  labelText: string,
-): HTMLTextAreaElement {
+export function getTextareaByLabel(container: HTMLElement, labelText: string): HTMLTextAreaElement {
   const label = Array.from(container.querySelectorAll<HTMLLabelElement>("label")).find((el) =>
     el.textContent?.includes(labelText),
   );

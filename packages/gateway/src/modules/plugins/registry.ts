@@ -1,18 +1,23 @@
-import { PluginManifest } from "@tyrum/schemas";
-import type { PluginManifest as PluginManifestT } from "@tyrum/schemas";
-import type { WsEventEnvelope } from "@tyrum/schemas";
-import { Ajv2019 } from "ajv/dist/2019.js";
+import {
+  PluginManifest,
+  type PluginManifest as PluginManifestT,
+  type WsEventEnvelope,
+} from "@tyrum/schemas";
 import type { ErrorObject } from "ajv";
+import { Ajv2019 } from "ajv/dist/2019.js";
+import type { Hono } from "hono";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, type Dirent } from "node:fs";
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { Hono } from "hono";
 import type { GatewayContainer } from "../../container.js";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
 import { OPERATOR_WS_AUDIENCE } from "../../ws/audience.js";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
+import type { ToolDescriptor } from "../agent/tools.js";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
+import type { Logger } from "../observability/logger.js";
 import {
   parsePluginLockFile,
   pluginIntegritySha256Hex,
@@ -20,23 +25,33 @@ import {
   type PluginInstallInfo,
 } from "./lockfile.js";
 import { missingRequiredManifestFields, resolveSafeChildPath } from "./validation.js";
-import type { Logger } from "../observability/logger.js";
-import type { ToolDescriptor } from "../agent/tools.js";
-import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 const PLUGIN_LIFECYCLE_AUDIT_PLAN_ID = "gateway.plugins.lifecycle";
 const PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX = "gateway.plugins.tool_invoked";
+const MANIFEST_CANDIDATES = ["plugin.yml", "plugin.yaml", "plugin.json"] as const;
+const CONFIG_CANDIDATES = ["config.yml", "config.yaml", "config.json"] as const;
+const JSON_SCHEMA_CHILD_KEYS = new Set([
+  "items",
+  "contains",
+  "not",
+  "if",
+  "then",
+  "else",
+  "propertyNames",
+  "unevaluatedItems",
+  "additionalItems",
+]);
+const JSON_SCHEMA_ARRAY_KEYS = new Set(["prefixItems", "anyOf", "oneOf"]);
+const JSON_SCHEMA_RECORD_KEYS = new Set([
+  "properties",
+  "patternProperties",
+  "$defs",
+  "definitions",
+  "dependentSchemas",
+]);
 
-export type PluginCommandExecuteResult = {
-  output: string;
-  data?: unknown;
-};
-
-export type PluginToolExecuteResult = {
-  output: string;
-  error?: string;
-};
-
+export type PluginCommandExecuteResult = { output: string; data?: unknown };
+export type PluginToolExecuteResult = { output: string; error?: string };
 export interface PluginToolContext {
   home: string;
   agent_id: string;
@@ -45,28 +60,23 @@ export interface PluginToolContext {
   fetch: typeof fetch;
   container?: GatewayContainer;
 }
-
 export interface PluginCommandContext {
   logger: Logger;
   container?: GatewayContainer;
 }
-
 export type PluginToolRegistration = {
   descriptor: ToolDescriptor;
   execute: (args: unknown, ctx: PluginToolContext) => Promise<PluginToolExecuteResult>;
 };
-
 export type PluginCommandRegistration = {
   name: string;
   execute: (args: string[], ctx: PluginCommandContext) => Promise<PluginCommandExecuteResult>;
 };
-
 export type PluginRegistration = {
   tools?: PluginToolRegistration[];
   commands?: PluginCommandRegistration[];
   router?: Hono;
 };
-
 export type PluginRegisterFn = (ctx: {
   manifest: PluginManifestT;
   config: unknown;
@@ -83,36 +93,59 @@ type LoadedPlugin = {
   router?: Hono;
   loaded_at: string;
 };
+type PluginDirKind = "workspace" | "user" | "bundled";
+type PluginDir = { kind: PluginDirKind; path: string };
+type NormalizeSchemaOptions = {
+  root?: unknown;
+  skipAdditionalPropertiesDefault?: boolean;
+  skipAdditionalPropertiesDefaultFor?: WeakSet<object>;
+};
 
-function isJsonSchemaObject(value: unknown): value is Record<string, unknown> {
-  return isRecord(value);
-}
+const hasOwn = (value: object, key: string) => Object.prototype.hasOwnProperty.call(value, key);
+const isJsonSchemaObject = (value: unknown): value is Record<string, unknown> => isRecord(value);
+const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
+const errorCode = (err: unknown) =>
+  err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
+const hasSchemaProperties = (value: object) =>
+  hasOwn(value, "properties") || hasOwn(value, "patternProperties");
+const normalizePluginId = (id: string) => id.trim() || "plugin";
+const toolIdAllowed = (manifest: PluginManifestT, toolId: string) =>
+  Boolean(manifest.contributes?.tools?.includes(toolId));
+const commandAllowed = (manifest: PluginManifestT, name: string) =>
+  Boolean(manifest.contributes?.commands?.includes(name));
+const cloneManifest = (manifest: PluginManifestT) => structuredClone(manifest) as PluginManifestT;
+const resolvePluginsDir = (home: string) => join(home, "plugins");
+const isTrustedOwner = (uid: number, currentUid: number) => uid === currentUid || uid === 0;
+const isWorldWritable = (mode: number) => (mode & 0o002) !== 0;
+const selectContainerForPlugin = (manifest: PluginManifestT, container?: GatewayContainer) =>
+  container && manifest.permissions?.db ? container : undefined;
+const getCurrentUid = () => {
+  if (typeof process.getuid !== "function") return undefined;
+  try {
+    return process.getuid();
+  } catch {
+    // Intentional: environments without a stable uid are treated as unknown ownership.
+    return undefined;
+  }
+};
+const unescapeJsonPointerSegment = (value: string) =>
+  value.replace(/~[01]/g, (match) => (match === "~1" ? "/" : "~"));
 
 function looksLikeJsonSchemaObjectShape(value: unknown): boolean {
   if (!isRecord(value)) return false;
   const type = value["type"];
-  const isObjectType = type === "object" || (Array.isArray(type) && type.includes("object"));
-  const hasProperties =
-    Object.prototype.hasOwnProperty.call(value, "properties") ||
-    Object.prototype.hasOwnProperty.call(value, "patternProperties");
-  return isObjectType || hasProperties;
-}
-
-function unescapeJsonPointerSegment(value: string): string {
-  return value.replace(/~[01]/g, (match) => (match === "~1" ? "/" : "~"));
+  return (
+    type === "object" ||
+    (Array.isArray(type) && type.includes("object")) ||
+    hasSchemaProperties(value)
+  );
 }
 
 function resolveInternalJsonSchemaRef(root: unknown, ref: string): unknown | undefined {
   if (ref === "#") return root;
   if (!ref.startsWith("#/")) return undefined;
-
-  const parts = ref
-    .slice(2)
-    .split("/")
-    .map((entry) => unescapeJsonPointerSegment(entry));
-
   let current: unknown = root;
-  for (const part of parts) {
+  for (const part of ref.slice(2).split("/").map(unescapeJsonPointerSegment)) {
     if (Array.isArray(current)) {
       const index = Number(part);
       if (!Number.isInteger(index) || index < 0 || index >= current.length) return undefined;
@@ -122,7 +155,6 @@ function resolveInternalJsonSchemaRef(root: unknown, ref: string): unknown | und
     if (!isRecord(current)) return undefined;
     current = current[part];
   }
-
   return current;
 }
 
@@ -134,73 +166,42 @@ function looksLikeJsonSchemaObjectShapeOrRef(
   if (looksLikeJsonSchemaObjectShape(value)) return true;
   if (!isRecord(value)) return false;
   const ref = value["$ref"];
-  if (typeof ref !== "string") return false;
-  if (seenRefs.has(ref)) return false;
+  if (typeof ref !== "string" || seenRefs.has(ref)) return false;
   seenRefs.add(ref);
   const resolved = resolveInternalJsonSchemaRef(root, ref);
   return resolved ? looksLikeJsonSchemaObjectShapeOrRef(resolved, root, seenRefs) : false;
 }
 
 function collectAllOfInternalRefTargets(root: unknown): WeakSet<object> {
-  const targets = new WeakSet<object>();
-  if (root === null || typeof root !== "object") return targets;
-
-  const visited = new WeakSet<object>();
+  const targets = new WeakSet<object>(),
+    visited = new WeakSet<object>();
   const visit = (node: unknown): void => {
-    if (node === null || typeof node !== "object") return;
-    if (visited.has(node)) return;
+    if (!node || typeof node !== "object" || visited.has(node)) return;
     visited.add(node);
-
-    if (Array.isArray(node)) {
-      for (const item of node) visit(item);
-      return;
-    }
-
-    const record = node as Record<string, unknown>;
-    const allOf = record["allOf"];
-    const ref = record["$ref"];
+    if (Array.isArray(node)) return void node.forEach(visit);
+    const record = node as Record<string, unknown>,
+      allOf = record["allOf"],
+      ref = record["$ref"];
     if (Array.isArray(allOf)) {
       for (const entry of allOf) {
-        if (!isRecord(entry)) continue;
-        const entryRef = entry["$ref"];
-        if (typeof entryRef !== "string") continue;
-        const resolved = resolveInternalJsonSchemaRef(root, entryRef);
-        if (resolved !== null && typeof resolved === "object") {
-          targets.add(resolved as object);
-        }
+        if (!isRecord(entry) || typeof entry["$ref"] !== "string") continue;
+        const resolved = resolveInternalJsonSchemaRef(root, entry["$ref"]);
+        if (resolved && typeof resolved === "object") targets.add(resolved as object);
       }
     }
-    const additionalPropertiesExplicit = Object.prototype.hasOwnProperty.call(
-      record,
-      "additionalProperties",
-    );
-    const unevaluatedPropertiesExplicit = Object.prototype.hasOwnProperty.call(
-      record,
-      "unevaluatedProperties",
-    );
-    const hasProperties =
-      Object.prototype.hasOwnProperty.call(record, "properties") ||
-      Object.prototype.hasOwnProperty.call(record, "patternProperties");
-    const hasAllOf = Array.isArray(allOf) && allOf.length > 0;
     if (
       typeof ref === "string" &&
-      !hasAllOf &&
-      hasProperties &&
-      !additionalPropertiesExplicit &&
-      !unevaluatedPropertiesExplicit &&
+      !(Array.isArray(allOf) && allOf.length > 0) &&
+      hasSchemaProperties(record) &&
+      !hasOwn(record, "additionalProperties") &&
+      !hasOwn(record, "unevaluatedProperties") &&
       looksLikeJsonSchemaObjectShapeOrRef(record, root)
     ) {
       const resolved = resolveInternalJsonSchemaRef(root, ref);
-      if (resolved !== null && typeof resolved === "object") {
-        targets.add(resolved as object);
-      }
+      if (resolved && typeof resolved === "object") targets.add(resolved as object);
     }
-
-    for (const value of Object.values(record)) {
-      visit(value);
-    }
+    Object.values(record).forEach(visit);
   };
-
   visit(root);
   return targets;
 }
@@ -208,140 +209,89 @@ function collectAllOfInternalRefTargets(root: unknown): WeakSet<object> {
 function normalizeJsonSchemaAdditionalPropertiesDefaults(
   schema: unknown,
   seen = new WeakMap<object, unknown>(),
-  opts?: {
-    root?: unknown;
-    skipAdditionalPropertiesDefault?: boolean;
-    skipAdditionalPropertiesDefaultFor?: WeakSet<object>;
-  },
+  opts?: NormalizeSchemaOptions,
 ): unknown {
-  if (schema === null || typeof schema !== "object") return schema;
+  if (!schema || typeof schema !== "object") return schema;
   const existing = seen.get(schema);
   if (existing) return existing;
-
   const childOpts = opts ? { ...opts, skipAdditionalPropertiesDefault: false } : undefined;
-
   if (Array.isArray(schema)) {
-    const out: unknown[] = [];
+    const out = schema.map((item) =>
+      normalizeJsonSchemaAdditionalPropertiesDefaults(item, seen, childOpts),
+    );
     seen.set(schema, out);
-    for (const item of schema) {
-      out.push(normalizeJsonSchemaAdditionalPropertiesDefaults(item, seen, childOpts));
-    }
     return out;
   }
-
-  const record = schema as Record<string, unknown>;
-  const out: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  const record = schema as Record<string, unknown>,
+    out = Object.create(null) as Record<string, unknown>;
   seen.set(schema, out);
-
-  const skipAdditionalPropertiesDefault =
-    (opts?.skipAdditionalPropertiesDefault ?? false) ||
-    (opts?.skipAdditionalPropertiesDefaultFor?.has(schema) ?? false);
-  const additionalPropertiesExplicit = Object.prototype.hasOwnProperty.call(
-    record,
-    "additionalProperties",
+  const allOf = record["allOf"],
+    hasAllOf = Array.isArray(allOf) && allOf.length > 0,
+    root = opts?.root;
+  const skipAdditionalPropertiesDefault = Boolean(
+    opts?.skipAdditionalPropertiesDefault || opts?.skipAdditionalPropertiesDefaultFor?.has(schema),
   );
-  const unevaluatedPropertiesExplicit = Object.prototype.hasOwnProperty.call(
-    record,
-    "unevaluatedProperties",
-  );
-  const allOf = record["allOf"];
-  const hasAllOf = Array.isArray(allOf) && allOf.length > 0;
-
-  const type = record["type"];
-  const isObjectType = type === "object" || (Array.isArray(type) && type.includes("object"));
-  const hasProperties =
-    Object.prototype.hasOwnProperty.call(record, "properties") ||
-    Object.prototype.hasOwnProperty.call(record, "patternProperties");
-  const isObjectSchema = isObjectType || hasProperties;
-  const root = opts?.root;
+  const additionalPropertiesExplicit = hasOwn(record, "additionalProperties"),
+    unevaluatedPropertiesExplicit = hasOwn(record, "unevaluatedProperties");
+  const isObjectSchema = looksLikeJsonSchemaObjectShape(record);
   const looksLikeAllOfObjectSchema =
     hasAllOf &&
     (isObjectSchema ||
       (root
         ? (allOf as unknown[]).some((entry) => looksLikeJsonSchemaObjectShapeOrRef(entry, root))
-        : (allOf as unknown[]).some((entry) => looksLikeJsonSchemaObjectShape(entry))));
-
+        : (allOf as unknown[]).some(looksLikeJsonSchemaObjectShape)));
   for (const [key, value] of Object.entries(record)) {
-    switch (key) {
-      case "additionalProperties":
-      case "unevaluatedProperties": {
-        out[key] =
-          typeof value === "boolean"
-            ? value
-            : normalizeJsonSchemaAdditionalPropertiesDefaults(value, seen, childOpts);
-        break;
-      }
-      case "items":
-      case "contains":
-      case "not":
-      case "if":
-      case "then":
-      case "else":
-      case "propertyNames":
-      case "unevaluatedItems":
-      case "additionalItems": {
-        out[key] = normalizeJsonSchemaAdditionalPropertiesDefaults(value, seen, childOpts);
-        break;
-      }
-      case "prefixItems":
-      case "anyOf":
-      case "oneOf": {
-        out[key] = Array.isArray(value)
-          ? value.map((entry) =>
-              normalizeJsonSchemaAdditionalPropertiesDefaults(entry, seen, childOpts),
-            )
-          : value;
-        break;
-      }
-      case "allOf": {
-        out[key] = Array.isArray(value)
-          ? value.map((entry) =>
-              normalizeJsonSchemaAdditionalPropertiesDefaults(entry, seen, {
-                ...opts,
-                skipAdditionalPropertiesDefault: true,
-              }),
-            )
-          : value;
-        break;
-      }
-      case "properties":
-      case "patternProperties":
-      case "$defs":
-      case "definitions":
-      case "dependentSchemas": {
-        if (!isRecord(value)) {
-          out[key] = value;
-          break;
-        }
-        const normalized: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
-        for (const [prop, schemaValue] of Object.entries(value)) {
-          normalized[prop] = normalizeJsonSchemaAdditionalPropertiesDefaults(
-            schemaValue,
-            seen,
-            childOpts,
-          );
-        }
-        out[key] = normalized;
-        break;
-      }
-      default:
-        out[key] = value;
-        break;
+    if (key === "additionalProperties" || key === "unevaluatedProperties") {
+      out[key] =
+        typeof value === "boolean"
+          ? value
+          : normalizeJsonSchemaAdditionalPropertiesDefaults(value, seen, childOpts);
+      continue;
     }
+    if (JSON_SCHEMA_CHILD_KEYS.has(key)) {
+      out[key] = normalizeJsonSchemaAdditionalPropertiesDefaults(value, seen, childOpts);
+      continue;
+    }
+    if (JSON_SCHEMA_ARRAY_KEYS.has(key)) {
+      out[key] = Array.isArray(value)
+        ? value.map((entry) =>
+            normalizeJsonSchemaAdditionalPropertiesDefaults(entry, seen, childOpts),
+          )
+        : value;
+      continue;
+    }
+    if (key === "allOf") {
+      out[key] = Array.isArray(value)
+        ? value.map((entry) =>
+            normalizeJsonSchemaAdditionalPropertiesDefaults(entry, seen, {
+              ...opts,
+              skipAdditionalPropertiesDefault: true,
+            }),
+          )
+        : value;
+      continue;
+    }
+    if (JSON_SCHEMA_RECORD_KEYS.has(key)) {
+      out[key] = isRecord(value)
+        ? Object.fromEntries(
+            Object.entries(value).map(([prop, schemaValue]) => [
+              prop,
+              normalizeJsonSchemaAdditionalPropertiesDefaults(schemaValue, seen, childOpts),
+            ]),
+          )
+        : value;
+      continue;
+    }
+    out[key] = value;
   }
-
   if (
     !skipAdditionalPropertiesDefault &&
     !additionalPropertiesExplicit &&
     !unevaluatedPropertiesExplicit
   ) {
-    if (looksLikeAllOfObjectSchema) {
-      out["unevaluatedProperties"] = false;
-    } else if (isObjectSchema) {
-      out["additionalProperties"] = false;
-    }
+    if (looksLikeAllOfObjectSchema) out["unevaluatedProperties"] = false;
+    else if (isObjectSchema) out["additionalProperties"] = false;
   }
-
   const ref = record["$ref"];
   if (
     typeof ref === "string" &&
@@ -357,14 +307,14 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
     out["allOf"] = [{ $ref: ref }];
     out["unevaluatedProperties"] = false;
   }
-
   return out;
 }
+
 async function tryReadFile(path: string): Promise<string | undefined> {
   try {
     return await readFile(path, "utf-8");
   } catch {
-    // Intentional: treat missing/unreadable plugin metadata as absent (fail closed).
+    // Intentional: missing manifest candidates are skipped during plugin discovery.
     return undefined;
   }
 }
@@ -372,36 +322,29 @@ async function tryReadFile(path: string): Promise<string | undefined> {
 async function loadManifestFromDir(
   dir: string,
 ): Promise<{ path: string; raw: string; manifest: PluginManifestT } | undefined> {
-  const candidates = ["plugin.yml", "plugin.yaml", "plugin.json"];
-  for (const filename of candidates) {
-    const path = join(dir, filename);
-    const raw = await tryReadFile(path);
+  for (const filename of MANIFEST_CANDIDATES) {
+    const path = join(dir, filename),
+      raw = await tryReadFile(path);
     if (!raw) continue;
     const parsed = parseJsonOrYaml(raw, path);
-    if (!isRecord(parsed)) {
-      throw new Error("manifest must be an object");
-    }
+    if (!isRecord(parsed)) throw new Error("manifest must be an object");
     const missingFields = missingRequiredManifestFields(parsed);
-    if (missingFields.length > 0) {
+    if (missingFields.length > 0)
       throw new Error(`missing required manifest field(s): ${missingFields.join(", ")}`);
-    }
     return { path, raw, manifest: PluginManifest.parse(parsed) };
   }
   return undefined;
 }
 
 async function loadConfigFromDir(dir: string): Promise<{ path?: string; config: unknown }> {
-  const candidates = ["config.yml", "config.yaml", "config.json"];
-  for (const filename of candidates) {
-    const path = join(dir, filename);
-    const raw = await tryReadFile(path);
+  for (const filename of CONFIG_CANDIDATES) {
+    const path = join(dir, filename),
+      raw = await tryReadFile(path);
     if (raw === undefined) continue;
     try {
-      const parsed = parseJsonOrYaml(raw, path);
-      return { path, config: parsed };
+      return { path, config: parseJsonOrYaml(raw, path) };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`failed to parse config (${filename}): ${message}`);
+      throw new Error(`failed to parse config (${filename}): ${errorMessage(err)}`);
     }
   }
   return { config: {} };
@@ -413,139 +356,307 @@ function validatePluginConfig(params: {
 }):
   | { ok: true; normalizedSchema: Record<string, unknown>; config: unknown }
   | { ok: false; error: string } {
-  const skipAdditionalPropertiesDefaultFor = collectAllOfInternalRefTargets(params.schema);
   const normalizedSchema = normalizeJsonSchemaAdditionalPropertiesDefaults(
     params.schema,
     new WeakMap<object, unknown>(),
     {
       root: params.schema,
-      skipAdditionalPropertiesDefaultFor,
+      skipAdditionalPropertiesDefaultFor: collectAllOfInternalRefTargets(params.schema),
     },
   );
-  if (!isJsonSchemaObject(normalizedSchema)) {
+  if (!isJsonSchemaObject(normalizedSchema))
     return { ok: false, error: "config_schema must be a JSON Schema object" };
-  }
-
   try {
-    const ajv = new Ajv2019({ allErrors: true, strict: false, unevaluated: true });
-    const validate = ajv.compile(normalizedSchema);
-    const ok = validate(params.config);
-    if (ok) {
-      return { ok: true, normalizedSchema, config: params.config };
-    }
+    const validate = new Ajv2019({ allErrors: true, strict: false, unevaluated: true }).compile(
+      normalizedSchema,
+    );
+    if (validate(params.config)) return { ok: true, normalizedSchema, config: params.config };
     const errors = ((validate.errors ?? []) as ErrorObject[])
-      .map((err) => {
-        const at = err.instancePath && err.instancePath.length > 0 ? err.instancePath : "/";
-        const msg = err.message ? String(err.message) : "invalid";
-        return `${at}: ${msg}`;
-      })
-      .filter((entry) => entry.length > 0);
+      .map(
+        (err) =>
+          `${err.instancePath && err.instancePath.length > 0 ? err.instancePath : "/"}: ${err.message ? String(err.message) : "invalid"}`,
+      )
+      .filter(Boolean);
     return {
       ok: false,
       error: errors.length > 0 ? errors.join("; ") : "config does not match schema",
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { ok: false, error: message };
+    return { ok: false, error: errorMessage(err) };
   }
 }
 
 function tryReadPackageJsonName(path: string): string | undefined {
   try {
     const parsed = JSON.parse(readFileSync(path, "utf-8")) as unknown;
-    if (!isRecord(parsed)) return undefined;
-    const name = parsed["name"];
-    return typeof name === "string" ? name : undefined;
+    return isRecord(parsed) && typeof parsed["name"] === "string" ? parsed["name"] : undefined;
   } catch {
-    // Intentional: best-effort package root discovery; ignore missing/unreadable/invalid package.json.
+    // Intentional: invalid package.json content should not block plugin loading.
     return undefined;
   }
 }
 
 function resolveBundledPluginsDir(): string {
-  const here = dirname(fileURLToPath(import.meta.url));
-  return resolveBundledPluginsDirFrom(here);
+  return resolveBundledPluginsDirFrom(dirname(fileURLToPath(import.meta.url)));
 }
 
 export function resolveBundledPluginsDirFrom(startDir: string): string {
-  // We cannot rely on the source tree depth because tsdown bundles the gateway
-  // into `dist/index.mjs`, making `import.meta.url` point at `dist/`.
-  //
-  // We also cannot simply look for a `plugins/` directory because this module
-  // itself lives under `src/modules/plugins/`.
-  //
-  // Instead, find the `@tyrum/gateway` package root and return `<root>/plugins`.
   let current = startDir;
   for (let i = 0; i < 10; i += 1) {
-    const name = tryReadPackageJsonName(join(current, "package.json"));
-    if (name === "@tyrum/gateway") {
+    if (tryReadPackageJsonName(join(current, "package.json")) === "@tyrum/gateway")
       return join(current, "plugins");
-    }
-
     const parent = dirname(current);
     if (parent === current) break;
     current = parent;
   }
-
-  // Fallback to the historical source layout.
   return join(startDir, "../../../plugins");
-}
-
-function resolvePluginsDir(home: string): string {
-  return join(home, "plugins");
-}
-
-function getCurrentUid(): number | undefined {
-  if (typeof process.getuid !== "function") return undefined;
-  try {
-    return process.getuid();
-  } catch {
-    // Intentional: getuid may throw in restricted environments; treat uid as unavailable.
-    return undefined;
-  }
-}
-
-function isTrustedOwner(uid: number, currentUid: number): boolean {
-  return uid === currentUid || uid === 0;
-}
-
-function isWorldWritable(mode: number): boolean {
-  // POSIX "other write" bit.
-  return (mode & 0o002) !== 0;
 }
 
 function isWithinDir(parent: string, child: string): boolean {
   const rel = relative(parent, child);
-  if (rel === "") return true;
-  if (isAbsolute(rel)) return false;
-  const firstSegment = rel.split(/[\\/]/g)[0];
-  return firstSegment !== "..";
+  return rel === "" || (!isAbsolute(rel) && rel.split(/[\\/]/g)[0] !== "..");
 }
 
-function normalizePluginId(id: string): string {
-  const trimmed = id.trim();
-  return trimmed.length > 0 ? trimmed : "plugin";
+async function resolveSecureDir(params: {
+  logger: Logger;
+  event: "plugins.insecure_root_dir" | "plugins.insecure_plugin_dir";
+  kind: PluginDirKind;
+  path: string;
+  currentUid?: number;
+  rootDir?: string;
+  rootRealDir?: string;
+}): Promise<string | undefined> {
+  const dirKey = params.rootRealDir ? "source_dir" : "root_dir";
+  let realDir: string;
+  try {
+    realDir = await realpath(params.path);
+  } catch (err) {
+    params.logger.warn(params.event, {
+      [dirKey]: params.path,
+      kind: params.kind,
+      reason: "unresolvable",
+      error: errorMessage(err),
+    });
+    return undefined;
+  }
+  if (params.rootRealDir && !isWithinDir(params.rootRealDir, realDir)) {
+    params.logger.warn(params.event, {
+      source_dir: params.path,
+      kind: params.kind,
+      reason: "escapes_root",
+      root_dir: params.rootDir,
+      root_real_dir: params.rootRealDir,
+      plugin_real_dir: realDir,
+    });
+    return undefined;
+  }
+  if (params.currentUid === undefined) return realDir;
+  try {
+    const dirStat = await stat(realDir);
+    if (isWorldWritable(dirStat.mode)) {
+      params.logger.warn(params.event, {
+        [dirKey]: params.path,
+        kind: params.kind,
+        reason: "world_writable",
+        mode: dirStat.mode,
+      });
+      return undefined;
+    }
+    if (!isTrustedOwner(dirStat.uid, params.currentUid)) {
+      params.logger.warn(params.event, {
+        [dirKey]: params.path,
+        kind: params.kind,
+        reason: "unsafe_ownership",
+        uid: dirStat.uid,
+        current_uid: params.currentUid,
+      });
+      return undefined;
+    }
+  } catch (err) {
+    params.logger.warn(params.event, {
+      [dirKey]: params.path,
+      kind: params.kind,
+      reason: "unstatable",
+      error: errorMessage(err),
+    });
+    return undefined;
+  }
+  return realDir;
 }
 
-function toolIdAllowed(manifest: PluginManifestT, toolId: string): boolean {
-  return Boolean(manifest.contributes?.tools?.includes(toolId));
+async function loadPluginLock(params: {
+  logger: Logger;
+  pluginId: string;
+  pluginDir: string;
+  manifestVersion: string;
+}): Promise<PluginInstallInfo | undefined | null> {
+  let lockRaw: string;
+  try {
+    lockRaw = await readFile(join(params.pluginDir, PLUGIN_LOCK_FILENAME), "utf-8");
+  } catch (err) {
+    if (errorCode(err) === "ENOENT") return undefined;
+    params.logger.warn("plugins.lock_unreadable", {
+      plugin_id: params.pluginId,
+      source_dir: params.pluginDir,
+      error: errorMessage(err),
+    });
+    return null;
+  }
+  const parsedLock = parsePluginLockFile(lockRaw);
+  if (!parsedLock) {
+    params.logger.warn("plugins.lock_invalid", {
+      plugin_id: params.pluginId,
+      source_dir: params.pluginDir,
+    });
+    return null;
+  }
+  if (parsedLock.pinned_version !== params.manifestVersion) {
+    params.logger.warn("plugins.lock_version_mismatch", {
+      plugin_id: params.pluginId,
+      source_dir: params.pluginDir,
+      pinned_version: parsedLock.pinned_version,
+      manifest_version: params.manifestVersion,
+    });
+    return null;
+  }
+  return parsedLock;
 }
 
-function commandAllowed(manifest: PluginManifestT, name: string): boolean {
-  return Boolean(manifest.contributes?.commands?.includes(name));
+async function resolvePluginEntryPath(params: {
+  logger: Logger;
+  pluginId: string;
+  pluginDir: string;
+  pluginRealDir: string;
+  entry: string;
+}): Promise<string | undefined> {
+  let entryPath: string;
+  try {
+    entryPath = resolveSafeChildPath(params.pluginDir, params.entry);
+  } catch (err) {
+    params.logger.warn("plugins.invalid_entry_path", {
+      plugin_id: params.pluginId,
+      source_dir: params.pluginDir,
+      entry: params.entry,
+      error: errorMessage(err),
+    });
+    return undefined;
+  }
+  try {
+    const entryRealPath = await realpath(entryPath);
+    if (!isWithinDir(params.pluginRealDir, entryRealPath)) {
+      params.logger.warn("plugins.invalid_entry_path", {
+        plugin_id: params.pluginId,
+        source_dir: params.pluginDir,
+        entry: params.entry,
+        reason: "symlink_escape",
+        entry_path: entryPath,
+        entry_real_path: entryRealPath,
+        plugin_real_dir: params.pluginRealDir,
+      });
+      return undefined;
+    }
+    return entryRealPath;
+  } catch (err) {
+    params.logger.warn("plugins.import_failed", {
+      plugin_id: params.pluginId,
+      source_dir: params.pluginDir,
+      entry_path: entryPath,
+      error: errorMessage(err),
+    });
+    return undefined;
+  }
 }
 
-function cloneManifest(manifest: PluginManifestT): PluginManifestT {
-  return structuredClone(manifest) as PluginManifestT;
+async function verifyPluginIntegrity(params: {
+  logger: Logger;
+  pluginId: string;
+  pluginDir: string;
+  manifestRaw: string;
+  entryPath: string;
+  install?: PluginInstallInfo;
+}): Promise<boolean> {
+  if (!params.install) return true;
+  const entryRaw = await tryReadFile(params.entryPath);
+  if (entryRaw === undefined) {
+    params.logger.warn("plugins.lock_integrity_mismatch", {
+      plugin_id: params.pluginId,
+      source_dir: params.pluginDir,
+      reason: "entry_unreadable",
+    });
+    return false;
+  }
+  const integritySha256 = pluginIntegritySha256Hex(params.manifestRaw, entryRaw);
+  if (integritySha256 === params.install.integrity_sha256.toLowerCase()) return true;
+  params.logger.warn("plugins.lock_integrity_mismatch", {
+    plugin_id: params.pluginId,
+    source_dir: params.pluginDir,
+    pinned_version: params.install.pinned_version,
+    expected_sha256: params.install.integrity_sha256,
+    actual_sha256: integritySha256,
+  });
+  return false;
 }
 
-function selectContainerForPlugin(
+async function loadRegisterFn(params: {
+  logger: Logger;
+  pluginId: string;
+  pluginDir: string;
+  entryPath: string;
+}): Promise<PluginRegisterFn | undefined> {
+  try {
+    const mod = (await import(pathToFileURL(params.entryPath).href)) as Record<string, unknown>,
+      candidate = mod["registerPlugin"];
+    return typeof candidate === "function" ? (candidate as PluginRegisterFn) : undefined;
+  } catch (err) {
+    params.logger.warn("plugins.import_failed", {
+      plugin_id: params.pluginId,
+      source_dir: params.pluginDir,
+      entry_path: params.entryPath,
+      error: errorMessage(err),
+    });
+    return undefined;
+  }
+}
+
+function collectPluginRegistration(
   manifest: PluginManifestT,
-  container?: GatewayContainer,
-): GatewayContainer | undefined {
-  if (!container) return undefined;
-  if (manifest.permissions?.db) return container;
-  return undefined;
+  registration: PluginRegistration,
+): {
+  tools: Map<string, PluginToolRegistration>;
+  commands: Map<string, PluginCommandRegistration>;
+  undeclaredTools: string[];
+  undeclaredCommands: string[];
+  undeclaredRouter: boolean;
+} {
+  const tools = new Map<string, PluginToolRegistration>(),
+    undeclaredTools: string[] = [];
+  for (const tool of registration.tools ?? []) {
+    const toolId = tool?.descriptor.id?.trim?.() ?? "";
+    if (!tool?.descriptor || typeof tool.execute !== "function" || !toolId) continue;
+    if (!toolIdAllowed(manifest, toolId)) undeclaredTools.push(toolId);
+    else tools.set(toolId, tool);
+  }
+  const commands = new Map<string, PluginCommandRegistration>(),
+    undeclaredCommands: string[] = [];
+  for (const cmd of registration.commands ?? []) {
+    const name = typeof cmd?.name === "string" ? cmd.name.trim() : "";
+    if (!name || typeof cmd?.execute !== "function") continue;
+    if (!commandAllowed(manifest, name)) undeclaredCommands.push(name);
+    else commands.set(name, cmd);
+  }
+  return {
+    tools,
+    commands,
+    undeclaredTools,
+    undeclaredCommands,
+    undeclaredRouter:
+      Boolean(registration.router) && (manifest.contributes?.routes?.length ?? 0) === 0,
+  };
+}
+
+function parsePluginCommand(raw: string): { name: string; args: string[] } | undefined {
+  const parts = raw.trim().replace(/^\//, "").trim().split(/\s+/g).filter(Boolean);
+  return parts.length > 0 ? { name: parts[0]!, args: parts.slice(1) } : undefined;
 }
 
 export class PluginRegistry {
@@ -571,14 +682,9 @@ export class PluginRegistry {
       container: opts.container,
       fetchImpl: opts.fetchImpl,
     });
-
-    const dirs: Array<{ kind: "workspace" | "user" | "bundled"; path: string }> = [];
-    dirs.push({ kind: "workspace", path: resolvePluginsDir(opts.home) });
-    if (opts.userHome) {
-      dirs.push({ kind: "user", path: resolvePluginsDir(opts.userHome) });
-    }
+    const dirs: PluginDir[] = [{ kind: "workspace", path: resolvePluginsDir(opts.home) }];
+    if (opts.userHome) dirs.push({ kind: "user", path: resolvePluginsDir(opts.userHome) });
     dirs.push({ kind: "bundled", path: resolveBundledPluginsDir() });
-
     await registry.loadFromDirectories(dirs);
     return registry;
   }
@@ -594,40 +700,32 @@ export class PluginRegistry {
     source_dir: string;
   }> {
     return [...this.plugins.values()]
-      .map((p) => ({
-        id: p.manifest.id,
-        name: p.manifest.name,
-        version: p.manifest.version,
-        contributions: p.manifest.contributes,
-        permissions: p.manifest.permissions,
-        install: p.install ? structuredClone(p.install) : undefined,
-        loaded_at: p.loaded_at,
-        source_dir: p.source_dir,
+      .map((plugin) => ({
+        id: plugin.manifest.id,
+        name: plugin.manifest.name,
+        version: plugin.manifest.version,
+        contributions: plugin.manifest.contributes,
+        permissions: plugin.manifest.permissions,
+        install: plugin.install ? structuredClone(plugin.install) : undefined,
+        loaded_at: plugin.loaded_at,
+        source_dir: plugin.source_dir,
       }))
       .toSorted((a, b) => a.id.localeCompare(b.id));
   }
 
   getManifest(pluginId: string): PluginManifestT | undefined {
-    const id = normalizePluginId(pluginId);
-    return this.plugins.get(id)?.manifest;
+    return this.plugins.get(normalizePluginId(pluginId))?.manifest;
   }
-
   getToolDescriptors(): ToolDescriptor[] {
-    const out: ToolDescriptor[] = [];
-    for (const plugin of this.plugins.values()) {
-      for (const tool of plugin.tools.values()) {
-        out.push(tool.descriptor);
-      }
-    }
-    return out;
+    return [...this.plugins.values()].flatMap((plugin) =>
+      [...plugin.tools.values()].map((tool) => tool.descriptor),
+    );
   }
 
   getTool(toolId: string): { plugin: PluginManifestT; tool: PluginToolRegistration } | undefined {
     for (const plugin of this.plugins.values()) {
       const tool = plugin.tools.get(toolId);
-      if (tool) {
-        return { plugin: plugin.manifest, tool };
-      }
+      if (tool) return { plugin: plugin.manifest, tool };
     }
     return undefined;
   }
@@ -647,9 +745,7 @@ export class PluginRegistry {
   }): Promise<PluginToolExecuteResult | undefined> {
     const found = this.getTool(params.toolId);
     if (!found) return undefined;
-
     const startMs = Date.now();
-
     let result: PluginToolExecuteResult;
     try {
       result = await found.tool.execute(params.args, {
@@ -661,10 +757,8 @@ export class PluginRegistry {
         container: selectContainerForPlugin(found.plugin, this.opts.container),
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      result = { output: "", error: message };
+      result = { output: "", error: errorMessage(err) };
     }
-
     await this.emitPluginToolInvokedEvent({
       pluginId: found.plugin.id,
       pluginVersion: found.plugin.version,
@@ -681,482 +775,241 @@ export class PluginRegistry {
       error: result.error,
       durationMs: Math.max(0, Date.now() - startMs),
     });
-
     return result;
   }
 
   async tryExecuteCommand(raw: string): Promise<PluginCommandExecuteResult | undefined> {
-    const trimmed = raw.trim();
-    if (trimmed.length === 0) return undefined;
-    const normalized = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
-    const parts = normalized
-      .trim()
-      .split(/\s+/g)
-      .filter((p) => p.length > 0);
-    if (parts.length === 0) return undefined;
-
-    const name = parts[0]!;
-    const args = parts.slice(1);
-
+    const command = parsePluginCommand(raw);
+    if (!command) return undefined;
     for (const plugin of this.plugins.values()) {
-      const cmd = plugin.commands.get(name);
+      const cmd = plugin.commands.get(command.name);
       if (!cmd) continue;
       try {
-        return await cmd.execute(args, {
+        return await cmd.execute(command.args, {
           logger: this.opts.logger,
           container: selectContainerForPlugin(plugin.manifest, this.opts.container),
         });
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { output: `Plugin command '${name}' failed: ${message}` };
+        return { output: `Plugin command '${command.name}' failed: ${errorMessage(err)}` };
       }
     }
-
     return undefined;
   }
 
   routers(): Array<{ pluginId: string; router: Hono }> {
-    const out: Array<{ pluginId: string; router: Hono }> = [];
-    for (const plugin of this.plugins.values()) {
-      if (plugin.router) {
-        out.push({ pluginId: plugin.manifest.id, router: plugin.router });
-      }
-    }
-    return out;
+    return [...this.plugins.values()].flatMap((plugin) =>
+      plugin.router ? [{ pluginId: plugin.manifest.id, router: plugin.router }] : [],
+    );
   }
 
-  private async loadFromDirectories(
-    dirs: Array<{ kind: "workspace" | "user" | "bundled"; path: string }>,
-  ): Promise<void> {
-    for (const dir of dirs) {
-      let entries;
-      try {
-        entries = await readdir(dir.path, { withFileTypes: true });
-      } catch {
-        // Intentional: treat missing/unreadable plugin directories as empty.
-        continue;
-      }
+  private async loadFromDirectories(dirs: PluginDir[]): Promise<void> {
+    for (const dir of dirs) await this.loadFromDirectory(dir);
+  }
 
-      const currentUid = getCurrentUid();
-      let rootRealDir: string;
-      try {
-        rootRealDir = await realpath(dir.path);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        // If we cannot resolve or stat the plugin root, fail closed for this directory.
-        this.opts.logger.warn("plugins.insecure_root_dir", {
-          root_dir: dir.path,
-          kind: dir.kind,
-          reason: "unresolvable",
-          error: message,
-        });
-        continue;
-      }
-
-      if (currentUid !== undefined) {
-        try {
-          const rootStat = await stat(rootRealDir);
-          if (isWorldWritable(rootStat.mode)) {
-            this.opts.logger.warn("plugins.insecure_root_dir", {
-              root_dir: dir.path,
-              kind: dir.kind,
-              reason: "world_writable",
-              mode: rootStat.mode,
-            });
-            continue;
-          }
-          if (!isTrustedOwner(rootStat.uid, currentUid)) {
-            this.opts.logger.warn("plugins.insecure_root_dir", {
-              root_dir: dir.path,
-              kind: dir.kind,
-              reason: "unsafe_ownership",
-              uid: rootStat.uid,
-              current_uid: currentUid,
-            });
-            continue;
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.opts.logger.warn("plugins.insecure_root_dir", {
-            root_dir: dir.path,
-            kind: dir.kind,
-            reason: "unstatable",
-            error: message,
-          });
-          continue;
-        }
-      }
-
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-
-        const pluginDir = join(dir.path, entry.name);
-        let pluginRealDir: string;
-        try {
-          pluginRealDir = await realpath(pluginDir);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.opts.logger.warn("plugins.insecure_plugin_dir", {
-            source_dir: pluginDir,
-            kind: dir.kind,
-            reason: "unresolvable",
-            error: message,
-          });
-          continue;
-        }
-        if (rootRealDir && !isWithinDir(rootRealDir, pluginRealDir)) {
-          this.opts.logger.warn("plugins.insecure_plugin_dir", {
-            source_dir: pluginDir,
-            kind: dir.kind,
-            reason: "escapes_root",
-            root_dir: dir.path,
-            root_real_dir: rootRealDir,
-            plugin_real_dir: pluginRealDir,
-          });
-          continue;
-        }
-        if (currentUid !== undefined) {
-          try {
-            const pluginStat = await stat(pluginRealDir);
-            if (isWorldWritable(pluginStat.mode)) {
-              this.opts.logger.warn("plugins.insecure_plugin_dir", {
-                source_dir: pluginDir,
-                kind: dir.kind,
-                reason: "world_writable",
-                mode: pluginStat.mode,
-              });
-              continue;
-            }
-            if (!isTrustedOwner(pluginStat.uid, currentUid)) {
-              this.opts.logger.warn("plugins.insecure_plugin_dir", {
-                source_dir: pluginDir,
-                kind: dir.kind,
-                reason: "unsafe_ownership",
-                uid: pluginStat.uid,
-                current_uid: currentUid,
-              });
-              continue;
-            }
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            this.opts.logger.warn("plugins.insecure_plugin_dir", {
-              source_dir: pluginDir,
-              kind: dir.kind,
-              reason: "unstatable",
-              error: message,
-            });
-            continue;
-          }
-        }
-
-        let manifestFile: { path: string; raw: string; manifest: PluginManifestT } | undefined;
-        try {
-          manifestFile = await loadManifestFromDir(pluginDir);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.opts.logger.warn("plugins.invalid_manifest", {
-            source_dir: pluginDir,
-            error: message,
-          });
-          await this.emitPluginLifecycleEvent({
-            kind: "failed",
-            sourceKind: dir.kind,
-            sourceDir: pluginDir,
-            reason: "invalid_manifest",
-            error: message,
-          });
-          continue;
-        }
-        if (!manifestFile) continue;
-
-        const id = normalizePluginId(manifestFile.manifest.id);
-        if (this.plugins.has(id)) {
-          // Higher-precedence directory already registered this plugin id.
-          continue;
-        }
-
-        const manifest = cloneManifest({ ...manifestFile.manifest, id });
-        if (!manifest.entry) {
-          this.opts.logger.warn("plugins.missing_entry", {
-            plugin_id: id,
-            source_dir: pluginDir,
-          });
-          await this.emitPluginLifecycleEvent({
-            kind: "failed",
-            plugin: manifest,
-            sourceKind: dir.kind,
-            sourceDir: pluginDir,
-            reason: "missing_entry",
-          });
-          continue;
-        }
-
-        let pluginInstall: PluginInstallInfo | undefined;
-        let lockRaw: string | undefined;
-        try {
-          lockRaw = await readFile(join(pluginDir, PLUGIN_LOCK_FILENAME), "utf-8");
-        } catch (err) {
-          const code =
-            err && typeof err === "object" && "code" in err
-              ? (err as { code?: string }).code
-              : undefined;
-          if (code !== "ENOENT") {
-            const message = err instanceof Error ? err.message : String(err);
-            this.opts.logger.warn("plugins.lock_unreadable", {
-              plugin_id: id,
-              source_dir: pluginDir,
-              error: message,
-            });
-            continue;
-          }
-          lockRaw = undefined;
-        }
-
-        if (lockRaw !== undefined) {
-          const parsedLock = parsePluginLockFile(lockRaw);
-          if (!parsedLock) {
-            this.opts.logger.warn("plugins.lock_invalid", {
-              plugin_id: id,
-              source_dir: pluginDir,
-            });
-            continue;
-          }
-          pluginInstall = parsedLock;
-          if (parsedLock.pinned_version !== manifest.version) {
-            this.opts.logger.warn("plugins.lock_version_mismatch", {
-              plugin_id: id,
-              source_dir: pluginDir,
-              pinned_version: parsedLock.pinned_version,
-              manifest_version: manifest.version,
-            });
-            continue;
-          }
-        }
-
-        let configPath: string | undefined;
-        let config: unknown;
-        try {
-          const loadedConfig = await loadConfigFromDir(pluginDir);
-          configPath = loadedConfig.path;
-          config = loadedConfig.config;
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.opts.logger.warn("plugins.invalid_config", {
-            plugin_id: id,
-            source_dir: pluginDir,
-            error: message,
-          });
-          continue;
-        }
-        const configValidation = validatePluginConfig({
-          schema: manifest.config_schema,
-          config,
-        });
-        if (!configValidation.ok) {
-          this.opts.logger.warn("plugins.invalid_config", {
-            plugin_id: id,
-            source_dir: pluginDir,
-            config_path: configPath,
-            error: configValidation.error,
-          });
-          await this.emitPluginLifecycleEvent({
-            kind: "failed",
-            plugin: manifest,
-            sourceKind: dir.kind,
-            sourceDir: pluginDir,
-            reason: "invalid_config",
-            error: configValidation.error,
-          });
-          continue;
-        }
-        manifest.config_schema = configValidation.normalizedSchema;
-
-        let entryPath: string;
-        try {
-          entryPath = resolveSafeChildPath(pluginDir, manifest.entry);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.opts.logger.warn("plugins.invalid_entry_path", {
-            plugin_id: id,
-            source_dir: pluginDir,
-            entry: manifest.entry,
-            error: message,
-          });
-          continue;
-        }
-        try {
-          const entryRealPath = await realpath(entryPath);
-          if (!isWithinDir(pluginRealDir, entryRealPath)) {
-            this.opts.logger.warn("plugins.invalid_entry_path", {
-              plugin_id: id,
-              source_dir: pluginDir,
-              entry: manifest.entry,
-              reason: "symlink_escape",
-              entry_path: entryPath,
-              entry_real_path: entryRealPath,
-              plugin_real_dir: pluginRealDir,
-            });
-            continue;
-          }
-          entryPath = entryRealPath;
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.opts.logger.warn("plugins.import_failed", {
-            plugin_id: id,
-            source_dir: pluginDir,
-            entry_path: entryPath,
-            error: message,
-          });
-          continue;
-        }
-
-        if (pluginInstall) {
-          const entryRaw = await tryReadFile(entryPath);
-          if (entryRaw === undefined) {
-            this.opts.logger.warn("plugins.lock_integrity_mismatch", {
-              plugin_id: id,
-              source_dir: pluginDir,
-              reason: "entry_unreadable",
-            });
-            continue;
-          }
-          const integritySha256 = pluginIntegritySha256Hex(manifestFile.raw, entryRaw);
-          const expectedIntegritySha256 = pluginInstall.integrity_sha256.toLowerCase();
-          if (integritySha256 !== expectedIntegritySha256) {
-            this.opts.logger.warn("plugins.lock_integrity_mismatch", {
-              plugin_id: id,
-              source_dir: pluginDir,
-              pinned_version: pluginInstall.pinned_version,
-              expected_sha256: pluginInstall.integrity_sha256,
-              actual_sha256: integritySha256,
-            });
-            continue;
-          }
-        }
-
-        let registerFn: PluginRegisterFn | undefined;
-        try {
-          const mod = (await import(pathToFileURL(entryPath).href)) as Record<string, unknown>;
-          const candidate = mod["registerPlugin"];
-          if (typeof candidate === "function") {
-            registerFn = candidate as PluginRegisterFn;
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.opts.logger.warn("plugins.import_failed", {
-            plugin_id: id,
-            source_dir: pluginDir,
-            entry_path: entryPath,
-            error: message,
-          });
-          continue;
-        }
-
-        if (!registerFn) {
-          this.opts.logger.warn("plugins.missing_register", {
-            plugin_id: id,
-            source_dir: pluginDir,
-            entry_path: entryPath,
-          });
-          continue;
-        }
-
-        let registration: PluginRegistration;
-        try {
-          const manifestForRegistration = cloneManifest(manifest);
-          registration = await Promise.resolve(
-            registerFn({
-              manifest: manifestForRegistration,
-              config: configValidation.config,
-              logger: this.opts.logger.child({ plugin_id: id }),
-            }),
-          );
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.opts.logger.warn("plugins.register_failed", {
-            plugin_id: id,
-            source_dir: pluginDir,
-            error: message,
-          });
-          continue;
-        }
-
-        const tools = new Map<string, PluginToolRegistration>();
-        const undeclaredTools: string[] = [];
-        for (const tool of registration.tools ?? []) {
-          if (!tool?.descriptor || typeof tool.execute !== "function") continue;
-          const toolId = tool.descriptor.id?.trim?.() ?? "";
-          if (!toolId) continue;
-          if (!toolIdAllowed(manifest, toolId)) {
-            undeclaredTools.push(toolId);
-            continue;
-          }
-          tools.set(toolId, tool);
-        }
-
-        const commands = new Map<string, PluginCommandRegistration>();
-        const undeclaredCommands: string[] = [];
-        for (const cmd of registration.commands ?? []) {
-          if (!cmd || typeof cmd.name !== "string" || typeof cmd.execute !== "function") continue;
-          const name = cmd.name.trim();
-          if (!name) continue;
-          if (!commandAllowed(manifest, name)) {
-            undeclaredCommands.push(name);
-            continue;
-          }
-          commands.set(name, cmd);
-        }
-
-        const undeclaredRouter =
-          Boolean(registration.router) && (manifest.contributes?.routes?.length ?? 0) === 0;
-        if (undeclaredTools.length > 0 || undeclaredCommands.length > 0 || undeclaredRouter) {
-          this.opts.logger.warn("plugins.undeclared_contributions", {
-            plugin_id: id,
-            source_dir: pluginDir,
-            tools: undeclaredTools,
-            commands: undeclaredCommands,
-            router: undeclaredRouter,
-          });
-          continue;
-        }
-
-        this.plugins.set(id, {
-          manifest,
-          source_dir: pluginDir,
-          install: pluginInstall ? structuredClone(pluginInstall) : undefined,
-          entry_path: entryPath,
-          tools,
-          commands,
-          router: registration.router,
-          loaded_at: new Date().toISOString(),
-        });
-
-        this.opts.logger.info("plugins.loaded", {
-          plugin_id: id,
-          source_dir: pluginDir,
-          tools: tools.size,
-          commands: commands.size,
-          router: Boolean(registration.router),
-          kind: dir.kind,
-        });
-
-        await this.emitPluginLifecycleEvent({
-          kind: "loaded",
-          plugin: manifest,
-          sourceKind: dir.kind,
-          sourceDir: pluginDir,
-          toolsCount: tools.size,
-          commandsCount: commands.size,
-          router: Boolean(registration.router),
-        });
-      }
+  private async loadFromDirectory(dir: PluginDir): Promise<void> {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(dir.path, { withFileTypes: true });
+    } catch {
+      // Intentional: absent plugin directories are ignored during discovery.
+      return;
     }
+    const currentUid = getCurrentUid();
+    const rootRealDir = await resolveSecureDir({
+      logger: this.opts.logger,
+      event: "plugins.insecure_root_dir",
+      kind: dir.kind,
+      path: dir.path,
+      currentUid,
+    });
+    if (!rootRealDir) return;
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const pluginDir = join(dir.path, entry.name);
+      const pluginRealDir = await resolveSecureDir({
+        logger: this.opts.logger,
+        event: "plugins.insecure_plugin_dir",
+        kind: dir.kind,
+        path: pluginDir,
+        currentUid,
+        rootDir: dir.path,
+        rootRealDir,
+      });
+      if (pluginRealDir) await this.loadPluginFromDirectory(dir, pluginDir, pluginRealDir);
+    }
+  }
+
+  private async loadPluginFromDirectory(
+    dir: PluginDir,
+    pluginDir: string,
+    pluginRealDir: string,
+  ): Promise<void> {
+    let manifestFile: Awaited<ReturnType<typeof loadManifestFromDir>>;
+    try {
+      manifestFile = await loadManifestFromDir(pluginDir);
+    } catch (err) {
+      const error = errorMessage(err);
+      this.opts.logger.warn("plugins.invalid_manifest", { source_dir: pluginDir, error });
+      await this.emitPluginLifecycleEvent({
+        kind: "failed",
+        sourceKind: dir.kind,
+        sourceDir: pluginDir,
+        reason: "invalid_manifest",
+        error,
+      });
+      return;
+    }
+    if (!manifestFile) return;
+    const id = normalizePluginId(manifestFile.manifest.id);
+    if (this.plugins.has(id)) return;
+    const manifest = cloneManifest({ ...manifestFile.manifest, id });
+    const failLifecycle = async (
+      event: string,
+      reason: string,
+      extra: Record<string, unknown> = {},
+      error?: string,
+    ) => {
+      this.opts.logger.warn(event, {
+        plugin_id: id,
+        source_dir: pluginDir,
+        ...extra,
+        ...(error ? { error } : {}),
+      });
+      await this.emitPluginLifecycleEvent({
+        kind: "failed",
+        plugin: manifest,
+        sourceKind: dir.kind,
+        sourceDir: pluginDir,
+        reason,
+        error,
+      });
+    };
+    if (!manifest.entry)
+      return void (await failLifecycle("plugins.missing_entry", "missing_entry"));
+    const pluginInstall = await loadPluginLock({
+      logger: this.opts.logger,
+      pluginId: id,
+      pluginDir,
+      manifestVersion: manifest.version,
+    });
+    if (pluginInstall === null) return;
+    let configPath: string | undefined, config: unknown;
+    try {
+      const loadedConfig = await loadConfigFromDir(pluginDir);
+      configPath = loadedConfig.path;
+      config = loadedConfig.config;
+    } catch (err) {
+      this.opts.logger.warn("plugins.invalid_config", {
+        plugin_id: id,
+        source_dir: pluginDir,
+        error: errorMessage(err),
+      });
+      return;
+    }
+    const configValidation = validatePluginConfig({ schema: manifest.config_schema, config });
+    if (!configValidation.ok)
+      return void (await failLifecycle(
+        "plugins.invalid_config",
+        "invalid_config",
+        { config_path: configPath },
+        configValidation.error,
+      ));
+    manifest.config_schema = configValidation.normalizedSchema;
+    const entryPath = await resolvePluginEntryPath({
+      logger: this.opts.logger,
+      pluginId: id,
+      pluginDir,
+      pluginRealDir,
+      entry: manifest.entry,
+    });
+    if (
+      !entryPath ||
+      !(await verifyPluginIntegrity({
+        logger: this.opts.logger,
+        pluginId: id,
+        pluginDir,
+        manifestRaw: manifestFile.raw,
+        entryPath,
+        install: pluginInstall ?? undefined,
+      }))
+    )
+      return;
+    const registerFn = await loadRegisterFn({
+      logger: this.opts.logger,
+      pluginId: id,
+      pluginDir,
+      entryPath,
+    });
+    if (!registerFn) {
+      this.opts.logger.warn("plugins.missing_register", {
+        plugin_id: id,
+        source_dir: pluginDir,
+        entry_path: entryPath,
+      });
+      return;
+    }
+    let registration: PluginRegistration;
+    try {
+      registration = await Promise.resolve(
+        registerFn({
+          manifest: cloneManifest(manifest),
+          config: configValidation.config,
+          logger: this.opts.logger.child({ plugin_id: id }),
+        }),
+      );
+    } catch (err) {
+      this.opts.logger.warn("plugins.register_failed", {
+        plugin_id: id,
+        source_dir: pluginDir,
+        error: errorMessage(err),
+      });
+      return;
+    }
+    const { tools, commands, undeclaredTools, undeclaredCommands, undeclaredRouter } =
+      collectPluginRegistration(manifest, registration);
+    if (undeclaredTools.length > 0 || undeclaredCommands.length > 0 || undeclaredRouter) {
+      this.opts.logger.warn("plugins.undeclared_contributions", {
+        plugin_id: id,
+        source_dir: pluginDir,
+        tools: undeclaredTools,
+        commands: undeclaredCommands,
+        router: undeclaredRouter,
+      });
+      return;
+    }
+    this.plugins.set(id, {
+      manifest,
+      source_dir: pluginDir,
+      install: pluginInstall ? structuredClone(pluginInstall) : undefined,
+      entry_path: entryPath,
+      tools,
+      commands,
+      router: registration.router,
+      loaded_at: new Date().toISOString(),
+    });
+    this.opts.logger.info("plugins.loaded", {
+      plugin_id: id,
+      source_dir: pluginDir,
+      tools: tools.size,
+      commands: commands.size,
+      router: Boolean(registration.router),
+      kind: dir.kind,
+    });
+    await this.emitPluginLifecycleEvent({
+      kind: "loaded",
+      plugin: manifest,
+      sourceKind: dir.kind,
+      sourceDir: pluginDir,
+      toolsCount: tools.size,
+      commandsCount: commands.size,
+      router: Boolean(registration.router),
+    });
   }
 
   private async emitPluginLifecycleEvent(params: {
     kind: "loaded" | "failed";
     plugin?: Pick<PluginManifestT, "id" | "name" | "version">;
-    sourceKind: "workspace" | "user" | "bundled";
+    sourceKind: PluginDirKind;
     sourceDir: string;
     toolsCount?: number;
     commandsCount?: number;
@@ -1164,27 +1017,24 @@ export class PluginRegistry {
     reason?: string;
     error?: string;
   }): Promise<void> {
-    const container = this.opts.container;
-    if (!container) return;
-
+    if (!this.opts.container) return;
     try {
-      const occurredAt = new Date().toISOString();
-      const action = {
-        type: "plugin.lifecycle",
-        kind: params.kind,
-        plugin_id: params.plugin?.id,
-        plugin_name: params.plugin?.name,
-        plugin_version: params.plugin?.version,
-        source_kind: params.sourceKind,
-        source_dir: params.sourceDir,
-        tools_count: params.toolsCount,
-        commands_count: params.commandsCount,
-        router: params.router,
-        reason: params.reason,
-        error: params.error,
-      };
-
-      await container.eventLog.appendNext(
+      const occurredAt = new Date().toISOString(),
+        action = {
+          type: "plugin.lifecycle",
+          kind: params.kind,
+          plugin_id: params.plugin?.id,
+          plugin_name: params.plugin?.name,
+          plugin_version: params.plugin?.version,
+          source_kind: params.sourceKind,
+          source_dir: params.sourceDir,
+          tools_count: params.toolsCount,
+          commands_count: params.commandsCount,
+          router: params.router,
+          reason: params.reason,
+          error: params.error,
+        };
+      await this.opts.container.eventLog.appendNext(
         {
           tenantId: DEFAULT_TENANT_ID,
           replayId: randomUUID(),
@@ -1219,18 +1069,16 @@ export class PluginRegistry {
               },
             },
           };
-
           await enqueueWsBroadcastMessage(tx, DEFAULT_TENANT_ID, evt, OPERATOR_WS_AUDIENCE);
         },
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
       this.opts.logger.warn("plugins.lifecycle_emit_failed", {
         plugin_id: params.plugin?.id,
         source_dir: params.sourceDir,
         kind: params.kind,
         reason: params.reason,
-        error: message,
+        error: errorMessage(err),
       });
     }
   }
@@ -1251,13 +1099,11 @@ export class PluginRegistry {
     error?: string;
     durationMs: number;
   }): Promise<void> {
-    const container = this.opts.container;
     const sourcePlanId = params.auditPlanId?.trim();
-    if (!container || !sourcePlanId) return;
-
+    if (!this.opts.container || !sourcePlanId) return;
     try {
-      const auditPlanId = `${PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX}:${sourcePlanId}`;
-      const occurredAt = new Date().toISOString();
+      const auditPlanId = `${PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX}:${sourcePlanId}`,
+        occurredAt = new Date().toISOString();
       const action = {
         type: "plugin_tool.invoked",
         plugin_id: params.pluginId,
@@ -1274,8 +1120,7 @@ export class PluginRegistry {
         duration_ms: params.durationMs,
         error: params.error,
       };
-
-      await container.eventLog.appendNext(
+      await this.opts.container.eventLog.appendNext(
         {
           tenantId: DEFAULT_TENANT_ID,
           replayId: randomUUID(),
@@ -1310,19 +1155,17 @@ export class PluginRegistry {
               },
             },
           };
-
           await enqueueWsBroadcastMessage(tx, DEFAULT_TENANT_ID, evt, OPERATOR_WS_AUDIENCE);
         },
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
       this.opts.logger.warn("plugins.tool_invoked_emit_failed", {
         plugin_id: params.pluginId,
         tool_id: params.toolId,
         tool_call_id: params.toolCallId,
         plan_id: sourcePlanId,
         audit_plan_id: `${PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX}:${sourcePlanId}`,
-        error: message,
+        error: errorMessage(err),
       });
     }
   }

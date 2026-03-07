@@ -3,10 +3,7 @@ import {
   descriptorIdForClientCapability,
 } from "@tyrum/schemas";
 import { expect, it, vi } from "vitest";
-import {
-  DEFAULT_TENANT_ID,
-  DEFAULT_WORKSPACE_ID,
-} from "../../src/modules/identity/scope.js";
+import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 import { NodeDispatchService } from "../../src/modules/agent/node-dispatch-service.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
@@ -130,12 +127,10 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
     {
       name: "tool.node.dispatch returns a structured no_capable_node error when no desktop node is connected",
       service: () =>
-        new NodeDispatchService(
-          {
-            connectionManager: new ConnectionManager(),
-            taskResults: new TaskResultRegistry(),
-          } as never,
-        ),
+        new NodeDispatchService({
+          connectionManager: new ConnectionManager(),
+          taskResults: new TaskResultRegistry(),
+        } as never),
       expectedCode: "no_capable_node",
     },
     {

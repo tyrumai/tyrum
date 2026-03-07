@@ -37,9 +37,7 @@ function createTlsPinnedConnect(
     const port = Number.parseInt(String(opts.port ?? ""), 10);
     const hostname = String(opts.hostname ?? "");
     const servername =
-      typeof opts.servername === "string" && opts.servername.trim()
-        ? opts.servername
-        : hostname;
+      typeof opts.servername === "string" && opts.servername.trim() ? opts.servername : hostname;
 
     if (!hostname || !Number.isFinite(port)) {
       callback(new Error("Invalid TLS connector options"), null);

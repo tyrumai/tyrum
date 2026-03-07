@@ -150,7 +150,9 @@ describe("WS memory v1 handlers", () => {
         limit: 50,
       }),
     );
-    expect(listRes.items).toEqual([expect.objectContaining({ memory_item_id: created.memory_item_id })]);
+    expect(listRes.items).toEqual([
+      expect.objectContaining({ memory_item_id: created.memory_item_id }),
+    ]);
 
     const defaultListRes = expectOk<{ items: Array<{ memory_item_id: string }> }>(
       await sendProtocolMessage(requester, deps, "r-list-default", "memory.list", {
@@ -170,7 +172,9 @@ describe("WS memory v1 handlers", () => {
         limit: 50,
       }),
     );
-    expect(searchRes.hits).toEqual([expect.objectContaining({ memory_item_id: created.memory_item_id })]);
+    expect(searchRes.hits).toEqual([
+      expect.objectContaining({ memory_item_id: created.memory_item_id }),
+    ]);
 
     expectOk(
       await sendProtocolMessage(requester, deps, "r-get-agent-2", "memory.get", {
@@ -213,24 +217,19 @@ describe("WS memory v1 handlers", () => {
     );
 
     const afterForgetListRes = expectOk<{ items: Array<{ memory_item_id: string }> }>(
-      await sendProtocolMessage(
-        requester,
-        deps,
-        "r-list-agent-2-after-forget",
-        "memory.list",
-        { v: 1, agent_id: "agent-2", limit: 50 },
-      ),
+      await sendProtocolMessage(requester, deps, "r-list-agent-2-after-forget", "memory.list", {
+        v: 1,
+        agent_id: "agent-2",
+        limit: 50,
+      }),
     );
     expect(afterForgetListRes.items).toEqual([]);
 
     const afterForgetDefaultListRes = expectOk<{ items: Array<{ memory_item_id: string }> }>(
-      await sendProtocolMessage(
-        requester,
-        deps,
-        "r-list-default-after-forget",
-        "memory.list",
-        { v: 1, limit: 50 },
-      ),
+      await sendProtocolMessage(requester, deps, "r-list-default-after-forget", "memory.list", {
+        v: 1,
+        limit: 50,
+      }),
     );
     expect(afterForgetDefaultListRes.items).toEqual([
       expect.objectContaining({ memory_item_id: defaultCreated.memory_item_id }),
@@ -482,11 +481,11 @@ describe("WS memory v1 handlers", () => {
     expect(
       requesterWs.send.mock.calls.some((call) => {
         const [message] = call;
-        return typeof message === "string" && message.includes("\"memory.item.created\"");
+        return typeof message === "string" && message.includes('"memory.item.created"');
       }),
     ).toBe(true);
-    expect(logger.error.mock.calls.some((call) => call[0] === "memory.v1.consolidation_failed")).toBe(
-      true,
-    );
+    expect(
+      logger.error.mock.calls.some((call) => call[0] === "memory.v1.consolidation_failed"),
+    ).toBe(true);
   });
 });

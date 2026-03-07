@@ -98,7 +98,9 @@ export function WorkItemColumn({
                   key={item.work_item_id}
                   className={[
                     "cursor-pointer rounded-lg border p-3 transition-colors",
-                    active ? "border-primary bg-primary-dim" : "border-border bg-bg-subtle hover:bg-bg",
+                    active
+                      ? "border-primary bg-primary-dim"
+                      : "border-border bg-bg-subtle hover:bg-bg",
                   ].join(" ")}
                   role="button"
                   tabIndex={0}

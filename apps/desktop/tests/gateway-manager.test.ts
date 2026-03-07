@@ -156,9 +156,9 @@ describe("GatewayManager", () => {
     const internal = gm as unknown as Internal;
     internal.process = {};
 
-    await expect(
-      gm.start(gatewayStartOptions({ port: 9999 })),
-    ).rejects.toThrow("Gateway already running");
+    await expect(gm.start(gatewayStartOptions({ port: 9999 }))).rejects.toThrow(
+      "Gateway already running",
+    );
   });
 
   it("emits status-change events", () => {
@@ -330,9 +330,7 @@ describe("GatewayManager", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(
-      gm.start(gatewayStartOptions()),
-    ).rejects.toThrow("Gateway failed to start");
+    await expect(gm.start(gatewayStartOptions())).rejects.toThrow("Gateway failed to start");
 
     expect(gm.status).toBe("error");
     expect(statuses).not.toContain("running");

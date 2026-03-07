@@ -115,7 +115,9 @@ export function registerMemoryV1DalSearchTests(fixture: MemoryV1DalFixture): voi
       expect(ranked.hits.some((h) => h.memory_item_id === noteSensitive.memory_item_id)).toBe(true);
       expect(ranked.hits.map((h) => h.memory_item_id)).not.toContain(otherAgent.memory_item_id);
       expect(ranked.hits[0]?.snippet).toBeTruthy();
-      expect((ranked.hits[0]?.provenance as { channel?: string } | undefined)?.channel).toBe("slack");
+      expect((ranked.hits[0]?.provenance as { channel?: string } | undefined)?.channel).toBe(
+        "slack",
+      );
 
       const limited = await dal.search(
         { v: 1, query: "restart", filter: { kinds: ["note"] }, limit: 1 },
@@ -158,7 +160,9 @@ export function registerMemoryV1DalSearchTests(fixture: MemoryV1DalFixture): voi
       );
 
       const safeSnippet = await dal.search({ v: 1, query: "system", limit: 10 }, scopeA);
-      const injectionHit = safeSnippet.hits.find((h) => h.memory_item_id === injection.memory_item_id);
+      const injectionHit = safeSnippet.hits.find(
+        (h) => h.memory_item_id === injection.memory_item_id,
+      );
       expect(injectionHit?.snippet).toContain("[role-ref]");
 
       const expandedHit = safeSnippet.hits.find(
@@ -236,9 +240,9 @@ export function registerMemoryV1DalSearchTests(fixture: MemoryV1DalFixture): voi
       expect(blank.hits).toEqual([]);
       expect(blank.next_cursor).toBeUndefined();
 
-      await expect(dal.search({ v: 1, query: "a".repeat(1025), limit: 10 }, scopeA)).rejects.toThrow(
-        /query too long/i,
-      );
+      await expect(
+        dal.search({ v: 1, query: "a".repeat(1025), limit: 10 }, scopeA),
+      ).rejects.toThrow(/query too long/i);
 
       await expect(dal.search({ v: 1, query: "a".repeat(65), limit: 10 }, scopeA)).rejects.toThrow(
         /query term too long/i,
@@ -322,7 +326,9 @@ export function registerMemoryV1DalSearchTests(fixture: MemoryV1DalFixture): voi
         { v: 1, query: "*", filter: { kinds: ["note"] }, limit: 10 },
         scopeA,
       );
-      const structuredHit = structured.hits.find((h) => h.memory_item_id === longNote.memory_item_id);
+      const structuredHit = structured.hits.find(
+        (h) => h.memory_item_id === longNote.memory_item_id,
+      );
       expect(structuredHit?.snippet).toBeTruthy();
       expect(structuredHit?.snippet?.length ?? 0).toBeLessThanOrEqual(240);
       expect(structuredHit?.snippet?.endsWith("…")).toBe(true);
@@ -348,7 +354,9 @@ export function registerMemoryV1DalSearchTests(fixture: MemoryV1DalFixture): voi
         { v: 1, query: "retrospective_term", filter: { kinds: ["episode"] }, limit: 10 },
         scopeA,
       );
-      const summaryHit = summaryResults.hits.find((h) => h.memory_item_id === episode.memory_item_id);
+      const summaryHit = summaryResults.hits.find(
+        (h) => h.memory_item_id === episode.memory_item_id,
+      );
       expect(summaryHit?.snippet).toBeTruthy();
       expect(summaryHit?.snippet).toContain("retrospective_term");
     });

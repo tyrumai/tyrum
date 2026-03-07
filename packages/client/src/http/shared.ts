@@ -208,7 +208,7 @@ function createPinnedNodeFetch(options: {
     ) => Promise<Response>;
     dispatcher: { destroy?: () => Promise<void> | void };
   }> {
-    const nodeTransport = await loadNodePinnedTransportModule("..");
+    const nodeTransport = await loadNodePinnedTransportModule();
     return await nodeTransport.createPinnedNodeTransportState(options);
   }
 

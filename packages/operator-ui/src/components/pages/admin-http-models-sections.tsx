@@ -91,12 +91,7 @@ export function ExecutionProfilesCard({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              isLoading={refreshing}
-              onClick={onRefresh}
-            >
+            <Button type="button" variant="secondary" isLoading={refreshing} onClick={onRefresh}>
               Refresh
             </Button>
             <Button

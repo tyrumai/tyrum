@@ -124,11 +124,7 @@ function OperatorUiAppRoot({
         ) : null
       }
     >
-      <ElevatedModeProvider
-        core={core}
-        mode={mode}
-        elevatedModeController={elevatedModeController}
-      >
+      <ElevatedModeProvider core={core} mode={mode} elevatedModeController={elevatedModeController}>
         {viewModel.showConnectPage ? (
           <div className="mx-auto mt-20 max-w-md w-full px-4">
             <Suspense fallback={<OperatorRouteFallback />}>

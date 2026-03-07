@@ -1,6 +1,11 @@
 import type { Emitter } from "mitt";
 import type { GatewayEvents } from "../../event-bus.js";
-import type { ActionPrimitive, Lane as LaneT, Playbook, PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
+import type {
+  ActionPrimitive,
+  Lane as LaneT,
+  Playbook,
+  PolicyBundle as PolicyBundleT,
+} from "@tyrum/schemas";
 import { ActionPrimitive as ActionPrimitiveSchema, PolicyBundle } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlActiveWhereClause } from "../../statestore/sql.js";
@@ -11,14 +16,22 @@ import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "../policy/service.js";
 import type { PlaybookRunner } from "../playbook/runner.js";
 import { WatcherFiringDal, type WatcherFiringRow } from "./firing-dal.js";
-import { defaultHeartbeatInstruction, parseScheduleConfig, resolvePendingScheduleFireMs, type NormalizedScheduleConfig } from "../automation/schedule-service.js";
+import {
+  defaultHeartbeatInstruction,
+  parseScheduleConfig,
+  resolvePendingScheduleFireMs,
+  type NormalizedScheduleConfig,
+} from "../automation/schedule-service.js";
 
 const DEFAULT_TICK_MS = 60_000;
 const DEFAULT_FIRING_LEASE_TTL_MS = 60_000;
 const DEFAULT_PROCESS_BATCH = 25;
 
 class LostFiringLeaseError extends Error {
-  constructor(message: string) { super(message); this.name = "LostFiringLeaseError"; }
+  constructor(message: string) {
+    super(message);
+    this.name = "LostFiringLeaseError";
+  }
 }
 
 interface RawPeriodicWatcherRow {
@@ -31,7 +44,8 @@ interface RawPeriodicWatcherRow {
   trigger_config_json: string;
   active: number | boolean;
   last_fired_at_ms?: number | null;
-  created_at: string; updated_at: string;
+  created_at: string;
+  updated_at: string;
 }
 
 type SchedulerPeriodicConfig = Omit<NormalizedScheduleConfig, "lane"> & {
@@ -39,13 +53,27 @@ type SchedulerPeriodicConfig = Omit<NormalizedScheduleConfig, "lane"> & {
   laneRaw?: string;
 };
 
-interface WatcherScopeKeys { tenant_key: string; workspace_key: string; agent_key: string; }
+interface WatcherScopeKeys {
+  tenant_key: string;
+  workspace_key: string;
+  agent_key: string;
+}
 
 export interface WatcherSchedulerOptions {
-  db: SqlDb; memoryV1Dal: MemoryV1Dal; eventBus: Emitter<GatewayEvents>; owner?: string; logger?: Logger;
-  engine?: ExecutionEngine; policyService?: PolicyService; playbooks?: Playbook[]; playbookRunner?: PlaybookRunner;
-  tickMs?: number; firingLeaseTtlMs?: number; maxFiringsPerTick?: number;
-  automationEnabled?: boolean; keepProcessAlive?: boolean;
+  db: SqlDb;
+  memoryV1Dal: MemoryV1Dal;
+  eventBus: Emitter<GatewayEvents>;
+  owner?: string;
+  logger?: Logger;
+  engine?: ExecutionEngine;
+  policyService?: PolicyService;
+  playbooks?: Playbook[];
+  playbookRunner?: PlaybookRunner;
+  tickMs?: number;
+  firingLeaseTtlMs?: number;
+  maxFiringsPerTick?: number;
+  automationEnabled?: boolean;
+  keepProcessAlive?: boolean;
 }
 export class WatcherScheduler {
   private readonly db: SqlDb;
@@ -53,9 +81,15 @@ export class WatcherScheduler {
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly owner: string;
   private readonly logger?: Logger;
-  private readonly tickMs: number; private readonly keepProcessAlive: boolean; private readonly automationEnabled: boolean;
-  private readonly firingLeaseTtlMs: number; private readonly maxFiringsPerTick: number; private readonly firingDal: WatcherFiringDal;
-  private readonly engine?: ExecutionEngine; private readonly policyService?: PolicyService; private readonly playbookRunner?: PlaybookRunner;
+  private readonly tickMs: number;
+  private readonly keepProcessAlive: boolean;
+  private readonly automationEnabled: boolean;
+  private readonly firingLeaseTtlMs: number;
+  private readonly maxFiringsPerTick: number;
+  private readonly firingDal: WatcherFiringDal;
+  private readonly engine?: ExecutionEngine;
+  private readonly policyService?: PolicyService;
+  private readonly playbookRunner?: PlaybookRunner;
   private readonly playbooksById: Map<string, Playbook>;
   private timer: ReturnType<typeof setInterval> | undefined;
 
@@ -69,7 +103,10 @@ export class WatcherScheduler {
     this.keepProcessAlive = opts.keepProcessAlive ?? false;
     this.automationEnabled = opts.automationEnabled ?? false;
     this.firingLeaseTtlMs = opts.firingLeaseTtlMs ?? DEFAULT_FIRING_LEASE_TTL_MS;
-    this.maxFiringsPerTick = Math.max(1, Math.min(500, opts.maxFiringsPerTick ?? DEFAULT_PROCESS_BATCH));
+    this.maxFiringsPerTick = Math.max(
+      1,
+      Math.min(500, opts.maxFiringsPerTick ?? DEFAULT_PROCESS_BATCH),
+    );
     this.firingDal = new WatcherFiringDal(opts.db);
     this.engine = opts.engine;
     this.policyService = opts.policyService;
@@ -108,7 +145,11 @@ export class WatcherScheduler {
       if (slotMs === undefined) continue;
 
       try {
-        const created = await this.firingDal.createIfAbsent({ tenantId: watcher.tenant_id, watcherId: watcher.watcher_id, scheduledAtMs: slotMs });
+        const created = await this.firingDal.createIfAbsent({
+          tenantId: watcher.tenant_id,
+          watcherId: watcher.watcher_id,
+          scheduledAtMs: slotMs,
+        });
         await this.db.run(
           `UPDATE watchers
            SET last_fired_at_ms = ?, updated_at = ?
@@ -117,12 +158,13 @@ export class WatcherScheduler {
           [slotMs, nowIso, watcher.tenant_id, watcher.watcher_id, ...activeWhere.params, slotMs],
         );
 
-        if (created.created) this.logger?.info("watcher.firing_created", {
-          watcher_id: watcher.watcher_id,
-          schedule_kind: config.schedule_kind,
-          firing_id: created.row.watcher_firing_id,
-          scheduled_at_ms: slotMs,
-        });
+        if (created.created)
+          this.logger?.info("watcher.firing_created", {
+            watcher_id: watcher.watcher_id,
+            schedule_kind: config.schedule_kind,
+            firing_id: created.row.watcher_firing_id,
+            scheduled_at_ms: slotMs,
+          });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.logger?.warn("watcher.firing_create_failed", {
@@ -158,6 +200,7 @@ export class WatcherScheduler {
     try {
       parsed = JSON.parse(raw) as unknown;
     } catch {
+      // Intentional: malformed periodic config disables that schedule instead of crashing the poller.
       return undefined;
     }
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -193,9 +236,11 @@ export class WatcherScheduler {
     }
     if (!execution) {
       const playbookId =
-        typeof record["playbook_id"] === "string" ? record["playbook_id"].trim()
-          : typeof record["planId"] === "string" ? record["planId"].trim()
-          : "";
+        typeof record["playbook_id"] === "string"
+          ? record["playbook_id"].trim()
+          : typeof record["planId"] === "string"
+            ? record["planId"].trim()
+            : "";
       if (playbookId) execution = { kind: "playbook", playbook_id: playbookId };
     }
     if (!execution) {
@@ -211,7 +256,9 @@ export class WatcherScheduler {
       cadence: { type: "interval", interval_ms: Math.floor(intervalMs) },
       execution,
       delivery: { mode: parsedLane === "heartbeat" ? "quiet" : "notify" },
-      ...(typeof record["key"] === "string" && record["key"].trim() ? { key: record["key"].trim() } : {}),
+      ...(typeof record["key"] === "string" && record["key"].trim()
+        ? { key: record["key"].trim() }
+        : {}),
       ...(parsedLane ? { lane: parsedLane } : {}),
       laneRaw,
     };
@@ -233,17 +280,35 @@ export class WatcherScheduler {
     return err instanceof Error ? err.message : String(err);
   }
   private getPlanId(cfg: SchedulerPeriodicConfig | undefined): string {
-    return cfg?.execution.kind === "playbook" ? cfg.execution.playbook_id
-      : cfg?.execution.kind === "agent_turn" ? cfg.schedule_kind
-      : "";
+    return cfg?.execution.kind === "playbook"
+      ? cfg.execution.playbook_id
+      : cfg?.execution.kind === "agent_turn"
+        ? cfg.schedule_kind
+        : "";
   }
   private async markFiringFailed(firing: WatcherFiringRow, error: string): Promise<void> {
-    await this.firingDal.markFailed({ tenantId: firing.tenant_id, watcherFiringId: firing.watcher_firing_id, owner: this.owner, error });
+    await this.firingDal.markFailed({
+      tenantId: firing.tenant_id,
+      watcherFiringId: firing.watcher_firing_id,
+      owner: this.owner,
+      error,
+    });
   }
   private async markFiringEnqueued(firing: WatcherFiringRow): Promise<void> {
-    await this.firingDal.markEnqueued({ tenantId: firing.tenant_id, watcherFiringId: firing.watcher_firing_id, owner: this.owner });
+    await this.firingDal.markEnqueued({
+      tenantId: firing.tenant_id,
+      watcherFiringId: firing.watcher_firing_id,
+      owner: this.owner,
+    });
   }
-  private buildAutomationTurnRequest(input: { watcher: RawPeriodicWatcherRow; firing: WatcherFiringRow; config: SchedulerPeriodicConfig; tenantKey: string; agentKey: string; workspaceKey: string; }): Record<string, unknown> {
+  private buildAutomationTurnRequest(input: {
+    watcher: RawPeriodicWatcherRow;
+    firing: WatcherFiringRow;
+    config: SchedulerPeriodicConfig;
+    tenantKey: string;
+    agentKey: string;
+    workspaceKey: string;
+  }): Record<string, unknown> {
     const kind = input.config.schedule_kind;
     const instruction =
       input.config.execution.kind === "agent_turn"
@@ -255,8 +320,12 @@ export class WatcherScheduler {
     const firedAtIso = new Date(input.firing.scheduled_at_ms).toISOString();
 
     const messageLines = [
-      `Automation trigger: ${kind}`, `Schedule id: ${input.watcher.watcher_id}`, `Watcher key: ${input.watcher.watcher_key}`,
-      `Fired at: ${firedAtIso}`, `Previous fired at: ${previousFiredAtIso ?? "never"}`, `Delivery mode: ${input.config.delivery.mode}`,
+      `Automation trigger: ${kind}`,
+      `Schedule id: ${input.watcher.watcher_id}`,
+      `Watcher key: ${input.watcher.watcher_key}`,
+      `Fired at: ${firedAtIso}`,
+      `Previous fired at: ${previousFiredAtIso ?? "never"}`,
+      `Delivery mode: ${input.config.delivery.mode}`,
       `Cadence: ${
         input.config.cadence.type === "interval"
           ? `every ${String(input.config.cadence.interval_ms)}ms`
@@ -266,7 +335,8 @@ export class WatcherScheduler {
       "Instruction:",
       instruction ?? "Review context and act according to the configured automation schedule.",
     ];
-    if (kind === "heartbeat" && input.config.delivery.mode === "quiet") messageLines.push("", "Return an empty reply when there is no useful user-facing action.");
+    if (kind === "heartbeat" && input.config.delivery.mode === "quiet")
+      messageLines.push("", "Return an empty reply when there is no useful user-facing action.");
 
     return {
       tenant_key: input.tenantKey,
@@ -291,22 +361,31 @@ export class WatcherScheduler {
       },
     };
   }
-  private async recordPeriodicFireEpisode(firing: WatcherFiringRow, watcher: RawPeriodicWatcherRow, planId: string, triggerType: string): Promise<void> {
+  private async recordPeriodicFireEpisode(
+    firing: WatcherFiringRow,
+    watcher: RawPeriodicWatcherRow,
+    planId: string,
+    triggerType: string,
+  ): Promise<void> {
     try {
-      await recordMemoryV1SystemEpisode(this.memoryV1Dal, {
-        occurred_at: new Date(firing.scheduled_at_ms).toISOString(),
-        channel: "watcher",
-        event_type: "periodic_fired",
-        summary_md: "Watcher fired: periodic_fired",
-        tags: ["watcher", `watcher_id:${firing.watcher_id}`, `plan_id:${planId}`],
-        metadata: {
-          firing_id: firing.watcher_firing_id,
-          watcher_id: firing.watcher_id,
-          plan_id: planId,
-          trigger_type: triggerType,
-          scheduled_at_ms: firing.scheduled_at_ms,
+      await recordMemoryV1SystemEpisode(
+        this.memoryV1Dal,
+        {
+          occurred_at: new Date(firing.scheduled_at_ms).toISOString(),
+          channel: "watcher",
+          event_type: "periodic_fired",
+          summary_md: "Watcher fired: periodic_fired",
+          tags: ["watcher", `watcher_id:${firing.watcher_id}`, `plan_id:${planId}`],
+          metadata: {
+            firing_id: firing.watcher_firing_id,
+            watcher_id: firing.watcher_id,
+            plan_id: planId,
+            trigger_type: triggerType,
+            scheduled_at_ms: firing.scheduled_at_ms,
+          },
         },
-      }, { tenantId: firing.tenant_id, agentId: watcher.agent_id });
+        { tenantId: firing.tenant_id, agentId: watcher.agent_id },
+      );
     } catch (err) {
       console.warn("watcher.periodic_episode_record_failed", {
         watcher_id: firing.watcher_id,
@@ -316,7 +395,10 @@ export class WatcherScheduler {
       });
     }
   }
-  private async getScopeKeys(firing: WatcherFiringRow, watcher: RawPeriodicWatcherRow): Promise<WatcherScopeKeys | undefined> {
+  private async getScopeKeys(
+    firing: WatcherFiringRow,
+    watcher: RawPeriodicWatcherRow,
+  ): Promise<WatcherScopeKeys | undefined> {
     return await this.db.get<WatcherScopeKeys>(
       `SELECT t.tenant_key, ws.workspace_key, ag.agent_key
        FROM tenants t
@@ -327,22 +409,29 @@ export class WatcherScheduler {
       [firing.tenant_id, watcher.workspace_id, watcher.agent_id],
     );
   }
-  private async resolveExecution(input: { firing: WatcherFiringRow; watcher: RawPeriodicWatcherRow; cfg: SchedulerPeriodicConfig; scopeKeys: WatcherScopeKeys; }): Promise<{ steps: ActionPrimitive[]; playbook?: Playbook } | undefined> {
+  private async resolveExecution(input: {
+    firing: WatcherFiringRow;
+    watcher: RawPeriodicWatcherRow;
+    cfg: SchedulerPeriodicConfig;
+    scopeKeys: WatcherScopeKeys;
+  }): Promise<{ steps: ActionPrimitive[]; playbook?: Playbook } | undefined> {
     const { firing, watcher, cfg, scopeKeys } = input;
     if (cfg.execution.kind === "steps") return { steps: cfg.execution.steps };
     if (cfg.execution.kind === "agent_turn") {
       return {
-        steps: [{
-          type: "Decide",
-          args: this.buildAutomationTurnRequest({
-            watcher,
-            firing,
-            config: cfg,
-            tenantKey: scopeKeys.tenant_key,
-            agentKey: scopeKeys.agent_key,
-            workspaceKey: scopeKeys.workspace_key,
-          }),
-        }],
+        steps: [
+          {
+            type: "Decide",
+            args: this.buildAutomationTurnRequest({
+              watcher,
+              firing,
+              config: cfg,
+              tenantKey: scopeKeys.tenant_key,
+              agentKey: scopeKeys.agent_key,
+              workspaceKey: scopeKeys.workspace_key,
+            }),
+          },
+        ],
       };
     }
     const playbook = this.playbooksById.get(cfg.execution.playbook_id);
@@ -359,19 +448,35 @@ export class WatcherScheduler {
     }
     return { playbook, steps: this.playbookRunner.run(playbook).steps };
   }
-  private async enqueueAutomationPlan(input: { firing: WatcherFiringRow; watcher: RawPeriodicWatcherRow; cfg: SchedulerPeriodicConfig; triggerType: string; key: string; lane: LaneT; planId: string; steps: ActionPrimitive[]; playbook?: Playbook; scopeKeys: WatcherScopeKeys; }): Promise<void> {
-    const { firing, watcher, cfg, triggerType, key, lane, planId, steps, playbook, scopeKeys } = input;
+  private async enqueueAutomationPlan(input: {
+    firing: WatcherFiringRow;
+    watcher: RawPeriodicWatcherRow;
+    cfg: SchedulerPeriodicConfig;
+    triggerType: string;
+    key: string;
+    lane: LaneT;
+    planId: string;
+    steps: ActionPrimitive[];
+    playbook?: Playbook;
+    scopeKeys: WatcherScopeKeys;
+  }): Promise<void> {
+    const { firing, watcher, cfg, triggerType, key, lane, planId, steps, playbook, scopeKeys } =
+      input;
     const automationPlanId = `automation-${firing.watcher_firing_id}`;
     const playbookBundle = playbook ? this.resolvePlaybookBundle(playbook) : undefined;
     const effective = await this.policyService!.loadEffectiveBundle({ playbookBundle });
-    const snapshot = await this.policyService!.getOrCreateSnapshot(firing.tenant_id, effective.bundle);
+    const snapshot = await this.policyService!.getOrCreateSnapshot(
+      firing.tenant_id,
+      effective.bundle,
+    );
     try {
       const result = await this.db.transaction(async (tx) => {
         const current = await tx.get<{ status: string; lease_owner: string | null }>(
           `SELECT status, lease_owner FROM watcher_firings WHERE tenant_id = ? AND watcher_firing_id = ?`,
           [firing.tenant_id, firing.watcher_firing_id],
         );
-        if (!current || current.status !== "processing" || current.lease_owner !== this.owner) return null;
+        if (!current || current.status !== "processing" || current.lease_owner !== this.owner)
+          return null;
         const enqueued = await this.engine!.enqueuePlanInTx(tx, {
           tenantId: firing.tenant_id,
           key,
@@ -402,9 +507,17 @@ export class WatcherScheduler {
           `UPDATE watcher_firings
            SET status = 'enqueued', lease_owner = NULL, lease_expires_at_ms = NULL, job_id = ?, run_id = ?, error = NULL, updated_at = ?
            WHERE tenant_id = ? AND watcher_firing_id = ? AND lease_owner = ? AND status = 'processing'`,
-          [enqueued.jobId, enqueued.runId, new Date().toISOString(), firing.tenant_id, firing.watcher_firing_id, this.owner],
+          [
+            enqueued.jobId,
+            enqueued.runId,
+            new Date().toISOString(),
+            firing.tenant_id,
+            firing.watcher_firing_id,
+            this.owner,
+          ],
         );
-        if (updated.changes !== 1) throw new LostFiringLeaseError("lost watcher firing lease while enqueuing");
+        if (updated.changes !== 1)
+          throw new LostFiringLeaseError("lost watcher firing lease while enqueuing");
         return enqueued;
       });
       if (!result) return;
@@ -455,7 +568,10 @@ export class WatcherScheduler {
     this.eventBus.emit("watcher:fired", { watcherId: firing.watcher_id, planId, triggerType });
     if (!this.automationEnabled) return this.markFiringEnqueued(firing);
     if (!this.engine || !this.policyService) {
-      return this.markFiringFailed(firing, "automation enabled but execution engine/policy service not configured");
+      return this.markFiringFailed(
+        firing,
+        "automation enabled but execution engine/policy service not configured",
+      );
     }
     if (!cfg) return this.markFiringFailed(firing, "invalid periodic schedule config");
     if (cfg.laneRaw && !cfg.lane) {
@@ -469,6 +585,17 @@ export class WatcherScheduler {
     const resolved = await this.resolveExecution({ firing, watcher, cfg, scopeKeys });
     if (!resolved) return;
 
-    await this.enqueueAutomationPlan({ firing, watcher, cfg, triggerType, key: cfg.key ?? `cron:watcher-${String(firing.watcher_id)}`, lane: cfg.lane ?? "cron", planId, steps: resolved.steps, playbook: resolved.playbook, scopeKeys });
+    await this.enqueueAutomationPlan({
+      firing,
+      watcher,
+      cfg,
+      triggerType,
+      key: cfg.key ?? `cron:watcher-${String(firing.watcher_id)}`,
+      lane: cfg.lane ?? "cron",
+      planId,
+      steps: resolved.steps,
+      playbook: resolved.playbook,
+      scopeKeys,
+    });
   }
 }

@@ -1,8 +1,8 @@
 import type {
   MemoryForgetSelector,
-  MemoryItemId,
   MemoryItem,
   MemoryItemFilter,
+  MemoryItemId,
   MemoryItemPatch,
   MemorySearchHit,
   MemoryTombstone,
@@ -12,33 +12,27 @@ import type { OperatorWsClient } from "../deps.js";
 import { toOperatorCoreError, type OperatorCoreError } from "../operator-error.js";
 import { createStore, type ExternalStore } from "../store.js";
 
-export type MemoryBrowseRequest =
-  | {
-      kind: "list";
-      agentId?: string;
-      filter?: MemoryItemFilter;
-      limit?: number;
-    }
-  | {
-      kind: "search";
-      agentId?: string;
-      query: string;
-      filter?: MemoryItemFilter;
-      limit?: number;
-    };
+type MemoryListInput = { agentId?: string; filter?: MemoryItemFilter; limit?: number };
+type MemorySearchInput = MemoryListInput & { query: string };
+type MemoryExportInput = {
+  agentId?: string;
+  filter?: MemoryItemFilter;
+  includeTombstones?: boolean;
+};
+type ListRequest = { kind: "list" } & MemoryListInput;
+type SearchRequest = { kind: "search"; query: string } & MemoryListInput;
+type ListResults = { kind: "list"; items: MemoryItem[]; nextCursor: string | null };
+type SearchResults = { kind: "search"; hits: MemorySearchHit[]; nextCursor: string | null };
+type MemoryConsolidation = { fromIds: Set<string>; item: MemoryItem };
+type BrowseBuffers = {
+  upserts: Map<string, MemoryItem>;
+  deletedIds: Set<string>;
+  consolidations: MemoryConsolidation[];
+};
+type BrowseRunOptions = { reset?: boolean; cursor?: string; append?: boolean };
 
-export type MemoryBrowseResults =
-  | {
-      kind: "list";
-      items: MemoryItem[];
-      nextCursor: string | null;
-    }
-  | {
-      kind: "search";
-      hits: MemorySearchHit[];
-      nextCursor: string | null;
-    };
-
+export type MemoryBrowseRequest = ListRequest | SearchRequest;
+export type MemoryBrowseResults = ListResults | SearchResults;
 export interface MemoryBrowseState {
   request: MemoryBrowseRequest | null;
   results: MemoryBrowseResults | null;
@@ -46,6 +40,83 @@ export interface MemoryBrowseState {
   error: OperatorCoreError | null;
   lastSyncedAt: string | null;
 }
+export interface MemoryInspectState {
+  agentId: string | null;
+  memoryItemId: MemoryItemId | null;
+  item: MemoryItem | null;
+  loading: boolean;
+  error: OperatorCoreError | null;
+}
+export interface MemoryTombstonesState {
+  tombstones: MemoryTombstone[];
+  loading: boolean;
+  error: OperatorCoreError | null;
+}
+export interface MemoryExportState {
+  running: boolean;
+  artifactId: string | null;
+  error: OperatorCoreError | null;
+  lastExportedAt: string | null;
+}
+export interface MemoryState {
+  browse: MemoryBrowseState;
+  inspect: MemoryInspectState;
+  tombstones: MemoryTombstonesState;
+  export: MemoryExportState;
+}
+export interface MemoryStore extends ExternalStore<MemoryState> {
+  list(input?: MemoryListInput): Promise<void>;
+  search(input: MemorySearchInput): Promise<void>;
+  refreshBrowse(): Promise<void>;
+  loadMore(): Promise<void>;
+  inspect(memoryItemId: MemoryItemId, input?: { agentId?: string }): Promise<void>;
+  update(
+    memoryItemId: MemoryItemId,
+    patch: MemoryItemPatch,
+    input?: { agentId?: string },
+  ): Promise<MemoryItem>;
+  forget(selectors: MemoryForgetSelector[], input?: { agentId?: string }): Promise<void>;
+  export(input?: MemoryExportInput): Promise<void>;
+}
+export interface MemoryStoreBindings {
+  store: MemoryStore;
+  handleMemoryItemUpsert: (item: MemoryItem) => void;
+  handleMemoryTombstone: (tombstone: MemoryTombstone) => void;
+  handleMemoryConsolidated: (fromMemoryItemIds: MemoryItemId[], item: MemoryItem) => void;
+  handleMemoryExportCompleted: (artifactId: string) => void;
+}
+
+const createBrowseState = (): MemoryBrowseState => ({
+  request: null,
+  results: null,
+  loading: false,
+  error: null,
+  lastSyncedAt: null,
+});
+const createInspectState = (agentId: string | null = null): MemoryInspectState => ({
+  agentId,
+  memoryItemId: null,
+  item: null,
+  loading: false,
+  error: null,
+});
+const createTombstonesState = (tombstones: MemoryTombstone[] = []): MemoryTombstonesState => ({
+  tombstones,
+  loading: false,
+  error: null,
+});
+const createExportState = (): MemoryExportState => ({
+  running: false,
+  artifactId: null,
+  error: null,
+  lastExportedAt: null,
+});
+const createMemoryState = (): MemoryState => ({
+  browse: createBrowseState(),
+  inspect: createInspectState(),
+  tombstones: createTombstonesState(),
+  export: createExportState(),
+});
 
 export function completeBrowseSuccess(
   prev: MemoryBrowseState,
@@ -61,116 +132,86 @@ export function completeBrowseSuccess(
   };
 }
 
-export interface MemoryInspectState {
-  agentId: string | null;
-  memoryItemId: MemoryItemId | null;
-  item: MemoryItem | null;
-  loading: boolean;
-  error: OperatorCoreError | null;
-}
-
-export interface MemoryTombstonesState {
-  tombstones: MemoryTombstone[];
-  loading: boolean;
-  error: OperatorCoreError | null;
-}
-
-export interface MemoryExportState {
-  running: boolean;
-  artifactId: string | null;
-  error: OperatorCoreError | null;
-  lastExportedAt: string | null;
-}
-
-export interface MemoryState {
-  browse: MemoryBrowseState;
-  inspect: MemoryInspectState;
-  tombstones: MemoryTombstonesState;
-  export: MemoryExportState;
-}
-
-export interface MemoryStore extends ExternalStore<MemoryState> {
-  list(input?: { agentId?: string; filter?: MemoryItemFilter; limit?: number }): Promise<void>;
-  search(input: {
-    agentId?: string;
-    query: string;
-    filter?: MemoryItemFilter;
-    limit?: number;
-  }): Promise<void>;
-  refreshBrowse(): Promise<void>;
-  loadMore(): Promise<void>;
-  inspect(memoryItemId: MemoryItemId, input?: { agentId?: string }): Promise<void>;
-  update(
-    memoryItemId: MemoryItemId,
-    patch: MemoryItemPatch,
-    input?: { agentId?: string },
-  ): Promise<MemoryItem>;
-  forget(selectors: MemoryForgetSelector[], input?: { agentId?: string }): Promise<void>;
-  export(input?: {
-    agentId?: string;
-    filter?: MemoryItemFilter;
-    includeTombstones?: boolean;
-  }): Promise<void>;
-}
-
-function toCursor(value: string | undefined): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
-}
-
-function normalizeAgentScope(agentId?: string | null): string | undefined {
+const toCursor = (value: string | undefined): string | null =>
+  typeof value === "string" && value.trim().length > 0 ? value : null;
+const normalizeAgentScope = (agentId?: string | null): string | undefined => {
   const trimmed = agentId?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
-}
-
-function resolveAgentScope(agentId?: string | null): string {
-  return normalizeAgentScope(agentId) ?? "default";
-}
-
-function normalizeResolvedAgentId(agentId?: string | null): string | null {
+};
+const resolveAgentScope = (agentId?: string | null): string =>
+  normalizeAgentScope(agentId) ?? "default";
+const normalizeResolvedAgentId = (agentId?: string | null): string | null => {
   const normalized = normalizeAgentScope(agentId);
-  if (!normalized) return null;
-  return AgentId.safeParse(normalized).success ? normalized : null;
-}
-
-function sameAgentScope(a?: string | null, b?: string | null): boolean {
-  return resolveAgentScope(a) === resolveAgentScope(b);
-}
+  return normalized && AgentId.safeParse(normalized).success ? normalized : null;
+};
+const sameAgentScope = (a?: string | null, b?: string | null): boolean =>
+  resolveAgentScope(a) === resolveAgentScope(b);
+const filterByDeletedIds = <T extends { memory_item_id: string }>(
+  entries: T[],
+  deletedIds: Set<string>,
+): T[] =>
+  deletedIds.size === 0
+    ? entries
+    : entries.filter((entry) => !deletedIds.has(entry.memory_item_id));
+const browseOperation = (request: MemoryBrowseRequest): "memory.list" | "memory.search" =>
+  request.kind === "list" ? "memory.list" : "memory.search";
+const clearInspectSelection = (inspect: MemoryInspectState): MemoryInspectState => ({
+  ...inspect,
+  memoryItemId: null,
+  item: null,
+  loading: false,
+  error: null,
+});
+const completeExportSuccess = (prev: MemoryExportState, artifactId: string): MemoryExportState => ({
+  ...prev,
+  running: false,
+  artifactId,
+  error: null,
+  lastExportedAt: new Date().toISOString(),
+});
+const buildListRequest = (input?: MemoryListInput): ListRequest => ({
+  kind: "list",
+  agentId: normalizeAgentScope(input?.agentId),
+  filter: input?.filter,
+  limit: input?.limit,
+});
+const buildSearchRequest = (input: MemorySearchInput): SearchRequest => ({
+  kind: "search",
+  agentId: normalizeAgentScope(input.agentId),
+  query: input.query,
+  filter: input.filter,
+  limit: input.limit,
+});
 
 function findKnownAgentId(state: MemoryState): string | null {
   const inspectAgentId = normalizeResolvedAgentId(state.inspect.item?.agent_id);
   if (inspectAgentId) return inspectAgentId;
-
-  const browseResults = state.browse.results;
-  if (browseResults?.kind === "list") {
-    for (const item of browseResults.items) {
+  if (state.browse.results?.kind === "list") {
+    for (const item of state.browse.results.items) {
       const browseAgentId = normalizeResolvedAgentId(item.agent_id);
       if (browseAgentId) return browseAgentId;
     }
   }
-
   for (const tombstone of state.tombstones.tombstones) {
     const tombstoneAgentId = normalizeResolvedAgentId(tombstone.agent_id);
     if (tombstoneAgentId) return tombstoneAgentId;
   }
-
   return normalizeResolvedAgentId(state.inspect.agentId ?? state.browse.request?.agentId);
 }
 
 function matchesCurrentScope(state: MemoryState, agentId?: string | null): boolean {
   const incomingAgentId = normalizeAgentScope(agentId);
-  if (!incomingAgentId) return true;
-  const currentAgentId = findKnownAgentId(state);
-  if (!currentAgentId) return true;
-  return currentAgentId === incomingAgentId;
+  const currentAgentId = incomingAgentId ? findKnownAgentId(state) : null;
+  return !incomingAgentId || !currentAgentId || currentAgentId === incomingAgentId;
 }
 
 function findItemInBrowseResults(
   results: MemoryBrowseResults | null,
   memoryItemId: MemoryItemId,
 ): MemoryItem | null {
-  if (!results) return null;
-  if (results.kind !== "list") return null;
-  return results.items.find((item) => item.memory_item_id === memoryItemId) ?? null;
+  return results?.kind === "list"
+    ? (results.items.find((item) => item.memory_item_id === memoryItemId) ?? null)
+    : null;
 }
 
 function removeFromBrowseResults(
@@ -178,24 +219,28 @@ function removeFromBrowseResults(
   deletedIds: Set<string>,
 ): MemoryBrowseResults | null {
   if (!results) return null;
-  if (results.kind === "list") {
-    const items = results.items.filter((item) => !deletedIds.has(item.memory_item_id));
-    return { ...results, items };
-  }
-  const hits = results.hits.filter((hit) => !deletedIds.has(hit.memory_item_id));
-  return { ...results, hits };
+  return results.kind === "list"
+    ? { ...results, items: filterByDeletedIds(results.items, deletedIds) }
+    : { ...results, hits: filterByDeletedIds(results.hits, deletedIds) };
+}
+
+function replaceBrowseListItem(
+  results: MemoryBrowseResults | null,
+  item: MemoryItem,
+): MemoryBrowseResults | null {
+  if (results?.kind !== "list") return results;
+  const index = results.items.findIndex((entry) => entry.memory_item_id === item.memory_item_id);
+  if (index === -1) return results;
+  const items = [...results.items];
+  items[index] = item;
+  return { ...results, items };
 }
 
 function upsertTombstones(prev: MemoryTombstone[], incoming: MemoryTombstone[]): MemoryTombstone[] {
   if (incoming.length === 0) return prev;
-  const byId = new Map<string, MemoryTombstone>();
-  for (const entry of incoming) {
-    byId.set(entry.memory_item_id, entry);
-  }
+  const byId = new Map(incoming.map((entry) => [entry.memory_item_id, entry] as const));
   for (const entry of prev) {
-    if (!byId.has(entry.memory_item_id)) {
-      byId.set(entry.memory_item_id, entry);
-    }
+    if (!byId.has(entry.memory_item_id)) byId.set(entry.memory_item_id, entry);
   }
   return [...byId.values()];
 }
@@ -212,8 +257,6 @@ function applyItemUpserts(items: MemoryItem[], upserts: Map<string, MemoryItem>)
   return changed ? next : items;
 }
 
-type MemoryConsolidation = { fromIds: Set<string>; item: MemoryItem };
-
 function countItemsBeforeConsolidationAnchor(
   items: { memory_item_id: string }[],
   anchorIndex: number,
@@ -222,549 +265,309 @@ function countItemsBeforeConsolidationAnchor(
 ): number {
   let index = 0;
   for (const entry of items.slice(0, anchorIndex)) {
-    if (!fromIds.has(entry.memory_item_id) && entry.memory_item_id !== consolidatedItemId) {
-      index++;
-    }
+    if (!fromIds.has(entry.memory_item_id) && entry.memory_item_id !== consolidatedItemId) index++;
   }
   return index;
+}
+
+function insertConsolidatedItem(
+  items: MemoryItem[],
+  fromIds: Set<string>,
+  item: MemoryItem,
+): MemoryItem[] {
+  const anchorIndex = items.findIndex((entry) => fromIds.has(entry.memory_item_id));
+  if (anchorIndex === -1) return items;
+  const filtered = items.filter(
+    (entry) => !fromIds.has(entry.memory_item_id) && entry.memory_item_id !== item.memory_item_id,
+  );
+  filtered.splice(
+    countItemsBeforeConsolidationAnchor(items, anchorIndex, fromIds, item.memory_item_id),
+    0,
+    item,
+  );
+  return filtered;
 }
 
 function applyConsolidationsToListItems(
   items: MemoryItem[],
   consolidations: MemoryConsolidation[],
 ): MemoryItem[] {
-  if (consolidations.length === 0) return items;
   let next = items;
-  for (const consolidation of consolidations) {
-    const anchorIndex = next.findIndex((entry) => consolidation.fromIds.has(entry.memory_item_id));
-    if (anchorIndex === -1) continue;
-    const filtered = next.filter(
-      (entry) =>
-        !consolidation.fromIds.has(entry.memory_item_id) &&
-        entry.memory_item_id !== consolidation.item.memory_item_id,
-    );
-    const insertIndex = countItemsBeforeConsolidationAnchor(
-      next,
-      anchorIndex,
-      consolidation.fromIds,
-      consolidation.item.memory_item_id,
-    );
-    filtered.splice(insertIndex, 0, consolidation.item);
-    next = filtered;
-  }
+  for (const consolidation of consolidations)
+    next = insertConsolidatedItem(next, consolidation.fromIds, consolidation.item);
   return next;
+}
+
+function collectConsolidatedFromIds(consolidations: MemoryConsolidation[]): Set<string> {
+  const fromIds = new Set<string>();
+  for (const consolidation of consolidations) {
+    for (const id of consolidation.fromIds) fromIds.add(id);
+  }
+  return fromIds;
 }
 
 function applyConsolidationsToHits(
   hits: MemorySearchHit[],
   consolidations: MemoryConsolidation[],
 ): MemorySearchHit[] {
-  if (consolidations.length === 0) return hits;
-  const fromIds = new Set<string>();
-  for (const consolidation of consolidations) {
-    for (const id of consolidation.fromIds) {
-      fromIds.add(id);
-    }
-  }
-  if (fromIds.size === 0) return hits;
-  return hits.filter((hit) => !fromIds.has(hit.memory_item_id));
+  const fromIds = collectConsolidatedFromIds(consolidations);
+  return fromIds.size === 0 ? hits : filterByDeletedIds(hits, fromIds);
 }
 
-export function createMemoryStore(ws: OperatorWsClient): {
-  store: MemoryStore;
-  handleMemoryItemUpsert: (item: MemoryItem) => void;
-  handleMemoryTombstone: (tombstone: MemoryTombstone) => void;
-  handleMemoryConsolidated: (fromMemoryItemIds: MemoryItemId[], item: MemoryItem) => void;
-  handleMemoryExportCompleted: (artifactId: string) => void;
-} {
-  const { store, setState } = createStore<MemoryState>({
-    browse: {
-      request: null,
-      results: null,
-      loading: false,
-      error: null,
-      lastSyncedAt: null,
-    },
-    inspect: {
-      agentId: null,
-      memoryItemId: null,
-      item: null,
-      loading: false,
-      error: null,
-    },
-    tombstones: {
-      tombstones: [],
-      loading: false,
-      error: null,
-    },
-    export: {
-      running: false,
-      artifactId: null,
-      error: null,
-      lastExportedAt: null,
-    },
-  });
+function applyConsolidationToResults(
+  results: MemoryBrowseResults | null,
+  fromIds: Set<string>,
+  item: MemoryItem,
+): MemoryBrowseResults | null {
+  if (!results) return results;
+  if (results.kind === "list") {
+    const items = insertConsolidatedItem(results.items, fromIds, item);
+    return items === results.items ? results : { ...results, items };
+  }
+  const hits = filterByDeletedIds(results.hits, fromIds);
+  return hits.length === results.hits.length ? results : { ...results, hits };
+}
 
+function filterLoadMoreConsolidations(
+  prevItems: MemoryItem[],
+  nextItems: MemoryItem[],
+  consolidations: MemoryConsolidation[],
+): { items: MemoryItem[]; pendingConsolidations: MemoryConsolidation[] } {
+  const pendingConsolidations: MemoryConsolidation[] = [];
+  let items = nextItems;
+  for (const consolidation of consolidations) {
+    const hasConsolidatedItem = prevItems.some(
+      (entry) => entry.memory_item_id === consolidation.item.memory_item_id,
+    );
+    const hasFromIdInPrev = prevItems.some((entry) =>
+      consolidation.fromIds.has(entry.memory_item_id),
+    );
+    if (hasConsolidatedItem && !hasFromIdInPrev) {
+      items = items.filter(
+        (entry) =>
+          !consolidation.fromIds.has(entry.memory_item_id) &&
+          entry.memory_item_id !== consolidation.item.memory_item_id,
+      );
+      continue;
+    }
+    pendingConsolidations.push(consolidation);
+  }
+  return { items, pendingConsolidations };
+}
+
+function applyBrowseBuffers(
+  results: MemoryBrowseResults,
+  buffers: BrowseBuffers,
+): MemoryBrowseResults {
+  if (results.kind === "list") {
+    const items = applyItemUpserts(
+      filterByDeletedIds(
+        applyConsolidationsToListItems(results.items, buffers.consolidations),
+        buffers.deletedIds,
+      ),
+      buffers.upserts,
+    );
+    return { ...results, items };
+  }
+  return {
+    ...results,
+    hits: filterByDeletedIds(
+      applyConsolidationsToHits(results.hits, buffers.consolidations),
+      buffers.deletedIds,
+    ),
+  };
+}
+
+function mergeBrowseResults(
+  prevResults: MemoryBrowseResults | null,
+  nextResults: MemoryBrowseResults,
+  buffers: BrowseBuffers,
+): MemoryBrowseResults | null {
+  if (!prevResults || prevResults.kind !== nextResults.kind) return null;
+  if (prevResults.kind === "list" && nextResults.kind === "list") {
+    const { items: nextItems, pendingConsolidations } = filterLoadMoreConsolidations(
+      prevResults.items,
+      nextResults.items,
+      buffers.consolidations,
+    );
+    const items = applyItemUpserts(
+      filterByDeletedIds(
+        applyConsolidationsToListItems([...prevResults.items, ...nextItems], pendingConsolidations),
+        buffers.deletedIds,
+      ),
+      buffers.upserts,
+    );
+    return { kind: "list", items, nextCursor: nextResults.nextCursor };
+  }
+  if (prevResults.kind === "search" && nextResults.kind === "search") {
+    const hits = filterByDeletedIds(
+      applyConsolidationsToHits([...prevResults.hits, ...nextResults.hits], buffers.consolidations),
+      buffers.deletedIds,
+    );
+    return { kind: "search", hits, nextCursor: nextResults.nextCursor };
+  }
+  return null;
+}
+
+export function createMemoryStore(ws: OperatorWsClient): MemoryStoreBindings {
+  const { store, setState } = createStore<MemoryState>(createMemoryState());
   let browseRunId = 0;
   let activeBrowseRunId: number | null = null;
+  let inspectRunId = 0;
+  let activeInspectRunId: number | null = null;
+  let forgetRunId = 0;
+  let activeForgetRunId: number | null = null;
+  let exportRunId = 0;
+  let activeExportRunId: number | null = null;
   let bufferedItemUpserts = new Map<string, MemoryItem>();
   let bufferedDeletedIds = new Set<string>();
   let bufferedConsolidations: MemoryConsolidation[] = [];
 
-  function resetBrowseBuffers(): void {
+  const resetBrowseBuffers = (): void => {
     bufferedItemUpserts = new Map<string, MemoryItem>();
     bufferedDeletedIds = new Set<string>();
     bufferedConsolidations = [];
-  }
-
-  let inspectRunId = 0;
-  let activeInspectRunId: number | null = null;
-
-  let forgetRunId = 0;
-  let activeForgetRunId: number | null = null;
-
-  let exportRunId = 0;
-  let activeExportRunId: number | null = null;
-
-  async function list(input?: {
-    agentId?: string;
-    filter?: MemoryItemFilter;
-    limit?: number;
-  }): Promise<void> {
+  };
+  const currentBrowseBuffers = (): BrowseBuffers => ({
+    upserts: bufferedItemUpserts,
+    deletedIds: bufferedDeletedIds,
+    consolidations: bufferedConsolidations,
+  });
+  const startBrowseRun = (): number => {
     const runId = ++browseRunId;
     activeBrowseRunId = runId;
     resetBrowseBuffers();
-    const agentId = normalizeAgentScope(input?.agentId);
+    return runId;
+  };
+  const finishBrowseRun = (runId: number): void => {
+    if (activeBrowseRunId === runId) {
+      activeBrowseRunId = null;
+      resetBrowseBuffers();
+    }
+  };
+  const currentInspectAgentId = (agentId?: string | null): string | undefined =>
+    normalizeAgentScope(agentId ?? store.getSnapshot().inspect.agentId);
 
-    const request: MemoryBrowseRequest = {
-      kind: "list",
-      agentId,
-      filter: input?.filter,
-      limit: input?.limit,
-    };
-
+  function startBrowseRequest(request: MemoryBrowseRequest): void {
     setState((prev) => {
-      const scopeChanged = !sameAgentScope(prev.inspect.agentId, agentId);
+      const agentId = request.agentId ?? null;
+      const scopeChanged = !sameAgentScope(prev.inspect.agentId, request.agentId);
       return {
         ...prev,
-        browse: {
-          ...prev.browse,
-          request,
-          results: null,
-          loading: true,
-          error: null,
-        },
-        inspect: scopeChanged
-          ? {
-              agentId: agentId ?? null,
-              memoryItemId: null,
-              item: null,
-              loading: false,
-              error: null,
-            }
-          : { ...prev.inspect, agentId: agentId ?? null },
-        tombstones: scopeChanged
-          ? { ...prev.tombstones, tombstones: [], loading: false, error: null }
-          : prev.tombstones,
+        browse: { ...prev.browse, request, results: null, loading: true, error: null },
+        inspect: scopeChanged ? createInspectState(agentId) : { ...prev.inspect, agentId },
+        tombstones: scopeChanged ? createTombstonesState() : prev.tombstones,
       };
     });
+  }
 
-    try {
+  function setBrowseLoading(): void {
+    setState((prev) => ({ ...prev, browse: { ...prev.browse, loading: true, error: null } }));
+  }
+
+  async function fetchBrowseResults(
+    request: MemoryBrowseRequest,
+    cursor?: string,
+  ): Promise<MemoryBrowseResults> {
+    if (request.kind === "list") {
       const result = await ws.memoryList({
         v: 1,
-        agent_id: agentId,
-        filter: input?.filter,
-        limit: input?.limit,
-        cursor: undefined,
-      });
-      if (activeBrowseRunId !== runId) return;
-      const upserts = bufferedItemUpserts;
-      const deletes = bufferedDeletedIds;
-      const consolidations = bufferedConsolidations;
-
-      setState((prev) => {
-        let items = applyConsolidationsToListItems(result.items, consolidations);
-        if (deletes.size > 0) {
-          items = items.filter((item) => !deletes.has(item.memory_item_id));
-        }
-        items = applyItemUpserts(items, upserts);
-
-        return {
-          ...prev,
-          browse: completeBrowseSuccess(prev.browse, {
-            request,
-            results: {
-              kind: "list",
-              items,
-              nextCursor: toCursor(result.next_cursor),
-            },
-            now: new Date().toISOString(),
-          }),
-        };
-      });
-    } catch (error) {
-      if (activeBrowseRunId !== runId) return;
-      setState((prev) => ({
-        ...prev,
-        browse: {
-          ...prev.browse,
-          loading: false,
-          error: toOperatorCoreError("ws", "memory.list", error),
-        },
-      }));
-    } finally {
-      if (activeBrowseRunId === runId) {
-        activeBrowseRunId = null;
-        resetBrowseBuffers();
-      }
-    }
-  }
-
-  async function search(input: {
-    agentId?: string;
-    query: string;
-    filter?: MemoryItemFilter;
-    limit?: number;
-  }): Promise<void> {
-    const runId = ++browseRunId;
-    activeBrowseRunId = runId;
-    resetBrowseBuffers();
-    const agentId = normalizeAgentScope(input.agentId);
-
-    const request: MemoryBrowseRequest = {
-      kind: "search",
-      agentId,
-      query: input.query,
-      filter: input.filter,
-      limit: input.limit,
-    };
-
-    setState((prev) => {
-      const scopeChanged = !sameAgentScope(prev.inspect.agentId, agentId);
-      return {
-        ...prev,
-        browse: {
-          ...prev.browse,
-          request,
-          results: null,
-          loading: true,
-          error: null,
-        },
-        inspect: scopeChanged
-          ? {
-              agentId: agentId ?? null,
-              memoryItemId: null,
-              item: null,
-              loading: false,
-              error: null,
-            }
-          : { ...prev.inspect, agentId: agentId ?? null },
-        tombstones: scopeChanged
-          ? { ...prev.tombstones, tombstones: [], loading: false, error: null }
-          : prev.tombstones,
-      };
-    });
-
-    try {
-      const result = await ws.memorySearch({
-        v: 1,
-        agent_id: agentId,
-        query: input.query,
-        filter: input.filter,
-        limit: input.limit,
-        cursor: undefined,
-      });
-      if (activeBrowseRunId !== runId) return;
-      const deletes = bufferedDeletedIds;
-      const consolidations = bufferedConsolidations;
-
-      setState((prev) => {
-        let hits = applyConsolidationsToHits(result.hits, consolidations);
-        if (deletes.size > 0) {
-          hits = hits.filter((hit) => !deletes.has(hit.memory_item_id));
-        }
-        return {
-          ...prev,
-          browse: completeBrowseSuccess(prev.browse, {
-            request,
-            results: {
-              kind: "search",
-              hits,
-              nextCursor: toCursor(result.next_cursor),
-            },
-            now: new Date().toISOString(),
-          }),
-        };
-      });
-    } catch (error) {
-      if (activeBrowseRunId !== runId) return;
-      setState((prev) => ({
-        ...prev,
-        browse: {
-          ...prev.browse,
-          loading: false,
-          error: toOperatorCoreError("ws", "memory.search", error),
-        },
-      }));
-    } finally {
-      if (activeBrowseRunId === runId) {
-        activeBrowseRunId = null;
-        resetBrowseBuffers();
-      }
-    }
-  }
-
-  async function refreshBrowse(): Promise<void> {
-    const snapshot = store.getSnapshot();
-    const request = snapshot.browse.request;
-    if (!request) return;
-
-    const runId = ++browseRunId;
-    activeBrowseRunId = runId;
-    resetBrowseBuffers();
-
-    setState((prev) => ({
-      ...prev,
-      browse: {
-        ...prev.browse,
-        loading: true,
-        error: null,
-      },
-    }));
-
-    try {
-      if (request.kind === "list") {
-        const result = await ws.memoryList({
-          v: 1,
-          agent_id: request.agentId,
-          filter: request.filter,
-          limit: request.limit,
-          cursor: undefined,
-        });
-        if (activeBrowseRunId !== runId) return;
-        const upserts = bufferedItemUpserts;
-        const deletes = bufferedDeletedIds;
-        const consolidations = bufferedConsolidations;
-
-        setState((prev) => {
-          let items = applyConsolidationsToListItems(result.items, consolidations);
-          if (deletes.size > 0) {
-            items = items.filter((item) => !deletes.has(item.memory_item_id));
-          }
-          items = applyItemUpserts(items, upserts);
-
-          return {
-            ...prev,
-            browse: completeBrowseSuccess(prev.browse, {
-              request,
-              results: {
-                kind: "list",
-                items,
-                nextCursor: toCursor(result.next_cursor),
-              },
-              now: new Date().toISOString(),
-            }),
-          };
-        });
-        return;
-      }
-
-      const result = await ws.memorySearch({
-        v: 1,
         agent_id: request.agentId,
-        query: request.query,
-        filter: request.filter,
-        limit: request.limit,
-        cursor: undefined,
-      });
-      if (activeBrowseRunId !== runId) return;
-      const deletes = bufferedDeletedIds;
-      const consolidations = bufferedConsolidations;
-
-      setState((prev) => {
-        let hits = applyConsolidationsToHits(result.hits, consolidations);
-        if (deletes.size > 0) {
-          hits = hits.filter((hit) => !deletes.has(hit.memory_item_id));
-        }
-        return {
-          ...prev,
-          browse: completeBrowseSuccess(prev.browse, {
-            request,
-            results: {
-              kind: "search",
-              hits,
-              nextCursor: toCursor(result.next_cursor),
-            },
-            now: new Date().toISOString(),
-          }),
-        };
-      });
-    } catch (error) {
-      if (activeBrowseRunId !== runId) return;
-      setState((prev) => ({
-        ...prev,
-        browse: {
-          ...prev.browse,
-          loading: false,
-          error: toOperatorCoreError(
-            "ws",
-            request.kind === "list" ? "memory.list" : "memory.search",
-            error,
-          ),
-        },
-      }));
-    } finally {
-      if (activeBrowseRunId === runId) {
-        activeBrowseRunId = null;
-        resetBrowseBuffers();
-      }
-    }
-  }
-
-  async function loadMore(): Promise<void> {
-    const snapshot = store.getSnapshot();
-    const request = snapshot.browse.request;
-    const results = snapshot.browse.results;
-    if (!request || !results) return;
-    const cursor = results.nextCursor;
-    if (!cursor) return;
-
-    const runId = ++browseRunId;
-    activeBrowseRunId = runId;
-    resetBrowseBuffers();
-
-    setState((prev) => ({
-      ...prev,
-      browse: {
-        ...prev.browse,
-        loading: true,
-        error: null,
-      },
-    }));
-
-    try {
-      if (request.kind === "list") {
-        const next = await ws.memoryList({
-          v: 1,
-          agent_id: request.agentId,
-          filter: request.filter,
-          limit: request.limit,
-          cursor,
-        });
-        if (activeBrowseRunId !== runId) return;
-        const upserts = bufferedItemUpserts;
-        const deletes = bufferedDeletedIds;
-        const consolidations = bufferedConsolidations;
-
-        setState((prev) => {
-          const prevResults = prev.browse.results;
-          if (!prevResults || prevResults.kind !== "list") return prev;
-          const prevItems = prevResults.items;
-          let nextItems = next.items;
-
-          const pendingConsolidations: MemoryConsolidation[] = [];
-          for (const consolidation of consolidations) {
-            const hasConsolidatedItem = prevItems.some(
-              (entry) => entry.memory_item_id === consolidation.item.memory_item_id,
-            );
-            const hasFromIdInPrev = prevItems.some((entry) =>
-              consolidation.fromIds.has(entry.memory_item_id),
-            );
-
-            if (hasConsolidatedItem && !hasFromIdInPrev) {
-              nextItems = nextItems.filter(
-                (entry) =>
-                  !consolidation.fromIds.has(entry.memory_item_id) &&
-                  entry.memory_item_id !== consolidation.item.memory_item_id,
-              );
-              continue;
-            }
-
-            pendingConsolidations.push(consolidation);
-          }
-
-          let items = [...prevItems, ...nextItems];
-          items = applyConsolidationsToListItems(items, pendingConsolidations);
-          if (deletes.size > 0) {
-            items = items.filter((item) => !deletes.has(item.memory_item_id));
-          }
-          items = applyItemUpserts(items, upserts);
-          return {
-            ...prev,
-            browse: completeBrowseSuccess(prev.browse, {
-              request,
-              results: {
-                kind: "list",
-                items,
-                nextCursor: toCursor(next.next_cursor),
-              },
-              now: new Date().toISOString(),
-            }),
-          };
-        });
-        return;
-      }
-
-      const next = await ws.memorySearch({
-        v: 1,
-        agent_id: request.agentId,
-        query: request.query,
         filter: request.filter,
         limit: request.limit,
         cursor,
       });
-      if (activeBrowseRunId !== runId) return;
-      const deletes = bufferedDeletedIds;
-      const consolidations = bufferedConsolidations;
-
-      setState((prev) => {
-        const prevResults = prev.browse.results;
-        if (!prevResults || prevResults.kind !== "search") return prev;
-        let hits = [...prevResults.hits, ...next.hits];
-        hits = applyConsolidationsToHits(hits, consolidations);
-        if (deletes.size > 0) {
-          hits = hits.filter((hit) => !deletes.has(hit.memory_item_id));
-        }
-        return {
-          ...prev,
-          browse: completeBrowseSuccess(prev.browse, {
-            request,
-            results: {
-              kind: "search",
-              hits,
-              nextCursor: toCursor(next.next_cursor),
-            },
-            now: new Date().toISOString(),
-          }),
-        };
-      });
-    } catch (error) {
-      if (activeBrowseRunId !== runId) return;
-      setState((prev) => ({
-        ...prev,
-        browse: {
-          ...prev.browse,
-          loading: false,
-          error: toOperatorCoreError(
-            "ws",
-            request.kind === "list" ? "memory.list" : "memory.search",
-            error,
-          ),
-        },
-      }));
-    } finally {
-      if (activeBrowseRunId === runId) {
-        activeBrowseRunId = null;
-        resetBrowseBuffers();
-      }
+      return { kind: "list", items: result.items, nextCursor: toCursor(result.next_cursor) };
     }
+    const result = await ws.memorySearch({
+      v: 1,
+      agent_id: request.agentId,
+      query: request.query,
+      filter: request.filter,
+      limit: request.limit,
+      cursor,
+    });
+    return { kind: "search", hits: result.hits, nextCursor: toCursor(result.next_cursor) };
+  }
+
+  function commitBrowseSuccess(
+    runId: number,
+    request: MemoryBrowseRequest,
+    results: MemoryBrowseResults,
+    append = false,
+  ): void {
+    if (activeBrowseRunId !== runId) return;
+    const buffers = currentBrowseBuffers();
+    const now = new Date().toISOString();
+    setState((prev) => {
+      const nextResults = append
+        ? mergeBrowseResults(prev.browse.results, results, buffers)
+        : applyBrowseBuffers(results, buffers);
+      return nextResults
+        ? {
+            ...prev,
+            browse: completeBrowseSuccess(prev.browse, { request, results: nextResults, now }),
+          }
+        : prev;
+    });
+  }
+
+  function commitBrowseError(runId: number, request: MemoryBrowseRequest, error: unknown): void {
+    if (activeBrowseRunId !== runId) return;
+    setState((prev) => ({
+      ...prev,
+      browse: {
+        ...prev.browse,
+        loading: false,
+        error: toOperatorCoreError("ws", browseOperation(request), error),
+      },
+    }));
+  }
+
+  async function runBrowse(
+    request: MemoryBrowseRequest,
+    options: BrowseRunOptions = {},
+  ): Promise<void> {
+    const runId = startBrowseRun();
+    if (options.reset) startBrowseRequest(request);
+    else setBrowseLoading();
+    try {
+      commitBrowseSuccess(
+        runId,
+        request,
+        await fetchBrowseResults(request, options.cursor),
+        options.append,
+      );
+    } catch (error) {
+      commitBrowseError(runId, request, error);
+    } finally {
+      finishBrowseRun(runId);
+    }
+  }
+
+  async function list(input?: MemoryListInput): Promise<void> {
+    return runBrowse(buildListRequest(input), { reset: true });
+  }
+
+  async function search(input: MemorySearchInput): Promise<void> {
+    return runBrowse(buildSearchRequest(input), { reset: true });
+  }
+
+  async function refreshBrowse(): Promise<void> {
+    const request = store.getSnapshot().browse.request;
+    if (request) await runBrowse(request);
+  }
+
+  async function loadMore(): Promise<void> {
+    const { request, results } = store.getSnapshot().browse;
+    if (request && results?.nextCursor)
+      await runBrowse(request, { cursor: results.nextCursor, append: true });
   }
 
   async function inspect(memoryItemId: MemoryItemId, input?: { agentId?: string }): Promise<void> {
     const runId = ++inspectRunId;
     activeInspectRunId = runId;
-    const agentId = normalizeAgentScope(input?.agentId ?? store.getSnapshot().inspect.agentId);
-
+    const agentId = currentInspectAgentId(input?.agentId);
     setState((prev) => ({
       ...prev,
       inspect: {
@@ -776,18 +579,12 @@ export function createMemoryStore(ws: OperatorWsClient): {
         error: null,
       },
     }));
-
     try {
       const result = await ws.memoryGet({ v: 1, agent_id: agentId, memory_item_id: memoryItemId });
       if (activeInspectRunId !== runId) return;
       setState((prev) => ({
         ...prev,
-        inspect: {
-          ...prev.inspect,
-          memoryItemId,
-          item: result.item,
-          loading: false,
-        },
+        inspect: { ...prev.inspect, memoryItemId, item: result.item, loading: false },
       }));
     } catch (error) {
       if (activeInspectRunId !== runId) return;
@@ -800,9 +597,7 @@ export function createMemoryStore(ws: OperatorWsClient): {
         },
       }));
     } finally {
-      if (activeInspectRunId === runId) {
-        activeInspectRunId = null;
-      }
+      if (activeInspectRunId === runId) activeInspectRunId = null;
     }
   }
 
@@ -812,13 +607,11 @@ export function createMemoryStore(ws: OperatorWsClient): {
   ): Promise<void> {
     const runId = ++forgetRunId;
     activeForgetRunId = runId;
-    const agentId = normalizeAgentScope(input?.agentId ?? store.getSnapshot().inspect.agentId);
-
+    const agentId = currentInspectAgentId(input?.agentId);
     setState((prev) => ({
       ...prev,
       tombstones: { ...prev.tombstones, loading: true, error: null },
     }));
-
     try {
       const result = await ws.memoryForget({
         v: 1,
@@ -827,36 +620,25 @@ export function createMemoryStore(ws: OperatorWsClient): {
         selectors,
       });
       if (activeForgetRunId !== runId) return;
-
-      const deletedIds = new Set<string>(result.tombstones.map((t) => t.memory_item_id));
+      const deletedIds = new Set(result.tombstones.map((tombstone) => tombstone.memory_item_id));
       const inspectingId = store.getSnapshot().inspect.memoryItemId;
-      if (inspectingId && deletedIds.has(inspectingId)) {
-        activeInspectRunId = null;
-      }
-
-      setState((prev) => {
-        const nextBrowseResults = removeFromBrowseResults(prev.browse.results, deletedIds);
-        const shouldClearInspect = prev.inspect.memoryItemId
-          ? deletedIds.has(prev.inspect.memoryItemId)
-          : false;
-        return {
-          ...prev,
-          browse: {
-            ...prev.browse,
-            results: nextBrowseResults
-              ? { ...nextBrowseResults, nextCursor: nextBrowseResults.nextCursor ?? null }
-              : prev.browse.results,
-          },
-          inspect: shouldClearInspect
-            ? { ...prev.inspect, item: null, memoryItemId: null, loading: false, error: null }
+      if (inspectingId && deletedIds.has(inspectingId)) activeInspectRunId = null;
+      setState((prev) => ({
+        ...prev,
+        browse: {
+          ...prev.browse,
+          results: removeFromBrowseResults(prev.browse.results, deletedIds),
+        },
+        inspect:
+          prev.inspect.memoryItemId && deletedIds.has(prev.inspect.memoryItemId)
+            ? clearInspectSelection(prev.inspect)
             : prev.inspect,
-          tombstones: {
-            ...prev.tombstones,
-            tombstones: upsertTombstones(prev.tombstones.tombstones, result.tombstones),
-            loading: false,
-          },
-        };
-      });
+        tombstones: {
+          ...prev.tombstones,
+          tombstones: upsertTombstones(prev.tombstones.tombstones, result.tombstones),
+          loading: false,
+        },
+      }));
     } catch (error) {
       if (activeForgetRunId !== runId) return;
       setState((prev) => ({
@@ -868,9 +650,7 @@ export function createMemoryStore(ws: OperatorWsClient): {
         },
       }));
     } finally {
-      if (activeForgetRunId === runId) {
-        activeForgetRunId = null;
-      }
+      if (activeForgetRunId === runId) activeForgetRunId = null;
     }
   }
 
@@ -879,10 +659,9 @@ export function createMemoryStore(ws: OperatorWsClient): {
     patch: MemoryItemPatch,
     input?: { agentId?: string },
   ): Promise<MemoryItem> {
-    const agentId = normalizeAgentScope(input?.agentId ?? store.getSnapshot().inspect.agentId);
     const result = await ws.memoryUpdate({
       v: 1,
-      agent_id: agentId,
+      agent_id: currentInspectAgentId(input?.agentId),
       memory_item_id: memoryItemId,
       patch,
     });
@@ -890,41 +669,24 @@ export function createMemoryStore(ws: OperatorWsClient): {
     return result.item;
   }
 
-  async function exportMemory(input?: {
-    agentId?: string;
-    filter?: MemoryItemFilter;
-    includeTombstones?: boolean;
-  }): Promise<void> {
+  async function exportMemory(input?: MemoryExportInput): Promise<void> {
     const runId = ++exportRunId;
     activeExportRunId = runId;
-    const agentId = normalizeAgentScope(input?.agentId ?? store.getSnapshot().inspect.agentId);
-
     setState((prev) => ({
       ...prev,
-      export: {
-        ...prev.export,
-        running: true,
-        artifactId: null,
-        error: null,
-      },
+      export: { ...prev.export, running: true, artifactId: null, error: null },
     }));
-
     try {
       const result = await ws.memoryExport({
         v: 1,
-        agent_id: agentId,
+        agent_id: currentInspectAgentId(input?.agentId),
         filter: input?.filter,
         include_tombstones: input?.includeTombstones ?? false,
       });
       if (activeExportRunId !== runId) return;
       setState((prev) => ({
         ...prev,
-        export: {
-          ...prev.export,
-          running: false,
-          artifactId: result.artifact_id,
-          lastExportedAt: new Date().toISOString(),
-        },
+        export: completeExportSuccess(prev.export, result.artifact_id),
       }));
     } catch (error) {
       if (activeExportRunId !== runId) return;
@@ -937,66 +699,37 @@ export function createMemoryStore(ws: OperatorWsClient): {
         },
       }));
     } finally {
-      if (activeExportRunId === runId) {
-        activeExportRunId = null;
-      }
+      if (activeExportRunId === runId) activeExportRunId = null;
     }
   }
 
   function handleMemoryItemUpsert(item: MemoryItem): void {
-    const snapshot = store.getSnapshot();
-    if (!matchesCurrentScope(snapshot, item.agent_id)) {
-      return;
-    }
-    if (activeBrowseRunId !== null) {
-      bufferedItemUpserts.set(item.memory_item_id, item);
-    }
+    if (!matchesCurrentScope(store.getSnapshot(), item.agent_id)) return;
+    if (activeBrowseRunId !== null) bufferedItemUpserts.set(item.memory_item_id, item);
     setState((prev) => {
-      const browseResults = prev.browse.results;
-      let nextBrowseResults = browseResults;
-      if (browseResults?.kind === "list") {
-        const index = browseResults.items.findIndex(
-          (entry) => entry.memory_item_id === item.memory_item_id,
-        );
-        if (index !== -1) {
-          const items = [...browseResults.items];
-          items[index] = item;
-          nextBrowseResults = { ...browseResults, items };
-        }
-      }
-
+      const nextBrowseResults = replaceBrowseListItem(prev.browse.results, item);
       const nextInspect =
         prev.inspect.memoryItemId === item.memory_item_id
           ? { ...prev.inspect, item }
           : prev.inspect;
-
-      if (nextBrowseResults === browseResults && nextInspect === prev.inspect) return prev;
-      return {
-        ...prev,
-        browse: { ...prev.browse, results: nextBrowseResults },
-        inspect: nextInspect,
-      };
+      return nextBrowseResults === prev.browse.results && nextInspect === prev.inspect
+        ? prev
+        : { ...prev, browse: { ...prev.browse, results: nextBrowseResults }, inspect: nextInspect };
     });
   }
 
   function handleMemoryTombstone(tombstone: MemoryTombstone): void {
-    const snapshot = store.getSnapshot();
-    if (!matchesCurrentScope(snapshot, tombstone.agent_id)) {
-      return;
-    }
-    if (activeBrowseRunId !== null) {
-      bufferedDeletedIds.add(tombstone.memory_item_id);
-    }
-    if (store.getSnapshot().inspect.memoryItemId === tombstone.memory_item_id) {
+    if (!matchesCurrentScope(store.getSnapshot(), tombstone.agent_id)) return;
+    if (activeBrowseRunId !== null) bufferedDeletedIds.add(tombstone.memory_item_id);
+    if (store.getSnapshot().inspect.memoryItemId === tombstone.memory_item_id)
       activeInspectRunId = null;
-    }
     const deletedIds = new Set<string>([tombstone.memory_item_id]);
     setState((prev) => ({
       ...prev,
       browse: { ...prev.browse, results: removeFromBrowseResults(prev.browse.results, deletedIds) },
       inspect:
         prev.inspect.memoryItemId === tombstone.memory_item_id
-          ? { ...prev.inspect, memoryItemId: null, item: null, loading: false, error: null }
+          ? clearInspectSelection(prev.inspect)
           : prev.inspect,
       tombstones: {
         ...prev.tombstones,
@@ -1006,95 +739,44 @@ export function createMemoryStore(ws: OperatorWsClient): {
   }
 
   function handleMemoryConsolidated(fromMemoryItemIds: MemoryItemId[], item: MemoryItem): void {
-    const snapshot = store.getSnapshot();
-    if (!matchesCurrentScope(snapshot, item.agent_id)) {
-      return;
-    }
+    if (!matchesCurrentScope(store.getSnapshot(), item.agent_id)) return;
     const fromIds = new Set<string>(fromMemoryItemIds);
     if (activeBrowseRunId !== null) {
-      for (const id of fromMemoryItemIds) {
-        bufferedDeletedIds.add(id);
-      }
+      for (const id of fromMemoryItemIds) bufferedDeletedIds.add(id);
       bufferedConsolidations.push({ fromIds, item });
     }
-
     const inspectingId = store.getSnapshot().inspect.memoryItemId;
-    if (inspectingId && fromIds.has(inspectingId)) {
-      activeInspectRunId = null;
-    }
-
+    if (inspectingId && fromIds.has(inspectingId)) activeInspectRunId = null;
     setState((prev) => {
-      let nextBrowseResults = prev.browse.results;
-
-      if (nextBrowseResults?.kind === "list") {
-        const anchorIndex = nextBrowseResults.items.findIndex((entry) =>
-          fromIds.has(entry.memory_item_id),
-        );
-        if (anchorIndex !== -1) {
-          const filtered = nextBrowseResults.items.filter(
-            (entry) =>
-              !fromIds.has(entry.memory_item_id) && entry.memory_item_id !== item.memory_item_id,
-          );
-          const insertIndex = countItemsBeforeConsolidationAnchor(
-            nextBrowseResults.items,
-            anchorIndex,
-            fromIds,
-            item.memory_item_id,
-          );
-          filtered.splice(insertIndex, 0, item);
-          nextBrowseResults = { ...nextBrowseResults, items: filtered };
-        }
-      } else if (nextBrowseResults?.kind === "search") {
-        const filtered = nextBrowseResults.hits.filter((hit) => !fromIds.has(hit.memory_item_id));
-        if (filtered.length !== nextBrowseResults.hits.length) {
-          nextBrowseResults = { ...nextBrowseResults, hits: filtered };
-        }
-      }
-
+      const nextBrowseResults = applyConsolidationToResults(prev.browse.results, fromIds, item);
       const nextInspect =
         prev.inspect.memoryItemId && fromIds.has(prev.inspect.memoryItemId)
-          ? { ...prev.inspect, memoryItemId: null, item: null, loading: false, error: null }
+          ? clearInspectSelection(prev.inspect)
           : prev.inspect.memoryItemId === item.memory_item_id
             ? { ...prev.inspect, item }
             : prev.inspect;
-
-      if (nextBrowseResults === prev.browse.results && nextInspect === prev.inspect) return prev;
-
-      return {
-        ...prev,
-        browse: { ...prev.browse, results: nextBrowseResults },
-        inspect: nextInspect,
-      };
+      return nextBrowseResults === prev.browse.results && nextInspect === prev.inspect
+        ? prev
+        : { ...prev, browse: { ...prev.browse, results: nextBrowseResults }, inspect: nextInspect };
     });
   }
 
   function handleMemoryExportCompleted(artifactId: string): void {
-    setState((prev) => ({
-      ...prev,
-      export: {
-        ...prev.export,
-        running: false,
-        artifactId,
-        error: null,
-        lastExportedAt: new Date().toISOString(),
-      },
-    }));
+    setState((prev) => ({ ...prev, export: completeExportSuccess(prev.export, artifactId) }));
   }
 
-  const memoryStore: MemoryStore = {
-    ...store,
-    list,
-    search,
-    refreshBrowse,
-    loadMore,
-    inspect,
-    update,
-    forget,
-    export: exportMemory,
-  };
-
   return {
-    store: memoryStore,
+    store: {
+      ...store,
+      list,
+      search,
+      refreshBrowse,
+      loadMore,
+      inspect,
+      update,
+      forget,
+      export: exportMemory,
+    },
     handleMemoryItemUpsert,
     handleMemoryTombstone,
     handleMemoryConsolidated,

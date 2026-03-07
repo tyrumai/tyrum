@@ -184,8 +184,10 @@ export async function setupArtifactRouteTest(
   container?: GatewayContainer,
 ) {
   const resolvedContainer = container ?? (await createTestContainer({ tyrumHome: homeDir }));
-  const { authTokens, tenantAdminToken, secretProviderForTenant } =
-    await createTestAuthAndSecrets(resolvedContainer, { tyrumHome: homeDir });
+  const { authTokens, tenantAdminToken, secretProviderForTenant } = await createTestAuthAndSecrets(
+    resolvedContainer,
+    { tyrumHome: homeDir },
+  );
   const app = createApp(resolvedContainer, { authTokens, secretProviderForTenant });
   const { requestUnauthenticated } = decorateAppWithDefaultAuth(app, tenantAdminToken);
 

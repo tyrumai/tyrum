@@ -1,4 +1,11 @@
-import type { LanguageModelV2, LanguageModelV2CallOptions, LanguageModelV3, LanguageModelV3CallOptions, LanguageModelV3GenerateResult, LanguageModelV3StreamResult } from "@ai-sdk/provider";
+import type {
+  LanguageModelV2,
+  LanguageModelV2CallOptions,
+  LanguageModelV3,
+  LanguageModelV3CallOptions,
+  LanguageModelV3GenerateResult,
+  LanguageModelV3StreamResult,
+} from "@ai-sdk/provider";
 import { APICallError } from "ai";
 import type { LanguageModel } from "ai";
 import type { AgentConfig as AgentConfigT } from "@tyrum/schemas";
@@ -10,7 +17,19 @@ import { SessionModelOverrideDal } from "../../models/session-model-override-dal
 import { createProviderFromNpm } from "../../models/provider-factory.js";
 import type { SecretProvider } from "../../secret/provider.js";
 import { coerceRecord, coerceStringRecord } from "../../util/coerce.js";
-import { buildProviderResolutionSetup, getStopFallbackApiCallError, isAuthInvalidStatus, isCredentialPaymentOrEntitlementStatus, isTransientStatus, listOrderedEligibleProfilesForProvider, OAUTH_REFRESH_LEASE_UNAVAILABLE, parseProviderModelId, providerRequiresConfiguredAccount, resolveProfileSecrets, resolveProviderBaseURL } from "./provider-resolution.js";
+import {
+  buildProviderResolutionSetup,
+  getStopFallbackApiCallError,
+  isAuthInvalidStatus,
+  isCredentialPaymentOrEntitlementStatus,
+  isTransientStatus,
+  listOrderedEligibleProfilesForProvider,
+  OAUTH_REFRESH_LEASE_UNAVAILABLE,
+  parseProviderModelId,
+  providerRequiresConfiguredAccount,
+  resolveProfileSecrets,
+  resolveProviderBaseURL,
+} from "./provider-resolution.js";
 
 export interface ResolveSessionModelDeps {
   container: GatewayContainer;
@@ -20,7 +39,11 @@ export interface ResolveSessionModelDeps {
   fetchImpl: typeof fetch;
 }
 
-const V2_PROVIDER_NPMS = new Set(["@gitlab/gitlab-ai-provider", "@jerome-benoit/sap-ai-provider-v2", "venice-ai-sdk-provider"]);
+const V2_PROVIDER_NPMS = new Set([
+  "@gitlab/gitlab-ai-provider",
+  "@jerome-benoit/sap-ai-provider-v2",
+  "venice-ai-sdk-provider",
+]);
 
 function expectedSpecificationVersionForNpm(npm: string): "v2" | "v3" {
   return V2_PROVIDER_NPMS.has(npm) ? "v2" : "v3";
@@ -101,11 +124,21 @@ export async function resolveSessionModel(
     .map((candidate) => candidate.rawModelId.trim())
     .filter((value, index, values) => value.length > 0 && values.indexOf(value) === index);
 
-  const catalog = (await deps.container.modelCatalog.getEffectiveCatalog({ tenantId: input.tenantId })).catalog;
+  const catalog = (
+    await deps.container.modelCatalog.getEffectiveCatalog({ tenantId: input.tenantId })
+  ).catalog;
 
   type ProviderEntry = (typeof catalog)[string];
   type ModelEntry = NonNullable<ProviderEntry["models"]>[string];
-  type ResolvedCandidate = { providerId: string; modelId: string; provider: ProviderEntry; model: ModelEntry; npm: string; api: string | undefined; optionsOverride?: Record<string, unknown> };
+  type ResolvedCandidate = {
+    providerId: string;
+    modelId: string;
+    provider: ProviderEntry;
+    model: ModelEntry;
+    npm: string;
+    api: string | undefined;
+    optionsOverride?: Record<string, unknown>;
+  };
 
   const invalidCandidateIds: string[] = [];
   const optionsByCandidateId = new Map<string, Record<string, unknown>>();
@@ -137,7 +170,10 @@ export async function resolveSessionModel(
     parsedCandidates.push(parsed);
   }
 
-  if (invalidCandidateIds.length > 0) throw new Error(`invalid agent model id(s) (expected provider/model): ${invalidCandidateIds.join(", ")}`);
+  if (invalidCandidateIds.length > 0)
+    throw new Error(
+      `invalid agent model id(s) (expected provider/model): ${invalidCandidateIds.join(", ")}`,
+    );
 
   const resolvedCandidates: ResolvedCandidate[] = parsedCandidates
     .map((candidate): ResolvedCandidate | undefined => {
@@ -171,8 +207,13 @@ export async function resolveSessionModel(
     throw new Error(`model not found in models.dev catalog: ${attemptedLabel}`);
   }
 
-  const specsByCandidate = resolvedCandidates.map((candidate) => ({ candidateId: `${candidate.providerId}/${candidate.modelId}`, specificationVersion: expectedSpecificationVersionForNpm(candidate.npm) }));
-  const distinctSpecs = Array.from(new Set(specsByCandidate.map((entry) => entry.specificationVersion)));
+  const specsByCandidate = resolvedCandidates.map((candidate) => ({
+    candidateId: `${candidate.providerId}/${candidate.modelId}`,
+    specificationVersion: expectedSpecificationVersionForNpm(candidate.npm),
+  }));
+  const distinctSpecs = Array.from(
+    new Set(specsByCandidate.map((entry) => entry.specificationVersion)),
+  );
   if (distinctSpecs.length > 1) {
     const details = specsByCandidate
       .map((entry) => `${entry.candidateId} (${entry.specificationVersion})`)
@@ -181,7 +222,15 @@ export async function resolveSessionModel(
   }
 
   const fetchImpl = input.fetchImpl ?? deps.fetchImpl;
-  const { secretProvider, authProfileDal, pinDal, oauthProviderRegistry, oauthRefreshLeaseDal, logger, oauthLeaseOwner } = buildProviderResolutionSetup({
+  const {
+    secretProvider,
+    authProfileDal,
+    pinDal,
+    oauthProviderRegistry,
+    oauthRefreshLeaseDal,
+    logger,
+    oauthLeaseOwner,
+  } = buildProviderResolutionSetup({
     container: deps.container,
     secretProvider: deps.secretProvider,
     oauthLeaseOwner: deps.oauthLeaseOwner,
@@ -190,7 +239,9 @@ export async function resolveSessionModel(
 
   type ResolvedLanguageModel = LanguageModelV2 | LanguageModelV3;
 
-  async function buildRotatingModel(chosen: (typeof resolvedCandidates)[number]): Promise<ResolvedLanguageModel> {
+  async function buildRotatingModel(
+    chosen: (typeof resolvedCandidates)[number],
+  ): Promise<ResolvedLanguageModel> {
     const mergedOptions = (() => {
       const providerOptions =
         coerceRecord((chosen.provider as { options?: unknown }).options) ?? {};
@@ -230,7 +281,9 @@ export async function resolveSessionModel(
       providerEnv: (chosen.provider as { env?: unknown }).env,
     });
     const missingCredentialsError = () =>
-      new Error(`no active auth profiles with credentials configured for provider '${chosen.providerId}'`);
+      new Error(
+        `no active auth profiles with credentials configured for provider '${chosen.providerId}'`,
+      );
     const pinSessionProfile = (authProfileId: string): void => {
       if (!input.sessionId) return;
       void pinDal
@@ -242,7 +295,12 @@ export async function resolveSessionModel(
         })
         .catch(() => {});
     };
-    const invokeModel = async <T, TCallOptions>(model: ResolvedLanguageModel, options: TCallOptions, invoke: (model: ResolvedLanguageModel, options: TCallOptions) => PromiseLike<T>, authProfileId?: string): Promise<T> => {
+    const invokeModel = async <T, TCallOptions>(
+      model: ResolvedLanguageModel,
+      options: TCallOptions,
+      invoke: (model: ResolvedLanguageModel, options: TCallOptions) => PromiseLike<T>,
+      authProfileId?: string,
+    ): Promise<T> => {
       const result = await invoke(model, options);
       if (authProfileId) pinSessionProfile(authProfileId);
       return result;
@@ -450,7 +508,9 @@ export async function resolveSessionModel(
     };
   }
 
-  const rotatingModels = await Promise.all(resolvedCandidates.map((entry) => buildRotatingModel(entry)));
+  const rotatingModels = await Promise.all(
+    resolvedCandidates.map((entry) => buildRotatingModel(entry)),
+  );
   if (rotatingModels.length === 1) return rotatingModels[0]!;
 
   const primarySpec = rotatingModels[0]!.specificationVersion;

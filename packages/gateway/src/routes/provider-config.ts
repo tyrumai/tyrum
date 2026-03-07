@@ -39,8 +39,8 @@ export interface ProviderConfigRouteDeps {
   executionProfileModelAssignmentDal: ExecutionProfileModelAssignmentDal;
 }
 
-const invalidRequest = (c: Context, message: string, status = 400) =>
-  c.json({ error: "invalid_request", message }, status);
+const invalidRequest = (c: Context, message: string) =>
+  c.json({ error: "invalid_request", message }, 400);
 const notFound = (c: Context, message: string) => c.json({ error: "not_found", message }, 404);
 
 function toContractAccount(row: AuthProfileRow) {
@@ -160,7 +160,9 @@ async function loadRegistrySpecs(
   tenantId: string,
 ): Promise<Map<string, ProviderRegistrySpec>> {
   const loaded = await modelCatalog.getEffectiveCatalog({ tenantId });
-  return new Map(listProviderRegistrySpecs(loaded.catalog).map((provider) => [provider.provider_key, provider]));
+  return new Map(
+    listProviderRegistrySpecs(loaded.catalog).map((provider) => [provider.provider_key, provider]),
+  );
 }
 
 async function listProviderGroups(deps: ProviderConfigRouteDeps, tenantId: string) {
@@ -195,10 +197,14 @@ async function listProviderGroups(deps: ProviderConfigRouteDeps, tenantId: strin
 
   const providers = Array.from(grouped.values())
     .map((provider) => {
-      provider.accounts = provider.accounts.toSorted((a, b) => a.display_name.localeCompare(b.display_name));
+      provider.accounts = provider.accounts.toSorted((a, b) =>
+        a.display_name.localeCompare(b.display_name),
+      );
       return provider;
     })
-    .toSorted((a, b) => a.name.localeCompare(b.name) || a.provider_key.localeCompare(b.provider_key));
+    .toSorted(
+      (a, b) => a.name.localeCompare(b.name) || a.provider_key.localeCompare(b.provider_key),
+    );
   return ConfiguredProviderListResponse.parse({ status: "ok", providers });
 }
 
@@ -210,7 +216,8 @@ async function storeManagedSecrets(input: {
   const configuredSecretKeys: Record<string, string> = {};
   for (const [slotKey, value] of Object.entries(input.secretValues)) {
     const secretKey = buildManagedProviderSecretKey(input.accountKey, slotKey);
-    await input.secretProvider.store(secretKey, value); configuredSecretKeys[slotKey] = secretKey;
+    await input.secretProvider.store(secretKey, value);
+    configuredSecretKeys[slotKey] = secretKey;
   }
   return configuredSecretKeys;
 }
@@ -346,7 +353,10 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
         secretKeys: managedSecretKeys,
       });
 
-      return c.json(ProviderAccountMutateResponse.parse({ status: "ok", account: toContractAccount(row) }), 201);
+      return c.json(
+        ProviderAccountMutateResponse.parse({ status: "ok", account: toContractAccount(row) }),
+        201,
+      );
     } catch (error) {
       await revokeManagedSecrets(secretProvider, Object.values(managedSecretKeys));
       throw error;
@@ -419,7 +429,9 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
           : await deps.authProfileDal.enableByKey({ tenantId, authProfileKey: accountKey });
       if (!row) return notFound(c, "provider account not found");
     }
-    return c.json(ProviderAccountMutateResponse.parse({ status: "ok", account: toContractAccount(row) }));
+    return c.json(
+      ProviderAccountMutateResponse.parse({ status: "ok", account: toContractAccount(row) }),
+    );
   });
 
   app.delete("/config/providers/accounts/:key", async (c) => {
@@ -444,26 +456,32 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
         deletedProviderKey: existing.provider_key,
       });
       if ("conflict" in resolved) {
-        return c.json({
-          ...resolved.conflict,
-          message:
-            "cannot delete the last provider account while configured model presets or execution-profile assignments still reference this provider; delete the provider instead",
-        }, 409);
+        return c.json(
+          {
+            ...resolved.conflict,
+            message:
+              "cannot delete the last provider account while configured model presets or execution-profile assignments still reference this provider; delete the provider instead",
+          },
+          409,
+        );
       }
       if (resolved.deletedPresetKeys.size > 0) {
-        return c.json({
-          error: "invalid_request",
-          message:
-            "cannot delete the last provider account while configured model presets still reference this provider; delete the provider instead",
-        }, 409);
+        return c.json(
+          {
+            error: "invalid_request",
+            message:
+              "cannot delete the last provider account while configured model presets still reference this provider; delete the provider instead",
+          },
+          409,
+        );
       }
     }
 
     await deps.db.transaction(async (tx) => {
-      await tx.run("DELETE FROM session_provider_pins WHERE tenant_id = ? AND auth_profile_id = ?", [
-        tenantId,
-        existing.auth_profile_id,
-      ]);
+      await tx.run(
+        "DELETE FROM session_provider_pins WHERE tenant_id = ? AND auth_profile_id = ?",
+        [tenantId, existing.auth_profile_id],
+      );
       await tx.run("DELETE FROM auth_profiles WHERE tenant_id = ? AND auth_profile_key = ?", [
         tenantId,
         existing.auth_profile_key,
@@ -516,19 +534,25 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
         }
         if (deletedPresetKeys.length > 0) {
           const presetPlaceholders = deletedPresetKeys.map(() => "?").join(", ");
-          await tx.run(`DELETE FROM session_model_overrides WHERE tenant_id = ? AND preset_key IN (${presetPlaceholders})`, [tenantId, ...deletedPresetKeys]);
-          await tx.run("DELETE FROM configured_model_presets WHERE tenant_id = ? AND provider_key = ?", [
-            tenantId,
-            providerKey,
-          ]);
+          await tx.run(
+            `DELETE FROM session_model_overrides WHERE tenant_id = ? AND preset_key IN (${presetPlaceholders})`,
+            [tenantId, ...deletedPresetKeys],
+          );
+          await tx.run(
+            "DELETE FROM configured_model_presets WHERE tenant_id = ? AND provider_key = ?",
+            [tenantId, providerKey],
+          );
         }
-        await tx.run("DELETE FROM session_model_overrides WHERE tenant_id = ? AND model_id LIKE ? ESCAPE '\\'", [
-          tenantId,
-          `${escapeLikePattern(providerKey)}/%`,
-        ]);
+        await tx.run(
+          "DELETE FROM session_model_overrides WHERE tenant_id = ? AND model_id LIKE ? ESCAPE '\\'",
+          [tenantId, `${escapeLikePattern(providerKey)}/%`],
+        );
         if (profileIds.length > 0) {
           const profilePlaceholders = profileIds.map(() => "?").join(", ");
-          await tx.run(`DELETE FROM session_provider_pins WHERE tenant_id = ? AND auth_profile_id IN (${profilePlaceholders})`, [tenantId, ...profileIds]);
+          await tx.run(
+            `DELETE FROM session_provider_pins WHERE tenant_id = ? AND auth_profile_id IN (${profilePlaceholders})`,
+            [tenantId, ...profileIds],
+          );
         }
         await tx.run("DELETE FROM auth_profiles WHERE tenant_id = ? AND provider_key = ?", [
           tenantId,

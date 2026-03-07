@@ -2,10 +2,7 @@ import { releaseConcurrencySlotsTx } from "./concurrency-manager.js";
 import type { RunControlDeps } from "./shared.js";
 import type { ResumeTokenRow } from "./shared.js";
 
-export async function resumeRun(
-  deps: RunControlDeps,
-  token: string,
-): Promise<string | undefined> {
+export async function resumeRun(deps: RunControlDeps, token: string): Promise<string | undefined> {
   const { nowIso } = deps.clock();
   return await deps.db.transaction(async (tx) => {
     const row = await tx.get<ResumeTokenRow>(

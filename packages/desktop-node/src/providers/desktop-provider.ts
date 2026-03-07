@@ -161,27 +161,46 @@ export class DesktopProvider implements CapabilityProvider {
 
   async execute(action: ActionPrimitive): Promise<TaskResult> {
     const parseResult = DesktopActionArgs.safeParse(action.args);
-    if (!parseResult.success) return this.fail(`Invalid desktop args: ${parseResult.error.message}`);
+    if (!parseResult.success)
+      return this.fail(`Invalid desktop args: ${parseResult.error.message}`);
     const args = parseResult.data;
     try {
       switch (args.op) {
-        case "screenshot": return await this.screenshot(args);
-        case "mouse": return await this.mouseAction(args);
-        case "keyboard": return await this.keyboardAction(args);
-        case "snapshot": return await this.snapshot(args);
-        case "query": return await this.query(args);
-        case "act": return await this.act(args);
-        case "wait_for": return await this.waitFor(args);
-        default: return this.fail(`Unsupported desktop operation: ${(args as { op: string }).op}`);
+        case "screenshot":
+          return await this.screenshot(args);
+        case "mouse":
+          return await this.mouseAction(args);
+        case "keyboard":
+          return await this.keyboardAction(args);
+        case "snapshot":
+          return await this.snapshot(args);
+        case "query":
+          return await this.query(args);
+        case "act":
+          return await this.act(args);
+        case "wait_for":
+          return await this.waitFor(args);
+        default:
+          return this.fail(`Unsupported desktop operation: ${(args as { op: string }).op}`);
       }
-    } catch (err) { return this.fail(`Desktop backend error: ${toErrorMessage(err)}`); }
+    } catch (err) {
+      return this.fail(`Desktop backend error: ${toErrorMessage(err)}`);
+    }
   }
 
   private backendPermissions(accessibility: boolean): DesktopBackendPermissions {
-    return { accessibility, screen_capture: this.permissions.desktopScreenshot, input_control: this.permissions.desktopInput };
+    return {
+      accessibility,
+      screen_capture: this.permissions.desktopScreenshot,
+      input_control: this.permissions.desktopInput,
+    };
   }
 
-  private toImageEvidence(type: string, capture: Capture, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  private toImageEvidence(
+    type: string,
+    capture: Capture,
+    extra: Record<string, unknown> = {},
+  ): Record<string, unknown> {
     return this.evidence({
       type,
       mime: "image/png",
@@ -203,7 +222,11 @@ export class DesktopProvider implements CapabilityProvider {
   }
 
   private queryText(selector: DesktopQueryArgs["selector"]): string | undefined {
-    return selector.kind === "ocr" ? selector.text : selector.kind === "a11y" ? selector.name : undefined;
+    return selector.kind === "ocr"
+      ? selector.text
+      : selector.kind === "a11y"
+        ? selector.name
+        : undefined;
   }
 
   private async snapshotState(args: DesktopSnapshotArgs): Promise<SnapshotState> {
@@ -231,7 +254,8 @@ export class DesktopProvider implements CapabilityProvider {
 
   private async queryViaA11y(args: DesktopQueryArgs): Promise<TaskResult | undefined> {
     const { selector } = args;
-    const wantsA11y = selector.kind === "a11y" || (selector.kind === "ref" && isAtspiRef(selector.ref));
+    const wantsA11y =
+      selector.kind === "a11y" || (selector.kind === "ref" && isAtspiRef(selector.ref));
     if (!wantsA11y) return undefined;
     const a11yBackend = await this.resolveA11yBackend();
     if (!a11yBackend) return undefined;
@@ -242,7 +266,9 @@ export class DesktopProvider implements CapabilityProvider {
         result: { op: "query", matches },
         evidence: this.evidence({ type: "query", mode: "a11y" }),
       };
-    } catch (err) { return this.fail(toErrorMessage(err)); }
+    } catch (err) {
+      return this.fail(toErrorMessage(err));
+    }
   }
 
   private collectOcrMatches(
@@ -258,14 +284,22 @@ export class DesktopProvider implements CapabilityProvider {
     for (const candidate of candidates) {
       const candidateText = candidate.text.trim();
       if (!candidateText) continue;
-      const matchIndex = normalizeForContainsText(candidateText, caseInsensitive).indexOf(normalizedNeedle);
-      if (matchIndex === -1 || (boundsFilter && !rectsIntersect(candidate.bounds, boundsFilter))) continue;
+      const matchIndex = normalizeForContainsText(candidateText, caseInsensitive).indexOf(
+        normalizedNeedle,
+      );
+      if (matchIndex === -1 || (boundsFilter && !rectsIntersect(candidate.bounds, boundsFilter)))
+        continue;
       const boundedText = boundTextAroundMatch(candidateText, matchIndex);
       if (!boundedText) continue;
       const nextBytes = Buffer.byteLength(boundedText, "utf8");
       if (totalTextBytes + nextBytes > MAX_OCR_MATCH_TEXT_BYTES) continue;
       totalTextBytes += nextBytes;
-      matches.push({ kind: "ocr", text: boundedText, bounds: candidate.bounds, confidence: candidate.confidence });
+      matches.push({
+        kind: "ocr",
+        text: boundedText,
+        bounds: candidate.bounds,
+        confidence: candidate.confidence,
+      });
       if (matches.length >= limit) break;
     }
     return matches;
@@ -285,53 +319,81 @@ export class DesktopProvider implements CapabilityProvider {
         action: args.action,
         ...(resolvedElementRef === undefined ? {} : { resolved_element_ref: resolvedElementRef }),
       },
-      evidence: this.evidence({ type: "act", mode, action: args.action.kind, ...(point ? { x: point.x, y: point.y } : {}) }),
+      evidence: this.evidence({
+        type: "act",
+        mode,
+        action: args.action.kind,
+        ...(point ? { x: point.x, y: point.y } : {}),
+      }),
     };
   }
 
-  private async resolvePointFromA11yName(name: string): Promise<{ point: PixelPoint } | TaskResult> {
+  private async resolvePointFromA11yName(
+    name: string,
+  ): Promise<{ point: PixelPoint } | TaskResult> {
     const ocrResult = await this.query({
       op: "query",
       selector: { kind: "ocr", text: name, case_insensitive: true },
       limit: 1,
     });
     if (!ocrResult.success) return ocrResult;
-    const match = ((ocrResult.result as { matches?: Array<{ kind: string; bounds?: DesktopUiRect }> } | undefined)?.matches ?? [])[0];
-    if (!match || match.kind !== "ocr" || !match.bounds) return this.fail(`OCR target not found: "${name}"`);
-    return { point: { x: match.bounds.x + match.bounds.width / 2, y: match.bounds.y + match.bounds.height / 2 } };
+    const match = ((
+      ocrResult.result as { matches?: Array<{ kind: string; bounds?: DesktopUiRect }> } | undefined
+    )?.matches ?? [])[0];
+    if (!match || match.kind !== "ocr" || !match.bounds)
+      return this.fail(`OCR target not found: "${name}"`);
+    return {
+      point: {
+        x: match.bounds.x + match.bounds.width / 2,
+        y: match.bounds.y + match.bounds.height / 2,
+      },
+    };
   }
 
   private async actViaA11y(args: DesktopActArgs): Promise<TaskResult | undefined> {
     const targetRef = args.target.kind === "ref" ? args.target.ref : undefined;
-    const isA11yTarget = args.target.kind === "a11y" || (targetRef !== undefined && isAtspiRef(targetRef));
+    const isA11yTarget =
+      args.target.kind === "a11y" || (targetRef !== undefined && isAtspiRef(targetRef));
     if (!isA11yTarget) return undefined;
     const a11yBackend = await this.resolveA11yBackend();
     if (a11yBackend) {
-      const denied = await this.confirm(`Allow desktop act ${args.action.kind} via accessibility?`, "User denied desktop act");
+      const denied = await this.confirm(
+        `Allow desktop act ${args.action.kind} via accessibility?`,
+        "User denied desktop act",
+      );
       if (denied) return denied;
       try {
         const result = await a11yBackend.act(args);
         return this.actResult(args, "a11y", result.resolved_element_ref);
-      } catch (err) { return this.fail(toErrorMessage(err)); }
+      } catch (err) {
+        return this.fail(toErrorMessage(err));
+      }
     }
     if (args.target.kind === "ref") {
       return this.fail(
         "AT-SPI backend unavailable for atspi: refs (pixel fallback requires an OCR selector or pixel ref)",
       );
     }
-    if (args.target.kind !== "a11y") return this.fail(`Unsupported act target kind for a11y fallback: ${args.target.kind}`);
+    if (args.target.kind !== "a11y")
+      return this.fail(`Unsupported act target kind for a11y fallback: ${args.target.kind}`);
     const name = args.target.name?.trim();
     if (!name) return this.fail("Pixel act requires an a11y selector name for OCR text search");
     const pointResult = await this.resolvePointFromA11yName(name);
     if ("success" in pointResult) return pointResult;
     const { point } = pointResult;
-    const denied = await this.confirm(`Allow desktop act ${args.action.kind} at (${point.x}, ${point.y})?`, "User denied desktop act");
+    const denied = await this.confirm(
+      `Allow desktop act ${args.action.kind} at (${point.x}, ${point.y})?`,
+      "User denied desktop act",
+    );
     if (denied) return denied;
     await this.performPixelAct(point, args.action);
     return this.actResult(args, "pixel", `pixel:${point.x},${point.y}`, point);
   }
 
-  private async screenshot(args: { display: "primary" | "all" | { id: string }; max_width?: number }): Promise<TaskResult> {
+  private async screenshot(args: {
+    display: "primary" | "all" | { id: string };
+    max_width?: number;
+  }): Promise<TaskResult> {
     const denied = this.requireScreenshot();
     if (denied) return denied;
     const capture = await this.backend.captureScreen(args.display);
@@ -345,7 +407,12 @@ export class DesktopProvider implements CapabilityProvider {
     const { mode, accessibility, windows, tree } = await this.snapshotState(args);
     return {
       success: true,
-      result: { op: "snapshot", backend: { mode, permissions: this.backendPermissions(accessibility) }, windows, tree },
+      result: {
+        op: "snapshot",
+        backend: { mode, permissions: this.backendPermissions(accessibility) },
+        windows,
+        tree,
+      },
       evidence: this.toImageEvidence("snapshot", capture, { mode }),
     };
   }
@@ -382,7 +449,13 @@ export class DesktopProvider implements CapabilityProvider {
       return this.fail(`OCR failed: ${toErrorMessage(err)}`);
     }
     const boundsFilter = args.selector.kind === "ocr" ? args.selector.bounds : undefined;
-    const matches = this.collectOcrMatches(candidates, queryText, caseInsensitive, boundsFilter, args.limit);
+    const matches = this.collectOcrMatches(
+      candidates,
+      queryText,
+      caseInsensitive,
+      boundsFilter,
+      args.limit,
+    );
     return {
       success: true,
       result: { op: "query", matches },
@@ -402,9 +475,11 @@ export class DesktopProvider implements CapabilityProvider {
     if (denied) return denied;
     const a11yResult = await this.actViaA11y(args);
     if (a11yResult) return a11yResult;
-    if (args.target.kind !== "ref") return this.fail(`Unsupported act target kind for pixel mode: ${args.target.kind}`);
+    if (args.target.kind !== "ref")
+      return this.fail(`Unsupported act target kind for pixel mode: ${args.target.kind}`);
     const point = parsePixelRef(args.target.ref);
-    if (!point) return this.fail(`Unsupported pixel ref format: "${args.target.ref}" (expected "pixel:x,y")`);
+    if (!point)
+      return this.fail(`Unsupported pixel ref format: "${args.target.ref}" (expected "pixel:x,y")`);
     const confirmation = await this.confirm(
       `Allow desktop act ${args.action.kind} at (${point.x}, ${point.y})?`,
       "User denied desktop act",
@@ -424,12 +499,21 @@ export class DesktopProvider implements CapabilityProvider {
       const queryResult = await this.query({ op: "query", selector: args.selector, limit: 1 });
       const matches = queryResult.success ? this.extractMatches(queryResult.result) : [];
       lastMatch = matches[0] ?? lastMatch;
-      const satisfied = queryResult.success && (args.state === "hidden" ? matches.length === 0 : matches.length > 0);
+      const satisfied =
+        queryResult.success &&
+        (args.state === "hidden" ? matches.length === 0 : matches.length > 0);
       if (satisfied) {
         const elapsed = Date.now() - start;
         return {
           success: true,
-          result: { op: "wait_for", selector: args.selector, state: args.state, status: "satisfied", elapsed_ms: elapsed, match: args.state === "hidden" ? undefined : matches[0] },
+          result: {
+            op: "wait_for",
+            selector: args.selector,
+            state: args.state,
+            status: "satisfied",
+            elapsed_ms: elapsed,
+            match: args.state === "hidden" ? undefined : matches[0],
+          },
         };
       }
       const sleepMs = Math.min(args.poll_ms, Math.max(0, deadline - Date.now()));
@@ -439,29 +523,67 @@ export class DesktopProvider implements CapabilityProvider {
     const elapsed = Date.now() - start;
     return {
       success: true,
-      result: { op: "wait_for", selector: args.selector, state: args.state, status: "timeout", elapsed_ms: elapsed, match: args.state === "hidden" ? lastMatch : undefined },
+      result: {
+        op: "wait_for",
+        selector: args.selector,
+        state: args.state,
+        status: "timeout",
+        elapsed_ms: elapsed,
+        match: args.state === "hidden" ? lastMatch : undefined,
+      },
     };
   }
 
-  private async mouseAction(args: { action: string; x: number; y: number; button?: string; duration_ms?: number }): Promise<TaskResult> {
+  private async mouseAction(args: {
+    action: string;
+    x: number;
+    y: number;
+    button?: string;
+    duration_ms?: number;
+  }): Promise<TaskResult> {
     const denied = this.requireInput();
     if (denied) return denied;
-    const confirmation = await this.confirm(`Allow mouse ${args.action} at (${args.x}, ${args.y})?`, "User denied mouse action");
+    const confirmation = await this.confirm(
+      `Allow mouse ${args.action} at (${args.x}, ${args.y})?`,
+      "User denied mouse action",
+    );
     if (confirmation) return confirmation;
     switch (args.action) {
-      case "move": await this.backend.moveMouse(args.x, args.y); break;
-      case "click": await this.backend.clickMouse(args.x, args.y, args.button as "left" | "right" | "middle" | undefined); break;
-      case "drag": await this.backend.dragMouse(args.x, args.y, args.duration_ms); break;
-      default: return this.fail(`Unsupported mouse action: ${args.action}`);
+      case "move":
+        await this.backend.moveMouse(args.x, args.y);
+        break;
+      case "click":
+        await this.backend.clickMouse(
+          args.x,
+          args.y,
+          args.button as "left" | "right" | "middle" | undefined,
+        );
+        break;
+      case "drag":
+        await this.backend.dragMouse(args.x, args.y, args.duration_ms);
+        break;
+      default:
+        return this.fail(`Unsupported mouse action: ${args.action}`);
     }
-    return { success: true, evidence: this.evidence({ type: "mouse", action: args.action, x: args.x, y: args.y }) };
+    return {
+      success: true,
+      evidence: this.evidence({ type: "mouse", action: args.action, x: args.x, y: args.y }),
+    };
   }
 
-  private async keyboardAction(args: { action: string; text?: string; key?: string }): Promise<TaskResult> {
+  private async keyboardAction(args: {
+    action: string;
+    text?: string;
+    key?: string;
+  }): Promise<TaskResult> {
     const denied = this.requireInput();
     if (denied) return denied;
-    const detail = args.action === "type" ? args.text : args.action === "press" ? args.key : undefined;
-    const confirmation = await this.confirm(`Allow keyboard ${args.action}: "${detail ?? "<missing>"}"?`, "User denied keyboard action");
+    const detail =
+      args.action === "type" ? args.text : args.action === "press" ? args.key : undefined;
+    const confirmation = await this.confirm(
+      `Allow keyboard ${args.action}: "${detail ?? "<missing>"}"?`,
+      "User denied keyboard action",
+    );
     if (confirmation) return confirmation;
     switch (args.action) {
       case "type":
@@ -472,12 +594,24 @@ export class DesktopProvider implements CapabilityProvider {
         if (!args.key) return this.fail("Missing key for keyboard press action");
         await this.backend.pressKey(args.key);
         break;
-      default: return this.fail(`Unsupported keyboard action: ${args.action}`);
+      default:
+        return this.fail(`Unsupported keyboard action: ${args.action}`);
     }
-    return { success: true, evidence: this.evidence({ type: "keyboard", action: args.action, text: args.text, key: args.key }) };
+    return {
+      success: true,
+      evidence: this.evidence({
+        type: "keyboard",
+        action: args.action,
+        text: args.text,
+        key: args.key,
+      }),
+    };
   }
 
-  private async performPixelAct(point: PixelPoint, action: DesktopActArgs["action"]): Promise<void> {
+  private async performPixelAct(
+    point: PixelPoint,
+    action: DesktopActArgs["action"],
+  ): Promise<void> {
     if (action.kind === "right_click") {
       await this.backend.clickMouse(point.x, point.y, "right");
       return;

@@ -19,7 +19,9 @@ describe("Artifact lifecycle (retention + quotas)", () => {
   });
 
   it("adds durable lifecycle tracking columns to execution_artifacts", async () => {
-    const columns = await harness.db.all<{ name: string }>("PRAGMA table_info(execution_artifacts)");
+    const columns = await harness.db.all<{ name: string }>(
+      "PRAGMA table_info(execution_artifacts)",
+    );
     const names = columns.map((c) => c.name);
 
     expect(names).toContain("retention_expires_at");

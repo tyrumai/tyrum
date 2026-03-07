@@ -118,7 +118,9 @@ vi.mock("../src/main/gateway-bin-path.js", () => ({
   resolveGatewayBinPath: vi.fn(() => "/tmp/mock-gateway-bin.mjs"),
 }));
 
-function createWindowStub(sentEvents?: Array<{ channel: string; payload: unknown }>): BrowserWindow {
+function createWindowStub(
+  sentEvents?: Array<{ channel: string; payload: unknown }>,
+): BrowserWindow {
   return {
     isDestroyed: () => false,
     webContents: {

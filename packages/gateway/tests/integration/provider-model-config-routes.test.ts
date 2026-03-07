@@ -5,12 +5,38 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createTestApp } from "./helpers.js";
 
 const jsonHeaders = { "content-type": "application/json" };
-const EXECUTION_PROFILE_IDS = ["interaction", "explorer_ro", "reviewer_ro", "planner", "jury", "executor_rw", "integrator"] as const;
+const EXECUTION_PROFILE_IDS = [
+  "interaction",
+  "explorer_ro",
+  "reviewer_ro",
+  "planner",
+  "jury",
+  "executor_rw",
+  "integrator",
+] as const;
 const defaultSessionScope = { tenantKey: "default", agentKey: "default", workspaceKey: "default" };
 const PROVIDER_METADATA = {
-  anthropic: { name: "Anthropic", env: ["ANTHROPIC_API_KEY"], npm: "@ai-sdk/anthropic", api: "https://api.anthropic.com/v1", doc: "https://docs.anthropic.com" },
-  openai: { name: "OpenAI", env: ["OPENAI_API_KEY"], npm: "@ai-sdk/openai", api: "https://api.openai.com/v1", doc: "https://platform.openai.com/docs" },
-  openrouter: { name: "OpenRouter", env: ["OPENROUTER_API_KEY"], npm: "@openrouter/ai-sdk-provider", api: "https://openrouter.ai/api/v1", doc: "https://openrouter.ai/docs/api-reference/overview" },
+  anthropic: {
+    name: "Anthropic",
+    env: ["ANTHROPIC_API_KEY"],
+    npm: "@ai-sdk/anthropic",
+    api: "https://api.anthropic.com/v1",
+    doc: "https://docs.anthropic.com",
+  },
+  openai: {
+    name: "OpenAI",
+    env: ["OPENAI_API_KEY"],
+    npm: "@ai-sdk/openai",
+    api: "https://api.openai.com/v1",
+    doc: "https://platform.openai.com/docs",
+  },
+  openrouter: {
+    name: "OpenRouter",
+    env: ["OPENROUTER_API_KEY"],
+    npm: "@openrouter/ai-sdk-provider",
+    api: "https://openrouter.ai/api/v1",
+    doc: "https://openrouter.ai/docs/api-reference/overview",
+  },
 } satisfies Record<string, Record<string, unknown>>;
 
 async function seedCatalog(
@@ -29,15 +55,25 @@ async function seedCatalog(
   });
 }
 
-function modelResponse(id: string, name: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
+function modelResponse(
+  id: string,
+  name: string,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
   return { id, name, modalities: { output: ["text"] }, ...extra };
 }
 
-function catalogFor(providerKey: keyof typeof PROVIDER_METADATA, models: Record<string, unknown>): Record<string, unknown> {
+function catalogFor(
+  providerKey: keyof typeof PROVIDER_METADATA,
+  models: Record<string, unknown>,
+): Record<string, unknown> {
   return { [providerKey]: { id: providerKey, ...PROVIDER_METADATA[providerKey], models } };
 }
 
-async function createProviderAccount(app: Awaited<ReturnType<typeof createTestApp>>["app"], body: Record<string, unknown>): Promise<Response> {
+async function createProviderAccount(
+  app: Awaited<ReturnType<typeof createTestApp>>["app"],
+  body: Record<string, unknown>,
+): Promise<Response> {
   return await app.request("/config/providers/accounts", {
     method: "POST",
     headers: jsonHeaders,
@@ -45,7 +81,10 @@ async function createProviderAccount(app: Awaited<ReturnType<typeof createTestAp
   });
 }
 
-async function createModelPreset(app: Awaited<ReturnType<typeof createTestApp>>["app"], body: Record<string, unknown>): Promise<Response> {
+async function createModelPreset(
+  app: Awaited<ReturnType<typeof createTestApp>>["app"],
+  body: Record<string, unknown>,
+): Promise<Response> {
   return await app.request("/config/models/presets", {
     method: "POST",
     headers: jsonHeaders,
@@ -53,7 +92,10 @@ async function createModelPreset(app: Awaited<ReturnType<typeof createTestApp>>[
   });
 }
 
-async function createDefaultSession(container: Awaited<ReturnType<typeof createTestApp>>["container"], providerThreadId: string) {
+async function createDefaultSession(
+  container: Awaited<ReturnType<typeof createTestApp>>["container"],
+  providerThreadId: string,
+) {
   return await container.sessionDal.getOrCreate({
     scopeKeys: defaultSessionScope,
     connectorKey: "ui",
@@ -62,7 +104,11 @@ async function createDefaultSession(container: Awaited<ReturnType<typeof createT
   });
 }
 
-async function insertApiKeyProfile(container: Awaited<ReturnType<typeof createTestApp>>["container"], authProfileKey: string, providerKey: string): Promise<void> {
+async function insertApiKeyProfile(
+  container: Awaited<ReturnType<typeof createTestApp>>["container"],
+  authProfileKey: string,
+  providerKey: string,
+): Promise<void> {
   await container.db.run(
     `INSERT INTO auth_profiles (
        tenant_id,
@@ -76,7 +122,11 @@ async function insertApiKeyProfile(container: Awaited<ReturnType<typeof createTe
   );
 }
 
-async function insertSessionModelOverride(container: Awaited<ReturnType<typeof createTestApp>>["container"], sessionId: string, modelId: string): Promise<void> {
+async function insertSessionModelOverride(
+  container: Awaited<ReturnType<typeof createTestApp>>["container"],
+  sessionId: string,
+  modelId: string,
+): Promise<void> {
   await container.db.run(
     `INSERT INTO session_model_overrides (
        tenant_id,
@@ -121,19 +171,27 @@ describe("provider + model config routes", () => {
 
     const registryRes = await app.request("/config/providers/registry");
     expect(registryRes.status).toBe(200);
-    const registryBody =
-      (await registryRes.json()) as {
-        providers: Array<{ provider_key: string; supported: boolean; methods: Array<{ method_key: string }> }>;
-      };
-    expect(registryBody.providers.some((provider) => provider.provider_key === "anthropic")).toBe(true);
-    expect(registryBody.providers.find((provider) => provider.provider_key === "anthropic")?.methods).toEqual(
-      expect.arrayContaining([expect.objectContaining({ method_key: "api_key" })]),
+    const registryBody = (await registryRes.json()) as {
+      providers: Array<{
+        provider_key: string;
+        supported: boolean;
+        methods: Array<{ method_key: string }>;
+      }>;
+    };
+    expect(registryBody.providers.some((provider) => provider.provider_key === "anthropic")).toBe(
+      true,
     );
+    expect(
+      registryBody.providers.find((provider) => provider.provider_key === "anthropic")?.methods,
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ method_key: "api_key" })]));
     expect(
       registryBody.providers.find((provider) => provider.provider_key === "cloudflare-workers-ai")
         ?.supported,
     ).toBe(true);
-    expect(registryBody.providers.find((provider) => provider.provider_key === "cloudflare-workers-ai")?.methods).toEqual(
+    expect(
+      registryBody.providers.find((provider) => provider.provider_key === "cloudflare-workers-ai")
+        ?.methods,
+    ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           method_key: "api_key",
@@ -145,7 +203,9 @@ describe("provider + model config routes", () => {
         }),
       ]),
     );
-    expect(registryBody.providers.find((provider) => provider.provider_key === "unsupported")?.supported).toBe(false);
+    expect(
+      registryBody.providers.find((provider) => provider.provider_key === "unsupported")?.supported,
+    ).toBe(false);
 
     const createRes = await createProviderAccount(app, {
       provider_key: "anthropic",
@@ -169,7 +229,11 @@ describe("provider + model config routes", () => {
     const listed = (await listRes.json()) as {
       providers: Array<{
         provider_key: string;
-        accounts: Array<{ account_key: string; display_name: string; configured_secret_keys: string[] }>;
+        accounts: Array<{
+          account_key: string;
+          display_name: string;
+          configured_secret_keys: string[];
+        }>;
       }>;
     };
     expect(listed.providers).toEqual(
@@ -199,7 +263,9 @@ describe("provider + model config routes", () => {
       },
     );
     expect(updateRes.status).toBe(200);
-    const updated = (await updateRes.json()) as { account: { display_name: string; config: Record<string, unknown> } };
+    const updated = (await updateRes.json()) as {
+      account: { display_name: string; config: Record<string, unknown> };
+    };
     expect(updated.account.display_name).toBe("Renamed Anthropic");
     expect(updated.account.config["baseURL"]).toBe("https://example.test/v1");
 
@@ -235,7 +301,9 @@ describe("provider + model config routes", () => {
 
     const availableRes = await app.request("/config/models/presets/available");
     expect(availableRes.status).toBe(200);
-    const available = (await availableRes.json()) as { models: Array<{ provider_key: string; model_id: string }> };
+    const available = (await availableRes.json()) as {
+      models: Array<{ provider_key: string; model_id: string }>;
+    };
     expect(available.models).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ provider_key: "openai", model_id: "gpt-4.1" }),
@@ -356,16 +424,24 @@ describe("provider + model config routes", () => {
 
     const availableRes = await app.request("/config/models/presets/available");
     expect(availableRes.status).toBe(200);
-    const available = (await availableRes.json()) as { models: Array<{ provider_key: string; model_id: string }> };
+    const available = (await availableRes.json()) as {
+      models: Array<{ provider_key: string; model_id: string }>;
+    };
     expect(available.models).toEqual(
-      expect.arrayContaining([expect.objectContaining({ provider_key: "openrouter", model_id: "openai/gpt-5.4" })]),
+      expect.arrayContaining([
+        expect.objectContaining({ provider_key: "openrouter", model_id: "openai/gpt-5.4" }),
+      ]),
     );
 
     const presetListRes = await app.request("/config/models/presets");
     expect(presetListRes.status).toBe(200);
-    const presetList = (await presetListRes.json()) as { presets: Array<{ preset_key: string; model_id: string }> };
+    const presetList = (await presetListRes.json()) as {
+      presets: Array<{ preset_key: string; model_id: string }>;
+    };
     expect(presetList.presets).toEqual(
-      expect.arrayContaining([expect.objectContaining({ preset_key: "legacy-openrouter", model_id: "openai/gpt-5.4" })]),
+      expect.arrayContaining([
+        expect.objectContaining({ preset_key: "legacy-openrouter", model_id: "openai/gpt-5.4" }),
+      ]),
     );
 
     const createRes = await createModelPreset(app, {
@@ -375,8 +451,12 @@ describe("provider + model config routes", () => {
       options: {},
     });
     expect(createRes.status).toBe(201);
-    const created = (await createRes.json()) as { preset: { provider_key: string; model_id: string } };
-    expect(created.preset).toEqual(expect.objectContaining({ provider_key: "openrouter", model_id: "openai/gpt-5.4" }));
+    const created = (await createRes.json()) as {
+      preset: { provider_key: string; model_id: string };
+    };
+    expect(created.preset).toEqual(
+      expect.objectContaining({ provider_key: "openrouter", model_id: "openai/gpt-5.4" }),
+    );
   });
 
   it("returns 400 when assignments reference a missing preset", async () => {
@@ -499,7 +579,11 @@ describe("provider + model config routes", () => {
       wildcardSession.session_id,
       `${wildcardProviderKey}/gpt-4.1`,
     );
-    await insertSessionModelOverride(container, otherSession.session_id, `${otherProviderKey}/gpt-4.1`);
+    await insertSessionModelOverride(
+      container,
+      otherSession.session_id,
+      `${otherProviderKey}/gpt-4.1`,
+    );
 
     const deleteRes = await app.request(
       `/config/providers/${encodeURIComponent(wildcardProviderKey)}`,

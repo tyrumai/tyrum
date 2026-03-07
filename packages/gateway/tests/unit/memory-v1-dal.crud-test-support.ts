@@ -132,7 +132,11 @@ export function registerMemoryV1DalCrudTests(fixture: MemoryV1DalFixture): void 
         scopeA,
       );
 
-      const tombstone = await dal.delete(created.memory_item_id, { deleted_by: "operator" }, scopeA);
+      const tombstone = await dal.delete(
+        created.memory_item_id,
+        { deleted_by: "operator" },
+        scopeA,
+      );
       expect(await dal.getById(created.memory_item_id, scopeA)).toBeUndefined();
 
       await db.run(

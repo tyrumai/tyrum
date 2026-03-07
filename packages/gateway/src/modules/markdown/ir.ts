@@ -75,8 +75,13 @@ type InlineParseMatch = InlineParseResult & { next: number };
 const unorderedListPattern = /^(\s*)[-+*]\s+(.*)$/;
 const orderedListPattern = /^(\s*)(\d+)[.)]\s+(.*)$/;
 
-function appendShiftedSpans(target: MarkdownIrSpan[], source: MarkdownIrSpan[], offset: number): void {
-  for (const span of source) target.push({ ...span, start: span.start + offset, end: span.end + offset });
+function appendShiftedSpans(
+  target: MarkdownIrSpan[],
+  source: MarkdownIrSpan[],
+  offset: number,
+): void {
+  for (const span of source)
+    target.push({ ...span, start: span.start + offset, end: span.end + offset });
 }
 
 function findItalicEnd(input: string, start: number): number {
@@ -91,7 +96,9 @@ function matchWrappedInline(
   input: string,
   idx: number,
   marker: string,
-  outer: Pick<Extract<MarkdownIrSpan, { kind: "style" }>, "kind" | "style"> | Pick<Extract<MarkdownIrSpan, { kind: "link" }>, "kind" | "href">,
+  outer:
+    | Pick<Extract<MarkdownIrSpan, { kind: "style" }>, "kind" | "style">
+    | Pick<Extract<MarkdownIrSpan, { kind: "link" }>, "kind" | "href">,
   end = input.indexOf(marker, idx + marker.length),
 ): InlineParseMatch | undefined {
   if (!input.startsWith(marker, idx) || end === -1) return undefined;
@@ -105,7 +112,12 @@ function matchCodeInline(input: string, idx: number): InlineParseMatch | undefin
   const end = input.indexOf("`", idx + 1);
   if (end === -1) return undefined;
   const text = input.slice(idx + 1, end);
-  return { text, spans: text.length > 0 ? [{ kind: "style", style: "inline_code", start: 0, end: text.length }] : [], next: end + 1 };
+  return {
+    text,
+    spans:
+      text.length > 0 ? [{ kind: "style", style: "inline_code", start: 0, end: text.length }] : [],
+    next: end + 1,
+  };
 }
 
 function matchLinkInline(input: string, idx: number): InlineParseMatch | undefined {
@@ -116,7 +128,12 @@ function matchLinkInline(input: string, idx: number): InlineParseMatch | undefin
   if (hrefEnd === -1) return undefined;
   const label = parseInlineMarkdown(input.slice(idx + 1, labelEnd));
   if (label.text.length > 0) {
-    label.spans.push({ kind: "link", href: input.slice(labelEnd + 2, hrefEnd).trim(), start: 0, end: label.text.length });
+    label.spans.push({
+      kind: "link",
+      href: input.slice(labelEnd + 2, hrefEnd).trim(),
+      start: 0,
+      end: label.text.length,
+    });
   }
   return { ...label, next: hrefEnd + 1 };
 }
@@ -133,7 +150,13 @@ function parseInlineMarkdown(input: string): InlineParseResult {
       matchWrappedInline(input, idx, "||", { kind: "style", style: "spoiler" }) ??
       matchWrappedInline(input, idx, "**", { kind: "style", style: "bold" }) ??
       matchWrappedInline(input, idx, "~~", { kind: "style", style: "strike" }) ??
-      matchWrappedInline(input, idx, "*", { kind: "style", style: "italic" }, findItalicEnd(input, idx));
+      matchWrappedInline(
+        input,
+        idx,
+        "*",
+        { kind: "style", style: "italic" },
+        findItalicEnd(input, idx),
+      );
     if (match) {
       const start = out.length;
       out += match.text;
@@ -163,11 +186,22 @@ function parseListBlock(line: string): Extract<MarkdownBlock, { kind: "list_item
   const ordered = orderedListPattern.exec(line);
   if (ordered) {
     const parsedIndex = Number.parseInt(ordered[2] ?? "", 10);
-    return { kind: "list_item", ordered: true, index: Number.isFinite(parsedIndex) ? parsedIndex : undefined, depth: Math.floor((ordered[1] ?? "").length / 2), raw: ordered[3] ?? "" };
+    return {
+      kind: "list_item",
+      ordered: true,
+      index: Number.isFinite(parsedIndex) ? parsedIndex : undefined,
+      depth: Math.floor((ordered[1] ?? "").length / 2),
+      raw: ordered[3] ?? "",
+    };
   }
   const unordered = unorderedListPattern.exec(line);
   if (!unordered) return undefined;
-  return { kind: "list_item", ordered: false, depth: Math.floor((unordered[1] ?? "").length / 2), raw: unordered[2] ?? "" };
+  return {
+    kind: "list_item",
+    ordered: false,
+    depth: Math.floor((unordered[1] ?? "").length / 2),
+    raw: unordered[2] ?? "",
+  };
 }
 
 function isBlockStarter(line: string): boolean {
@@ -182,7 +216,13 @@ function scanBlocks(input: string): MarkdownBlockWithSeparator[] {
 
   const pushBlock = (block: MarkdownBlock): void => {
     const prev = blocks.at(-1);
-    const sepBefore = !prev ? "" : nextSep === "\n\n" ? "\n\n" : prev.kind === "list_item" && block.kind === "list_item" ? "\n" : "\n\n";
+    const sepBefore = !prev
+      ? ""
+      : nextSep === "\n\n"
+        ? "\n\n"
+        : prev.kind === "list_item" && block.kind === "list_item"
+          ? "\n"
+          : "\n\n";
     blocks.push({ ...block, sepBefore });
     nextSep = undefined;
   };
@@ -359,7 +399,9 @@ export function irToPlainText(ir: MarkdownIr): string {
   const links = ir.spans.filter((span): span is LinkSpan => span.kind === "link");
 
   const renderRangeWithLinks = (start: number, end: number): string => {
-    const localLinks = links.filter((link) => link.start >= start && link.end <= end).toSorted((a, b) => a.start - b.start);
+    const localLinks = links
+      .filter((link) => link.start >= start && link.end <= end)
+      .toSorted((a, b) => a.start - b.start);
 
     let out = "";
     let cursor = start;
@@ -381,7 +423,10 @@ export function irToPlainText(ir: MarkdownIr): string {
       case "paragraph":
         return content;
       case "blockquote": {
-        return content.split("\n").map((line) => `> ${line}`).join("\n");
+        return content
+          .split("\n")
+          .map((line) => `> ${line}`)
+          .join("\n");
       }
       case "list_item": {
         const indent = "  ".repeat(Math.max(0, span.depth));
@@ -443,7 +488,9 @@ function sliceIr(ir: MarkdownIr, start: number, end: number): MarkdownIr {
   const spans = ir.spans.flatMap((span) => {
     const spanStart = Math.max(span.start, start);
     const spanEnd = Math.min(span.end, end);
-    return spanEnd <= spanStart ? [] : [{ ...span, start: spanStart - start, end: spanEnd - start }];
+    return spanEnd <= spanStart
+      ? []
+      : [{ ...span, start: spanStart - start, end: spanEnd - start }];
   });
   return { text, spans: sortSpans(spans) };
 }

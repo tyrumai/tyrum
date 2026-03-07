@@ -64,9 +64,7 @@ export function modelRefFor(availableModel: AvailableModel): string {
   return `${availableModel.provider_key}/${availableModel.model_id}`;
 }
 
-export function splitModelRef(
-  modelRef: string,
-): { providerKey: string; modelId: string } | null {
+export function splitModelRef(modelRef: string): { providerKey: string; modelId: string } | null {
   const slashIndex = modelRef.indexOf("/");
   if (slashIndex <= 0 || slashIndex === modelRef.length - 1) return null;
   return {

@@ -165,8 +165,7 @@ export async function waitForPendingDesktopPairing(params: {
     const pairings = await params.listPending();
     const pairing = pairings.find(
       (pending) =>
-        Array.isArray(pending.node.capabilities) &&
-        pending.node.capabilities.includes("desktop"),
+        Array.isArray(pending.node.capabilities) && pending.node.capabilities.includes("desktop"),
     );
     if (pairing) return pairing;
     await delay(250);
@@ -216,10 +215,13 @@ export function ensureDesktopSandboxImage(imageTag: string, repoRoot: string): v
     !dockerImageExists(imageTag);
   if (!shouldBuild) return;
 
-  const build = runDocker(["build", "-f", "docker/desktop-sandbox/Dockerfile", "-t", imageTag, "."], {
-    cwd: repoRoot,
-    timeoutMs: DOCKER_BUILD_TIMEOUT_MS,
-  });
+  const build = runDocker(
+    ["build", "-f", "docker/desktop-sandbox/Dockerfile", "-t", imageTag, "."],
+    {
+      cwd: repoRoot,
+      timeoutMs: DOCKER_BUILD_TIMEOUT_MS,
+    },
+  );
   assertDockerOk(build, "Failed to build desktop-sandbox image for e2e test.");
 }
 

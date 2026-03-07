@@ -232,9 +232,21 @@ class LocalStepExecutor implements StepExecutor {
 
     switch (action.type) {
       case "Http":
-        return this.executeHttp(action, resolved as Record<string, unknown>, planId, stepIndex, timeoutMs);
+        return this.executeHttp(
+          action,
+          resolved as Record<string, unknown>,
+          planId,
+          stepIndex,
+          timeoutMs,
+        );
       case "CLI":
-        return this.executeCli(action, resolved as Record<string, unknown>, planId, stepIndex, timeoutMs);
+        return this.executeCli(
+          action,
+          resolved as Record<string, unknown>,
+          planId,
+          stepIndex,
+          timeoutMs,
+        );
       default:
         return { success: false, error: `unsupported action type: ${action.type}` };
     }

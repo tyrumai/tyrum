@@ -1,6 +1,15 @@
 import type { ClientInterface, MessageBus } from "dbus-next";
 
-import type { DesktopActArgs, DesktopQueryArgs, DesktopQueryMatch, DesktopSnapshotArgs, DesktopUiNodeSummary, DesktopUiRect, DesktopUiTree, DesktopWindow } from "@tyrum/schemas";
+import type {
+  DesktopActArgs,
+  DesktopQueryArgs,
+  DesktopQueryMatch,
+  DesktopSnapshotArgs,
+  DesktopUiNodeSummary,
+  DesktopUiRect,
+  DesktopUiTree,
+  DesktopWindow,
+} from "@tyrum/schemas";
 
 import { DEFAULT_A11Y_MAX_DEPTH } from "../a11y/prune-ui-tree.js";
 import {
@@ -9,9 +18,15 @@ import {
   MAX_NODE_ACTIONS,
   MAX_NODE_CHILDREN,
   MAX_NODE_STATES,
-  MAX_ROLE_CHARS, MAX_STATE_CHARS, clampTrimmed,
+  MAX_ROLE_CHARS,
+  MAX_STATE_CHARS,
+  clampTrimmed,
 } from "../a11y/schema-clamps.js";
-import type { DesktopA11yActResult, DesktopA11yBackend, DesktopA11ySnapshot } from "./desktop-a11y-backend.js";
+import type {
+  DesktopA11yActResult,
+  DesktopA11yBackend,
+  DesktopA11ySnapshot,
+} from "./desktop-a11y-backend.js";
 
 type AtSpiAccessibleRef = { busName: string; objectPath: string };
 
@@ -19,7 +34,10 @@ const ATSPI_REF_PREFIX = "atspi:";
 const ATSPI_REF_SEPARATOR = "|";
 const ATSPI_REGISTRY_BUS_NAME = "org.a11y.atspi.Registry";
 const ATSPI_ROOT_ACCESSIBLE_PATH = "/org/a11y/atspi/accessible/root";
-const ATSPI_ROOT_ACCESSIBLE_REF: AtSpiAccessibleRef = { busName: ATSPI_REGISTRY_BUS_NAME, objectPath: ATSPI_ROOT_ACCESSIBLE_PATH };
+const ATSPI_ROOT_ACCESSIBLE_REF: AtSpiAccessibleRef = {
+  busName: ATSPI_REGISTRY_BUS_NAME,
+  objectPath: ATSPI_ROOT_ACCESSIBLE_PATH,
+};
 
 const QUERY_MAX_NODES = 8_192;
 const QUERY_MAX_CHILDREN = 512;
@@ -27,12 +45,50 @@ const QUERY_MAX_CHILDREN = 512;
 const MAX_WINDOWS = 32;
 
 const ATSPI_STATE_TYPE_NAMES: Array<string | undefined> = [
-  "invalid", "active", "armed", "busy", "checked", "collapsed", "defunct", "editable",
-  "enabled", "expandable", "expanded", "focusable", "focused", "has_tooltip", "horizontal", "iconified",
-  "modal", "multi_line", "multiselectable", "opaque", "pressed", "resizable", "selectable", "selected",
-  "sensitive", "showing", "single_line", "stale", "transient", "vertical", "visible", "manages_descendants",
-  "indeterminate", "required", "truncated", "animated", "invalid_entry", "supports_autocompletion", "selectable_text", "is_default",
-  "visited", "checkable", "has_popup", "read_only",
+  "invalid",
+  "active",
+  "armed",
+  "busy",
+  "checked",
+  "collapsed",
+  "defunct",
+  "editable",
+  "enabled",
+  "expandable",
+  "expanded",
+  "focusable",
+  "focused",
+  "has_tooltip",
+  "horizontal",
+  "iconified",
+  "modal",
+  "multi_line",
+  "multiselectable",
+  "opaque",
+  "pressed",
+  "resizable",
+  "selectable",
+  "selected",
+  "sensitive",
+  "showing",
+  "single_line",
+  "stale",
+  "transient",
+  "vertical",
+  "visible",
+  "manages_descendants",
+  "indeterminate",
+  "required",
+  "truncated",
+  "animated",
+  "invalid_entry",
+  "supports_autocompletion",
+  "selectable_text",
+  "is_default",
+  "visited",
+  "checkable",
+  "has_popup",
+  "read_only",
 ];
 
 function unwrapDbusValue(value: unknown): unknown {
@@ -64,7 +120,8 @@ function toNonNegativeInt(value: unknown): number {
       if (typeof num === "number" && Number.isFinite(num)) return Math.max(0, Math.floor(num));
     }
   }
-  if (typeof unwrapped === "number" && Number.isFinite(unwrapped)) return Math.max(0, Math.floor(unwrapped));
+  if (typeof unwrapped === "number" && Number.isFinite(unwrapped))
+    return Math.max(0, Math.floor(unwrapped));
   if (typeof unwrapped === "bigint") {
     if (unwrapped <= 0n) return 0;
     const max = BigInt(Number.MAX_SAFE_INTEGER);
@@ -155,8 +212,12 @@ function normalizeMaybe(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function normalizeRole(value: string | undefined): string { return clampTrimmed(value?.toLowerCase() ?? "", MAX_ROLE_CHARS) || "unknown"; }
-function normalizeName(value: string | undefined): string { return value ? clampTrimmed(value, MAX_NAME_CHARS) : ""; }
+function normalizeRole(value: string | undefined): string {
+  return clampTrimmed(value?.toLowerCase() ?? "", MAX_ROLE_CHARS) || "unknown";
+}
+function normalizeName(value: string | undefined): string {
+  return value ? clampTrimmed(value, MAX_NAME_CHARS) : "";
+}
 
 function toRect(value: unknown): DesktopUiRect {
   if (!Array.isArray(value) || value.length < 4) return { x: 0, y: 0, width: 0, height: 0 };
@@ -200,7 +261,12 @@ function extractWindowsFromTree(root: DesktopUiTree["root"]): DesktopWindow[] {
     if (windows.length >= MAX_WINDOWS) return;
     const role = node.role.trim().toLowerCase();
     const isWindowRole = role === "frame" || role === "dialog" || role === "window";
-    if (isWindowRole && typeof node.ref === "string" && node.ref.length > 0 && node.ref.length <= 256) {
+    if (
+      isWindowRole &&
+      typeof node.ref === "string" &&
+      node.ref.length > 0 &&
+      node.ref.length <= 256
+    ) {
       const ref = node.ref;
       if (!seen.has(ref)) {
         seen.add(ref);
@@ -213,7 +279,10 @@ function extractWindowsFromTree(root: DesktopUiTree["root"]): DesktopWindow[] {
         });
       }
     }
-    for (const child of node.children) { if (windows.length >= MAX_WINDOWS) break; visit(child); }
+    for (const child of node.children) {
+      if (windows.length >= MAX_WINDOWS) break;
+      visit(child);
+    }
   };
   visit(root);
   return windows;
@@ -224,7 +293,10 @@ async function loadDbus(): Promise<typeof import("dbus-next")> {
 }
 
 type AtSpiDynamicMethod = (...args: unknown[]) => unknown;
-function getAtSpiDynamicMethod(iface: ClientInterface, methodName: string): AtSpiDynamicMethod | null {
+function getAtSpiDynamicMethod(
+  iface: ClientInterface,
+  methodName: string,
+): AtSpiDynamicMethod | null {
   const candidate = (iface as unknown as Record<string, unknown>)[methodName];
   return typeof candidate === "function" ? (candidate as AtSpiDynamicMethod) : null;
 }
@@ -247,7 +319,8 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
         const getAddress = getAtSpiDynamicMethod(busIface, "GetAddress");
         const address = await getAddress?.call(busIface);
         const busAddress = normalizeMaybe(address);
-        if (!busAddress) throw new Error("AT-SPI bus address unavailable (org.a11y.Bus.GetAddress)");
+        if (!busAddress)
+          throw new Error("AT-SPI bus address unavailable (org.a11y.Bus.GetAddress)");
         atspiBus = dbus.sessionBus({ busAddress });
         await atspiBus.getProxyObject(ATSPI_REGISTRY_BUS_NAME, ATSPI_ROOT_ACCESSIBLE_PATH);
         this.bus = atspiBus;
@@ -272,7 +345,10 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
   async isAvailable(): Promise<boolean> {
     try {
       await this.connect();
-      const accessible = await this.getInterface(ATSPI_ROOT_ACCESSIBLE_REF, "org.a11y.atspi.Accessible");
+      const accessible = await this.getInterface(
+        ATSPI_ROOT_ACCESSIBLE_REF,
+        "org.a11y.atspi.Accessible",
+      );
       if (!accessible) return false;
       const getRoleName = getAtSpiDynamicMethod(accessible, "GetRoleName");
       if (!getRoleName) return false;
@@ -283,7 +359,10 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     }
   }
 
-  private async getInterface(ref: AtSpiAccessibleRef, name: string): Promise<ClientInterface | null> {
+  private async getInterface(
+    ref: AtSpiAccessibleRef,
+    name: string,
+  ): Promise<ClientInterface | null> {
     await this.connect();
     const bus = this.bus;
     if (!bus) return null;
@@ -295,7 +374,10 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     }
   }
 
-  private async getChildren(ref: AtSpiAccessibleRef, maxChildren: number = MAX_NODE_CHILDREN): Promise<AtSpiAccessibleRef[]> {
+  private async getChildren(
+    ref: AtSpiAccessibleRef,
+    maxChildren: number = MAX_NODE_CHILDREN,
+  ): Promise<AtSpiAccessibleRef[]> {
     const limit = Math.max(0, Math.floor(maxChildren));
     if (limit <= 0) return [];
     const iface = await this.getInterface(ref, "org.a11y.atspi.Accessible");
@@ -304,7 +386,10 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     if (getChildren) {
       const raw = await getChildren.call(iface);
       if (!Array.isArray(raw)) return [];
-      return raw.map(parseAccessibleRef).filter((v): v is AtSpiAccessibleRef => v !== null).slice(0, limit);
+      return raw
+        .map(parseAccessibleRef)
+        .filter((v): v is AtSpiAccessibleRef => v !== null)
+        .slice(0, limit);
     }
 
     const getChildCount = getAtSpiDynamicMethod(iface, "GetChildCount");
@@ -334,12 +419,17 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     const accessible = await this.getInterface(ref, "org.a11y.atspi.Accessible");
     const component = await this.getInterface(ref, "org.a11y.atspi.Component");
     const action = await this.getInterface(ref, "org.a11y.atspi.Action");
-    const roleRaw = accessible ? await getAtSpiDynamicMethod(accessible, "GetRoleName")?.call(accessible) : undefined;
-    const nameRaw = accessible ? await getAtSpiDynamicMethod(accessible, "GetName")?.call(accessible) : undefined;
+    const roleRaw = accessible
+      ? await getAtSpiDynamicMethod(accessible, "GetRoleName")?.call(accessible)
+      : undefined;
+    const nameRaw = accessible
+      ? await getAtSpiDynamicMethod(accessible, "GetName")?.call(accessible)
+      : undefined;
     const role = normalizeRole(normalizeMaybe(roleRaw));
     const accessibleName = normalizeName(normalizeMaybe(nameRaw));
     const extentsFn = component ? getAtSpiDynamicMethod(component, "GetExtents") : undefined;
-    const extentsRaw = typeof extentsFn === "function" ? await extentsFn.call(component, 0) : undefined;
+    const extentsRaw =
+      typeof extentsFn === "function" ? await extentsFn.call(component, 0) : undefined;
     const bounds = toRect(extentsRaw);
     const actions: string[] = [];
     if (action) {
@@ -350,7 +440,12 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
       const getActionName = getAtSpiDynamicMethod(action, "GetActionName");
 
       for (let i = 0; i < count && actions.length < MAX_NODE_ACTIONS; i++) {
-        const fn = typeof getName === "function" ? getName : typeof getActionName === "function" ? getActionName : null;
+        const fn =
+          typeof getName === "function"
+            ? getName
+            : typeof getActionName === "function"
+              ? getActionName
+              : null;
         if (!fn) break;
         const raw = await fn.call(action, i);
         const actionName = normalizeMaybe(raw);
@@ -385,14 +480,25 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     const visited = new Set<string>();
     let remainingNodes = Math.max(1, Math.floor(args.max_nodes));
 
-    const build = async (ref: AtSpiAccessibleRef, depth: number): Promise<DesktopUiTree["root"] | null> => {
+    const build = async (
+      ref: AtSpiAccessibleRef,
+      depth: number,
+    ): Promise<DesktopUiTree["root"] | null> => {
       const key = `${ref.busName}${ATSPI_REF_SEPARATOR}${ref.objectPath}`;
       if (visited.has(key)) return null;
       if (remainingNodes <= 0) return null;
       visited.add(key);
       remainingNodes -= 1;
       const info = await this.describeAccessible(ref);
-      const node: DesktopUiTree["root"] = { ref: info.elementRef, role: info.role, name: info.name, states: info.states, bounds: info.bounds, actions: info.actions, children: [] };
+      const node: DesktopUiTree["root"] = {
+        ref: info.elementRef,
+        role: info.role,
+        name: info.name,
+        states: info.states,
+        bounds: info.bounds,
+        actions: info.actions,
+        children: [],
+      };
       if (depth >= DEFAULT_A11Y_MAX_DEPTH) return node;
       if (remainingNodes <= 0) return node;
       const childLimit = Math.min(MAX_NODE_CHILDREN, remainingNodes);
@@ -423,7 +529,19 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
       const ref = parseAtSpiElementRef(selector.ref);
       if (!ref) return [];
       const info = await this.describeAccessible(ref);
-      return [{ kind: "a11y", element_ref: info.elementRef, node: { role: info.role, name: info.name, states: info.states, bounds: info.bounds, actions: info.actions } }];
+      return [
+        {
+          kind: "a11y",
+          element_ref: info.elementRef,
+          node: {
+            role: info.role,
+            name: info.name,
+            states: info.states,
+            bounds: info.bounds,
+            actions: info.actions,
+          },
+        },
+      ];
     }
 
     const rootRef = await this.resolveRootAccessible();
@@ -444,7 +562,13 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
       remainingNodes -= 1;
 
       const info = await this.describeAccessible(ref);
-      const node: DesktopUiNodeSummary = { role: info.role, name: info.name, states: info.states, bounds: info.bounds, actions: info.actions };
+      const node: DesktopUiNodeSummary = {
+        role: info.role,
+        name: info.name,
+        states: info.states,
+        bounds: info.bounds,
+        actions: info.actions,
+      };
 
       if (matchesSelector({ selector, node })) {
         matches.push({ kind: "a11y", element_ref: info.elementRef, node });
@@ -505,7 +629,12 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     const doAction = getAtSpiDynamicMethod(action, "DoAction");
     if (typeof doAction !== "function") throw new Error("AT-SPI action unsupported");
 
-    const actionNameFn = typeof getName === "function" ? getName : typeof getActionName === "function" ? getActionName : null;
+    const actionNameFn =
+      typeof getName === "function"
+        ? getName
+        : typeof getActionName === "function"
+          ? getActionName
+          : null;
     const candidates = new Set(["click", "activate", "press"]);
     const candidateIndices: number[] = [];
     const actionNamesByIndex: Array<string | undefined> = [];
@@ -533,7 +662,9 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
 
       if (normalizeDbusBoolean(didAct) === false) {
         const actionName = actionNamesByIndex[index];
-        lastError = new Error(`DoAction(${index}${actionName ? `:${actionName}` : ""}) returned ${String(didAct)}`);
+        lastError = new Error(
+          `DoAction(${index}${actionName ? `:${actionName}` : ""}) returned ${String(didAct)}`,
+        );
         continue;
       }
       return { resolved_element_ref: toAtSpiElementRef(ref) };

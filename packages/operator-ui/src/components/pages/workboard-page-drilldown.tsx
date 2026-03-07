@@ -1,22 +1,9 @@
-import type {
-  DecisionRecord,
-  WorkArtifact,
-  WorkItem,
-  WorkSignal,
-} from "@tyrum/operator-core";
+import type { DecisionRecord, WorkArtifact, WorkItem, WorkSignal } from "@tyrum/operator-core";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
-import type {
-  WorkStateKvEntry,
-  WorkTaskSummary,
-} from "../workboard/workboard-store.js";
-import {
-  DetailListSection,
-  EmptyState,
-  KvSection,
-  Section,
-} from "./workboard-page.shared.js";
+import type { WorkStateKvEntry, WorkTaskSummary } from "../workboard/workboard-store.js";
+import { DetailListSection, EmptyState, KvSection, Section } from "./workboard-page.shared.js";
 
 type TaskCounts = {
   leased: number;
@@ -159,7 +146,10 @@ export function WorkBoardDrilldown({
               {taskList.length > 0 ? (
                 <div className="grid gap-2">
                   {taskList.map((task) => (
-                    <div key={task.task_id} className="rounded-lg border border-border bg-bg-subtle p-3">
+                    <div
+                      key={task.task_id}
+                      className="rounded-lg border border-border bg-bg-subtle p-3"
+                    >
                       <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
                         <span>
                           <strong className="text-fg">{task.status}</strong>
@@ -189,7 +179,10 @@ export function WorkBoardDrilldown({
               items={approvalBlockers}
               empty="No approval blockers."
               renderItem={(task) => (
-                <div key={task.task_id} className="rounded-lg border border-border bg-bg-subtle p-3">
+                <div
+                  key={task.task_id}
+                  className="rounded-lg border border-border bg-bg-subtle p-3"
+                >
                   <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
                     <span>approval {task.approval_id}</span>
                     <span className="font-mono">{task.task_id}</span>
@@ -254,7 +247,10 @@ export function WorkBoardDrilldown({
               items={signals}
               empty="No WorkSignals."
               renderItem={(signal) => (
-                <div key={signal.signal_id} className="rounded-lg border border-border bg-bg-subtle p-3">
+                <div
+                  key={signal.signal_id}
+                  className="rounded-lg border border-border bg-bg-subtle p-3"
+                >
                   <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
                     <span className="font-semibold text-fg">{signal.trigger_kind}</span>
                     <span>
@@ -262,9 +258,7 @@ export function WorkBoardDrilldown({
                     </span>
                     <span>{new Date(signal.created_at).toLocaleString()}</span>
                     {signal.last_fired_at ? (
-                      <span>
-                        last fired {new Date(signal.last_fired_at).toLocaleString()}
-                      </span>
+                      <span>last fired {new Date(signal.last_fired_at).toLocaleString()}</span>
                     ) : null}
                   </div>
                   <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-fg">

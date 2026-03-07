@@ -117,7 +117,9 @@ function createClusterWsRouteOptions(context: AppRouteContext) {
 
 function resolvePlaybooks(context: AppRouteContext): Playbook[] {
   const playbookHome = context.container.config?.tyrumHome;
-  return context.opts.playbooks ?? (playbookHome ? loadAllPlaybooks(`${playbookHome}/playbooks`) : []);
+  return (
+    context.opts.playbooks ?? (playbookHome ? loadAllPlaybooks(`${playbookHome}/playbooks`) : [])
+  );
 }
 
 export function registerSystemAndPublicRoutes(context: AppRouteContext): void {

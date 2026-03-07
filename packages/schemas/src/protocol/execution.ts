@@ -4,14 +4,24 @@ import { DateTimeSchema } from "../common.js";
 import { ContextReport } from "../context.js";
 import { DeviceTokenClaims } from "../device-token.js";
 import {
-  ExecutionAttempt, ExecutionAttemptId, ExecutionRun, ExecutionRunId, ExecutionRunPausedPayload,
-  ExecutionStep, ExecutionStepId,
+  ExecutionAttempt,
+  ExecutionAttemptId,
+  ExecutionRun,
+  ExecutionRunId,
+  ExecutionRunPausedPayload,
+  ExecutionStep,
+  ExecutionStepId,
 } from "../execution.js";
 import { AgentId, ChannelKey, Lane, NodeId, ThreadId, TyrumKey, WorkspaceId } from "../keys.js";
 import { PolicyOverride, PolicySnapshotId } from "../policy-bundle.js";
 import { ActionPrimitive } from "../planner.js";
 import { PluginId } from "../plugin.js";
-import { WsEventEnvelope, WsRequestEnvelope, WsResponseErrEnvelope, WsResponseOkEnvelope } from "./envelopes.js";
+import {
+  WsEventEnvelope,
+  WsRequestEnvelope,
+  WsResponseErrEnvelope,
+  WsResponseOkEnvelope,
+} from "./envelopes.js";
 
 // ---------------------------------------------------------------------------
 // Operation payloads (typed) — execution
@@ -21,7 +31,8 @@ const wsRequest = <T extends string, P extends z.ZodTypeAny>(type: T, payload: P
   WsRequestEnvelope.extend({ type: z.literal(type), payload });
 const wsEvent = <T extends string, P extends z.ZodTypeAny>(type: T, payload: P) =>
   WsEventEnvelope.extend({ type: z.literal(type), payload });
-const wsResponseOk = <T extends string>(type: T) => WsResponseOkEnvelope.extend({ type: z.literal(type) });
+const wsResponseOk = <T extends string>(type: T) =>
+  WsResponseOkEnvelope.extend({ type: z.literal(type) });
 const wsResponseErr = <T extends string>(type: T) =>
   WsResponseErrEnvelope.extend({ type: z.literal(type) });
 const WsRunIdEventPayload = z.object({ run_id: ExecutionRunId }).strict();
@@ -66,10 +77,14 @@ export type WsTaskExecuteResult = z.infer<typeof WsTaskExecuteResult>;
 // ---------------------------------------------------------------------------
 
 export const WsAttemptEvidenceResponseOkEnvelope = wsResponseOk("attempt.evidence");
-export type WsAttemptEvidenceResponseOkEnvelope = z.infer<typeof WsAttemptEvidenceResponseOkEnvelope>;
+export type WsAttemptEvidenceResponseOkEnvelope = z.infer<
+  typeof WsAttemptEvidenceResponseOkEnvelope
+>;
 
 export const WsAttemptEvidenceResponseErrEnvelope = wsResponseErr("attempt.evidence");
-export type WsAttemptEvidenceResponseErrEnvelope = z.infer<typeof WsAttemptEvidenceResponseErrEnvelope>;
+export type WsAttemptEvidenceResponseErrEnvelope = z.infer<
+  typeof WsAttemptEvidenceResponseErrEnvelope
+>;
 
 export const WsAttemptEvidenceResponseEnvelope = z.union([
   WsAttemptEvidenceResponseOkEnvelope,
@@ -251,7 +266,9 @@ export const WsAttemptEvidenceEvent = wsEvent("attempt.evidence", WsAttemptEvide
 export type WsAttemptEvidenceEvent = z.infer<typeof WsAttemptEvidenceEvent>;
 
 export const WsPolicyOverrideCreatedEventPayload = WsPolicyOverrideEventPayload;
-export type WsPolicyOverrideCreatedEventPayload = z.infer<typeof WsPolicyOverrideCreatedEventPayload>;
+export type WsPolicyOverrideCreatedEventPayload = z.infer<
+  typeof WsPolicyOverrideCreatedEventPayload
+>;
 
 export const WsPolicyOverrideCreatedEvent = wsEvent(
   "policy_override.created",
@@ -260,7 +277,9 @@ export const WsPolicyOverrideCreatedEvent = wsEvent(
 export type WsPolicyOverrideCreatedEvent = z.infer<typeof WsPolicyOverrideCreatedEvent>;
 
 export const WsPolicyOverrideRevokedEventPayload = WsPolicyOverrideEventPayload;
-export type WsPolicyOverrideRevokedEventPayload = z.infer<typeof WsPolicyOverrideRevokedEventPayload>;
+export type WsPolicyOverrideRevokedEventPayload = z.infer<
+  typeof WsPolicyOverrideRevokedEventPayload
+>;
 
 export const WsPolicyOverrideRevokedEvent = wsEvent(
   "policy_override.revoked",
@@ -269,7 +288,9 @@ export const WsPolicyOverrideRevokedEvent = wsEvent(
 export type WsPolicyOverrideRevokedEvent = z.infer<typeof WsPolicyOverrideRevokedEvent>;
 
 export const WsPolicyOverrideExpiredEventPayload = WsPolicyOverrideEventPayload;
-export type WsPolicyOverrideExpiredEventPayload = z.infer<typeof WsPolicyOverrideExpiredEventPayload>;
+export type WsPolicyOverrideExpiredEventPayload = z.infer<
+  typeof WsPolicyOverrideExpiredEventPayload
+>;
 
 export const WsPolicyOverrideExpiredEvent = wsEvent(
   "policy_override.expired",
@@ -396,7 +417,10 @@ export const WsPluginToolInvokedEventPayload = z
   .strict();
 export type WsPluginToolInvokedEventPayload = z.infer<typeof WsPluginToolInvokedEventPayload>;
 
-export const WsPluginToolInvokedEvent = wsEvent("plugin_tool.invoked", WsPluginToolInvokedEventPayload);
+export const WsPluginToolInvokedEvent = wsEvent(
+  "plugin_tool.invoked",
+  WsPluginToolInvokedEventPayload,
+);
 export type WsPluginToolInvokedEvent = z.infer<typeof WsPluginToolInvokedEvent>;
 
 export const WsUsageScopeKind = z.enum(["run", "session", "agent", "deployment"]);

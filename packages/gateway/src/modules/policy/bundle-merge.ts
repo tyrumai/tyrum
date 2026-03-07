@@ -1,10 +1,6 @@
 import type { PolicyBundle as PolicyBundleT, Decision } from "@tyrum/schemas";
 import { PolicyBundle } from "@tyrum/schemas";
-import {
-  mostRestrictiveDecision,
-  normalizeDomain,
-  type PolicyDomainConfig,
-} from "./domain.js";
+import { mostRestrictiveDecision, normalizeDomain, type PolicyDomainConfig } from "./domain.js";
 
 function unionStrings(a: readonly string[], b: readonly string[]): string[] {
   if (a.length === 0) return [...b];
@@ -45,9 +41,10 @@ function minOrUndefined(values: readonly number[]): number | undefined {
   return values.length > 0 ? Math.min(...values) : undefined;
 }
 
-function mergeBySensitivity(
-  values: Array<Record<string, unknown>>,
-): { normal?: number; sensitive?: number } {
+function mergeBySensitivity(values: Array<Record<string, unknown>>): {
+  normal?: number;
+  sensitive?: number;
+} {
   return {
     normal: values
       .map((value) => value["normal"])
@@ -183,8 +180,7 @@ export function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): P
   );
   const retentionByLabelSensitivity = mergeByLabelSensitivity(
     bundles,
-    (artifacts) =>
-      artifacts.retention?.by_label_sensitivity as Record<string, unknown> | undefined,
+    (artifacts) => artifacts.retention?.by_label_sensitivity as Record<string, unknown> | undefined,
   );
   const quotaByLabelSensitivity = mergeByLabelSensitivity(
     bundles,

@@ -1734,7 +1734,10 @@ describe("ExecutionEngine (normalized)", () => {
     const attemptRow = await db.get<{ artifacts_json: string }>(
       "SELECT artifacts_json FROM execution_attempts LIMIT 1",
     );
-    const artifacts = JSON.parse(attemptRow!.artifacts_json) as Array<{ uri: string; kind: string }>;
+    const artifacts = JSON.parse(attemptRow!.artifacts_json) as Array<{
+      uri: string;
+      kind: string;
+    }>;
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0]!.uri).toBe(artifactRef.uri);
     expect(artifacts[0]!.kind).toBe(artifactRef.kind);

@@ -364,8 +364,18 @@ describe("Channel inbox queue overflow policies", () => {
     });
 
     const key = queueKey();
-    await enqueueLegacyMessage({ messageId: "media-1", caption: "first photo", receivedAtMs: 1_000, key });
-    await enqueueLegacyMessage({ messageId: "media-2", caption: "second photo", receivedAtMs: 2_000, key });
+    await enqueueLegacyMessage({
+      messageId: "media-1",
+      caption: "first photo",
+      receivedAtMs: 1_000,
+      key,
+    });
+    await enqueueLegacyMessage({
+      messageId: "media-2",
+      caption: "second photo",
+      receivedAtMs: 2_000,
+      key,
+    });
 
     const rows = await db.all<{ message_id: string; status: string; payload_json: string }>(
       "SELECT message_id, status, payload_json FROM channel_inbox ORDER BY received_at_ms ASC, inbox_id ASC",
