@@ -70,6 +70,8 @@ describe("plugin routes", () => {
         pluginCatalogProvider: {
           loadGlobalRegistry: vi.fn(),
           loadTenantRegistry,
+          invalidateTenantRegistry: vi.fn(async () => undefined),
+          shutdown: vi.fn(async () => undefined),
         } as never,
       }),
     );
@@ -147,6 +149,7 @@ describe("plugin routes", () => {
           loadGlobalRegistry,
           loadTenantRegistry: vi.fn(),
           invalidateTenantRegistry: vi.fn(async () => undefined),
+          shutdown: vi.fn(async () => undefined),
         },
       }),
     );

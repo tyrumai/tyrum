@@ -14,6 +14,8 @@ describe("command dispatcher plugin catalog integration", () => {
         loadTenantRegistry: vi.fn(async () => ({
           tryExecuteCommand: tryExecuteTenantCommand,
         })),
+        invalidateTenantRegistry: vi.fn(async () => undefined),
+        shutdown: vi.fn(async () => undefined),
       } as never,
       plugins: {
         tryExecuteCommand: tryExecuteGlobalCommand,

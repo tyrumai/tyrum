@@ -16,6 +16,7 @@ import type { loadLifecycleHooksFromHome } from "../modules/hooks/config.js";
 import type { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import type { OtelRuntime } from "../modules/observability/otel.js";
 import type { PluginRegistry } from "../modules/plugins/registry.js";
+import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
 import type { createDbSecretProviderFactory } from "../modules/secret/create-secret-provider.js";
 import type { WatcherScheduler } from "../modules/watcher/scheduler.js";
 import type { WorkSignalScheduler } from "../modules/workboard/signal-scheduler.js";
@@ -76,6 +77,7 @@ export interface ProtocolRuntime {
 
 export interface EdgeRuntime {
   plugins?: PluginRegistry;
+  pluginCatalogProvider?: PluginCatalogProvider;
   agents?: AgentRegistry;
   authRateLimiter?: SlidingWindowRateLimiter;
   wsUpgradeRateLimiter?: SlidingWindowRateLimiter;

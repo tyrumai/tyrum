@@ -133,6 +133,7 @@ describe("shared state config routes", () => {
         loadGlobalRegistry: vi.fn(),
         loadTenantRegistry: vi.fn(),
         invalidateTenantRegistry,
+        shutdown: vi.fn(async () => undefined),
       } as never,
     });
 

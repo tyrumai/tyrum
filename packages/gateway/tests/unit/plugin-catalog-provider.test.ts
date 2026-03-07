@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { rm } from "node:fs/promises";
+import { rm, stat } from "node:fs/promises";
 import { PluginManifest } from "@tyrum/schemas";
 import { createContainer } from "../../src/container.js";
 import { RuntimePackageDal } from "../../src/modules/agent/runtime-package-dal.js";
@@ -301,6 +301,7 @@ describe("PluginCatalogProvider", () => {
         },
       },
     );
+    let provider: ReturnType<typeof createPluginCatalogProvider> | undefined;
     try {
       const artifact = await container.artifactStore.put({
         kind: "file",
@@ -317,7 +318,7 @@ describe("PluginCatalogProvider", () => {
         createdBy: { kind: "test" },
       });
 
-      const provider = createPluginCatalogProvider({
+      provider = createPluginCatalogProvider({
         home,
         userHome: home,
         logger: createSilentLogger(),
@@ -339,6 +340,120 @@ describe("PluginCatalogProvider", () => {
 
       expect((await provider.loadTenantRegistry(DEFAULT_TENANT_ID)).list()).toEqual([]);
     } finally {
+      await provider?.shutdown();
+      await container.db.close();
+    }
+  });
+
+  it("refreshes cached tenant registries when shared package revisions change externally", async () => {
+    const { home } = await createEchoPluginHome();
+    cleanupPaths.push(home);
+
+    const container = createContainer(
+      {
+        dbPath: ":memory:",
+        migrationsDir: SQLITE_MIGRATIONS_DIR,
+        tyrumHome: home,
+      },
+      {
+        deploymentConfig: {
+          state: { mode: "shared" },
+        },
+      },
+    );
+    let provider: ReturnType<typeof createPluginCatalogProvider> | undefined;
+    try {
+      const artifact = await container.artifactStore.put({
+        kind: "file",
+        mime_type: "text/javascript",
+        body: Buffer.from(pluginEntryModule(), "utf-8"),
+      });
+      const dal = new RuntimePackageDal(container.db);
+      await dal.set({
+        tenantId: DEFAULT_TENANT_ID,
+        packageKind: "plugin",
+        packageKey: "echo",
+        packageData: sharedEchoManifest(),
+        artifactId: artifact.artifact_id,
+        createdBy: { kind: "test" },
+      });
+
+      provider = createPluginCatalogProvider({
+        home,
+        userHome: home,
+        logger: createSilentLogger(),
+        container,
+      });
+
+      expect((await provider.loadTenantRegistry(DEFAULT_TENANT_ID)).list()).toHaveLength(1);
+
+      await dal.set({
+        tenantId: DEFAULT_TENANT_ID,
+        packageKind: "plugin",
+        packageKey: "echo",
+        packageData: sharedEchoManifest(),
+        artifactId: artifact.artifact_id,
+        enabled: false,
+        createdBy: { kind: "other-instance" },
+      });
+
+      expect((await provider.loadTenantRegistry(DEFAULT_TENANT_ID)).list()).toEqual([]);
+    } finally {
+      await provider?.shutdown();
+      await container.db.close();
+    }
+  });
+
+  it("cleans up the shared plugin cache root on shutdown", async () => {
+    const { home } = await createEchoPluginHome();
+    cleanupPaths.push(home);
+
+    const container = createContainer(
+      {
+        dbPath: ":memory:",
+        migrationsDir: SQLITE_MIGRATIONS_DIR,
+        tyrumHome: home,
+      },
+      {
+        deploymentConfig: {
+          state: { mode: "shared" },
+        },
+      },
+    );
+    let provider: ReturnType<typeof createPluginCatalogProvider> | undefined;
+    try {
+      const artifact = await container.artifactStore.put({
+        kind: "file",
+        mime_type: "text/javascript",
+        body: Buffer.from(pluginEntryModule(), "utf-8"),
+      });
+      await new RuntimePackageDal(container.db).set({
+        tenantId: DEFAULT_TENANT_ID,
+        packageKind: "plugin",
+        packageKey: "echo",
+        packageData: sharedEchoManifest(),
+        artifactId: artifact.artifact_id,
+        createdBy: { kind: "test" },
+      });
+
+      provider = createPluginCatalogProvider({
+        home,
+        userHome: home,
+        logger: createSilentLogger(),
+        container,
+      });
+      await provider.loadTenantRegistry(DEFAULT_TENANT_ID);
+
+      const cacheRoot = await (provider as unknown as { cacheRootPromise?: Promise<string> })
+        .cacheRootPromise;
+      expect(cacheRoot).toBeTruthy();
+      expect((await stat(cacheRoot!)).isDirectory()).toBe(true);
+
+      await provider.shutdown();
+
+      await expect(stat(cacheRoot!)).rejects.toThrow();
+    } finally {
+      await provider?.shutdown();
       await container.db.close();
     }
   });

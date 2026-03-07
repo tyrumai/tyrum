@@ -170,8 +170,10 @@ describe("PolicyService regressions (precedence + overrides)", () => {
         overrideDal: new PolicyOverrideDal(db),
       });
 
-      await expect(policy.loadEffectiveBundle()).rejects.toThrow("tenantId is required");
-      await expect(policy.getStatus()).rejects.toThrow("tenantId is required");
+      await expect(policy.loadEffectiveBundle({ tenantId: "" })).rejects.toThrow(
+        "tenantId is required",
+      );
+      await expect(policy.getStatus({ tenantId: "" })).rejects.toThrow("tenantId is required");
     } finally {
       await db.close();
     }

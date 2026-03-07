@@ -64,21 +64,21 @@ export class PolicyService {
     return false; // default: enforce
   }
 
-  async loadEffectiveBundle(params?: {
+  async loadEffectiveBundle(params: {
     playbookBundle?: PolicyBundleT;
-    tenantId?: string;
+    tenantId: string;
     agentId?: string;
   }): Promise<{
     bundle: PolicyBundleT;
     sha256: string;
     sources: { deployment: string; agent: string | null; playbook: "inline" | null };
   }> {
-    const tenantId = params?.tenantId?.trim();
+    const tenantId = params.tenantId?.trim();
     if (!tenantId) throw new Error("tenantId is required to load the effective policy bundle");
-    const agentId = params?.agentId?.trim() || null;
+    const agentId = params.agentId?.trim() || null;
     const deployment = await this.loadDeploymentBundle(tenantId);
     const agent = await this.loadAgentBundle({ tenantId, agentId });
-    const playbookBundle = params?.playbookBundle;
+    const playbookBundle = params.playbookBundle;
     const merged = mergePolicyBundles([
       deployment.bundle,
       agent.bundle ?? undefined,
@@ -408,7 +408,7 @@ export class PolicyService {
     };
   }
 
-  async getStatus(scope?: { tenantId?: string; agentId?: string }): Promise<{
+  async getStatus(scope: { tenantId: string; agentId?: string }): Promise<{
     enabled: boolean;
     observe_only: boolean;
     effective_sha256: string;
@@ -417,9 +417,9 @@ export class PolicyService {
     const enabled = this.isEnabled();
     const observeOnly = this.isObserveOnly();
 
-    const tenantId = scope?.tenantId?.trim();
+    const tenantId = scope.tenantId?.trim();
     if (!tenantId) throw new Error("tenantId is required to read policy status");
-    const effective = await this.loadEffectiveBundle({ tenantId, agentId: scope?.agentId });
+    const effective = await this.loadEffectiveBundle({ tenantId, agentId: scope.agentId });
     return {
       enabled,
       observe_only: observeOnly,

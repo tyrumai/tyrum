@@ -371,6 +371,7 @@ export async function startEdgeRuntime(
   const server = await createGatewayServer(context, app, wsHandler);
   return {
     plugins,
+    pluginCatalogProvider,
     agents,
     authRateLimiter,
     wsUpgradeRateLimiter,

@@ -32,6 +32,7 @@ export interface PluginCatalogProvider {
   loadGlobalRegistry(): Promise<PluginRegistry>;
   loadTenantRegistry(tenantId: string): Promise<PluginRegistry>;
   invalidateTenantRegistry(tenantId: string): Promise<void>;
+  shutdown(): Promise<void>;
 }
 
 class LocalPluginCatalogProvider implements PluginCatalogProvider {
@@ -68,11 +69,16 @@ class LocalPluginCatalogProvider implements PluginCatalogProvider {
   async invalidateTenantRegistry(_tenantId: string): Promise<void> {
     this.registryPromise = undefined;
   }
+
+  async shutdown(): Promise<void> {}
 }
 
 class SharedPluginCatalogProvider implements PluginCatalogProvider {
   private readonly runtimePackageDal: RuntimePackageDal;
-  private readonly tenantRegistryPromises = new Map<string, Promise<PluginRegistry>>();
+  private readonly tenantRegistryEntries = new Map<
+    string,
+    { fingerprint: string; promise: Promise<PluginRegistry> }
+  >();
   private globalRegistryPromise: Promise<PluginRegistry> | undefined;
   private cacheRootPromise: Promise<string> | undefined;
 
@@ -109,20 +115,31 @@ class SharedPluginCatalogProvider implements PluginCatalogProvider {
 
   async loadTenantRegistry(tenantId: string): Promise<PluginRegistry> {
     const normalizedTenantId = tenantId.trim() || DEFAULT_TENANT_ID;
-    let promise = this.tenantRegistryPromises.get(normalizedTenantId);
-    if (!promise) {
-      promise = this.loadTenantRegistryUncached(normalizedTenantId).catch((err) => {
-        this.tenantRegistryPromises.delete(normalizedTenantId);
-        throw err;
-      });
-      this.tenantRegistryPromises.set(normalizedTenantId, promise);
+    const revisions = await this.runtimePackageDal.listLatest({
+      tenantId: normalizedTenantId,
+      packageKind: "plugin",
+      enabledOnly: true,
+    });
+    const fingerprint = computeRevisionFingerprint(revisions);
+    const cached = this.tenantRegistryEntries.get(normalizedTenantId);
+    if (cached && cached.fingerprint === fingerprint) {
+      return await cached.promise;
     }
+
+    const promise = this.loadTenantRegistryUncached(normalizedTenantId, revisions).catch((err) => {
+      const current = this.tenantRegistryEntries.get(normalizedTenantId);
+      if (current?.promise === promise) {
+        this.tenantRegistryEntries.delete(normalizedTenantId);
+      }
+      throw err;
+    });
+    this.tenantRegistryEntries.set(normalizedTenantId, { fingerprint, promise });
     return await promise;
   }
 
   async invalidateTenantRegistry(tenantId: string): Promise<void> {
     const normalizedTenantId = tenantId.trim() || DEFAULT_TENANT_ID;
-    this.tenantRegistryPromises.delete(normalizedTenantId);
+    this.tenantRegistryEntries.delete(normalizedTenantId);
 
     if (!this.cacheRootPromise) {
       return;
@@ -132,8 +149,25 @@ class SharedPluginCatalogProvider implements PluginCatalogProvider {
     await rm(join(cacheRoot, normalizedTenantId), { recursive: true, force: true });
   }
 
-  private async loadTenantRegistryUncached(tenantId: string): Promise<PluginRegistry> {
-    const sharedRoot = await this.materializeTenantPlugins(tenantId);
+  async shutdown(): Promise<void> {
+    this.tenantRegistryEntries.clear();
+    this.globalRegistryPromise = undefined;
+    const cacheRootPromise = this.cacheRootPromise;
+    this.cacheRootPromise = undefined;
+    if (!cacheRootPromise) {
+      return;
+    }
+    await rm(await cacheRootPromise, { recursive: true, force: true }).catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      this.opts.logger.warn("plugins.shared_cache_cleanup_failed", { error: message });
+    });
+  }
+
+  private async loadTenantRegistryUncached(
+    tenantId: string,
+    revisions: readonly RuntimePackageRevision[],
+  ): Promise<PluginRegistry> {
+    const sharedRoot = await this.materializeTenantPlugins(tenantId, revisions);
     const dirs: PluginDir[] = [
       { kind: "shared", path: sharedRoot },
       ...resolvePluginSearchDirs({
@@ -162,17 +196,14 @@ class SharedPluginCatalogProvider implements PluginCatalogProvider {
     return await this.cacheRootPromise;
   }
 
-  private async materializeTenantPlugins(tenantId: string): Promise<string> {
+  private async materializeTenantPlugins(
+    tenantId: string,
+    revisions: readonly RuntimePackageRevision[],
+  ): Promise<string> {
     const cacheRoot = await this.getCacheRoot();
     const tenantRoot = join(cacheRoot, tenantId);
     await rm(tenantRoot, { recursive: true, force: true });
     await mkdir(tenantRoot, { recursive: true, mode: 0o700 });
-
-    const revisions = await this.runtimePackageDal.listLatest({
-      tenantId,
-      packageKind: "plugin",
-      enabledOnly: true,
-    });
 
     for (const revision of revisions) {
       await this.materializeRevision(tenantRoot, revision);
@@ -302,6 +333,19 @@ class SharedPluginCatalogProvider implements PluginCatalogProvider {
       throw new Error(`shared plugin bundle is missing entry file '${params.entryPath}'`);
     }
   }
+}
+
+function computeRevisionFingerprint(revisions: readonly RuntimePackageRevision[]): string {
+  return revisions
+    .map((revision) =>
+      [
+        revision.packageKey,
+        String(revision.revision),
+        revision.packageSha256,
+        revision.artifactId ?? "",
+      ].join(":"),
+    )
+    .join("|");
 }
 
 function parseSharedPluginBundle(body: Buffer): SharedPluginBundle | undefined {

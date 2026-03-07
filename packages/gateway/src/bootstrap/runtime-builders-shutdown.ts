@@ -118,6 +118,7 @@ export function createShutdownHandler(
         closeServer,
         closeWss,
         shutdownHookRuns,
+        runtime.edge.pluginCatalogProvider?.shutdown() ?? Promise.resolve(),
         runtime.edge.agents?.shutdown() ?? Promise.resolve(),
         runtime.otel.shutdown(),
         stopWorker,
