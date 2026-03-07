@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { PluginManifest } from "@tyrum/schemas";
@@ -202,10 +202,24 @@ class SharedPluginCatalogProvider implements PluginCatalogProvider {
   ): Promise<string> {
     const cacheRoot = await this.getCacheRoot();
     const tenantRoot = join(cacheRoot, tenantId);
-    await rm(tenantRoot, { recursive: true, force: true });
     await mkdir(tenantRoot, { recursive: true, mode: 0o700 });
 
+    const expectedDirs = new Set(
+      revisions
+        .map((revision) => resolveMaterializedPluginDirName(revision))
+        .filter((dirName): dirName is string => Boolean(dirName)),
+    );
+    const existingEntries = await readdir(tenantRoot, { withFileTypes: true }).catch(() => []);
+    for (const entry of existingEntries) {
+      if (!entry.isDirectory() || expectedDirs.has(entry.name)) continue;
+      await rm(join(tenantRoot, entry.name), { recursive: true, force: true });
+    }
+
     for (const revision of revisions) {
+      const dirName = resolveMaterializedPluginDirName(revision);
+      if (dirName && (await pathExists(join(tenantRoot, dirName)))) {
+        continue;
+      }
       await this.materializeRevision(tenantRoot, revision);
     }
 
@@ -346,6 +360,15 @@ function computeRevisionFingerprint(revisions: readonly RuntimePackageRevision[]
       ].join(":"),
     )
     .join("|");
+}
+
+function resolveMaterializedPluginDirName(revision: RuntimePackageRevision): string | undefined {
+  try {
+    const plugin = PluginManifest.parse(revision.packageData) as PluginManifestT;
+    return `${sanitizeDirSegment(plugin.id)}-${String(revision.revision)}`;
+  } catch {
+    return undefined;
+  }
 }
 
 function parseSharedPluginBundle(body: Buffer): SharedPluginBundle | undefined {
