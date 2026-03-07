@@ -24,11 +24,7 @@ import {
   PLUGIN_LOCK_FILENAME,
   type PluginInstallInfo,
 } from "./lockfile.js";
-import {
-  type PluginDir,
-  type PluginDirKind,
-  resolvePluginSearchDirs,
-} from "./directories.js";
+import { type PluginDir, type PluginDirKind, resolvePluginSearchDirs } from "./directories.js";
 import { missingRequiredManifestFields, resolveSafeChildPath } from "./validation.js";
 
 const PLUGIN_LIFECYCLE_AUDIT_PLAN_ID = "gateway.plugins.lifecycle";

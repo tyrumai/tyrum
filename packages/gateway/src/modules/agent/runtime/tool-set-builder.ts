@@ -23,6 +23,7 @@ import { wildcardMatch } from "../../policy/wildcard.js";
 import { hasToolResult } from "../../ai-sdk/message-utils.js";
 import { coerceRecord } from "../../util/coerce.js";
 import { LaneQueueInterruptError } from "../../lanes/queue-signal-dal.js";
+import type { GatewayStateMode } from "../../runtime-state/mode.js";
 
 interface ToolExecutionContext {
   tenantId: string;
@@ -83,6 +84,7 @@ type ToolSetBuilderLogger = {
 type ToolSetBuilderRedactionEngine = { redactText: (text: string) => { redacted: string } };
 export interface ToolSetBuilderDeps {
   home: string;
+  stateMode?: GatewayStateMode;
   tenantId: string;
   agentId: string;
   workspaceId: string;
@@ -426,16 +428,13 @@ export class ToolSetBuilder {
           }
 
           usedTools.add(toolDesc.id);
-          const agentId = this.deps.agentId;
-          const workspaceId = this.deps.workspaceId;
-
           const pluginRes = await this.deps.plugins?.executeTool({
             toolId: toolDesc.id,
             toolCallId,
             args: effectiveArgs,
-            home: this.deps.home,
-            agentId,
-            workspaceId,
+            home: this.deps.stateMode === "shared" ? "" : this.deps.home,
+            agentId: this.deps.agentId,
+            workspaceId: this.deps.workspaceId,
             auditPlanId: toolExecutionContext.planId,
             sessionId: toolExecutionContext.sessionId,
             channel: toolExecutionContext.channel,
@@ -454,8 +453,8 @@ export class ToolSetBuilder {
                 };
               })()
             : await toolExecutor.execute(toolDesc.id, toolCallId, effectiveArgs, {
-                agent_id: agentId,
-                workspace_id: workspaceId,
+                agent_id: this.deps.agentId,
+                workspace_id: this.deps.workspaceId,
                 session_id: toolExecutionContext.sessionId,
                 channel: toolExecutionContext.channel,
                 thread_id: toolExecutionContext.threadId,

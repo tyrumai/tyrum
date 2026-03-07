@@ -72,6 +72,7 @@ import { OauthRefreshLeaseDal as OauthRefreshLeaseDalImpl } from "./modules/oaut
 import { OAuthProviderRegistry as OAuthProviderRegistryImpl } from "./modules/oauth/provider-registry.js";
 import { IdentityScopeDal as IdentityScopeDalImpl } from "./modules/identity/scope.js";
 import { ChannelThreadDal as ChannelThreadDalImpl } from "./modules/channels/thread-dal.js";
+import { isSharedStateMode } from "./modules/runtime-state/mode.js";
 
 export interface GatewayContainerConfig {
   dbPath: string;
@@ -195,6 +196,7 @@ export function wireContainer(
     overrideDal: policyOverrideDal,
     logger,
     deploymentPolicy: deploymentConfig.policy,
+    includeAgentHomeBundle: !isSharedStateMode(deploymentConfig),
   });
 
   const modelsDevCacheDal = new ModelsDevCacheDal(db);

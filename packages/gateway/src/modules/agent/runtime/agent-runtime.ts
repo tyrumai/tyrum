@@ -281,7 +281,6 @@ export class AgentRuntime {
       })
     ).config;
   }
-
   private maybeCleanupSessions(ttlDays: number, agentKey: string): void {
     const now = Date.now();
     if (now < this.cleanupAtMs) {
@@ -1477,10 +1476,10 @@ export class AgentRuntime {
         ? this.mcpManager.listToolDescriptors(ctx.mcpServers)
         : this.mcpManager.listToolDescriptors([]),
     ]);
-
     const pluginToolsRaw = this.plugins?.getToolDescriptors() ?? [];
     const toolSetBuilder = new ToolSetBuilder({
       home: this.home,
+      stateMode: resolveGatewayStateMode(this.opts.container.deploymentConfig),
       tenantId: session.tenant_id,
       agentId: session.agent_id,
       workspaceId: session.workspace_id,
@@ -1510,12 +1509,10 @@ export class AgentRuntime {
     const filteredTools = toolCandidates
       .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
       .slice(0, 8);
-
     // Build MCP server spec lookup for ToolExecutor
-    const mcpSpecMap = new Map<string, McpServerSpecT>();
-    for (const server of ctx.mcpServers) {
-      mcpSpecMap.set(server.id, server);
-    }
+    const mcpSpecMap = new Map<string, McpServerSpecT>(
+      ctx.mcpServers.map((server) => [server.id, server]),
+    );
 
     const nodeDispatchService = this.opts.protocolDeps
       ? new NodeDispatchService(this.opts.protocolDeps)

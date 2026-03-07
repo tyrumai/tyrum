@@ -23,6 +23,58 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 }
 
 describe("PolicyService regressions (precedence + overrides)", () => {
+  it("can disable per-agent home policy bundles for shared mode", async () => {
+    await withTempDir(async (home) => {
+      const db = openTestSqliteDb();
+      try {
+        await writeFile(
+          join(home, "policy.yml"),
+          [
+            "v: 1",
+            "tools:",
+            "  default: deny",
+            "  allow: []",
+            "  require_approval:",
+            "    - tool.exec",
+            "  deny: []",
+            "",
+          ].join("\n"),
+          "utf-8",
+        );
+
+        const playbookBundle = PolicyBundle.parse({
+          v: 1,
+          tools: {
+            default: "deny",
+            allow: ["tool.exec"],
+            require_approval: [],
+            deny: [],
+          },
+        });
+
+        const policy = new PolicyService({
+          home,
+          snapshotDal: new PolicySnapshotDal(db),
+          overrideDal: new PolicyOverrideDal(db),
+          includeAgentHomeBundle: false,
+        });
+
+        const res = await policy.evaluateToolCall({
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          toolId: "tool.exec",
+          toolMatchTarget: "echo ok",
+          playbookBundle,
+        });
+
+        expect(res.decision).toBe("allow");
+      } finally {
+        await db.close();
+      }
+    });
+  });
+
   it("enforces require_approval over allow when patterns overlap", async () => {
     await withTempDir(async (home) => {
       const db = openTestSqliteDb();

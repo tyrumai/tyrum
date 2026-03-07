@@ -10,6 +10,7 @@ import { AgentRuntime } from "./runtime.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { LanguageModel } from "ai";
 import type { ProtocolDeps } from "../../ws/protocol.js";
+import { isSharedStateMode } from "../runtime-state/mode.js";
 
 function normalizeAgentId(raw: string | undefined): string {
   const trimmed = raw?.trim();
@@ -69,6 +70,7 @@ export class AgentRegistry {
       snapshotDal: this.opts.container.policySnapshotDal,
       overrideDal: this.opts.container.policyOverrideDal,
       logger: this.opts.logger,
+      includeAgentHomeBundle: !isSharedStateMode(this.opts.container.deploymentConfig),
     });
     this.policyServiceByAgentId.set(id, service);
     return service;

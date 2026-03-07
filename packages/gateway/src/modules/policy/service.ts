@@ -55,6 +55,7 @@ export class PolicyService {
         mode?: string;
         bundlePath?: string;
       };
+      includeAgentHomeBundle?: boolean;
     },
   ) {}
 
@@ -454,6 +455,11 @@ export class PolicyService {
     bundle: PolicyBundleT | null;
     sha256: string | null;
   }> {
+    if (this.opts.includeAgentHomeBundle === false) {
+      this.agentBundleCache = { path: null, bundle: null, sha256: null };
+      return this.agentBundleCache;
+    }
+
     const candidates = [
       `${this.opts.home}/policy.yml`,
       `${this.opts.home}/policy.yaml`,
