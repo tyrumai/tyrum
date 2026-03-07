@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { rm, stat } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PluginManifest } from "@tyrum/schemas";
 import { createContainer } from "../../src/container.js";
 import { RuntimePackageDal } from "../../src/modules/agent/runtime-package-dal.js";
@@ -55,8 +57,8 @@ describe("PluginCatalogProvider", () => {
     }
   });
 
-  it("loads tenant-scoped shared plugins from runtime packages and ignores TYRUM_HOME/plugins", async () => {
-    const { home } = await createEchoPluginHome();
+  it("loads tenant-scoped shared plugins from runtime packages", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-shared-plugin-home-"));
     cleanupPaths.push(home);
 
     const container = createContainer(
@@ -106,6 +108,69 @@ describe("PluginCatalogProvider", () => {
     }
   });
 
+  it("includes home-installed plugins in shared tenant registries", async () => {
+    const { home, pluginsRoot } = await createEchoPluginHome();
+    cleanupPaths.push(home);
+
+    const pluginDir = join(pluginsRoot, "local-install");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      join(pluginDir, "plugin.json"),
+      JSON.stringify({
+        id: "local-install",
+        name: "Local Install",
+        version: "0.0.1",
+        entry: "index.mjs",
+        contributes: {
+          tools: ["plugin.local-install.echo"],
+          commands: ["local-install"],
+          routes: [],
+          mcp_servers: [],
+        },
+        permissions: {
+          tools: [],
+          network_egress: [],
+          secrets: [],
+          db: false,
+        },
+        config_schema: {
+          type: "object",
+          properties: {},
+          required: [],
+          additionalProperties: false,
+        },
+      }),
+      "utf-8",
+    );
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule("local-install"), "utf-8");
+
+    const container = createContainer(
+      {
+        dbPath: ":memory:",
+        migrationsDir: SQLITE_MIGRATIONS_DIR,
+        tyrumHome: home,
+      },
+      {
+        deploymentConfig: {
+          state: { mode: "shared" },
+        },
+      },
+    );
+    try {
+      const provider = createPluginCatalogProvider({
+        home,
+        userHome: home,
+        logger: createSilentLogger(),
+        container,
+      });
+
+      const tenantPlugins = await provider.loadTenantRegistry(DEFAULT_TENANT_ID);
+      expect(tenantPlugins.list().map((plugin) => plugin.id)).toEqual(["echo", "local-install"]);
+    } finally {
+      await container.db.close();
+    }
+  });
+
   it("skips shared plugins that do not point to an artifact payload", async () => {
     const { home } = await createEchoPluginHome({ entry: null });
     cleanupPaths.push(home);
@@ -148,7 +213,7 @@ describe("PluginCatalogProvider", () => {
   });
 
   it("retries a failed local global registry load", async () => {
-    const { home } = await createEchoPluginHome();
+    const home = await mkdtemp(join(tmpdir(), "tyrum-shared-plugin-home-"));
     cleanupPaths.push(home);
 
     const fakeRegistry = Object.create(PluginRegistry.prototype) as PluginRegistry;
@@ -286,7 +351,7 @@ describe("PluginCatalogProvider", () => {
   });
 
   it("reloads tenant registries after invalidation and drops removed plugins", async () => {
-    const { home } = await createEchoPluginHome();
+    const home = await mkdtemp(join(tmpdir(), "tyrum-shared-plugin-home-"));
     cleanupPaths.push(home);
 
     const container = createContainer(
@@ -346,7 +411,7 @@ describe("PluginCatalogProvider", () => {
   });
 
   it("refreshes cached tenant registries when shared package revisions change externally", async () => {
-    const { home } = await createEchoPluginHome();
+    const home = await mkdtemp(join(tmpdir(), "tyrum-shared-plugin-home-"));
     cleanupPaths.push(home);
 
     const container = createContainer(

@@ -1,5 +1,6 @@
 import type { GatewayBootContext, GatewayRuntime } from "./runtime-shared.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
+import { isSharedStateMode } from "../modules/runtime-state/mode.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -42,6 +43,44 @@ function closeCallbackTarget(
   });
 }
 
+async function listLifecycleHookTenantIds(context: GatewayBootContext): Promise<readonly string[]> {
+  if (!isSharedStateMode(context.deploymentConfig)) {
+    return [DEFAULT_TENANT_ID];
+  }
+
+  const rows = await context.container.db.all<{ tenant_id: string }>(
+    "SELECT tenant_id FROM tenants ORDER BY tenant_id ASC",
+  );
+  const tenantIds = Array.from(
+    new Set(rows.map((row) => row.tenant_id.trim()).filter((tenantId) => tenantId.length > 0)),
+  );
+  return tenantIds.length > 0 ? tenantIds : [DEFAULT_TENANT_ID];
+}
+
+export async function fireGatewayLifecycleHooks(
+  context: GatewayBootContext,
+  hooksRuntime: {
+    fire(input: {
+      event: string;
+      tenantId: string;
+      metadata?: unknown;
+    }): Promise<readonly string[]>;
+  },
+  input: { event: string; metadata?: unknown },
+): Promise<readonly string[]> {
+  const runIds: string[] = [];
+  for (const tenantId of await listLifecycleHookTenantIds(context)) {
+    runIds.push(
+      ...(await hooksRuntime.fire({
+        event: input.event,
+        tenantId,
+        metadata: input.metadata,
+      })),
+    );
+  }
+  return runIds;
+}
+
 export function createShutdownHandler(
   context: GatewayBootContext,
   runtime: GatewayRuntime,
@@ -70,20 +109,17 @@ export function createShutdownHandler(
 
     const shutdownHookRuns =
       runtime.protocol.hooksRuntime && context.shouldRunWorker
-        ? runtime.protocol.hooksRuntime
-            .fire({
+        ? fireGatewayLifecycleHooks(context, runtime.protocol.hooksRuntime, {
+            event: "gateway.shutdown",
+            metadata: { signal, instance_id: context.instanceId, role: context.role },
+          }).catch((err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            context.logger.warn("hooks.fire_failed", {
               event: "gateway.shutdown",
-              tenantId: DEFAULT_TENANT_ID,
-              metadata: { signal, instance_id: context.instanceId, role: context.role },
-            })
-            .catch((err) => {
-              const message = err instanceof Error ? err.message : String(err);
-              context.logger.warn("hooks.fire_failed", {
-                event: "gateway.shutdown",
-                error: message,
-              });
-              return [];
-            })
+              error: message,
+            });
+            return [];
+          })
         : Promise.resolve([]);
 
     const stopWorker = (async () => {
