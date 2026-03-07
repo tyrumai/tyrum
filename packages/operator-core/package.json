@@ -1,6 +1,8 @@
 {
   "name": "@tyrum/operator-core",
   "version": "0.1.0",
+  "author": "Ron Hernaus <ron@virtunet.nl>",
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": {

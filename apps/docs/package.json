@@ -2,6 +2,8 @@
   "name": "@tyrum/docs",
   "version": "0.1.0",
   "private": true,
+  "author": "Ron Hernaus <ron@virtunet.nl>",
+  "license": "MIT",
   "scripts": {
     "start": "docusaurus start",
     "build": "docusaurus build && node ./scripts/publish-raw-docs-and-llms.mjs",
