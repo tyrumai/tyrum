@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { OPERATOR_ROUTE_DEFINITIONS } from "../src/operator-routes.js";
 
 describe("Operator UI app/page component structure", () => {
   it("exports each page from components/pages", async () => {
@@ -23,5 +24,21 @@ describe("Operator UI app/page component structure", () => {
       const mod = (await import(specifier)) as Record<string, unknown>;
       expect(mod[exportName]).toBeTypeOf("function");
     }
+  });
+
+  it("keeps the PR 1124 primary navigation shape in the shared route table", () => {
+    const sidebarShortcutIds = OPERATOR_ROUTE_DEFINITIONS.filter(
+      (route) => route.navGroup === "sidebar" && route.shortcut,
+    ).map((route) => route.id);
+
+    expect(sidebarShortcutIds).toEqual([
+      "dashboard",
+      "chat",
+      "approvals",
+      "workboard",
+      "agents",
+      "pairing",
+      "configure",
+    ]);
   });
 });
