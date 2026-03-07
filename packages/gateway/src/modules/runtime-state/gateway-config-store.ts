@@ -16,6 +16,7 @@ async function fileExists(path: string): Promise<boolean> {
     await access(path);
     return true;
   } catch {
+    // Intentional: local-mode config fallbacks probe optional files.
     return false;
   }
 }

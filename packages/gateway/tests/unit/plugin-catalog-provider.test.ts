@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { rm } from "node:fs/promises";
 import { PluginManifest } from "@tyrum/schemas";
 import { createContainer } from "../../src/container.js";
 import { RuntimePackageDal } from "../../src/modules/agent/runtime-package-dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createPluginCatalogProvider } from "../../src/modules/plugins/catalog-provider.js";
+import { PluginRegistry } from "../../src/modules/plugins/registry.js";
 import {
   createCapturingLogger,
   createEchoPluginHome,
@@ -45,6 +46,7 @@ describe("PluginCatalogProvider", () => {
   const cleanupPaths: string[] = [];
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     while (cleanupPaths.length > 0) {
       const path = cleanupPaths.pop();
       if (path) {
@@ -140,6 +142,82 @@ describe("PluginCatalogProvider", () => {
 
       expect(tenantPlugins.list()).toEqual([]);
       expect(warnings.some((entry) => entry.msg === "plugins.shared_missing_artifact")).toBe(true);
+    } finally {
+      await container.db.close();
+    }
+  });
+
+  it("retries a failed local global registry load", async () => {
+    const { home } = await createEchoPluginHome();
+    cleanupPaths.push(home);
+
+    const fakeRegistry = Object.create(PluginRegistry.prototype) as PluginRegistry;
+    vi.spyOn(PluginRegistry, "load")
+      .mockRejectedValueOnce(new Error("transient"))
+      .mockResolvedValueOnce(fakeRegistry);
+
+    const container = createContainer(
+      {
+        dbPath: ":memory:",
+        migrationsDir: SQLITE_MIGRATIONS_DIR,
+        tyrumHome: home,
+      },
+      {
+        deploymentConfig: {
+          state: { mode: "local" },
+        },
+      },
+    );
+
+    try {
+      const provider = createPluginCatalogProvider({
+        home,
+        userHome: home,
+        logger: createSilentLogger(),
+        container,
+      });
+
+      await expect(provider.loadGlobalRegistry()).rejects.toThrow("transient");
+      await expect(provider.loadGlobalRegistry()).resolves.toBe(fakeRegistry);
+      expect(PluginRegistry.load).toHaveBeenCalledTimes(2);
+    } finally {
+      await container.db.close();
+    }
+  });
+
+  it("retries a failed shared global registry load", async () => {
+    const { home } = await createEchoPluginHome();
+    cleanupPaths.push(home);
+
+    const fakeRegistry = Object.create(PluginRegistry.prototype) as PluginRegistry;
+    vi.spyOn(PluginRegistry, "loadFromSearchDirs")
+      .mockRejectedValueOnce(new Error("transient"))
+      .mockResolvedValueOnce(fakeRegistry);
+
+    const container = createContainer(
+      {
+        dbPath: ":memory:",
+        migrationsDir: SQLITE_MIGRATIONS_DIR,
+        tyrumHome: home,
+      },
+      {
+        deploymentConfig: {
+          state: { mode: "shared" },
+        },
+      },
+    );
+
+    try {
+      const provider = createPluginCatalogProvider({
+        home,
+        userHome: home,
+        logger: createSilentLogger(),
+        container,
+      });
+
+      await expect(provider.loadGlobalRegistry()).rejects.toThrow("transient");
+      await expect(provider.loadGlobalRegistry()).resolves.toBe(fakeRegistry);
+      expect(PluginRegistry.loadFromSearchDirs).toHaveBeenCalledTimes(2);
     } finally {
       await container.db.close();
     }

@@ -197,7 +197,8 @@ export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps):
     let body: unknown;
     try {
       body = (await c.req.json()) as unknown;
-    } catch {
+    } catch (err) {
+      void err;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
 
@@ -250,7 +251,8 @@ export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps):
     let body: unknown;
     try {
       body = (await c.req.json()) as unknown;
-    } catch {
+    } catch (err) {
+      void err;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
 
@@ -365,7 +367,8 @@ export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps):
     let body: unknown;
     try {
       body = (await c.req.json()) as unknown;
-    } catch {
+    } catch (err) {
+      void err;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
 
@@ -411,7 +414,8 @@ export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps):
     let body: unknown;
     try {
       body = (await c.req.json()) as unknown;
-    } catch {
+    } catch (err) {
+      void err;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
 
@@ -495,7 +499,8 @@ export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps):
     let body: unknown;
     try {
       body = (await c.req.json()) as unknown;
-    } catch {
+    } catch (err) {
+      void err;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
 

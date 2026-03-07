@@ -95,7 +95,8 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
     let body: unknown;
     try {
       body = (await c.req.json()) as unknown;
-    } catch {
+    } catch (err) {
+      void err;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
     const parsed = HooksUpdateRequest.safeParse(body);
@@ -127,7 +128,8 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
     let body: unknown;
     try {
       body = (await c.req.json()) as unknown;
-    } catch {
+    } catch (err) {
+      void err;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
     const parsed = RevertRequest.safeParse(body);
@@ -209,7 +211,8 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
       let body: unknown;
       try {
         body = (await c.req.json()) as unknown;
-      } catch {
+      } catch (err) {
+        void err;
         return c.json({ error: "invalid_request", message: "invalid json" }, 400);
       }
       const parsed = PolicyUpdateRequest.safeParse(body);
@@ -244,7 +247,8 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
       let body: unknown;
       try {
         body = (await c.req.json()) as unknown;
-      } catch {
+      } catch (err) {
+        void err;
         return c.json({ error: "invalid_request", message: "invalid json" }, 400);
       }
       const parsed = RevertRequest.safeParse(body);

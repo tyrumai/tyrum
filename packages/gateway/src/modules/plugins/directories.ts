@@ -18,6 +18,7 @@ function tryReadPackageJsonName(path: string): string | undefined {
         : undefined
       : undefined;
   } catch {
+    // Intentional: package.json discovery should ignore unreadable or invalid candidates.
     return undefined;
   }
 }

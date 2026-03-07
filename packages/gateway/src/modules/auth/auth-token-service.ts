@@ -71,7 +71,14 @@ function constantTimeEqual(a: Buffer, b: Buffer): boolean {
 }
 
 function constantTimeStringEqual(a: string, b: string): boolean {
-  return constantTimeEqual(Buffer.from(a, "utf-8"), Buffer.from(b, "utf-8"));
+  const aBuf = Buffer.from(a, "utf-8");
+  const bBuf = Buffer.from(b, "utf-8");
+  const maxLength = Math.max(aBuf.length, bBuf.length, 1);
+  const paddedA = Buffer.alloc(maxLength);
+  const paddedB = Buffer.alloc(maxLength);
+  aBuf.copy(paddedA);
+  bBuf.copy(paddedB);
+  return timingSafeEqual(paddedA, paddedB) && aBuf.length === bBuf.length;
 }
 
 export type ProvisionedAuthToken = {

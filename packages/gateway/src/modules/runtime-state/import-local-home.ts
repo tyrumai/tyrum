@@ -179,6 +179,7 @@ async function listAgentHomes(sourceHome: string): Promise<AgentHome[]> {
   try {
     entries = await readdir(agentsDir, { withFileTypes: true });
   } catch {
+    // Intentional: agent subdirectories are optional in a local home.
     return homes;
   }
 
@@ -206,6 +207,7 @@ async function importSkills(params: {
   try {
     entries = await readdir(skillsDir, { withFileTypes: true });
   } catch {
+    // Intentional: importing should skip homes without a skills directory.
     return 0;
   }
 
@@ -252,6 +254,7 @@ async function importMcpServers(params: {
   try {
     entries = await readdir(mcpDir, { withFileTypes: true });
   } catch {
+    // Intentional: importing should skip homes without an mcp directory.
     return 0;
   }
 
@@ -287,6 +290,7 @@ async function importMarkdownMemory(params: {
   try {
     entries = await readdir(memoryDir, { withFileTypes: true });
   } catch {
+    // Intentional: importing should skip homes without markdown memory files.
     return 0;
   }
 
@@ -335,6 +339,7 @@ async function importPlugins(params: {
   try {
     entries = await readdir(pluginsRoot, { withFileTypes: true });
   } catch {
+    // Intentional: importing should skip homes without a plugins directory.
     return 0;
   }
 
@@ -494,6 +499,7 @@ async function pathExists(path: string): Promise<boolean> {
     await readFile(path);
     return true;
   } catch {
+    // Intentional: policy file discovery probes optional local files.
     return false;
   }
 }

@@ -53,6 +53,9 @@ class LocalPluginCatalogProvider implements PluginCatalogProvider {
       logger: this.opts.logger,
       container: this.opts.container,
       fetchImpl: this.opts.fetchImpl,
+    }).catch((err) => {
+      this.registryPromise = undefined;
+      throw err;
     });
     return await this.registryPromise;
   }
@@ -92,6 +95,9 @@ class SharedPluginCatalogProvider implements PluginCatalogProvider {
       logger: this.opts.logger,
       container: this.opts.container,
       fetchImpl: this.opts.fetchImpl,
+    }).catch((err) => {
+      this.globalRegistryPromise = undefined;
+      throw err;
     });
     return await this.globalRegistryPromise;
   }
@@ -272,6 +278,7 @@ function parseSharedPluginBundle(body: Buffer): SharedPluginBundle | undefined {
   try {
     parsed = JSON.parse(body.toString("utf-8")) as unknown;
   } catch {
+    // Intentional: a non-JSON artifact is treated as a raw entry payload.
     return undefined;
   }
 
@@ -324,6 +331,7 @@ async function pathExists(path: string): Promise<boolean> {
     await stat(path);
     return true;
   } catch {
+    // Intentional: missing paths are expected during lazy materialization checks.
     return false;
   }
 }

@@ -131,4 +131,26 @@ describe("AuthTokenService", () => {
     );
     expect(await svc.countActiveTenantAdminTokens(DEFAULT_TENANT_ID)).toBe(1);
   });
+
+  it("rejects length-mismatched provisioned opaque tokens while preserving exact matches", async () => {
+    const svc = new AuthTokenService(db, {
+      provisionedTokens: [
+        {
+          token: "opaque-admin-token",
+          tenantId: DEFAULT_TENANT_ID,
+          role: "admin",
+          scopes: ["*"],
+        },
+      ],
+    });
+
+    expect(await svc.authenticate("opaque-admin-token-extra")).toBeNull();
+    expect(await svc.authenticate("opaque-admin-toke")).toBeNull();
+    expect(await svc.authenticate("opaque-admin-token")).toEqual(
+      expect.objectContaining({
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+      }),
+    );
+  });
 });
