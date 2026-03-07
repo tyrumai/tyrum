@@ -12,10 +12,7 @@ import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
 import { AgentIdentityDal } from "../modules/agent/identity-dal.js";
-import {
-  MarkdownMemoryDal,
-  type MarkdownMemoryDoc,
-} from "../modules/agent/markdown-memory-dal.js";
+import { MarkdownMemoryDal, type MarkdownMemoryDoc } from "../modules/agent/markdown-memory-dal.js";
 import {
   RuntimePackageDal,
   type RuntimePackageKind,
@@ -291,7 +288,10 @@ export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps):
     const tenantId = requireTenantId(c);
     const parsedKind = runtimePackageKindSchema.safeParse(c.req.query("kind"));
     if (!parsedKind.success) {
-      return c.json({ error: "invalid_request", message: "kind must be skill, mcp, or plugin" }, 400);
+      return c.json(
+        { error: "invalid_request", message: "kind must be skill, mcp, or plugin" },
+        400,
+      );
     }
 
     const revisions = await runtimePackageDal.listLatest({

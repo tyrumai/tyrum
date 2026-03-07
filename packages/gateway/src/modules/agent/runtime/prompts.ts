@@ -88,9 +88,7 @@ export function formatToolPrompt(tools: readonly ToolDescriptor[]): string {
     .join("\n");
 }
 
-export function formatMemoryPrompt(
-  hits: Awaited<ReturnType<AgentMemoryStore["search"]>>,
-): string {
+export function formatMemoryPrompt(hits: Awaited<ReturnType<AgentMemoryStore["search"]>>): string {
   if (hits.length === 0) {
     return "No matching long-term memory found.";
   }

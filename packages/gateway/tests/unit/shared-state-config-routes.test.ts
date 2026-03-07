@@ -95,9 +95,7 @@ describe("shared state config routes", () => {
     const payload = (await listRes.json()) as {
       packages: Array<{ key: string; enabled: boolean }>;
     };
-    expect(payload.packages).toEqual([
-      expect.objectContaining({ key: "db-skill", enabled: true }),
-    ]);
+    expect(payload.packages).toEqual([expect.objectContaining({ key: "db-skill", enabled: true })]);
   });
 
   it("stores and returns markdown memory docs", async () => {
