@@ -70,4 +70,58 @@ describe("createProtocolRuntime hooks gating", () => {
       await container.db.close();
     }
   });
+
+  it("uses the shared config store for hooks in shared mode", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-hooks-runtime-shared-"));
+    const container = createContainer(
+      {
+        dbPath: ":memory:",
+        migrationsDir: SQLITE_MIGRATIONS_DIR,
+        tyrumHome: homeDir,
+      },
+      {
+        deploymentConfig: DeploymentConfig.parse({ state: { mode: "shared" } }),
+      },
+    );
+
+    const logger = container.logger.child({ test: "runtime-builders-hooks-shared" });
+    const context: GatewayBootContext = {
+      instanceId: "test-instance",
+      role: "edge",
+      tyrumHome: homeDir,
+      host: "127.0.0.1",
+      port: 8788,
+      dbPath: ":memory:",
+      migrationsDir: SQLITE_MIGRATIONS_DIR,
+      isLocalOnly: false,
+      shouldRunEdge: true,
+      shouldRunWorker: false,
+      deploymentConfig: container.deploymentConfig,
+      container,
+      logger,
+      authTokens: {} as GatewayBootContext["authTokens"],
+      secretProviderForTenant: (() => ({
+        list: async () => [],
+        resolve: async () => null,
+        store: async () => {
+          throw new Error("not implemented");
+        },
+        revoke: async () => false,
+      })) as GatewayBootContext["secretProviderForTenant"],
+      lifecycleHooks: [],
+    };
+
+    try {
+      const protocol = await createProtocolRuntime(context, {
+        enabled: false,
+        shutdown: async () => undefined,
+      });
+
+      expect(protocol.hooksRuntime).toBeDefined();
+      expect((protocol.hooksRuntime as never).opts.hooks).toBeUndefined();
+      protocol.approvalEngineActionProcessor?.stop();
+    } finally {
+      await container.db.close();
+    }
+  });
 });

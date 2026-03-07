@@ -108,7 +108,7 @@ export async function createProtocolRuntime(
         configStore: isSharedStateMode(context.deploymentConfig)
           ? context.container.gatewayConfigStore
           : undefined,
-        hooks: context.lifecycleHooks,
+        hooks: isSharedStateMode(context.deploymentConfig) ? undefined : context.lifecycleHooks,
       })
     : undefined;
 

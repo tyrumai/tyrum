@@ -96,4 +96,46 @@ describe("LifecycleHooksRuntime", () => {
     const parsedAction = JSON.parse(step!.action_json) as ActionPrimitive;
     expect(parsedAction.type).toBe("CLI");
   });
+
+  it("falls back to the shared config store when local hooks are empty", async () => {
+    db = openTestSqliteDb();
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-hooks-shared-"));
+
+    const policySnapshotDal = new PolicySnapshotDal(db);
+    const policyOverrideDal = new PolicyOverrideDal(db);
+    const policyService = new PolicyService({
+      home: homeDir,
+      snapshotDal: policySnapshotDal,
+      overrideDal: policyOverrideDal,
+    });
+
+    const engine = new ExecutionEngine({ db });
+    const configStore = {
+      getLifecycleHooks: async () => [
+        {
+          hook_key: "hook:550e8400-e29b-41d4-a716-446655440002",
+          event: "gateway.start",
+          lane: "cron",
+          steps: [
+            {
+              type: "CLI",
+              args: { cmd: "echo", args: ["shared"] },
+            },
+          ] satisfies ActionPrimitive[],
+        },
+      ],
+    };
+
+    const runtime = new LifecycleHooksRuntime({
+      db,
+      engine,
+      policyService,
+      configStore: configStore as never,
+      hooks: [],
+    });
+
+    const runIds = await runtime.fire({ event: "gateway.start" });
+
+    expect(runIds).toHaveLength(1);
+  });
 });
