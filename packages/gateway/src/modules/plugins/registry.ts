@@ -789,6 +789,10 @@ export class PluginRegistry {
     );
   }
 
+  getRouter(pluginId: string): Hono | undefined {
+    return this.plugins.get(normalizePluginId(pluginId))?.router;
+  }
+
   private async loadFromDirectories(dirs: PluginDir[]): Promise<void> {
     for (const dir of dirs) await this.loadFromDirectory(dir);
   }

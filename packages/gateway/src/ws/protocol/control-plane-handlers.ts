@@ -98,6 +98,7 @@ async function handleCommandExecuteMessage(
     policyOverrideDal: deps.policyOverrideDal,
     contextReportDal: deps.contextReportDal,
     plugins: deps.plugins,
+    pluginCatalogProvider: deps.pluginCatalogProvider,
     modelsDev: deps.modelsDev,
     modelCatalog: deps.modelCatalog,
     agents: deps.agents,

@@ -279,6 +279,7 @@ export async function startEdgeRuntime(
   });
   const plugins = await pluginCatalogProvider.loadGlobalRegistry();
   protocol.protocolDeps.plugins = plugins;
+  protocol.protocolDeps.pluginCatalogProvider = pluginCatalogProvider;
 
   const agents = context.deploymentConfig.agent.enabled
     ? new AgentRegistry({
@@ -311,6 +312,7 @@ export async function startEdgeRuntime(
   const app = createApp(context.container, {
     agents,
     plugins,
+    pluginCatalogProvider,
     authTokens: context.authTokens,
     secretProviderForTenant: context.secretProviderForTenant,
     isLocalOnly: context.isLocalOnly,

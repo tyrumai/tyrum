@@ -269,7 +269,13 @@ export function registerModelsAndConfigRoutes(context: AppRouteContext): void {
   }
 
   if (context.opts.plugins) {
-    context.app.route("/", createPluginRoutes({ plugins: context.opts.plugins }));
+    context.app.route(
+      "/",
+      createPluginRoutes({
+        plugins: context.opts.plugins,
+        pluginCatalogProvider: context.opts.pluginCatalogProvider,
+      }),
+    );
   }
 
   context.app.route(

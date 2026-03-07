@@ -10,6 +10,7 @@ import type { AgentRegistry } from "../../modules/agent/registry.js";
 import type { ExecutionEngine } from "../../modules/execution/engine.js";
 import type { PolicyService } from "../../modules/policy/service.js";
 import type { PluginRegistry } from "../../modules/plugins/registry.js";
+import type { PluginCatalogProvider } from "../../modules/plugins/catalog-provider.js";
 import type { LifecycleHooksRuntime } from "../../modules/hooks/runtime.js";
 import type { Logger } from "../../modules/observability/logger.js";
 import type { SqlDb, StateStoreKind } from "../../statestore/types.js";
@@ -70,6 +71,7 @@ export interface ProtocolDeps {
   engine?: ExecutionEngine;
   policyService?: PolicyService;
   plugins?: PluginRegistry;
+  pluginCatalogProvider?: PluginCatalogProvider;
   modelsDev?: ModelsDevService;
   modelCatalog?: ModelCatalogService;
   hooks?: LifecycleHooksRuntime;

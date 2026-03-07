@@ -12,6 +12,7 @@ import type { AgentRegistry } from "./modules/agent/registry.js";
 import type { AuthTokenService } from "./modules/auth/auth-token-service.js";
 import type { SecretProvider } from "./modules/secret/provider.js";
 import type { PluginRegistry } from "./modules/plugins/registry.js";
+import type { PluginCatalogProvider } from "./modules/plugins/catalog-provider.js";
 import { createAuthMiddleware } from "./modules/auth/middleware.js";
 import type { ConnectionManager } from "./ws/connection-manager.js";
 import type { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
@@ -43,6 +44,7 @@ import {
 export interface AppOptions {
   agents?: AgentRegistry;
   plugins?: PluginRegistry;
+  pluginCatalogProvider?: PluginCatalogProvider;
   authTokens?: AuthTokenService;
   secretProviderForTenant?: (tenantId: string) => SecretProvider;
   playbooks?: Playbook[];
