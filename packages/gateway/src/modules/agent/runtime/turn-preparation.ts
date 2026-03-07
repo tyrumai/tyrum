@@ -2,10 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { LanguageModel, ToolSet } from "ai";
 import type {
   AgentTurnRequest as AgentTurnRequestT,
-  AgentConfig as AgentConfigT,
   NormalizedContainerKind,
 } from "@tyrum/schemas";
-import { ContextReport as ContextReportSchema } from "@tyrum/schemas";
 import type { LaneQueueState } from "./turn-engine-bridge.js";
 import type { ToolCallPolicyState } from "./tool-set-builder.js";
 import { ToolSetBuilder } from "./tool-set-builder.js";
@@ -26,39 +24,38 @@ import {
   formatToolPrompt,
 } from "./prompts.js";
 import { resolveSessionModel as resolveSessionModelImpl } from "./session-model-resolution.js";
-import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
+import {
+  semanticSearch,
+  ensureDefaultHeartbeatSchedule,
+  maybeCleanupSessions,
+  loadAgentConfigFromDb,
+} from "./turn-preparation-helpers.js";
 import { buildWorkFocusDigest } from "./work-focus-digest.js";
 import type { AgentContextReport, AgentLoadedContext, AgentRuntimeOptions } from "./types.js";
 import { resolveAutomationMetadata, buildAutomationDigest } from "./automation-delivery.js";
 import { resolveExecutionProfile, type ResolvedExecutionProfile } from "./intake-delegation.js";
-import { buildDefaultAgentConfig } from "../default-config.js";
 import type { AgentContextStore } from "../context-store.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import type { SessionRow } from "../session-dal.js";
 import { SessionDal } from "../session-dal.js";
-import { AgentConfigDal } from "../../config/agent-config-dal.js";
 import { isToolAllowed, selectToolDirectory } from "../tools.js";
 import { parseChannelSourceKey } from "../../channels/interface.js";
 import { tagContent } from "../provenance.js";
 import { sanitizeForModel } from "../sanitizer.js";
 import { MemoryV1Dal } from "../../memory/v1-dal.js";
 import { buildMemoryV1Digest } from "../../memory/v1-digest.js";
-import {
-  MemoryV1SemanticIndex,
-  type MemoryV1SemanticSearchHit,
-} from "../../memory/v1-semantic-index.js";
 import { McpManager } from "../mcp-manager.js";
 import { NodeDispatchService } from "../node-dispatch-service.js";
 import { ToolExecutor } from "../tool-executor.js";
 import { resolveSandboxHardeningProfile } from "../../sandbox/hardening.js";
 import { LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
-import { ScheduleService } from "../../automation/schedule-service.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import type { SecretProvider } from "../../secret/provider.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal } from "../../approval/dal.js";
+import { buildContextReport } from "./turn-context-report.js";
 
 export type TurnExecutionContext = {
   planId: string;
@@ -108,97 +105,6 @@ export type PrepareTurnDeps = {
   setCleanupAtMs: (ms: number) => void;
 };
 
-async function semanticSearch(
-  deps: PrepareTurnDeps,
-  query: string,
-  limit: number,
-  primaryModelId: string,
-  sessionId: string,
-  tenantId: string,
-  agentId: string,
-): Promise<MemoryV1SemanticSearchHit[]> {
-  try {
-    const pipeline = await resolveEmbeddingPipeline({
-      container: deps.opts.container,
-      secretProvider: deps.secretProvider,
-      instanceOwner: deps.instanceOwner,
-      fetchImpl: deps.fetchImpl,
-      primaryModelId,
-      sessionId,
-      tenantId,
-      agentId,
-    });
-    if (!pipeline) return [];
-    const index = new MemoryV1SemanticIndex({
-      db: deps.opts.container.db,
-      tenantId,
-      agentId,
-      embedder: {
-        modelId: "runtime/embedding",
-        embed: async (text: string) => pipeline.embed(text),
-      },
-    });
-    return await index.search(query, limit);
-  } catch {
-    // Intentional: semantic search is best-effort; fall back to no hits on failure.
-    return [];
-  }
-}
-
-async function ensureDefaultHeartbeatSchedule(
-  deps: PrepareTurnDeps,
-  agentId: string,
-  workspaceId: string,
-): Promise<void> {
-  if (!deps.opts.container.deploymentConfig.automation.enabled) {
-    return;
-  }
-  const scopeKey = `${deps.tenantId}:${agentId}:${workspaceId}`;
-  if (deps.defaultHeartbeatSeededScopes.has(scopeKey)) {
-    return;
-  }
-
-  const scheduleService = new ScheduleService(
-    deps.opts.container.db,
-    deps.opts.container.identityScopeDal,
-  );
-  await scheduleService.ensureDefaultHeartbeatScheduleForMembership({
-    tenantId: deps.tenantId,
-    agentId,
-    workspaceId,
-  });
-  deps.defaultHeartbeatSeededScopes.add(scopeKey);
-}
-
-function maybeCleanupSessions(
-  deps: PrepareTurnDeps,
-  ttlDays: number,
-  agentKey: string,
-): void {
-  const now = Date.now();
-  if (now < deps.cleanupAtMs) {
-    return;
-  }
-  void deps.sessionDal.deleteExpired(ttlDays, agentKey);
-  deps.setCleanupAtMs(now + 60 * 60 * 1000);
-}
-
-async function loadAgentConfigFromDb(
-  deps: PrepareTurnDeps,
-  scope: { tenantId: string; agentId: string },
-): Promise<AgentConfigT> {
-  return (
-    await new AgentConfigDal(deps.opts.container.db).ensureSeeded({
-      tenantId: scope.tenantId,
-      agentId: scope.agentId,
-      defaultConfig: buildDefaultAgentConfig(
-        resolveGatewayStateMode(deps.opts.container.deploymentConfig),
-      ),
-      createdBy: { kind: "agent-runtime" },
-      reason: "seed",
-    })
-  ).config;
-}
 
 export async function prepareTurn(
   deps: PrepareTurnDeps,
@@ -462,88 +368,13 @@ export async function prepareTurn(
       })
     : undefined;
 
-  const toolSchemaParts = filteredTools.map((t) => {
-    const schema = t.inputSchema ?? { type: "object", additionalProperties: true };
-    let chars = 0;
-    try {
-      chars = JSON.stringify(schema).length;
-    } catch {
-      // Intentional: schema size accounting is best-effort; treat non-serializable schemas as 0 chars.
-      chars = 0;
-    }
-    return { id: t.id, chars };
+  const validatedReport = buildContextReport({
+    session, resolved, ctx, executionProfile, filteredTools,
+    systemPrompt, identityPrompt, safetyPrompt, sandboxPrompt,
+    skillsText, toolsText, sessionText, workFocusText, memoryText,
+    automationTriggerText, automationDigestText, memoryDigestResult,
+    automation, logger: deps.opts.container.logger,
   });
-  const toolSchemaTotalChars = toolSchemaParts.reduce((total, part) => total + part.chars, 0);
-  const toolSchemaTop = toolSchemaParts.toSorted((a, b) => b.chars - a.chars).slice(0, 5);
-
-  const contextReportId = randomUUID();
-  const report: AgentContextReport = {
-    context_report_id: contextReportId,
-    generated_at: new Date().toISOString(),
-    session_id: session.session_id,
-    channel: resolved.channel,
-    thread_id: resolved.thread_id,
-    agent_id: session.agent_id,
-    workspace_id: session.workspace_id,
-    system_prompt: {
-      chars: systemPrompt.length,
-      sections: [
-        { id: "identity", chars: identityPrompt.length },
-        { id: "safety", chars: safetyPrompt.length },
-        { id: "sandbox", chars: sandboxPrompt.length },
-      ],
-    },
-    user_parts: [
-      { id: "skills", chars: skillsText.length },
-      { id: "tools", chars: toolsText.length },
-      { id: "session_context", chars: sessionText.length },
-      { id: "work_focus_digest", chars: workFocusText.length },
-      { id: "memory_digest", chars: memoryText.length },
-      ...(automationTriggerText
-        ? [{ id: "automation_trigger", chars: automationTriggerText.length }]
-        : []),
-      ...(automationDigestText
-        ? [{ id: "automation_digest", chars: automationDigestText.length }]
-        : []),
-      { id: "message", chars: resolved.message.length },
-    ],
-    selected_tools: filteredTools.map((t) => t.id),
-    execution_profile: executionProfile.id,
-    execution_profile_source: executionProfile.source,
-    tool_schema_top: toolSchemaTop,
-    tool_schema_total_chars: toolSchemaTotalChars,
-    enabled_skills: ctx.skills.map((s) => s.meta.id),
-    mcp_servers: ctx.mcpServers.map((s) => s.id),
-    ...(automation
-      ? {
-          automation: {
-            schedule_kind: automation.schedule_kind,
-            schedule_id: automation.schedule_id,
-            delivery_mode: automation.delivery_mode,
-          },
-        }
-      : {}),
-    memory: {
-      keyword_hits: memoryDigestResult.keyword_hit_count,
-      semantic_hits: memoryDigestResult.semantic_hit_count,
-      structured_hits: memoryDigestResult.structured_item_count,
-      included_items: memoryDigestResult.included_item_ids.length,
-    },
-    tool_calls: [],
-    injected_files: [],
-  };
-  const validated = ContextReportSchema.safeParse(report);
-  const validatedReport = (() => {
-    if (validated.success) {
-      return validated.data as unknown as AgentContextReport;
-    }
-    deps.opts.container.logger.warn("context_report.invalid", {
-      context_report_id: contextReportId,
-      session_id: session.session_id,
-      error: validated.error.message,
-    });
-    return report;
-  })();
   const usedTools = new Set<string>();
   const toolCallPolicyStates = new Map<string, ToolCallPolicyState>();
   const toolSet = toolSetBuilder.buildToolSet(
