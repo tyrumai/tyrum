@@ -26,4 +26,17 @@ describe("command dispatcher plugin catalog integration", () => {
     expect(tryExecuteTenantCommand).toHaveBeenCalledWith("/echo hello");
     expect(tryExecuteGlobalCommand).not.toHaveBeenCalled();
   });
+
+  it("uses the global plugin registry when no tenant-scoped catalog is available", async () => {
+    const tryExecuteGlobalCommand = vi.fn(async () => ({ output: "global plugin command" }));
+
+    const result = await executeCommand("/echo hello", {
+      plugins: {
+        tryExecuteCommand: tryExecuteGlobalCommand,
+      } as never,
+    });
+
+    expect(result.output).toBe("global plugin command");
+    expect(tryExecuteGlobalCommand).toHaveBeenCalledWith("/echo hello");
+  });
 });

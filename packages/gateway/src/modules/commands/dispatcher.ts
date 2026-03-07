@@ -67,14 +67,12 @@ export async function executeCommand(
     (await tryExecuteSessionCommand({ cmd, deps, toks }));
   if (result) return result;
 
-  if (deps.tenantId && deps.pluginCatalogProvider) {
-    const tenantPlugins = await deps.pluginCatalogProvider.loadTenantRegistry(deps.tenantId);
-    const pluginResult = await tenantPlugins.tryExecuteCommand(raw);
-    if (pluginResult) return pluginResult;
-  }
-
-  if (deps.plugins) {
-    const pluginResult = await deps.plugins.tryExecuteCommand(raw);
+  const pluginRegistry =
+    deps.tenantId && deps.pluginCatalogProvider
+      ? await deps.pluginCatalogProvider.loadTenantRegistry(deps.tenantId)
+      : deps.plugins;
+  if (pluginRegistry) {
+    const pluginResult = await pluginRegistry.tryExecuteCommand(raw);
     if (pluginResult) return pluginResult;
   }
 
