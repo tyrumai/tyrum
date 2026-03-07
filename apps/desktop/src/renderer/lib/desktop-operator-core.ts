@@ -281,6 +281,7 @@ async function bootDesktopOperatorCore({
       setCore,
     });
     setElevatedModeController(elevatedModeController);
+    manager.getCore().connect();
   } catch (err) {
     if (isDisposed()) return;
     disposeDesktopOperatorCoreManager({
@@ -309,6 +310,7 @@ export function useDesktopOperatorCore(
   const [busy, setBusy] = useState(enabled);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [needsConfiguration, setNeedsConfiguration] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const managerRef = useRef<OperatorCoreManager | null>(null);
   const unsubManagerRef = useRef<(() => void) | null>(null);
   const elevatedModeStoreRef = useRef<ElevatedModeStore | null>(null);
@@ -317,6 +319,7 @@ export function useDesktopOperatorCore(
     setBusy(true);
     setErrorMessage(null);
     setNeedsConfiguration(false);
+    setRetryCount((count) => count + 1);
   }, []);
 
   useEffect(() => {
@@ -368,7 +371,7 @@ export function useDesktopOperatorCore(
       });
       setElevatedModeController(null);
     };
-  }, [enabled, retry]);
+  }, [enabled, retryCount]);
 
   return { core, elevatedModeController, busy, errorMessage, needsConfiguration, retry };
 }
