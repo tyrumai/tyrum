@@ -43,7 +43,6 @@ services:
     environment:
       TYRUM_HOME: /var/lib/tyrum-node
       TYRUM_GATEWAY_WS_URL: ws://tyrum:8788/ws
-      TYRUM_GATEWAY_TOKEN_PATH: /gateway/.admin-token
       TYRUM_GATEWAY_TOKEN: ${GATEWAY_TOKEN:-}
       TYRUM_NODE_LABEL: tyrum-desktop-sandbox
       TYRUM_NODE_MODE: desktop-sandbox
@@ -54,7 +53,6 @@ services:
       - "127.0.0.1:6080:6080"
     volumes:
       - tyrum-desktop-node:/var/lib/tyrum-node
-      - tyrum-data:/gateway:ro
     depends_on:
       - tyrum
     restart: unless-stopped

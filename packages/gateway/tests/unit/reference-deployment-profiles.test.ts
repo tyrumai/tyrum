@@ -91,6 +91,7 @@ describe("reference deployment profiles", () => {
     const desktopSandbox = services?.["desktop-sandbox"];
     const desktopSandboxEnv = desktopSandbox?.environment as Record<string, unknown> | undefined;
     expect(desktopSandboxEnv?.TYRUM_GATEWAY_TOKEN).toBe("${GATEWAY_TOKEN:-}");
+    expect(desktopSandboxEnv?.TYRUM_GATEWAY_TOKEN_PATH).toBeUndefined();
     expect(desktopSandbox?.volumes).not.toContain("tyrum-data:/gateway:ro");
   });
 

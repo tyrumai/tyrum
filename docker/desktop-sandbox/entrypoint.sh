@@ -89,7 +89,7 @@ if [[ -z "${TYRUM_GATEWAY_WS_URL:-}" ]]; then
   export TYRUM_GATEWAY_WS_URL="ws://tyrum:8788/ws"
 fi
 
-if [[ -n "${TYRUM_GATEWAY_TOKEN_PATH:-}" ]]; then
+if [[ -z "${TYRUM_GATEWAY_TOKEN:-}" && -n "${TYRUM_GATEWAY_TOKEN_PATH:-}" ]]; then
   echo "desktop-sandbox: waiting for gateway token file (${TYRUM_GATEWAY_TOKEN_PATH})"
   for _ in $(seq 1 120); do
     if [[ -s "${TYRUM_GATEWAY_TOKEN_PATH}" ]]; then
@@ -123,7 +123,7 @@ if [[ -n "${TYRUM_GATEWAY_TOKEN:-}" ]]; then
   node_args+=(--token "$TYRUM_GATEWAY_TOKEN")
 fi
 
-if [[ -n "${TYRUM_GATEWAY_TOKEN_PATH:-}" ]]; then
+if [[ -z "${TYRUM_GATEWAY_TOKEN:-}" && -n "${TYRUM_GATEWAY_TOKEN_PATH:-}" ]]; then
   node_args+=(--token-path "$TYRUM_GATEWAY_TOKEN_PATH")
 fi
 

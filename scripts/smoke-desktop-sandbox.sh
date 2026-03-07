@@ -8,6 +8,10 @@ if [[ -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
   export COMPOSE_PROJECT_NAME="tyrum-smoke-desktop-sandbox-${RANDOM}"
 fi
 
+if [[ -z "${GATEWAY_TOKEN:-}" ]]; then
+  export GATEWAY_TOKEN="$(openssl rand -hex 32)"
+fi
+
 cleanup() {
   if [[ "${TYRUM_SMOKE_KEEP_RUNNING:-}" == "1" ]]; then
     echo "[smoke] leaving containers running (TYRUM_SMOKE_KEEP_RUNNING=1)"
@@ -54,12 +58,11 @@ wait_for_novnc
 
 docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -e '
   import Database from "better-sqlite3";
-  import { readFileSync } from "node:fs";
   import { randomUUID } from "node:crypto";
   import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, descriptorIdForClientCapability } from "@tyrum/schemas";
 
   const baseUrl = "http://127.0.0.1:8788";
-  const token = readFileSync("/var/lib/tyrum/.admin-token", "utf8").trim();
+  const token = process.env.GATEWAY_TOKEN?.trim();
   if (!token) throw new Error("[smoke] admin token is empty");
 
   const headers = {
