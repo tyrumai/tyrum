@@ -29,8 +29,8 @@ import {
   type TyrumClientProtocolErrorKind,
 } from "./ws-client.js";
 import { normalizeFingerprint256 } from "./tls/fingerprint.js";
+import { VERSION } from "./version.js";
 
-export { VERSION } from "./index.js";
 export { autoExecute } from "./capability.js";
 export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "./capability.js";
 export type {
@@ -178,3 +178,4 @@ export type {
   TyrumHttpFetch,
   TyrumRequestOptions,
 };
+export { VERSION };

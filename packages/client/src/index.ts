@@ -1,5 +1,5 @@
 // Client SDK shared entry point
-export const VERSION = "0.1.0";
+export { VERSION } from "./version.js";
 
 export { autoExecute } from "./capability.js";
 export { normalizeFingerprint256 } from "./tls/fingerprint.js";
