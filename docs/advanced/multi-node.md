@@ -1,8 +1,10 @@
 # Multi-Node Guide
 
-This guide explains running more than one Tyrum node.
+This guide explains the difference between running multiple independent local nodes and running HA/shared gateway instances.
 
-## Core rule
+## Two patterns
+
+### 1. Independent local nodes
 
 Run each node with its own state directory and port.
 
@@ -22,6 +24,26 @@ Node B:
 TYRUM_HOME=$HOME/.tyrum-b GATEWAY_PORT=8789 tyrum
 ```
 
+This is still `state.mode=local`. Each node is independent.
+
+### 2. HA / shared instances
+
+Do not share `TYRUM_HOME` across service instances.
+
+For HA, use:
+
+- `state.mode=shared`
+- shared Postgres
+- shared artifact storage
+- one shared secret key source across all instances
+- no mutable runtime fallbacks from `TYRUM_HOME`
+
+If you are migrating from a local node:
+
+```bash
+tyrum import-home ~/.tyrum --db <shared-db-uri> --tenant-id 00000000-0000-4000-8000-000000000001
+```
+
 ## Recommended structure
 
 - One process manager entry per node.
@@ -31,7 +53,8 @@ TYRUM_HOME=$HOME/.tyrum-b GATEWAY_PORT=8789 tyrum
 ## Configuration strategy
 
 - Keep shared defaults in environment templates.
-- Override only per-node values (`TYRUM_HOME`, `GATEWAY_PORT`, host binding).
+- Override only per-node values (`TYRUM_HOME`, `GATEWAY_PORT`, host binding) for local-mode nodes.
+- For shared mode, keep only instance-local cache/temp paths per node; durable state belongs in shared services.
 - Pin release versions during coordinated upgrades.
 
 ## Upgrade pattern
@@ -43,5 +66,6 @@ TYRUM_HOME=$HOME/.tyrum-b GATEWAY_PORT=8789 tyrum
 ## Common mistakes
 
 - Reusing the same `TYRUM_HOME` across nodes.
+- Treating `TYRUM_HOME` as shared durable state in HA mode.
 - Port collisions between nodes.
 - Upgrading all nodes at once without a canary.

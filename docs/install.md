@@ -63,7 +63,12 @@ Browser login uses a cookie bootstrap flow:
 - The gateway sets an `HttpOnly` auth cookie for the browser.
 - Subsequent HTTP and WebSocket requests authenticate via that cookie (tokens are never placed in URLs).
 
-If you did not set `GATEWAY_TOKEN`, the gateway generates an admin token and stores it at `~/.tyrum/.admin-token` (or `$TYRUM_HOME/.admin-token`).
+On first startup, the gateway prints bootstrap tokens to stdout once:
+
+- `system`
+- `default-tenant-admin`
+
+Capture the `default-tenant-admin` token and use it to sign in to `/ui` unless you already provisioned tokens through another flow.
 
 Singleton agent routes are enabled by default.
 
@@ -153,4 +158,5 @@ curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- 2026.2.18
 
 - [Quick Start](getting-started.md)
 - [Remote Gateway Guide](advanced/remote-gateway.md)
+- [Deployment Profiles](advanced/deployment-profiles.md)
 - [Multi-Node Guide](advanced/multi-node.md)

@@ -5,6 +5,17 @@ Tyrum supports two operator-visible deployment profiles:
 - `single-host`: a single gateway instance running all roles, backed by SQLite
 - `split-role`: separate `gateway-edge`, `worker`, and `scheduler` roles, backed by Postgres
 
+Storage behavior is controlled by a separate runtime state profile:
+
+- `state.mode=local`: mutable runtime state lives under `TYRUM_HOME`
+- `state.mode=shared`: mutable runtime state moves to shared stores (DB / artifacts / shared secret source)
+
+Recommended mapping:
+
+- desktop / embedded / local single-instance: `single-host` + `state.mode=local`
+- remote single gateway: `single-host` + `state.mode=local`
+- HA / horizontally scaled service: `split-role` + `state.mode=shared`
+
 Reference (reproducible) configuration templates live in `config/deployments/`.
 
 ## Docker deployments (docker compose)
@@ -26,17 +37,33 @@ docker compose up -d --build tyrum
 docker compose logs -f tyrum
 ```
 
-The gateway auto-generates an admin token at `${TYRUM_HOME}/.admin-token` if `GATEWAY_TOKEN` is not set.
+The gateway prints bootstrap tokens to stdout once on first startup. Capture the `default-tenant-admin` token for operator sign-in.
 
 ### Split-role
 
-Split-role requires one shared admin token across all roles:
+Optionally set one shared tenant admin token across all roles if you want a stable provisioned token:
 
 ```bash
 cp config/deployments/split-role.env.example config/local.env
-# edit config/local.env and set GATEWAY_TOKEN (>=32 chars)
+# optional: edit config/local.env and set GATEWAY_TOKEN
 docker compose --env-file config/local.env --profile split up -d --build postgres tyrum-edge tyrum-worker tyrum-scheduler
 ```
+
+If `GATEWAY_TOKEN` is unset, the gateway prints bootstrap tokens once on first startup instead.
+
+For HA/shared cutover from an existing local home:
+
+1. Set the deployment to `state.mode=shared`.
+2. Use shared Postgres instead of SQLite.
+3. Configure shared artifact storage instead of local fs artifacts.
+4. Provide one shared secret key source for all instances (for example `TYRUM_SHARED_MASTER_KEY_B64` or an equivalent external secret source).
+5. Import local home state before switching traffic:
+
+```bash
+tyrum import-home ~/.tyrum --db <shared-db-uri> --tenant-id 00000000-0000-4000-8000-000000000001
+```
+
+In shared mode, mutable runtime state must not depend on `TYRUM_HOME`. Bundled read-only assets remain valid.
 
 ## Kubernetes deployments (Helm)
 

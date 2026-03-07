@@ -70,16 +70,37 @@ function constantTimeEqual(a: Buffer, b: Buffer): boolean {
   return timingSafeEqual(a, b);
 }
 
+function constantTimeStringEqual(a: string, b: string): boolean {
+  return constantTimeEqual(Buffer.from(a, "utf-8"), Buffer.from(b, "utf-8"));
+}
+
+export type ProvisionedAuthToken = {
+  token: string;
+  tenantId: string | null;
+  role: AuthTokenRole;
+  scopes?: string[];
+  deviceId?: string;
+  tokenId?: string;
+};
+
+type NormalizedProvisionedAuthToken = {
+  token: string;
+  claims: AuthTokenClaims;
+};
+
 export class AuthTokenService {
   private readonly dal: AuthTokenDal;
+  private readonly provisionedTokens: readonly NormalizedProvisionedAuthToken[];
 
   constructor(
     db: SqlDb,
     private readonly opts?: {
       nowMs?: () => number;
+      provisionedTokens?: ProvisionedAuthToken[];
     },
   ) {
     this.dal = new AuthTokenDal(db);
+    this.provisionedTokens = normalizeProvisionedTokens(opts?.provisionedTokens);
   }
 
   async authenticate(
@@ -89,44 +110,49 @@ export class AuthTokenService {
       expectedDeviceId?: string;
     },
   ): Promise<AuthTokenClaims | null> {
-    const parsed = candidate ? parseToken(candidate) : undefined;
-    if (!parsed) return null;
+    const tokenRaw = candidate?.trim();
+    if (!tokenRaw) return null;
 
-    const row = await this.dal.getById(parsed.tokenId);
-    if (!row) return null;
-    if (row.revoked_at) return null;
+    const parsed = parseToken(tokenRaw);
+    if (parsed) {
+      const row = await this.dal.getById(parsed.tokenId);
+      if (!row) return this.authenticateProvisionedToken(tokenRaw, opts);
+      if (row.revoked_at) return null;
 
-    const nowMs = this.opts?.nowMs?.() ?? Date.now();
-    if (isExpired(row.expires_at, nowMs)) return null;
+      const nowMs = this.opts?.nowMs?.() ?? Date.now();
+      if (isExpired(row.expires_at, nowMs)) return null;
 
-    if (row.kdf !== "scrypt") return null;
+      if (row.kdf !== "scrypt") return null;
 
-    const secret = decodeBase64Url(parsed.secretB64Url);
-    const salt = decodeBase64Url(row.secret_salt);
-    const expectedHash = decodeBase64Url(row.secret_hash);
-    if (!secret || !salt || !expectedHash) return null;
+      const secret = decodeBase64Url(parsed.secretB64Url);
+      const salt = decodeBase64Url(row.secret_salt);
+      const expectedHash = decodeBase64Url(row.secret_hash);
+      if (!secret || !salt || !expectedHash) return null;
 
-    const actualHash = deriveScryptHash(secret, salt);
-    if (!constantTimeEqual(actualHash, expectedHash)) return null;
+      const actualHash = deriveScryptHash(secret, salt);
+      if (!constantTimeEqual(actualHash, expectedHash)) return null;
 
-    const expectedRole = opts?.expectedRole;
-    if (expectedRole && row.role !== expectedRole) return null;
+      const expectedRole = opts?.expectedRole;
+      if (expectedRole && row.role !== expectedRole) return null;
 
-    const expectedDeviceId = opts?.expectedDeviceId?.trim();
-    if (expectedDeviceId && row.device_id !== expectedDeviceId) return null;
+      const expectedDeviceId = opts?.expectedDeviceId?.trim();
+      if (expectedDeviceId && row.device_id !== expectedDeviceId) return null;
 
-    const scopes = parseScopesJson(row.scopes_json);
+      const scopes = parseScopesJson(row.scopes_json);
 
-    return {
-      token_kind: row.role === "admin" ? "admin" : "device",
-      token_id: row.token_id,
-      tenant_id: row.tenant_id,
-      device_id: row.device_id ?? undefined,
-      role: row.role,
-      scopes,
-      issued_at: row.issued_at,
-      expires_at: row.expires_at ?? undefined,
-    };
+      return {
+        token_kind: row.role === "admin" ? "admin" : "device",
+        token_id: row.token_id,
+        tenant_id: row.tenant_id,
+        device_id: row.device_id ?? undefined,
+        role: row.role,
+        scopes,
+        issued_at: row.issued_at,
+        expires_at: row.expires_at ?? undefined,
+      };
+    }
+
+    return this.authenticateProvisionedToken(tokenRaw, opts);
   }
 
   async issueToken(input: {
@@ -181,14 +207,81 @@ export class AuthTokenService {
   }
 
   async countActiveTenantTokens(tenantId: string): Promise<number> {
-    return await this.dal.countActiveTenantTokens(tenantId);
+    return (
+      (await this.dal.countActiveTenantTokens(tenantId)) +
+      this.countProvisionedTokens((entry) => entry.claims.tenant_id === tenantId)
+    );
   }
 
   async countActiveTenantAdminTokens(tenantId: string): Promise<number> {
-    return await this.dal.countActiveTenantAdminTokens(tenantId);
+    return (
+      (await this.dal.countActiveTenantAdminTokens(tenantId)) +
+      this.countProvisionedTokens(
+        (entry) => entry.claims.tenant_id === tenantId && entry.claims.role === "admin",
+      )
+    );
   }
 
   async countActiveSystemTokens(): Promise<number> {
-    return await this.dal.countActiveSystemTokens();
+    return (
+      (await this.dal.countActiveSystemTokens()) +
+      this.countProvisionedTokens(
+        (entry) => entry.claims.tenant_id === null && entry.claims.role === "admin",
+      )
+    );
   }
+
+  private authenticateProvisionedToken(
+    candidate: string,
+    opts?: {
+      expectedRole?: AuthTokenRole;
+      expectedDeviceId?: string;
+    },
+  ): AuthTokenClaims | null {
+    const expectedRole = opts?.expectedRole;
+    const expectedDeviceId = opts?.expectedDeviceId?.trim();
+    for (const entry of this.provisionedTokens) {
+      if (!constantTimeStringEqual(entry.token, candidate)) continue;
+      if (expectedRole && entry.claims.role !== expectedRole) return null;
+      if (expectedDeviceId && entry.claims.device_id !== expectedDeviceId) return null;
+      return entry.claims;
+    }
+    return null;
+  }
+
+  private countProvisionedTokens(
+    predicate: (entry: NormalizedProvisionedAuthToken) => boolean,
+  ): number {
+    let matches = 0;
+    for (const entry of this.provisionedTokens) {
+      if (predicate(entry)) matches += 1;
+    }
+    return matches;
+  }
+}
+
+function normalizeProvisionedTokens(
+  entries: ProvisionedAuthToken[] | undefined,
+): readonly NormalizedProvisionedAuthToken[] {
+  if (!entries || entries.length === 0) return [];
+
+  const normalized: NormalizedProvisionedAuthToken[] = [];
+  for (const [index, entry] of entries.entries()) {
+    const token = entry.token.trim();
+    if (!token) continue;
+    const issuedAt = new Date(0).toISOString();
+    normalized.push({
+      token,
+      claims: {
+        token_kind: entry.role === "admin" ? "admin" : "device",
+        token_id: entry.tokenId?.trim() || `provisioned-${String(index + 1)}`,
+        tenant_id: entry.tenantId,
+        device_id: entry.deviceId?.trim() || undefined,
+        role: entry.role,
+        scopes: normalizeScopes(entry.scopes),
+        issued_at: issuedAt,
+      },
+    });
+  }
+  return normalized;
 }

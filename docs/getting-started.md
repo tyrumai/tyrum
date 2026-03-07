@@ -32,9 +32,7 @@ Open:
 
 On first visit, the UI prompts for your admin token and bootstraps a browser auth cookie via `POST /auth/session`.
 
-If you did not set `GATEWAY_TOKEN`, the gateway generates an admin token and stores it at:
-
-- `~/.tyrum/.admin-token` (or `$TYRUM_HOME/.admin-token`)
+If you did not provision tokens ahead of time, capture the `default-tenant-admin` bootstrap token from the gateway startup logs. The gateway prints bootstrap tokens once on first run.
 
 ## 4. Singleton agent routes (default on)
 
@@ -58,4 +56,14 @@ Example:
 
 ```bash
 GATEWAY_PORT=8789 tyrum
+```
+
+## 6. Scaling later
+
+- `single-host` / desktop-style installs use local filesystem state under `TYRUM_HOME`.
+- HA/shared deployments use `state.mode=shared` plus shared Postgres, shared artifact storage, and a shared secret key source.
+- To migrate an existing local home into shared stores before cutover:
+
+```bash
+tyrum import-home ~/.tyrum --db <shared-db-uri> --tenant-id 00000000-0000-4000-8000-000000000001
 ```

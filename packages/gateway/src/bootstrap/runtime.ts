@@ -43,6 +43,12 @@ import {
 } from "./runtime-builders.js";
 import type { GatewayBootContext } from "./runtime-shared.js";
 
+function resolveProvisionedGatewayToken(): string | undefined {
+  const token =
+    process.env["TYRUM_GATEWAY_TOKEN"]?.trim() ?? process.env["GATEWAY_TOKEN"]?.trim() ?? "";
+  return token.length > 0 ? token : undefined;
+}
+
 async function ensureBootstrapTokens(authTokens: AuthTokenService): Promise<boolean> {
   const bootstrapTokens: Array<{ label: string; token: string }> = [];
   if ((await authTokens.countActiveSystemTokens()) === 0) {
@@ -148,7 +154,20 @@ async function createGatewayBootContext(
   assertSharedStateModeGuardrails({ dbPath, deploymentConfig });
   await seedDefaultAgentConfig(container);
 
-  const authTokens = new AuthTokenService(container.db);
+  const provisionedGatewayToken = resolveProvisionedGatewayToken();
+  const authTokens = new AuthTokenService(container.db, {
+    provisionedTokens: provisionedGatewayToken
+      ? [
+          {
+            token: provisionedGatewayToken,
+            tenantId: DEFAULT_TENANT_ID,
+            role: "admin",
+            scopes: ["*"],
+            tokenId: "provisioned-default-tenant-admin",
+          },
+        ]
+      : [],
+  });
   const hasDefaultTenantAdminToken = await ensureBootstrapTokens(authTokens);
   const transportPolicy = assertNonLoopbackDeploymentGuardrails({
     role,

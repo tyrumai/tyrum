@@ -223,5 +223,32 @@ describe("Auth integration", () => {
       });
       expect(afterLogoutRes.status).toBe(401);
     });
+
+    it("accepts a provisioned opaque tenant admin token via /auth/session", async () => {
+      const { container, requestUnauthenticated: requestWithProvisionedToken } =
+        await createTestApp({
+          tyrumHome: tempDir,
+          isLocalOnly: true,
+          provisionedTenantAdminToken: "opaque-admin-token",
+        });
+      try {
+        const loginRes = await requestWithProvisionedToken("/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: "opaque-admin-token" }),
+        });
+        expect(loginRes.status).toBe(204);
+
+        const cookie = loginRes.headers.get("set-cookie")?.split(";")[0] ?? "";
+        expect(cookie).toContain("tyrum_admin_token=");
+
+        const statusRes = await requestWithProvisionedToken("/status", {
+          headers: { Cookie: cookie },
+        });
+        expect(statusRes.status).toBe(200);
+      } finally {
+        await container.db.close();
+      }
+    });
   });
 });

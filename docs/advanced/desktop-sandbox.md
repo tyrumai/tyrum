@@ -5,6 +5,7 @@ The `desktop-sandbox` Docker Compose profile starts a reproducible Linux desktop
 ## Quickstart
 
 ```bash
+export GATEWAY_TOKEN="$(openssl rand -hex 32)"
 docker compose --profile desktop-sandbox up -d --build
 ```
 
@@ -15,14 +16,8 @@ docker compose --profile desktop-sandbox up -d --build
 
 ## Pairing and takeover
 
-1. Get the admin token:
-
-```bash
-docker compose exec -T tyrum sh -lc 'cat /var/lib/tyrum/.admin-token' | tr -d '\r\n'
-```
-
-2. Open `http://localhost:8788/ui`, paste the token on the Connect page, and connect.
-3. Open the **Pairing** page, approve the pending pairing request, and use the **Open takeover** link to open the noVNC session.
+1. Open `http://localhost:8788/ui`, paste `$GATEWAY_TOKEN` on the Connect page, and connect.
+2. Open the **Pairing** page, approve the pending pairing request, and use the **Open takeover** link to open the noVNC session.
 
 ## Manual QA checklist (operator UI)
 
@@ -39,7 +34,7 @@ docker compose exec -T tyrum sh -lc 'cat /var/lib/tyrum/.admin-token' | tr -d '\
 After approving pairing, run a Desktop snapshot:
 
 ```bash
-TOKEN="$(docker compose exec -T tyrum sh -lc 'cat /var/lib/tyrum/.admin-token' | tr -d '\r\n')"
+TOKEN="${GATEWAY_TOKEN}"
 curl -sS -H "authorization: Bearer ${TOKEN}" -H "content-type: application/json" \
   -d '{"key":"agent:default:manual:desktop-sandbox","lane":"main","steps":[{"type":"Desktop","args":{"op":"snapshot","include_tree":false}}]}' \
   "http://localhost:8788/workflow/run"
@@ -56,7 +51,7 @@ docker compose exec -T desktop-sandbox bash -lc 'DISPLAY=:0 xfce4-terminal --tit
 2. Run snapshot → query → act with `include_tree: true`:
 
 ```bash
-TOKEN="$(docker compose exec -T tyrum sh -lc 'cat /var/lib/tyrum/.admin-token' | tr -d '\r\n')"
+TOKEN="${GATEWAY_TOKEN}"
 curl -sS -H "authorization: Bearer ${TOKEN}" -H "content-type: application/json" \
   -d '{"key":"agent:default:manual:a11y:desktop-sandbox","lane":"main","steps":[{"type":"Desktop","args":{"op":"snapshot","include_tree":true,"max_nodes":512,"max_text_chars":8192}},{"type":"Desktop","args":{"op":"query","selector":{"kind":"a11y","name":"Tyrum A11y Smoke"},"limit":1}},{"type":"Desktop","args":{"op":"act","target":{"kind":"a11y","name":"Tyrum A11y Smoke"},"action":{"kind":"focus"}}}]}' \
   "http://localhost:8788/workflow/run"

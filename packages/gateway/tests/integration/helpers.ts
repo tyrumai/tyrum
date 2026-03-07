@@ -170,6 +170,7 @@ export interface TestAppOptions {
   deploymentConfig?: Partial<DeploymentConfigT>;
   enableAgents?: boolean;
   operatorUiAssetsDir?: string;
+  provisionedTenantAdminToken?: string;
 }
 
 export async function createTestApp(opts: TestAppOptions = {}): Promise<
@@ -199,17 +200,32 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<
     tyrumHome: baseHome,
   });
 
-  const authTokens = new AuthTokenService(container.db);
+  const provisionedTenantAdminToken = opts.provisionedTenantAdminToken?.trim();
+  const authTokens = new AuthTokenService(container.db, {
+    provisionedTokens: provisionedTenantAdminToken
+      ? [
+          {
+            token: provisionedTenantAdminToken,
+            tenantId: DEFAULT_TENANT_ID,
+            role: "admin",
+            scopes: ["*"],
+            tokenId: "provisioned-default-tenant-admin",
+          },
+        ]
+      : [],
+  });
   const systemIssued = await authTokens.issueToken({
     tenantId: null,
     role: "admin",
     scopes: ["*"],
   });
-  const tenantIssued = await authTokens.issueToken({
-    tenantId: DEFAULT_TENANT_ID,
-    role: "admin",
-    scopes: ["*"],
-  });
+  const tenantIssued = provisionedTenantAdminToken
+    ? undefined
+    : await authTokens.issueToken({
+        tenantId: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
 
   const shouldEnableAgents = opts.enableAgents ?? container.deploymentConfig.agent.enabled;
   const agents = shouldEnableAgents
@@ -239,7 +255,8 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<
     },
   });
 
-  const decorated = decorateAppWithDefaultAuth(app, tenantIssued.token);
+  const tenantAdminToken = provisionedTenantAdminToken ?? tenantIssued!.token;
+  const decorated = decorateAppWithDefaultAuth(app, tenantAdminToken);
 
   return {
     app,
@@ -248,7 +265,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<
     auth: {
       tenantId: DEFAULT_TENANT_ID,
       systemToken: systemIssued.token,
-      tenantAdminToken: tenantIssued.token,
+      tenantAdminToken,
       authTokens,
     },
     ...decorated,

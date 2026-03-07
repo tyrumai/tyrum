@@ -105,4 +105,30 @@ describe("AuthTokenService", () => {
     });
     expect(await expiredSvc.authenticate(issued2.token)).toBeNull();
   });
+
+  it("authenticates provisioned opaque tenant admin tokens", async () => {
+    const svc = new AuthTokenService(db, {
+      provisionedTokens: [
+        {
+          token: "opaque-admin-token",
+          tenantId: DEFAULT_TENANT_ID,
+          role: "admin",
+          scopes: ["*"],
+          tokenId: "provisioned-default-tenant-admin",
+        },
+      ],
+    });
+
+    const claims = await svc.authenticate("opaque-admin-token");
+    expect(claims).toEqual(
+      expect.objectContaining({
+        token_kind: "admin",
+        token_id: "provisioned-default-tenant-admin",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      }),
+    );
+    expect(await svc.countActiveTenantAdminTokens(DEFAULT_TENANT_ID)).toBe(1);
+  });
 });

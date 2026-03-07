@@ -64,6 +64,7 @@ describe("reference deployment profiles", () => {
 
     const singleHostEnv = singleHost?.environment as Record<string, unknown> | undefined;
     expect(singleHostEnv?.GATEWAY_DB_PATH).toBe(singleHostDbPath);
+    expect(singleHostEnv?.GATEWAY_TOKEN).toBe("${GATEWAY_TOKEN:-}");
 
     const splitServices = ["tyrum-edge", "tyrum-worker", "tyrum-scheduler"];
     for (const serviceName of splitServices) {
@@ -84,7 +85,13 @@ describe("reference deployment profiles", () => {
 
       const env = service.environment as Record<string, unknown> | undefined;
       expect(env?.GATEWAY_DB_PATH).toBe(dbPath);
+      expect(env?.GATEWAY_TOKEN).toBe("${GATEWAY_TOKEN:-}");
     }
+
+    const desktopSandbox = services?.["desktop-sandbox"];
+    const desktopSandboxEnv = desktopSandbox?.environment as Record<string, unknown> | undefined;
+    expect(desktopSandboxEnv?.TYRUM_GATEWAY_TOKEN).toBe("${GATEWAY_TOKEN:-}");
+    expect(desktopSandbox?.volumes).not.toContain("tyrum-data:/gateway:ro");
   });
 
   it("keeps snapshot import disabled by default in reference compose deployments", async () => {
