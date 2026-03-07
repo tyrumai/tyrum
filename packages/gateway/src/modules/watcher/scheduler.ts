@@ -596,7 +596,7 @@ export class WatcherScheduler {
           lane,
           planId: automationPlanId,
           requestId,
-          workspaceId: scopeKeys?.workspace_key ?? "default",
+          workspaceKey: scopeKeys?.workspace_key ?? "default",
           steps: steps!,
           policySnapshotId: snapshot.policy_snapshot_id,
           trigger: {

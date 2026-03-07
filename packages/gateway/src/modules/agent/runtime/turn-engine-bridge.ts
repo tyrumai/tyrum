@@ -318,7 +318,7 @@ export async function turnViaExecutionEngine(
     tenantId: deps.tenantId,
     key,
     lane,
-    workspaceId: workspaceKey,
+    workspaceKey,
     planId,
     requestId,
     budgets: executionProfile.profile.budgets,

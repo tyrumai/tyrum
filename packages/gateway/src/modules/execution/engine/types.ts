@@ -57,7 +57,12 @@ export interface EnqueuePlanInput {
   tenantId: string;
   key: string;
   lane: string;
-  /** Workspace identifier used for workspace leases and audit scoping (default: "default"). */
+  /** Preferred stable workspace key used to resolve the internal workspace_id (default: "default"). */
+  workspaceKey?: string;
+  /**
+   * Legacy alias accepted for backward compatibility.
+   * This may be either a workspace key or an already-resolved workspace_id UUID.
+   */
   workspaceId?: string;
   planId: string;
   requestId: string;

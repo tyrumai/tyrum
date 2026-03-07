@@ -2588,6 +2588,41 @@ describe("ExecutionEngine (normalized)", () => {
     }
   }, 20_000);
 
+  it("accepts workspace ids via the legacy enqueuePlan workspaceId alias", async () => {
+    db = openTestSqliteDb();
+    const scopeIds = await new IdentityScopeDal(db).resolveScopeIds({
+      agentKey: "agent-legacy-workspace",
+      workspaceKey: "work-legacy",
+    });
+
+    const engine = new ExecutionEngine({ db });
+    await enqueuePlan(engine, {
+      key: "agent:agent-legacy-workspace:main",
+      lane: "main",
+      planId: "plan-legacy-workspace-id",
+      requestId: "req-legacy-workspace-id",
+      workspaceId: scopeIds.workspaceId,
+      steps: [action("CLI")],
+    });
+
+    const job = await db.get<{ workspace_id: string }>(
+      `SELECT workspace_id
+       FROM execution_jobs
+       ORDER BY created_at DESC, job_id DESC
+       LIMIT 1`,
+    );
+    expect(job?.workspace_id).toBe(scopeIds.workspaceId);
+
+    const duplicatedWorkspace = await db.get<{ workspace_id: string }>(
+      `SELECT workspace_id
+       FROM workspaces
+       WHERE tenant_id = ? AND workspace_key = ?
+       LIMIT 1`,
+      [DEFAULT_TENANT_ID, scopeIds.workspaceId],
+    );
+    expect(duplicatedWorkspace).toBeUndefined();
+  });
+
   it("marks the current step failed and cancels queued siblings when retries are exhausted", async () => {
     db = openTestSqliteDb();
 
