@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:http";
 import { getRequestListener } from "@hono/node-server";
 import { createTestApp } from "./helpers.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 async function startServer(server: Server): Promise<number> {
   return await new Promise<number>((resolve) => {
@@ -28,6 +29,7 @@ describe("Trusted proxies", () => {
     const port = await startServer(server);
 
     const pending = await container.nodePairingDal.upsertOnConnect({
+      tenantId: DEFAULT_TENANT_ID,
       nodeId: "node-1",
       pubkey: "pubkey-1",
       label: "node-1",
@@ -72,6 +74,7 @@ describe("Trusted proxies", () => {
     const port = await startServer(server);
 
     const pending = await container.nodePairingDal.upsertOnConnect({
+      tenantId: DEFAULT_TENANT_ID,
       nodeId: "node-1",
       pubkey: "pubkey-1",
       label: "node-1",
@@ -116,6 +119,7 @@ describe("Trusted proxies", () => {
     const port = await startServer(server);
 
     const pending = await container.nodePairingDal.upsertOnConnect({
+      tenantId: DEFAULT_TENANT_ID,
       nodeId: "node-1",
       pubkey: "pubkey-1",
       label: "node-1",
@@ -160,6 +164,7 @@ describe("Trusted proxies", () => {
     const port = await startServer(server);
 
     const pending = await container.nodePairingDal.upsertOnConnect({
+      tenantId: DEFAULT_TENANT_ID,
       nodeId: "node-1",
       pubkey: "pubkey-1",
       label: "node-1",
@@ -204,6 +209,7 @@ describe("Trusted proxies", () => {
     const port = await startServer(server);
 
     const pending = await container.nodePairingDal.upsertOnConnect({
+      tenantId: DEFAULT_TENANT_ID,
       nodeId: "node-1",
       pubkey: "pubkey-1",
       label: "node-1",

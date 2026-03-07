@@ -1,5 +1,6 @@
 import { HTTPException } from "hono/http-exception";
 import type { AuthTokenClaims } from "@tyrum/schemas";
+import { requireTenantIdValue } from "../identity/scope.js";
 
 export function requireAuthClaims(c: { get: (key: string) => unknown }): AuthTokenClaims {
   const raw = c.get("authClaims") as unknown;
@@ -11,9 +12,10 @@ export function requireAuthClaims(c: { get: (key: string) => unknown }): AuthTok
 
 export function requireTenantId(c: { get: (key: string) => unknown }): string {
   const claims = requireAuthClaims(c);
-  const tenantId = claims.tenant_id;
-  if (!tenantId) {
+  try {
+    return requireTenantIdValue(claims.tenant_id, "tenant token required");
+  } catch {
+    // Intentional: translate missing tenant scope into the route-layer HTTP authorization error.
     throw new HTTPException(403, { message: "tenant token required" });
   }
-  return tenantId;
 }

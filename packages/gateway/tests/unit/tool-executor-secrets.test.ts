@@ -8,7 +8,9 @@ import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import type { SecretResolutionAuditDal } from "../../src/modules/secret/resolution-audit-dal.js";
 import type { SecretHandle } from "@tyrum/schemas";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 function stubMcpManager(): McpManager {
   return {
@@ -44,8 +46,11 @@ async function allowPublicDnsLookup() {
 
 describe("ToolExecutor secret resolution", () => {
   let homeDir: string | undefined;
+  let db: SqliteDb | undefined;
 
   afterEach(async () => {
+    await db?.close();
+    db = undefined;
     if (homeDir) {
       await rm(homeDir, { recursive: true, force: true });
       homeDir = undefined;
@@ -89,6 +94,7 @@ describe("ToolExecutor secret resolution", () => {
 
   it("records audit rows for resolved secrets when audit context is provided", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
+    db = openTestSqliteDb();
 
     const mockFetch = vi.fn(async () => ({
       text: async () => "ok",
@@ -129,6 +135,12 @@ describe("ToolExecutor secret resolution", () => {
       allowPublicDnsLookup,
       undefined,
       auditDal,
+      {
+        db,
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: null,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+      },
     );
 
     await executor.execute(
@@ -163,6 +175,54 @@ describe("ToolExecutor secret resolution", () => {
         outcome: "resolved",
       }),
     );
+  });
+
+  it("does not write secret audit rows when tenant context is missing", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
+    db = openTestSqliteDb();
+
+    const mockFetch = vi.fn(async () => ({
+      text: async () => "ok",
+    })) as unknown as typeof fetch;
+
+    const provider = stubSecretProvider(new Map([["handle-abc", "my-api-key-value"]]));
+    const auditDal: SecretResolutionAuditDal = {
+      record: vi.fn(async () => {
+        throw new Error("should not be called");
+      }),
+    } as unknown as SecretResolutionAuditDal;
+
+    const executor = new ToolExecutor(
+      homeDir,
+      stubMcpManager(),
+      new Map(),
+      mockFetch,
+      provider,
+      allowPublicDnsLookup,
+      undefined,
+      auditDal,
+      {
+        db,
+        tenantId: "   ",
+        agentId: null,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+      },
+    );
+
+    await executor.execute(
+      "tool.http.fetch",
+      "call-missing-tenant-audit",
+      {
+        url: "https://api.example.com",
+        headers: { Authorization: "secret:handle-abc" },
+      },
+      {
+        agent_id: "default",
+        workspace_id: "default",
+      },
+    );
+
+    expect(auditDal.record).not.toHaveBeenCalled();
   });
 
   it("redacts resolved secret values from tool output", async () => {

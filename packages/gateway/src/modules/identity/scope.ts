@@ -22,6 +22,17 @@ export interface ScopeIds {
   workspaceId: string;
 }
 
+export function requireTenantIdValue(
+  tenantId: string | null | undefined,
+  message = "tenantId is required",
+): string {
+  const normalized = typeof tenantId === "string" ? tenantId.trim() : "";
+  if (normalized.length === 0) {
+    throw new Error(message);
+  }
+  return normalized;
+}
+
 export function normalizeScopeKeys(input?: Partial<ScopeKeys>): ScopeKeys {
   const tenantKey = input?.tenantKey?.trim() || DEFAULT_TENANT_KEY;
   const agentKey = input?.agentKey?.trim() || DEFAULT_AGENT_KEY;

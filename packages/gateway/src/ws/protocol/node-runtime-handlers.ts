@@ -190,7 +190,11 @@ async function ensureApprovedNodePairing(
   }
 
   try {
-    const pairing = await deps.nodePairingDal.getByNodeId(nodeId);
+    const tenantId = client.auth_claims?.tenant_id;
+    if (!tenantId?.trim()) {
+      return errorResponse(msg.request_id, msg.type, "unauthorized", "tenant token required");
+    }
+    const pairing = await deps.nodePairingDal.getByNodeId(nodeId, tenantId);
     if (pairing?.status === "approved") {
       return undefined;
     }

@@ -113,6 +113,7 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
     const jobName = `tyrum-toolrunner-${suffix}`.slice(0, 63);
 
     const payload = JSON.stringify({
+      tenant_id: context.tenantId,
       plan_id: planId,
       step_index: stepIndex,
       timeout_ms: timeoutMs,

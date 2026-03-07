@@ -221,4 +221,26 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
       await db.close();
     }
   });
+
+  it("fails closed when automation schedule tools are invoked without a tenant id", async () => {
+    const db = openTestSqliteDb();
+
+    try {
+      const result = await createToolExecutor({
+        homeDir: requireHomeDir(home),
+        workspaceLease: {
+          db,
+          tenantId: "   ",
+          agentId: null,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+        },
+        identityScopeDal: new IdentityScopeDal(db),
+      }).execute("tool.automation.schedule.list", "call-schedule-missing-tenant-1", {});
+
+      expect(result.output).toBe("");
+      expect(result.error).toBe("tenantId is required");
+    } finally {
+      await db.close();
+    }
+  });
 }

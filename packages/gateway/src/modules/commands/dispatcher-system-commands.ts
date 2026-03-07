@@ -301,8 +301,9 @@ async function executePairingsCommand(
   const status = toks[1]?.toLowerCase();
   const allowed = new Set(["pending", "approved", "denied", "revoked"]);
   const filter = status && allowed.has(status) ? status : undefined;
+  const tenantId = resolveTenantId(deps);
   const payload = {
-    pairings: await deps.nodePairingDal.list({ status: filter as never, limit: 100 }),
+    pairings: await deps.nodePairingDal.list({ tenantId, status: filter as never, limit: 100 }),
   };
   return { output: jsonBlock(payload), data: payload };
 }

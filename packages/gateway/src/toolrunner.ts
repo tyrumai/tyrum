@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { createDbSecretProvider } from "./modules/secret/create-secret-provider.js";
 import { createLocalStepExecutor } from "./modules/execution/local-step-executor.js";
 import type { StepExecutionContext } from "./modules/execution/engine.js";
-import { DEFAULT_TENANT_ID } from "./modules/identity/scope.js";
+import { requireTenantIdValue } from "./modules/identity/scope.js";
 import { RedactionEngine } from "./modules/redaction/engine.js";
 import { createArtifactStore } from "./modules/artifact/create-artifact-store.js";
 import { Logger } from "./modules/observability/logger.js";
@@ -17,6 +17,7 @@ import { DeploymentConfig } from "@tyrum/schemas";
 import { DeploymentConfigDal } from "./modules/config/deployment-config-dal.js";
 
 interface ToolRunnerStdioRequest {
+  tenant_id?: string;
   plan_id: string;
   step_index: number;
   timeout_ms?: number;
@@ -86,8 +87,15 @@ export async function runToolRunnerFromStdio(params?: {
     return 2;
   }
 
+  let tenantId: string;
   const planId = typeof request.plan_id === "string" ? request.plan_id : "";
   const stepIndex = typeof request.step_index === "number" ? Math.floor(request.step_index) : -1;
+  try {
+    tenantId = requireTenantIdValue(request.tenant_id, "missing/invalid tenant_id");
+  } catch {
+    process.stderr.write("toolrunner input error: missing/invalid tenant_id\n");
+    return 2;
+  }
   if (!planId || stepIndex < 0) {
     process.stderr.write("toolrunner input error: missing/invalid plan_id or step_index\n");
     return 2;
@@ -132,7 +140,7 @@ export async function runToolRunnerFromStdio(params?: {
       db,
       dbPath,
       tyrumHome,
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
     });
     const artifactStore = createArtifactStore(
       {
@@ -159,7 +167,7 @@ export async function runToolRunnerFromStdio(params?: {
     });
 
     const context: StepExecutionContext = {
-      tenantId: DEFAULT_TENANT_ID,
+      tenantId,
       runId: "toolrunner",
       stepId: `toolrunner:${planId}:${String(stepIndex)}`,
       attemptId: "toolrunner",

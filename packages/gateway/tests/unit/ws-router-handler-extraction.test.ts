@@ -219,6 +219,33 @@ describe("remaining WS handler extraction", () => {
     });
   });
 
+  it("rejects requests with a blank tenant token before routing request handlers", async () => {
+    const client = createAdminWsClient({
+      auth_claims: {
+        token_kind: "admin",
+        role: "admin",
+        scopes: ["*"],
+        tenant_id: "   ",
+      },
+    });
+    const deps = {};
+    const raw = serializeWsRequest({ type: "command.execute", payload: { command: "/help" } });
+
+    const { handleClientMessage } = await import("../../src/ws/protocol/handler.js");
+    const res = await handleClientMessage(client, raw, deps);
+
+    expect(handleControlPlaneMessageMock).not.toHaveBeenCalled();
+    expect(res).toMatchObject({
+      request_id: "req-1",
+      type: "command.execute",
+      ok: false,
+      error: {
+        code: "unauthorized",
+        message: "tenant token required",
+      },
+    });
+  });
+
   it("routes node-facing requests through node-handlers", async () => {
     const client = createAdminWsClient({ role: "node" });
     const deps = {};

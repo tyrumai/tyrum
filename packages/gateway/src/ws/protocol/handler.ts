@@ -20,6 +20,7 @@ import { handleSessionMessage } from "./session-handlers.js";
 import { handleSubagentMessage } from "./subagent-handlers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope, ProtocolResponseEnvelope } from "./types.js";
 import { handleWorkboardMessage } from "./workboard-handlers.js";
+import { requireTenantIdValue } from "../../modules/identity/scope.js";
 
 type ParsedMessageResult =
   | { ok: true; msg: ProtocolRequestEnvelope | ProtocolResponseEnvelope }
@@ -141,7 +142,9 @@ async function authorizeRequest(
     }
   }
 
-  if (!authClaims.tenant_id) {
+  try {
+    requireTenantIdValue(authClaims.tenant_id, "tenant token required");
+  } catch {
     return errorResponse(msg.request_id, msg.type, "unauthorized", "tenant token required");
   }
 

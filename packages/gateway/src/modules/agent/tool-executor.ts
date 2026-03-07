@@ -1,7 +1,7 @@
 import { isAbsolute, relative, resolve } from "node:path";
 import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
 import type { ArtifactStore } from "../artifact/store.js";
-import { DEFAULT_TENANT_ID } from "../identity/scope.js";
+import { requireTenantIdValue } from "../identity/scope.js";
 import type { IdentityScopeDal } from "../identity/scope.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { SecretProvider } from "../secret/provider.js";
@@ -236,9 +236,18 @@ export class ToolExecutor {
     resolved: string | null,
   ): Promise<void> {
     if (!audit || !this.secretResolutionAuditDal) return;
+    const tenantId = (() => {
+      try {
+        return requireTenantIdValue(this.workspaceLease?.tenantId);
+      } catch {
+        // Intentional: secret execution can proceed without an audit row when tenant scope is absent.
+        return undefined;
+      }
+    })();
+    if (!tenantId) return;
     try {
       await this.secretResolutionAuditDal.record({
-        tenantId: this.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID,
+        tenantId,
         toolCallId: audit.tool_call_id,
         toolId: audit.tool_id,
         handleId: handle.handle_id,

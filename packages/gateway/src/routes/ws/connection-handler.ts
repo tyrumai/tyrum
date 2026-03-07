@@ -307,7 +307,7 @@ class WsConnectionSession {
     if (!verifyConnectProof(pending, proof.payload.proof))
       return void this.ws.close(4007, "invalid proof");
 
-    const claims = auth.kind === "claims" ? auth.claims : undefined;
+    const claims = auth.kind === "claims" ? auth.claims : this.createScopedNodeClaims(auth);
     this.completeHandshake(pending, claims);
 
     const response: WsResponseEnvelope = {
@@ -317,6 +317,19 @@ class WsConnectionSession {
       result: { client_id: pending.connectionId, device_id: pending.deviceId, role: pending.role },
     };
     this.ws.send(JSON.stringify(response));
+  }
+
+  private createScopedNodeClaims(
+    auth: Extract<WsAuthState, { kind: "scoped_node" }>,
+  ): AuthTokenClaims {
+    return {
+      token_kind: "device",
+      token_id: `pairing:${auth.expectedNodeId}`,
+      tenant_id: auth.tenantId,
+      device_id: auth.expectedNodeId,
+      role: "node",
+      scopes: ["*"],
+    };
   }
 
   private completeHandshake(pending: PendingInit, claims: AuthTokenClaims | undefined): void {
@@ -402,15 +415,18 @@ class WsConnectionSession {
     claims: AuthTokenClaims | undefined,
   ): void {
     if (!this.input.nodePairingDal || pending.role !== "node") return;
+    const tenantId = claims?.tenant_id?.trim();
+    if (!tenantId) return;
 
     const nowIso = new Date().toISOString();
     const nodeId = pending.deviceId;
     const persistedClientIp = toPersistedClientIp(clientIp);
     void this.input.nodePairingDal
-      .getByNodeId(nodeId)
+      .getByNodeId(nodeId, tenantId)
       .then((previous) => {
         return this.input
           .nodePairingDal!.upsertOnConnect({
+            tenantId,
             nodeId,
             pubkey: pending.pubkey,
             label: pending.label ?? null,

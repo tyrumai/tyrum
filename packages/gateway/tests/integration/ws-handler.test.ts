@@ -1158,11 +1158,9 @@ describe("WS handler integration", () => {
       "pairing.requested",
     );
     expect(pairingEvt["type"]).toBe("pairing.requested");
-
-    const pairing = await container.nodePairingDal.getByNodeId(deviceId);
+    const pairing = await container.nodePairingDal.getByNodeId(deviceId, DEFAULT_TENANT_ID);
     expect(pairing).toBeDefined();
     expect(pairing!.status).toBe("pending");
-
     const operatorMessages = recordJsonMessages(operator);
     const observerMessages = recordJsonMessages(observer);
     const nodeMessages = recordJsonMessages(node);
@@ -1189,8 +1187,7 @@ describe("WS handler integration", () => {
       (msg) => msg["type"] === "pairing.approve" && Object.prototype.hasOwnProperty.call(msg, "ok"),
     );
     expect(approveRes["ok"]).toBe(true);
-
-    const pairing2 = await container.nodePairingDal.getById(pairing!.pairing_id);
+    const pairing2 = await container.nodePairingDal.getById(pairing!.pairing_id, DEFAULT_TENANT_ID);
     expect(pairing2).toBeDefined();
     expect(pairing2!.status).toBe("approved");
     expect((pairing2 as any)["trust_level"]).toBe("remote");
@@ -1515,10 +1512,9 @@ describe("WS handler integration", () => {
       "node.connect.proof",
     );
 
-    const pairing = await container.nodePairingDal.getByNodeId(deviceId);
+    const pairing = await container.nodePairingDal.getByNodeId(deviceId, DEFAULT_TENANT_ID);
     expect(pairing).toBeDefined();
     expect(pairing!.status).toBe("pending");
-
     const approvedEvtP = waitForJsonMessageMatching(
       node,
       (msg) =>
@@ -1610,7 +1606,7 @@ describe("WS handler integration", () => {
     await waitForCondition(
       async () => {
         const presence = await container.presenceDal.getByInstanceId(deviceId);
-        const pairing = await container.nodePairingDal.getByNodeId(deviceId);
+        const pairing = await container.nodePairingDal.getByNodeId(deviceId, DEFAULT_TENANT_ID);
         return Boolean(presence && pairing);
       },
       { description: "ws presence and pairing records" },
@@ -1623,7 +1619,7 @@ describe("WS handler integration", () => {
       resolved_client_ip: "203.0.113.9",
     });
 
-    const pairing = await container.nodePairingDal.getByNodeId(deviceId);
+    const pairing = await container.nodePairingDal.getByNodeId(deviceId, DEFAULT_TENANT_ID);
     const pairingMetadata = pairing?.node.metadata as Record<string, unknown> | undefined;
     expect(pairingMetadata).toMatchObject({
       ip: "203.0.113.9",
@@ -1676,7 +1672,7 @@ describe("WS handler integration", () => {
     await waitForCondition(
       async () => {
         const presence = await container.presenceDal.getByInstanceId(deviceId);
-        const pairing = await container.nodePairingDal.getByNodeId(deviceId);
+        const pairing = await container.nodePairingDal.getByNodeId(deviceId, DEFAULT_TENANT_ID);
         return Boolean(presence && pairing);
       },
       { description: "ws presence and pairing records" },
@@ -1689,7 +1685,7 @@ describe("WS handler integration", () => {
       resolved_client_ip: "127.0.0.1",
     });
 
-    const pairing = await container.nodePairingDal.getByNodeId(deviceId);
+    const pairing = await container.nodePairingDal.getByNodeId(deviceId, DEFAULT_TENANT_ID);
     const pairingMetadata = pairing?.node.metadata as Record<string, unknown> | undefined;
     expect(pairingMetadata).toMatchObject({
       ip: "127.0.0.1",

@@ -1,6 +1,5 @@
 import { ActionPrimitive as ActionPrimitiveSchema, type ActionPrimitive } from "@tyrum/schemas";
-import { DEFAULT_TENANT_ID } from "../identity/scope.js";
-import type { IdentityScopeDal } from "../identity/scope.js";
+import { requireTenantIdValue, type IdentityScopeDal } from "../identity/scope.js";
 import {
   ScheduleService,
   type ScheduleCadence,
@@ -22,6 +21,10 @@ function getScheduleService(context: ScheduleExecutorContext): ScheduleService {
   return new ScheduleService(db, context.identityScopeDal);
 }
 
+function requireWorkspaceLeaseTenantId(context: ScheduleExecutorContext): string {
+  return requireTenantIdValue(context.workspaceLease?.tenantId);
+}
+
 async function resolveScheduleScope(
   args: unknown,
   context: ScheduleExecutorContext,
@@ -31,7 +34,7 @@ async function resolveScheduleScope(
   workspaceKey?: string;
 }> {
   const parsed = args as Record<string, unknown> | null;
-  const tenantId = context.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID;
+  const tenantId = requireWorkspaceLeaseTenantId(context);
   const agentKey =
     typeof parsed?.["agent_key"] === "string" && parsed["agent_key"].trim().length > 0
       ? parsed["agent_key"].trim()
@@ -140,7 +143,7 @@ async function executeAutomationScheduleGet(
   }
 
   const schedule = await service.getSchedule({
-    tenantId: context.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID,
+    tenantId: requireWorkspaceLeaseTenantId(context),
     scheduleId,
     includeDeleted: parsed?.["include_deleted"] === true,
   });
@@ -237,7 +240,7 @@ async function executeAutomationScheduleUpdate(
   }
 
   const schedule = await service.updateSchedule({
-    tenantId: context.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID,
+    tenantId: requireWorkspaceLeaseTenantId(context),
     scheduleId,
     patch,
   });
@@ -265,11 +268,11 @@ async function executeScheduleToggle(
   const schedule =
     mode === "pause"
       ? await service.pauseSchedule({
-          tenantId: context.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID,
+          tenantId: requireWorkspaceLeaseTenantId(context),
           scheduleId,
         })
       : await service.resumeSchedule({
-          tenantId: context.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID,
+          tenantId: requireWorkspaceLeaseTenantId(context),
           scheduleId,
         });
 
@@ -294,7 +297,7 @@ async function executeAutomationScheduleDelete(
   }
 
   await service.deleteSchedule({
-    tenantId: context.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID,
+    tenantId: requireWorkspaceLeaseTenantId(context),
     scheduleId,
   });
   return {
