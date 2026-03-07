@@ -20,7 +20,7 @@ async function createClientMock() {
       load: vi.fn(),
       save: vi.fn(),
     }),
-    TyrumClient: class TyrumClient {},
+    TyrumClient: function TyrumClient() {},
     createTyrumHttpClient: (options: unknown) => {
       httpCtorSpy(options);
       return {

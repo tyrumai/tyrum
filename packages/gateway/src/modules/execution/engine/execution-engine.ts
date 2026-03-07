@@ -100,9 +100,10 @@ export class ExecutionEngine {
       executeWithTimeout: async (...args) => await this.executeWithTimeout(...args),
       resolveSecretScopesFromArgs: async (tenantId, args, context) =>
         await this.resolveSecretScopesFromArgs(tenantId, args, context),
-      retryOrFailStep: async (opts) => await this.approvalManager.maybeRetryOrFailStep(opts),
-      pauseRunForApproval: async (tx, opts, input) =>
-        await this.approvalManager.pauseRunForApproval(tx, opts, input),
+      retryOrFailStep: async (retryOptions) =>
+        await this.approvalManager.maybeRetryOrFailStep(retryOptions),
+      pauseRunForApproval: async (tx, pauseOptions, input) =>
+        await this.approvalManager.pauseRunForApproval(tx, pauseOptions, input),
       recordArtifactsTx: async (tx, scope, artifacts) =>
         await this.recordArtifactsTx(tx, scope, artifacts),
       emitAttemptUpdatedTx: async (tx, attemptId) => await this.emitAttemptUpdatedTx(tx, attemptId),
@@ -485,7 +486,7 @@ export class ExecutionEngine {
     const decisionIds = decisions
       .map((d) => d.decision_id)
       .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
-      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      .toSorted((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
     const intentGraphSha256 = sha256HexFromString(
       stableJsonStringify({

@@ -10,7 +10,7 @@ const TARGET_SUFFIX = "_db_config_and_tokens_indexes.sql";
 function findMigration(kind: "sqlite" | "postgres"): string {
   const matches = readdirSync(join(MIGRATIONS_ROOT, kind))
     .filter((file) => file.endsWith(TARGET_SUFFIX))
-    .sort();
+    .toSorted();
   expect(matches).toHaveLength(1);
   return matches[0] ?? "";
 }
@@ -19,7 +19,7 @@ function extractIndexNames(sql: string): string[] {
   return [...sql.matchAll(/CREATE INDEX IF NOT EXISTS ([A-Za-z0-9_]+)/g)]
     .map((match) => match[1])
     .filter((name): name is string => Boolean(name))
-    .sort();
+    .toSorted();
 }
 
 describe("gateway migration indexes", () => {

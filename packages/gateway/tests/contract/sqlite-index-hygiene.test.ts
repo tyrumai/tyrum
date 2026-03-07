@@ -42,7 +42,7 @@ describe("SQLite index hygiene", () => {
     try {
       for (const file of readdirSync(sqliteMigrationsDir)
         .filter((name) => name.endsWith(".sql") && name < "108_")
-        .sort()) {
+        .toSorted()) {
         copyFileSync(join(sqliteMigrationsDir, file), join(preCleanupDir, file));
       }
 

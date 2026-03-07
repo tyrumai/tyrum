@@ -114,7 +114,7 @@ describe("Secret routes (integration)", () => {
         }),
       ]);
 
-      const statuses = [first.status, second.status].sort((a, b) => a - b);
+      const statuses = [first.status, second.status].toSorted((a, b) => a - b);
       expect(statuses).toEqual([201, 409]);
 
       const winnerValue = first.status === 201 ? "v1" : "v2";
@@ -150,7 +150,7 @@ describe("Secret routes (integration)", () => {
       const res = await app.request("/secrets");
       expect(res.status).toBe(200);
       const body = (await res.json()) as { handles: Array<{ handle_id: string }> };
-      expect(body.handles.map((h) => h.handle_id).sort()).toEqual(["key_a", "key_b"]);
+      expect(body.handles.map((h) => h.handle_id).toSorted()).toEqual(["key_a", "key_b"]);
       expect(JSON.stringify(body)).not.toContain("val-a");
       expect(JSON.stringify(body)).not.toContain("val-b");
     } finally {

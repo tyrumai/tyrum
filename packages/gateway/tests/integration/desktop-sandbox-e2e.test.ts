@@ -737,7 +737,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
               );
               const chosen =
                 defaultButton ??
-                [...buttonCandidates].sort((a, b) => b.node.bounds.x - a.node.bounds.x)[0];
+                buttonCandidates.toSorted((a, b) => b.node.bounds.x - a.node.bounds.x)[0];
 
               if (!chosen)
                 throw new Error("Desktop a11y could not locate a dialog button to click.");

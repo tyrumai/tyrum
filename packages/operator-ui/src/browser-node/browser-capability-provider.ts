@@ -20,10 +20,10 @@ function formatUnknownError(error: unknown): string {
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => {
+    reader.addEventListener("error", () => {
       reject(reader.error ?? new Error("Failed to read blob"));
-    };
-    reader.onload = () => {
+    });
+    reader.addEventListener("load", () => {
       if (typeof reader.result !== "string") {
         reject(new Error("Expected a data URL string"));
         return;
@@ -34,7 +34,7 @@ function blobToBase64(blob: Blob): Promise<string> {
         return;
       }
       resolve(reader.result.slice(index + 1));
-    };
+    });
     reader.readAsDataURL(blob);
   });
 }
@@ -83,7 +83,7 @@ async function capturePhoto(args: BrowserActionArgs & { op: "camera.capture_phot
     video.srcObject = stream;
 
     await new Promise<void>((resolve) => {
-      video.onloadedmetadata = () => resolve();
+      video.addEventListener("loadedmetadata", () => resolve(), { once: true });
     });
 
     try {
@@ -169,14 +169,14 @@ async function recordAudio(args: BrowserActionArgs & { op: "microphone.record" }
 
     const startedAt = Date.now();
     const stopped = new Promise<void>((resolve, reject) => {
-      recorder.onstop = () => resolve();
-      recorder.onerror = (evt: unknown) => {
+      recorder.addEventListener("stop", () => resolve(), { once: true });
+      recorder.addEventListener("error", (evt: unknown) => {
         const errorValue =
           evt && typeof evt === "object" && "error" in evt
             ? (evt as { error?: unknown }).error
             : evt;
         reject(errorValue ?? new Error("Recording failed"));
-      };
+      });
     });
 
     recorder.start();

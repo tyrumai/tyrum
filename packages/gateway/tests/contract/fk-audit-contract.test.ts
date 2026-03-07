@@ -500,7 +500,7 @@ function copyMigrationsBefore(sourceDir: string, upperExclusive: string): string
   const targetDir = mkdtempSync(join(tmpdir(), "tyrum-fk-audit-migrations-"));
   for (const file of readdirSync(sourceDir)
     .filter((name) => name.endsWith(".sql") && name < upperExclusive)
-    .sort()) {
+    .toSorted()) {
     copyFileSync(join(sourceDir, file), join(targetDir, file));
   }
   return targetDir;

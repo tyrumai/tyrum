@@ -28,7 +28,7 @@ function readSpecs(): JsonColumnSpec[] {
 function readPostgresMigrationsSql(): string {
   const files = readdirSync(postgresMigrationsDir)
     .filter((file) => file.endsWith(".sql"))
-    .sort();
+    .toSorted();
   expect(files.length, "postgres migration files").toBeGreaterThan(0);
   return files.map((file) => readFileSync(join(postgresMigrationsDir, file), "utf-8")).join("\n\n");
 }

@@ -916,11 +916,11 @@ describe("Failure matrix (scaling-ha)", () => {
 
     const restartingOutboxDal = {
       listActiveTenantIds: async () => [DEFAULT_TENANT_ID],
-      poll: async (tenantId: string, consumerId: string, batchSize?: number) => {
+      poll: async (tenantId: string, consumerKey: string, batchSize?: number) => {
         if (didRestart) {
-          return await outboxDal2!.poll(tenantId, consumerId, batchSize);
+          return await outboxDal2!.poll(tenantId, consumerKey, batchSize);
         }
-        const rows = await outboxDal1.poll(tenantId, consumerId, batchSize);
+        const rows = await outboxDal1.poll(tenantId, consumerKey, batchSize);
 
         // Simulate DB restart after the poll but before the ack.
         await db1.close();
@@ -933,19 +933,19 @@ describe("Failure matrix (scaling-ha)", () => {
 
         return rows;
       },
-      ackConsumerCursor: async (tenantId: string, consumerId: string, lastOutboxId: number) => {
+      ackConsumerCursor: async (tenantId: string, consumerKey: string, lastOutboxId: number) => {
         if (didRestart && !didFailAck) {
           didFailAck = true;
-          return await outboxDal1.ackConsumerCursor(tenantId, consumerId, lastOutboxId);
+          return await outboxDal1.ackConsumerCursor(tenantId, consumerKey, lastOutboxId);
         }
-        return await outboxDal2!.ackConsumerCursor(tenantId, consumerId, lastOutboxId);
+        return await outboxDal2!.ackConsumerCursor(tenantId, consumerKey, lastOutboxId);
       },
-      ensureConsumer: async (tenantId: string, consumerId: string) => {
+      ensureConsumer: async (tenantId: string, consumerKey: string) => {
         if (didRestart) {
-          await outboxDal2!.ensureConsumer(tenantId, consumerId);
+          await outboxDal2!.ensureConsumer(tenantId, consumerKey);
           return;
         }
-        await outboxDal1.ensureConsumer(tenantId, consumerId);
+        await outboxDal1.ensureConsumer(tenantId, consumerKey);
       },
     } as unknown as OutboxDal;
 

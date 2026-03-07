@@ -49,7 +49,7 @@ function toContractAccount(row: AuthProfileRow) {
     type: row.type,
     status: row.status,
     config: row.config,
-    configured_secret_keys: Object.keys(row.secret_keys).sort((a, b) => a.localeCompare(b)),
+    configured_secret_keys: Object.keys(row.secret_keys).toSorted((a, b) => a.localeCompare(b)),
     created_at: row.created_at,
     updated_at: row.updated_at,
   });
@@ -204,11 +204,13 @@ async function listProviderGroups(deps: ProviderConfigRouteDeps, tenantId: strin
   }
 
   const providers = Array.from(grouped.values())
-    .map((provider) => ({
-      ...provider,
-      accounts: provider.accounts.sort((a, b) => a.display_name.localeCompare(b.display_name)),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name) || a.provider_key.localeCompare(b.provider_key));
+    .map((provider) => {
+      provider.accounts = provider.accounts.toSorted((a, b) =>
+        a.display_name.localeCompare(b.display_name),
+      );
+      return provider;
+    })
+    .toSorted((a, b) => a.name.localeCompare(b.name) || a.provider_key.localeCompare(b.provider_key));
 
   return ConfiguredProviderListResponse.parse({
     status: "ok",
@@ -259,7 +261,7 @@ async function resolveProviderDeletionRequirements(input: {
 
   const requiredExecutionProfileIds = assignments
     .map((assignment) => assignment.execution_profile_id)
-    .sort((a, b) => a.localeCompare(b));
+    .toSorted((a, b) => a.localeCompare(b));
   if (requiredExecutionProfileIds.length === 0) {
     return {
       deletedPresetKeys,

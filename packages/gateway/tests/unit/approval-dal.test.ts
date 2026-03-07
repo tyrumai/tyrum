@@ -296,10 +296,10 @@ describe("ApprovalDal", () => {
 
     class TrackingApprovalDal extends ApprovalDal {
       constructor(
-        db: SqlDb,
+        sqlDb: SqlDb,
         private readonly seenTxDals: SqlDb[],
       ) {
-        super(db);
+        super(sqlDb);
       }
 
       protected override createTxDal(tx: SqlDb): ApprovalDal {

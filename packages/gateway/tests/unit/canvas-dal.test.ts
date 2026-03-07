@@ -108,7 +108,7 @@ describe("CanvasDal", () => {
       parentId: "plan-A",
     });
     expect(planA).toHaveLength(2);
-    expect(planA.map((row) => row.title).sort()).toEqual(["First", "Second"]);
+    expect(planA.map((row) => row.title).toSorted()).toEqual(["First", "Second"]);
 
     const planB = await dal.listByParent({
       tenantId: DEFAULT_TENANT_ID,

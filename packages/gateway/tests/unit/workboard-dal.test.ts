@@ -130,10 +130,10 @@ describe("WorkboardDal", () => {
     expect(events.events[0]!.kind).toBe("status.transition");
 
     const all = await dal.listItems({ scope });
-    expect(all.items.map((it) => it.work_item_id)).toEqual([b.work_item_id, a.work_item_id]);
+    expect(all.items.map((item) => item.work_item_id)).toEqual([b.work_item_id, a.work_item_id]);
 
     const doing = await dal.listItems({ scope, statuses: ["doing"] });
-    expect(doing.items.map((it) => it.work_item_id)).toEqual([b.work_item_id]);
+    expect(doing.items.map((item) => item.work_item_id)).toEqual([b.work_item_id]);
   });
 
   it("rejects invalid work item transitions", async () => {

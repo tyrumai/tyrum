@@ -472,7 +472,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
       : undefined;
 
     const role = normalizeRole(normalizeMaybe(roleRaw));
-    const name = normalizeName(normalizeMaybe(nameRaw));
+    const accessibleName = normalizeName(normalizeMaybe(nameRaw));
 
     const extentsFn = component ? getAtSpiDynamicMethod(component, "GetExtents") : undefined;
     const extentsRaw =
@@ -496,8 +496,8 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
               : null;
         if (!fn) break;
         const raw = await fn.call(action, i);
-        const name = normalizeMaybe(raw);
-        if (name) actions.push(clampTrimmed(name, MAX_ACTION_CHARS));
+        const actionName = normalizeMaybe(raw);
+        if (actionName) actions.push(clampTrimmed(actionName, MAX_ACTION_CHARS));
       }
     }
 
@@ -519,7 +519,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     return {
       elementRef,
       role,
-      name,
+      name: accessibleName,
       bounds,
       actions,
       states,
@@ -712,7 +712,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
           ? getActionName
           : null;
 
-    const candidates = ["click", "activate", "press"];
+    const candidates = new Set(["click", "activate", "press"]);
     const candidateIndices: number[] = [];
     const actionNamesByIndex: Array<string | undefined> = [];
     if (actionNameFn) {
@@ -721,7 +721,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
         const name = normalizeMaybe(raw)?.toLowerCase();
         actionNamesByIndex[i] = name;
         if (!name) continue;
-        if (candidates.includes(name)) candidateIndices.push(i);
+        if (candidates.has(name)) candidateIndices.push(i);
       }
     }
 

@@ -114,8 +114,8 @@ describe("WS task.execute result plumbing", () => {
       onTaskResult: (taskId, success, result, evidence, error) => {
         registry.resolve(taskId, toTaskResult(success, result, evidence, error));
       },
-      onConnectionClosed: (connectionId) => {
-        registry.rejectAllForConnection(connectionId);
+      onConnectionClosed: (closedConnectionId) => {
+        registry.rejectAllForConnection(closedConnectionId);
       },
     };
 
@@ -197,8 +197,8 @@ describe("WS task.execute result plumbing", () => {
       onTaskResult: (taskId, success, result, evidence, error) => {
         registry.resolve(taskId, toTaskResult(success, result, evidence, error));
       },
-      onConnectionClosed: (connectionId) => {
-        registry.rejectAllForConnection(connectionId);
+      onConnectionClosed: (closedConnectionId) => {
+        registry.rejectAllForConnection(closedConnectionId);
       },
     };
 

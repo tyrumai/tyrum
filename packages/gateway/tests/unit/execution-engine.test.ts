@@ -1476,7 +1476,7 @@ describe("ExecutionEngine (normalized)", () => {
     const decisionIds = decisions
       .map((d) => d.decision_id)
       .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
-      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      .toSorted((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
     const intentGraphSha256 = sha256HexFromString(
       stableJsonStringify({
@@ -1731,10 +1731,10 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    const row = await db.get<{ artifacts_json: string }>(
+    const attemptRow = await db.get<{ artifacts_json: string }>(
       "SELECT artifacts_json FROM execution_attempts LIMIT 1",
     );
-    const artifacts = JSON.parse(row!.artifacts_json) as Array<{ uri: string; kind: string }>;
+    const artifacts = JSON.parse(attemptRow!.artifacts_json) as Array<{ uri: string; kind: string }>;
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0]!.uri).toBe(artifactRef.uri);
     expect(artifacts[0]!.kind).toBe(artifactRef.kind);
@@ -1770,8 +1770,8 @@ describe("ExecutionEngine (normalized)", () => {
       ["ws.broadcast"],
     );
     const types = outbox
-      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
-      .map((row) => row.message?.type)
+      .map((outboxRow) => JSON.parse(outboxRow.payload_json) as { message?: { type?: string } })
+      .map((payload) => payload.message?.type)
       .filter((value): value is string => typeof value === "string");
     expect(types).toContain("artifact.created");
     expect(types).toContain("artifact.attached");

@@ -1128,7 +1128,7 @@ export async function executeCommand(
       if (matchingPresets.length > 1) {
         const keys = matchingPresets
           .map((preset) => preset.preset_key)
-          .sort((a, b) => a.localeCompare(b))
+          .toSorted((a, b) => a.localeCompare(b))
           .join(", ");
         return {
           output: `Model '${modelIdRaw}' matches multiple configured presets: ${keys}. Use /model <preset_key>.`,

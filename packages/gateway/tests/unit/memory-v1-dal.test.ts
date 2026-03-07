@@ -76,7 +76,7 @@ for (const fixture of fixtures) {
         expect(created.v).toBe(1);
         expect(created.kind).toBe("fact");
         expect(created.agent_id).toBe(scopeA.agentId);
-        expect(created.tags.sort()).toEqual(["prefs", "project"]);
+        expect(created.tags.toSorted()).toEqual(["prefs", "project"]);
         expect(created.created_at).toBeTruthy();
         expect(created.updated_at).toBeUndefined();
         expect(created.provenance.source_kind).toBe("user");

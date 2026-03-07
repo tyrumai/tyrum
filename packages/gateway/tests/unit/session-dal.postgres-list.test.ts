@@ -32,8 +32,8 @@ describe("SessionDal.list (postgres)", () => {
       ]);
 
       const page = await dal.list({ connectorKey: "ui", limit: 10 });
-      expect(page.sessions.map((s) => s.session_id).sort()).toEqual(
-        [s1.session_key, s2.session_key].sort(),
+      expect(page.sessions.map((s) => s.session_id).toSorted()).toEqual(
+        [s1.session_key, s2.session_key].toSorted(),
       );
 
       const corrupted = page.sessions.find((s) => s.session_id === s1.session_key);
@@ -83,8 +83,8 @@ describe("SessionDal.list (postgres)", () => {
       ]);
 
       const page = await dal.list({ connectorKey: "ui", limit: 10 });
-      expect(page.sessions.map((s) => s.session_id).sort()).toEqual(
-        [s1.session_key, s2.session_key].sort(),
+      expect(page.sessions.map((s) => s.session_id).toSorted()).toEqual(
+        [s1.session_key, s2.session_key].toSorted(),
       );
 
       const corrupted = page.sessions.find((s) => s.session_id === s1.session_key);

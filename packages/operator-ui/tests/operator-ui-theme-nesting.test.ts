@@ -25,12 +25,12 @@ function stubLocalStorage() {
 }
 
 vi.mock("../src/components/pages/connect-page.js", async () => {
-  const React = await import("react");
+  const ReactModule = await import("react");
   const { useTheme } = await import("../src/hooks/use-theme.js");
   return {
     ConnectPage() {
       const { mode } = useTheme();
-      return React.createElement("div", { "data-testid": "theme-mode" }, mode);
+      return ReactModule.createElement("div", { "data-testid": "theme-mode" }, mode);
     },
   };
 });

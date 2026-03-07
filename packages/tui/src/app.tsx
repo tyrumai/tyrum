@@ -888,11 +888,11 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       return;
     }
 
-    const core = coreRef.current;
-    const approvals = core.approvalsStore.getSnapshot();
-    const pairing = core.pairingStore.getSnapshot();
-    const runs = core.runsStore.getSnapshot();
-    const memory = core.memoryStore.getSnapshot();
+    const currentCore = coreRef.current;
+    const approvals = currentCore.approvalsStore.getSnapshot();
+    const pairing = currentCore.pairingStore.getSnapshot();
+    const runs = currentCore.runsStore.getSnapshot();
+    const memory = currentCore.memoryStore.getSnapshot();
 
     const pairingIds = getPairingIds(pairing);
     const runIds = getRunList(runs)
@@ -909,7 +909,7 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       state: uiStateRef.current,
       input,
       key: toTuiKey(key),
-      elevatedModeActive: isElevatedModeActive(core.elevatedModeStore.getSnapshot()),
+      elevatedModeActive: isElevatedModeActive(currentCore.elevatedModeStore.getSnapshot()),
       approvalsPendingIds: approvals.pendingIds,
       pairingIds,
       runIds,
@@ -925,10 +925,10 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
           exit();
           return;
         case "connect":
-          core.connect();
+          currentCore.connect();
           return;
         case "disconnect":
-          core.disconnect();
+          currentCore.disconnect();
           return;
         case "openElevatedMode":
           openElevatedDialog();
@@ -938,14 +938,14 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
           return;
         case "refreshMemory":
           if (memory.browse.request?.kind === "search") {
-            void core.memoryStore.search({
+            void currentCore.memoryStore.search({
               query: memory.browse.request.query,
               filter: memory.browse.request.filter,
               limit: memory.browse.request.limit,
             });
             return;
           }
-          void core.memoryStore.list({
+          void currentCore.memoryStore.list({
             filter: memory.browse.request?.filter,
             limit: memory.browse.request?.limit,
           });
@@ -957,36 +957,36 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
           openMemoryForgetDialog(command.memoryItemId);
           return;
         case "exportMemory":
-          void core.memoryStore.export().catch(() => {});
+          void currentCore.memoryStore.export().catch(() => {});
           return;
         case "refreshApprovals":
-          void core.approvalsStore.refreshPending();
+          void currentCore.approvalsStore.refreshPending();
           return;
         case "resolveApproval":
-          void core.approvalsStore.resolve(command.approvalId, command.decision);
+          void currentCore.approvalsStore.resolve(command.approvalId, command.decision);
           return;
         case "refreshPairing":
-          void core.pairingStore.refresh();
+          void currentCore.pairingStore.refresh();
           return;
         case "approvePairing": {
-          const req = core.pairingStore.getSnapshot().byId[command.pairingId];
+          const req = currentCore.pairingStore.getSnapshot().byId[command.pairingId];
           if (!req || req.status !== "pending") return;
-          void core.pairingStore.approve(command.pairingId, {
+          void currentCore.pairingStore.approve(command.pairingId, {
             trust_level: "local",
             capability_allowlist: req.capability_allowlist,
           });
           return;
         }
         case "denyPairing": {
-          const req = core.pairingStore.getSnapshot().byId[command.pairingId];
+          const req = currentCore.pairingStore.getSnapshot().byId[command.pairingId];
           if (!req || req.status !== "pending") return;
-          void core.pairingStore.deny(command.pairingId);
+          void currentCore.pairingStore.deny(command.pairingId);
           return;
         }
         case "revokePairing": {
-          const req = core.pairingStore.getSnapshot().byId[command.pairingId];
+          const req = currentCore.pairingStore.getSnapshot().byId[command.pairingId];
           if (!req || req.status !== "approved") return;
-          void core.pairingStore.revoke(command.pairingId);
+          void currentCore.pairingStore.revoke(command.pairingId);
           return;
         }
         default: {

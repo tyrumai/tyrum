@@ -17,8 +17,8 @@ const coreClient = {
 };
 
 vi.mock("@kubernetes/client-node", () => {
-  class BatchV1Api {}
-  class CoreV1Api {}
+  function BatchV1Api() {}
+  function CoreV1Api() {}
 
   class KubeConfig {
     loadFromCluster(): void {

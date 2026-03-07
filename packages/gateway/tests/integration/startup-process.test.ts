@@ -56,13 +56,13 @@ function extractBootstrapToken(stdout: string, label: string): string {
 }
 
 function waitForOpen(ws: WebSocket, timeoutMs = 5_000): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (ws.readyState === WebSocket.OPEN) return resolve();
+  return new Promise((resolvePromise, reject) => {
+    if (ws.readyState === WebSocket.OPEN) return resolvePromise();
 
     const timer = setTimeout(() => reject(new Error("open timeout")), timeoutMs);
     ws.once("open", () => {
       clearTimeout(timer);
-      resolve();
+      resolvePromise();
     });
     ws.once("error", (err) => {
       clearTimeout(timer);

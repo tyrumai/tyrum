@@ -119,7 +119,7 @@ async function toAssignmentResponse(input: {
           },
         ];
       })
-      .sort((a, b) => a.execution_profile_id.localeCompare(b.execution_profile_id)),
+      .toSorted((a, b) => a.execution_profile_id.localeCompare(b.execution_profile_id)),
   });
 }
 
@@ -130,7 +130,7 @@ function resolveRequiredAssignments(
   return assignments
     .filter((assignment) => deletedPresetKeys.has(assignment.preset_key))
     .map((assignment) => assignment.execution_profile_id)
-    .sort((a, b) => a.localeCompare(b));
+    .toSorted((a, b) => a.localeCompare(b));
 }
 
 async function validateReplacementAssignments(input: {
@@ -209,7 +209,7 @@ export function createModelConfigRoutes(deps: ModelConfigRouteDeps): Hono {
               model.modalities && typeof model.modalities === "object" ? model.modalities : null,
           }));
       })
-      .sort(
+      .toSorted(
         (a, b) =>
           a.provider_name.localeCompare(b.provider_name) ||
           a.model_name.localeCompare(b.model_name),
@@ -390,8 +390,8 @@ export function createModelConfigRoutes(deps: ModelConfigRouteDeps): Hono {
     }
 
     const assignmentRecord = parsed.data.assignments;
-    const keys = Object.keys(assignmentRecord).sort((a, b) => a.localeCompare(b));
-    const expected = [...EXECUTION_PROFILE_IDS].sort((a, b) => a.localeCompare(b));
+    const keys = Object.keys(assignmentRecord).toSorted((a, b) => a.localeCompare(b));
+    const expected = [...EXECUTION_PROFILE_IDS].toSorted((a, b) => a.localeCompare(b));
     if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
       return c.json(
         { error: "invalid_request", message: "assignments must include every execution profile" },

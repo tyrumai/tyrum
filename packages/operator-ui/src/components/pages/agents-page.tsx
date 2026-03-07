@@ -45,7 +45,7 @@ function normalizeAgentOptions(
       });
     }
   }
-  return [...byKey.values()].sort((a, b) => a.agentKey.localeCompare(b.agentKey));
+  return [...byKey.values()].toSorted((a, b) => a.agentKey.localeCompare(b.agentKey));
 }
 
 function selectInitialAgentKey(input: {

@@ -97,7 +97,7 @@ describe("ConfiguredModelPresetDal", () => {
       close: async () => {},
     };
 
-    const db: SqlDb = {
+    const rootDb: SqlDb = {
       kind: "postgres",
       get: async () => {
         throw new Error("outer db should not perform read/write work");
@@ -114,7 +114,7 @@ describe("ConfiguredModelPresetDal", () => {
       close: async () => {},
     };
 
-    const row = await new ConfiguredModelPresetDal(db).updateByKey({
+    const row = await new ConfiguredModelPresetDal(rootDb).updateByKey({
       tenantId: DEFAULT_TENANT_ID,
       presetKey: "preset-updated-at",
       options: { a: 1, b: 3 },

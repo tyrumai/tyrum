@@ -855,15 +855,15 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     const dialog = document.body.querySelector<HTMLElement>("[data-testid='models-preset-dialog']");
     expect(dialog).not.toBeNull();
 
-    const textInputs = Array.from(dialog?.querySelectorAll<HTMLInputElement>("input") ?? []).filter(
+    const textInput = Array.from(dialog?.querySelectorAll<HTMLInputElement>("input") ?? []).find(
       (input) => input.type !== "hidden" && !input.readOnly,
     );
-    expect(textInputs[0]?.value).toBe("");
+    expect(textInput?.value).toBe("");
 
     const dialogSelects = Array.from(dialog?.querySelectorAll<HTMLSelectElement>("select") ?? []);
     expect(dialogSelects.length).toBe(2);
     setSelectValue(dialogSelects[0]!, "openai/gpt-4.1-mini");
-    expect(textInputs[0]?.value).toBe("GPT-4.1 Mini");
+    expect(textInput?.value).toBe("GPT-4.1 Mini");
     setSelectValue(dialogSelects[1]!, "high");
 
     const saveButton = document.body.querySelector<HTMLButtonElement>(

@@ -104,7 +104,6 @@ describe("lifecycle hooks startup gating", () => {
       return {
         LifecycleHooksRuntime: class LifecycleHooksRuntime {
           fire = fireMock;
-          constructor(_opts: unknown) {}
         },
       };
     });

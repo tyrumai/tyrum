@@ -24,7 +24,7 @@ describe("status-session-lanes", () => {
       { key: "not-agent", latest_run_status: "running", queued_runs: 1 },
     ]);
 
-    expect(Array.from(ids).sort()).toEqual(["default", "secondary"]);
+    expect(Array.from(ids).toSorted()).toEqual(["default", "secondary"]);
   });
 
   it("extracts execution run counts from queue depth", () => {

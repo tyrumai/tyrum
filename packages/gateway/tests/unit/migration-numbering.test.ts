@@ -34,7 +34,7 @@ function tryGetTrackedMigrationFiles(
       .filter((line) => line.length > 0)
       .map((line) => basename(line))
       .filter((file) => file.endsWith(".sql"))
-      .sort();
+      .toSorted();
 
     return files;
   } catch {
@@ -48,7 +48,7 @@ function getMigrationFiles(migrationsRoot: string, kind: "sqlite" | "postgres"):
 
   return readdirSync(join(migrationsRoot, kind))
     .filter((f) => f.endsWith(".sql"))
-    .sort();
+    .toSorted();
 }
 
 function getDuplicatePrefixes(files: readonly string[]): string[] {
@@ -61,7 +61,7 @@ function getDuplicatePrefixes(files: readonly string[]): string[] {
   return [...counts.entries()]
     .filter(([, count]) => count > 1)
     .map(([prefix]) => prefix)
-    .sort();
+    .toSorted();
 }
 
 describe("gateway migrations", () => {
@@ -122,7 +122,7 @@ describe("gateway migrations", () => {
         .filter((line) => line.length > 0)
         .map((line) => basename(line))
         .filter((file) => file.endsWith(".sql"))
-        .sort();
+        .toSorted();
       expect(getDuplicatePrefixes(files)).toEqual([]);
     } finally {
       rmSync(repoRoot, { recursive: true, force: true });

@@ -103,7 +103,7 @@ export function resolveProviderBaseURL(input: {
     if (unresolved.size > 0) {
       throw new Error(
         `provider base URL template requires values for ${Array.from(unresolved)
-          .sort((left, right) => left.localeCompare(right))
+          .toSorted((left, right) => left.localeCompare(right))
           .join(", ")}`,
       );
     }
