@@ -171,6 +171,75 @@ describe("WatcherScheduler", () => {
     expect(episodes).toHaveLength(0);
   });
 
+  it("preserves legacy interval-only periodic watchers so they fail visibly during processing", async () => {
+    const enqueuedInputs: Array<Record<string, unknown>> = [];
+    const policyBundle = PolicyBundle.parse({ v: 1 });
+    const schedulerWithEngine = new WatcherScheduler({
+      db,
+      memoryV1Dal,
+      eventBus,
+      owner: "scheduler-1",
+      firingLeaseTtlMs: 10_000,
+      automationEnabled: true,
+      engine: {
+        enqueuePlanInTx: async (tx, input) => {
+          enqueuedInputs.push(input as unknown as Record<string, unknown>);
+          const jobId = randomUUID();
+          const runId = randomUUID();
+          await tx.run(
+            `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+             VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)`,
+            [
+              DEFAULT_TENANT_ID,
+              jobId,
+              DEFAULT_AGENT_ID,
+              DEFAULT_WORKSPACE_ID,
+              input.key,
+              input.lane,
+              "{}",
+            ],
+          );
+          await tx.run(
+            `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+             VALUES (?, ?, ?, ?, ?, 'queued', 1)`,
+            [DEFAULT_TENANT_ID, runId, jobId, input.key, input.lane],
+          );
+          return { jobId, runId };
+        },
+      } as unknown as ExecutionEngine,
+      policyService: {
+        loadEffectiveBundle: async () => ({
+          bundle: policyBundle,
+          sha256: "sha256",
+          sources: { deployment: "default", agent: null, playbook: null },
+        }),
+        getOrCreateSnapshot: async () => ({
+          policy_snapshot_id: "snapshot-1",
+          sha256: "sha256",
+          created_at: new Date().toISOString(),
+          bundle: policyBundle,
+        }),
+      } as unknown as PolicyService,
+    });
+
+    const id = await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
+    await db.run(
+      "UPDATE watchers SET trigger_config_json = ? WHERE tenant_id = ? AND watcher_id = ?",
+      [JSON.stringify({ intervalMs: 1000 }), DEFAULT_TENANT_ID, id],
+    );
+
+    await schedulerWithEngine.tick();
+
+    expect(enqueuedInputs).toHaveLength(0);
+
+    const firing = await db.get<{ status: string; error: string | null }>(
+      "SELECT status, error FROM watcher_firings",
+    );
+    expect(firing).toBeDefined();
+    expect(firing!.status).toBe("failed");
+    expect(firing!.error).toMatch(/playbook .* not found/i);
+  });
+
   it("ignores non-periodic watchers", async () => {
     await processor.createWatcher("plan-1", "plan_complete", { planId: "plan-1" });
 

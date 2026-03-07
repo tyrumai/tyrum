@@ -272,7 +272,9 @@ export class WatcherScheduler {
       }
     }
     if (!execution) {
-      return undefined;
+      // Preserve legacy intervalMs-only watchers so they still create firings
+      // and surface the missing execution target during processing.
+      execution = { kind: "playbook", playbook_id: "" };
     }
 
     return {
