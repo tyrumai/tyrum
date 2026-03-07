@@ -4,7 +4,7 @@ import { handleClientMessage } from "../../src/ws/protocol.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { makeDeps, makeClient } from "./ws-workboard.test-support.js";
 
-export function registerWorkboardCrudTests(): void {
+function registerCreateAndOverlapTests(): void {
   it("handles work.create and broadcasts work.item.created", async () => {
     const cm = new ConnectionManager();
     const { id, ws } = makeClient(cm);
@@ -273,7 +273,9 @@ export function registerWorkboardCrudTests(): void {
       await db.close();
     }
   });
+}
 
+function registerLinkAndListTests(): void {
   it("handles work.link.create/list and broadcasts work.link.created", async () => {
     const cm = new ConnectionManager();
     const { id, ws } = makeClient(cm);
@@ -470,4 +472,9 @@ export function registerWorkboardCrudTests(): void {
       await db.close();
     }
   });
+}
+
+export function registerWorkboardCrudTests(): void {
+  registerCreateAndOverlapTests();
+  registerLinkAndListTests();
 }

@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";
-import { seedAgentConfig, setupTestEnv, teardownTestEnv, fetch404, DEFAULT_TENANT_ID, migrationsDir } from "./agent-runtime.test-helpers.js";
+import {
+  seedAgentConfig,
+  teardownTestEnv,
+  fetch404,
+  DEFAULT_TENANT_ID,
+  migrationsDir,
+} from "./agent-runtime.test-helpers.js";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -8,9 +14,11 @@ import { createContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
-import type { LanguageModelV3 } from "@ai-sdk/provider";
 import { MockLanguageModelV3 } from "ai/test";
-import { AgentConfig, CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, descriptorIdForClientCapability } from "@tyrum/schemas";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdForClientCapability,
+} from "@tyrum/schemas";
 
 describe("AgentRuntime - desktop dispatch", () => {
   let homeDir: string | undefined;
@@ -243,5 +251,4 @@ describe("AgentRuntime - desktop dispatch", () => {
     expect(row).toBeTruthy();
     expect(row?.uri?.startsWith("artifact://")).toBe(true);
   }, 20_000);
-
 });

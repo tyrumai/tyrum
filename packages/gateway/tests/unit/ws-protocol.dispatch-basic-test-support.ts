@@ -5,10 +5,7 @@ import {
   type ActionPrimitive,
 } from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
-import {
-  dispatchTask,
-  handleClientMessage,
-} from "../../src/ws/protocol.js";
+import { dispatchTask, handleClientMessage } from "../../src/ws/protocol.js";
 import { NoCapableNodeError, NodeNotPairedError } from "../../src/ws/protocol/errors.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import {
@@ -16,17 +13,13 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import {
-  createMockWs,
-  makeDeps,
-  makeClient,
-} from "./ws-protocol.test-support.js";
+import { createMockWs, makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
 /**
  * Basic dispatchTask tests — pairing, readiness, metadata persistence, and cluster filtering.
  * Must be called inside a `describe("dispatchTask")` block.
  */
-export function registerDispatchBasicTests(): void {
+function registerSelectionTests(): void {
   it("never selects a capability-providing client for task.execute", async () => {
     const cm = new ConnectionManager();
     const { ws } = makeClient(cm, ["cli"], { protocolRev: 2 });
@@ -159,7 +152,9 @@ export function registerDispatchBasicTests(): void {
       "dev_test",
     );
   });
+}
 
+function registerMetadataPersistenceTests(): void {
   it("persists execution attempt executor metadata when dispatching to a node", async () => {
     const db = openTestSqliteDb();
     try {
@@ -282,7 +277,9 @@ export function registerDispatchBasicTests(): void {
       await db.close();
     }
   });
+}
 
+function registerReadinessAndClusterTests(): void {
   it("stops dispatching to a paired node when it reports readiness removed", async () => {
     const cm = new ConnectionManager();
     const { ws: nodeWs } = makeClient(cm, ["cli"], {
@@ -529,4 +526,10 @@ export function registerDispatchBasicTests(): void {
     expect(nodeWs.send).not.toHaveBeenCalled();
     expect(outboxDal.enqueue).not.toHaveBeenCalled();
   });
+}
+
+export function registerDispatchBasicTests(): void {
+  registerSelectionTests();
+  registerMetadataPersistenceTests();
+  registerReadinessAndClusterTests();
 }

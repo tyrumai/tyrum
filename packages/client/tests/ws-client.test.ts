@@ -15,9 +15,13 @@ describe("TyrumClient", () => {
 
   const fixture = {
     getServer: () => server,
-    setServer: (s: TestServer) => { server = s; },
+    setServer: (s: TestServer) => {
+      server = s;
+    },
     getClient: () => client,
-    setClient: (c: TyrumClient) => { client = c; },
+    setClient: (c: TyrumClient) => {
+      client = c;
+    },
   };
 
   afterEach(async () => {

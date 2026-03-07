@@ -9,7 +9,7 @@ import {
 import { OperatorUiApp } from "../src/index.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
-export function registerLoginTests(): void {
+function registerLoginFormTests(): void {
   it("disables browser assistance on the login token field", () => {
     const ws = new FakeWsClient(false);
     const { http } = createFakeHttpClient();
@@ -179,7 +179,9 @@ export function registerLoginTests(): void {
     });
     container.remove();
   });
+}
 
+function registerLoginErrorTests(): void {
   it("surfaces gateway errors when login fails", async () => {
     const fetchMock = vi.fn(async () => {
       return new Response(JSON.stringify({ error: "unauthorized", message: "invalid token" }), {
@@ -443,4 +445,9 @@ export function registerLoginTests(): void {
       vi.useRealTimers();
     }
   });
+}
+
+export function registerLoginTests(): void {
+  registerLoginFormTests();
+  registerLoginErrorTests();
 }

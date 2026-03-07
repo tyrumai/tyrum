@@ -3,7 +3,10 @@ import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 import type { AgentRuntimeOptions } from "./types.js";
 import { buildDefaultAgentConfig } from "../default-config.js";
 import { AgentConfigDal } from "../../config/agent-config-dal.js";
-import { MemoryV1SemanticIndex, type MemoryV1SemanticSearchHit } from "../../memory/v1-semantic-index.js";
+import {
+  MemoryV1SemanticIndex,
+  type MemoryV1SemanticSearchHit,
+} from "../../memory/v1-semantic-index.js";
 import { ScheduleService } from "../../automation/schedule-service.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import type { SecretProvider } from "../../secret/provider.js";

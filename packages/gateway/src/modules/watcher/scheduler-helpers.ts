@@ -1,4 +1,9 @@
-import type { ActionPrimitive, Lane as LaneT, Playbook, PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
+import type {
+  ActionPrimitive,
+  Lane as LaneT,
+  Playbook,
+  PolicyBundle as PolicyBundleT,
+} from "@tyrum/schemas";
 import { ActionPrimitive as ActionPrimitiveSchema, PolicyBundle } from "@tyrum/schemas";
 import {
   defaultHeartbeatInstruction,

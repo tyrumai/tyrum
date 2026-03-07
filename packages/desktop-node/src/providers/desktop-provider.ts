@@ -16,7 +16,7 @@ import {
 import { DEFAULT_A11Y_MAX_DEPTH, pruneUiTree } from "./a11y/prune-ui-tree.js";
 import type { DesktopA11yBackend } from "./backends/desktop-a11y-backend.js";
 import type { DesktopBackend } from "./backends/desktop-backend.js";
-import type { OcrEngine } from "./ocr/types.js";
+import type { OcrEngine, OcrMatch } from "./ocr/types.js";
 
 import {
   type PixelPoint,

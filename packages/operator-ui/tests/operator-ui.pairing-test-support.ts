@@ -1,10 +1,7 @@
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import {
-  createBearerTokenAuth,
-  createOperatorCore,
-} from "../../operator-core/src/index.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
 import * as operatorUi from "../src/index.js";
 import { PairingPage } from "../src/components/pages/pairing-page.js";
@@ -16,7 +13,7 @@ import {
   samplePairingRequestApproved,
 } from "./operator-ui.test-fixtures.js";
 
-export function registerPairingTests(): void {
+function registerPairingApproveTests(): void {
   it("lists and approves pairing requests", async () => {
     const ws = new FakeWsClient();
     const { http, pairingsList, pairingsApprove } = createFakeHttpClient();
@@ -341,7 +338,9 @@ export function registerPairingTests(): void {
     });
     container.remove();
   });
+}
 
+function registerPairingDenyRevokeTests(): void {
   it("renders pairing empty state when no pending requests", async () => {
     const ws = new FakeWsClient();
     const { http, pairingsList } = createFakeHttpClient();
@@ -528,4 +527,9 @@ export function registerPairingTests(): void {
     });
     container.remove();
   });
+}
+
+export function registerPairingTests(): void {
+  registerPairingApproveTests();
+  registerPairingDenyRevokeTests();
 }

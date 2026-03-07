@@ -275,10 +275,7 @@ export async function handleIntakeModeDecision(
     throw new Error("missing work_session_key metadata for delegated work");
   }
 
-  const workboard = new WorkboardDal(
-    deps.container.db,
-    deps.container.redactionEngine,
-  );
+  const workboard = new WorkboardDal(deps.container.db, deps.container.redactionEngine);
   const title = deriveWorkItemTitle(intakeModeDecision.body);
   const kind = intakeModeDecision.mode === "delegate_plan" ? "initiative" : "action";
 

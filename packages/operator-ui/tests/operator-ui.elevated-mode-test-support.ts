@@ -2,10 +2,7 @@ import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
-import {
-  createBearerTokenAuth,
-  createOperatorCore,
-} from "../../operator-core/src/index.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { ElevatedModeGate, ElevatedModeProvider, OperatorUiApp } from "../src/index.js";
 import {
   TEST_DEVICE_IDENTITY,
@@ -14,7 +11,7 @@ import {
 } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
-export function registerElevatedModeTests(): void {
+function registerElevatedModeBasicTests(): void {
   it("shows an Elevated Mode frame and allows exit", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
@@ -178,7 +175,9 @@ export function registerElevatedModeTests(): void {
     });
     container.remove();
   });
+}
 
+function registerElevatedModePersistTests(): void {
   it("uses a provided elevated mode controller to enter persistent mode and persist it", async () => {
     const { session, local } = stubPersistentStorage();
 
@@ -500,7 +499,9 @@ export function registerElevatedModeTests(): void {
     });
     container.remove();
   });
+}
 
+function registerElevatedModeDisconnectTests(): void {
   it("keeps elevated mode active and shows a toast when controller exit fails", async () => {
     const toastError = vi.spyOn(toast, "error");
     const ws = new FakeWsClient();
@@ -561,4 +562,10 @@ export function registerElevatedModeTests(): void {
     });
     container.remove();
   });
+}
+
+export function registerElevatedModeTests(): void {
+  registerElevatedModeBasicTests();
+  registerElevatedModePersistTests();
+  registerElevatedModeDisconnectTests();
 }

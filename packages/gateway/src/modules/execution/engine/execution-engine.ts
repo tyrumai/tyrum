@@ -395,15 +395,4 @@ export class ExecutionEngine {
   ): Promise<StepResult> {
     return await executeWithTimeoutFn(executor, action, planId, stepIndex, timeoutMs, context);
   }
-
-  private async maybePauseForToolIntentGuardrailTx(
-    tx: SqlDb,
-    opts: Parameters<typeof maybePauseForToolIntentGuardrailTx>[2],
-  ): Promise<Awaited<ReturnType<typeof maybePauseForToolIntentGuardrailTx>>> {
-    return await maybePauseForToolIntentGuardrailTx(
-      { logger: this.logger, approvalManager: this.approvalManager },
-      tx,
-      opts,
-    );
-  }
 }

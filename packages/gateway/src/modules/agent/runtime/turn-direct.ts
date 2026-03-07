@@ -37,9 +37,15 @@ import type { ApprovalDal } from "../../approval/dal.js";
 import type { SecretProvider } from "../../secret/provider.js";
 import { handleStatusQuery, throwToolApprovalError } from "./turn-direct-helpers.js";
 
-export { handleStatusQuery, throwToolApprovalError, maybeStoreToolApprovalArgsHandle } from "./turn-direct-helpers.js";
+export {
+  handleStatusQuery,
+  throwToolApprovalError,
+  maybeStoreToolApprovalArgsHandle,
+} from "./turn-direct-helpers.js";
 
-export function makeEventfulAbortSignal(upstream: AbortSignal | undefined): AbortSignal | undefined {
+export function makeEventfulAbortSignal(
+  upstream: AbortSignal | undefined,
+): AbortSignal | undefined {
   if (!upstream) return undefined;
   const controller = new AbortController();
 
@@ -149,9 +155,19 @@ export async function turnDirect(
   const abortSignal = makeEventfulAbortSignal(turnOpts?.abortSignal);
   const prepared = await prepareTurn(deps.prepareTurnDeps, input, turnOpts?.execution);
   const {
-    ctx, executionProfile, session, mainLaneSessionKey, model,
-    toolSet, toolCallPolicyStates, laneQueue, usedTools, userContent,
-    contextReport, systemPrompt, resolved,
+    ctx,
+    executionProfile,
+    session,
+    mainLaneSessionKey,
+    model,
+    toolSet,
+    toolCallPolicyStates,
+    laneQueue,
+    usedTools,
+    userContent,
+    contextReport,
+    systemPrompt,
+    resolved,
   } = prepared;
 
   const workScope: WorkScope = {
@@ -163,8 +179,14 @@ export async function turnDirect(
   if (isStatusQuery(resolved.message)) {
     const reply = await handleStatusQuery(deps.opts.container, workScope);
     const response = await finalizeTurn({
-      container: deps.opts.container, sessionDal: deps.sessionDal,
-      ctx, session, resolved, reply, usedTools, contextReport,
+      container: deps.opts.container,
+      sessionDal: deps.sessionDal,
+      ctx,
+      session,
+      resolved,
+      reply,
+      usedTools,
+      contextReport,
     });
     return { response, contextReport };
   }
@@ -175,8 +197,14 @@ export async function turnDirect(
   );
   if (intakeResult) {
     const response = await finalizeTurn({
-      container: deps.opts.container, sessionDal: deps.sessionDal,
-      ctx, session, resolved, reply: intakeResult.reply, usedTools, contextReport,
+      container: deps.opts.container,
+      sessionDal: deps.sessionDal,
+      ctx,
+      session,
+      resolved,
+      reply: intakeResult.reply,
+      usedTools,
+      contextReport,
     });
     return { response, contextReport };
   }
@@ -189,13 +217,23 @@ export async function turnDirect(
     const delegation = await delegateFromIntake(
       { agentId: deps.agentId, container: deps.opts.container },
       {
-        executionProfile, mode: intake.mode, reason_code: intake.reason_code, resolved,
-        scope: workScope, createdFromSessionKey: mainLaneSessionKey,
+        executionProfile,
+        mode: intake.mode,
+        reason_code: intake.reason_code,
+        resolved,
+        scope: workScope,
+        createdFromSessionKey: mainLaneSessionKey,
       },
     );
     const response = await finalizeTurn({
-      container: deps.opts.container, sessionDal: deps.sessionDal,
-      ctx, session, resolved, reply: delegation.reply, usedTools, contextReport,
+      container: deps.opts.container,
+      sessionDal: deps.sessionDal,
+      ctx,
+      session,
+      resolved,
+      reply: delegation.reply,
+      usedTools,
+      contextReport,
     });
     return { response, contextReport };
   }
@@ -245,8 +283,14 @@ export async function turnDirect(
     const automation = resolveAutomationMetadata(resolved.metadata);
     const reply = automation?.delivery_mode === "quiet" ? "" : "No assistant response returned.";
     const response = await finalizeTurn({
-      container: deps.opts.container, sessionDal: deps.sessionDal,
-      ctx, session, resolved, reply, usedTools, contextReport,
+      container: deps.opts.container,
+      sessionDal: deps.sessionDal,
+      ctx,
+      session,
+      resolved,
+      reply,
+      usedTools,
+      contextReport,
     });
     return { response, contextReport };
   }
@@ -255,13 +299,20 @@ export async function turnDirect(
   const { stopWhen, withinTurnLoop } = createStopWhenWithWithinTurnLoopDetection(
     deps.opts.container.logger,
     {
-      stepLimit: remainingSteps, withinTurnCfg,
-      sessionId: session.session_id, channel: resolved.channel, threadId: resolved.thread_id,
+      stepLimit: remainingSteps,
+      withinTurnCfg,
+      sessionId: session.session_id,
+      channel: resolved.channel,
+      threadId: resolved.thread_id,
     },
   );
 
   const result = await generateText({
-    model, system: systemPrompt, messages, tools: toolSet, stopWhen,
+    model,
+    system: systemPrompt,
+    messages,
+    tools: toolSet,
+    stopWhen,
     prepareStep: ({ messages: stepMessages }) =>
       prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
     abortSignal,
@@ -276,9 +327,19 @@ export async function turnDirect(
 
   if (approvalPart) {
     await throwToolApprovalError(
-      { approvalWaitMs: deps.approvalWaitMs, secretProvider: deps.secretProvider, agentId: deps.agentId },
-      approvalPart, toolCallPolicyStates, session, resolved,
-      usedTools, stepsUsedAfterCall, messages, result,
+      {
+        approvalWaitMs: deps.approvalWaitMs,
+        secretProvider: deps.secretProvider,
+        agentId: deps.agentId,
+      },
+      approvalPart,
+      toolCallPolicyStates,
+      session,
+      resolved,
+      usedTools,
+      stepsUsedAfterCall,
+      messages,
+      result,
     );
   }
 
@@ -288,8 +349,14 @@ export async function turnDirect(
     allowEmpty: automation?.delivery_mode === "quiet",
   });
   const response = await finalizeTurn({
-    container: deps.opts.container, sessionDal: deps.sessionDal,
-    ctx, session, resolved, reply, usedTools, contextReport,
+    container: deps.opts.container,
+    sessionDal: deps.sessionDal,
+    ctx,
+    session,
+    resolved,
+    reply,
+    usedTools,
+    contextReport,
   });
   return { response, contextReport };
 }
@@ -307,8 +374,18 @@ export async function turnStreamDirect(
 ): Promise<TurnStreamDirectResult> {
   const prepared = await prepareTurn(deps.prepareTurnDeps, input);
   const {
-    ctx, executionProfile, session, mainLaneSessionKey, model,
-    toolSet, laneQueue, usedTools, userContent, contextReport, systemPrompt, resolved,
+    ctx,
+    executionProfile,
+    session,
+    mainLaneSessionKey,
+    model,
+    toolSet,
+    laneQueue,
+    usedTools,
+    userContent,
+    contextReport,
+    systemPrompt,
+    resolved,
   } = prepared;
 
   const intake = await resolveIntakeDecision(
@@ -319,14 +396,27 @@ export async function turnStreamDirect(
     const delegation = await delegateFromIntake(
       { agentId: deps.agentId, container: deps.opts.container },
       {
-        executionProfile, mode: intake.mode, reason_code: intake.reason_code, resolved,
-        scope: { tenant_id: session.tenant_id, agent_id: session.agent_id, workspace_id: session.workspace_id },
+        executionProfile,
+        mode: intake.mode,
+        reason_code: intake.reason_code,
+        resolved,
+        scope: {
+          tenant_id: session.tenant_id,
+          agent_id: session.agent_id,
+          workspace_id: session.workspace_id,
+        },
         createdFromSessionKey: mainLaneSessionKey,
       },
     );
     const response = await finalizeTurn({
-      container: deps.opts.container, sessionDal: deps.sessionDal,
-      ctx, session, resolved, reply: delegation.reply, usedTools, contextReport,
+      container: deps.opts.container,
+      sessionDal: deps.sessionDal,
+      ctx,
+      session,
+      resolved,
+      reply: delegation.reply,
+      usedTools,
+      contextReport,
     });
 
     const streamResult = streamText({
@@ -336,7 +426,12 @@ export async function turnStreamDirect(
       stopWhen: [stepCountIs(1)],
     });
 
-    return { streamResult, sessionId: session.session_id, contextReport, finalize: async () => response };
+    return {
+      streamResult,
+      sessionId: session.session_id,
+      contextReport,
+      finalize: async () => response,
+    };
   }
 
   await maybeRunPreCompactionMemoryFlush(
@@ -348,15 +443,20 @@ export async function turnStreamDirect(
   const { stopWhen, withinTurnLoop } = createStopWhenWithWithinTurnLoopDetection(
     deps.opts.container.logger,
     {
-      stepLimit: deps.maxSteps, withinTurnCfg,
-      sessionId: session.session_id, channel: resolved.channel, threadId: resolved.thread_id,
+      stepLimit: deps.maxSteps,
+      withinTurnCfg,
+      sessionId: session.session_id,
+      channel: resolved.channel,
+      threadId: resolved.thread_id,
     },
   );
 
   const streamResult = streamText({
-    model, system: systemPrompt,
+    model,
+    system: systemPrompt,
     messages: [{ role: "user" as const, content: userContent }],
-    tools: toolSet, stopWhen,
+    tools: toolSet,
+    stopWhen,
     prepareStep: ({ messages: stepMessages }) =>
       prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
   });
@@ -369,8 +469,14 @@ export async function turnStreamDirect(
       allowEmpty: automation?.delivery_mode === "quiet",
     });
     return await finalizeTurn({
-      container: deps.opts.container, sessionDal: deps.sessionDal,
-      ctx, session, resolved, reply, usedTools, contextReport,
+      container: deps.opts.container,
+      sessionDal: deps.sessionDal,
+      ctx,
+      session,
+      resolved,
+      reply,
+      usedTools,
+      contextReport,
     });
   };
 

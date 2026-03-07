@@ -1,7 +1,11 @@
 import { expect, it, vi } from "vitest";
 import { PolicyBundle } from "@tyrum/schemas";
-import type { StepExecutor, StepResult } from "../../src/modules/execution/engine.js";
-import { ExecutionEngine } from "../../src/modules/execution/engine.js";
+import {
+  ExecutionEngine,
+  type StepExecutor,
+  type StepResult,
+} from "../../src/modules/execution/engine.js";
+import { maybePauseForToolIntentGuardrailTx } from "../../src/modules/execution/engine/execution-engine-intent-guardrail.js";
 import {
   sha256HexFromString,
   stableJsonStringify,
@@ -9,11 +13,6 @@ import {
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
-import {
-  DEFAULT_AGENT_ID,
-  DEFAULT_TENANT_ID,
-  DEFAULT_WORKSPACE_ID,
-} from "../../src/modules/identity/scope.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import {
   action,
@@ -21,17 +20,15 @@ import {
   drain,
   mockCallCount,
   AbortableTx,
+  DEFAULT_SCOPE,
+  DEFAULT_TENANT_ID,
 } from "./execution-engine.test-support.js";
 
 export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): void {
   it("pauses side-effecting steps when ToolIntent is missing for a work item run", async () => {
     const db = fixture.db();
     const workboard = new WorkboardDal(db);
-    const scope = {
-      tenant_id: DEFAULT_TENANT_ID,
-      agent_id: DEFAULT_AGENT_ID,
-      workspace_id: DEFAULT_WORKSPACE_ID,
-    } as const;
+    const scope = DEFAULT_SCOPE;
     const item = await workboard.createItem({
       scope,
       item: {
@@ -92,11 +89,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
   it("executes after an intent approval even when ToolIntent is still missing", async () => {
     const db = fixture.db();
     const workboard = new WorkboardDal(db);
-    const scope = {
-      tenant_id: DEFAULT_TENANT_ID,
-      agent_id: DEFAULT_AGENT_ID,
-      workspace_id: DEFAULT_WORKSPACE_ID,
-    } as const;
+    const scope = DEFAULT_SCOPE;
     const item = await workboard.createItem({
       scope,
       item: {
@@ -151,11 +144,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
   it("pauses even if intent guardrail evidence writes fail (Postgres aborted tx simulation)", async () => {
     const db = fixture.db();
     const workboard = new WorkboardDal(db);
-    const scope = {
-      tenant_id: DEFAULT_TENANT_ID,
-      agent_id: DEFAULT_AGENT_ID,
-      workspace_id: DEFAULT_WORKSPACE_ID,
-    } as const;
+    const scope = DEFAULT_SCOPE;
     const item = await workboard.createItem({
       scope,
       item: {
@@ -193,14 +182,18 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       );
       expect(run).toBeTruthy();
       expect(step).toBeTruthy();
-      const paused = await (engine as any).maybePauseForToolIntentGuardrailTx(tx, {
-        run,
-        step,
-        actionType: "Http",
-        action: undefined,
-        clock: { nowMs: Date.now(), nowIso: new Date().toISOString() },
-        workerId: "w1",
-      });
+      const paused = await maybePauseForToolIntentGuardrailTx(
+        { approvalManager: (engine as any).approvalManager },
+        tx,
+        {
+          run,
+          step,
+          actionType: "Http",
+          action: undefined,
+          clock: { nowMs: Date.now(), nowIso: new Date().toISOString() },
+          workerId: "w1",
+        },
+      );
       expect(paused?.approvalId).toBeTypeOf("string");
     });
     const run = await db.get<{ status: string; paused_reason: string | null }>(
@@ -220,11 +213,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
   it("pauses when ToolIntent intent_graph_sha256 does not match the current work item intent graph", async () => {
     const db = fixture.db();
     const workboard = new WorkboardDal(db);
-    const scope = {
-      tenant_id: DEFAULT_TENANT_ID,
-      agent_id: DEFAULT_AGENT_ID,
-      workspace_id: DEFAULT_WORKSPACE_ID,
-    } as const;
+    const scope = DEFAULT_SCOPE;
     const item = await workboard.createItem({
       scope,
       item: {
@@ -300,11 +289,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
   it("executes side-effecting steps when ToolIntent matches the current work item intent graph", async () => {
     const db = fixture.db();
     const workboard = new WorkboardDal(db);
-    const scope = {
-      tenant_id: DEFAULT_TENANT_ID,
-      agent_id: DEFAULT_AGENT_ID,
-      workspace_id: DEFAULT_WORKSPACE_ID,
-    } as const;
+    const scope = DEFAULT_SCOPE;
     const item = await workboard.createItem({
       scope,
       item: {
@@ -388,11 +373,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
   it("does not treat an approved intent approval as a policy approval", async () => {
     const db = fixture.db();
     const workboard = new WorkboardDal(db);
-    const scope = {
-      tenant_id: DEFAULT_TENANT_ID,
-      agent_id: DEFAULT_AGENT_ID,
-      workspace_id: DEFAULT_WORKSPACE_ID,
-    } as const;
+    const scope = DEFAULT_SCOPE;
     const item = await workboard.createItem({
       scope,
       item: {

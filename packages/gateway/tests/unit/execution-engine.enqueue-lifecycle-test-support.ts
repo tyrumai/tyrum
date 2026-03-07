@@ -5,7 +5,7 @@ import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/ident
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { action, enqueuePlan, drain, mockCallCount } from "./execution-engine.test-support.js";
 
-export function registerEnqueueLifecycleTests(fixture: { db: () => SqliteDb }): void {
+function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
   it("creates normalized execution records for a plan", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
@@ -175,7 +175,9 @@ export function registerEnqueueLifecycleTests(fixture: { db: () => SqliteDb }): 
     expect(trigger.kind).toBe("webhook");
     expect(trigger.lane).toBe("cron");
   });
+}
 
+function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
   it("emits run.started and run.completed when a run succeeds", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({
@@ -339,4 +341,9 @@ export function registerEnqueueLifecycleTests(fixture: { db: () => SqliteDb }): 
     );
     expect(duplicatedWorkspace).toBeUndefined();
   });
+}
+
+export function registerEnqueueLifecycleTests(fixture: { db: () => SqliteDb }): void {
+  registerEnqueueTests(fixture);
+  registerLifecycleTests(fixture);
 }

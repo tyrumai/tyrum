@@ -25,10 +25,7 @@ import {
   verifyPluginIntegrity,
 } from "./registry-manifest-helpers.js";
 import { validatePluginConfig } from "./registry-schema-helpers.js";
-import type {
-  LoadedPlugin,
-  PluginToolRegistration,
-} from "./registry-types.js";
+import type { LoadedPlugin, PluginToolRegistration } from "./registry-types.js";
 
 export type {
   PluginCommandContext,

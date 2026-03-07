@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
+import { resolveSessionModel } from "../../src/modules/agent/runtime/session-model-resolution.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -75,27 +76,20 @@ describe("AgentRuntime language model wrapper metadata", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
-      container,
-      agentId: "agent-1",
-      fetchImpl,
-    });
-
-    const model = await (
-      runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }
-    ).resolveSessionModel({
-      config: {
-        model: {
-          model: "openai/gpt-4.1",
-          options: {},
+    const model = await resolveSessionModel(
+      { container, secretProvider: undefined, oauthLeaseOwner: "test", fetchImpl },
+      {
+        config: {
+          model: {
+            model: "openai/gpt-4.1",
+            options: {},
+          },
         },
+        tenantId: "default",
+        sessionId: "session-1",
+        fetchImpl,
       },
-      sessionId: "session-1",
-      fetchImpl,
-    });
+    );
 
     expect(model.provider).toBe("openai");
     expect(model.modelId).toBe("gpt-4.1");

@@ -21,7 +21,7 @@ import {
   mockCallCount,
 } from "./execution-engine.test-support.js";
 
-export function registerRetryCancelTests(fixture: { db: () => SqliteDb }): void {
+function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
   it("emits run.cancelled when a run is cancelled", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
@@ -218,7 +218,9 @@ export function registerRetryCancelTests(fixture: { db: () => SqliteDb }): void 
     );
     expect(tokenRow!.revoked_at).not.toBeNull();
   });
+}
 
+function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb }): void {
   it("short-circuits execution when an idempotency record already succeeded", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
@@ -453,4 +455,9 @@ export function registerRetryCancelTests(fixture: { db: () => SqliteDb }): void 
     );
     expect(remainingLaneLease?.n).toBe(0);
   });
+}
+
+export function registerRetryCancelTests(fixture: { db: () => SqliteDb }): void {
+  registerCancelAndRetryTests(fixture);
+  registerIdempotencyAndConcurrencyTests(fixture);
 }

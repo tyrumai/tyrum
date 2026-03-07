@@ -6,7 +6,7 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { action, enqueuePlan, drain, mockCallCount } from "./execution-engine.test-support.js";
 
-export function registerBudgetPauseTests(fixture: { db: () => SqliteDb }): void {
+function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
   it("does not reset started_at or re-emit run.started when resuming a paused run", async () => {
     const db = fixture.db();
     const startedAtIso = "2026-02-24T00:00:00.000Z";
@@ -178,7 +178,9 @@ export function registerBudgetPauseTests(fixture: { db: () => SqliteDb }): void 
     expect(types).toContain("run.cancelled");
     expect(types).not.toContain("run.resumed");
   });
+}
 
+function registerApprovalResumeTests(fixture: { db: () => SqliteDb }): void {
   it("pauses and resumes when the executor returns an approval request", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({
@@ -318,4 +320,9 @@ export function registerBudgetPauseTests(fixture: { db: () => SqliteDb }): void 
     );
     expect(after?.revoked_at).toBe(nowIso);
   });
+}
+
+export function registerBudgetPauseTests(fixture: { db: () => SqliteDb }): void {
+  registerBudgetTests(fixture);
+  registerApprovalResumeTests(fixture);
 }

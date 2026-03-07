@@ -2,14 +2,11 @@ import { randomUUID } from "node:crypto";
 import { expect, it, vi } from "vitest";
 import { executeCommand } from "../../src/modules/commands/dispatcher.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
-import {
-  DEFAULT_AGENT_ID,
-  DEFAULT_TENANT_ID,
-} from "../../src/modules/identity/scope.js";
+import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { SlashCommandFixture } from "./command-slash-commands-missing.test-support.js";
 
-export function registerCommandsTests(fixture: SlashCommandFixture): void {
+function registerPolicyAndUsageTests(fixture: SlashCommandFixture): void {
   it("supports /policy overrides describe <policy_override_id>", async () => {
     const db = fixture.openDb();
     const policyOverrideDal = new PolicyOverrideDal(db);
@@ -138,7 +135,9 @@ export function registerCommandsTests(fixture: SlashCommandFixture): void {
     expect(result.output).toBe("Provider usage polling is not available on this gateway instance.");
     expect(result.data).toBeNull();
   });
+}
 
+function registerQueueAndIntakeTests(fixture: SlashCommandFixture): void {
   it("supports /queue <collect|followup|steer|steer_backlog|interrupt>", async () => {
     const db = fixture.openDb();
 
@@ -336,4 +335,9 @@ export function registerCommandsTests(fixture: SlashCommandFixture): void {
       queue_mode: "interrupt",
     });
   });
+}
+
+export function registerCommandsTests(fixture: SlashCommandFixture): void {
+  registerPolicyAndUsageTests(fixture);
+  registerQueueAndIntakeTests(fixture);
 }

@@ -5,7 +5,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { makeDeps, makeClient } from "./ws-workboard.test-support.js";
 
-export function registerWorkboardWipArtifactTests(): void {
+function registerCompletionNotificationTests(): void {
   it("enqueues a channel completion notification when last_active_session_key is a channel session", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm);
@@ -105,7 +105,9 @@ export function registerWorkboardWipArtifactTests(): void {
       await db.close();
     }
   });
+}
 
+function registerWipAndArtifactTests(): void {
   it("enforces WIP limit across transition requests", async () => {
     const cm = new ConnectionManager();
     const { id, ws } = makeClient(cm);
@@ -306,4 +308,9 @@ export function registerWorkboardWipArtifactTests(): void {
       await db.close();
     }
   });
+}
+
+export function registerWorkboardWipArtifactTests(): void {
+  registerCompletionNotificationTests();
+  registerWipAndArtifactTests();
 }

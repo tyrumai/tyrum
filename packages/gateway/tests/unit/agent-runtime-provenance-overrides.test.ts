@@ -1,16 +1,27 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";
-import { makeContextReport, createToolSetBuilder, setupTestEnv, teardownTestEnv, fetch404, DEFAULT_WORKSPACE_ID, migrationsDir } from "./agent-runtime.test-helpers.js";
+import {
+  makeContextReport,
+  createToolSetBuilder,
+  teardownTestEnv,
+  DEFAULT_WORKSPACE_ID,
+  migrationsDir,
+} from "./agent-runtime.test-helpers.js";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createContainer } from "../../src/container.js";
-import { ToolSetBuilder } from "../../src/modules/agent/runtime/tool-set-builder.js";
 import { awaitApprovalForToolExecution } from "../../src/modules/agent/runtime/tool-set-builder-helpers.js";
 
 vi.mock("../../src/modules/agent/runtime/tool-set-builder-helpers.js", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../../src/modules/agent/runtime/tool-set-builder-helpers.js")>();
-  return { ...original, awaitApprovalForToolExecution: vi.fn(original.awaitApprovalForToolExecution) };
+  const original =
+    await importOriginal<
+      typeof import("../../src/modules/agent/runtime/tool-set-builder-helpers.js")
+    >();
+  return {
+    ...original,
+    awaitApprovalForToolExecution: vi.fn(original.awaitApprovalForToolExecution),
+  };
 });
 
 describe("AgentRuntime - provenance and policy overrides", () => {
@@ -428,5 +439,4 @@ describe("AgentRuntime - provenance and policy overrides", () => {
       | undefined;
     expect(policyContext?.suggested_overrides).toBeUndefined();
   });
-
 });

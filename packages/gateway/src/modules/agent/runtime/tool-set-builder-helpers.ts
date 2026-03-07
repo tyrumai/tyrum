@@ -104,7 +104,14 @@ export type ApprovalDecisionResult = {
 export async function awaitApprovalForToolExecution(
   deps: Pick<
     ToolSetBuilderDeps,
-    "tenantId" | "agentId" | "workspaceId" | "approvalDal" | "approvalNotifier" | "approvalWaitMs" | "approvalPollMs" | "logger"
+    | "tenantId"
+    | "agentId"
+    | "workspaceId"
+    | "approvalDal"
+    | "approvalNotifier"
+    | "approvalWaitMs"
+    | "approvalPollMs"
+    | "logger"
   >,
   tool: ToolDescriptor,
   args: unknown,

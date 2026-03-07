@@ -22,10 +22,14 @@ import {
   waitForOpen,
 } from "./ws-handler.test-support.js";
 
-export function registerWsHandlerDeviceTests(ctx: TestContext): void {
+function registerDeviceProofTests(ctx: TestContext): void {
   it("supports connect.init/connect.proof with device identity proof", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -121,7 +125,11 @@ export function registerWsHandlerDeviceTests(ctx: TestContext): void {
 
   it("rejects connect.init when protocol_rev is unsupported", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -176,7 +184,9 @@ export function registerWsHandlerDeviceTests(ctx: TestContext): void {
     expect(connectionManager.getStats().totalClients).toBe(0);
     stopHeartbeat();
   });
+}
 
+function registerDeviceTokenTests(ctx: TestContext): void {
   it("rejects legacy connect handshake when using a device token", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
     const { container, authTokens } = await createAuthTokens(ctx.homeDir!);
@@ -371,4 +381,9 @@ export function registerWsHandlerDeviceTests(ctx: TestContext): void {
 
     stopHeartbeat();
   });
+}
+
+export function registerWsHandlerDeviceTests(ctx: TestContext): void {
+  registerDeviceProofTests(ctx);
+  registerDeviceTokenTests(ctx);
 }

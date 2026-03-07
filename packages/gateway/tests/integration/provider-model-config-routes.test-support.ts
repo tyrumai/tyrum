@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { expect } from "vitest";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import type { createTestApp } from "./helpers.js";

@@ -1,10 +1,7 @@
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import {
-  createBearerTokenAuth,
-  createOperatorCore,
-} from "../../operator-core/src/index.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
 import {
   FakeWsClient,
@@ -12,7 +9,7 @@ import {
   sampleApprovalPending,
 } from "./operator-ui.test-fixtures.js";
 
-export function registerDashboardNavTests(): void {
+function registerDashboardTests(): void {
   it("refreshes and displays status on the dashboard", async () => {
     const ws = new FakeWsClient();
     ws.approvalList.mockResolvedValue({
@@ -198,7 +195,9 @@ export function registerDashboardNavTests(): void {
       }
     }
   });
+}
 
+function registerNavShortcutTests(): void {
   it("supports Cmd/Ctrl+1-7 page navigation shortcuts across the primary routes", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -280,4 +279,9 @@ export function registerDashboardNavTests(): void {
     });
     container.remove();
   });
+}
+
+export function registerDashboardNavTests(): void {
+  registerDashboardTests();
+  registerNavShortcutTests();
 }

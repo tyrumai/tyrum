@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";
-import { setupTestEnv, teardownTestEnv, fetch404, migrationsDir } from "./agent-runtime.test-helpers.js";
+import { teardownTestEnv, fetch404, migrationsDir } from "./agent-runtime.test-helpers.js";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -298,5 +298,4 @@ describe("AgentRuntime - context reports and identity keys", () => {
     expect(run).toBeTruthy();
     expect(run!.key).toBe("agent:default:test:work:channel:thread-1");
   });
-
 });

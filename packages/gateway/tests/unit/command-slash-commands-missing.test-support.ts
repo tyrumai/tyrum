@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { SessionDal } from "../../src/modules/agent/session-dal.js";
@@ -137,7 +136,9 @@ export function createSlashCommandFixture(): SlashCommandFixture {
 
   return {
     db: () => db,
-    setDb: (value) => { db = value; },
+    setDb: (value) => {
+      db = value;
+    },
     openDb,
     ensureSession,
     insertChannelInboxRow,

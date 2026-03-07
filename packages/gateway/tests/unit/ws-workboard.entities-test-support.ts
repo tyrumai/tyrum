@@ -4,7 +4,7 @@ import { handleClientMessage } from "../../src/ws/protocol.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { makeDeps, makeClient } from "./ws-workboard.test-support.js";
 
-export function registerWorkboardEntityTests(): void {
+function registerDecisionAndSignalTests(): void {
   it("handles work.decision.create/list/get and broadcasts work.decision.created", async () => {
     const cm = new ConnectionManager();
     const { id, ws } = makeClient(cm);
@@ -226,7 +226,9 @@ export function registerWorkboardEntityTests(): void {
       await db.close();
     }
   });
+}
 
+function registerStateKvTests(): void {
   it("handles work.state_kv.set/get/list and broadcasts work.state_kv.updated", async () => {
     const cm = new ConnectionManager();
     const { id, ws } = makeClient(cm);
@@ -299,4 +301,9 @@ export function registerWorkboardEntityTests(): void {
       await db.close();
     }
   });
+}
+
+export function registerWorkboardEntityTests(): void {
+  registerDecisionAndSignalTests();
+  registerStateKvTests();
 }

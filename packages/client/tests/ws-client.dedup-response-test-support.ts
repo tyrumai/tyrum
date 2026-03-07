@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { TyrumClient } from "../src/ws-client.js";
 import {
   type TestServer,
@@ -9,12 +9,14 @@ import {
   withTimeout,
 } from "./ws-client.test-support.js";
 
-export function registerDedupResponseTests(fixture: {
+type DedupFixture = {
   getServer: () => TestServer | undefined;
   setServer: (s: TestServer) => void;
   getClient: () => TyrumClient | undefined;
   setClient: (c: TyrumClient) => void;
-}): void {
+};
+
+function registerDedupRequestTests(fixture: DedupFixture): void {
   it("dedupes task.execute request retries by request_id across reconnect", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -211,7 +213,9 @@ export function registerDedupResponseTests(fixture: {
     const response2 = await response2P;
     expect(response2).toEqual(response1);
   });
+}
 
+function registerDedupEventTests(fixture: DedupFixture): void {
   it("dedupes events by event_id", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -454,4 +458,9 @@ export function registerDedupResponseTests(fixture: {
       result: { approved: false, reason: "too risky" },
     });
   });
+}
+
+export function registerDedupResponseTests(fixture: DedupFixture): void {
+  registerDedupRequestTests(fixture);
+  registerDedupEventTests(fixture);
 }

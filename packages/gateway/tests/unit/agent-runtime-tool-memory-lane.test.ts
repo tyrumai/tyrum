@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";
-import { setupTestEnv, teardownTestEnv, fetch404, DEFAULT_AGENT_ID, DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID, migrationsDir } from "./agent-runtime.test-helpers.js";
+import {
+  teardownTestEnv,
+  fetch404,
+  DEFAULT_TENANT_ID,
+  migrationsDir,
+} from "./agent-runtime.test-helpers.js";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -10,7 +15,6 @@ import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { LaneQueueSignalDal } from "../../src/modules/lanes/queue-signal-dal.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { resolveExecutionProfile } from "../../src/modules/agent/runtime/intake-delegation.js";
-import type { LanguageModelV3 } from "@ai-sdk/provider";
 import { createStubLanguageModel } from "./stub-language-model.js";
 import { MockLanguageModelV3 } from "ai/test";
 
@@ -92,7 +96,8 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
       .spyOn(WorkboardDal.prototype, "getSubagent")
       .mockRejectedValue(new Error("boom"));
 
-    const runtime = new AgentRuntime({
+    // Construct runtime to ensure container is initialized for the test scope.
+    void new AgentRuntime({
       container,
       home: homeDir,
       languageModel: createStubLanguageModel("hello"),
@@ -429,5 +434,4 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     );
     expect(inboxCompleted?.n).toBe(0);
   }, 10_000);
-
 });

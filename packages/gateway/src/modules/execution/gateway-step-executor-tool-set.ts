@@ -19,7 +19,7 @@ import {
   resolveSecretScopesFromArgs,
 } from "./gateway-step-executor-helpers.js";
 
-export function buildToolSet(input: {
+type BuildToolSetInput = {
   planId: string;
   stepIndex: number;
   timeoutMs: number;
@@ -31,12 +31,10 @@ export function buildToolSet(input: {
   container: GatewayContainer;
   secretProvider?: SecretProvider;
   toolCallPolicyStates: Map<string, ToolCallPolicyState>;
-}): ToolSet {
-  const allowed = new Set(input.allowedToolIds);
-  const tools: Record<string, Tool> = {};
-  const modelToolNames = buildModelToolNameMap(Array.from(allowed));
+};
 
-  const accountToolCall = (toolCallId: string): void => {
+function createToolCallAccounter(input: BuildToolSetInput) {
+  return (toolCallId: string): void => {
     const id = toolCallId.trim();
     if (id.length === 0) return;
     if (input.toolBudget.countedToolCallIds.has(id)) return;
@@ -49,12 +47,15 @@ export function buildToolSet(input: {
       throw new Error(message);
     }
   };
+}
 
+function createApprovalLoader(input: BuildToolSetInput) {
   let cachedApproval:
     | { status: string; context: unknown; reason?: string | null }
     | null
     | undefined;
-  const loadApproval = async (): Promise<typeof cachedApproval> => {
+
+  return async (): Promise<typeof cachedApproval> => {
     if (cachedApproval !== undefined) return cachedApproval;
     const approvalId = input.executionContext.approvalId;
     if (!approvalId) {
@@ -96,8 +97,10 @@ export function buildToolSet(input: {
     cachedApproval = { status: row.status, context, reason: resolution?.reason ?? null };
     return cachedApproval;
   };
+}
 
-  const resolveToolCallPolicyState = async (input2: {
+function createPolicyStateResolver(input: BuildToolSetInput) {
+  return async (input2: {
     toolId: string;
     toolCallId: string;
     args: unknown;
@@ -134,22 +137,22 @@ export function buildToolSet(input: {
         })
       : ("allow" as const);
 
-    const shouldRequireApproval = decision === "require_approval";
-
     const state: ToolCallPolicyState = {
       toolId: input2.toolId,
       toolCallId: input2.toolCallId,
       args: input2.args,
       matchTarget,
       decision,
-      shouldRequireApproval,
+      shouldRequireApproval: decision === "require_approval",
     };
 
     input.toolCallPolicyStates.set(input2.toolCallId, state);
     return state;
   };
+}
 
-  const runTool = async (action: ActionPrimitiveT, toolCallId: string): Promise<unknown> => {
+function createToolRunner(input: BuildToolSetInput) {
+  return async (action: ActionPrimitiveT, toolCallId: string): Promise<unknown> => {
     const startedAtMs = Date.now();
     const totalBudgetMs = Math.max(1, input.timeoutMs);
     const needsWorkspaceLease = action.type === "CLI";
@@ -200,32 +203,44 @@ export function buildToolSet(input: {
       }
     }
   };
+}
 
-  const matchesApprovedToolContext = (input2: {
-    context: unknown;
-    toolId: string;
-    toolCallId: string;
-    toolMatchTarget: string;
-  }): boolean => {
-    const ctx = coerceRecord(input2.context);
-    return (
-      ctx?.["source"] === "llm-step-tool-execution" &&
-      ctx["tool_id"] === input2.toolId &&
-      ctx["tool_call_id"] === input2.toolCallId &&
-      ctx["tool_match_target"] === input2.toolMatchTarget
-    );
-  };
+function matchesApprovedToolContext(input2: {
+  context: unknown;
+  toolId: string;
+  toolCallId: string;
+  toolMatchTarget: string;
+}): boolean {
+  const ctx = coerceRecord(input2.context);
+  return (
+    ctx?.["source"] === "llm-step-tool-execution" &&
+    ctx["tool_id"] === input2.toolId &&
+    ctx["tool_call_id"] === input2.toolCallId &&
+    ctx["tool_match_target"] === input2.toolMatchTarget
+  );
+}
 
-  const parseTimeoutMsArg = (record: Record<string, unknown>): number | undefined => {
-    const raw = record["timeout_ms"];
-    if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
-    return Math.max(1, Math.floor(raw));
-  };
+function parseTimeoutMsArg(record: Record<string, unknown>): number | undefined {
+  const raw = record["timeout_ms"];
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
+  return Math.max(1, Math.floor(raw));
+}
 
-  const resolveToolCallId = (options: ToolExecutionOptions): string =>
-    typeof options.toolCallId === "string" && options.toolCallId.trim().length > 0
-      ? options.toolCallId.trim()
-      : "tc-unknown";
+function resolveToolCallId(options: ToolExecutionOptions): string {
+  return typeof options.toolCallId === "string" && options.toolCallId.trim().length > 0
+    ? options.toolCallId.trim()
+    : "tc-unknown";
+}
+
+export function buildToolSet(input: BuildToolSetInput): ToolSet {
+  const allowed = new Set(input.allowedToolIds);
+  const tools: Record<string, Tool> = {};
+  const modelToolNames = buildModelToolNameMap(Array.from(allowed));
+
+  const accountToolCall = createToolCallAccounter(input);
+  const loadApproval = createApprovalLoader(input);
+  const resolveToolCallPolicyState = createPolicyStateResolver(input);
+  const runTool = createToolRunner(input);
 
   const createPolicyAwareTool = (input2: {
     toolId: "tool.exec" | "tool.http.fetch";
@@ -247,9 +262,7 @@ export function buildToolSet(input: {
           args,
         });
 
-        if (!state.shouldRequireApproval) {
-          return false;
-        }
+        if (!state.shouldRequireApproval) return false;
 
         const approval = await loadApproval();
         if (approval && approval.status !== "pending") {

@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import type { WorkboardDalFixture } from "./workboard-dal.test-support.js";
 
-export function registerItemsTests(fixture: WorkboardDalFixture): void {
+function registerCrudAndTransitionTests(fixture: WorkboardDalFixture): void {
   it("creates and fetches a work item", async () => {
     const dal = fixture.createDal();
     const scope = await fixture.resolveScope();
@@ -200,7 +200,9 @@ export function registerItemsTests(fixture: WorkboardDalFixture): void {
     expect(cancelledFromBlocked).toBeDefined();
     expect(cancelledFromBlocked!.status).toBe("cancelled");
   });
+}
 
+function registerCascadeTests(fixture: WorkboardDalFixture): void {
   it("cancels open tasks + closes subagents when work item is cancelled", async () => {
     const dal = fixture.createDal();
     const scope = await fixture.resolveScope();
@@ -430,7 +432,9 @@ export function registerItemsTests(fixture: WorkboardDalFixture): void {
       ).rejects.toThrow(/terminal/i);
     }
   });
+}
 
+function registerPaginationAndWipTests(fixture: WorkboardDalFixture): void {
   it("paginates work item lists with cursor", async () => {
     const dal = fixture.createDal();
     const scope = await fixture.resolveScope();
@@ -526,4 +530,10 @@ export function registerItemsTests(fixture: WorkboardDalFixture): void {
       details: { limit: 2 },
     });
   });
+}
+
+export function registerItemsTests(fixture: WorkboardDalFixture): void {
+  registerCrudAndTransitionTests(fixture);
+  registerCascadeTests(fixture);
+  registerPaginationAndWipTests(fixture);
 }

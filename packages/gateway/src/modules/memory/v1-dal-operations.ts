@@ -1,15 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type {
-  MemoryItem,
-  MemoryItemCreateInput,
-  MemoryItemPatch,
-} from "@tyrum/schemas";
+import type { MemoryItem, MemoryItemCreateInput, MemoryItemPatch } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import type { RawMemoryItemRow } from "./v1-dal-types.js";
-import {
-  assertPatchCompatible,
-  uniqSortedStrings,
-} from "./v1-dal-helpers.js";
+import { assertPatchCompatible, uniqSortedStrings } from "./v1-dal-helpers.js";
 export { searchMemoryItems } from "./v1-dal-search.js";
 export { consolidateMemoryToBudgets } from "./v1-dal-consolidation.js";
 
@@ -157,9 +150,7 @@ export async function createMemoryItem(
         input.provenance.message_id ?? null,
         input.provenance.tool_call_id ?? null,
         JSON.stringify(input.provenance.refs ?? []),
-        input.provenance.metadata !== undefined
-          ? JSON.stringify(input.provenance.metadata)
-          : null,
+        input.provenance.metadata !== undefined ? JSON.stringify(input.provenance.metadata) : null,
       ],
     );
 

@@ -7,7 +7,7 @@ import {
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import type { WorkboardDalFixture } from "./workboard-dal.test-support.js";
 
-export function registerStateTests(fixture: WorkboardDalFixture): void {
+function registerStateKvTests(fixture: WorkboardDalFixture): void {
   it("normalizes advisory lock seeds to signed 32-bit integers", async () => {
     const lockSeeds: number[] = [];
 
@@ -209,7 +209,9 @@ export function registerStateTests(fixture: WorkboardDalFixture): void {
     const percent = await dal.listStateKv({ scope, prefix: "pct%" });
     expect(percent.entries.map((e) => e.key)).toEqual(["pct%foo"]);
   });
+}
 
+function registerArtifactTests(fixture: WorkboardDalFixture): void {
   it("rejects setting work item state KV outside the caller scope", async () => {
     const dal = fixture.createDal();
 
@@ -296,7 +298,9 @@ export function registerStateTests(fixture: WorkboardDalFixture): void {
       }),
     ).rejects.toThrow(/scope/i);
   });
+}
 
+function registerDecisionAndSignalTests(fixture: WorkboardDalFixture): void {
   it("rejects created_by_subagent_id outside the caller scope", async () => {
     const dal = fixture.createDal();
     const scopeA = await fixture.resolveScope();
@@ -474,4 +478,10 @@ export function registerStateTests(fixture: WorkboardDalFixture): void {
     const pausedOnly = await dal.listSignals({ scope, statuses: ["paused"] });
     expect(pausedOnly.signals.map((s) => s.signal_id)).toEqual([signal.signal_id]);
   });
+}
+
+export function registerStateTests(fixture: WorkboardDalFixture): void {
+  registerStateKvTests(fixture);
+  registerArtifactTests(fixture);
+  registerDecisionAndSignalTests(fixture);
 }

@@ -7,13 +7,10 @@ import {
   createOperatorCore,
 } from "../../operator-core/src/index.js";
 import { ElevatedModeGate, ElevatedModeProvider } from "../src/index.js";
-import {
-  TEST_DEVICE_IDENTITY,
-  requestInfoToUrl,
-} from "./operator-ui.test-support.js";
+import { TEST_DEVICE_IDENTITY, requestInfoToUrl } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
-export function registerElevatedModeAuthTests(): void {
+function registerElevatedModeAuthBearerTests(): void {
   it("uses baseline bearer auth to enter Elevated Mode", async () => {
     const issuedAt = "2026-02-27T00:00:00.000Z";
     const expiresAt = "2026-02-27T00:10:00.000Z";
@@ -221,7 +218,9 @@ export function registerElevatedModeAuthTests(): void {
     });
     container.remove();
   });
+}
 
+function registerElevatedModeAuthCookieDialogTests(): void {
   it("uses baseline cookie auth to enter Elevated Mode in web mode", async () => {
     const issuedAt = "2026-02-27T00:00:00.000Z";
     const expiresAt = "2026-02-27T00:10:00.000Z";
@@ -381,4 +380,9 @@ export function registerElevatedModeAuthTests(): void {
     });
     container.remove();
   });
+}
+
+export function registerElevatedModeAuthTests(): void {
+  registerElevatedModeAuthBearerTests();
+  registerElevatedModeAuthCookieDialogTests();
 }

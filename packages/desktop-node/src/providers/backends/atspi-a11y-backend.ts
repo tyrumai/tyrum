@@ -26,7 +26,6 @@ import type {
 
 import {
   type AtSpiAccessibleRef,
-  type AtSpiDynamicMethod,
   ATSPI_REF_SEPARATOR,
   ATSPI_REGISTRY_BUS_NAME,
   ATSPI_ROOT_ACCESSIBLE_PATH,

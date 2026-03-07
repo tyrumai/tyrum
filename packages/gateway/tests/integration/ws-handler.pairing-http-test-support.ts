@@ -9,6 +9,7 @@ import { createPairingRoutes } from "../../src/routes/pairing.js";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { waitForCondition } from "../helpers/wait-for.js";
 import type { TestContext } from "./ws-handler.test-support.js";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
@@ -19,17 +20,19 @@ import {
   computeDeviceId,
   createAuthTokens,
   descriptorIdForClientCapability,
-  issueDeviceToken,
-  waitForClose,
   waitForJsonMessage,
   waitForJsonMessageMatching,
   waitForOpen,
 } from "./ws-handler.test-support.js";
 
-export function registerWsHandlerPairingHttpTests(ctx: TestContext): void {
+function registerHttpApprovalTests(ctx: TestContext): void {
   it("emits pairing.approved to the node when approval is done via HTTP routes", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -159,10 +162,16 @@ export function registerWsHandlerPairingHttpTests(ctx: TestContext): void {
 
     stopHeartbeat();
   }, 15_000);
+}
 
+function registerIpResolutionTests(ctx: TestContext): void {
   it("stores resolved and raw client IPs for WS presence and pairing when proxies are trusted", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -229,7 +238,11 @@ export function registerWsHandlerPairingHttpTests(ctx: TestContext): void {
 
   it("ignores forwarded WS headers for presence and pairing when proxies are untrusted", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -292,4 +305,9 @@ export function registerWsHandlerPairingHttpTests(ctx: TestContext): void {
 
     stopHeartbeat();
   });
+}
+
+export function registerWsHandlerPairingHttpTests(ctx: TestContext): void {
+  registerHttpApprovalTests(ctx);
+  registerIpResolutionTests(ctx);
 }

@@ -60,8 +60,7 @@ export class ScheduleService {
     nowMs: number;
   }): Promise<boolean> {
     const cadence = defaultHeartbeatCadence();
-    const intervalMs =
-      cadence.type === "interval" ? cadence.interval_ms : 30 * 60_000;
+    const intervalMs = cadence.type === "interval" ? cadence.interval_ms : 30 * 60_000;
     const lastFiredAtMs = Math.floor(input.nowMs / intervalMs) * intervalMs;
     const watcherKey = buildDefaultHeartbeatWatcherKey({
       agentId: input.agentId,

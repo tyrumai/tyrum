@@ -27,10 +27,14 @@ import {
   waitForOpen,
 } from "./ws-handler.test-support.js";
 
-export function registerWsHandlerPairingWsTests(ctx: TestContext): void {
+function registerPairingRequestTests(ctx: TestContext): void {
   it("creates a pairing request when a node connects and allows WS approval", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -203,10 +207,16 @@ export function registerWsHandlerPairingWsTests(ctx: TestContext): void {
 
     stopHeartbeat();
   });
+}
 
+function registerTokenRevocationTests(ctx: TestContext): void {
   it("issues a node-scoped token on approval and invalidates it on revocation", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -426,4 +436,9 @@ export function registerWsHandlerPairingWsTests(ctx: TestContext): void {
 
     stopHeartbeat();
   }, 15_000);
+}
+
+export function registerWsHandlerPairingWsTests(ctx: TestContext): void {
+  registerPairingRequestTests(ctx);
+  registerTokenRevocationTests(ctx);
 }

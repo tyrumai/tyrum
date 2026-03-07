@@ -1,9 +1,7 @@
 import { vi } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
-import {
-  DEFAULT_TENANT_ID,
-} from "../../src/modules/identity/scope.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 export type SpyLogger = NonNullable<ProtocolDeps["logger"]> & {
   warn: ReturnType<typeof vi.fn>;

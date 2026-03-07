@@ -3,16 +3,13 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
-import {
-  makeDeps,
-  makeClient,
-} from "./ws-protocol.test-support.js";
+import { makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
 /**
  * Basic parsing, task.execute, and command.execute tests for handleClientMessage.
  * Must be called inside a `describe("handleClientMessage")` block.
  */
-export function registerHandleMessageBasicTests(): void {
+function registerParsingTests(): void {
   it("returns error for invalid JSON", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
@@ -64,7 +61,9 @@ export function registerHandleMessageBasicTests(): void {
       "unsupported_request",
     );
   });
+}
 
+function registerTaskAndCommandTests(): void {
   it("dispatches task.execute response to callback", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"], { role: "node" });
@@ -282,4 +281,9 @@ export function registerHandleMessageBasicTests(): void {
       "browser action failed",
     );
   });
+}
+
+export function registerHandleMessageBasicTests(): void {
+  registerParsingTests();
+  registerTaskAndCommandTests();
 }

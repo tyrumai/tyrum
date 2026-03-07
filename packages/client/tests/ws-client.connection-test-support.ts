@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
@@ -10,17 +10,17 @@ import {
   type TestServer,
   createTestServer,
   waitForMessage,
-  acceptConnect,
-  delay,
   handleInboundFrame,
 } from "./ws-client.test-support.js";
 
-export function registerConnectionTests(fixture: {
+type ConnectionFixture = {
   getServer: () => TestServer | undefined;
   setServer: (s: TestServer) => void;
   getClient: () => TyrumClient | undefined;
   setClient: (c: TyrumClient) => void;
-}): void {
+};
+
+function registerConnectionHandshakeTests(fixture: ConnectionFixture): void {
   it("connects and sends connect.init with capability descriptors", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -165,10 +165,14 @@ export function registerConnectionTests(fixture: {
     expect(Object.prototype.hasOwnProperty.call(device, "version")).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(device, "mode")).toBe(false);
   });
+}
 
+function registerConnectionProtocolErrorTests(fixture: ConnectionFixture): void {
   it("reports malformed JSON frames through protocol_error hooks", () => {
     const received: TyrumClientProtocolErrorInfo[] = [];
-    const onProtocolError = vi.fn((info) => { received.push(info); });
+    const onProtocolError = vi.fn((info) => {
+      received.push(info);
+    });
     const client = new TyrumClient({
       url: "ws://127.0.0.1:65535",
       token: "t",
@@ -179,7 +183,9 @@ export function registerConnectionTests(fixture: {
     fixture.setClient(client);
 
     const protocolEvents: TyrumClientProtocolErrorInfo[] = [];
-    client.on("protocol_error", (info) => { protocolEvents.push(info); });
+    client.on("protocol_error", (info) => {
+      protocolEvents.push(info);
+    });
 
     handleInboundFrame(client, "{bad json");
 
@@ -192,7 +198,9 @@ export function registerConnectionTests(fixture: {
 
   it("reports invalid envelopes through protocol_error hooks", () => {
     const received: TyrumClientProtocolErrorInfo[] = [];
-    const onProtocolError = vi.fn((info) => { received.push(info); });
+    const onProtocolError = vi.fn((info) => {
+      received.push(info);
+    });
     const client = new TyrumClient({
       url: "ws://127.0.0.1:65535",
       token: "t",
@@ -286,8 +294,19 @@ export function registerConnectionTests(fixture: {
 
     const payload = init["payload"] as Record<string, unknown>;
     expect(payload["capabilities"]).toEqual([
-      { id: descriptorIdForClientCapability("cli"), version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
-      { id: descriptorIdForClientCapability("http"), version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+      {
+        id: descriptorIdForClientCapability("cli"),
+        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+      },
+      {
+        id: descriptorIdForClientCapability("http"),
+        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+      },
     ]);
   });
+}
+
+export function registerConnectionTests(fixture: ConnectionFixture): void {
+  registerConnectionHandshakeTests(fixture);
+  registerConnectionProtocolErrorTests(fixture);
 }

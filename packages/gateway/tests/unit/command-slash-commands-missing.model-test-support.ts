@@ -1,17 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { executeCommand } from "../../src/modules/commands/dispatcher.js";
-import {
-  DEFAULT_AGENT_ID,
-  DEFAULT_TENANT_ID,
-} from "../../src/modules/identity/scope.js";
-import type { AgentRegistry } from "../../src/modules/agent/registry.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import type { ModelsDevService } from "../../src/modules/models/models-dev-service.js";
 import type { SlashCommandFixture } from "./command-slash-commands-missing.test-support.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function registerModelTests(fixture: SlashCommandFixture): void {
+function registerBasicModelTests(fixture: SlashCommandFixture): void {
   it("supports /model <provider/model> for a session", async () => {
     const db = fixture.openDb();
 
@@ -151,7 +147,9 @@ export function registerModelTests(fixture: SlashCommandFixture): void {
       model_id: "openai/gpt-4.1",
     });
   });
+}
 
+function registerPresetTests(fixture: SlashCommandFixture): void {
   it("supports /model <preset_key> for a session", async () => {
     const db = fixture.openDb();
     await fixture.createConfiguredPreset({
@@ -269,7 +267,9 @@ export function registerModelTests(fixture: SlashCommandFixture): void {
     expect(result.output).toContain("anthropic-default");
     expect(result.output).toContain("anthropic-review");
   });
+}
 
+function registerAuthProfileTests(fixture: SlashCommandFixture): void {
   it("supports /model <provider/model>@<profile> for a session", async () => {
     const prevEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
     process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
@@ -526,4 +526,10 @@ export function registerModelTests(fixture: SlashCommandFixture): void {
     );
     expect(stored).toBeUndefined();
   });
+}
+
+export function registerModelTests(fixture: SlashCommandFixture): void {
+  registerBasicModelTests(fixture);
+  registerPresetTests(fixture);
+  registerAuthProfileTests(fixture);
 }

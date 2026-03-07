@@ -39,7 +39,9 @@ export function createWorkboardDalFixture(): WorkboardDalFixture {
   return {
     name: "sqlite",
     db: () => db,
-    setDb: (value) => { db = value; },
+    setDb: (value) => {
+      db = value;
+    },
     createDal,
     resolveScope,
   };

@@ -192,7 +192,9 @@ describe("registerGatewayIpc handlers", () => {
 
   it("rotates embedded token when persisted token cannot be decrypted", async () => {
     decryptTokenMock.mockImplementationOnce(() => {
-      throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
+      throw new Error(
+        "Error while decrypting the ciphertext provided to safeStorage.decryptString.",
+      );
     });
     await registerGatewayIpcForTest();
     const handler = getRegisteredHandler("gateway:operator-connection");
@@ -270,7 +272,9 @@ describe("registerGatewayIpc handlers", () => {
       token: "tyrum-token.v1.embedded.token",
     });
     decryptTokenMock.mockImplementationOnce(() => {
-      throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
+      throw new Error(
+        "Error while decrypting the ciphertext provided to safeStorage.decryptString.",
+      );
     });
     const second = await handler!({} as never);
     expect(second).toEqual(first);
@@ -284,7 +288,9 @@ describe("registerGatewayIpc handlers", () => {
     const { loadConfig } = await import("../src/main/config/store.js");
     await startEmbeddedGatewayFromConfig();
     decryptTokenMock.mockImplementationOnce(() => {
-      throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
+      throw new Error(
+        "Error while decrypting the ciphertext provided to safeStorage.decryptString.",
+      );
     });
     const connection = resolveOperatorConnection(loadConfig());
     expect(connection.token).toBe("tyrum-token.v1.embedded.token");
@@ -296,7 +302,9 @@ describe("registerGatewayIpc handlers", () => {
     testState.mode = "remote";
     testState.remoteWsUrl = "wss://remote.example/ws";
     decryptTokenMock.mockImplementation((tokenRef: string) =>
-      tokenRef === "enc:remote-token" ? "tyrum-token.v1.remote.token" : "tyrum-token.v1.embedded.token",
+      tokenRef === "enc:remote-token"
+        ? "tyrum-token.v1.remote.token"
+        : "tyrum-token.v1.embedded.token",
     );
     await registerGatewayIpcForTest();
     const handler = getRegisteredHandler("gateway:operator-connection");
@@ -313,7 +321,9 @@ describe("registerGatewayIpc handlers", () => {
     testState.mode = "remote";
     testState.remoteWsUrl = "ws://remote.example/ws";
     decryptTokenMock.mockImplementation((tokenRef: string) =>
-      tokenRef === "enc:remote-token" ? "0123456789abcdef0123456789abcdef" : "tyrum-token.v1.embedded.token",
+      tokenRef === "enc:remote-token"
+        ? "0123456789abcdef0123456789abcdef"
+        : "tyrum-token.v1.embedded.token",
     );
     await registerGatewayIpcForTest();
     const handler = getRegisteredHandler("gateway:operator-connection");
@@ -360,7 +370,9 @@ describe("registerGatewayIpc handlers", () => {
     testState.remoteWsUrl = "wss://127.0.0.1:8788/ws";
     testState.remoteTlsCertFingerprint256 = "a".repeat(64);
     testState.remoteTlsAllowSelfSigned = true;
-    const globalFetchMock = vi.fn(async () => new Response("unexpected global fetch", { status: 200 }));
+    const globalFetchMock = vi.fn(
+      async () => new Response("unexpected global fetch", { status: 200 }),
+    );
     vi.stubGlobal("fetch", globalFetchMock);
     undiciFetchMock.mockImplementation(async () => createOkResponse());
     await registerGatewayIpcForTest();
@@ -384,7 +396,9 @@ describe("registerGatewayIpc handlers", () => {
 
   it("does not rotate embedded tokens during HTTP proxy requests", async () => {
     decryptTokenMock.mockImplementation(() => {
-      throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
+      throw new Error(
+        "Error while decrypting the ciphertext provided to safeStorage.decryptString.",
+      );
     });
     const fetchMock = vi.fn(async () => createOkResponse());
     vi.stubGlobal("fetch", fetchMock);

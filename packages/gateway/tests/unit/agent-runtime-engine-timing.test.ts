@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";
-import { createDeferred, setupTestEnv, teardownTestEnv, fetch404, DEFAULT_TENANT_ID, migrationsDir } from "./agent-runtime.test-helpers.js";
+import {
+  createDeferred,
+  teardownTestEnv,
+  fetch404,
+  DEFAULT_TENANT_ID,
+  migrationsDir,
+} from "./agent-runtime.test-helpers.js";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -8,7 +14,12 @@ import { createContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { simulateReadableStream } from "ai";
-import type { LanguageModelV3, LanguageModelV3CallOptions, LanguageModelV3GenerateResult, LanguageModelV3StreamResult } from "@ai-sdk/provider";
+import type {
+  LanguageModelV3,
+  LanguageModelV3CallOptions,
+  LanguageModelV3GenerateResult,
+  LanguageModelV3StreamResult,
+} from "@ai-sdk/provider";
 import { createStubLanguageModel } from "./stub-language-model.js";
 
 describe("AgentRuntime - engine timing and concurrency", () => {
@@ -446,5 +457,4 @@ describe("AgentRuntime - engine timing and concurrency", () => {
       await Promise.allSettled([p1, p2]);
     }
   });
-
 });

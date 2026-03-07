@@ -494,11 +494,6 @@ export class MemoryV1Dal {
     agentId?: string;
     budgets: AgentConfig["memory"]["v1"]["budgets"];
   }): Promise<MemoryV1ConsolidationResult> {
-    return consolidateMemoryToBudgets(
-      this.db,
-      this.normalizeScope(params),
-      params.budgets,
-      this,
-    );
+    return consolidateMemoryToBudgets(this.db, this.normalizeScope(params), params.budgets, this);
   }
 }

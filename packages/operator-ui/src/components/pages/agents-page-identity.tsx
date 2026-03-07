@@ -55,6 +55,121 @@ function OutlineBadgeList({ emptyText, items }: { emptyText: string; items: stri
   );
 }
 
+function SkillsCard({ status }: { status: AgentStatusResponse }) {
+  const detailedSkills = status.skills_detailed ?? [];
+  return (
+    <Card data-testid="agents-identity-skills">
+      <CardHeader className="pb-4">
+        <div className="text-sm font-medium text-fg">Skills</div>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        <OutlineBadgeList emptyText="No skills configured." items={status.skills} />
+        {detailedSkills.length > 0 ? (
+          <div className="grid gap-2">
+            {detailedSkills.map((skill) => (
+              <div
+                key={skill.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-fg">
+                    {skill.name} <span className="text-fg-muted">({skill.id})</span>
+                  </div>
+                  <div className="text-xs text-fg-muted">
+                    {skill.source} • v{skill.version}
+                  </div>
+                </div>
+                <Badge variant="outline">Installed</Badge>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function McpCard({ status }: { status: AgentStatusResponse }) {
+  return (
+    <Card data-testid="agents-identity-mcp">
+      <CardHeader className="pb-4">
+        <div className="text-sm font-medium text-fg">MCP</div>
+      </CardHeader>
+      <CardContent className="grid gap-2 text-sm">
+        {status.mcp.length === 0 ? (
+          <div className="text-fg-muted">No MCP servers configured.</div>
+        ) : (
+          status.mcp.map((server) => (
+            <div
+              key={server.id}
+              className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
+            >
+              <div className="min-w-0">
+                <div className="truncate font-medium text-fg">{server.name}</div>
+                <div className="text-xs text-fg-muted">
+                  {server.id} • {server.transport}
+                </div>
+              </div>
+              <Badge variant={server.enabled ? "success" : "outline"}>
+                {server.enabled ? "On" : "Off"}
+              </Badge>
+            </div>
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SessionsCard({ status }: { status: AgentStatusResponse }) {
+  const sessionStats = [
+    { label: "TTL", value: `${status.sessions.ttl_days} days` },
+    { label: "Max turns", value: status.sessions.max_turns },
+    { label: "Context window", value: `${status.sessions.context_pruning.max_messages} messages` },
+    {
+      label: "Tool prune keep",
+      value: `${status.sessions.context_pruning.tool_prune_keep_last_messages} messages`,
+    },
+  ];
+  const sessionPolicies = [
+    {
+      label: "Within-turn limits",
+      value: `${status.sessions.loop_detection.within_turn.consecutive_repeat_limit} consecutive • ${status.sessions.loop_detection.within_turn.cycle_repeat_limit} cycle`,
+      valueClassName: "text-sm font-normal",
+    },
+    {
+      label: "Cross-turn detection",
+      value: `${status.sessions.loop_detection.cross_turn.window_assistant_messages} msgs • ${status.sessions.loop_detection.cross_turn.similarity_threshold} similarity`,
+      valueClassName: "text-sm font-normal",
+    },
+  ];
+
+  return (
+    <Card data-testid="agents-identity-sessions">
+      <CardHeader className="pb-4">
+        <div className="text-sm font-medium text-fg">Sessions</div>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {sessionStats.map((stat) => (
+            <SessionStat key={stat.label} label={stat.label} value={stat.value} />
+          ))}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {sessionPolicies.map((stat) => (
+            <SessionStat
+              key={stat.label}
+              label={stat.label}
+              value={stat.value}
+              valueClassName={stat.valueClassName}
+            />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function AgentIdentityPanel({
   loading,
   error,
@@ -88,7 +203,6 @@ export function AgentIdentityPanel({
     );
   }
 
-  const detailedSkills = status.skills_detailed ?? [];
   const overviewFields: Array<{ label: string; value: ReactNode; valueClassName?: string }> = [
     { label: "Name", value: status.identity.name, valueClassName: "text-base font-medium" },
     ...(status.identity.description
@@ -106,27 +220,6 @@ export function AgentIdentityPanel({
   const modelFields: Array<{ label: string; value: ReactNode; valueClassName?: string }> = [
     { label: "Primary", value: status.model.model, valueClassName: "text-base font-medium" },
     ...(status.model.variant ? [{ label: "Variant", value: status.model.variant }] : []),
-  ];
-  const sessionStats = [
-    { label: "TTL", value: `${status.sessions.ttl_days} days` },
-    { label: "Max turns", value: status.sessions.max_turns },
-    { label: "Context window", value: `${status.sessions.context_pruning.max_messages} messages` },
-    {
-      label: "Tool prune keep",
-      value: `${status.sessions.context_pruning.tool_prune_keep_last_messages} messages`,
-    },
-  ];
-  const sessionPolicies = [
-    {
-      label: "Within-turn limits",
-      value: `${status.sessions.loop_detection.within_turn.consecutive_repeat_limit} consecutive • ${status.sessions.loop_detection.within_turn.cycle_repeat_limit} cycle`,
-      valueClassName: "text-sm font-normal",
-    },
-    {
-      label: "Cross-turn detection",
-      value: `${status.sessions.loop_detection.cross_turn.window_assistant_messages} msgs • ${status.sessions.loop_detection.cross_turn.similarity_threshold} similarity`,
-      valueClassName: "text-sm font-normal",
-    },
   ];
 
   return (
@@ -205,34 +298,7 @@ export function AgentIdentityPanel({
           </CardContent>
         </Card>
 
-        <Card data-testid="agents-identity-skills">
-          <CardHeader className="pb-4">
-            <div className="text-sm font-medium text-fg">Skills</div>
-          </CardHeader>
-          <CardContent className="grid gap-3 text-sm">
-            <OutlineBadgeList emptyText="No skills configured." items={status.skills} />
-            {detailedSkills.length > 0 ? (
-              <div className="grid gap-2">
-                {detailedSkills.map((skill) => (
-                  <div
-                    key={skill.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate font-medium text-fg">
-                        {skill.name} <span className="text-fg-muted">({skill.id})</span>
-                      </div>
-                      <div className="text-xs text-fg-muted">
-                        {skill.source} • v{skill.version}
-                      </div>
-                    </div>
-                    <Badge variant="outline">Installed</Badge>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+        <SkillsCard status={status} />
 
         <Card data-testid="agents-identity-tools">
           <CardHeader className="pb-4">
@@ -243,56 +309,8 @@ export function AgentIdentityPanel({
           </CardContent>
         </Card>
 
-        <Card data-testid="agents-identity-mcp">
-          <CardHeader className="pb-4">
-            <div className="text-sm font-medium text-fg">MCP</div>
-          </CardHeader>
-          <CardContent className="grid gap-2 text-sm">
-            {status.mcp.length === 0 ? (
-              <div className="text-fg-muted">No MCP servers configured.</div>
-            ) : (
-              status.mcp.map((server) => (
-                <div
-                  key={server.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-medium text-fg">{server.name}</div>
-                    <div className="text-xs text-fg-muted">
-                      {server.id} • {server.transport}
-                    </div>
-                  </div>
-                  <Badge variant={server.enabled ? "success" : "outline"}>
-                    {server.enabled ? "On" : "Off"}
-                  </Badge>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        <Card data-testid="agents-identity-sessions">
-          <CardHeader className="pb-4">
-            <div className="text-sm font-medium text-fg">Sessions</div>
-          </CardHeader>
-          <CardContent className="grid gap-3 text-sm">
-            <div className="grid gap-2 sm:grid-cols-2">
-              {sessionStats.map((stat) => (
-                <SessionStat key={stat.label} label={stat.label} value={stat.value} />
-              ))}
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {sessionPolicies.map((stat) => (
-                <SessionStat
-                  key={stat.label}
-                  label={stat.label}
-                  value={stat.value}
-                  valueClassName={stat.valueClassName}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <McpCard status={status} />
+        <SessionsCard status={status} />
       </div>
     </div>
   );

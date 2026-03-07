@@ -1,10 +1,7 @@
 import { expect, it } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import {
-  createBearerTokenAuth,
-  createOperatorCore,
-} from "../../operator-core/src/index.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
 import {
   waitForSelector,
@@ -13,7 +10,7 @@ import {
 } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
-export function registerConfigurePanelsTests(): void {
+function registerConfigurePanelsNavTests(): void {
   it("renders a Configure nav item and strict admin section tabs", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -253,7 +250,9 @@ export function registerConfigurePanelsTests(): void {
       container.remove();
     }
   });
+}
 
+function registerConfigurePanelsPluginTests(): void {
   it("disables Configure Plugins.get until a plugin id is provided", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -350,4 +349,9 @@ export function registerConfigurePanelsTests(): void {
       container.remove();
     }
   });
+}
+
+export function registerConfigurePanelsTests(): void {
+  registerConfigurePanelsNavTests();
+  registerConfigurePanelsPluginTests();
 }

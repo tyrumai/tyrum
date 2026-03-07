@@ -6,11 +6,7 @@ import type {
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
 } from "@tyrum/schemas";
-import {
-  AgentKey,
-  AgentStatusResponse,
-  WorkspaceKey,
-} from "@tyrum/schemas";
+import { AgentKey, AgentStatusResponse, WorkspaceKey } from "@tyrum/schemas";
 import {
   type LaneQueueScope,
   type TurnEngineBridgeDeps,
@@ -40,20 +36,11 @@ import { ExecutionEngine } from "../../execution/engine.js";
 import { resolveWorkspaceKey } from "../../workspace/id.js";
 import { DEFAULT_TENANT_ID } from "../../identity/scope.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
-import {
-  resolveAutomationMetadata,
-  maybeDeliverAutomationReply,
-} from "./automation-delivery.js";
-import {
-  resolveExecutionProfile,
-} from "./intake-delegation.js";
+import { resolveAutomationMetadata, maybeDeliverAutomationReply } from "./automation-delivery.js";
+import { resolveExecutionProfile } from "./intake-delegation.js";
 import type { PrepareTurnDeps } from "./turn-preparation.js";
 import type { TurnExecutionContext } from "./turn-preparation.js";
-import {
-  turnDirect,
-  turnStreamDirect,
-  type TurnDirectDeps,
-} from "./turn-direct.js";
+import { turnDirect, turnStreamDirect, type TurnDirectDeps } from "./turn-direct.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -322,13 +309,27 @@ export class AgentRuntime {
       approvalPollMs: this.approvalPollMs,
       db: this.opts.container.db,
       approvalDal: this.approvalDal,
-      resolveExecutionProfile: (args: { laneQueueScope?: LaneQueueScope; metadata?: Record<string, unknown> }) =>
+      resolveExecutionProfile: (args: {
+        laneQueueScope?: LaneQueueScope;
+        metadata?: Record<string, unknown>;
+      }) =>
         resolveExecutionProfile(
           { container: this.opts.container, agentId: this.agentId, workspaceId: this.workspaceId },
           args,
         ),
-      turnDirect: async (request: AgentTurnRequestT, turnOpts?: { abortSignal?: AbortSignal; timeoutMs?: number; execution?: TurnExecutionContext }) => {
-        const { response, contextReport } = await turnDirect(this.turnDirectDeps, request, turnOpts);
+      turnDirect: async (
+        request: AgentTurnRequestT,
+        turnOpts?: {
+          abortSignal?: AbortSignal;
+          timeoutMs?: number;
+          execution?: TurnExecutionContext;
+        },
+      ) => {
+        const { response, contextReport } = await turnDirect(
+          this.turnDirectDeps,
+          request,
+          turnOpts,
+        );
         this.lastContextReport = contextReport;
         return response;
       },

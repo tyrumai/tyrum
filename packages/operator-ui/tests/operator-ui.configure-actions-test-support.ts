@@ -1,10 +1,7 @@
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import {
-  createBearerTokenAuth,
-  createOperatorCore,
-} from "../../operator-core/src/index.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
 import {
   EXECUTION_PROFILE_IDS,
@@ -15,7 +12,7 @@ import {
 } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
-export function registerConfigureActionsTests(): void {
+function registerConfigureActionsPluginTests(): void {
   it("disables Configure Plugins actions while a request is in flight", async () => {
     const listDeferred = createDeferred<Response>();
     const getDeferred = createDeferred<Response>();
@@ -364,7 +361,9 @@ export function registerConfigureActionsTests(): void {
       container.remove();
     }
   });
+}
 
+function registerConfigureActionsModelTests(): void {
   it("requires confirmation before removing a model preset from Configure", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -525,4 +524,9 @@ export function registerConfigureActionsTests(): void {
       container.remove();
     }
   });
+}
+
+export function registerConfigureActionsTests(): void {
+  registerConfigureActionsPluginTests();
+  registerConfigureActionsModelTests();
 }

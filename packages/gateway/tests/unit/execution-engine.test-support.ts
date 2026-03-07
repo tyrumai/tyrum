@@ -5,8 +5,19 @@ import {
   type StepExecutor,
   type StepResult,
 } from "../../src/modules/execution/engine.js";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
+export { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID };
 import type { SqlDb, RunResult } from "../../src/statestore/types.js";
+
+export const DEFAULT_SCOPE = {
+  tenant_id: DEFAULT_TENANT_ID,
+  agent_id: DEFAULT_AGENT_ID,
+  workspace_id: DEFAULT_WORKSPACE_ID,
+} as const;
 
 export function action(
   type: ActionPrimitive["type"],

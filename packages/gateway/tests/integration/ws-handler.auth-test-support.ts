@@ -17,10 +17,14 @@ import {
   waitForUnexpectedResponse,
 } from "./ws-handler.test-support.js";
 
-export function registerWsHandlerAuthTests(ctx: TestContext): void {
+function registerConnectionTests(ctx: TestContext): void {
   it("accepts connection, completes connect.init/connect.proof handshake, and registers client", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -69,7 +73,11 @@ export function registerWsHandlerAuthTests(ctx: TestContext): void {
 
   it("rejects legacy connect handshake requests", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -113,7 +121,11 @@ export function registerWsHandlerAuthTests(ctx: TestContext): void {
 
   it("accepts connection authenticated via Authorization header during upgrade", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -158,7 +170,11 @@ export function registerWsHandlerAuthTests(ctx: TestContext): void {
 
   it("rejects upgrades that omit the tyrum-v1 base subprotocol", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -191,10 +207,16 @@ export function registerWsHandlerAuthTests(ctx: TestContext): void {
 
     stopHeartbeat();
   });
+}
 
+function registerCookieAndRejectTests(ctx: TestContext): void {
   it("accepts connection authenticated via cookie during upgrade", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -242,7 +264,11 @@ export function registerWsHandlerAuthTests(ctx: TestContext): void {
 
   it("accepts cookie-authenticated upgrade when token contains '=' characters", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -288,7 +314,11 @@ export function registerWsHandlerAuthTests(ctx: TestContext): void {
 
   it("rejects cookie-authenticated upgrade without Origin header", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -325,7 +355,11 @@ export function registerWsHandlerAuthTests(ctx: TestContext): void {
 
   it("rejects cookie-authenticated upgrade when Origin does not match Host", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -363,7 +397,11 @@ export function registerWsHandlerAuthTests(ctx: TestContext): void {
 
   it("rejects cookie-authenticated upgrade when Origin port does not match default Host port", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
-    const { container, authTokens, tenantAdminToken: adminToken } = await createAuthTokens(ctx.homeDir!);
+    const {
+      container,
+      authTokens,
+      tenantAdminToken: adminToken,
+    } = await createAuthTokens(ctx.homeDir!);
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
@@ -433,4 +471,9 @@ export function registerWsHandlerAuthTests(ctx: TestContext): void {
 
     stopHeartbeat();
   });
+}
+
+export function registerWsHandlerAuthTests(ctx: TestContext): void {
+  registerConnectionTests(ctx);
+  registerCookieAndRejectTests(ctx);
 }

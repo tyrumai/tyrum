@@ -1,7 +1,4 @@
-import {
-  PluginManifest,
-  type PluginManifest as PluginManifestT,
-} from "@tyrum/schemas";
+import { PluginManifest, type PluginManifest as PluginManifestT } from "@tyrum/schemas";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, relative } from "node:path";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
@@ -71,9 +68,7 @@ export async function loadManifestFromDir(
   return undefined;
 }
 
-export async function loadConfigFromDir(
-  dir: string,
-): Promise<{ path?: string; config: unknown }> {
+export async function loadConfigFromDir(dir: string): Promise<{ path?: string; config: unknown }> {
   for (const filename of CONFIG_CANDIDATES) {
     const path = join(dir, filename),
       raw = await tryReadFile(path);

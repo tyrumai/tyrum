@@ -41,11 +41,25 @@ export interface ContextReportInput {
 
 export function buildContextReport(input: ContextReportInput): AgentContextReport {
   const {
-    session, resolved, ctx, executionProfile, filteredTools,
-    systemPrompt, identityPrompt, safetyPrompt, sandboxPrompt,
-    skillsText, toolsText, sessionText, workFocusText, memoryText,
-    automationTriggerText, automationDigestText, memoryDigestResult,
-    automation, logger,
+    session,
+    resolved,
+    ctx,
+    executionProfile,
+    filteredTools,
+    systemPrompt,
+    identityPrompt,
+    safetyPrompt,
+    sandboxPrompt,
+    skillsText,
+    toolsText,
+    sessionText,
+    workFocusText,
+    memoryText,
+    automationTriggerText,
+    automationDigestText,
+    memoryDigestResult,
+    automation,
+    logger,
   } = input;
 
   const toolSchemaParts = filteredTools.map((t) => {

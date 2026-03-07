@@ -1,19 +1,33 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";
-import { makeContextReport, createToolSetBuilder, seedAgentConfig, setupTestEnv, teardownTestEnv, fetch404, DEFAULT_AGENT_ID, DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID, migrationsDir } from "./agent-runtime.test-helpers.js";
+import {
+  makeContextReport,
+  createToolSetBuilder,
+  seedAgentConfig,
+  teardownTestEnv,
+  fetch404,
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+  migrationsDir,
+} from "./agent-runtime.test-helpers.js";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
-import { ToolSetBuilder } from "../../src/modules/agent/runtime/tool-set-builder.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
-import { AgentConfig } from "@tyrum/schemas";
 import { awaitApprovalForToolExecution } from "../../src/modules/agent/runtime/tool-set-builder-helpers.js";
 
 vi.mock("../../src/modules/agent/runtime/tool-set-builder-helpers.js", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../../src/modules/agent/runtime/tool-set-builder-helpers.js")>();
-  return { ...original, awaitApprovalForToolExecution: vi.fn(original.awaitApprovalForToolExecution) };
+  const original =
+    await importOriginal<
+      typeof import("../../src/modules/agent/runtime/tool-set-builder-helpers.js")
+    >();
+  return {
+    ...original,
+    awaitApprovalForToolExecution: vi.fn(original.awaitApprovalForToolExecution),
+  };
 });
 
 describe("AgentRuntime - session lifecycle and policy", () => {
@@ -441,5 +455,4 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
     expect(toolExecutor.execute.mock.calls[0]?.[2]).toEqual({ command: "echo from-secret" });
   });
-
 });

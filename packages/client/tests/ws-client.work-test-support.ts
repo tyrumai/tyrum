@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { TyrumClient } from "../src/ws-client.js";
 import {
   type TestServer,
@@ -7,12 +7,14 @@ import {
   acceptConnect,
 } from "./ws-client.test-support.js";
 
-export function registerWorkTests(fixture: {
+type WorkFixture = {
   getServer: () => TestServer | undefined;
   setServer: (s: TestServer) => void;
   getClient: () => TyrumClient | undefined;
   setClient: (c: TyrumClient) => void;
-}): void {
+};
+
+function registerWorkItemTests(fixture: WorkFixture): void {
   it("sends typed work.* requests and returns validated results", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -79,7 +81,7 @@ export function registerWorkTests(fixture: {
       created_at: "2026-02-19T12:00:00Z",
     };
 
-    const signal = {
+    const _signal = {
       signal_id: "11111111-2222-3333-8aaa-555555555555",
       ...scopeIds,
       work_item_id: workItem.work_item_id,
@@ -91,7 +93,7 @@ export function registerWorkTests(fixture: {
       last_fired_at: null,
     };
 
-    const stateKvEntry = {
+    const _stateKvEntry = {
       ...scopeIds,
       work_item_id: workItem.work_item_id,
       key: "branch",
@@ -236,8 +238,83 @@ export function registerWorkTests(fixture: {
       { decision },
     );
     expect(decisionCreateRes.decision.decision_id).toBe(decision.decision_id);
+  });
+}
 
-    const signalListPayload = { ...scopeKeys, work_item_id: workItem.work_item_id };
+function registerWorkSignalKvTests(fixture: WorkFixture): void {
+  it("sends typed work.signal.* and work.state_kv.* requests", async () => {
+    const server = createTestServer();
+    fixture.setServer(server);
+    const client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+    });
+    fixture.setClient(client);
+
+    const connectedP = new Promise<void>((resolve) => {
+      client.on("connected", () => resolve());
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await connectedP;
+
+    const scopeKeys = { tenant_key: "t-1", agent_key: "agent-1", workspace_key: "default" };
+    const scopeIds = {
+      tenant_id: "11111111-1111-4111-8111-111111111111",
+      agent_id: "22222222-2222-4222-8222-222222222222",
+      workspace_id: "33333333-3333-4333-8333-333333333333",
+    };
+
+    const workItemId = "123e4567-e89b-12d3-a456-426614174000";
+
+    const signal = {
+      signal_id: "11111111-2222-3333-8aaa-555555555555",
+      ...scopeIds,
+      work_item_id: workItemId,
+      trigger_kind: "time",
+      trigger_spec_json: { at: "tomorrow" },
+      payload_json: { note: "ping" },
+      status: "active",
+      created_at: "2026-02-19T12:00:00Z",
+      last_fired_at: null,
+    };
+
+    const stateKvEntry = {
+      ...scopeIds,
+      work_item_id: workItemId,
+      key: "branch",
+      value_json: { name: "main" },
+      updated_at: "2026-02-19T12:00:00Z",
+    };
+
+    async function expectWorkRequest<T>(
+      call: () => Promise<T>,
+      expectedType: string,
+      payload: unknown,
+      result: unknown,
+    ): Promise<T> {
+      const pending = call();
+      const req = (await waitForMessage(ws)) as Record<string, unknown>;
+      expect(req["type"]).toBe(expectedType);
+      expect(req["payload"]).toEqual(payload);
+
+      ws.send(
+        JSON.stringify({
+          request_id: req["request_id"],
+          type: expectedType,
+          ok: true,
+          result,
+        }),
+      );
+
+      return await pending;
+    }
+
+    const signalListPayload = { ...scopeKeys, work_item_id: workItemId };
     const signalListRes = await expectWorkRequest(
       () => client.workSignalList(signalListPayload),
       "work.signal.list",
@@ -286,7 +363,7 @@ export function registerWorkTests(fixture: {
     expect(kvGetRes.entry).toBeNull();
 
     const kvListPayload = {
-      scope: { ...scopeKeys, kind: "work_item", work_item_id: workItem.work_item_id },
+      scope: { ...scopeKeys, kind: "work_item", work_item_id: workItemId },
     };
     const kvListRes = await expectWorkRequest(
       () => client.workStateKvList(kvListPayload),
@@ -297,7 +374,7 @@ export function registerWorkTests(fixture: {
     expect(kvListRes.entries).toEqual([]);
 
     const kvSetPayload = {
-      scope: { ...scopeKeys, kind: "work_item", work_item_id: workItem.work_item_id },
+      scope: { ...scopeKeys, kind: "work_item", work_item_id: workItemId },
       key: "branch",
       value_json: { name: "main" },
     };
@@ -309,4 +386,9 @@ export function registerWorkTests(fixture: {
     );
     expect(kvSetRes.entry.key).toBe("branch");
   });
+}
+
+export function registerWorkTests(fixture: WorkFixture): void {
+  registerWorkItemTests(fixture);
+  registerWorkSignalKvTests(fixture);
 }

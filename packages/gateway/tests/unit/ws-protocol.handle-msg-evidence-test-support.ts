@@ -11,17 +11,13 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import {
-  createSpyLogger,
-  makeDeps,
-  makeClient,
-} from "./ws-protocol.test-support.js";
+import { createSpyLogger, makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
 /**
  * Capability.ready and attempt.evidence tests for handleClientMessage.
  * Must be called inside a `describe("handleClientMessage")` block.
  */
-export function registerHandleMessageEvidenceTests(): void {
+function registerCapabilityReadyTests(): void {
   it("accepts capability.ready from nodes and broadcasts a capability.ready event", async () => {
     const cm = new ConnectionManager();
     const { id: nodeConnId } = makeClient(cm, ["cli"], {
@@ -126,7 +122,9 @@ export function registerHandleMessageEvidenceTests(): void {
       }),
     );
   });
+}
 
+function registerAttemptEvidenceTests(): void {
   it("logs attempt.evidence node pairing lookup failures", async () => {
     const cm = new ConnectionManager();
     const { id: nodeConnId } = makeClient(cm, ["cli"], {
@@ -436,4 +434,9 @@ export function registerHandleMessageEvidenceTests(): void {
       await db.close();
     }
   });
+}
+
+export function registerHandleMessageEvidenceTests(): void {
+  registerCapabilityReadyTests();
+  registerAttemptEvidenceTests();
 }

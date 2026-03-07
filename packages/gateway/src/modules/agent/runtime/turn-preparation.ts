@@ -105,31 +105,20 @@ export type PrepareTurnDeps = {
   setCleanupAtMs: (ms: number) => void;
 };
 
-
-export async function prepareTurn(
+async function resolveIdentityAndContext(
   deps: PrepareTurnDeps,
   input: AgentTurnRequestT,
-  exec?: TurnExecutionContext,
-): Promise<PreparedTurn> {
-  const resolved = resolveAgentTurnInput(input);
-  const automation = resolveAutomationMetadata(resolved.metadata);
-  const laneQueueScope = resolveLaneQueueScope(resolved.metadata);
+  resolved: ResolvedAgentTurnInput,
+) {
   const agentKey = input.agent_key?.trim() || deps.agentId;
   const workspaceKey = input.workspace_key?.trim() || deps.workspaceId;
 
-  const agentId = await deps.opts.container.identityScopeDal.ensureAgentId(
-    deps.tenantId,
-    agentKey,
-  );
+  const agentId = await deps.opts.container.identityScopeDal.ensureAgentId(deps.tenantId, agentKey);
   const workspaceId = await deps.opts.container.identityScopeDal.ensureWorkspaceId(
     deps.tenantId,
     workspaceKey,
   );
-  await deps.opts.container.identityScopeDal.ensureMembership(
-    deps.tenantId,
-    agentId,
-    workspaceId,
-  );
+  await deps.opts.container.identityScopeDal.ensureMembership(deps.tenantId, agentId, workspaceId);
   await ensureDefaultHeartbeatSchedule(deps, agentId, workspaceId);
 
   const config = await loadAgentConfigFromDb(deps, {
@@ -152,49 +141,16 @@ export async function prepareTurn(
   const connectorKey = parsedChannel.connector;
   const accountKey = resolved.envelope?.delivery.account ?? parsedChannel.accountId;
 
-  const session = await deps.sessionDal.getOrCreate({
-    tenantId: deps.tenantId,
-    scopeKeys: {
-      agentKey,
-      workspaceKey,
-    },
-    connectorKey,
-    accountKey,
-    providerThreadId: resolved.thread_id,
-    containerKind,
-  });
+  return { agentKey, workspaceKey, ctx, containerKind, connectorKey, accountKey };
+}
 
-  const laneQueue: LaneQueueState | undefined = laneQueueScope
-    ? {
-        tenant_id: session.tenant_id,
-        scope: laneQueueScope,
-        signals: new LaneQueueSignalDal(deps.opts.container.db),
-        interruptError: undefined,
-        cancelToolCalls: false,
-        pendingInjectionTexts: [],
-      }
-    : undefined;
-
-  const mainLaneSessionKey = resolveMainLaneSessionKey({
-    agentId: agentKey,
-    workspaceId: workspaceKey,
-    resolved,
-    containerKind,
-    deliveryAccount: resolved.envelope?.delivery.account,
-  });
-
-  const executionProfile = await resolveExecutionProfile(
-    {
-      container: deps.opts.container,
-      agentId: deps.agentId,
-      workspaceId: deps.workspaceId,
-    },
-    {
-      laneQueueScope,
-      metadata: resolved.metadata,
-    },
-  );
-
+async function resolveToolsAndMemory(
+  deps: PrepareTurnDeps,
+  ctx: AgentLoadedContext,
+  session: SessionRow,
+  resolved: ResolvedAgentTurnInput,
+  executionProfile: ResolvedExecutionProfile,
+) {
   const wantsMcpTools = ctx.config.tools.allow.some(
     (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
   );
@@ -284,14 +240,178 @@ export async function prepareTurn(
   const filteredTools = toolCandidates
     .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
     .slice(0, 8);
-  const mcpSpecMap = new Map(
-    ctx.mcpServers.map((server) => [server.id, server]),
+
+  return { memoryDigestResult, toolSetBuilder, filteredTools };
+}
+
+function assemblePrompts(
+  ctx: AgentLoadedContext,
+  session: SessionRow,
+  memoryDigestResult: { digest: string },
+  filteredTools: ReturnType<typeof selectToolDirectory>,
+  automation: ReturnType<typeof resolveAutomationMetadata>,
+) {
+  const sessionCtx = formatSessionContext(session.summary, session.turns);
+  const identityPrompt = formatIdentityPrompt(ctx.identity);
+  const safetyPrompt = DATA_TAG_SAFETY_PROMPT;
+  const skillsText = `Enabled skills:\n${formatSkillsPrompt(ctx.skills)}`;
+  const toolsText = `Available tools:\n${formatToolPrompt(filteredTools)}`;
+  const sessionText = `Session context:\n${sessionCtx}`;
+  const memoryTagged = tagContent(memoryDigestResult.digest, "memory", false);
+  const memoryText = `Memory digest:\n${sanitizeForModel(memoryTagged)}`;
+  const automationTriggerText = automation
+    ? `Automation trigger:\n${[
+        `Schedule kind: ${automation.schedule_kind ?? "unknown"}`,
+        `Schedule id: ${automation.schedule_id ?? "unknown"}`,
+        `Fired at: ${automation.fired_at ?? "unknown"}`,
+        `Previous fired at: ${automation.previous_fired_at ?? "never"}`,
+        `Delivery mode: ${automation.delivery_mode ?? "notify"}`,
+        automation.instruction ? `Instruction: ${automation.instruction}` : undefined,
+      ]
+        .filter((line): line is string => Boolean(line))
+        .join("\n")}`
+    : undefined;
+
+  return {
+    identityPrompt,
+    safetyPrompt,
+    skillsText,
+    toolsText,
+    sessionText,
+    memoryText,
+    automationTriggerText,
+  };
+}
+
+export async function prepareTurn(
+  deps: PrepareTurnDeps,
+  input: AgentTurnRequestT,
+  exec?: TurnExecutionContext,
+): Promise<PreparedTurn> {
+  const resolved = resolveAgentTurnInput(input);
+  const automation = resolveAutomationMetadata(resolved.metadata);
+  const laneQueueScope = resolveLaneQueueScope(resolved.metadata);
+
+  const { agentKey, workspaceKey, ctx, containerKind, connectorKey, accountKey } =
+    await resolveIdentityAndContext(deps, input, resolved);
+
+  const session = await deps.sessionDal.getOrCreate({
+    tenantId: deps.tenantId,
+    scopeKeys: { agentKey, workspaceKey },
+    connectorKey,
+    accountKey,
+    providerThreadId: resolved.thread_id,
+    containerKind,
+  });
+
+  const laneQueue: LaneQueueState | undefined = laneQueueScope
+    ? {
+        tenant_id: session.tenant_id,
+        scope: laneQueueScope,
+        signals: new LaneQueueSignalDal(deps.opts.container.db),
+        interruptError: undefined,
+        cancelToolCalls: false,
+        pendingInjectionTexts: [],
+      }
+    : undefined;
+
+  const mainLaneSessionKey = resolveMainLaneSessionKey({
+    agentId: agentKey,
+    workspaceId: workspaceKey,
+    resolved,
+    containerKind,
+    deliveryAccount: resolved.envelope?.delivery.account,
+  });
+
+  const executionProfile = await resolveExecutionProfile(
+    {
+      container: deps.opts.container,
+      agentId: deps.agentId,
+      workspaceId: deps.workspaceId,
+    },
+    { laneQueueScope, metadata: resolved.metadata },
   );
 
+  const { memoryDigestResult, toolSetBuilder, filteredTools } = await resolveToolsAndMemory(
+    deps,
+    ctx,
+    session,
+    resolved,
+    executionProfile,
+  );
+
+  const workFocusDigest =
+    isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
+      ? "Skipped for command turns."
+      : await buildWorkFocusDigest({
+          container: deps.opts.container,
+          scope: {
+            tenant_id: session.tenant_id,
+            agent_id: session.agent_id,
+            workspace_id: session.workspace_id,
+          },
+        });
+  const workFocusText = `Work focus digest:\n${workFocusDigest}`;
+
+  const {
+    identityPrompt,
+    safetyPrompt,
+    skillsText,
+    toolsText,
+    sessionText,
+    memoryText,
+    automationTriggerText,
+  } = assemblePrompts(ctx, session, memoryDigestResult, filteredTools, automation);
+
+  const hardeningProfile = resolveSandboxHardeningProfile(
+    deps.opts.container.deploymentConfig.toolrunner.hardeningProfile,
+  );
+  const sandboxPrompt = await buildSandboxPrompt({
+    policyService: deps.policyService,
+    hardeningProfile,
+    tenantId: deps.tenantId,
+    agentId: session.agent_id,
+  });
+  const systemPrompt = `${identityPrompt}\n\n${safetyPrompt}\n\n${sandboxPrompt}`;
+
+  const automationDigestText = automation
+    ? await buildAutomationDigest({
+        container: deps.opts.container,
+        scope: {
+          tenant_id: session.tenant_id,
+          agent_id: session.agent_id,
+          workspace_id: session.workspace_id,
+        },
+        automation,
+      })
+    : undefined;
+
+  const validatedReport = buildContextReport({
+    session,
+    resolved,
+    ctx,
+    executionProfile,
+    filteredTools,
+    systemPrompt,
+    identityPrompt,
+    safetyPrompt,
+    sandboxPrompt,
+    skillsText,
+    toolsText,
+    sessionText,
+    workFocusText,
+    memoryText,
+    automationTriggerText,
+    automationDigestText,
+    memoryDigestResult,
+    automation,
+    logger: deps.opts.container.logger,
+  });
+
+  const mcpSpecMap = new Map(ctx.mcpServers.map((server) => [server.id, server]));
   const nodeDispatchService = deps.opts.protocolDeps
     ? new NodeDispatchService(deps.opts.protocolDeps)
     : undefined;
-
   const toolExecutor = new ToolExecutor(
     deps.home,
     deps.mcpManager,
@@ -313,68 +433,6 @@ export async function prepareTurn(
     deps.opts.container.identityScopeDal,
   );
 
-  const sessionCtx = formatSessionContext(session.summary, session.turns);
-  const workFocusDigest =
-    isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
-      ? "Skipped for command turns."
-      : await buildWorkFocusDigest({
-          container: deps.opts.container,
-          scope: {
-            tenant_id: session.tenant_id,
-            agent_id: session.agent_id,
-            workspace_id: session.workspace_id,
-          },
-        });
-
-  const identityPrompt = formatIdentityPrompt(ctx.identity);
-  const safetyPrompt = DATA_TAG_SAFETY_PROMPT;
-  const hardeningProfile = resolveSandboxHardeningProfile(
-    deps.opts.container.deploymentConfig.toolrunner.hardeningProfile,
-  );
-  const sandboxPrompt = await buildSandboxPrompt({
-    policyService: deps.policyService,
-    hardeningProfile,
-    tenantId: deps.tenantId,
-    agentId: session.agent_id,
-  });
-  const systemPrompt = `${identityPrompt}\n\n${safetyPrompt}\n\n${sandboxPrompt}`;
-  const skillsText = `Enabled skills:\n${formatSkillsPrompt(ctx.skills)}`;
-  const toolsText = `Available tools:\n${formatToolPrompt(filteredTools)}`;
-  const sessionText = `Session context:\n${sessionCtx}`;
-  const workFocusText = `Work focus digest:\n${workFocusDigest}`;
-  const memoryTagged = tagContent(memoryDigestResult.digest, "memory", false);
-  const memoryText = `Memory digest:\n${sanitizeForModel(memoryTagged)}`;
-  const automationTriggerText = automation
-    ? `Automation trigger:\n${[
-        `Schedule kind: ${automation.schedule_kind ?? "unknown"}`,
-        `Schedule id: ${automation.schedule_id ?? "unknown"}`,
-        `Fired at: ${automation.fired_at ?? "unknown"}`,
-        `Previous fired at: ${automation.previous_fired_at ?? "never"}`,
-        `Delivery mode: ${automation.delivery_mode ?? "notify"}`,
-        automation.instruction ? `Instruction: ${automation.instruction}` : undefined,
-      ]
-        .filter((line): line is string => Boolean(line))
-        .join("\n")}`
-    : undefined;
-  const automationDigestText = automation
-    ? await buildAutomationDigest({
-        container: deps.opts.container,
-        scope: {
-          tenant_id: session.tenant_id,
-          agent_id: session.agent_id,
-          workspace_id: session.workspace_id,
-        },
-        automation,
-      })
-    : undefined;
-
-  const validatedReport = buildContextReport({
-    session, resolved, ctx, executionProfile, filteredTools,
-    systemPrompt, identityPrompt, safetyPrompt, sandboxPrompt,
-    skillsText, toolsText, sessionText, workFocusText, memoryText,
-    automationTriggerText, automationDigestText, memoryDigestResult,
-    automation, logger: deps.opts.container.logger,
-  });
   const usedTools = new Set<string>();
   const toolCallPolicyStates = new Map<string, ToolCallPolicyState>();
   const toolSet = toolSetBuilder.buildToolSet(
@@ -407,12 +465,8 @@ export async function prepareTurn(
     { type: "text", text: sessionText },
     { type: "text", text: workFocusText },
     { type: "text", text: memoryText },
-    ...(automationTriggerText
-      ? [{ type: "text" as const, text: automationTriggerText }]
-      : []),
-    ...(automationDigestText
-      ? [{ type: "text" as const, text: automationDigestText }]
-      : []),
+    ...(automationTriggerText ? [{ type: "text" as const, text: automationTriggerText }] : []),
+    ...(automationDigestText ? [{ type: "text" as const, text: automationDigestText }] : []),
     { type: "text", text: resolved.message },
   ];
 

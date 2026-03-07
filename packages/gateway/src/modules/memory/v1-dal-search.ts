@@ -5,10 +5,7 @@ import type {
   MemorySearchResponse,
 } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
-import type {
-  MemorySearchInput,
-  RawSearchRow,
-} from "./v1-dal-types.js";
+import type { MemorySearchInput, RawSearchRow } from "./v1-dal-types.js";
 import {
   buildMemoryV1ItemQueryParts,
   buildSnippet,
@@ -21,174 +18,85 @@ import {
 
 type Scope = { tenantId: string; agentId: string };
 
-export async function searchMemoryItems(
-  db: SqlDb,
-  input: MemorySearchInput,
-  scope: Scope,
-): Promise<MemorySearchResponse> {
-  const query = input.query.trim();
-  if (query.length === 0) {
-    return { v: 1, hits: [], next_cursor: undefined };
+const MAX_FILTER_KEYS = 50;
+const MAX_FILTER_TAGS = 20;
+const MAX_FILTER_PROVENANCE_VALUES = 20;
+
+function normalizeSearchFilter(filter: MemoryItemFilter | undefined): MemoryItemFilter | undefined {
+  if (!filter) return undefined;
+
+  const next: MemoryItemFilter = {};
+  if (filter.kinds && filter.kinds.length > 0) next.kinds = [...new Set(filter.kinds)];
+  if (filter.sensitivities && filter.sensitivities.length > 0) {
+    next.sensitivities = [...new Set(filter.sensitivities)];
   }
 
-  const MAX_QUERY_CHARS = 1024;
-  const MAX_TERMS = 12;
-  const MAX_TERM_CHARS = 64;
-  const MAX_FILTER_KEYS = 50;
-  const MAX_FILTER_TAGS = 20;
-  const MAX_FILTER_PROVENANCE_VALUES = 20;
-  const MAX_CANDIDATE_LIMIT = 1000;
-  const MAX_SQL_PARAMS = 900;
-
-  if (query !== "*" && query.length > MAX_QUERY_CHARS) {
-    throw invalidRequestError(`query too long (max=${MAX_QUERY_CHARS})`);
-  }
-
-  const rawTerms =
-    query === "*"
-      ? []
-      : query
-          .split(/\s+/g)
-          .map((term) => term.trim())
-          .filter(Boolean);
-  if (rawTerms.some((term) => term.length > MAX_TERM_CHARS)) {
-    throw invalidRequestError(`query term too long (max=${MAX_TERM_CHARS})`);
-  }
-
-  const terms = uniqSortedStrings(rawTerms.map((term) => term.toLowerCase()));
-
-  if (terms.length > MAX_TERMS) {
-    throw invalidRequestError(`too many query terms (max=${MAX_TERMS})`);
-  }
-
-  const limit = Math.max(1, Math.min(500, input.limit ?? 20));
-  const candidateLimit = Math.min(Math.max(limit * 20, 200), MAX_CANDIDATE_LIMIT);
-
-  const filter = input.filter;
-  let normalizedFilter: MemoryItemFilter | undefined;
-  if (filter) {
-    const next: MemoryItemFilter = {};
-    if (filter.kinds && filter.kinds.length > 0) next.kinds = [...new Set(filter.kinds)];
-    if (filter.sensitivities && filter.sensitivities.length > 0) {
-      next.sensitivities = [...new Set(filter.sensitivities)];
+  if (filter.keys && filter.keys.length > 0) {
+    const keys = uniqSortedStrings(filter.keys);
+    if (keys.length > MAX_FILTER_KEYS) {
+      throw invalidRequestError(`too many filter.keys (max=${MAX_FILTER_KEYS})`);
     }
-
-    if (filter.keys && filter.keys.length > 0) {
-      const keys = uniqSortedStrings(filter.keys);
-      if (keys.length > MAX_FILTER_KEYS) {
-        throw invalidRequestError(`too many filter.keys (max=${MAX_FILTER_KEYS})`);
-      }
-      if (keys.length > 0) next.keys = keys;
-    }
-
-    if (filter.tags && filter.tags.length > 0) {
-      const tags = uniqSortedStrings(filter.tags);
-      if (tags.length > MAX_FILTER_TAGS) {
-        throw invalidRequestError(`too many filter.tags (max=${MAX_FILTER_TAGS})`);
-      }
-      if (tags.length > 0) next.tags = tags;
-    }
-
-    if (filter.provenance) {
-      const provenance: NonNullable<MemoryItemFilter["provenance"]> = {};
-      if (filter.provenance.source_kinds && filter.provenance.source_kinds.length > 0) {
-        provenance.source_kinds = [...new Set(filter.provenance.source_kinds)];
-      }
-      if (filter.provenance.channels && filter.provenance.channels.length > 0) {
-        const channels = uniqSortedStrings(filter.provenance.channels);
-        if (channels.length > MAX_FILTER_PROVENANCE_VALUES) {
-          throw invalidRequestError(
-            `too many filter.provenance.channels (max=${MAX_FILTER_PROVENANCE_VALUES})`,
-          );
-        }
-        if (channels.length > 0) provenance.channels = channels;
-      }
-      if (filter.provenance.thread_ids && filter.provenance.thread_ids.length > 0) {
-        const threadIds = uniqSortedStrings(filter.provenance.thread_ids);
-        if (threadIds.length > MAX_FILTER_PROVENANCE_VALUES) {
-          throw invalidRequestError(
-            `too many filter.provenance.thread_ids (max=${MAX_FILTER_PROVENANCE_VALUES})`,
-          );
-        }
-        if (threadIds.length > 0) provenance.thread_ids = threadIds;
-      }
-      if (filter.provenance.session_ids && filter.provenance.session_ids.length > 0) {
-        const sessionIds = uniqSortedStrings(filter.provenance.session_ids);
-        if (sessionIds.length > MAX_FILTER_PROVENANCE_VALUES) {
-          throw invalidRequestError(
-            `too many filter.provenance.session_ids (max=${MAX_FILTER_PROVENANCE_VALUES})`,
-          );
-        }
-        if (sessionIds.length > 0) provenance.session_ids = sessionIds;
-      }
-      if (Object.keys(provenance).length > 0) next.provenance = provenance;
-    }
-
-    if (Object.keys(next).length > 0) normalizedFilter = next;
+    if (keys.length > 0) next.keys = keys;
   }
 
-  const queryParts = buildMemoryV1ItemQueryParts({
-    tenantId: scope.tenantId,
-    agentId: scope.agentId,
-    filter: normalizedFilter,
-    alwaysJoinProvenance: true,
-  });
-  const clauses: string[] = [...queryParts.where];
-  const params: unknown[] = [...queryParts.values];
-
-  if (terms.length > 0) {
-    const contains =
-      db.kind === "sqlite"
-        ? (haystack: string): string => `instr(${haystack}, ?) > 0`
-        : (haystack: string): string => `strpos(${haystack}, ?) > 0`;
-    const termClauses: string[] = [];
-    for (const term of terms) {
-      termClauses.push(
-        `(
-            (i.title IS NOT NULL AND ${contains("LOWER(i.title)")})
-            OR (i.body_md IS NOT NULL AND ${contains("LOWER(i.body_md)")})
-            OR (i.summary_md IS NOT NULL AND ${contains("LOWER(i.summary_md)")})
-            OR (i.key IS NOT NULL AND ${contains("LOWER(i.key)")})
-          )`,
-      );
-      params.push(term, term, term, term);
+  if (filter.tags && filter.tags.length > 0) {
+    const tags = uniqSortedStrings(filter.tags);
+    if (tags.length > MAX_FILTER_TAGS) {
+      throw invalidRequestError(`too many filter.tags (max=${MAX_FILTER_TAGS})`);
     }
-
-    clauses.push(`(${termClauses.join("\n            OR ")})`);
+    if (tags.length > 0) next.tags = tags;
   }
 
-  const totalParams = params.length + 1; // include LIMIT
-  if (totalParams > MAX_SQL_PARAMS) {
-    throw invalidRequestError(
-      `search too complex (params=${totalParams}, max=${MAX_SQL_PARAMS})`,
-    );
+  if (filter.provenance) {
+    const provenance: NonNullable<MemoryItemFilter["provenance"]> = {};
+    if (filter.provenance.source_kinds && filter.provenance.source_kinds.length > 0) {
+      provenance.source_kinds = [...new Set(filter.provenance.source_kinds)];
+    }
+    if (filter.provenance.channels && filter.provenance.channels.length > 0) {
+      const channels = uniqSortedStrings(filter.provenance.channels);
+      if (channels.length > MAX_FILTER_PROVENANCE_VALUES) {
+        throw invalidRequestError(
+          `too many filter.provenance.channels (max=${MAX_FILTER_PROVENANCE_VALUES})`,
+        );
+      }
+      if (channels.length > 0) provenance.channels = channels;
+    }
+    if (filter.provenance.thread_ids && filter.provenance.thread_ids.length > 0) {
+      const threadIds = uniqSortedStrings(filter.provenance.thread_ids);
+      if (threadIds.length > MAX_FILTER_PROVENANCE_VALUES) {
+        throw invalidRequestError(
+          `too many filter.provenance.thread_ids (max=${MAX_FILTER_PROVENANCE_VALUES})`,
+        );
+      }
+      if (threadIds.length > 0) provenance.thread_ids = threadIds;
+    }
+    if (filter.provenance.session_ids && filter.provenance.session_ids.length > 0) {
+      const sessionIds = uniqSortedStrings(filter.provenance.session_ids);
+      if (sessionIds.length > MAX_FILTER_PROVENANCE_VALUES) {
+        throw invalidRequestError(
+          `too many filter.provenance.session_ids (max=${MAX_FILTER_PROVENANCE_VALUES})`,
+        );
+      }
+      if (sessionIds.length > 0) provenance.session_ids = sessionIds;
+    }
+    if (Object.keys(provenance).length > 0) next.provenance = provenance;
   }
 
-  const rows = await db.all<RawSearchRow>(
-    `SELECT
-         i.memory_item_id,
-         i.kind,
-         i.key,
-         i.title,
-         i.body_md,
-         i.summary_md,
-         i.created_at,
-         p.source_kind,
-         p.channel,
-         p.thread_id,
-         p.session_id,
-         p.message_id,
-         p.tool_call_id,
-         p.refs_json,
-         p.metadata_json
-       FROM ${queryParts.from}
-       WHERE ${clauses.join("\n         AND ")}
-       ORDER BY i.created_at DESC
-       LIMIT ?`,
-    [...params, candidateLimit],
-  );
+  return Object.keys(next).length > 0 ? next : undefined;
+}
 
-  const scored = rows.map((row) => {
+function scoreAndRankRows(
+  rows: RawSearchRow[],
+  terms: string[],
+): Array<{
+  memory_item_id: string;
+  kind: MemoryItemKind;
+  score: number;
+  provenance: MemoryProvenance;
+  _created_at: string;
+  snippet?: string;
+}> {
+  return rows.map((row) => {
     const provenance: MemoryProvenance = {
       source_kind: row.source_kind,
       refs: parseJson<string[]>(row.refs_json),
@@ -233,8 +141,7 @@ export async function searchMemoryItems(
                   ? body
                   : summary;
 
-    const snippet =
-      snippetSource.length > 0 ? buildSnippet(snippetSource, terms, 240) : undefined;
+    const snippet = snippetSource.length > 0 ? buildSnippet(snippetSource, terms, 240) : undefined;
 
     const hit: {
       memory_item_id: string;
@@ -253,6 +160,98 @@ export async function searchMemoryItems(
     if (snippet) hit.snippet = snippet;
     return hit;
   });
+}
+
+export async function searchMemoryItems(
+  db: SqlDb,
+  input: MemorySearchInput,
+  scope: Scope,
+): Promise<MemorySearchResponse> {
+  const query = input.query.trim();
+  if (query.length === 0) {
+    return { v: 1, hits: [], next_cursor: undefined };
+  }
+
+  const MAX_QUERY_CHARS = 1024;
+  const MAX_TERMS = 12;
+  const MAX_TERM_CHARS = 64;
+  const MAX_CANDIDATE_LIMIT = 1000;
+  const MAX_SQL_PARAMS = 900;
+
+  if (query !== "*" && query.length > MAX_QUERY_CHARS) {
+    throw invalidRequestError(`query too long (max=${MAX_QUERY_CHARS})`);
+  }
+
+  const rawTerms =
+    query === "*"
+      ? []
+      : query
+          .split(/\s+/g)
+          .map((term) => term.trim())
+          .filter(Boolean);
+  if (rawTerms.some((term) => term.length > MAX_TERM_CHARS)) {
+    throw invalidRequestError(`query term too long (max=${MAX_TERM_CHARS})`);
+  }
+
+  const terms = uniqSortedStrings(rawTerms.map((term) => term.toLowerCase()));
+
+  if (terms.length > MAX_TERMS) {
+    throw invalidRequestError(`too many query terms (max=${MAX_TERMS})`);
+  }
+
+  const limit = Math.max(1, Math.min(500, input.limit ?? 20));
+  const candidateLimit = Math.min(Math.max(limit * 20, 200), MAX_CANDIDATE_LIMIT);
+
+  const normalizedFilter = normalizeSearchFilter(input.filter);
+
+  const queryParts = buildMemoryV1ItemQueryParts({
+    tenantId: scope.tenantId,
+    agentId: scope.agentId,
+    filter: normalizedFilter,
+    alwaysJoinProvenance: true,
+  });
+  const clauses: string[] = [...queryParts.where];
+  const params: unknown[] = [...queryParts.values];
+
+  if (terms.length > 0) {
+    const contains =
+      db.kind === "sqlite"
+        ? (haystack: string): string => `instr(${haystack}, ?) > 0`
+        : (haystack: string): string => `strpos(${haystack}, ?) > 0`;
+    const termClauses: string[] = [];
+    for (const term of terms) {
+      termClauses.push(
+        `(
+            (i.title IS NOT NULL AND ${contains("LOWER(i.title)")})
+            OR (i.body_md IS NOT NULL AND ${contains("LOWER(i.body_md)")})
+            OR (i.summary_md IS NOT NULL AND ${contains("LOWER(i.summary_md)")})
+            OR (i.key IS NOT NULL AND ${contains("LOWER(i.key)")})
+          )`,
+      );
+      params.push(term, term, term, term);
+    }
+
+    clauses.push(`(${termClauses.join("\n            OR ")})`);
+  }
+
+  const totalParams = params.length + 1; // include LIMIT
+  if (totalParams > MAX_SQL_PARAMS) {
+    throw invalidRequestError(`search too complex (params=${totalParams}, max=${MAX_SQL_PARAMS})`);
+  }
+
+  const rows = await db.all<RawSearchRow>(
+    `SELECT
+         i.memory_item_id, i.kind, i.key, i.title, i.body_md, i.summary_md, i.created_at,
+         p.source_kind, p.channel, p.thread_id, p.session_id, p.message_id,
+         p.tool_call_id, p.refs_json, p.metadata_json
+       FROM ${queryParts.from}
+       WHERE ${clauses.join("\n         AND ")}
+       ORDER BY i.created_at DESC
+       LIMIT ?`,
+    [...params, candidateLimit],
+  );
+
+  const scored = scoreAndRankRows(rows, terms);
 
   scored.sort((a, b) => {
     if (a.score !== b.score) return b.score - a.score;

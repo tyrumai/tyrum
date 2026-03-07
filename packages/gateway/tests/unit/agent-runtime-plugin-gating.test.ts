@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";
-import { makeContextReport, createToolSetBuilder, setupTestEnv, teardownTestEnv, fetch404, migrationsDir } from "./agent-runtime.test-helpers.js";
+import {
+  makeContextReport,
+  createToolSetBuilder,
+  teardownTestEnv,
+  fetch404,
+  migrationsDir,
+} from "./agent-runtime.test-helpers.js";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
-import { ToolSetBuilder } from "../../src/modules/agent/runtime/tool-set-builder.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
 
 describe("AgentRuntime - plugin tool gating", () => {

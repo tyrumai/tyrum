@@ -8,10 +8,7 @@ import { WorkboardDal } from "../workboard/dal.js";
 import { resolveWorkspaceKey } from "../workspace/id.js";
 import { SessionDal } from "../agent/session-dal.js";
 import { IdentityScopeDal } from "../identity/scope.js";
-import {
-  buildChannelSourceKey,
-  parseChannelSourceKey,
-} from "./interface.js";
+import { buildChannelSourceKey, parseChannelSourceKey } from "./interface.js";
 import { ChannelThreadDal } from "./thread-dal.js";
 import type {
   ChannelInboundQueueOverflowPolicy,
@@ -27,10 +24,7 @@ export type {
   ChannelInboundQueueOverflowResult,
   ChannelInboxRow,
 } from "./inbox-dal-types.js";
-import {
-  normalizeQueueMode,
-  toRow,
-} from "./inbox-dal-helpers.js";
+import { normalizeQueueMode, toRow } from "./inbox-dal-helpers.js";
 import { executeEnqueueTransaction } from "./inbox-dal-enqueue.js";
 
 const DEFAULT_INBOUND_DEDUPE_TTL_MS = 7 * 24 * 60 * 60 * 1000;

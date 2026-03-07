@@ -1,6 +1,5 @@
 import { WebSocket } from "ws";
 import type { Server } from "node:http";
-import { generateKeyPairSync, sign } from "node:crypto";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
@@ -61,7 +60,10 @@ export function waitForOpen(ws: WebSocket): Promise<void> {
   });
 }
 
-export function waitForClose(ws: WebSocket, timeoutMs = 5_000): Promise<{ code: number; reason: string }> {
+export function waitForClose(
+  ws: WebSocket,
+  timeoutMs = 5_000,
+): Promise<{ code: number; reason: string }> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("close timeout")), timeoutMs);
     ws.once("close", (code, reason) => {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { TyrumClient } from "../src/ws-client.js";
 import {
   type TestServer,
@@ -9,12 +9,14 @@ import {
   withTimeout,
 } from "./ws-client.test-support.js";
 
-export function registerMemorySubagentTests(fixture: {
+type MemorySubagentFixture = {
   getServer: () => TestServer | undefined;
   setServer: (s: TestServer) => void;
   getClient: () => TyrumClient | undefined;
   setClient: (c: TyrumClient) => void;
-}): void {
+};
+
+function registerMemoryTests(fixture: MemorySubagentFixture): void {
   it("sends typed memory.* requests and returns validated results", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -232,7 +234,9 @@ export function registerMemorySubagentTests(fixture: {
 
     await expect(pending).rejects.toThrow(/returned invalid result/i);
   });
+}
 
+function registerSubagentTests(fixture: MemorySubagentFixture): void {
   it("sends typed subagent.* requests and returns validated results", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -388,11 +392,7 @@ export function registerMemorySubagentTests(fixture: {
     };
 
     await expect(
-      withTimeout(
-        client.subagentSend(invalidPayload as any),
-        200,
-        "subagent.send invalid payload",
-      ),
+      withTimeout(client.subagentSend(invalidPayload as any), 200, "subagent.send invalid payload"),
     ).rejects.toThrow(/invalid payload/i);
 
     await delay(25);
@@ -477,4 +477,9 @@ export function registerMemorySubagentTests(fixture: {
       outputMsg,
     );
   });
+}
+
+export function registerMemorySubagentTests(fixture: MemorySubagentFixture): void {
+  registerMemoryTests(fixture);
+  registerSubagentTests(fixture);
 }

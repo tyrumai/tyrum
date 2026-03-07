@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 import { generateKeyPairSync } from "node:crypto";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
@@ -15,12 +15,14 @@ import {
   waitForReconnectScheduled,
 } from "./ws-client.test-support.js";
 
-export function registerReconnectTests(fixture: {
+type ReconnectFixture = {
   getServer: () => TestServer | undefined;
   setServer: (s: TestServer) => void;
   getClient: () => TyrumClient | undefined;
   setClient: (c: TyrumClient) => void;
-}): void {
+};
+
+function registerReconnectBasicTests(fixture: ReconnectFixture): void {
   it("disconnects cleanly", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -158,7 +160,9 @@ export function registerReconnectTests(fixture: {
       }),
     );
   });
+}
 
+function registerReconnectBackoffTests(fixture: ReconnectFixture): void {
   it("schedules exponential reconnect backoff with jitter up to maxReconnectDelay", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -242,7 +246,9 @@ export function registerReconnectTests(fixture: {
     expect(reconnectSchedule3.delayMs).toBe(10);
     expect(reconnectSchedule3.attempt).toBe(1);
   });
+}
 
+function registerReconnectTerminalTests(fixture: ReconnectFixture): void {
   it("does not reconnect after a terminal close code and emits an actionable transport error", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -520,4 +526,10 @@ export function registerReconnectTests(fixture: {
     await delay(200);
     expect(client.connected).toBe(false);
   });
+}
+
+export function registerReconnectTests(fixture: ReconnectFixture): void {
+  registerReconnectBasicTests(fixture);
+  registerReconnectBackoffTests(fixture);
+  registerReconnectTerminalTests(fixture);
 }

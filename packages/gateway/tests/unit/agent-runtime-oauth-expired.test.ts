@@ -8,6 +8,7 @@ import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
 import { DbSecretProvider } from "../../src/modules/secret/provider.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { resolveSessionModel } from "../../src/modules/agent/runtime/session-model-resolution.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -134,20 +135,15 @@ describe("AgentRuntime OAuth rotation when refresh cannot run", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
-      container,
-      agentId: "agent-1",
-      secretProvider,
-      fetchImpl,
-    });
-
-    const model = await (runtime as any).resolveSessionModel({
-      config: { model: { model: "openai/gpt-4.1", options: {} } },
-      tenantId: DEFAULT_TENANT_ID,
-      sessionId: randomUUID(),
-      fetchImpl,
-    });
+    const model = await resolveSessionModel(
+      { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
+      {
+        config: { model: { model: "openai/gpt-4.1", options: {} } },
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: randomUUID(),
+        fetchImpl,
+      },
+    );
 
     await model.doGenerate({} as any);
 

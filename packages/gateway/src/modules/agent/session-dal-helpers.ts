@@ -90,7 +90,11 @@ export interface SessionRepairResult {
   dropped_messages: number;
 }
 
-export type StoredTranscript = { turns: SessionMessage[]; summary: string; droppedMessages: number };
+export type StoredTranscript = {
+  turns: SessionMessage[];
+  summary: string;
+  droppedMessages: number;
+};
 export type SessionIdentity = { tenantId: string; sessionId: string };
 
 export const SESSION_TURNS_JSON_META = {

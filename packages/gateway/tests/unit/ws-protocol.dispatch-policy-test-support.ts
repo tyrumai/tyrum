@@ -5,26 +5,16 @@ import {
   type ActionPrimitive,
 } from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
-import {
-  dispatchTask,
-  handleClientMessage,
-  NoCapableClientError,
-} from "../../src/ws/protocol.js";
+import { dispatchTask, handleClientMessage, NoCapableClientError } from "../../src/ws/protocol.js";
 import { NoCapableNodeError, NodeNotPairedError } from "../../src/ws/protocol/errors.js";
-import {
-  DEFAULT_TENANT_ID,
-} from "../../src/modules/identity/scope.js";
-import {
-  createMockWs,
-  makeDeps,
-  makeClient,
-} from "./ws-protocol.test-support.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { createMockWs, makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
 /**
  * Policy, allowlist, legacy client, and error tests for dispatchTask.
  * Must be called inside a `describe("dispatchTask")` block.
  */
-export function registerDispatchPolicyTests(): void {
+function registerAllowlistTests(): void {
   it("dispatches to a paired node and prefers nodes over legacy clients", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
@@ -207,7 +197,9 @@ export function registerDispatchPolicyTests(): void {
     expect(nodeWs.send).not.toHaveBeenCalled();
     expect(clientWs.send).not.toHaveBeenCalled();
   });
+}
 
+function registerPolicyEvaluationTests(): void {
   it("throws NodeDispatchDeniedError when policy denies node dispatch", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
@@ -374,7 +366,9 @@ export function registerDispatchPolicyTests(): void {
       policy_decision: "allow",
     });
   });
+}
 
+function registerDispatchErrorTests(): void {
   it("does not dispatch tasks to legacy clients", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
@@ -492,4 +486,10 @@ export function registerDispatchPolicyTests(): void {
       ),
     ).toThrow(NoCapableClientError);
   });
+}
+
+export function registerDispatchPolicyTests(): void {
+  registerAllowlistTests();
+  registerPolicyEvaluationTests();
+  registerDispatchErrorTests();
 }

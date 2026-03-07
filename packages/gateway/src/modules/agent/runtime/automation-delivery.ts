@@ -1,4 +1,8 @@
-import type { AgentTurnRequest as AgentTurnRequestT, AgentTurnResponse as AgentTurnResponseT, WorkScope } from "@tyrum/schemas";
+import type {
+  AgentTurnRequest as AgentTurnRequestT,
+  AgentTurnResponse as AgentTurnResponseT,
+  WorkScope,
+} from "@tyrum/schemas";
 import { WorkboardDal } from "../../workboard/dal.js";
 import { ChannelOutboxDal } from "../../channels/outbox-dal.js";
 import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../../channels/interface.js";
@@ -60,26 +64,25 @@ export async function buildAutomationDigest(input: {
   automation: AutomationTurnMetadata;
 }): Promise<string> {
   const workboard = new WorkboardDal(input.container.db, input.container.redactionEngine);
-  const [itemsResult, signalsResult, activity, pendingApprovals, recentEvents] =
-    await Promise.all([
-      workboard.listItems({
-        scope: input.scope,
-        statuses: ["doing", "blocked", "ready", "backlog"],
-        limit: 10,
-      }),
-      workboard.listSignals({
-        scope: input.scope,
-        statuses: ["active"],
-        limit: 10,
-      }),
-      workboard.getScopeActivity({ scope: input.scope }),
-      input.container.db.all<{
-        approval_id: string;
-        kind: string;
-        prompt: string;
-        created_at: string;
-      }>(
-        `SELECT approval_id, kind, prompt, created_at
+  const [itemsResult, signalsResult, activity, pendingApprovals, recentEvents] = await Promise.all([
+    workboard.listItems({
+      scope: input.scope,
+      statuses: ["doing", "blocked", "ready", "backlog"],
+      limit: 10,
+    }),
+    workboard.listSignals({
+      scope: input.scope,
+      statuses: ["active"],
+      limit: 10,
+    }),
+    workboard.getScopeActivity({ scope: input.scope }),
+    input.container.db.all<{
+      approval_id: string;
+      kind: string;
+      prompt: string;
+      created_at: string;
+    }>(
+      `SELECT approval_id, kind, prompt, created_at
          FROM approvals
          WHERE tenant_id = ?
            AND agent_id = ?
@@ -87,16 +90,16 @@ export async function buildAutomationDigest(input: {
            AND status = 'pending'
          ORDER BY created_at DESC
          LIMIT 10`,
-        [input.scope.tenant_id, input.scope.agent_id, input.scope.workspace_id],
-      ),
-      input.automation.previous_fired_at
-        ? input.container.db.all<{
-            work_item_id: string;
-            title: string;
-            kind: string;
-            created_at: string;
-          }>(
-            `SELECT e.work_item_id, i.title, e.kind, e.created_at
+      [input.scope.tenant_id, input.scope.agent_id, input.scope.workspace_id],
+    ),
+    input.automation.previous_fired_at
+      ? input.container.db.all<{
+          work_item_id: string;
+          title: string;
+          kind: string;
+          created_at: string;
+        }>(
+          `SELECT e.work_item_id, i.title, e.kind, e.created_at
              FROM work_item_events e
              JOIN work_items i
                ON i.tenant_id = e.tenant_id
@@ -107,15 +110,15 @@ export async function buildAutomationDigest(input: {
                AND e.created_at > ?
              ORDER BY e.created_at DESC
              LIMIT 10`,
-            [
-              input.scope.tenant_id,
-              input.scope.agent_id,
-              input.scope.workspace_id,
-              input.automation.previous_fired_at,
-            ],
-          )
-        : Promise.resolve([]),
-    ]);
+          [
+            input.scope.tenant_id,
+            input.scope.agent_id,
+            input.scope.workspace_id,
+            input.automation.previous_fired_at,
+          ],
+        )
+      : Promise.resolve([]),
+  ]);
 
   const lines: string[] = [];
   lines.push("Automation digest:");

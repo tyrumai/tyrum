@@ -7,17 +7,13 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import {
-  createSpyLogger,
-  makeDeps,
-  makeClient,
-} from "./ws-protocol.test-support.js";
+import { createSpyLogger, makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
 /**
  * Pairing, scopes, presence, and ping scope tests for handleClientMessage.
  * Must be called inside a `describe("handleClientMessage")` block.
  */
-export function registerHandleMessageScopeTests(): void {
+function registerPairingAndCommandScopeTests(): void {
   it("rejects pairing.approve when trust_level is missing", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["cli"]);
@@ -150,7 +146,9 @@ export function registerHandleMessageScopeTests(): void {
     expect((result as unknown as { ok: boolean }).ok).toBe(false);
     expect((result as unknown as { error: { code: string } }).error.code).toBe("forbidden");
   });
+}
 
+function registerPresenceAndPingScopeTests(): void {
   it("does not forbid presence.beacon when no scopes are required", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["cli"], {
@@ -380,4 +378,9 @@ export function registerHandleMessageScopeTests(): void {
     expect((result as unknown as { ok: boolean }).ok).toBe(true);
     expect((result as unknown as { type: string }).type).toBe("ping");
   });
+}
+
+export function registerHandleMessageScopeTests(): void {
+  registerPairingAndCommandScopeTests();
+  registerPresenceAndPingScopeTests();
 }

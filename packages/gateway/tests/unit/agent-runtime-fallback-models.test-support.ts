@@ -1,12 +1,13 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { LanguageModelV3 } from "@ai-sdk/provider";
+import type { LanguageModel } from "ai";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
 import { ConfiguredModelPresetDal } from "../../src/modules/models/configured-model-preset-dal.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
 import { DbSecretProvider } from "../../src/modules/secret/provider.js";
+import { resolveSessionModel as resolveSessionModelFn } from "../../src/modules/agent/runtime/session-model-resolution.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -52,6 +53,12 @@ type ConfiguredPresetInput = {
   providerKey: string;
   modelId: string;
   options?: Record<string, unknown>;
+};
+
+type AgentRuntimeLike = {
+  _container: GatewayContainer;
+  _secretProvider: DbSecretProvider | undefined;
+  _fetchImpl: typeof fetch;
 };
 
 export const notFoundFetch: typeof fetch = async () => new Response("not found", { status: 404 });
@@ -132,41 +139,44 @@ export async function createAgentRuntime(
     fetchImpl?: typeof fetch;
     withSecretProvider?: boolean;
   } = {},
-) {
+): Promise<AgentRuntimeLike> {
   const fetchImpl = options.fetchImpl ?? notFoundFetch;
   const secretProvider = options.withSecretProvider ? await seedAuthProfiles(container) : undefined;
-  const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
 
-  return new AgentRuntime({
-    container,
-    agentId: "agent-1",
-    secretProvider,
-    fetchImpl,
-  });
+  return {
+    _container: container,
+    _secretProvider: secretProvider,
+    _fetchImpl: fetchImpl,
+  };
 }
 
 export async function resolveSessionModel(
-  runtime: unknown,
+  runtime: AgentRuntimeLike,
   args: ResolveSessionModelArgs,
-): Promise<LanguageModelV3> {
-  return await (
-    runtime as {
-      resolveSessionModel: (input: unknown) => Promise<LanguageModelV3>;
-    }
-  ).resolveSessionModel({
-    config: {
-      model: {
-        model: args.model,
-        fallback: args.fallback ?? [],
-        options: {},
-      },
+): Promise<LanguageModel> {
+  const fetchImpl = args.fetchImpl ?? runtime._fetchImpl;
+  return await resolveSessionModelFn(
+    {
+      container: runtime._container,
+      secretProvider: runtime._secretProvider,
+      oauthLeaseOwner: "test",
+      fetchImpl,
     },
-    tenantId: DEFAULT_TENANT_ID,
-    sessionId: args.sessionId,
-    executionProfileId: args.executionProfileId,
-    profileModelId: args.profileModelId,
-    fetchImpl: args.fetchImpl ?? notFoundFetch,
-  });
+    {
+      config: {
+        model: {
+          model: args.model,
+          fallback: args.fallback ?? [],
+          options: {},
+        },
+      },
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: args.sessionId,
+      executionProfileId: args.executionProfileId,
+      profileModelId: args.profileModelId,
+      fetchImpl,
+    },
+  );
 }
 
 export async function createUiSession(container: GatewayContainer, providerThreadId: string) {

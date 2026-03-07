@@ -1,19 +1,14 @@
 import { expect, it, vi } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
-import {
-  DEFAULT_TENANT_ID,
-} from "../../src/modules/identity/scope.js";
-import {
-  makeDeps,
-  makeClient,
-} from "./ws-protocol.test-support.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
 /**
  * Approval decision and ping tests for handleClientMessage.
  * Must be called inside a `describe("handleClientMessage")` block.
  */
-export function registerHandleMessageApprovalTests(): void {
+function registerApprovalDecisionTests(): void {
   it("dispatches approval.request decision to callback", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
@@ -219,7 +214,9 @@ export function registerHandleMessageApprovalTests(): void {
     const payload = (result as unknown as { payload: { code: string } }).payload;
     expect(payload.code).toBe("invalid_approval_decision");
   });
+}
 
+function registerPingTests(): void {
   it("does not update lastWsPongAt on ping response", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
@@ -258,4 +255,9 @@ export function registerHandleMessageApprovalTests(): void {
     });
     expect(client.lastWsPongAt).toBe(1000);
   });
+}
+
+export function registerHandleMessageApprovalTests(): void {
+  registerApprovalDecisionTests();
+  registerPingTests();
 }

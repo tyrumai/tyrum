@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import type { WorkboardDalFixture } from "./workboard-dal.test-support.js";
 
-export function registerTasksTests(fixture: WorkboardDalFixture): void {
+function registerTaskCrudTests(fixture: WorkboardDalFixture): void {
   it("creates tasks, subagents, links, and scope activity", async () => {
     const dal = fixture.createDal();
     const scope = await fixture.resolveScope();
@@ -175,7 +175,9 @@ export function registerTasksTests(fixture: WorkboardDalFixture): void {
     expect(subagent.work_item_task_id).toBe(task.task_id);
     expect(subagent.work_item_id).toBe(item.work_item_id);
   });
+}
 
+function registerDependencyValidationTests(fixture: WorkboardDalFixture): void {
   it("rejects cross-work-item task dependencies", async () => {
     const dal = fixture.createDal();
     const scope = await fixture.resolveScope();
@@ -272,7 +274,9 @@ export function registerTasksTests(fixture: WorkboardDalFixture): void {
       }),
     ).rejects.toThrow(/depends_on.*itself/i);
   });
+}
 
+function registerDependencyGraphTests(fixture: WorkboardDalFixture): void {
   it("rejects task dependency cycles", async () => {
     const dal = fixture.createDal();
     const scope = await fixture.resolveScope();
@@ -507,4 +511,10 @@ export function registerTasksTests(fixture: WorkboardDalFixture): void {
     });
     expect(third.leased.map((x) => x.task.task_id)).toEqual([join.task_id]);
   });
+}
+
+export function registerTasksTests(fixture: WorkboardDalFixture): void {
+  registerTaskCrudTests(fixture);
+  registerDependencyValidationTests(fixture);
+  registerDependencyGraphTests(fixture);
 }

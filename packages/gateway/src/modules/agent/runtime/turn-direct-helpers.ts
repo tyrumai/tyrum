@@ -2,10 +2,7 @@ import { generateText } from "ai";
 import type { ModelMessage } from "ai";
 import type { SecretHandle as SecretHandleT, WorkScope } from "@tyrum/schemas";
 import type { ToolCallPolicyState } from "./tool-set-builder.js";
-import {
-  ToolExecutionApprovalRequiredError,
-  type ResolvedAgentTurnInput,
-} from "./turn-helpers.js";
+import { ToolExecutionApprovalRequiredError, type ResolvedAgentTurnInput } from "./turn-helpers.js";
 import type { SessionRow } from "../session-dal.js";
 import { coerceRecord } from "../../util/coerce.js";
 import type { GatewayContainer } from "../../../container.js";
@@ -34,9 +31,7 @@ export async function handleStatusQuery(
         work_item_id: item.work_item_id,
       });
       for (const task of tasks.slice(0, 10)) {
-        lines.push(
-          `  - task ${task.task_id} (${task.status}) profile=${task.execution_profile}`,
-        );
+        lines.push(`  - task ${task.task_id} (${task.status}) profile=${task.execution_profile}`);
       }
     }
     return lines.join("\n");
@@ -94,14 +89,12 @@ export async function throwToolApprovalError(
   result: Awaited<ReturnType<typeof generateText>>,
 ): Promise<never> {
   const record = coerceRecord(approvalPart);
-  const approvalId =
-    typeof record?.["approvalId"] === "string" ? record["approvalId"].trim() : "";
+  const approvalId = typeof record?.["approvalId"] === "string" ? record["approvalId"].trim() : "";
   const toolCall = coerceRecord(record?.["toolCall"]);
 
   const toolCallId =
     typeof toolCall?.["toolCallId"] === "string" ? toolCall["toolCallId"].trim() : "";
-  const toolName =
-    typeof toolCall?.["toolName"] === "string" ? toolCall["toolName"].trim() : "";
+  const toolName = typeof toolCall?.["toolName"] === "string" ? toolCall["toolName"].trim() : "";
   const toolArgs = toolCall ? toolCall["input"] : undefined;
 
   if (!approvalId || !toolCallId || !toolName) {
@@ -110,9 +103,7 @@ export async function throwToolApprovalError(
 
   const state = toolCallPolicyStates.get(toolCallId);
   if (!state) {
-    throw new Error(
-      `tool approval request missing policy state for tool_call_id=${toolCallId}`,
-    );
+    throw new Error(`tool approval request missing policy state for tool_call_id=${toolCallId}`);
   }
 
   const responseMessages = (result.response?.messages ?? []) as unknown as ModelMessage[];
@@ -120,15 +111,11 @@ export async function throwToolApprovalError(
 
   const expiresAt = new Date(Date.now() + deps.approvalWaitMs).toISOString();
 
-  const toolArgsHandle = await maybeStoreToolApprovalArgsHandle(
-    deps.secretProvider,
-    deps.agentId,
-    {
-      toolId: state.toolDesc.id,
-      toolCallId,
-      args: state.args ?? toolArgs,
-    },
-  );
+  const toolArgsHandle = await maybeStoreToolApprovalArgsHandle(deps.secretProvider, deps.agentId, {
+    toolId: state.toolDesc.id,
+    toolCallId,
+    args: state.args ?? toolArgs,
+  });
 
   const policyContext = {
     policy_snapshot_id: state.policySnapshotId,

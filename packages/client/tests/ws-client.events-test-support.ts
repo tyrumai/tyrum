@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { TyrumClient } from "../src/ws-client.js";
 import {
   type TestServer,
@@ -9,12 +9,14 @@ import {
   withTimeout,
 } from "./ws-client.test-support.js";
 
-export function registerEventsTests(fixture: {
+type EventsFixture = {
   getServer: () => TestServer | undefined;
   setServer: (s: TestServer) => void;
   getClient: () => TyrumClient | undefined;
   setClient: (c: TyrumClient) => void;
-}): void {
+};
+
+function registerEventsBasicTests(fixture: EventsFixture): void {
   it("responds to ping with pong", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -243,7 +245,9 @@ export function registerEventsTests(fixture: {
     const msg = await received;
     expect(msg).toEqual(updateMsg);
   });
+}
 
+function registerEventsAdvancedTests(fixture: EventsFixture): void {
   it("emits additional protocol events by wire event type", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -421,4 +425,9 @@ export function registerEventsTests(fixture: {
     expect(res.approval.approval_id).toBe("550e8400-e29b-41d4-a716-446655440000");
     expect(res.approval.status).toBe("approved");
   });
+}
+
+export function registerEventsTests(fixture: EventsFixture): void {
+  registerEventsBasicTests(fixture);
+  registerEventsAdvancedTests(fixture);
 }

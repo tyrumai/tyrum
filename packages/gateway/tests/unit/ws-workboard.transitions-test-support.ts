@@ -4,7 +4,7 @@ import { handleClientMessage } from "../../src/ws/protocol.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { makeDeps, makeClient } from "./ws-workboard.test-support.js";
 
-export function registerWorkboardTransitionTests(): void {
+function registerGetAndTransitionTests(): void {
   it("handles work.get against the DB", async () => {
     const cm = new ConnectionManager();
     const { id, ws } = makeClient(cm);
@@ -226,7 +226,9 @@ export function registerWorkboardTransitionTests(): void {
       await db.close();
     }
   });
+}
 
+function registerTransitionErrorTests(): void {
   it("rejects invalid work transitions with structured errors", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm);
@@ -451,4 +453,9 @@ export function registerWorkboardTransitionTests(): void {
       await db.close();
     }
   });
+}
+
+export function registerWorkboardTransitionTests(): void {
+  registerGetAndTransitionTests();
+  registerTransitionErrorTests();
 }

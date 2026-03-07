@@ -1,16 +1,13 @@
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import {
-  createBearerTokenAuth,
-  createOperatorCore,
-} from "../../operator-core/src/index.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
 import * as operatorUi from "../src/index.js";
 import { stubMatchMedia } from "./test-utils.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
-export function registerShellLayoutTests(): void {
+function registerShellLayoutRenderTests(): void {
   it("does not export internal mode banners from the public API", () => {
     expect("AdminModeBanner" in operatorUi).toBe(false);
     expect("ElevatedModeBanner" in operatorUi).toBe(false);
@@ -191,7 +188,9 @@ export function registerShellLayoutTests(): void {
     });
     container.remove();
   });
+}
 
+function registerShellLayoutNavTests(): void {
   it("renders a bottom tab bar on web below md breakpoint", () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -260,4 +259,9 @@ export function registerShellLayoutTests(): void {
     });
     container.remove();
   });
+}
+
+export function registerShellLayoutTests(): void {
+  registerShellLayoutRenderTests();
+  registerShellLayoutNavTests();
 }

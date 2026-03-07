@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import type { WorkboardDalFixture } from "./workboard-dal.test-support.js";
 
-export function registerLeasesTests(fixture: WorkboardDalFixture): void {
+function registerLeaseBasicTests(fixture: WorkboardDalFixture): void {
   it("leases tasks when dependencies are 'failed'", async () => {
     const dal = fixture.createDal();
     const scope = await fixture.resolveScope();
@@ -193,7 +193,9 @@ export function registerLeasesTests(fixture: WorkboardDalFixture): void {
       }),
     ).rejects.toThrow(/lease/i);
   });
+}
 
+function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
   it("enforces lease owner + expiry when leaving 'leased'", async () => {
     const dal = fixture.createDal();
     const scope = await fixture.resolveScope();
@@ -407,4 +409,9 @@ export function registerLeasesTests(fixture: WorkboardDalFixture): void {
     expect(workTaskEvents[2]?.payload?.approval_id).toBe(approval!.approval_id);
     expect(workTaskEvents[3]?.payload?.result_summary).toBe("ok");
   });
+}
+
+export function registerLeasesTests(fixture: WorkboardDalFixture): void {
+  registerLeaseBasicTests(fixture);
+  registerLeaseOwnerAndEventTests(fixture);
 }

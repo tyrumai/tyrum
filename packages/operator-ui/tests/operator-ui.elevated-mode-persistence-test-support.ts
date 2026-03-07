@@ -1,18 +1,12 @@
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import {
-  createBearerTokenAuth,
-  createOperatorCore,
-} from "../../operator-core/src/index.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { ElevatedModeGate, ElevatedModeProvider } from "../src/index.js";
-import {
-  TEST_DEVICE_IDENTITY,
-  stubPersistentStorage,
-} from "./operator-ui.test-support.js";
+import { TEST_DEVICE_IDENTITY, stubPersistentStorage } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
-export function registerElevatedModePersistenceTests(): void {
+function registerElevatedModePersistenceClearTests(): void {
   it("clears persistent elevated mode when the controller becomes available after a 4001 disconnect", async () => {
     const session = new Map<string, string>();
     session.set(
@@ -163,7 +157,9 @@ export function registerElevatedModePersistenceTests(): void {
     });
     container.remove();
   });
+}
 
+function registerElevatedModePersistenceValidationTests(): void {
   it("clears invalid persisted elevated mode state during restore", async () => {
     const session = new Map<string, string>();
     session.set(
@@ -287,5 +283,9 @@ export function registerElevatedModePersistenceTests(): void {
     });
     container.remove();
   });
+}
 
+export function registerElevatedModePersistenceTests(): void {
+  registerElevatedModePersistenceClearTests();
+  registerElevatedModePersistenceValidationTests();
 }

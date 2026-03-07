@@ -2,6 +2,8 @@ import { vi } from "vitest";
 import type { OperatorWsClient, OperatorHttpClient } from "../../operator-core/src/deps.js";
 import {
   type Handler,
+  type SampleExecutionStepStatus,
+  type SampleExecutionAttemptStatus,
   EXECUTION_PROFILE_IDS,
   TEST_DEVICE_IDENTITY,
 } from "./operator-ui.test-support.js";
@@ -259,16 +261,10 @@ export function sampleExecutionRun() {
   } as const;
 }
 
-export type SampleExecutionStepStatus =
-  | "queued"
-  | "running"
-  | "paused"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
-  | "skipped";
-
-export type SampleExecutionAttemptStatus = "running" | "succeeded" | "failed" | "timed_out" | "cancelled";
+export type {
+  SampleExecutionStepStatus,
+  SampleExecutionAttemptStatus,
+} from "./operator-ui.test-support.js";
 
 export function sampleExecutionStep({
   stepId,

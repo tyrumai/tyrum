@@ -5,7 +5,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { makeDeps, makeClient } from "./ws-workboard.test-support.js";
 
-export function registerWorkboardScopeErrorTests(): void {
+function registerScopeTests(): void {
   it("denies work.* requests for scoped tokens without scopes (deny-by-default)", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, {
@@ -121,7 +121,9 @@ export function registerWorkboardScopeErrorTests(): void {
       await db.close();
     }
   });
+}
 
+function registerErrorHandlingTests(): void {
   it("sanitizes SQL-level failures for work.* requests", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm);
@@ -254,7 +256,9 @@ export function registerWorkboardScopeErrorTests(): void {
       await db.close();
     }
   });
+}
 
+function registerValidationTests(): void {
   it("returns unsupported_request for work.list when DB is not configured", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm);
@@ -497,4 +501,10 @@ export function registerWorkboardScopeErrorTests(): void {
       await db.close();
     }
   });
+}
+
+export function registerWorkboardScopeErrorTests(): void {
+  registerScopeTests();
+  registerErrorHandlingTests();
+  registerValidationTests();
 }

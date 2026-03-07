@@ -42,12 +42,24 @@ describe("WS handler integration", () => {
   });
 
   const ctx: TestContext = {
-    get server() { return server; },
-    setServer(s) { server = s; },
-    get homeDir() { return homeDir; },
-    setHomeDir(d) { homeDir = d; },
-    get clients() { return clients; },
-    get containers() { return containers; },
+    get server() {
+      return server;
+    },
+    setServer(s) {
+      server = s;
+    },
+    get homeDir() {
+      return homeDir;
+    },
+    setHomeDir(d) {
+      homeDir = d;
+    },
+    get clients() {
+      return clients;
+    },
+    get containers() {
+      return containers;
+    },
   };
 
   registerWsHandlerAuthTests(ctx);

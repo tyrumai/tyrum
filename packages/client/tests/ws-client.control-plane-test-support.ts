@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
@@ -12,12 +12,14 @@ import {
   delay,
 } from "./ws-client.test-support.js";
 
-export function registerControlPlaneTests(fixture: {
+type ControlPlaneFixture = {
   getServer: () => TestServer | undefined;
   setServer: (s: TestServer) => void;
   getClient: () => TyrumClient | undefined;
   setClient: (c: TyrumClient) => void;
-}): void {
+};
+
+function registerControlPlaneSessionTests(fixture: ControlPlaneFixture): void {
   it("sends typed control-plane requests for session/workflow/pairing/presence", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -28,72 +30,6 @@ export function registerControlPlaneTests(fixture: {
       reconnect: false,
     });
     fixture.setClient(client);
-
-    const approvedPairing = {
-      pairing: {
-        pairing_id: 11,
-        status: "approved",
-        trust_level: "remote",
-        requested_at: "2026-02-21T12:00:00Z",
-        node: {
-          node_id: "node-1",
-          capabilities: ["http"],
-          last_seen_at: "2026-02-21T12:00:00Z",
-        },
-        capability_allowlist: [
-          {
-            id: descriptorIdForClientCapability("http"),
-            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-          },
-        ],
-        resolution: {
-          decision: "approved",
-          resolved_at: "2026-02-21T12:00:10Z",
-          reason: "looks good",
-        },
-        resolved_at: "2026-02-21T12:00:10Z",
-      },
-    };
-
-    const deniedPairing = {
-      pairing: {
-        pairing_id: 11,
-        status: "denied",
-        requested_at: "2026-02-21T12:00:00Z",
-        node: {
-          node_id: "node-1",
-          capabilities: ["http"],
-          last_seen_at: "2026-02-21T12:00:00Z",
-        },
-        capability_allowlist: [],
-        resolution: {
-          decision: "denied",
-          resolved_at: "2026-02-21T12:00:11Z",
-          reason: "not trusted",
-        },
-        resolved_at: "2026-02-21T12:00:11Z",
-      },
-    };
-
-    const revokedPairing = {
-      pairing: {
-        pairing_id: 11,
-        status: "revoked",
-        requested_at: "2026-02-21T12:00:00Z",
-        node: {
-          node_id: "node-1",
-          capabilities: ["http"],
-          last_seen_at: "2026-02-21T12:00:00Z",
-        },
-        capability_allowlist: [],
-        resolution: {
-          decision: "revoked",
-          resolved_at: "2026-02-21T12:00:12Z",
-          reason: "removed",
-        },
-        resolved_at: "2026-02-21T12:00:12Z",
-      },
-    };
 
     client.connect();
     const ws = await server.waitForClient();
@@ -219,6 +155,91 @@ export function registerControlPlaneTests(fixture: {
       }),
     );
     await expect(deleteP).resolves.toEqual({ session_id: "ui:ui-1" });
+  });
+}
+
+function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
+  it("sends typed workflow/pairing/presence/capability requests", async () => {
+    const server = createTestServer();
+    fixture.setServer(server);
+    const client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: ["http"],
+      reconnect: false,
+    });
+    fixture.setClient(client);
+
+    const approvedPairing = {
+      pairing: {
+        pairing_id: 11,
+        status: "approved",
+        trust_level: "remote",
+        requested_at: "2026-02-21T12:00:00Z",
+        node: {
+          node_id: "node-1",
+          capabilities: ["http"],
+          last_seen_at: "2026-02-21T12:00:00Z",
+        },
+        capability_allowlist: [
+          {
+            id: descriptorIdForClientCapability("http"),
+            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+          },
+        ],
+        resolution: {
+          decision: "approved",
+          resolved_at: "2026-02-21T12:00:10Z",
+          reason: "looks good",
+        },
+        resolved_at: "2026-02-21T12:00:10Z",
+      },
+    };
+
+    const deniedPairing = {
+      pairing: {
+        pairing_id: 11,
+        status: "denied",
+        requested_at: "2026-02-21T12:00:00Z",
+        node: {
+          node_id: "node-1",
+          capabilities: ["http"],
+          last_seen_at: "2026-02-21T12:00:00Z",
+        },
+        capability_allowlist: [],
+        resolution: {
+          decision: "denied",
+          resolved_at: "2026-02-21T12:00:11Z",
+          reason: "not trusted",
+        },
+        resolved_at: "2026-02-21T12:00:11Z",
+      },
+    };
+
+    const revokedPairing = {
+      pairing: {
+        pairing_id: 11,
+        status: "revoked",
+        requested_at: "2026-02-21T12:00:00Z",
+        node: {
+          node_id: "node-1",
+          capabilities: ["http"],
+          last_seen_at: "2026-02-21T12:00:00Z",
+        },
+        capability_allowlist: [],
+        resolution: {
+          decision: "revoked",
+          resolved_at: "2026-02-21T12:00:12Z",
+          reason: "removed",
+        },
+        resolved_at: "2026-02-21T12:00:12Z",
+      },
+    };
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await delay(10);
 
     const runP = client.workflowRun({
       key: "agent:agent-1:main",
@@ -395,7 +416,9 @@ export function registerControlPlaneTests(fixture: {
     );
     await expect(evidenceP).resolves.toBeUndefined();
   });
+}
 
+function registerControlPlaneErrorTests(fixture: ControlPlaneFixture): void {
   it("rejects void helper responses with non-empty ack payloads", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -498,4 +521,10 @@ export function registerControlPlaneTests(fixture: {
       ]),
     ).rejects.toThrow(/disconnected/i);
   });
+}
+
+export function registerControlPlaneTests(fixture: ControlPlaneFixture): void {
+  registerControlPlaneSessionTests(fixture);
+  registerControlPlaneWorkflowTests(fixture);
+  registerControlPlaneErrorTests(fixture);
 }

@@ -20,7 +20,7 @@ import {
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { action, enqueuePlan, drain, mockCallCount } from "./execution-engine.test-support.js";
 
-export function registerPolicyEvaluationTests(fixture: { db: () => SqliteDb }): void {
+function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
   it("pauses when policy requires approval for a step and resumes after approval", async () => {
     const db = fixture.db();
     const snapshotDal = new PolicySnapshotDal(db);
@@ -181,7 +181,9 @@ export function registerPolicyEvaluationTests(fixture: { db: () => SqliteDb }): 
       await rm(home, { recursive: true, force: true });
     }
   });
+}
 
+function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
   it("persists policy decisions (reasons + snapshot + applied override ids) on attempts", async () => {
     const db = fixture.db();
     const home = await mkdtemp(join(tmpdir(), "tyrum-policy-home-"));
@@ -384,4 +386,9 @@ export function registerPolicyEvaluationTests(fixture: { db: () => SqliteDb }): 
       await rm(home, { recursive: true, force: true });
     }
   });
+}
+
+export function registerPolicyEvaluationTests(fixture: { db: () => SqliteDb }): void {
+  registerPolicyApprovalTests(fixture);
+  registerPolicyPersistenceTests(fixture);
 }

@@ -1,15 +1,12 @@
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import {
-  createBearerTokenAuth,
-  createOperatorCore,
-} from "../../operator-core/src/index.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
 import { clickButtonByTestId, clickTabByLabel } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
-export function registerConnectDesktopTests(): void {
+function registerConnectDesktopBasicTests(): void {
   it("connects via the primary connect action", () => {
     const ws = new FakeWsClient(false);
     const { http } = createFakeHttpClient();
@@ -210,7 +207,9 @@ export function registerConnectDesktopTests(): void {
     container.remove();
     delete (window as unknown as Record<string, unknown>)["tyrumDesktop"];
   });
+}
 
+function registerConnectDesktopSettingsTests(): void {
   it("disables node settings save while settings are saving", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -475,4 +474,9 @@ export function registerConnectDesktopTests(): void {
     container.remove();
     delete (window as unknown as Record<string, unknown>)["tyrumDesktop"];
   });
+}
+
+export function registerConnectDesktopTests(): void {
+  registerConnectDesktopBasicTests();
+  registerConnectDesktopSettingsTests();
 }

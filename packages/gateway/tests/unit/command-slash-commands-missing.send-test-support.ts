@@ -3,7 +3,7 @@ import { executeCommand } from "../../src/modules/commands/dispatcher.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import type { SlashCommandFixture } from "./command-slash-commands-missing.test-support.js";
 
-export function registerSendTests(fixture: SlashCommandFixture): void {
+function registerBasicSendTests(fixture: SlashCommandFixture): void {
   it("supports /send <on|off|inherit>", async () => {
     const db = fixture.openDb();
 
@@ -73,7 +73,9 @@ export function registerSendTests(fixture: SlashCommandFixture): void {
 
     expect(result.data).toMatchObject({ key, send_policy: "off" });
   });
+}
 
+function registerSendResolutionTests(fixture: SlashCommandFixture): void {
   it("resolves /send with channel:default to the default-account session only", async () => {
     const db = fixture.openDb();
 
@@ -241,4 +243,9 @@ export function registerSendTests(fixture: SlashCommandFixture): void {
     );
     expect(stillStored?.send_policy).toBe("off");
   });
+}
+
+export function registerSendTests(fixture: SlashCommandFixture): void {
+  registerBasicSendTests(fixture);
+  registerSendResolutionTests(fixture);
 }

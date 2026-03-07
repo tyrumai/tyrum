@@ -24,6 +24,159 @@ export interface IntentGuardrailDeps {
   approvalManager: ExecutionEngineApprovalManager;
 }
 
+function resolveToolIntentError(
+  toolIntent: { provenance_json?: unknown; artifact_id: string } | undefined,
+  intentGraphSha256: string,
+): string | undefined {
+  if (!toolIntent) return "missing ToolIntent (kind=tool_intent) for this step";
+  const prov = toolIntent.provenance_json;
+  if (!isRecord(prov)) return "ToolIntent provenance_json must be an object";
+
+  const goal = typeof prov["goal"] === "string" ? prov["goal"].trim() : "";
+  const expectedValue =
+    typeof prov["expected_value"] === "string" ? prov["expected_value"].trim() : "";
+  const sideEffectClass =
+    typeof prov["side_effect_class"] === "string" ? prov["side_effect_class"].trim() : "";
+  const riskClass = typeof prov["risk_class"] === "string" ? prov["risk_class"].trim() : "";
+  const expectedEvidence = prov["expected_evidence"];
+  const budget = prov["cost_budget"];
+  const budgetOk =
+    isRecord(budget) &&
+    (normalizeNonnegativeInt(budget["max_usd_micros"]) !== undefined ||
+      normalizePositiveInt(budget["max_duration_ms"]) !== undefined ||
+      normalizeNonnegativeInt(budget["max_total_tokens"]) !== undefined);
+  const claimedSha =
+    typeof prov["intent_graph_sha256"] === "string" ? prov["intent_graph_sha256"].trim() : "";
+
+  if (!goal) return "ToolIntent.goal is required";
+  if (!expectedValue) return "ToolIntent.expected_value is required";
+  if (!budgetOk) return "ToolIntent.cost_budget is required";
+  if (!sideEffectClass) return "ToolIntent.side_effect_class is required";
+  if (!riskClass) return "ToolIntent.risk_class is required";
+  if (expectedEvidence === undefined) return "ToolIntent.expected_evidence is required";
+  if (!claimedSha) return "ToolIntent.intent_graph_sha256 is required";
+  if (claimedSha !== intentGraphSha256) {
+    return "ToolIntent intent_graph_sha256 does not match current intent graph";
+  }
+  return undefined;
+}
+
+async function writeGuardrailEvidence(
+  deps: IntentGuardrailDeps,
+  tx: SqlDb,
+  dal: WorkboardDal,
+  opts: {
+    run: RunnableRunRow;
+    step: StepRow;
+    actionType: ActionPrimitiveT["type"];
+    clock: ExecutionClock;
+  },
+  workItemId: string,
+  intentGraphSha256: string,
+  toolIntentArtifactId: string | undefined,
+  error: string,
+): Promise<{ artifactId: string | undefined; decisionId: string | undefined }> {
+  const scope = {
+    tenant_id: opts.run.tenant_id,
+    agent_id: opts.run.agent_id,
+    workspace_id: opts.run.workspace_id,
+  } as const;
+
+  let artifactId: string | undefined;
+  let decisionId: string | undefined;
+  const evidenceSavepoint = `tyrum_intent_guardrail_evidence_${String(opts.step.step_index)}`;
+  let evidenceSavepointCreated = false;
+  try {
+    await tx.exec(`SAVEPOINT ${evidenceSavepoint}`);
+    evidenceSavepointCreated = true;
+
+    const reportLines = [
+      "Blocked side-effecting step due to ToolIntent deviation.",
+      "",
+      `- run_id: \`${opts.run.run_id}\``,
+      `- step_index: \`${String(opts.step.step_index)}\``,
+      `- action_type: \`${opts.actionType}\``,
+      `- reason: ${error}`,
+      `- intent_graph_sha256: \`${intentGraphSha256}\``,
+      toolIntentArtifactId ? `- tool_intent_artifact_id: \`${toolIntentArtifactId}\`` : undefined,
+    ];
+    const report = await dal.createArtifact({
+      scope,
+      artifact: {
+        work_item_id: workItemId,
+        kind: "verification_report",
+        title: "Intent guardrail: pause before side effect",
+        body_md: reportLines.filter((line): line is string => Boolean(line)).join("\n"),
+        refs: [`run:${opts.run.run_id}`, `step:${String(opts.step.step_index)}`],
+        created_by_run_id: opts.run.run_id,
+        provenance_json: {
+          v: 1,
+          kind: "intent_guardrail",
+          reason: error,
+          intent_graph_sha256: intentGraphSha256,
+          run_id: opts.run.run_id,
+          step_index: opts.step.step_index,
+          action_type: opts.actionType,
+          tool_intent_artifact_id: toolIntentArtifactId,
+        },
+      },
+      createdAtIso: opts.clock.nowIso,
+    });
+    artifactId = report.artifact_id;
+
+    const rationaleLines = [
+      "Pausing execution before a side-effecting step because ToolIntent validation failed.",
+      "",
+      `Reason: ${error}`,
+      "",
+      `Expected intent graph hash: \`${intentGraphSha256}\``,
+      artifactId ? `Evidence artifact: \`${artifactId}\`` : undefined,
+    ];
+    const decision = await dal.createDecision({
+      scope,
+      decision: {
+        work_item_id: workItemId,
+        question: `Proceed with side-effecting step ${String(opts.step.step_index)}?`,
+        chosen: "pause_and_escalate",
+        alternatives: ["proceed_without_tool_intent", "cancel_step_or_run"],
+        rationale_md: rationaleLines.filter((line): line is string => Boolean(line)).join("\n"),
+        input_artifact_ids: artifactId ? [artifactId] : [],
+        created_by_run_id: opts.run.run_id,
+      },
+      createdAtIso: opts.clock.nowIso,
+    });
+    decisionId = decision.decision_id;
+
+    await tx.exec(`RELEASE SAVEPOINT ${evidenceSavepoint}`);
+  } catch (err) {
+    if (evidenceSavepointCreated) {
+      try {
+        await tx.exec(`ROLLBACK TO SAVEPOINT ${evidenceSavepoint}`);
+        await tx.exec(`RELEASE SAVEPOINT ${evidenceSavepoint}`);
+      } catch (rollbackErr) {
+        const rollbackMessage =
+          rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
+        deps.logger?.warn("intent_guardrail.evidence_rollback_failed", {
+          run_id: opts.run.run_id,
+          step_id: opts.step.step_id,
+          error: rollbackMessage,
+        });
+      }
+    }
+
+    artifactId = undefined;
+    decisionId = undefined;
+    const message = err instanceof Error ? err.message : String(err);
+    deps.logger?.warn("intent_guardrail.evidence_write_failed", {
+      run_id: opts.run.run_id,
+      step_id: opts.step.step_id,
+      error: message,
+    });
+  }
+
+  return { artifactId, decisionId };
+}
+
 export async function maybePauseForToolIntentGuardrailTx(
   deps: IntentGuardrailDeps,
   tx: SqlDb,
@@ -57,7 +210,6 @@ export async function maybePauseForToolIntentGuardrailTx(
   } as const;
 
   const dal = new WorkboardDal(tx);
-
   const planId = parsePlanIdFromTriggerJson(opts.run.trigger_json) ?? opts.run.run_id;
 
   const pauseOpts: PauseRunForApprovalOpts = {
@@ -122,139 +274,22 @@ export async function maybePauseForToolIntentGuardrailTx(
     .find((a) => {
       const prov = a.provenance_json;
       if (!isRecord(prov)) return false;
-      const runId = prov["run_id"];
-      const stepIndex = prov["step_index"];
-      return runId === opts.run.run_id && stepIndex === opts.step.step_index;
+      return prov["run_id"] === opts.run.run_id && prov["step_index"] === opts.step.step_index;
     });
 
-  const resolveToolIntentError = (): string | undefined => {
-    if (!toolIntent) return "missing ToolIntent (kind=tool_intent) for this step";
-    const prov = toolIntent.provenance_json;
-    if (!isRecord(prov)) return "ToolIntent provenance_json must be an object";
-
-    const goal = typeof prov["goal"] === "string" ? prov["goal"].trim() : "";
-    const expectedValue =
-      typeof prov["expected_value"] === "string" ? prov["expected_value"].trim() : "";
-    const sideEffectClass =
-      typeof prov["side_effect_class"] === "string" ? prov["side_effect_class"].trim() : "";
-    const riskClass = typeof prov["risk_class"] === "string" ? prov["risk_class"].trim() : "";
-    const expectedEvidence = prov["expected_evidence"];
-    const budget = prov["cost_budget"];
-    const budgetOk =
-      isRecord(budget) &&
-      (normalizeNonnegativeInt(budget["max_usd_micros"]) !== undefined ||
-        normalizePositiveInt(budget["max_duration_ms"]) !== undefined ||
-        normalizeNonnegativeInt(budget["max_total_tokens"]) !== undefined);
-    const claimedSha =
-      typeof prov["intent_graph_sha256"] === "string" ? prov["intent_graph_sha256"].trim() : "";
-
-    if (!goal) return "ToolIntent.goal is required";
-    if (!expectedValue) return "ToolIntent.expected_value is required";
-    if (!budgetOk) return "ToolIntent.cost_budget is required";
-    if (!sideEffectClass) return "ToolIntent.side_effect_class is required";
-    if (!riskClass) return "ToolIntent.risk_class is required";
-    if (expectedEvidence === undefined) return "ToolIntent.expected_evidence is required";
-    if (!claimedSha) return "ToolIntent.intent_graph_sha256 is required";
-    if (claimedSha !== intentGraphSha256) {
-      return "ToolIntent intent_graph_sha256 does not match current intent graph";
-    }
-    return undefined;
-  };
-
-  const error = resolveToolIntentError();
+  const error = resolveToolIntentError(toolIntent, intentGraphSha256);
   if (!error) return undefined;
 
-  let artifactId: string | undefined;
-  let decisionId: string | undefined;
-  const evidenceSavepoint = `tyrum_intent_guardrail_evidence_${String(opts.step.step_index)}`;
-  let evidenceSavepointCreated = false;
-  try {
-    await tx.exec(`SAVEPOINT ${evidenceSavepoint}`);
-    evidenceSavepointCreated = true;
-
-    const reportLines = [
-      "Blocked side-effecting step due to ToolIntent deviation.",
-      "",
-      `- run_id: \`${opts.run.run_id}\``,
-      `- step_index: \`${String(opts.step.step_index)}\``,
-      `- action_type: \`${opts.actionType}\``,
-      `- reason: ${error}`,
-      `- intent_graph_sha256: \`${intentGraphSha256}\``,
-      toolIntent ? `- tool_intent_artifact_id: \`${toolIntent.artifact_id}\`` : undefined,
-    ];
-    const report = await dal.createArtifact({
-      scope,
-      artifact: {
-        work_item_id: workItemId,
-        kind: "verification_report",
-        title: "Intent guardrail: pause before side effect",
-        body_md: reportLines.filter((line): line is string => Boolean(line)).join("\n"),
-        refs: [`run:${opts.run.run_id}`, `step:${String(opts.step.step_index)}`],
-        created_by_run_id: opts.run.run_id,
-        provenance_json: {
-          v: 1,
-          kind: "intent_guardrail",
-          reason: error,
-          intent_graph_sha256: intentGraphSha256,
-          run_id: opts.run.run_id,
-          step_index: opts.step.step_index,
-          action_type: opts.actionType,
-          tool_intent_artifact_id: toolIntent?.artifact_id,
-        },
-      },
-      createdAtIso: opts.clock.nowIso,
-    });
-    artifactId = report.artifact_id;
-
-    const rationaleLines = [
-      "Pausing execution before a side-effecting step because ToolIntent validation failed.",
-      "",
-      `Reason: ${error}`,
-      "",
-      `Expected intent graph hash: \`${intentGraphSha256}\``,
-      artifactId ? `Evidence artifact: \`${artifactId}\`` : undefined,
-    ];
-    const decision = await dal.createDecision({
-      scope,
-      decision: {
-        work_item_id: workItemId,
-        question: `Proceed with side-effecting step ${String(opts.step.step_index)}?`,
-        chosen: "pause_and_escalate",
-        alternatives: ["proceed_without_tool_intent", "cancel_step_or_run"],
-        rationale_md: rationaleLines.filter((line): line is string => Boolean(line)).join("\n"),
-        input_artifact_ids: artifactId ? [artifactId] : [],
-        created_by_run_id: opts.run.run_id,
-      },
-      createdAtIso: opts.clock.nowIso,
-    });
-    decisionId = decision.decision_id;
-
-    await tx.exec(`RELEASE SAVEPOINT ${evidenceSavepoint}`);
-  } catch (err) {
-    if (evidenceSavepointCreated) {
-      try {
-        await tx.exec(`ROLLBACK TO SAVEPOINT ${evidenceSavepoint}`);
-        await tx.exec(`RELEASE SAVEPOINT ${evidenceSavepoint}`);
-      } catch (rollbackErr) {
-        const rollbackMessage =
-          rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
-        deps.logger?.warn("intent_guardrail.evidence_rollback_failed", {
-          run_id: opts.run.run_id,
-          step_id: opts.step.step_id,
-          error: rollbackMessage,
-        });
-      }
-    }
-
-    artifactId = undefined;
-    decisionId = undefined;
-    const message = err instanceof Error ? err.message : String(err);
-    deps.logger?.warn("intent_guardrail.evidence_write_failed", {
-      run_id: opts.run.run_id,
-      step_id: opts.step.step_id,
-      error: message,
-    });
-  }
+  const { artifactId, decisionId } = await writeGuardrailEvidence(
+    deps,
+    tx,
+    dal,
+    opts as typeof opts & { actionType: ActionPrimitiveT["type"] },
+    workItemId,
+    intentGraphSha256,
+    toolIntent?.artifact_id,
+    error,
+  );
 
   const paused = await deps.approvalManager.pauseRunForApproval(tx, pauseOpts, {
     kind: "intent",

@@ -6,12 +6,7 @@ import type {
   DesktopUiTree,
   DesktopWindow,
 } from "@tyrum/schemas";
-import {
-  MAX_ACTION_CHARS,
-  MAX_NAME_CHARS,
-  MAX_ROLE_CHARS,
-  clampTrimmed,
-} from "../a11y/schema-clamps.js";
+import { MAX_NAME_CHARS, MAX_ROLE_CHARS, clampTrimmed } from "../a11y/schema-clamps.js";
 
 export type AtSpiAccessibleRef = { busName: string; objectPath: string };
 

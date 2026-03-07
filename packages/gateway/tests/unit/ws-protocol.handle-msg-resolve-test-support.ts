@@ -6,16 +6,13 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import {
-  makeDeps,
-  makeClient,
-} from "./ws-protocol.test-support.js";
+import { makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
 /**
  * Approval list, approval resolve, and override tests for handleClientMessage.
  * Must be called inside a `describe("handleClientMessage")` block.
  */
-export function registerHandleMessageResolveTests(): void {
+function registerApprovalListAndResolveTests(): void {
   it("handles approval.list requests when approvalDal is configured", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
@@ -177,7 +174,9 @@ export function registerHandleMessageResolveTests(): void {
     expect(res.result.approval.status).toBe("approved");
     expect(res.result.approval.resolution.decision).toBe("approved");
   });
+}
 
+function registerOverrideTests(): void {
   it("does not create approve-always overrides when the approval resolves to denied", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
@@ -432,4 +431,9 @@ export function registerHandleMessageResolveTests(): void {
     expect(err.error.code).toBe("invalid_request");
     expect(policyOverrideDal.create).not.toHaveBeenCalled();
   });
+}
+
+export function registerHandleMessageResolveTests(): void {
+  registerApprovalListAndResolveTests();
+  registerOverrideTests();
 }

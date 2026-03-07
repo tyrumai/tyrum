@@ -6,10 +6,7 @@ import type { NormalizedThreadMessage } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { safeJsonParse } from "../../utils/json.js";
-import {
-  DEFAULT_CHANNEL_ACCOUNT_ID,
-  parseChannelSourceKey,
-} from "./interface.js";
+import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "./interface.js";
 import type {
   ChannelInboundQueueOverflowPolicy,
   ChannelInboundQueueOverflowResult,
