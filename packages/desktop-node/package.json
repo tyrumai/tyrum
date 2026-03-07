@@ -1,6 +1,8 @@
 {
   "name": "@tyrum/desktop-node",
   "version": "0.1.0",
+  "author": "Ron Hernaus <ron@virtunet.nl>",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "tyrum-desktop-node": "./bin/tyrum-desktop-node.mjs"

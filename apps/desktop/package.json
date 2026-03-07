@@ -2,6 +2,8 @@
   "name": "tyrum-desktop",
   "version": "0.1.0",
   "private": true,
+  "author": "Ron Hernaus <ron@virtunet.nl>",
+  "license": "MIT",
   "type": "module",
   "main": "dist/main/index.mjs",
   "scripts": {

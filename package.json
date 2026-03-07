@@ -1,5 +1,7 @@
 {
   "private": true,
+  "author": "Ron Hernaus <ron@virtunet.nl>",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": "24.x"
