@@ -197,14 +197,14 @@ class SharedPluginCatalogProvider implements PluginCatalogProvider {
     await mkdir(pluginDir, { recursive: true, mode: 0o700 });
 
     try {
-      const manifestRaw = `${JSON.stringify(plugin, null, 2)}\n`;
-      await writeFile(join(pluginDir, "plugin.json"), manifestRaw, { mode: 0o600 });
-
       await this.writePluginPayload({
         pluginDir,
         entryPath: entry,
         artifactBody: artifact.body,
       });
+
+      const manifestPath = await ensurePluginManifestFile(pluginDir, plugin);
+      const manifestRaw = await readFile(manifestPath, "utf-8");
 
       const entryPath = resolveSafeChildPath(pluginDir, entry);
       const entryRaw = await readFile(entryPath, "utf-8");
@@ -326,6 +326,22 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function ensurePluginManifestFile(
+  pluginDir: string,
+  manifest: PluginManifestT,
+): Promise<string> {
+  for (const fileName of ["plugin.yml", "plugin.yaml", "plugin.json"]) {
+    const candidate = join(pluginDir, fileName);
+    if (await pathExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  const manifestPath = join(pluginDir, "plugin.json");
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
+  return manifestPath;
 }
 
 export function createPluginCatalogProvider(opts: {

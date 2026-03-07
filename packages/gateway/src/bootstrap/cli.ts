@@ -1,5 +1,4 @@
 import { X509Certificate } from "node:crypto";
-import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DeploymentConfig } from "@tyrum/schemas";
@@ -18,11 +17,18 @@ import {
   resolveGatewayMigrationsDir,
   type GatewayStartOptions,
 } from "./config.js";
+import { CLI_HELP_TEXT } from "./cli-help.js";
+import { runImportHome } from "./cli-import-home.js";
+import {
+  normalizeVersionSpecifier,
+  parseUpdateChannel,
+  runGatewayUpdate,
+  type UpdateChannel,
+} from "./cli-update.js";
 import type { GatewayRole } from "./network.js";
 import { main } from "./runtime.js";
 
-type UpdateChannel = "stable" | "beta" | "dev";
-
+export { resolveGatewayUpdateTarget } from "./cli-update.js";
 type CliCommand =
   | ({
       kind: "start";
@@ -33,57 +39,18 @@ type CliCommand =
   | { kind: "help" }
   | { kind: "version" }
   | { kind: "update"; channel: UpdateChannel; version?: string }
-  | { kind: "plugin_install"; source_dir: string; home?: string };
-
-const UPDATE_CHANNEL_TAG: Record<UpdateChannel, string> = {
-  stable: "latest",
-  beta: "next",
-  dev: "dev",
-};
-
+  | { kind: "plugin_install"; source_dir: string; home?: string }
+  | {
+      kind: "import_home";
+      source_home: string;
+      tenantId?: string;
+      home?: string;
+      db?: string;
+      migrationsDir?: string;
+    };
 function printCliHelp(): void {
-  console.log(`Tyrum gateway
-
-Usage:
-  tyrum [start|edge|worker|scheduler] [--home <path>] [--db <path|postgres-uri>] [--host <host>] [--port <port>] [--role <role>]
-  tyrum check
-  tyrum tls fingerprint
-  tyrum toolrunner
-  tyrum plugin install <dir> [--home <path>]
-  tyrum update [--channel stable|beta|dev] [--version <version>]
-  tyrum --version
-  tyrum --help
-
-Notes:
-  - Running without subcommands starts all roles (edge + worker + scheduler).
-  - --version takes precedence over --channel for updates.
-`);
+  console.log(CLI_HELP_TEXT);
 }
-
-function parseUpdateChannel(raw: string): UpdateChannel {
-  if (raw === "stable" || raw === "beta" || raw === "dev") {
-    return raw;
-  }
-  throw new Error(`invalid update channel '${raw}' (expected stable, beta, or dev)`);
-}
-
-function normalizeVersionSpecifier(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    throw new Error("update --version requires a non-empty value");
-  }
-
-  const normalized = trimmed.startsWith("v") && trimmed.length > 1 ? trimmed.slice(1) : trimmed;
-
-  if (!/^[0-9A-Za-z][0-9A-Za-z.-]*$/.test(normalized)) {
-    throw new Error(
-      `invalid version '${raw}'. Use release versions like 2026.2.18 or 2026.2.18-beta.1`,
-    );
-  }
-
-  return normalized;
-}
-
 type CommonDbFlags = { home?: string; db?: string; migrationsDir?: string };
 
 function parsePortFlag(value: string): number {
@@ -375,6 +342,59 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     return { kind: "plugin_install", source_dir: sourceDir, home };
   }
 
+  if (first === "import-home") {
+    const common: CommonDbFlags = {};
+    let sourceHome: string | undefined;
+    let tenantId: string | undefined;
+
+    for (let index = 0; index < rest.length; index += 1) {
+      const arg = rest[index];
+      if (!arg) continue;
+
+      if (arg === "-h" || arg === "--help") {
+        return { kind: "help" };
+      }
+
+      const commonFlag = parseCommonDbFlag(rest, index, common);
+      if (commonFlag.handled) {
+        index = commonFlag.nextIndex;
+        continue;
+      }
+
+      if (arg === "--tenant-id") {
+        const value = rest[index + 1];
+        if (!value) throw new Error("--tenant-id requires a value");
+        tenantId = value.trim();
+        index += 1;
+        continue;
+      }
+
+      if (arg.startsWith("-")) {
+        throw new Error(`unsupported import-home argument '${arg}'`);
+      }
+
+      if (!sourceHome) {
+        sourceHome = arg;
+        continue;
+      }
+
+      throw new Error(`unexpected import-home argument '${arg}'`);
+    }
+
+    if (!sourceHome) {
+      throw new Error("import-home requires a source home directory");
+    }
+
+    return {
+      kind: "import_home",
+      source_home: sourceHome,
+      tenantId,
+      home: common.home,
+      db: common.db,
+      migrationsDir: common.migrationsDir,
+    };
+  }
+
   if (first !== "update") throw new Error(`unknown command '${first}'`);
 
   let channel: UpdateChannel = "stable";
@@ -412,50 +432,6 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   }
 
   return { kind: "update", channel, version };
-}
-
-function npmExecutableForPlatform(platform: NodeJS.Platform): string {
-  return platform === "win32" ? "npm.cmd" : "npm";
-}
-
-export function resolveGatewayUpdateTarget(channel: UpdateChannel, version?: string): string {
-  if (version && version.length > 0) return version;
-  return UPDATE_CHANNEL_TAG[channel];
-}
-
-async function runGatewayUpdate(channel: UpdateChannel, version?: string): Promise<number> {
-  const target = resolveGatewayUpdateTarget(channel, version);
-  const packageSpec = `@tyrum/gateway@${target}`;
-  const npmCmd = npmExecutableForPlatform(process.platform);
-
-  console.log(`Updating ${packageSpec} ...`);
-
-  const exitCode = await new Promise<number>((resolve, reject) => {
-    const child = spawn(npmCmd, ["install", "-g", packageSpec], {
-      stdio: "inherit",
-    });
-
-    child.once("error", (error) => {
-      reject(error);
-    });
-
-    child.once("exit", (code, signal) => {
-      if (signal) {
-        console.error(`Update process terminated by signal: ${signal}`);
-        resolve(1);
-        return;
-      }
-      resolve(code ?? 1);
-    });
-  });
-
-  if (exitCode === 0) {
-    console.log("Update completed.");
-    return 0;
-  }
-
-  console.error(`Update failed with exit code ${exitCode}.`);
-  return exitCode;
 }
 
 async function runGatewayCheck(cmd: Extract<CliCommand, { kind: "check" }>): Promise<number> {
@@ -575,6 +551,10 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
       console.error(`plugin.install: failed: ${message}`);
       return 1;
     }
+  }
+
+  if (command.kind === "import_home") {
+    return await runImportHome(command);
   }
 
   if (command.kind === "update") {
