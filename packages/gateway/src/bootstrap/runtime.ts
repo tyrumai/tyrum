@@ -192,7 +192,7 @@ export { runShutdownCleanup } from "./runtime-builders.js";
 
 export async function main(input?: GatewayRole | GatewayStartOptions): Promise<void> {
   const context = await createGatewayBootContext(input);
-  const background = startBackgroundSchedulers(context);
+  const background = await startBackgroundSchedulers(context);
   const otel = await maybeStartOtel({
     serviceName: "tyrum-gateway",
     serviceVersion: VERSION,
