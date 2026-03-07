@@ -249,8 +249,8 @@ export class AuthTokenService {
     const expectedDeviceId = opts?.expectedDeviceId?.trim();
     for (const entry of this.provisionedTokens) {
       if (!constantTimeStringEqual(entry.token, candidate)) continue;
-      if (expectedRole && entry.claims.role !== expectedRole) return null;
-      if (expectedDeviceId && entry.claims.device_id !== expectedDeviceId) return null;
+      if (expectedRole && entry.claims.role !== expectedRole) continue;
+      if (expectedDeviceId && entry.claims.device_id !== expectedDeviceId) continue;
       return entry.claims;
     }
     return null;

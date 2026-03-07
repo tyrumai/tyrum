@@ -153,4 +153,39 @@ describe("AuthTokenService", () => {
       }),
     );
   });
+
+  it("continues scanning provisioned tokens after a role or device mismatch", async () => {
+    const svc = new AuthTokenService(db, {
+      provisionedTokens: [
+        {
+          token: "shared-token",
+          tenantId: DEFAULT_TENANT_ID,
+          role: "admin",
+          scopes: ["*"],
+          tokenId: "provisioned-admin",
+        },
+        {
+          token: "shared-token",
+          tenantId: DEFAULT_TENANT_ID,
+          role: "client",
+          deviceId: "device-2",
+          scopes: ["operator.read"],
+          tokenId: "provisioned-device",
+        },
+      ],
+    });
+
+    expect(
+      await svc.authenticate("shared-token", {
+        expectedRole: "client",
+        expectedDeviceId: "device-2",
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        token_id: "provisioned-device",
+        role: "client",
+        device_id: "device-2",
+      }),
+    );
+  });
 });

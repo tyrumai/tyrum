@@ -43,6 +43,7 @@ import type {
   GatewayServer,
   ProtocolRuntime,
 } from "./runtime-shared.js";
+import { isSharedStateMode } from "../modules/runtime-state/mode.js";
 export { startBackgroundSchedulers } from "./runtime-builders-background.js";
 export { createShutdownHandler, runShutdownCleanup } from "./runtime-builders-shutdown.js";
 
@@ -93,15 +94,23 @@ export async function createProtocolRuntime(
     context.shouldRunEdge || context.shouldRunWorker
       ? (edgeEngine ?? createExecutionEngine(context, { includeSecrets: false }))
       : undefined;
-  const hooksRuntime =
-    context.container.gatewayConfigStore && (context.shouldRunEdge || context.shouldRunWorker)
-      ? new LifecycleHooksRuntime({
-          db: context.container.db,
-          engine: approvalEngine!,
-          policyService: context.container.policyService,
-          configStore: context.container.gatewayConfigStore,
-        })
-      : undefined;
+  const shouldEnableHooksRuntime =
+    context.shouldRunEdge || context.shouldRunWorker
+      ? isSharedStateMode(context.deploymentConfig)
+        ? Boolean(context.container.gatewayConfigStore)
+        : context.lifecycleHooks.length > 0
+      : false;
+  const hooksRuntime = shouldEnableHooksRuntime
+    ? new LifecycleHooksRuntime({
+        db: context.container.db,
+        engine: approvalEngine!,
+        policyService: context.container.policyService,
+        configStore: isSharedStateMode(context.deploymentConfig)
+          ? context.container.gatewayConfigStore
+          : undefined,
+        hooks: context.lifecycleHooks,
+      })
+    : undefined;
 
   const taskResults = new TaskResultRegistry();
   const wsEventDal = new WsEventDal(context.container.db);

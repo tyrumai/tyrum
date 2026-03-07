@@ -1,6 +1,7 @@
 import { wireContainer } from "../container.js";
 import { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";
+import { loadLifecycleHooksFromHome } from "../modules/hooks/config.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { maybeStartOtel } from "../modules/observability/otel.js";
 import { createDbSecretProviderFactory } from "../modules/secret/create-secret-provider.js";
@@ -185,6 +186,9 @@ async function createGatewayBootContext(
     version: VERSION,
   });
   logger.info("gateway.instance", { instance_id: instanceId });
+  const lifecycleHooks = isSharedStateMode(deploymentConfig)
+    ? []
+    : await loadLifecycleHooksFromHome(tyrumHome, logger);
 
   const secretKeyProvider = isSharedStateMode(deploymentConfig)
     ? createSharedSecretKeyProvider()
@@ -216,7 +220,7 @@ async function createGatewayBootContext(
     logger,
     authTokens,
     secretProviderForTenant: secrets.secretProviderForTenant,
-    lifecycleHooks: [],
+    lifecycleHooks,
   };
 }
 
