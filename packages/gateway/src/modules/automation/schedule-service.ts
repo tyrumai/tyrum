@@ -595,6 +595,10 @@ function ceilToNextMinute(afterMs: number): number {
   return floored + 60_000;
 }
 
+function resolveIntervalScheduleSlotMs(nowMs: number, intervalMs: number): number {
+  return Math.floor(nowMs / intervalMs) * intervalMs;
+}
+
 export function nextCronFireAtMs(input: {
   expression: string;
   timeZone: string;
@@ -622,7 +626,7 @@ export function resolvePendingScheduleFireMs(input: {
 
   if (input.config.cadence.type === "interval") {
     const intervalMs = input.config.cadence.interval_ms;
-    const slotMs = Math.floor(input.nowMs / intervalMs) * intervalMs;
+    const slotMs = resolveIntervalScheduleSlotMs(input.nowMs, intervalMs);
     const lastFiredAtMs = input.lastFiredAtMs ?? 0;
     return slotMs > lastFiredAtMs ? slotMs : undefined;
   }
@@ -646,11 +650,11 @@ export function resolveNextScheduleFireMs(input: {
 
   if (input.config.cadence.type === "interval") {
     const intervalMs = input.config.cadence.interval_ms;
-    const lastFiredAtMs = input.lastFiredAtMs;
-    if (typeof lastFiredAtMs === "number" && Number.isFinite(lastFiredAtMs)) {
-      return lastFiredAtMs + intervalMs;
+    const pendingFireAtMs = resolvePendingScheduleFireMs(input);
+    if (pendingFireAtMs !== undefined) {
+      return pendingFireAtMs;
     }
-    return Math.floor(input.nowMs / intervalMs) * intervalMs + intervalMs;
+    return resolveIntervalScheduleSlotMs(input.nowMs, intervalMs) + intervalMs;
   }
 
   return nextCronFireAtMs({

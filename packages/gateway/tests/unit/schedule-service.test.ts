@@ -150,6 +150,26 @@ describe("ScheduleService", () => {
     expect(resumed.next_fire_at).toBe("2026-03-06T11:00:00.000Z");
   });
 
+  it("keeps interval next_fire_at aligned with the scheduler slot when firings were missed", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-06T10:14:00.000Z"));
+
+    const schedule = await service.createSchedule({
+      tenantId: DEFAULT_TENANT_ID,
+      kind: "heartbeat",
+      cadence: { type: "interval", interval_ms: 5 * 60_000 },
+      execution: {
+        kind: "agent_turn",
+        instruction: "Check workboard state.",
+      },
+      delivery: { mode: "quiet" },
+      lastFiredAtMs: Date.parse("2026-03-06T10:00:00.000Z"),
+    });
+
+    expect(schedule.last_fired_at).toBe("2026-03-06T10:00:00.000Z");
+    expect(schedule.next_fire_at).toBe("2026-03-06T10:10:00.000Z");
+  });
+
   it("ensures the default heartbeat for a membership without creating duplicates", async () => {
     const first = await service.ensureDefaultHeartbeatScheduleForMembership({
       tenantId: DEFAULT_TENANT_ID,
