@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { expect, it } from "vitest";
 import { createDbSecretProvider } from "../../src/modules/secret/create-secret-provider.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { turnDirect } from "../../src/modules/agent/runtime/turn-direct.js";
 import {
   createFetchStub,
   createSequencedToolLoopLanguageModel,
@@ -107,7 +108,8 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
       }),
     });
 
-    const result = await (runtime as unknown as { turnDirect: Function }).turnDirect(
+    const result = await turnDirect(
+      (runtime as any).turnDirectDeps,
       { channel: "test", thread_id: "thread-resume-approved", message: "run command" },
       {
         execution: {
@@ -120,8 +122,8 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
       },
     );
 
-    expect(result.reply).toBe("done");
-    expect(result.used_tools).toContain("tool.exec");
+    expect(result.response.reply).toBe("done");
+    expect(result.response.used_tools).toContain("tool.exec");
     expect(await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID })).toHaveLength(0);
   }, 10_000);
 

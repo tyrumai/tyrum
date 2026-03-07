@@ -9,6 +9,7 @@ import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal
 import { DbSecretProvider } from "../../src/modules/secret/provider.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { resolveProfileSecrets } from "../../src/modules/agent/runtime/provider-resolution.js";
+import { resolveSessionModel } from "../../src/modules/agent/runtime/session-model-resolution.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -260,20 +261,15 @@ describe("AgentRuntime OAuth refresh", () => {
       return new Response("not found", { status: 404 });
     };
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
-      container,
-      agentId: "agent-1",
-      secretProvider,
-      fetchImpl,
-    });
-
-    const model = await (runtime as any).resolveSessionModel({
-      config: { model: { model: "openai/gpt-4.1", options: {} } },
-      tenantId: DEFAULT_TENANT_ID,
-      sessionId: randomUUID(),
-      fetchImpl,
-    });
+    const model = await resolveSessionModel(
+      { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
+      {
+        config: { model: { model: "openai/gpt-4.1", options: {} } },
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: randomUUID(),
+        fetchImpl,
+      },
+    );
 
     await model.doGenerate({} as any);
     await model.doGenerate({} as any);
@@ -348,20 +344,15 @@ describe("AgentRuntime OAuth refresh", () => {
       return new Response("not found", { status: 404 });
     };
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
-      container,
-      agentId: "agent-1",
-      secretProvider,
-      fetchImpl,
-    });
-
-    const model = await (runtime as any).resolveSessionModel({
-      config: { model: { model: "openai/gpt-4.1", options: {} } },
-      tenantId: DEFAULT_TENANT_ID,
-      sessionId: randomUUID(),
-      fetchImpl,
-    });
+    const model = await resolveSessionModel(
+      { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
+      {
+        config: { model: { model: "openai/gpt-4.1", options: {} } },
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: randomUUID(),
+        fetchImpl,
+      },
+    );
 
     await model.doGenerate({} as any);
     expect(await secretProvider.resolve(refreshHandle)).toBe("REFRESH_TOKEN");
@@ -404,20 +395,15 @@ describe("AgentRuntime OAuth refresh", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
-      container,
-      agentId: "agent-1",
-      secretProvider,
-      fetchImpl,
-    });
-
-    const model = await (runtime as any).resolveSessionModel({
-      config: { model: { model: "openai/gpt-4.1", options: {} } },
-      tenantId: DEFAULT_TENANT_ID,
-      sessionId: randomUUID(),
-      fetchImpl,
-    });
+    const model = await resolveSessionModel(
+      { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
+      {
+        config: { model: { model: "openai/gpt-4.1", options: {} } },
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: randomUUID(),
+        fetchImpl,
+      },
+    );
 
     await model.doGenerate({} as any);
 

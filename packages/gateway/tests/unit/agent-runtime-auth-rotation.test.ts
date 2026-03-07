@@ -8,6 +8,7 @@ import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
 import { APICallError, type LanguageModelV3 } from "@ai-sdk/provider";
 import { DbSecretProvider } from "../../src/modules/secret/provider.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { resolveSessionModel } from "../../src/modules/agent/runtime/session-model-resolution.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -121,29 +122,20 @@ describe("AgentRuntime auth profile rotation", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
-      container,
-      agentId: "agent-1",
-      secretProvider,
-      fetchImpl,
-    });
-
-    const model = await (
-      runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }
-    ).resolveSessionModel({
-      config: {
-        model: {
-          model: "openai/gpt-4.1",
-          options: {},
+    const model = await resolveSessionModel(
+      { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
+      {
+        config: {
+          model: {
+            model: "openai/gpt-4.1",
+            options: {},
+          },
         },
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: randomUUID(),
+        fetchImpl,
       },
-      tenantId: DEFAULT_TENANT_ID,
-      sessionId: randomUUID(),
-      fetchImpl,
-    });
+    );
 
     await model.doGenerate({} as any);
     await model.doGenerate({} as any);
@@ -205,29 +197,20 @@ describe("AgentRuntime auth profile rotation", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
-      container,
-      agentId: "agent-1",
-      secretProvider,
-      fetchImpl,
-    });
-
-    const model = await (
-      runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }
-    ).resolveSessionModel({
-      config: {
-        model: {
-          model: "openai/gpt-4.1",
-          options: {},
+    const model = await resolveSessionModel(
+      { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
+      {
+        config: {
+          model: {
+            model: "openai/gpt-4.1",
+            options: {},
+          },
         },
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: randomUUID(),
+        fetchImpl,
       },
-      tenantId: DEFAULT_TENANT_ID,
-      sessionId: randomUUID(),
-      fetchImpl,
-    });
+    );
 
     await expect(model.doGenerate({} as any)).rejects.toThrow("payment required");
     expect(usedApiKeys).toEqual(["PAYMENT1", "PAYMENT2"]);

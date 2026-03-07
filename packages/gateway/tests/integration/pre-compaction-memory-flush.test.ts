@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { MockLanguageModelV3 } from "ai/test";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import { prepareTurn } from "../../src/modules/agent/runtime/turn-preparation.js";
+import { turnDirect } from "../../src/modules/agent/runtime/turn-direct.js";
 import { maybeRunPreCompactionMemoryFlush } from "../../src/modules/agent/runtime/pre-compaction-memory-flush.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
@@ -409,7 +411,7 @@ describe("Pre-compaction memory flush", () => {
       timestamp: new Date().toISOString(),
     });
 
-    const prepared = await (runtime as unknown as { prepareTurn: Function }).prepareTurn({
+    const prepared = await prepareTurn((runtime as any).prepareTurnDeps, {
       channel: "test",
       thread_id: "thread-idempotent",
       message: "second",
@@ -508,20 +510,22 @@ describe("Pre-compaction memory flush", () => {
       >[0]["mcpManager"],
     });
 
-    const first = await (runtime as unknown as { turnDirect: Function }).turnDirect(
+    const first = await turnDirect(
+      (runtime as any).turnDirectDeps,
       { channel: "test", thread_id: "thread-timeout", message: "first" },
       { timeoutMs: 1_000 },
     );
-    expect(first.reply).toBe("a1");
+    expect(first.response.reply).toBe("a1");
 
     const startMs = performance.now();
-    const second = await (runtime as unknown as { turnDirect: Function }).turnDirect(
+    const second = await turnDirect(
+      (runtime as any).turnDirectDeps,
       { channel: "test", thread_id: "thread-timeout", message: "second" },
       { timeoutMs: 100 },
     );
     const elapsedMs = performance.now() - startMs;
 
-    expect(second.reply).toBe("a2");
+    expect(second.response.reply).toBe("a2");
     expect(elapsedMs).toBeLessThan(200);
   });
 });

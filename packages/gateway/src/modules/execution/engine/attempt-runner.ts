@@ -1,133 +1,43 @@
-import type {
-  ActionPrimitive as ActionPrimitiveT,
-  ArtifactRef as ArtifactRefT,
-  EvaluationContext,
-} from "@tyrum/schemas";
+import type { ArtifactRef as ArtifactRefT, EvaluationContext } from "@tyrum/schemas";
 import { evaluatePostcondition, PostconditionError } from "@tyrum/schemas";
 import type { SqlDb } from "../../../statestore/types.js";
 import { safeJsonParse } from "../../../utils/json.js";
-import type { Logger } from "../../observability/logger.js";
-import type { PolicyService } from "../../policy/service.js";
 import { releaseWorkspaceLease } from "../../workspace/lease.js";
-import type {
-  MaybeRetryOrFailStepOpts,
-  PauseRunForApprovalInput,
-  PauseRunForApprovalOpts,
-} from "./approval-manager.js";
+import type { PauseRunForApprovalInput } from "./approval-manager.js";
 import {
   releaseConcurrencySlotsTx,
   releaseLaneAndWorkspaceLeasesTx,
 } from "./concurrency-manager.js";
-import { toolCallFromAction } from "./tool-call.js";
+import type { StepExecutionContext, StepResult } from "./types.js";
 import type {
-  ClockFn,
-  ExecutionConcurrencyLimits,
-  StepExecutionContext,
-  StepExecutor,
-  StepResult,
-} from "./types.js";
-
-type PauseRunForApprovalFn = (
-  tx: SqlDb,
-  opts: PauseRunForApprovalOpts,
-  input: PauseRunForApprovalInput,
-) => Promise<{ approvalId: string; resumeToken: string }>;
-type RecordArtifactsScope = {
-  tenantId: string;
-  runId: string;
-  stepId: string;
-  attemptId: string;
-  workspaceId: string;
-  agentId: string | null;
-};
-type RecordArtifactsFn = (
-  tx: SqlDb,
-  scope: RecordArtifactsScope,
-  artifacts: ArtifactRefT[],
-) => Promise<void>;
-type AttemptOutcome =
-  | { kind: "paused"; reason: string; approvalId: string }
-  | { kind: "succeeded" }
-  | { kind: "cancelled" }
-  | { kind: "failed"; status: string; error: string };
-type AttemptPolicyContext = Pick<
+  AttemptOutcome,
+  AttemptStatusContext,
   ExecuteAttemptOptions,
-  "action" | "agentId" | "attemptId" | "runId" | "stepId" | "tenantId" | "workspaceId"
->;
-type AttemptStatusContext = Pick<
-  ExecuteAttemptOptions,
-  "attemptId" | "tenantId" | "key" | "lane" | "workspaceId" | "workerId"
->;
+  ExecutionAttemptRunnerOptions,
+  PreparedAttemptResult,
+} from "./attempt-runner-types.js";
+import {
+  persistAttemptPolicyContext,
+  logAttemptStart,
+  logAttemptOutcome,
+} from "./attempt-runner-helpers.js";
 
-interface ExecutionAttemptRunnerOptions {
-  db: SqlDb;
-  clock: ClockFn;
-  logger?: Logger;
-  policyService?: PolicyService;
-  concurrencyLimits?: ExecutionConcurrencyLimits;
-  redactText: (text: string) => string;
-  redactUnknown: <T>(value: T) => T;
-  executeWithTimeout: (
-    executor: StepExecutor,
-    action: ActionPrimitiveT,
-    planId: string,
-    stepIndex: number,
-    timeoutMs: number,
-    context: StepExecutionContext,
-  ) => Promise<StepResult>;
-  resolveSecretScopesFromArgs: (
-    tenantId: string,
-    args: unknown,
-    context?: { runId?: string; stepId?: string; attemptId?: string },
-  ) => Promise<string[]>;
-  retryOrFailStep: (opts: MaybeRetryOrFailStepOpts) => Promise<boolean>;
-  pauseRunForApproval: PauseRunForApprovalFn;
-  recordArtifactsTx: RecordArtifactsFn;
-  emitAttemptUpdatedTx: (tx: SqlDb, attemptId: string) => Promise<void>;
-  emitStepUpdatedTx: (tx: SqlDb, stepId: string) => Promise<void>;
-}
-
-export interface ExecuteAttemptOptions {
-  planId: string;
-  stepIndex: number;
-  action: ActionPrimitiveT;
-  postconditionJson: string | null;
-  maxAttempts: number;
-  timeoutMs: number;
-  tenantId: string;
-  runId: string;
-  jobId: string;
-  agentId: string;
-  workspaceId: string;
-  key: string;
-  lane: string;
-  stepId: string;
-  attemptId: string;
-  attemptNum: number;
-  workerId: string;
-  executor: StepExecutor;
-}
-
-interface PreparedAttemptResult {
-  result: StepResult;
-  artifacts: ArtifactRefT[];
-  artifactsJson: string;
-  cost: Record<string, unknown>;
-  costJson: string;
-  evidenceJson: string | null;
-  pauseDetail?: string;
-  postconditionError?: string;
-  postconditionReportJson: string | null;
-  wallDurationMs: number;
-}
+export type { ExecuteAttemptOptions } from "./attempt-runner-types.js";
 
 export class ExecutionAttemptRunner {
   constructor(private readonly opts: ExecutionAttemptRunnerOptions) {}
 
   async executeAttempt(opts: ExecuteAttemptOptions): Promise<boolean> {
     const wallStartMs = Date.now();
-    this.logAttemptStart(opts);
-    await this.persistAttemptPolicyContext(opts).catch((err) => {
+    logAttemptStart(this.opts.logger, opts);
+    await persistAttemptPolicyContext(
+      {
+        db: this.opts.db,
+        policyService: this.opts.policyService,
+        resolveSecretScopesFromArgs: this.opts.resolveSecretScopesFromArgs,
+      },
+      opts,
+    ).catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
       this.opts.logger?.warn("execution.attempt.policy_persist_failed", {
         run_id: opts.runId,
@@ -149,24 +59,8 @@ export class ExecutionAttemptRunner {
     const prepared = this.prepareAttemptResult(opts, result, wallStartMs);
     const outcome = await this.persistAttemptOutcome(opts, prepared);
     await this.releaseCliWorkspaceLease(opts);
-    this.logAttemptOutcome(opts, prepared, outcome);
+    logAttemptOutcome(this.opts.logger, opts, prepared, outcome);
     return true;
-  }
-
-  private logAttemptStart(opts: ExecuteAttemptOptions): void {
-    this.opts.logger?.info("execution.attempt.start", {
-      plan_id: opts.planId,
-      job_id: opts.jobId,
-      run_id: opts.runId,
-      step_id: opts.stepId,
-      attempt_id: opts.attemptId,
-      attempt: opts.attemptNum,
-      key: opts.key,
-      lane: opts.lane,
-      worker_id: opts.workerId,
-      step_index: opts.stepIndex,
-      action_type: opts.action.type,
-    });
   }
 
   private async loadExecutionContext(opts: ExecuteAttemptOptions): Promise<StepExecutionContext> {
@@ -533,51 +427,6 @@ export class ExecutionAttemptRunner {
     });
   }
 
-  private async persistAttemptPolicyContext(opts: AttemptPolicyContext): Promise<void> {
-    const run = await this.opts.db.get<{ policy_snapshot_id: string | null }>(
-      "SELECT policy_snapshot_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
-      [opts.tenantId, opts.runId],
-    );
-    const policySnapshotId = run?.policy_snapshot_id?.trim() ?? "";
-    if (!policySnapshotId) return;
-
-    await this.opts.db.run(
-      "UPDATE execution_attempts SET policy_snapshot_id = ? WHERE tenant_id = ? AND attempt_id = ?",
-      [policySnapshotId, opts.tenantId, opts.attemptId],
-    );
-    if (!this.opts.policyService?.isEnabled()) return;
-
-    const tool = toolCallFromAction(opts.action);
-    const secretScopes = await this.opts.resolveSecretScopesFromArgs(
-      opts.tenantId,
-      opts.action.args ?? {},
-      { runId: opts.runId, stepId: opts.stepId, attemptId: opts.attemptId },
-    );
-    const evaluation = await this.opts.policyService.evaluateToolCallFromSnapshot({
-      tenantId: opts.tenantId,
-      policySnapshotId,
-      agentId: opts.agentId,
-      workspaceId: opts.workspaceId,
-      toolId: tool.toolId,
-      toolMatchTarget: tool.matchTarget,
-      url: tool.url,
-      secretScopes: secretScopes.length > 0 ? secretScopes : undefined,
-      inputProvenance: { source: "workflow", trusted: true },
-    });
-
-    await this.opts.db.run(
-      `UPDATE execution_attempts
-       SET policy_decision_json = ?, policy_applied_override_ids_json = ?
-       WHERE tenant_id = ? AND attempt_id = ?`,
-      [
-        JSON.stringify(evaluation.decision_record ?? { decision: evaluation.decision, rules: [] }),
-        JSON.stringify(evaluation.applied_override_ids ?? []),
-        opts.tenantId,
-        opts.attemptId,
-      ],
-    );
-  }
-
   private async markAttemptSucceeded(
     tx: SqlDb,
     opts: AttemptStatusContext,
@@ -650,46 +499,5 @@ export class ExecutionAttemptRunner {
         error: message,
       });
     });
-  }
-
-  private logAttemptOutcome(
-    opts: ExecuteAttemptOptions,
-    prepared: PreparedAttemptResult,
-    outcome: AttemptOutcome,
-  ): void {
-    const base = {
-      job_id: opts.jobId,
-      run_id: opts.runId,
-      step_id: opts.stepId,
-      attempt_id: opts.attemptId,
-    };
-    switch (outcome.kind) {
-      case "paused":
-        this.opts.logger?.info("execution.attempt.paused", {
-          ...base,
-          reason: outcome.reason,
-          approval_id: outcome.approvalId,
-        });
-        return;
-      case "succeeded":
-        this.opts.logger?.info("execution.attempt.succeeded", {
-          ...base,
-          status: "succeeded",
-          duration_ms: prepared.wallDurationMs,
-          cost: prepared.cost,
-        });
-        return;
-      case "cancelled":
-        this.opts.logger?.info("execution.attempt.cancelled", { ...base, status: "cancelled" });
-        return;
-      case "failed":
-        this.opts.logger?.info("execution.attempt.failed", {
-          ...base,
-          status: outcome.status,
-          error: outcome.error,
-          duration_ms: prepared.wallDurationMs,
-          cost: prepared.cost,
-        });
-    }
   }
 }

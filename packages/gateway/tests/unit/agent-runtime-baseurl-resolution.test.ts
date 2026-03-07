@@ -9,6 +9,7 @@ import { ExecutionProfileModelAssignmentDal } from "../../src/modules/models/exe
 import { createDbSecretProvider } from "../../src/modules/secret/create-secret-provider.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
+import { resolveSessionModel } from "../../src/modules/agent/runtime/session-model-resolution.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -127,25 +128,15 @@ describe("AgentRuntime baseURL resolution", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
-      container,
-      agentId: "agent-1",
-      tenantId: DEFAULT_TENANT_ID,
-      fetchImpl,
-      secretProvider,
-    });
-
-    const model = await (
-      runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }
-    ).resolveSessionModel({
-      config: { model: { model: "openai/gpt-4.1", options: {} } },
-      tenantId: DEFAULT_TENANT_ID,
-      sessionId: "session-1",
-      fetchImpl,
-    });
+    const model = await resolveSessionModel(
+      { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
+      {
+        config: { model: { model: "openai/gpt-4.1", options: {} } },
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: "session-1",
+        fetchImpl,
+      },
+    );
 
     await model.doGenerate({} as any);
 
@@ -203,25 +194,15 @@ describe("AgentRuntime baseURL resolution", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
-      container,
-      agentId: "agent-1",
-      tenantId: DEFAULT_TENANT_ID,
-      fetchImpl,
-      secretProvider,
-    });
-
-    const model = await (
-      runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }
-    ).resolveSessionModel({
-      config: { model: { model: "openai/gpt-4.1", options: {} } },
-      tenantId: DEFAULT_TENANT_ID,
-      sessionId: "session-account-baseurl",
-      fetchImpl,
-    });
+    const model = await resolveSessionModel(
+      { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
+      {
+        config: { model: { model: "openai/gpt-4.1", options: {} } },
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: "session-account-baseurl",
+        fetchImpl,
+      },
+    );
 
     await model.doGenerate({} as any);
 
@@ -286,27 +267,17 @@ describe("AgentRuntime baseURL resolution", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
-      container,
-      agentId: "agent-1",
-      tenantId: DEFAULT_TENANT_ID,
-      fetchImpl,
-      secretProvider,
-    });
-
-    const model = await (
-      runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }
-    ).resolveSessionModel({
-      config: {
-        model: { model: "cloudflare-workers-ai/@cf/meta/llama-3.1-8b-instruct", options: {} },
+    const model = await resolveSessionModel(
+      { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
+      {
+        config: {
+          model: { model: "cloudflare-workers-ai/@cf/meta/llama-3.1-8b-instruct", options: {} },
+        },
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: "session-cloudflare-template",
+        fetchImpl,
       },
-      tenantId: DEFAULT_TENANT_ID,
-      sessionId: "session-cloudflare-template",
-      fetchImpl,
-    });
+    );
 
     await model.doGenerate({} as any);
 
@@ -377,31 +348,21 @@ describe("AgentRuntime baseURL resolution", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
-      container,
-      agentId: "agent-1",
-      tenantId: DEFAULT_TENANT_ID,
-      fetchImpl,
-      secretProvider,
-    });
-
-    const model = await (
-      runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }
-    ).resolveSessionModel({
-      config: {
-        model: {
-          model: "openai/gpt-4.1",
-          options: { baseURL: "https://override.example/v1" },
+    const model = await resolveSessionModel(
+      { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
+      {
+        config: {
+          model: {
+            model: "openai/gpt-4.1",
+            options: { baseURL: "https://override.example/v1" },
+          },
         },
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: "session-assigned",
+        executionProfileId: "interaction",
+        fetchImpl,
       },
-      tenantId: DEFAULT_TENANT_ID,
-      sessionId: "session-assigned",
-      executionProfileId: "interaction",
-      fetchImpl,
-    });
+    );
 
     await model.doGenerate({} as any);
 
@@ -470,31 +431,21 @@ describe("AgentRuntime baseURL resolution", () => {
 
     const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
 
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-    const runtime = new AgentRuntime({
-      container,
-      agentId: "agent-1",
-      tenantId: DEFAULT_TENANT_ID,
-      fetchImpl,
-      secretProvider,
-    });
-
-    const model = await (
-      runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }
-    ).resolveSessionModel({
-      config: {
-        model: {
-          model: "openai/gpt-4.1",
-          options: { reasoning_effort: "high" },
+    const model = await resolveSessionModel(
+      { container, secretProvider, oauthLeaseOwner: "test", fetchImpl },
+      {
+        config: {
+          model: {
+            model: "openai/gpt-4.1",
+            options: { reasoning_effort: "high" },
+          },
         },
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: "session-assigned",
+        executionProfileId: "interaction",
+        fetchImpl,
       },
-      tenantId: DEFAULT_TENANT_ID,
-      sessionId: "session-assigned",
-      executionProfileId: "interaction",
-      fetchImpl,
-    });
+    );
 
     await model.doGenerate({} as any);
 

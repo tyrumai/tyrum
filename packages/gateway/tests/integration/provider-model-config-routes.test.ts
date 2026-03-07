@@ -1,144 +1,18 @@
-import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createTestApp } from "./helpers.js";
-
-const jsonHeaders = { "content-type": "application/json" };
-const EXECUTION_PROFILE_IDS = [
-  "interaction",
-  "explorer_ro",
-  "reviewer_ro",
-  "planner",
-  "jury",
-  "executor_rw",
-  "integrator",
-] as const;
-const defaultSessionScope = { tenantKey: "default", agentKey: "default", workspaceKey: "default" };
-const PROVIDER_METADATA = {
-  anthropic: {
-    name: "Anthropic",
-    env: ["ANTHROPIC_API_KEY"],
-    npm: "@ai-sdk/anthropic",
-    api: "https://api.anthropic.com/v1",
-    doc: "https://docs.anthropic.com",
-  },
-  openai: {
-    name: "OpenAI",
-    env: ["OPENAI_API_KEY"],
-    npm: "@ai-sdk/openai",
-    api: "https://api.openai.com/v1",
-    doc: "https://platform.openai.com/docs",
-  },
-  openrouter: {
-    name: "OpenRouter",
-    env: ["OPENROUTER_API_KEY"],
-    npm: "@openrouter/ai-sdk-provider",
-    api: "https://openrouter.ai/api/v1",
-    doc: "https://openrouter.ai/docs/api-reference/overview",
-  },
-} satisfies Record<string, Record<string, unknown>>;
-
-async function seedCatalog(
-  cacheDal: ModelsDevCacheDal,
-  catalog: Record<string, unknown>,
-): Promise<void> {
-  const nowIso = new Date().toISOString();
-  await cacheDal.upsert({
-    fetchedAt: nowIso,
-    etag: null,
-    sha256: "sha-test",
-    json: JSON.stringify(catalog),
-    source: "remote",
-    lastError: null,
-    nowIso,
-  });
-}
-
-function modelResponse(
-  id: string,
-  name: string,
-  extra: Record<string, unknown> = {},
-): Record<string, unknown> {
-  return { id, name, modalities: { output: ["text"] }, ...extra };
-}
-
-function catalogFor(
-  providerKey: keyof typeof PROVIDER_METADATA,
-  models: Record<string, unknown>,
-): Record<string, unknown> {
-  return { [providerKey]: { id: providerKey, ...PROVIDER_METADATA[providerKey], models } };
-}
-
-async function createProviderAccount(
-  app: Awaited<ReturnType<typeof createTestApp>>["app"],
-  body: Record<string, unknown>,
-): Promise<Response> {
-  return await app.request("/config/providers/accounts", {
-    method: "POST",
-    headers: jsonHeaders,
-    body: JSON.stringify(body),
-  });
-}
-
-async function createModelPreset(
-  app: Awaited<ReturnType<typeof createTestApp>>["app"],
-  body: Record<string, unknown>,
-): Promise<Response> {
-  return await app.request("/config/models/presets", {
-    method: "POST",
-    headers: jsonHeaders,
-    body: JSON.stringify(body),
-  });
-}
-
-async function createDefaultSession(
-  container: Awaited<ReturnType<typeof createTestApp>>["container"],
-  providerThreadId: string,
-) {
-  return await container.sessionDal.getOrCreate({
-    scopeKeys: defaultSessionScope,
-    connectorKey: "ui",
-    providerThreadId,
-    containerKind: "dm",
-  });
-}
-
-async function insertApiKeyProfile(
-  container: Awaited<ReturnType<typeof createTestApp>>["container"],
-  authProfileKey: string,
-  providerKey: string,
-): Promise<void> {
-  await container.db.run(
-    `INSERT INTO auth_profiles (
-       tenant_id,
-       auth_profile_id,
-       auth_profile_key,
-       provider_key,
-       type,
-       status
-     ) VALUES (?, ?, ?, ?, 'api_key', 'active')`,
-    [DEFAULT_TENANT_ID, randomUUID(), authProfileKey, providerKey],
-  );
-}
-
-async function insertSessionModelOverride(
-  container: Awaited<ReturnType<typeof createTestApp>>["container"],
-  sessionId: string,
-  modelId: string,
-): Promise<void> {
-  await container.db.run(
-    `INSERT INTO session_model_overrides (
-       tenant_id,
-       session_id,
-       model_id,
-       preset_key,
-       pinned_at,
-       updated_at
-     ) VALUES (?, ?, ?, NULL, datetime('now'), datetime('now'))`,
-    [DEFAULT_TENANT_ID, sessionId, modelId],
-  );
-}
+import {
+  EXECUTION_PROFILE_IDS,
+  ModelsDevCacheDal,
+  DEFAULT_TENANT_ID,
+  seedCatalog,
+  modelResponse,
+  catalogFor,
+  createProviderAccount,
+  createModelPreset,
+  createDefaultSession,
+  insertApiKeyProfile,
+  insertSessionModelOverride,
+} from "./provider-model-config-routes.test-support.js";
 
 describe("provider + model config routes", () => {
   it("lists registry entries and supports provider account CRUD", async () => {
@@ -212,9 +86,7 @@ describe("provider + model config routes", () => {
       display_name: "Primary Anthropic",
       method_key: "api_key",
       config: {},
-      secrets: {
-        api_key: "sk-test-1",
-      },
+      secrets: { api_key: "sk-test-1" },
     });
     expect(createRes.status).toBe(201);
     const created = (await createRes.json()) as {
@@ -255,7 +127,7 @@ describe("provider + model config routes", () => {
       `/config/providers/accounts/${encodeURIComponent(created.account.account_key)}`,
       {
         method: "PATCH",
-        headers: jsonHeaders,
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           display_name: "Renamed Anthropic",
           config: { baseURL: "https://example.test/v1" },
@@ -271,9 +143,7 @@ describe("provider + model config routes", () => {
 
     const deleteRes = await app.request(
       `/config/providers/accounts/${encodeURIComponent(created.account.account_key)}`,
-      {
-        method: "DELETE",
-      },
+      { method: "DELETE" },
     );
     expect(deleteRes.status).toBe(200);
   });
@@ -293,9 +163,7 @@ describe("provider + model config routes", () => {
       display_name: "Primary OpenAI",
       method_key: "api_key",
       config: {},
-      secrets: {
-        api_key: "sk-test-2",
-      },
+      secrets: { api_key: "sk-test-2" },
     });
     expect(accountRes.status).toBe(201);
 
@@ -344,9 +212,7 @@ describe("provider + model config routes", () => {
 
     const blockedDeleteRes = await app.request(
       `/config/models/presets/${encodeURIComponent(presetA.preset.preset_key)}`,
-      {
-        method: "DELETE",
-      },
+      { method: "DELETE" },
     );
     expect(blockedDeleteRes.status).toBe(409);
     const blockedDelete = (await blockedDeleteRes.json()) as {
@@ -360,7 +226,7 @@ describe("provider + model config routes", () => {
       `/config/models/presets/${encodeURIComponent(presetA.preset.preset_key)}`,
       {
         method: "DELETE",
-        headers: jsonHeaders,
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           replacement_assignments: Object.fromEntries(
             EXECUTION_PROFILE_IDS.map((profileId) => [profileId, presetB.preset.preset_key]),
@@ -411,7 +277,7 @@ describe("provider + model config routes", () => {
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,
-        randomUUID(),
+        "00000000-0000-4000-8000-000000000001",
         "legacy-openrouter",
         "Legacy OpenRouter",
         "openrouter",
@@ -461,17 +327,15 @@ describe("provider + model config routes", () => {
 
   it("returns 400 when assignments reference a missing preset", async () => {
     const { app } = await createTestApp();
-
     const assignmentsRes = await app.request("/config/models/assignments", {
       method: "PUT",
-      headers: jsonHeaders,
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         assignments: Object.fromEntries(
           EXECUTION_PROFILE_IDS.map((profileId) => [profileId, "missing-preset"]),
         ),
       }),
     });
-
     expect(assignmentsRes.status).toBe(400);
     const body = (await assignmentsRes.json()) as { error: string; message: string };
     expect(body.error).toBe("invalid_request");
@@ -492,9 +356,7 @@ describe("provider + model config routes", () => {
       display_name: "Primary OpenAI",
       method_key: "api_key",
       config: {},
-      secrets: {
-        api_key: "sk-test-last-account",
-      },
+      secrets: { api_key: "sk-test-last-account" },
     });
     expect(accountRes.status).toBe(201);
     const created = (await accountRes.json()) as { account: { account_key: string } };
@@ -509,9 +371,7 @@ describe("provider + model config routes", () => {
 
     const deleteRes = await app.request(
       `/config/providers/accounts/${encodeURIComponent(created.account.account_key)}`,
-      {
-        method: "DELETE",
-      },
+      { method: "DELETE" },
     );
     expect(deleteRes.status).toBe(409);
     const deleteBody = (await deleteRes.json()) as { message: string };
@@ -540,18 +400,14 @@ describe("provider + model config routes", () => {
       display_name: "Primary Anthropic",
       method_key: "api_key",
       config: {},
-      secrets: {
-        api_key: "sk-test-direct-override",
-      },
+      secrets: { api_key: "sk-test-direct-override" },
     });
     expect(accountRes.status).toBe(201);
 
     const session = await createDefaultSession(container, "thread-direct");
     await insertSessionModelOverride(container, session.session_id, "anthropic/claude-3.5-sonnet");
 
-    const deleteRes = await app.request("/config/providers/anthropic", {
-      method: "DELETE",
-    });
+    const deleteRes = await app.request("/config/providers/anthropic", { method: "DELETE" });
     expect(deleteRes.status).toBe(200);
 
     const override = await container.db.get<{ count: number }>(
@@ -587,9 +443,7 @@ describe("provider + model config routes", () => {
 
     const deleteRes = await app.request(
       `/config/providers/${encodeURIComponent(wildcardProviderKey)}`,
-      {
-        method: "DELETE",
-      },
+      { method: "DELETE" },
     );
     expect(deleteRes.status).toBe(200);
 
