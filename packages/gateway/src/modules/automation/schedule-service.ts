@@ -299,7 +299,10 @@ function defaultStoredLastFiredAtMs(
   config: NormalizedScheduleConfig,
   nowMs: number,
 ): number | null {
-  return config.cadence.type === "cron" ? nowMs : null;
+  if (config.cadence.type === "cron") {
+    return nowMs;
+  }
+  return resolveIntervalScheduleSlotMs(nowMs, config.cadence.interval_ms);
 }
 
 function normalizeScheduleConfig(input: {

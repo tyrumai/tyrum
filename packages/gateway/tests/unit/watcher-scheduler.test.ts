@@ -11,9 +11,11 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { PolicyBundle } from "@tyrum/schemas";
 import type { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import type { PolicyService } from "../../src/modules/policy/service.js";
+import { ScheduleService } from "../../src/modules/automation/schedule-service.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
+  IdentityScopeDal,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
 
@@ -36,6 +38,7 @@ describe("WatcherScheduler", () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     if (!didOpenDb) return;
     didOpenDb = false;
     await db.close();
@@ -110,6 +113,38 @@ describe("WatcherScheduler", () => {
     expect(
       episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "periodic_fired"),
     ).toHaveLength(1); // only fired once
+  });
+
+  it("does not fire a newly created interval schedule until the first full interval elapses", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-06T10:14:00.000Z"));
+
+    const service = new ScheduleService(db, new IdentityScopeDal(db));
+    await service.createSchedule({
+      tenantId: DEFAULT_TENANT_ID,
+      kind: "heartbeat",
+      cadence: { type: "interval", interval_ms: 5 * 60_000 },
+      execution: {
+        kind: "agent_turn",
+        instruction: "Check workboard state.",
+      },
+      delivery: { mode: "quiet" },
+    });
+
+    await scheduler.tick();
+
+    const firingsBeforeInterval = await db.get<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM watcher_firings",
+    );
+    expect(firingsBeforeInterval?.count).toBe(0);
+
+    vi.setSystemTime(new Date("2026-03-06T10:15:00.000Z"));
+    await scheduler.tick();
+
+    const firingsAfterInterval = await db.get<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM watcher_firings",
+    );
+    expect(firingsAfterInterval?.count).toBe(1);
   });
 
   it("skips watchers with invalid config", async () => {
