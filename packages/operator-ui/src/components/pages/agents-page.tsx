@@ -1,7 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import type { AgentStatusResponse } from "@tyrum/schemas";
 import { Bot, RefreshCw } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { MemoryInspector } from "../memory/memory-inspector.js";
 import { PageHeader } from "../layout/page-header.js";
 import { Badge } from "../ui/badge.js";
@@ -13,11 +13,11 @@ import { StatusDot } from "../ui/status-dot.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { RunsPage } from "./runs-page.js";
 import { cn } from "../../lib/cn.js";
-import { useOperatorStore } from "../../use-operator-store.js";
 import {
   getActiveAgentIdsFromSessionLanes,
   parseAgentIdFromKey,
 } from "../../lib/status-session-lanes.js";
+import { useOperatorStore } from "../../use-operator-store.js";
 
 type AgentOption = {
   agentKey: string;
@@ -45,7 +45,7 @@ function normalizeAgentOptions(
       });
     }
   }
-  return [...byKey.values()].sort((a, b) => a.agentKey.localeCompare(b.agentKey));
+  return [...byKey.values()].toSorted((a, b) => a.agentKey.localeCompare(b.agentKey));
 }
 
 function selectInitialAgentKey(input: {
@@ -56,6 +56,54 @@ function selectInitialAgentKey(input: {
   if (input.availableAgentKeys.includes(current)) return current;
   if (input.availableAgentKeys.includes("default")) return "default";
   return input.availableAgentKeys[0] ?? current;
+}
+
+function IdentityField({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: ReactNode;
+  valueClassName?: string;
+}) {
+  return (
+    <div>
+      <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">{label}</div>
+      <div className={cn("text-sm text-fg", valueClassName)}>{value}</div>
+    </div>
+  );
+}
+
+function SessionStat({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: ReactNode;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border/70 px-3 py-2">
+      <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">{label}</div>
+      <div className={cn("text-base font-medium text-fg", valueClassName)}>{value}</div>
+    </div>
+  );
+}
+
+function OutlineBadgeList({ emptyText, items }: { emptyText: string; items: string[] }) {
+  return items.length === 0 ? (
+    <div className="text-fg-muted">{emptyText}</div>
+  ) : (
+    <div className="flex flex-wrap gap-2">
+      {items.map((item) => (
+        <Badge key={item} variant="outline">
+          {item}
+        </Badge>
+      ))}
+    </div>
+  );
 }
 
 function AgentIdentityPanel({
@@ -92,6 +140,45 @@ function AgentIdentityPanel({
   }
 
   const detailedSkills = status.skills_detailed ?? [];
+  const overviewFields: Array<{ label: string; value: ReactNode; valueClassName?: string }> = [
+    { label: "Name", value: status.identity.name, valueClassName: "text-base font-medium" },
+    ...(status.identity.description
+      ? [{ label: "Description", value: status.identity.description }]
+      : []),
+    {
+      label: "Home",
+      value: (
+        <code className="break-all rounded bg-bg-subtle px-2 py-1 text-xs text-fg">
+          {status.home}
+        </code>
+      ),
+    },
+  ];
+  const modelFields: Array<{ label: string; value: ReactNode; valueClassName?: string }> = [
+    { label: "Primary", value: status.model.model, valueClassName: "text-base font-medium" },
+    ...(status.model.variant ? [{ label: "Variant", value: status.model.variant }] : []),
+  ];
+  const sessionStats = [
+    { label: "TTL", value: `${status.sessions.ttl_days} days` },
+    { label: "Max turns", value: status.sessions.max_turns },
+    { label: "Context window", value: `${status.sessions.context_pruning.max_messages} messages` },
+    {
+      label: "Tool prune keep",
+      value: `${status.sessions.context_pruning.tool_prune_keep_last_messages} messages`,
+    },
+  ];
+  const sessionPolicies = [
+    {
+      label: "Within-turn limits",
+      value: `${status.sessions.loop_detection.within_turn.consecutive_repeat_limit} consecutive • ${status.sessions.loop_detection.within_turn.cycle_repeat_limit} cycle`,
+      valueClassName: "text-sm font-normal",
+    },
+    {
+      label: "Cross-turn detection",
+      value: `${status.sessions.loop_detection.cross_turn.window_assistant_messages} msgs • ${status.sessions.loop_detection.cross_turn.similarity_threshold} similarity`,
+      valueClassName: "text-sm font-normal",
+    },
+  ];
 
   return (
     <div className="grid gap-4">
@@ -128,24 +215,14 @@ function AgentIdentityPanel({
                 <Badge variant="outline">Workspace skills trusted</Badge>
               ) : null}
             </div>
-            <div>
-              <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">Name</div>
-              <div className="text-base font-medium text-fg">{status.identity.name}</div>
-            </div>
-            {status.identity.description ? (
-              <div>
-                <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
-                  Description
-                </div>
-                <div className="text-sm text-fg">{status.identity.description}</div>
-              </div>
-            ) : null}
-            <div>
-              <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">Home</div>
-              <code className="break-all rounded bg-bg-subtle px-2 py-1 text-xs text-fg">
-                {status.home}
-              </code>
-            </div>
+            {overviewFields.map((field) => (
+              <IdentityField
+                key={field.label}
+                label={field.label}
+                value={field.value}
+                valueClassName={field.valueClassName}
+              />
+            ))}
           </CardContent>
         </Card>
 
@@ -154,20 +231,14 @@ function AgentIdentityPanel({
             <div className="text-sm font-medium text-fg">Model</div>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm">
-            <div>
-              <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
-                Primary
-              </div>
-              <div className="text-base font-medium text-fg">{status.model.model}</div>
-            </div>
-            {status.model.variant ? (
-              <div>
-                <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
-                  Variant
-                </div>
-                <div className="text-sm text-fg">{status.model.variant}</div>
-              </div>
-            ) : null}
+            {modelFields.map((field) => (
+              <IdentityField
+                key={field.label}
+                label={field.label}
+                value={field.value}
+                valueClassName={field.valueClassName}
+              />
+            ))}
             {status.model.fallback && status.model.fallback.length > 0 ? (
               <div className="grid gap-2">
                 <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
@@ -190,17 +261,7 @@ function AgentIdentityPanel({
             <div className="text-sm font-medium text-fg">Skills</div>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm">
-            {status.skills.length === 0 ? (
-              <div className="text-fg-muted">No skills configured.</div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {status.skills.map((skill) => (
-                  <Badge key={skill} variant="outline">
-                    {skill}
-                  </Badge>
-                ))}
-              </div>
-            )}
+            <OutlineBadgeList emptyText="No skills configured." items={status.skills} />
             {detailedSkills.length > 0 ? (
               <div className="grid gap-2">
                 {detailedSkills.map((skill) => (
@@ -229,17 +290,7 @@ function AgentIdentityPanel({
             <div className="text-sm font-medium text-fg">Tools</div>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm">
-            {status.tools.length === 0 ? (
-              <div className="text-fg-muted">No tools configured.</div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {status.tools.map((tool) => (
-                  <Badge key={tool} variant="outline">
-                    {tool}
-                  </Badge>
-                ))}
-              </div>
-            )}
+            <OutlineBadgeList emptyText="No tools configured." items={status.tools} />
           </CardContent>
         </Card>
 
@@ -277,54 +328,19 @@ function AgentIdentityPanel({
           </CardHeader>
           <CardContent className="grid gap-3 text-sm">
             <div className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-lg border border-border/70 px-3 py-2">
-                <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">TTL</div>
-                <div className="text-base font-medium text-fg">{status.sessions.ttl_days} days</div>
-              </div>
-              <div className="rounded-lg border border-border/70 px-3 py-2">
-                <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
-                  Max turns
-                </div>
-                <div className="text-base font-medium text-fg">{status.sessions.max_turns}</div>
-              </div>
-              <div className="rounded-lg border border-border/70 px-3 py-2">
-                <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
-                  Context window
-                </div>
-                <div className="text-base font-medium text-fg">
-                  {status.sessions.context_pruning.max_messages} messages
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/70 px-3 py-2">
-                <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
-                  Tool prune keep
-                </div>
-                <div className="text-base font-medium text-fg">
-                  {status.sessions.context_pruning.tool_prune_keep_last_messages} messages
-                </div>
-              </div>
+              {sessionStats.map((stat) => (
+                <SessionStat key={stat.label} label={stat.label} value={stat.value} />
+              ))}
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-lg border border-border/70 px-3 py-2">
-                <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
-                  Within-turn limits
-                </div>
-                <div className="text-fg">
-                  {status.sessions.loop_detection.within_turn.consecutive_repeat_limit} consecutive
-                  {" • "}
-                  {status.sessions.loop_detection.within_turn.cycle_repeat_limit} cycle
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/70 px-3 py-2">
-                <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
-                  Cross-turn detection
-                </div>
-                <div className="text-fg">
-                  {status.sessions.loop_detection.cross_turn.window_assistant_messages} msgs
-                  {" • "}
-                  {status.sessions.loop_detection.cross_turn.similarity_threshold} similarity
-                </div>
-              </div>
+              {sessionPolicies.map((stat) => (
+                <SessionStat
+                  key={stat.label}
+                  label={stat.label}
+                  value={stat.value}
+                  valueClassName={stat.valueClassName}
+                />
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -373,6 +389,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     }
     return ids;
   }, [runs.runsById, status.status?.session_lanes]);
+  const selectedAgentActive = activeAgentIds.has(selectedAgentKey);
 
   const refreshAgentList = async (): Promise<void> => {
     if (!isConnected) return;
@@ -571,10 +588,10 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
             </Badge>
             <div className="flex items-center gap-2 text-sm text-fg-muted">
               <StatusDot
-                variant={activeAgentIds.has(selectedAgentKey) ? "success" : "neutral"}
-                pulse={activeAgentIds.has(selectedAgentKey)}
+                variant={selectedAgentActive ? "success" : "neutral"}
+                pulse={selectedAgentActive}
               />
-              {activeAgentIds.has(selectedAgentKey) ? "Currently active" : "Currently idle"}
+              {selectedAgentActive ? "Currently active" : "Currently idle"}
             </div>
           </div>
 

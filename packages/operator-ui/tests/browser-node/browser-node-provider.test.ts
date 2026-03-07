@@ -45,7 +45,7 @@ class FakeTyrumClient {
   }
 }
 
-vi.mock("@tyrum/client", () => ({
+vi.mock("@tyrum/client/browser", () => ({
   autoExecute: vi.fn(),
   createBrowserLocalStorageDeviceIdentityStorage: vi.fn((_key: string) => ({})),
   formatDeviceIdentityError: vi.fn((err: unknown) => String(err)),

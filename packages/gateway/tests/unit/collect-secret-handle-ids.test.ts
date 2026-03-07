@@ -9,7 +9,7 @@ describe("collectSecretHandleIds", () => {
       c: { d: "secret:h1" },
       d: "secret:",
       e: "not-a-secret:h3",
-    }).sort();
+    }).toSorted();
 
     expect(ids).toEqual(["h1", "h2"]);
   });

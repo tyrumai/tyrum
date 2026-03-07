@@ -12,14 +12,13 @@ const telegramQueueCtor = vi.fn();
 
 vi.mock("../../src/modules/channels/telegram.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../src/modules/channels/telegram.js")>();
+  function TelegramChannelQueue(...args: unknown[]) {
+    telegramQueueCtor(...args);
+  }
 
   return {
     ...original,
-    TelegramChannelQueue: class TelegramChannelQueue {
-      constructor(...args: unknown[]) {
-        telegramQueueCtor(...args);
-      }
-    },
+    TelegramChannelQueue,
   };
 });
 

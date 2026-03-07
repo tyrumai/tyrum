@@ -11,7 +11,7 @@ import {
   type MemoryItem,
   type MemoryTombstone,
   type TyrumClientEvents,
-} from "@tyrum/client";
+} from "@tyrum/client/browser";
 import { httpAuthForAuth, wsTokenForAuth, type OperatorAuthStrategy } from "./auth.js";
 import type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
 import type { Unsubscribe } from "./store.js";

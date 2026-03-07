@@ -1,4 +1,4 @@
-import { createTyrumHttpClient } from "@tyrum/operator-core";
+import { createTyrumHttpClient } from "@tyrum/operator-core/browser";
 import {
   createBearerTokenAuth,
   createDeviceIdentity,
@@ -9,7 +9,7 @@ import {
   type ElevatedModeStore,
   type OperatorCore,
   type OperatorCoreManager,
-} from "@tyrum/operator-core";
+} from "@tyrum/operator-core/browser";
 import {
   createPersistentElevatedModeController,
   type ElevatedModeController,
@@ -246,13 +246,7 @@ async function bootDesktopOperatorCore({
 
     const ipcFetch = createDesktopIpcFetch(api);
     const elevatedModeStore = createElevatedModeStore();
-    const elevatedModeController = createDesktopElevatedModeController({
-      connection,
-      ipcFetch,
-      deviceIdentity,
-      elevatedModeStore,
-    });
-    let manager: OperatorCoreManager;
+    let manager: OperatorCoreManager | null = null;
     try {
       manager = createDesktopOperatorCoreManager({
         connection,
@@ -260,34 +254,48 @@ async function bootDesktopOperatorCore({
         deviceIdentity,
         elevatedModeStore,
       });
-    } catch (error) {
-      elevatedModeStore.dispose();
-      throw error;
-    }
 
-    if (isDisposed()) {
-      manager.dispose();
-      elevatedModeStore.dispose();
-      return;
-    }
+      const elevatedModeController = createDesktopElevatedModeController({
+        connection,
+        ipcFetch,
+        deviceIdentity,
+        elevatedModeStore,
+      });
 
-    installDesktopOperatorCoreManager({
-      manager,
-      elevatedModeStore,
+      if (isDisposed()) {
+        manager.dispose();
+        manager = null;
+        elevatedModeStore.dispose();
+        return;
+      }
+
+      installDesktopOperatorCoreManager({
+        manager,
+        elevatedModeStore,
+        managerRef,
+        unsubManagerRef,
+        elevatedModeStoreRef,
+        isDisposed,
+        setCore,
+      });
+      setElevatedModeController(elevatedModeController);
+      manager.getCore().connect();
+    } catch (err) {
+      manager?.dispose();
+      elevatedModeStore.dispose();
+      throw err;
+    }
+  } catch (err) {
+    if (isDisposed()) return;
+    disposeDesktopOperatorCoreManager({
       managerRef,
       unsubManagerRef,
       elevatedModeStoreRef,
-      isDisposed,
-      setCore,
     });
-    setElevatedModeController(elevatedModeController);
-    manager.getCore().connect();
-  } catch (error) {
-    if (isDisposed()) return;
-    setNeedsConfiguration(false);
-    setErrorMessage(toErrorMessage(error));
-    setCore(null);
     setElevatedModeController(null);
+    setCore(null);
+    setNeedsConfiguration(false);
+    setErrorMessage(toErrorMessage(err));
   } finally {
     if (!isDisposed()) {
       setBusy(false);
@@ -296,14 +304,13 @@ async function bootDesktopOperatorCore({
 }
 
 export function useDesktopOperatorCore(
-  options?: UseDesktopOperatorCoreOptions,
+  opts: UseDesktopOperatorCoreOptions = {},
 ): DesktopOperatorCoreState {
-  const api = window.tyrumDesktop;
-  const enabled = options?.enabled ?? true;
+  const enabled = opts.enabled ?? true;
   const [core, setCore] = useState<OperatorCore | null>(null);
   const [elevatedModeController, setElevatedModeController] =
     useState<ElevatedModeController | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(enabled);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [needsConfiguration, setNeedsConfiguration] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -312,14 +319,19 @@ export function useDesktopOperatorCore(
   const elevatedModeStoreRef = useRef<ElevatedModeStore | null>(null);
 
   const retry = useCallback(() => {
-    setRetryCount((c) => c + 1);
+    setBusy(true);
+    setErrorMessage(null);
+    setNeedsConfiguration(false);
+    setRetryCount((count) => count + 1);
   }, []);
 
   useEffect(() => {
-    let disposed = false;
-    const isDisposed = () => disposed;
-
-    if (!api || !enabled) {
+    if (!enabled) {
+      disposeDesktopOperatorCoreManager({
+        managerRef,
+        unsubManagerRef,
+        elevatedModeStoreRef,
+      });
       resetDesktopOperatorCoreState({
         setCore,
         setElevatedModeController,
@@ -329,6 +341,16 @@ export function useDesktopOperatorCore(
       });
       return;
     }
+
+    const api = window.tyrumDesktop;
+    if (!api) {
+      setBusy(false);
+      setErrorMessage("Desktop API unavailable.");
+      return;
+    }
+
+    let disposed = false;
+    const isDisposed = (): boolean => disposed;
 
     void bootDesktopOperatorCore({
       api,
@@ -345,9 +367,14 @@ export function useDesktopOperatorCore(
 
     return () => {
       disposed = true;
-      disposeDesktopOperatorCoreManager({ managerRef, unsubManagerRef, elevatedModeStoreRef });
+      disposeDesktopOperatorCoreManager({
+        managerRef,
+        unsubManagerRef,
+        elevatedModeStoreRef,
+      });
+      setElevatedModeController(null);
     };
-  }, [api, enabled, retryCount]);
+  }, [enabled, retryCount]);
 
   return { core, elevatedModeController, busy, errorMessage, needsConfiguration, retry };
 }

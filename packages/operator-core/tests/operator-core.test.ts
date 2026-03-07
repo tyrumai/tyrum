@@ -1,355 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
-import type {
-  Approval,
-  ExecutionAttempt,
-  ExecutionRun,
-  ExecutionStep,
-  NodePairingRequest,
-  PresenceEntry,
-} from "@tyrum/schemas";
+import type { Approval } from "@tyrum/schemas";
 import type {
   PairingListResponse,
   PresenceResponse,
   StatusResponse,
-  TyrumHttpClient,
   UsageResponse,
 } from "@tyrum/client";
+import { createElevatedModeStore } from "../src/index.js";
 import {
-  createElevatedModeStore,
-  createBearerTokenAuth,
-  createOperatorCore,
-} from "../src/index.js";
-
-type Handler = (data: unknown) => void;
-
-class FakeWsClient {
-  connected = false;
-  private readonly handlers = new Map<string, Set<Handler>>();
-
-  connect = vi.fn(() => {});
-  disconnect = vi.fn(() => {});
-  approvalList = vi.fn(async () => ({ approvals: [], next_cursor: undefined }));
-  approvalResolve = vi.fn(async () => ({ approval: sampleApprovalApproved() }));
-  memorySearch = vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined }) as unknown);
-  memoryList = vi.fn(async () => ({ v: 1, items: [], next_cursor: undefined }) as unknown);
-  memoryGet = vi.fn(async () => ({ v: 1, item: {} }) as unknown);
-  memoryForget = vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] }) as unknown);
-  memoryExport = vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" }) as unknown);
-  sessionList = vi.fn(async () => ({ sessions: [], next_cursor: null }));
-  sessionGet = vi.fn(async () => ({
-    session: {
-      session_id: "session-1",
-      agent_id: "default",
-      channel: "ui",
-      thread_id: "ui-1",
-      summary: "",
-      turns: [],
-      updated_at: "2026-01-01T00:00:00.000Z",
-      created_at: "2026-01-01T00:00:00.000Z",
-    },
-  }));
-  sessionCreate = vi.fn(async () => ({
-    session_id: "session-1",
-    agent_id: "default",
-    channel: "ui",
-    thread_id: "ui-1",
-  }));
-  sessionCompact = vi.fn(async () => ({
-    session_id: "session-1",
-    dropped_messages: 0,
-    kept_messages: 0,
-  }));
-  sessionDelete = vi.fn(async () => ({ session_id: "session-1" }));
-  sessionSend = vi.fn(async () => ({ session_id: "session-1", assistant_message: "" }));
-  workList = vi.fn(async () => ({ items: [] }) as unknown);
-
-  on(event: string, handler: Handler): void {
-    const existing = this.handlers.get(event);
-    if (existing) {
-      existing.add(handler);
-      return;
-    }
-    this.handlers.set(event, new Set([handler]));
-  }
-
-  off(event: string, handler: Handler): void {
-    const existing = this.handlers.get(event);
-    if (!existing) return;
-    existing.delete(handler);
-    if (existing.size === 0) {
-      this.handlers.delete(event);
-    }
-  }
-
-  emit(event: string, data: unknown): void {
-    if (event === "connected") {
-      this.connected = true;
-    }
-    if (event === "disconnected") {
-      this.connected = false;
-    }
-    for (const handler of this.handlers.get(event) ?? []) {
-      handler(data);
-    }
-  }
-}
-
-function sampleStatusResponse(): StatusResponse {
-  return {
-    status: "ok",
-    version: "0.1.0",
-    instance_id: "gateway-1",
-    role: "gateway",
-    db_kind: "sqlite",
-    is_exposed: false,
-    otel_enabled: false,
-    ws: null,
-    policy: null,
-    model_auth: null,
-    catalog_freshness: null,
-    session_lanes: null,
-    queue_depth: null,
-    sandbox: null,
-  };
-}
-
-function sampleUsageResponse(): UsageResponse {
-  return {
-    status: "ok",
-    generated_at: "2026-01-01T00:00:00.000Z",
-    scope: { kind: "deployment", run_id: null, key: null, agent_id: null },
-    local: {
-      attempts: { total_with_cost: 0, parsed: 0, invalid: 0 },
-      totals: { duration_ms: 0, input_tokens: 0, output_tokens: 0, total_tokens: 0, usd_micros: 0 },
-    },
-    provider: null,
-  };
-}
-
-function samplePresenceResponse(): PresenceResponse {
-  return {
-    status: "ok",
-    generated_at: "2026-01-01T00:00:00.000Z",
-    entries: [],
-  };
-}
-
-function samplePairingListResponse(): PairingListResponse {
-  return { status: "ok", pairings: [] };
-}
-
-function createFakeHttpClient(): Pick<
-  TyrumHttpClient,
-  "status" | "usage" | "presence" | "pairings" | "agentStatus"
-> & {
-  __calls: {
-    statusGet: number;
-    usageGet: number;
-    presenceList: number;
-    pairingsList: number;
-    agentStatusGet: number;
-  };
-} {
-  const calls = {
-    statusGet: 0,
-    usageGet: 0,
-    presenceList: 0,
-    pairingsList: 0,
-    agentStatusGet: 0,
-  };
-
-  return {
-    __calls: calls,
-    status: {
-      get: vi.fn(async () => {
-        calls.statusGet++;
-        return sampleStatusResponse();
-      }),
-    },
-    usage: {
-      get: vi.fn(async () => {
-        calls.usageGet++;
-        return sampleUsageResponse();
-      }),
-    },
-    presence: {
-      list: vi.fn(async () => {
-        calls.presenceList++;
-        return samplePresenceResponse();
-      }),
-    },
-    pairings: {
-      list: vi.fn(async () => {
-        calls.pairingsList++;
-        return samplePairingListResponse();
-      }),
-      approve: vi.fn(async () => ({ status: "ok", pairing: samplePairingApproved() })),
-      deny: vi.fn(async () => ({ status: "ok", pairing: samplePairingDenied() })),
-      revoke: vi.fn(async () => ({ status: "ok", pairing: samplePairingRevoked() })),
-    },
-    agentStatus: {
-      get: vi.fn(async () => {
-        calls.agentStatusGet++;
-        return { status: "ok" } as unknown;
-      }),
-    },
-  };
-}
-
-function sampleApprovalPending(): Approval {
-  return {
-    approval_id: 1,
-    kind: "other",
-    status: "pending",
-    prompt: "Approve?",
-    created_at: "2026-01-01T00:00:00.000Z",
-    resolution: null,
-  };
-}
-
-function sampleApprovalApproved(): Approval {
-  return {
-    approval_id: 1,
-    kind: "other",
-    status: "approved",
-    prompt: "Approve?",
-    created_at: "2026-01-01T00:00:00.000Z",
-    resolution: {
-      decision: "approved",
-      resolved_at: "2026-01-01T00:00:01.000Z",
-    },
-  };
-}
-
-function samplePairingPending(): NodePairingRequest {
-  return {
-    pairing_id: 10,
-    status: "pending",
-    requested_at: "2026-01-01T00:00:00.000Z",
-    node: {
-      node_id: "node-1",
-      label: "test-node",
-      capabilities: [],
-      last_seen_at: "2026-01-01T00:00:00.000Z",
-    },
-    capability_allowlist: [],
-    resolution: null,
-    resolved_at: null,
-  };
-}
-
-function samplePairingApproved(): NodePairingRequest {
-  return {
-    ...samplePairingPending(),
-    status: "approved",
-    trust_level: "local",
-    resolution: {
-      decision: "approved",
-      resolved_at: "2026-01-01T00:00:01.000Z",
-    },
-    resolved_at: "2026-01-01T00:00:01.000Z",
-  };
-}
-
-function samplePairingDenied(): NodePairingRequest {
-  return {
-    ...samplePairingPending(),
-    status: "denied",
-    resolution: {
-      decision: "denied",
-      resolved_at: "2026-01-01T00:00:01.000Z",
-    },
-    resolved_at: "2026-01-01T00:00:01.000Z",
-  };
-}
-
-function samplePairingRevoked(): NodePairingRequest {
-  return {
-    ...samplePairingPending(),
-    status: "revoked",
-    resolution: {
-      decision: "revoked",
-      resolved_at: "2026-01-01T00:00:01.000Z",
-    },
-    resolved_at: "2026-01-01T00:00:01.000Z",
-  };
-}
-
-function samplePresenceEntry(): PresenceEntry {
-  return {
-    instance_id: "client-1",
-    role: "client",
-    last_seen_at: "2026-01-01T00:00:00.000Z",
-  };
-}
-
-function sampleRun(): ExecutionRun {
-  return {
-    run_id: "run-1",
-    job_id: "job-1",
-    key: "t:test",
-    lane: "default",
-    status: "running",
-    attempt: 1,
-    created_at: "2026-01-01T00:00:00.000Z",
-    started_at: "2026-01-01T00:00:01.000Z",
-    finished_at: null,
-  };
-}
-
-function sampleStep(): ExecutionStep {
-  return {
-    step_id: "step-1",
-    run_id: "run-1",
-    step_index: 0,
-    status: "running",
-    action: { type: "Research", args: {} },
-    created_at: "2026-01-01T00:00:02.000Z",
-  };
-}
-
-function sampleAttempt(): ExecutionAttempt {
-  return {
-    attempt_id: "attempt-1",
-    step_id: "step-1",
-    attempt: 1,
-    status: "running",
-    started_at: "2026-01-01T00:00:03.000Z",
-    finished_at: null,
-    error: null,
-    artifacts: [],
-  };
-}
-
-function tick(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-function deferred<T>(): {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (error: unknown) => void;
-} {
-  let resolve!: (value: T) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
+  FakeWsClient,
+  createFakeHttpClient,
+  createTestOperatorCore,
+  deferred,
+  sampleApprovalApproved,
+  sampleApprovalPending,
+  sampleAttempt,
+  samplePairingPending,
+  samplePresenceEntry,
+  samplePresenceResponse,
+  sampleRun,
+  sampleStatusResponse,
+  sampleStep,
+  sampleUsageResponse,
+  tick,
+} from "./operator-core.test-support.js";
 
 describe("operator-core wiring", () => {
   it("exposes full HTTP client APIs even when deps.http is partial", () => {
-    const ws = new FakeWsClient();
-    const http = createFakeHttpClient();
-
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core } = createTestOperatorCore();
 
     expect(typeof (core.http as Record<string, unknown>)["models"]).toBe("object");
     expect(typeof (core.http as Record<string, unknown>)["authProfiles"]).toBe("object");
@@ -360,30 +38,14 @@ describe("operator-core wiring", () => {
   });
 
   it("exposes wsUrl + httpBaseUrl on the core", () => {
-    const ws = new FakeWsClient();
-    const http = createFakeHttpClient();
-
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core } = createTestOperatorCore();
 
     expect(core.wsUrl).toBe("ws://127.0.0.1:8788/ws");
     expect(core.httpBaseUrl).toBe("http://127.0.0.1:8788");
   });
 
   it("exposes memoryStore on the core", () => {
-    const ws = new FakeWsClient();
-    const http = createFakeHttpClient();
-
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core } = createTestOperatorCore();
 
     expect(
       (core as unknown as { memoryStore?: { getSnapshot: () => unknown } }).memoryStore,
@@ -391,15 +53,7 @@ describe("operator-core wiring", () => {
   });
 
   it("exposes chatStore on the core", () => {
-    const ws = new FakeWsClient();
-    const http = createFakeHttpClient();
-
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core } = createTestOperatorCore();
 
     expect(
       (core as unknown as { chatStore?: { getSnapshot: () => unknown } }).chatStore,
@@ -407,15 +61,7 @@ describe("operator-core wiring", () => {
   });
 
   it("exposes autoSyncStore and syncAllNow triggers tasks", async () => {
-    const ws = new FakeWsClient();
-    const http = createFakeHttpClient();
-
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core, http, ws } = createTestOperatorCore();
 
     expect(
       (core as unknown as { autoSyncStore?: { getSnapshot: () => unknown } }).autoSyncStore,
@@ -442,15 +88,7 @@ describe("operator-core wiring", () => {
   });
 
   it("exposes elevatedModeStore as a single source of truth", () => {
-    const ws = new FakeWsClient();
-    const http = createFakeHttpClient();
-
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core } = createTestOperatorCore();
 
     expect(core.elevatedModeStore.getSnapshot()).toMatchObject({
       status: "inactive",
@@ -460,15 +98,7 @@ describe("operator-core wiring", () => {
   });
 
   it("updates stores from WS events", async () => {
-    const ws = new FakeWsClient();
-    const http = createFakeHttpClient();
-
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core, http, ws } = createTestOperatorCore();
 
     core.connect();
     expect(core.connectionStore.getSnapshot().status).toBe("connecting");
@@ -519,15 +149,7 @@ describe("operator-core wiring", () => {
     vi.setSystemTime(new Date("2026-01-01T00:00:10.000Z"));
 
     try {
-      const ws = new FakeWsClient();
-      const http = createFakeHttpClient();
-
-      const core = createOperatorCore({
-        wsUrl: "ws://127.0.0.1:8788/ws",
-        httpBaseUrl: "http://127.0.0.1:8788",
-        auth: createBearerTokenAuth("test-token"),
-        deps: { ws, http },
-      });
+      const { core, ws } = createTestOperatorCore();
 
       ws.emit("work.task.started", {
         payload: {
@@ -548,15 +170,7 @@ describe("operator-core wiring", () => {
   });
 
   it("records transport_error messages from the WS client", async () => {
-    const ws = new FakeWsClient();
-    const http = createFakeHttpClient();
-
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core, ws } = createTestOperatorCore();
 
     core.connect();
     ws.emit("connected", { clientId: "client-123" });
@@ -569,15 +183,7 @@ describe("operator-core wiring", () => {
   });
 
   it("treats connected without clientId as connected", async () => {
-    const ws = new FakeWsClient();
-    const http = createFakeHttpClient();
-
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core, http, ws } = createTestOperatorCore();
 
     core.connect();
     expect(core.connectionStore.getSnapshot().status).toBe("connecting");
@@ -597,15 +203,7 @@ describe("operator-core wiring", () => {
   });
 
   it("clears clientId when reconnecting", async () => {
-    const ws = new FakeWsClient();
-    const http = createFakeHttpClient();
-
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core, ws } = createTestOperatorCore();
 
     core.connect();
     ws.emit("connected", { clientId: "client-123" });
@@ -639,12 +237,7 @@ describe("operator-core wiring", () => {
       return call === 1 ? statusGetA.promise : statusGetB.promise;
     });
 
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core } = createTestOperatorCore({ ws, http });
 
     const p1 = core.statusStore.refreshStatus();
     const p2 = core.statusStore.refreshStatus();
@@ -683,12 +276,7 @@ describe("operator-core wiring", () => {
       return call === 1 ? usageGetA.promise : usageGetB.promise;
     });
 
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core } = createTestOperatorCore({ ws, http });
 
     const p1 = core.statusStore.refreshUsage();
     const p2 = core.statusStore.refreshUsage();
@@ -715,12 +303,7 @@ describe("operator-core wiring", () => {
     const approvalList = deferred<{ approvals: Approval[]; next_cursor?: string }>();
     ws.approvalList = vi.fn(async () => approvalList.promise);
 
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core } = createTestOperatorCore({ ws, http });
 
     ws.emit("connected", { clientId: "client-123" });
     ws.emit("approval.requested", { payload: { approval: sampleApprovalPending() } });
@@ -739,12 +322,7 @@ describe("operator-core wiring", () => {
     const pairingsList = deferred<PairingListResponse>();
     http.pairings.list = vi.fn(async () => pairingsList.promise);
 
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core } = createTestOperatorCore({ ws, http });
 
     ws.emit("connected", { clientId: "client-123" });
     ws.emit("pairing.requested", { payload: { pairing: samplePairingPending() } });
@@ -763,12 +341,7 @@ describe("operator-core wiring", () => {
     const presenceList = deferred<PresenceResponse>();
     http.presence.list = vi.fn(async () => presenceList.promise);
 
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core } = createTestOperatorCore({ ws, http });
 
     const entryA = samplePresenceEntry();
     const entryB = { ...entryA, instance_id: "client-2" };
@@ -788,18 +361,12 @@ describe("operator-core wiring", () => {
 
   it("preserves lastDisconnect when disconnect triggers a synchronous close event", async () => {
     const ws = new FakeWsClient();
-    const http = createFakeHttpClient();
 
     ws.disconnect = vi.fn(() => {
       ws.emit("disconnected", { code: 1000, reason: "client disconnect" });
     });
 
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core } = createTestOperatorCore({ ws });
 
     ws.emit("connected", { clientId: "client-123" });
     await tick();
@@ -812,15 +379,7 @@ describe("operator-core wiring", () => {
   });
 
   it("dispose disconnects the websocket", () => {
-    const ws = new FakeWsClient();
-    const http = createFakeHttpClient();
-
-    const core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { core, ws } = createTestOperatorCore();
 
     core.connect();
     core.dispose();
@@ -833,8 +392,6 @@ describe("operator-core wiring", () => {
     vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
 
     try {
-      const ws = new FakeWsClient();
-      const http = createFakeHttpClient();
       const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
 
       elevatedModeStore.enter({
@@ -842,11 +399,8 @@ describe("operator-core wiring", () => {
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
       });
 
-      const core = createOperatorCore({
-        wsUrl: "ws://127.0.0.1:8788/ws",
-        httpBaseUrl: "http://127.0.0.1:8788",
-        auth: createBearerTokenAuth("baseline-token"),
-        deps: { ws, http },
+      const { core } = createTestOperatorCore({
+        authToken: "baseline-token",
         elevatedModeStore,
       });
 
@@ -862,15 +416,7 @@ describe("operator-core wiring", () => {
   });
 
   it("re-syncs on reconnect", async () => {
-    const ws = new FakeWsClient();
-    const http = createFakeHttpClient();
-
-    const _core = createOperatorCore({
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      httpBaseUrl: "http://127.0.0.1:8788",
-      auth: createBearerTokenAuth("test-token"),
-      deps: { ws, http },
-    });
+    const { http, ws } = createTestOperatorCore();
 
     ws.emit("connected", { clientId: "client-123" });
     await tick();

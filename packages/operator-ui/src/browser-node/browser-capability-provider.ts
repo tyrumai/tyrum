@@ -17,13 +17,21 @@ function formatUnknownError(error: unknown): string {
   return String(error);
 }
 
+function assignLegacyEventHandler<T extends object>(
+  target: T,
+  eventProperty: string,
+  handler: ((event?: unknown) => void) | null,
+): void {
+  Reflect.set(target, eventProperty, handler);
+}
+
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => {
+    const onError = () => {
       reject(reader.error ?? new Error("Failed to read blob"));
     };
-    reader.onload = () => {
+    const onLoad = () => {
       if (typeof reader.result !== "string") {
         reject(new Error("Expected a data URL string"));
         return;
@@ -35,6 +43,13 @@ function blobToBase64(blob: Blob): Promise<string> {
       }
       resolve(reader.result.slice(index + 1));
     };
+    if (typeof reader.addEventListener === "function") {
+      reader.addEventListener("error", onError);
+      reader.addEventListener("load", onLoad);
+    } else {
+      assignLegacyEventHandler(reader, "onerror", onError);
+      assignLegacyEventHandler(reader, "onload", onLoad);
+    }
     reader.readAsDataURL(blob);
   });
 }
@@ -83,7 +98,7 @@ async function capturePhoto(args: BrowserActionArgs & { op: "camera.capture_phot
     video.srcObject = stream;
 
     await new Promise<void>((resolve) => {
-      video.onloadedmetadata = () => resolve();
+      video.addEventListener("loadedmetadata", () => resolve(), { once: true });
     });
 
     try {
@@ -169,14 +184,21 @@ async function recordAudio(args: BrowserActionArgs & { op: "microphone.record" }
 
     const startedAt = Date.now();
     const stopped = new Promise<void>((resolve, reject) => {
-      recorder.onstop = () => resolve();
-      recorder.onerror = (evt: unknown) => {
+      const onStop = () => resolve();
+      const onError = (evt: unknown) => {
         const errorValue =
           evt && typeof evt === "object" && "error" in evt
             ? (evt as { error?: unknown }).error
             : evt;
         reject(errorValue ?? new Error("Recording failed"));
       };
+      if (typeof recorder.addEventListener === "function") {
+        recorder.addEventListener("stop", onStop, { once: true });
+        recorder.addEventListener("error", onError);
+      } else {
+        assignLegacyEventHandler(recorder, "onstop", onStop);
+        assignLegacyEventHandler(recorder, "onerror", onError);
+      }
     });
 
     recorder.start();

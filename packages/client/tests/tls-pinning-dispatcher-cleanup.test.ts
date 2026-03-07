@@ -13,10 +13,8 @@ vi.mock("undici", () => {
     }
   }
 
-  class WebSocket {
-    constructor() {
-      throw new Error("ctor boom");
-    }
+  function WebSocket() {
+    throw new Error("ctor boom");
   }
 
   return { Agent, WebSocket, __agents: agents };

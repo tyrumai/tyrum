@@ -19,8 +19,8 @@ describe("WorkBoard migrations", () => {
   }
 
   it("applies the v2 rebuild migration", async () => {
-    const db = openDb();
-    const migration = await db.get<{ name: string }>(
+    const sqliteDb = openDb();
+    const migration = await sqliteDb.get<{ name: string }>(
       "SELECT name FROM _migrations WHERE name = ?",
       ["100_rebuild_v2.sql"],
     );
@@ -28,7 +28,7 @@ describe("WorkBoard migrations", () => {
   });
 
   it("creates workboard tables", async () => {
-    const db = openDb();
+    const sqliteDb = openDb();
     const tables = [
       "work_items",
       "work_item_tasks",
@@ -45,7 +45,7 @@ describe("WorkBoard migrations", () => {
     ];
 
     for (const table of tables) {
-      const row = await db.get<{ name: string }>(
+      const row = await sqliteDb.get<{ name: string }>(
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
         [table],
       );

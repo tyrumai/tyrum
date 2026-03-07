@@ -7,14 +7,19 @@ import type { SandboxHardeningProfile } from "../sandbox/hardening.js";
 import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../sandbox/elevated-execution.js";
 
 type StatusCountMap = Record<string, number>;
-
 type ActiveModelStatus = {
   model_id: string;
   provider: string | null;
   model: string | null;
   fallback_models: string[];
 };
-
+type SelectedAuthProfile = {
+  agent_id: string;
+  session_id: string;
+  provider: string;
+  profile_id: string;
+  updated_at: string;
+};
 type AuthProfilesStatus = {
   enabled: boolean;
   total: number;
@@ -25,15 +30,8 @@ type AuthProfilesStatus = {
   oauth_expiring_within_24h: number;
   providers: string[];
   disabled_reasons: Array<{ reason: string; count: number }>;
-  selected: {
-    agent_id: string;
-    session_id: string;
-    provider: string;
-    profile_id: string;
-    updated_at: string;
-  } | null;
+  selected: SelectedAuthProfile | null;
 };
-
 type CatalogFreshnessStatus = {
   source: string | null;
   source_version: string | null;
@@ -46,7 +44,6 @@ type CatalogFreshnessStatus = {
   last_refresh_status: "ok" | "error" | "unavailable";
   last_error: string | null;
 };
-
 type SessionLaneStatus = {
   key: string;
   lane: string;
@@ -57,17 +54,22 @@ type SessionLaneStatus = {
   lease_expires_at_ms: number | null;
   lease_active: boolean;
 };
-
+type QueueStateStatus = {
+  queued: number;
+  running?: number;
+  paused?: number;
+  processing?: number;
+  sending?: number;
+};
 type QueueDepthStatus = {
-  execution_runs: { queued: number; running: number; paused: number };
-  execution_jobs: { queued: number; running: number };
-  channel_inbox: { queued: number; processing: number };
-  channel_outbox: { queued: number; sending: number };
-  watcher_firings: { queued: number; processing: number };
+  execution_runs: QueueStateStatus;
+  execution_jobs: QueueStateStatus;
+  channel_inbox: QueueStateStatus;
+  channel_outbox: QueueStateStatus;
+  watcher_firings: QueueStateStatus;
   pending_total: number;
   inflight_total: number;
 };
-
 type SandboxStatus = {
   mode: "disabled" | "observe" | "enforce";
   policy_enabled: boolean;
@@ -78,10 +80,7 @@ type SandboxStatus = {
 };
 
 export interface StatusDetails {
-  model_auth: {
-    active_model: ActiveModelStatus | null;
-    auth_profiles: AuthProfilesStatus | null;
-  };
+  model_auth: { active_model: ActiveModelStatus | null; auth_profiles: AuthProfilesStatus | null };
   catalog_freshness: CatalogFreshnessStatus;
   session_lanes: SessionLaneStatus[];
   queue_depth: QueueDepthStatus | null;
@@ -543,22 +542,10 @@ async function loadQueueDepth(
       running: runs["running"] ?? 0,
       paused: runs["paused"] ?? 0,
     },
-    execution_jobs: {
-      queued: jobs["queued"] ?? 0,
-      running: jobs["running"] ?? 0,
-    },
-    channel_inbox: {
-      queued: inbox["queued"] ?? 0,
-      processing: inbox["processing"] ?? 0,
-    },
-    channel_outbox: {
-      queued: outbox["queued"] ?? 0,
-      sending: outbox["sending"] ?? 0,
-    },
-    watcher_firings: {
-      queued: firings["queued"] ?? 0,
-      processing: firings["processing"] ?? 0,
-    },
+    execution_jobs: { queued: jobs["queued"] ?? 0, running: jobs["running"] ?? 0 },
+    channel_inbox: { queued: inbox["queued"] ?? 0, processing: inbox["processing"] ?? 0 },
+    channel_outbox: { queued: outbox["queued"] ?? 0, sending: outbox["sending"] ?? 0 },
+    watcher_firings: { queued: firings["queued"] ?? 0, processing: firings["processing"] ?? 0 },
     pending_total:
       (runs["queued"] ?? 0) +
       (jobs["queued"] ?? 0) +
@@ -625,12 +612,8 @@ export async function buildStatusDetails(deps: StatusDetailsDeps): Promise<Statu
       ),
     ],
   );
-
   return {
-    model_auth: {
-      active_model: activeModel,
-      auth_profiles: authProfiles,
-    },
+    model_auth: { active_model: activeModel, auth_profiles: authProfiles },
     catalog_freshness: catalog,
     session_lanes: sessionLanes,
     queue_depth: queueDepth,

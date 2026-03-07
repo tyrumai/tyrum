@@ -28,10 +28,11 @@ describe("Gateway JSON Schema publishing", () => {
 
     const expectedNormalized = {
       ...expected,
-      schemas: expected.schemas.map((schema) => ({
-        ...schema,
-        file: basename(schema.file),
-      })),
+      schemas: expected.schemas.map((schema) => {
+        const normalizedSchema = Object.assign({}, schema);
+        normalizedSchema.file = basename(schema.file);
+        return normalizedSchema;
+      }),
     };
 
     expect(served).toEqual(expectedNormalized);

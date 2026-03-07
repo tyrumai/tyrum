@@ -212,7 +212,7 @@ describe("loadAllPlaybooks", () => {
       onInvalidPlaybook: () => {},
     });
     // Should load test-playbook and second-playbook; invalid-playbook is skipped
-    const ids = playbooks.map((p) => p.manifest.id).sort();
+    const ids = playbooks.map((p) => p.manifest.id).toSorted();
     expect(ids).toContain("test-playbook");
     expect(ids).toContain("second-playbook");
     expect(ids).not.toContain("invalid-playbook");

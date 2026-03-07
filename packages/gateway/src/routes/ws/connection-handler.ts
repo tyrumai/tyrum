@@ -44,6 +44,7 @@ import type { WsClusterOptions } from "./types.js";
 const EARLY_MESSAGE_MAX_COUNT = 8;
 const EARLY_MESSAGE_MAX_BYTES = 64 * 1024;
 const GATEWAY_PROTOCOL_REV = 2;
+type ClientIpInfo = { rawRemoteIp: string | undefined; resolvedClientIp: string | undefined };
 
 interface BindWsConnectionHandlerOptions {
   wss: WebSocketServer;
@@ -57,6 +58,20 @@ interface BindWsConnectionHandlerOptions {
   nodePairingDal?: NodePairingDal;
   presenceTtlMs: number;
 }
+
+type WsSessionInput = {
+  ws: WebSocket;
+  req: IncomingMessage;
+  connectionManager: ConnectionManager;
+  protocolDeps: ProtocolDeps;
+  authTokens: AuthTokenService;
+  cluster?: WsClusterOptions;
+  connectionTtlMs: number;
+  trustedProxies?: TrustedProxyAllowlist;
+  presenceDal?: PresenceDal;
+  nodePairingDal?: NodePairingDal;
+  presenceTtlMs: number;
+};
 
 export function bindWsConnectionHandler(opts: BindWsConnectionHandlerOptions): void {
   opts.wss.on("connection", (ws, req) => {
@@ -88,21 +103,7 @@ class WsConnectionSession {
   private handshakeTimeout: ReturnType<typeof setTimeout> | undefined;
   private pendingInit: PendingInit | undefined;
 
-  constructor(
-    private readonly input: {
-      ws: WebSocket;
-      req: IncomingMessage;
-      connectionManager: ConnectionManager;
-      protocolDeps: ProtocolDeps;
-      authTokens: AuthTokenService;
-      cluster?: WsClusterOptions;
-      connectionTtlMs: number;
-      trustedProxies?: TrustedProxyAllowlist;
-      presenceDal?: PresenceDal;
-      nodePairingDal?: NodePairingDal;
-      presenceTtlMs: number;
-    },
-  ) {
+  constructor(private readonly input: WsSessionInput) {
     this.tokenInfo = extractWsTokenWithTransport(input.req);
     this.token = this.tokenInfo.token;
   }
@@ -110,18 +111,13 @@ class WsConnectionSession {
   private get ws(): WebSocket {
     return this.input.ws;
   }
-
   private get req(): IncomingMessage {
     return this.input.req;
   }
 
   attach(): void {
-    this.ws.once("close", () => {
-      this.clearHandshakeTimeout();
-    });
-    this.ws.on("message", (data) => {
-      this.handleSocketMessage(data);
-    });
+    this.ws.once("close", () => this.clearHandshakeTimeout());
+    this.ws.on("message", (data) => this.handleSocketMessage(data));
     void this.startAuthResolution();
   }
 
@@ -199,9 +195,7 @@ class WsConnectionSession {
   private startHandshakeTimeout(): void {
     if (this.handshakeTimeout) return;
     this.handshakeTimeout = setTimeout(() => {
-      if (this.clientId === undefined) {
-        this.ws.close(4002, "handshake timeout");
-      }
+      if (this.clientId === undefined) this.ws.close(4002, "handshake timeout");
     }, 10_000);
     this.handshakeTimeout.unref();
   }
@@ -213,18 +207,13 @@ class WsConnectionSession {
   }
 
   private flushEarlyMessages(): void {
-    for (const raw of this.earlyMessages.splice(0)) {
-      this.handleRawMessage(raw);
-    }
+    for (const raw of this.earlyMessages.splice(0)) this.handleRawMessage(raw);
     this.earlyMessageBytes = 0;
   }
 
   private handleRawMessage(raw: string): void {
     if (!this.authState) return;
-    if (!this.clientId) {
-      this.handleHandshakeMessage(raw, this.authState);
-      return;
-    }
+    if (!this.clientId) return void this.handleHandshakeMessage(raw, this.authState);
     this.handleConnectedMessage(raw);
   }
 
@@ -239,16 +228,9 @@ class WsConnectionSession {
     }
 
     const init = WsConnectInitRequestSchema.safeParse(json);
-    if (init.success) {
-      this.handleConnectInit(init.data, auth);
-      return;
-    }
-
+    if (init.success) return void this.handleConnectInit(init.data, auth);
     const proof = WsConnectProofRequestSchema.safeParse(json);
-    if (proof.success) {
-      this.handleConnectProof(proof.data, auth);
-      return;
-    }
+    if (proof.success) return void this.handleConnectProof(proof.data, auth);
 
     if (
       typeof json === "object" &&
@@ -268,30 +250,19 @@ class WsConnectionSession {
       this.ws.close(4005, "protocol_rev mismatch");
       return;
     }
-
-    if (auth.kind === "scoped_node" && init.payload.role !== "node") {
-      this.ws.close(4001, "unauthorized");
-      return;
-    }
+    if (auth.kind === "scoped_node" && init.payload.role !== "node")
+      return void this.ws.close(4001, "unauthorized");
 
     const pubkeyDer = Buffer.from(init.payload.device.pubkey, "base64url");
     const expectedDeviceId = deviceIdFromSha256Digest(
       createHash("sha256").update(pubkeyDer).digest(),
     );
-    if (expectedDeviceId !== init.payload.device.device_id) {
-      this.ws.close(4006, "device_id mismatch");
-      return;
-    }
-
-    if (!this.isAuthorizedDeviceToken(auth, init, expectedDeviceId)) {
-      this.ws.close(4001, "unauthorized");
-      return;
-    }
-
-    if (auth.kind === "scoped_node" && expectedDeviceId !== auth.expectedNodeId) {
-      this.ws.close(4008, "scoped token mismatch");
-      return;
-    }
+    if (expectedDeviceId !== init.payload.device.device_id)
+      return void this.ws.close(4006, "device_id mismatch");
+    if (!this.isAuthorizedDeviceToken(auth, init, expectedDeviceId))
+      return void this.ws.close(4001, "unauthorized");
+    if (auth.kind === "scoped_node" && expectedDeviceId !== auth.expectedNodeId)
+      return void this.ws.close(4008, "scoped token mismatch");
 
     const connectionId = crypto.randomUUID();
     const challenge = randomBytes(32).toString("base64url");
@@ -330,20 +301,11 @@ class WsConnectionSession {
 
   private handleConnectProof(proof: WsConnectProofRequest, auth: WsAuthState): void {
     const pending = this.pendingInit;
-    if (!pending) {
-      this.ws.close(4003, "expected connect.init first");
-      return;
-    }
-
-    if (proof.payload.connection_id !== pending.connectionId) {
-      this.ws.close(4003, "connection_id mismatch");
-      return;
-    }
-
-    if (!verifyConnectProof(pending, proof.payload.proof)) {
-      this.ws.close(4007, "invalid proof");
-      return;
-    }
+    if (!pending) return void this.ws.close(4003, "expected connect.init first");
+    if (proof.payload.connection_id !== pending.connectionId)
+      return void this.ws.close(4003, "connection_id mismatch");
+    if (!verifyConnectProof(pending, proof.payload.proof))
+      return void this.ws.close(4007, "invalid proof");
 
     const claims = auth.kind === "claims" ? auth.claims : undefined;
     this.completeHandshake(pending, claims);
@@ -352,11 +314,7 @@ class WsConnectionSession {
       request_id: proof.request_id,
       type: "connect.proof",
       ok: true,
-      result: {
-        client_id: pending.connectionId,
-        device_id: pending.deviceId,
-        role: pending.role,
-      },
+      result: { client_id: pending.connectionId, device_id: pending.deviceId, role: pending.role },
     };
     this.ws.send(JSON.stringify(response));
   }
@@ -410,13 +368,7 @@ class WsConnectionSession {
       .catch(() => {});
   }
 
-  private upsertPresenceOnConnect(
-    pending: PendingInit,
-    clientIp: {
-      rawRemoteIp: string | undefined;
-      resolvedClientIp: string | undefined;
-    },
-  ): void {
+  private upsertPresenceOnConnect(pending: PendingInit, clientIp: ClientIpInfo): void {
     if (!this.input.presenceDal || !this.clientId || !this.deviceId) return;
 
     const nowMs = Date.now();
@@ -446,10 +398,7 @@ class WsConnectionSession {
 
   private upsertNodePairingOnConnect(
     pending: PendingInit,
-    clientIp: {
-      rawRemoteIp: string | undefined;
-      resolvedClientIp: string | undefined;
-    },
+    clientIp: ClientIpInfo,
     claims: AuthTokenClaims | undefined,
   ): void {
     if (!this.input.nodePairingDal || pending.role !== "node") return;
@@ -560,18 +509,13 @@ class WsConnectionSession {
 
     void handleClientMessage(client, raw, this.input.protocolDeps)
       .then((response) => {
-        if (response) {
-          this.ws.send(JSON.stringify(response));
-        }
+        if (response) this.ws.send(JSON.stringify(response));
       })
       .catch(() => {});
   }
 }
 
-function toPersistedClientIp(input: {
-  rawRemoteIp: string | undefined;
-  resolvedClientIp: string | undefined;
-}): {
+function toPersistedClientIp(input: ClientIpInfo): {
   ip: string | null;
   metadata: {
     raw_remote_ip: string | null;

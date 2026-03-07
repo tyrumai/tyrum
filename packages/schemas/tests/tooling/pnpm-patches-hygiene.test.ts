@@ -72,8 +72,8 @@ describe("tooling", () => {
       .map((name) => `patches/${name}`);
     const actualSet = new Set(actualPaths);
 
-    const extra = actualPaths.filter((path) => !expectedSet.has(path)).sort();
-    const absent = expectedPaths.filter((path) => !actualSet.has(path)).sort();
+    const extra = actualPaths.filter((path) => !expectedSet.has(path)).toSorted();
+    const absent = expectedPaths.filter((path) => !actualSet.has(path)).toSorted();
 
     expect(missing).toEqual([]);
     expect(extra).toEqual([]);

@@ -50,7 +50,7 @@ function createSequencedToolLoopLanguageModel(steps: readonly ToolLoopStep[]): M
 
   return new MockLanguageModelV3({
     doStream: async () => {
-      const lastText = [...steps].reverse().find((s) => s.kind === "text");
+      const lastText = steps.toReversed().find((s) => s.kind === "text");
       const text = lastText?.kind === "text" ? lastText.text : "";
       return {
         stream: simulateReadableStream({

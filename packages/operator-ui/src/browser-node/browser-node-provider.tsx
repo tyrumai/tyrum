@@ -5,7 +5,7 @@ import {
   loadOrCreateDeviceIdentity,
   TyrumClient,
   type TaskResult,
-} from "@tyrum/client";
+} from "@tyrum/client/browser";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,

@@ -1,174 +1,63 @@
 # Tyrum
 
-Self-hosted autonomous worker agent platform with a single gateway runtime that can host multiple agents (single operator by default). The default profile is local-first and binds to localhost by default, while requiring a gateway access token for HTTP and WebSocket access.
+Tyrum is a self-hosted autonomous worker agent platform built around a single gateway runtime. It is local-first by default, serves an operator UI at `/ui`, and uses authenticated HTTP and WebSocket access for automation, approvals, and auditability.
 
-## Overview
+The repository contains the gateway runtime, the client SDK, shared schemas, the desktop app, and the public docs site. Detailed architecture, deployment, and feature documentation lives under [`docs/`](docs/index.md).
 
-- **Goal:** A chat-first autonomous worker agent that can operate software like a human would, while preferring structured interfaces when available and using web/desktop automation as fallback. It produces audit evidence and asks for approvals when needed. “Personal assistant” is the first role, but the same worker can take on other remote-work roles via configuration.
-- **Deployment profile (default):** user-hosted, single-operator, localhost-only (`127.0.0.1`) with required token auth. One gateway can host multiple agents; run multiple gateways if you want stronger isolation.
-- **Differentiators:**
-  - No hard-coded skills; autonomy emerges from learned memory and generic executors.
-  - Approvals + policy gate for spending, PII, and explainability; spend is deny-by-default until configured.
-  - Prefer structured interfaces; fall back to web/desktop automation for drop-in “remote worker replacement”.
-  - Every action is auditable, reproducible, and backed by minimal constitutional rules.
-  - BYOK LLMs via OpenAI-compatible `/v1/*` proxy routes.
-- Architecture docs are canonical and live under `docs/architecture/`.
+## Install
 
-## Technology Stack
+Use the installer:
 
-| Layer            | Choice                               |
-| ---------------- | ------------------------------------ |
-| Runtime          | Node.js 24.x                         |
-| Language         | TypeScript (strict, ESM)             |
-| HTTP framework   | Hono                                 |
-| Validation/types | Zod                                  |
-| Database         | SQLite (better-sqlite3) + sqlite-vec |
-| Client protocol  | WebSocket                            |
-| Package manager  | pnpm                                 |
-| Build            | tsdown                               |
-| Linting          | oxlint                               |
-| Testing          | Vitest                               |
-| Event bus        | mitt (typed EventEmitter)            |
+```bash
+curl -fsSL https://get.tyrum.ai/install.sh | bash
+```
 
-## Repository Structure
+Or run from source:
 
-| Directory          | Purpose                                                      |
-| ------------------ | ------------------------------------------------------------ |
-| `packages/schemas` | Shared Zod types (`@tyrum/schemas`)                          |
-| `packages/gateway` | Main gateway process — Hono HTTP + WebSocket + SQLite        |
-| `packages/client`  | Client SDK for connecting to the gateway                     |
-| `config/`          | Runtime configuration (model gateway YAML)                   |
-| `docs/`            | Public user documentation (install, guides, advanced topics) |
+```bash
+pnpm install
+pnpm --filter @tyrum/gateway start
+```
 
-Docs are deployed to Cloudflare Pages (`tyrum-docs`) by `.github/workflows/docs-pages.yml`.
+On first start, the gateway prints bootstrap tokens. Keep them. The default local UI is:
 
-## Installation
+```text
+http://127.0.0.1:8788/ui
+```
 
-The gateway can be installed in multiple ways:
+## Develop
 
-1. **One-line installer (recommended):**
-   ```bash
-   curl -fsSL https://get.tyrum.ai/install.sh | bash
-   ```
-   Beta channel:
-   ```bash
-   curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- --channel beta
-   ```
-2. **npm global install:**
-   ```bash
-   npm i -g @tyrum/gateway
-   ```
-   Run:
-   ```bash
-   tyrum
-   ```
-   Update:
-   ```bash
-   tyrum update
-   ```
-3. **Release assets:** download platform installers and package tarballs from GitHub Releases.
+```bash
+pnpm install
+pnpm typecheck
+pnpm test
+pnpm lint
+pnpm build
+pnpm --filter @tyrum/gateway start
+```
 
-See `docs/install.md` for full details, version pinning, and update commands.
+Prereqs:
 
-## Getting Started
+- Node.js 24
+- pnpm 10
 
-1. **Read the architecture overview:** Start with `docs/architecture/index.md`.
-2. **Install tooling:** Node.js 24.x and pnpm.
-3. **Clone & branch:** Fork/clone the repo, create branches as `<issue-number>-<slug>`.
-4. **Install dependencies:** `pnpm install` from the repo root.
-5. **Run checks:** `pnpm typecheck && pnpm test && pnpm lint`
-6. **Start the gateway:** `pnpm --filter @tyrum/gateway start`
-   - Singleton agent routes (`/agent/status`, `/agent/turn`) are enabled by default. Set `TYRUM_AGENT_ENABLED=0` to disable.
-7. **Open the operator UI:** `http://127.0.0.1:8788/ui`
-   - The first visit prompts for your admin token and bootstraps a browser auth cookie via `POST /auth/session`.
-   - If you start the gateway with `TYRUM_TLS_SELF_SIGNED=1`, the UI is served over HTTPS: `https://127.0.0.1:8788/ui` (you’ll get a browser warning unless you install a CA).
+## Canonical Docs
 
-### Localhost Safety Defaults
+- [Docs home](docs/index.md)
+- [Install guide](docs/install.md)
+- [Architecture overview](docs/architecture/index.md)
+- [Contributing](CONTRIBUTING.md)
+- [Desktop app](apps/desktop/README.md)
+- [Docs site](apps/docs/README.md)
 
-- `GATEWAY_HOST` defaults to `127.0.0.1`.
-- `GATEWAY_PORT` defaults to `8788`.
-- Gateway auth token is required on localhost and non-local interfaces (`GATEWAY_TOKEN` env or `${TYRUM_HOME}/.admin-token`, auto-generated if missing).
-- Non-loopback deployments require a hardened admin token (minimum 32 characters).
-- Binding to a non-loopback host requires an explicit transport posture:
-  - Recommended (production): configure TLS termination and set `TYRUM_TLS_READY=1`.
-  - Simple (single gateway): serve HTTPS/WSS directly with `TYRUM_TLS_SELF_SIGNED=1` (self-signed cert; browsers warn unless trusted).
-  - Dev/trusted networks only: set `TYRUM_ALLOW_INSECURE_HTTP=1` to acknowledge plaintext HTTP.
-- Device-bound tokens can be issued/revoked with authenticated HTTP routes:
-  - `POST /auth/device-tokens/issue` with `{ device_id, role, scopes[], ttl_seconds? }`
-  - `POST /auth/device-tokens/revoke` with `{ token }`
-- The gateway serves the operator web UI at `/ui` and supports WebSocket upgrades on `/ws`.
-- Browser-based clients bootstrap an auth cookie via `POST /auth/session` and then authenticate HTTP + WebSocket requests via that cookie.
+## Workspace
 
-## Development Commands
+The main packages are:
 
-| Task                            | Command                                                    |
-| ------------------------------- | ---------------------------------------------------------- |
-| Install dependencies            | `pnpm install`                                             |
-| Type check                      | `pnpm typecheck`                                           |
-| Run tests                       | `pnpm test`                                                |
-| Watch tests                     | `pnpm test:watch`                                          |
-| Lint                            | `pnpm lint`                                                |
-| Build all packages              | `pnpm build`                                               |
-| Start gateway                   | `pnpm --filter @tyrum/gateway start`                       |
-| Start gateway (agents disabled) | `TYRUM_AGENT_ENABLED=0 pnpm --filter @tyrum/gateway start` |
-| Open operator UI                | `http://127.0.0.1:8788/ui`                                 |
+- `packages/gateway`: gateway runtime and `tyrum` CLI
+- `packages/client`: client SDK
+- `packages/schemas`: shared schemas and types
+- `apps/desktop`: Electron desktop app
+- `apps/docs`: public documentation site
 
-## Telegram Bot Setup
-
-Follow these steps to provision the Telegram channel safely across local and staging environments.
-
-### 1. Create the bot via BotFather
-
-- Chat with [@BotFather](https://t.me/BotFather) and run `/newbot` to name the agent and choose a unique handle.
-- Copy the API token BotFather returns; treat it as a secret and never paste it in chat or commit history.
-
-### 2. Set the webhook endpoint
-
-- For local development, expose the gateway over TLS using `ngrok`:
-  ```bash
-  ngrok http http://localhost:3001
-  curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
-    --data-urlencode "url=https://<subdomain>.ngrok.app/ingress/telegram" \
-    --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET}"
-  ```
-
-### 3. Wire credentials
-
-- Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_URL`, and `TELEGRAM_WEBHOOK_SECRET` environment variables before starting the gateway.
-
-## Signed Webhook Watcher Trigger
-
-Webhook-triggered watchers now accept signed calls at `POST /watchers/:id/trigger/webhook`.
-
-- Headers required on every request:
-  - `x-tyrum-webhook-timestamp`: UNIX timestamp in seconds or milliseconds
-  - `x-tyrum-webhook-nonce`: unique nonce per request (only `A-Z a-z 0-9 _ -`)
-  - `x-tyrum-webhook-signature`: `sha256=<hex>`
-- Signature input format:
-  - `HMAC_SHA256(secret, "<timestamp>.<nonce>.<raw-body>")`
-- Replay safety:
-  - Timestamp must fall within the configured replay window (`trigger_config.max_skew_ms`, default 5 minutes).
-  - Reusing the same nonce is rejected with `409 replay_detected` (even if timestamp units differ).
-- Secret source:
-  - Use secret handles from `/secrets` and store the handle in watcher `trigger_config.secret_handle`.
-  - Optionally set watcher `trigger_config.agent_id` to choose which agent/workspace secret store resolves the handle (default: `default`).
-
-## Key Documents
-
-- [Architecture Overview](docs/architecture/index.md)
-- [Install Guide](docs/install.md)
-
-## Roadmap
-
-See the architecture docs under `docs/architecture/` for current intended design and open gaps.
-
-## Way of Working
-
-- **Issue Lifecycle:** All work lives in GitHub Issues with acceptance criteria; the Tyrum project board tracks Backlog → Ready → In Progress → Review → Done.
-- **PR Expectations:** One issue per PR, automated checks pass before review.
-- **Continuous Improvement:** Retrospectives update `CONTRIBUTING.md` and `docs/` when needed.
-
-## Contact & Support
-
-- Discussion and planning live in GitHub Issues and the Tyrum project board.
-- For urgent questions, mention the relevant owner in Issues/PRs; long-term decisions belong in `docs/` and Issues.
+For everything beyond install and local development, use the docs above rather than treating this README as operational documentation.

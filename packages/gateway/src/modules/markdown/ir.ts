@@ -16,10 +16,7 @@ export type MarkdownIrSpan =
   | { kind: "style"; style: MarkdownIrStyle; start: number; end: number }
   | { kind: "link"; start: number; end: number; href: string };
 
-export type MarkdownIr = {
-  text: string;
-  spans: MarkdownIrSpan[];
-};
+export type MarkdownIr = { text: string; spans: MarkdownIrSpan[] };
 
 function sortSpans(spans: MarkdownIrSpan[]): MarkdownIrSpan[] {
   const compareStrings = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
@@ -72,127 +69,100 @@ function normalizeLineEndings(input: string): string {
   return input.replace(/\r\n?/g, "\n");
 }
 
-function parseInlineMarkdown(input: string): { text: string; spans: MarkdownIrSpan[] } {
+type InlineParseResult = { text: string; spans: MarkdownIrSpan[] };
+type InlineParseMatch = InlineParseResult & { next: number };
+
+const unorderedListPattern = /^(\s*)[-+*]\s+(.*)$/;
+const orderedListPattern = /^(\s*)(\d+)[.)]\s+(.*)$/;
+
+function appendShiftedSpans(
+  target: MarkdownIrSpan[],
+  source: MarkdownIrSpan[],
+  offset: number,
+): void {
+  for (const span of source)
+    target.push({ ...span, start: span.start + offset, end: span.end + offset });
+}
+
+function findItalicEnd(input: string, start: number): number {
+  for (let i = start + 1; i < input.length; i += 1) {
+    if (input[i] !== "*" || input[i - 1] === "*" || input[i + 1] === "*") continue;
+    return i;
+  }
+  return -1;
+}
+
+function matchWrappedInline(
+  input: string,
+  idx: number,
+  marker: string,
+  outer:
+    | Pick<Extract<MarkdownIrSpan, { kind: "style" }>, "kind" | "style">
+    | Pick<Extract<MarkdownIrSpan, { kind: "link" }>, "kind" | "href">,
+  end = input.indexOf(marker, idx + marker.length),
+): InlineParseMatch | undefined {
+  if (!input.startsWith(marker, idx) || end === -1) return undefined;
+  const inner = parseInlineMarkdown(input.slice(idx + marker.length, end));
+  if (inner.text.length > 0) inner.spans.push({ ...outer, start: 0, end: inner.text.length });
+  return { ...inner, next: end + marker.length };
+}
+
+function matchCodeInline(input: string, idx: number): InlineParseMatch | undefined {
+  if (input[idx] !== "`") return undefined;
+  const end = input.indexOf("`", idx + 1);
+  if (end === -1) return undefined;
+  const text = input.slice(idx + 1, end);
+  return {
+    text,
+    spans:
+      text.length > 0 ? [{ kind: "style", style: "inline_code", start: 0, end: text.length }] : [],
+    next: end + 1,
+  };
+}
+
+function matchLinkInline(input: string, idx: number): InlineParseMatch | undefined {
+  if (input[idx] !== "[") return undefined;
+  const labelEnd = input.indexOf("]", idx + 1);
+  if (labelEnd === -1 || input[labelEnd + 1] !== "(") return undefined;
+  const hrefEnd = input.indexOf(")", labelEnd + 2);
+  if (hrefEnd === -1) return undefined;
+  const label = parseInlineMarkdown(input.slice(idx + 1, labelEnd));
+  if (label.text.length > 0) {
+    label.spans.push({
+      kind: "link",
+      href: input.slice(labelEnd + 2, hrefEnd).trim(),
+      start: 0,
+      end: label.text.length,
+    });
+  }
+  return { ...label, next: hrefEnd + 1 };
+}
+
+function parseInlineMarkdown(input: string): InlineParseResult {
   let out = "";
   const spans: MarkdownIrSpan[] = [];
 
   let idx = 0;
   while (idx < input.length) {
-    if (input[idx] === "`") {
-      const end = input.indexOf("`", idx + 1);
-      if (end !== -1) {
-        const start = out.length;
-        out += input.slice(idx + 1, end);
-        const finish = out.length;
-        if (finish > start) {
-          spans.push({ kind: "style", style: "inline_code", start, end: finish });
-        }
-        idx = end + 1;
-        continue;
-      }
-    }
-
-    if (input[idx] === "[") {
-      const labelEnd = input.indexOf("]", idx + 1);
-      if (labelEnd !== -1 && input[labelEnd + 1] === "(") {
-        const hrefEnd = input.indexOf(")", labelEnd + 2);
-        if (hrefEnd !== -1) {
-          const labelRaw = input.slice(idx + 1, labelEnd);
-          const href = input.slice(labelEnd + 2, hrefEnd).trim();
-
-          const start = out.length;
-          const label = parseInlineMarkdown(labelRaw);
-          out += label.text;
-          const finish = out.length;
-          for (const span of label.spans) {
-            spans.push({ ...span, start: span.start + start, end: span.end + start });
-          }
-          if (finish > start) {
-            spans.push({ kind: "link", start, end: finish, href });
-          }
-
-          idx = hrefEnd + 1;
-          continue;
-        }
-      }
-    }
-
-    if (input.startsWith("||", idx)) {
-      const end = input.indexOf("||", idx + 2);
-      if (end !== -1) {
-        const start = out.length;
-        const inner = parseInlineMarkdown(input.slice(idx + 2, end));
-        out += inner.text;
-        const finish = out.length;
-        for (const span of inner.spans) {
-          spans.push({ ...span, start: span.start + start, end: span.end + start });
-        }
-        if (finish > start) {
-          spans.push({ kind: "style", style: "spoiler", start, end: finish });
-        }
-        idx = end + 2;
-        continue;
-      }
-    }
-
-    if (input.startsWith("**", idx)) {
-      const end = input.indexOf("**", idx + 2);
-      if (end !== -1) {
-        const start = out.length;
-        const inner = parseInlineMarkdown(input.slice(idx + 2, end));
-        out += inner.text;
-        const finish = out.length;
-        for (const span of inner.spans) {
-          spans.push({ ...span, start: span.start + start, end: span.end + start });
-        }
-        if (finish > start) {
-          spans.push({ kind: "style", style: "bold", start, end: finish });
-        }
-        idx = end + 2;
-        continue;
-      }
-    }
-
-    if (input.startsWith("~~", idx)) {
-      const end = input.indexOf("~~", idx + 2);
-      if (end !== -1) {
-        const start = out.length;
-        const inner = parseInlineMarkdown(input.slice(idx + 2, end));
-        out += inner.text;
-        const finish = out.length;
-        for (const span of inner.spans) {
-          spans.push({ ...span, start: span.start + start, end: span.end + start });
-        }
-        if (finish > start) {
-          spans.push({ kind: "style", style: "strike", start, end: finish });
-        }
-        idx = end + 2;
-        continue;
-      }
-    }
-
-    if (input[idx] === "*" && !input.startsWith("**", idx)) {
-      let end = -1;
-      for (let i = idx + 1; i < input.length; i += 1) {
-        if (input[i] !== "*") continue;
-        if (input[i - 1] === "*" || input[i + 1] === "*") continue;
-        end = i;
-        break;
-      }
-      if (end !== -1) {
-        const start = out.length;
-        const inner = parseInlineMarkdown(input.slice(idx + 1, end));
-        out += inner.text;
-        const finish = out.length;
-        for (const span of inner.spans) {
-          spans.push({ ...span, start: span.start + start, end: span.end + start });
-        }
-        if (finish > start) {
-          spans.push({ kind: "style", style: "italic", start, end: finish });
-        }
-        idx = end + 1;
-        continue;
-      }
+    const match =
+      matchCodeInline(input, idx) ??
+      matchLinkInline(input, idx) ??
+      matchWrappedInline(input, idx, "||", { kind: "style", style: "spoiler" }) ??
+      matchWrappedInline(input, idx, "**", { kind: "style", style: "bold" }) ??
+      matchWrappedInline(input, idx, "~~", { kind: "style", style: "strike" }) ??
+      matchWrappedInline(
+        input,
+        idx,
+        "*",
+        { kind: "style", style: "italic" },
+        findItalicEnd(input, idx),
+      );
+    if (match) {
+      const start = out.length;
+      out += match.text;
+      appendShiftedSpans(spans, match.spans, start);
+      idx = match.next;
+      continue;
     }
 
     out += input[idx]!;
@@ -212,22 +182,47 @@ type MarkdownBlock =
 
 type MarkdownBlockWithSeparator = MarkdownBlock & { sepBefore: MarkdownBlockSeparator };
 
+function parseListBlock(line: string): Extract<MarkdownBlock, { kind: "list_item" }> | undefined {
+  const ordered = orderedListPattern.exec(line);
+  if (ordered) {
+    const parsedIndex = Number.parseInt(ordered[2] ?? "", 10);
+    return {
+      kind: "list_item",
+      ordered: true,
+      index: Number.isFinite(parsedIndex) ? parsedIndex : undefined,
+      depth: Math.floor((ordered[1] ?? "").length / 2),
+      raw: ordered[3] ?? "",
+    };
+  }
+  const unordered = unorderedListPattern.exec(line);
+  if (!unordered) return undefined;
+  return {
+    kind: "list_item",
+    ordered: false,
+    depth: Math.floor((unordered[1] ?? "").length / 2),
+    raw: unordered[2] ?? "",
+  };
+}
+
+function isBlockStarter(line: string): boolean {
+  const trimmed = line.trimStart();
+  return trimmed.startsWith("```") || trimmed.startsWith(">") || parseListBlock(line) !== undefined;
+}
+
 function scanBlocks(input: string): MarkdownBlockWithSeparator[] {
   const lines = input.split("\n");
   const blocks: MarkdownBlockWithSeparator[] = [];
   let nextSep: MarkdownBlockSeparator | undefined;
 
   const pushBlock = (block: MarkdownBlock): void => {
-    let sepBefore: MarkdownBlockSeparator = "";
-    if (blocks.length === 0) {
-      sepBefore = "";
-    } else if (nextSep === "\n\n") {
-      sepBefore = "\n\n";
-    } else {
-      const prev = blocks[blocks.length - 1]!;
-      sepBefore = prev.kind === "list_item" && block.kind === "list_item" ? "\n" : "\n\n";
-    }
-
+    const prev = blocks.at(-1);
+    const sepBefore = !prev
+      ? ""
+      : nextSep === "\n\n"
+        ? "\n\n"
+        : prev.kind === "list_item" && block.kind === "list_item"
+          ? "\n"
+          : "\n\n";
     blocks.push({ ...block, sepBefore });
     nextSep = undefined;
   };
@@ -279,34 +274,14 @@ function scanBlocks(input: string): MarkdownBlockWithSeparator[] {
       continue;
     }
 
-    const unorderedMatch = /^(\s*)[-+*]\s+(.*)$/.exec(line);
-    const orderedMatch = /^(\s*)(\d+)[.)]\s+(.*)$/.exec(line);
-    if (unorderedMatch || orderedMatch) {
-      const listKind: "unordered" | "ordered" = orderedMatch ? "ordered" : "unordered";
+    const firstListItem = parseListBlock(line);
+    if (firstListItem) {
       while (idx < lines.length) {
         const listLine = lines[idx]!;
         if (listLine.trim().length === 0) break;
-
-        const unordered = /^(\s*)[-+*]\s+(.*)$/.exec(listLine);
-        const ordered = /^(\s*)(\d+)[.)]\s+(.*)$/.exec(listLine);
-
-        if (listKind === "unordered") {
-          if (!unordered) break;
-          const indent = unordered[1] ?? "";
-          const depth = Math.floor(indent.length / 2);
-          const raw = unordered[2] ?? "";
-          pushBlock({ kind: "list_item", ordered: false, depth, raw });
-          idx += 1;
-          continue;
-        }
-
-        if (!ordered) break;
-        const indent = ordered[1] ?? "";
-        const depth = Math.floor(indent.length / 2);
-        const parsedIndex = Number.parseInt(ordered[2] ?? "", 10);
-        const index = Number.isFinite(parsedIndex) ? parsedIndex : undefined;
-        const raw = ordered[3] ?? "";
-        pushBlock({ kind: "list_item", ordered: true, index, depth, raw });
+        const listItem = parseListBlock(listLine);
+        if (!listItem || listItem.ordered !== firstListItem.ordered) break;
+        pushBlock(listItem);
         idx += 1;
       }
       continue;
@@ -315,18 +290,7 @@ function scanBlocks(input: string): MarkdownBlockWithSeparator[] {
     const paragraphLines: string[] = [];
     while (idx < lines.length) {
       const paragraphLine = lines[idx]!;
-      if (paragraphLine.trim().length === 0) break;
-
-      const paragraphTrimmed = paragraphLine.trimStart();
-      if (
-        paragraphTrimmed.startsWith("```") ||
-        paragraphTrimmed.startsWith(">") ||
-        /^(\s*)[-+*]\s+/.test(paragraphLine) ||
-        /^(\s*)(\d+)[.)]\s+/.test(paragraphLine)
-      ) {
-        break;
-      }
-
+      if (paragraphLine.trim().length === 0 || isBlockStarter(paragraphLine)) break;
       paragraphLines.push(paragraphLine);
       idx += 1;
     }
@@ -343,12 +307,6 @@ function scanBlocks(input: string): MarkdownBlockWithSeparator[] {
   return blocks;
 }
 
-/**
- * Markdown → IR parser.
- *
- * D3 starts by establishing a deterministic IR shape (plain text + spans).
- * Rich block/link/style parsing is implemented incrementally via TDD.
- */
 export function markdownToIr(markdown: string): MarkdownIr {
   const input = normalizeLineEndings(markdown ?? "");
   let text = "";
@@ -360,6 +318,26 @@ export function markdownToIr(markdown: string): MarkdownIr {
     if (a === "\n\n" || b === "\n\n") return "\n\n";
     if (a === "\n" || b === "\n") return "\n";
     return "";
+  };
+  const pushBlockSpan = (block: MarkdownBlock, start: number, end: number): void => {
+    if (block.kind === "list_item") {
+      spans.push({
+        kind: "block",
+        block: "list_item",
+        ordered: block.ordered,
+        ...(block.index === undefined ? {} : { index: block.index }),
+        depth: block.depth,
+        start,
+        end,
+      });
+      return;
+    }
+    spans.push({
+      kind: "block",
+      block: block.kind === "blockquote" ? "blockquote" : "paragraph",
+      start,
+      end,
+    });
   };
 
   for (const block of scanBlocks(input)) {
@@ -397,26 +375,8 @@ export function markdownToIr(markdown: string): MarkdownIr {
     const start = text.length;
     text += inline.text;
     const end = text.length;
-
-    if (block.kind === "list_item") {
-      spans.push({
-        kind: "block",
-        block: "list_item",
-        ordered: block.ordered,
-        ...(block.index === undefined ? {} : { index: block.index }),
-        depth: block.depth,
-        start,
-        end,
-      });
-    } else if (block.kind === "blockquote") {
-      spans.push({ kind: "block", block: "blockquote", start, end });
-    } else {
-      spans.push({ kind: "block", block: "paragraph", start, end });
-    }
-
-    for (const span of inline.spans) {
-      spans.push({ ...span, start: span.start + start, end: span.end + start });
-    }
+    pushBlockSpan(block, start, end);
+    appendShiftedSpans(spans, inline.spans, start);
     pendingSep = "";
     prevEmittedKind = block.kind;
   }
@@ -510,20 +470,10 @@ export function chunkText(input: string, maxChars: number): string[] {
       chunks.push(text.slice(offset));
       break;
     }
-
     const maxFromIndex = Math.max(offset, end - 1);
-
-    // Prefer to cut at a newline reasonably close to the end.
     let cut = text.lastIndexOf("\n", maxFromIndex);
-    if (cut <= offset) {
-      cut = text.lastIndexOf(" ", maxFromIndex);
-    }
-    if (cut <= offset) {
-      cut = end;
-    } else {
-      cut += 1; // include delimiter
-    }
-
+    if (cut <= offset) cut = text.lastIndexOf(" ", maxFromIndex);
+    cut = cut <= offset ? end : cut + 1;
     chunks.push(text.slice(offset, cut));
     offset = cut;
   }
@@ -535,14 +485,13 @@ function sliceIr(ir: MarkdownIr, start: number, end: number): MarkdownIr {
   const text = ir.text.slice(start, end);
   if (text.length === 0) return { text: "", spans: [] };
 
-  const spans: MarkdownIrSpan[] = [];
-  for (const span of ir.spans) {
+  const spans = ir.spans.flatMap((span) => {
     const spanStart = Math.max(span.start, start);
     const spanEnd = Math.min(span.end, end);
-    if (spanEnd <= spanStart) continue;
-    spans.push({ ...span, start: spanStart - start, end: spanEnd - start });
-  }
-
+    return spanEnd <= spanStart
+      ? []
+      : [{ ...span, start: spanStart - start, end: spanEnd - start }];
+  });
   return { text, spans: sortSpans(spans) };
 }
 
@@ -594,11 +543,8 @@ function avoidSplittingProtectedSpan(
   const merged: Interval[] = [];
   for (const interval of intervals) {
     const prev = merged.at(-1);
-    if (!prev || interval.start >= prev.end) {
-      merged.push(interval);
-      continue;
-    }
-    prev.end = Math.max(prev.end, interval.end);
+    if (!prev || interval.start >= prev.end) merged.push(interval);
+    else prev.end = Math.max(prev.end, interval.end);
   }
 
   const container = merged.find((interval) => interval.start < cut && cut < interval.end);
@@ -623,13 +569,10 @@ function findMaxChunkEnd(
   let best = start;
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2);
-    const candidate = sliceIr(ir, start, mid);
-    if (measure(candidate) <= maxMeasure) {
+    if (measure(sliceIr(ir, start, mid)) <= maxMeasure) {
       best = mid;
       lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
+    } else hi = mid - 1;
   }
 
   return best;

@@ -15,24 +15,47 @@ function deferred<T>(): {
   return { promise, resolve, reject };
 }
 
+function listResponse(items: Array<Record<string, unknown>>, nextCursor?: string) {
+  return { v: 1, items, next_cursor: nextCursor };
+}
+
+function searchResponse(hits: Array<Record<string, unknown>>, nextCursor?: string) {
+  return { v: 1, hits, next_cursor: nextCursor };
+}
+
+function itemResponse(item: Record<string, unknown>) {
+  return { v: 1, item };
+}
+
+function forgetResponse(deletedCount = 0, tombstones: Array<Record<string, unknown>> = []) {
+  return { v: 1, deleted_count: deletedCount, tombstones };
+}
+
+function exportResponse(artifactId = "artifact-1") {
+  return { v: 1, artifact_id: artifactId };
+}
+
+function createWs(overrides: Record<string, unknown> = {}) {
+  return {
+    memoryList: vi.fn(async () => listResponse([])),
+    memorySearch: vi.fn(async () => searchResponse([])),
+    memoryGet: vi.fn(async () => itemResponse({})),
+    memoryUpdate: vi.fn(async () => itemResponse({})),
+    memoryForget: vi.fn(async () => forgetResponse()),
+    memoryExport: vi.fn(async () => exportResponse()),
+    ...overrides,
+  } as any;
+}
+
 describe("memory-store", () => {
   it("omits agent_id when memory operations use the implicit default scope", async () => {
-    const ws = {
-      memoryList: vi.fn(async () => ({
-        v: 1,
-        items: [{ memory_item_id: "m1" }],
-        next_cursor: undefined,
-      })),
-      memorySearch: vi.fn(async () => ({
-        v: 1,
-        hits: [{ memory_item_id: "m1" }],
-        next_cursor: undefined,
-      })),
-      memoryGet: vi.fn(async () => ({ v: 1, item: { memory_item_id: "m1" } })),
-      memoryUpdate: vi.fn(async () => ({ v: 1, item: { memory_item_id: "m1" } })),
-      memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 1, tombstones: [] })),
-      memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
-    } as any;
+    const ws = createWs({
+      memoryList: vi.fn(async () => listResponse([{ memory_item_id: "m1" }])),
+      memorySearch: vi.fn(async () => searchResponse([{ memory_item_id: "m1" }])),
+      memoryGet: vi.fn(async () => itemResponse({ memory_item_id: "m1" })),
+      memoryUpdate: vi.fn(async () => itemResponse({ memory_item_id: "m1" })),
+      memoryForget: vi.fn(async () => forgetResponse(1)),
+    });
 
     const { store } = createMemoryStore(ws);
 
@@ -84,18 +107,9 @@ describe("memory-store", () => {
   });
 
   it("refreshBrowse preserves existing results while loading", async () => {
-    const ws = {
-      memoryList: vi.fn(async () => ({
-        v: 1,
-        items: [{ memory_item_id: "memory-1" }],
-        next_cursor: undefined,
-      })),
-      memorySearch: vi.fn(async () => ({
-        v: 1,
-        hits: [],
-        next_cursor: undefined,
-      })),
-    } as any;
+    const ws = createWs({
+      memoryList: vi.fn(async () => listResponse([{ memory_item_id: "memory-1" }])),
+    });
 
     const { store } = createMemoryStore(ws);
 
@@ -124,34 +138,17 @@ describe("memory-store", () => {
   });
 
   it("refreshBrowse() and loadMore() preserve an explicit agent scope", async () => {
-    const ws = {
+    const ws = createWs({
       memoryList: vi
         .fn()
-        .mockResolvedValueOnce({
-          v: 1,
-          items: [{ memory_item_id: "m1", agent_id: "agent-2" }],
-          next_cursor: "cursor-1",
-        })
-        .mockResolvedValueOnce({
-          v: 1,
-          items: [{ memory_item_id: "m2", agent_id: "agent-2" }],
-          next_cursor: "cursor-2",
-        })
-        .mockResolvedValueOnce({
-          v: 1,
-          items: [{ memory_item_id: "m3", agent_id: "agent-2" }],
-          next_cursor: undefined,
-        }),
-      memorySearch: vi.fn(async () => ({
-        v: 1,
-        hits: [],
-        next_cursor: undefined,
-      })),
-      memoryGet: vi.fn(async () => ({ v: 1, item: {} })),
-      memoryUpdate: vi.fn(async () => ({ v: 1, item: {} })),
-      memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] })),
-      memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
-    } as any;
+        .mockResolvedValueOnce(
+          listResponse([{ memory_item_id: "m1", agent_id: "agent-2" }], "cursor-1"),
+        )
+        .mockResolvedValueOnce(
+          listResponse([{ memory_item_id: "m2", agent_id: "agent-2" }], "cursor-2"),
+        )
+        .mockResolvedValueOnce(listResponse([{ memory_item_id: "m3", agent_id: "agent-2" }])),
+    });
 
     const { store } = createMemoryStore(ws);
 
@@ -184,14 +181,9 @@ describe("memory-store", () => {
 
   it("buffers upserts, tombstones, and consolidations during list() and applies them on completion", async () => {
     const nextList = deferred<any>();
-    const ws = {
+    const ws = createWs({
       memoryList: vi.fn(async () => nextList.promise),
-      memorySearch: vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined })),
-      memoryGet: vi.fn(async () => ({ v: 1, item: {} })),
-      memoryUpdate: vi.fn(async () => ({ v: 1, item: {} })),
-      memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] })),
-      memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
-    } as any;
+    });
 
     const { store, handleMemoryItemUpsert, handleMemoryTombstone, handleMemoryConsolidated } =
       createMemoryStore(ws);
@@ -240,28 +232,23 @@ describe("memory-store", () => {
   });
 
   it("loadMore() merges list pages, drops redundant consolidations, and applies buffered deletes/upserts", async () => {
+    const nextPage = deferred<any>();
     const ws = {
       memoryList: vi
         .fn()
-        .mockResolvedValueOnce({
-          v: 1,
-          items: [
-            { memory_item_id: "consolidated", content: "c1" },
-            { memory_item_id: "keep1", content: "k1" },
-            { memory_item_id: "fromB", content: "fromB" },
-            { memory_item_id: "keep2", content: "k2" },
-          ],
-          next_cursor: "cursor-1",
-        })
+        .mockResolvedValueOnce(
+          listResponse(
+            [
+              { memory_item_id: "consolidated", content: "c1" },
+              { memory_item_id: "keep1", content: "k1" },
+              { memory_item_id: "fromB", content: "fromB" },
+              { memory_item_id: "keep2", content: "k2" },
+            ],
+            "cursor-1",
+          ),
+        )
         .mockImplementationOnce(async () => nextPage.promise),
-      memorySearch: vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined })),
-      memoryGet: vi.fn(async () => ({ v: 1, item: {} })),
-      memoryUpdate: vi.fn(async () => ({ v: 1, item: {} })),
-      memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] })),
-      memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
     } as any;
-
-    const nextPage = deferred<any>();
     const { store, handleMemoryConsolidated, handleMemoryItemUpsert, handleMemoryTombstone } =
       createMemoryStore(ws);
 
@@ -314,23 +301,16 @@ describe("memory-store", () => {
   });
 
   it("loadMore() merges search pages and filters consolidated/tombstoned hits", async () => {
+    const nextPage = deferred<any>();
     const ws = {
       memoryList: vi.fn(async () => ({ v: 1, items: [], next_cursor: undefined })),
       memorySearch: vi
         .fn()
-        .mockResolvedValueOnce({
-          v: 1,
-          hits: [{ memory_item_id: "h1" }, { memory_item_id: "from" }],
-          next_cursor: "cursor-1",
-        })
+        .mockResolvedValueOnce(
+          searchResponse([{ memory_item_id: "h1" }, { memory_item_id: "from" }], "cursor-1"),
+        )
         .mockImplementationOnce(async () => nextPage.promise),
-      memoryGet: vi.fn(async () => ({ v: 1, item: {} })),
-      memoryUpdate: vi.fn(async () => ({ v: 1, item: {} })),
-      memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] })),
-      memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
     } as any;
-
-    const nextPage = deferred<any>();
     const { store, handleMemoryConsolidated, handleMemoryTombstone } = createMemoryStore(ws);
 
     await store.search({ query: "q" });
@@ -359,20 +339,11 @@ describe("memory-store", () => {
   });
 
   it("inspect() uses browse results while loading and ignores responses after tombstone", async () => {
-    const ws = {
-      memoryList: vi.fn(async () => ({
-        v: 1,
-        items: [{ memory_item_id: "m1", content: "list-item" }],
-        next_cursor: undefined,
-      })),
-      memorySearch: vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined })),
-      memoryGet: vi.fn(async () => nextGet.promise),
-      memoryUpdate: vi.fn(async () => ({ v: 1, item: {} })),
-      memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] })),
-      memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
-    } as any;
-
     const nextGet = deferred<any>();
+    const ws = {
+      memoryList: vi.fn(async () => listResponse([{ memory_item_id: "m1", content: "list-item" }])),
+      memoryGet: vi.fn(async () => nextGet.promise),
+    } as any;
     const { store, handleMemoryTombstone } = createMemoryStore(ws);
 
     await store.list();
@@ -392,21 +363,13 @@ describe("memory-store", () => {
   });
 
   it("update() upserts into browse results and inspect state", async () => {
-    const ws = {
-      memoryList: vi.fn(async () => ({
-        v: 1,
-        items: [{ memory_item_id: "m1", content: "old" }],
-        next_cursor: undefined,
-      })),
-      memorySearch: vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined })),
-      memoryGet: vi.fn(async () => ({ v: 1, item: { memory_item_id: "m1", content: "old" } })),
-      memoryUpdate: vi.fn(async () => ({
-        v: 1,
-        item: { memory_item_id: "m1", agent_id: "default", content: "new" },
-      })),
-      memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] })),
-      memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
-    } as any;
+    const ws = createWs({
+      memoryList: vi.fn(async () => listResponse([{ memory_item_id: "m1", content: "old" }])),
+      memoryGet: vi.fn(async () => itemResponse({ memory_item_id: "m1", content: "old" })),
+      memoryUpdate: vi.fn(async () =>
+        itemResponse({ memory_item_id: "m1", agent_id: "default", content: "new" }),
+      ),
+    });
 
     const { store } = createMemoryStore(ws);
 
@@ -421,22 +384,18 @@ describe("memory-store", () => {
   });
 
   it("forget()/export() surface ws errors and handle export completion events", async () => {
-    const ws = {
-      memoryList: vi.fn(async () => ({
-        v: 1,
-        items: [{ memory_item_id: "m1" }, { memory_item_id: "m2" }],
-        next_cursor: undefined,
-      })),
-      memorySearch: vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined })),
-      memoryGet: vi.fn(async () => ({ v: 1, item: { memory_item_id: "m1" } })),
-      memoryUpdate: vi.fn(async () => ({ v: 1, item: { memory_item_id: "m1" } })),
+    const ws = createWs({
+      memoryList: vi.fn(async () =>
+        listResponse([{ memory_item_id: "m1" }, { memory_item_id: "m2" }]),
+      ),
+      memoryGet: vi.fn(async () => itemResponse({ memory_item_id: "m1" })),
       memoryForget: vi.fn(async () => {
         throw new Error("nope");
       }),
       memoryExport: vi.fn(async () => {
         throw new Error("nope");
       }),
-    } as any;
+    });
 
     const { store, handleMemoryExportCompleted } = createMemoryStore(ws);
 
@@ -456,28 +415,19 @@ describe("memory-store", () => {
 
   it("forwards agent scope through memory operations and ignores events from other agents", async () => {
     const scopedAgentId = "11111111-1111-4111-8111-111111111111";
-    const ws = {
-      memoryList: vi.fn(async () => ({
-        v: 1,
-        items: [{ memory_item_id: "m1", agent_id: scopedAgentId, content: "old" }],
-        next_cursor: undefined,
-      })),
-      memorySearch: vi.fn(async () => ({
-        v: 1,
-        hits: [{ memory_item_id: "m1" }],
-        next_cursor: undefined,
-      })),
-      memoryGet: vi.fn(async () => ({
-        v: 1,
-        item: { memory_item_id: "m1", agent_id: scopedAgentId, content: "old" },
-      })),
-      memoryUpdate: vi.fn(async () => ({
-        v: 1,
-        item: { memory_item_id: "m1", agent_id: scopedAgentId, content: "new" },
-      })),
-      memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 1, tombstones: [] })),
-      memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
-    } as any;
+    const ws = createWs({
+      memoryList: vi.fn(async () =>
+        listResponse([{ memory_item_id: "m1", agent_id: scopedAgentId, content: "old" }]),
+      ),
+      memorySearch: vi.fn(async () => searchResponse([{ memory_item_id: "m1" }])),
+      memoryGet: vi.fn(async () =>
+        itemResponse({ memory_item_id: "m1", agent_id: scopedAgentId, content: "old" }),
+      ),
+      memoryUpdate: vi.fn(async () =>
+        itemResponse({ memory_item_id: "m1", agent_id: scopedAgentId, content: "new" }),
+      ),
+      memoryForget: vi.fn(async () => forgetResponse(1)),
+    });
 
     const { store, handleMemoryItemUpsert } = createMemoryStore(ws);
 
@@ -538,14 +488,9 @@ describe("memory-store", () => {
   it("does not drop matching inspect events before a scoped agent UUID is learned", async () => {
     const resolvedAgentId = "33333333-3333-4333-8333-333333333333";
     const nextGet = deferred<any>();
-    const ws = {
-      memoryList: vi.fn(async () => ({ v: 1, items: [], next_cursor: undefined })),
-      memorySearch: vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined })),
+    const ws = createWs({
       memoryGet: vi.fn(async () => nextGet.promise),
-      memoryUpdate: vi.fn(async () => ({ v: 1, item: {} })),
-      memoryForget: vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] })),
-      memoryExport: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
-    } as any;
+    });
 
     const { store, handleMemoryItemUpsert, handleMemoryTombstone } = createMemoryStore(ws);
 

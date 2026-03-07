@@ -4,6 +4,7 @@ import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createTestApp } from "./helpers.js";
 
+const jsonHeaders = { "content-type": "application/json" };
 const EXECUTION_PROFILE_IDS = [
   "interaction",
   "explorer_ro",
@@ -13,6 +14,30 @@ const EXECUTION_PROFILE_IDS = [
   "executor_rw",
   "integrator",
 ] as const;
+const defaultSessionScope = { tenantKey: "default", agentKey: "default", workspaceKey: "default" };
+const PROVIDER_METADATA = {
+  anthropic: {
+    name: "Anthropic",
+    env: ["ANTHROPIC_API_KEY"],
+    npm: "@ai-sdk/anthropic",
+    api: "https://api.anthropic.com/v1",
+    doc: "https://docs.anthropic.com",
+  },
+  openai: {
+    name: "OpenAI",
+    env: ["OPENAI_API_KEY"],
+    npm: "@ai-sdk/openai",
+    api: "https://api.openai.com/v1",
+    doc: "https://platform.openai.com/docs",
+  },
+  openrouter: {
+    name: "OpenRouter",
+    env: ["OPENROUTER_API_KEY"],
+    npm: "@openrouter/ai-sdk-provider",
+    api: "https://openrouter.ai/api/v1",
+    doc: "https://openrouter.ai/docs/api-reference/overview",
+  },
+} satisfies Record<string, Record<string, unknown>>;
 
 async function seedCatalog(
   cacheDal: ModelsDevCacheDal,
@@ -30,21 +55,98 @@ async function seedCatalog(
   });
 }
 
+function modelResponse(
+  id: string,
+  name: string,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return { id, name, modalities: { output: ["text"] }, ...extra };
+}
+
+function catalogFor(
+  providerKey: keyof typeof PROVIDER_METADATA,
+  models: Record<string, unknown>,
+): Record<string, unknown> {
+  return { [providerKey]: { id: providerKey, ...PROVIDER_METADATA[providerKey], models } };
+}
+
+async function createProviderAccount(
+  app: Awaited<ReturnType<typeof createTestApp>>["app"],
+  body: Record<string, unknown>,
+): Promise<Response> {
+  return await app.request("/config/providers/accounts", {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+}
+
+async function createModelPreset(
+  app: Awaited<ReturnType<typeof createTestApp>>["app"],
+  body: Record<string, unknown>,
+): Promise<Response> {
+  return await app.request("/config/models/presets", {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+}
+
+async function createDefaultSession(
+  container: Awaited<ReturnType<typeof createTestApp>>["container"],
+  providerThreadId: string,
+) {
+  return await container.sessionDal.getOrCreate({
+    scopeKeys: defaultSessionScope,
+    connectorKey: "ui",
+    providerThreadId,
+    containerKind: "dm",
+  });
+}
+
+async function insertApiKeyProfile(
+  container: Awaited<ReturnType<typeof createTestApp>>["container"],
+  authProfileKey: string,
+  providerKey: string,
+): Promise<void> {
+  await container.db.run(
+    `INSERT INTO auth_profiles (
+       tenant_id,
+       auth_profile_id,
+       auth_profile_key,
+       provider_key,
+       type,
+       status
+     ) VALUES (?, ?, ?, ?, 'api_key', 'active')`,
+    [DEFAULT_TENANT_ID, randomUUID(), authProfileKey, providerKey],
+  );
+}
+
+async function insertSessionModelOverride(
+  container: Awaited<ReturnType<typeof createTestApp>>["container"],
+  sessionId: string,
+  modelId: string,
+): Promise<void> {
+  await container.db.run(
+    `INSERT INTO session_model_overrides (
+       tenant_id,
+       session_id,
+       model_id,
+       preset_key,
+       pinned_at,
+       updated_at
+     ) VALUES (?, ?, ?, NULL, datetime('now'), datetime('now'))`,
+    [DEFAULT_TENANT_ID, sessionId, modelId],
+  );
+}
+
 describe("provider + model config routes", () => {
   it("lists registry entries and supports provider account CRUD", async () => {
     const { app, container } = await createTestApp();
     await seedCatalog(new ModelsDevCacheDal(container.db), {
-      anthropic: {
-        id: "anthropic",
-        name: "Anthropic",
-        env: ["ANTHROPIC_API_KEY"],
-        npm: "@ai-sdk/anthropic",
-        api: "https://api.anthropic.com/v1",
-        doc: "https://docs.anthropic.com",
-        models: {
-          "claude-3.5-sonnet": { id: "claude-3.5-sonnet", name: "Claude 3.5 Sonnet" },
-        },
-      },
+      ...catalogFor("anthropic", {
+        "claude-3.5-sonnet": { id: "claude-3.5-sonnet", name: "Claude 3.5 Sonnet" },
+      }),
       "cloudflare-workers-ai": {
         id: "cloudflare-workers-ai",
         name: "Cloudflare Workers AI",
@@ -81,13 +183,7 @@ describe("provider + model config routes", () => {
     );
     expect(
       registryBody.providers.find((provider) => provider.provider_key === "anthropic")?.methods,
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          method_key: "api_key",
-        }),
-      ]),
-    );
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ method_key: "api_key" })]));
     expect(
       registryBody.providers.find((provider) => provider.provider_key === "cloudflare-workers-ai")
         ?.supported,
@@ -111,26 +207,18 @@ describe("provider + model config routes", () => {
       registryBody.providers.find((provider) => provider.provider_key === "unsupported")?.supported,
     ).toBe(false);
 
-    const createRes = await app.request("/config/providers/accounts", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        provider_key: "anthropic",
-        display_name: "Primary Anthropic",
-        method_key: "api_key",
-        config: {},
-        secrets: {
-          api_key: "sk-test-1",
-        },
-      }),
+    const createRes = await createProviderAccount(app, {
+      provider_key: "anthropic",
+      display_name: "Primary Anthropic",
+      method_key: "api_key",
+      config: {},
+      secrets: {
+        api_key: "sk-test-1",
+      },
     });
     expect(createRes.status).toBe(201);
     const created = (await createRes.json()) as {
-      account: {
-        account_key: string;
-        display_name: string;
-        configured_secret_keys: string[];
-      };
+      account: { account_key: string; display_name: string; configured_secret_keys: string[] };
     };
     expect(created.account.account_key).toBeTypeOf("string");
     expect(created.account.display_name).toBe("Primary Anthropic");
@@ -167,7 +255,7 @@ describe("provider + model config routes", () => {
       `/config/providers/accounts/${encodeURIComponent(created.account.account_key)}`,
       {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: jsonHeaders,
         body: JSON.stringify({
           display_name: "Renamed Anthropic",
           config: { baseURL: "https://example.test/v1" },
@@ -192,43 +280,22 @@ describe("provider + model config routes", () => {
 
   it("creates model presets, updates assignments, and requires replacements on delete", async () => {
     const { app, container } = await createTestApp();
-    await seedCatalog(new ModelsDevCacheDal(container.db), {
-      openai: {
-        id: "openai",
-        name: "OpenAI",
-        env: ["OPENAI_API_KEY"],
-        npm: "@ai-sdk/openai",
-        api: "https://api.openai.com/v1",
-        doc: "https://platform.openai.com/docs",
-        models: {
-          "gpt-4.1": {
-            id: "gpt-4.1",
-            name: "GPT-4.1",
-            modalities: { output: ["text"] },
-            reasoning: true,
-          },
-          "gpt-4.1-mini": {
-            id: "gpt-4.1-mini",
-            name: "GPT-4.1 Mini",
-            modalities: { output: ["text"] },
-            reasoning: true,
-          },
-        },
-      },
-    });
-
-    const accountRes = await app.request("/config/providers/accounts", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        provider_key: "openai",
-        display_name: "Primary OpenAI",
-        method_key: "api_key",
-        config: {},
-        secrets: {
-          api_key: "sk-test-2",
-        },
+    await seedCatalog(
+      new ModelsDevCacheDal(container.db),
+      catalogFor("openai", {
+        "gpt-4.1": modelResponse("gpt-4.1", "GPT-4.1", { reasoning: true }),
+        "gpt-4.1-mini": modelResponse("gpt-4.1-mini", "GPT-4.1 Mini", { reasoning: true }),
       }),
+    );
+
+    const accountRes = await createProviderAccount(app, {
+      provider_key: "openai",
+      display_name: "Primary OpenAI",
+      method_key: "api_key",
+      config: {},
+      secrets: {
+        api_key: "sk-test-2",
+      },
     });
     expect(accountRes.status).toBe(201);
 
@@ -244,35 +311,25 @@ describe("provider + model config routes", () => {
       ]),
     );
 
-    const presetARes = await app.request("/config/models/presets", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        display_name: "Interaction Default",
-        provider_key: "openai",
-        model_id: "gpt-4.1",
-        options: { reasoning_effort: "medium" },
-      }),
+    const presetARes = await createModelPreset(app, {
+      display_name: "Interaction Default",
+      provider_key: "openai",
+      model_id: "gpt-4.1",
+      options: { reasoning_effort: "medium" },
     });
     expect(presetARes.status).toBe(201);
     const presetA = (await presetARes.json()) as {
       preset: { preset_key: string; provider_key: string; model_id: string };
     };
 
-    const presetBRes = await app.request("/config/models/presets", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        display_name: "Fallback Default",
-        provider_key: "openai",
-        model_id: "gpt-4.1-mini",
-        options: { reasoning_effort: "high" },
-      }),
+    const presetBRes = await createModelPreset(app, {
+      display_name: "Fallback Default",
+      provider_key: "openai",
+      model_id: "gpt-4.1-mini",
+      options: { reasoning_effort: "high" },
     });
     expect(presetBRes.status).toBe(201);
-    const presetB = (await presetBRes.json()) as {
-      preset: { preset_key: string };
-    };
+    const presetB = (await presetBRes.json()) as { preset: { preset_key: string } };
 
     const assignmentsRes = await app.request("/config/models/assignments", {
       method: "PUT",
@@ -303,7 +360,7 @@ describe("provider + model config routes", () => {
       `/config/models/presets/${encodeURIComponent(presetA.preset.preset_key)}`,
       {
         method: "DELETE",
-        headers: { "content-type": "application/json" },
+        headers: jsonHeaders,
         body: JSON.stringify({
           replacement_assignments: Object.fromEntries(
             EXECUTION_PROFILE_IDS.map((profileId) => [profileId, presetB.preset.preset_key]),
@@ -327,37 +384,17 @@ describe("provider + model config routes", () => {
 
   it("normalizes legacy self-prefixed OpenRouter model ids in available and preset routes", async () => {
     const { app, container } = await createTestApp();
-    await seedCatalog(new ModelsDevCacheDal(container.db), {
-      openrouter: {
-        id: "openrouter",
-        name: "OpenRouter",
-        env: ["OPENROUTER_API_KEY"],
-        npm: "@openrouter/ai-sdk-provider",
-        api: "https://openrouter.ai/api/v1",
-        doc: "https://openrouter.ai/docs/api-reference/overview",
-        models: {
-          "openrouter/openai/gpt-5.4": {
-            id: "openrouter/openai/gpt-5.4",
-            name: "GPT-5.4",
-            modalities: { output: ["text"] },
-            reasoning: true,
-            tool_call: true,
-          },
-        },
-      },
-    });
-
-    await container.db.run(
-      `INSERT INTO auth_profiles (
-         tenant_id,
-         auth_profile_id,
-         auth_profile_key,
-         provider_key,
-         type,
-         status
-       ) VALUES (?, ?, ?, ?, 'api_key', 'active')`,
-      [DEFAULT_TENANT_ID, randomUUID(), "openrouter-primary", "openrouter"],
+    await seedCatalog(
+      new ModelsDevCacheDal(container.db),
+      catalogFor("openrouter", {
+        "openrouter/openai/gpt-5.4": modelResponse("openrouter/openai/gpt-5.4", "GPT-5.4", {
+          reasoning: true,
+          tool_call: true,
+        }),
+      }),
     );
+
+    await insertApiKeyProfile(container, "openrouter-primary", "openrouter");
 
     const nowIso = "2026-03-01T00:00:00.000Z";
     await container.db.run(
@@ -392,10 +429,7 @@ describe("provider + model config routes", () => {
     };
     expect(available.models).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          provider_key: "openrouter",
-          model_id: "openai/gpt-5.4",
-        }),
+        expect.objectContaining({ provider_key: "openrouter", model_id: "openai/gpt-5.4" }),
       ]),
     );
 
@@ -406,32 +440,22 @@ describe("provider + model config routes", () => {
     };
     expect(presetList.presets).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          preset_key: "legacy-openrouter",
-          model_id: "openai/gpt-5.4",
-        }),
+        expect.objectContaining({ preset_key: "legacy-openrouter", model_id: "openai/gpt-5.4" }),
       ]),
     );
 
-    const createRes = await app.request("/config/models/presets", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        display_name: "GPT-5.4",
-        provider_key: "openrouter",
-        model_id: "openai/gpt-5.4",
-        options: {},
-      }),
+    const createRes = await createModelPreset(app, {
+      display_name: "GPT-5.4",
+      provider_key: "openrouter",
+      model_id: "openai/gpt-5.4",
+      options: {},
     });
     expect(createRes.status).toBe(201);
     const created = (await createRes.json()) as {
       preset: { provider_key: string; model_id: string };
     };
     expect(created.preset).toEqual(
-      expect.objectContaining({
-        provider_key: "openrouter",
-        model_id: "openai/gpt-5.4",
-      }),
+      expect.objectContaining({ provider_key: "openrouter", model_id: "openai/gpt-5.4" }),
     );
   });
 
@@ -440,7 +464,7 @@ describe("provider + model config routes", () => {
 
     const assignmentsRes = await app.request("/config/models/assignments", {
       method: "PUT",
-      headers: { "content-type": "application/json" },
+      headers: jsonHeaders,
       body: JSON.stringify({
         assignments: Object.fromEntries(
           EXECUTION_PROFILE_IDS.map((profileId) => [profileId, "missing-preset"]),
@@ -456,51 +480,30 @@ describe("provider + model config routes", () => {
 
   it("blocks deleting the last provider account while presets still reference the provider", async () => {
     const { app, container } = await createTestApp();
-    await seedCatalog(new ModelsDevCacheDal(container.db), {
-      openai: {
-        id: "openai",
-        name: "OpenAI",
-        env: ["OPENAI_API_KEY"],
-        npm: "@ai-sdk/openai",
-        api: "https://api.openai.com/v1",
-        doc: "https://platform.openai.com/docs",
-        models: {
-          "gpt-4.1": {
-            id: "gpt-4.1",
-            name: "GPT-4.1",
-            modalities: { output: ["text"] },
-          },
-        },
+    await seedCatalog(
+      new ModelsDevCacheDal(container.db),
+      catalogFor("openai", {
+        "gpt-4.1": modelResponse("gpt-4.1", "GPT-4.1"),
+      }),
+    );
+
+    const accountRes = await createProviderAccount(app, {
+      provider_key: "openai",
+      display_name: "Primary OpenAI",
+      method_key: "api_key",
+      config: {},
+      secrets: {
+        api_key: "sk-test-last-account",
       },
     });
-
-    const accountRes = await app.request("/config/providers/accounts", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        provider_key: "openai",
-        display_name: "Primary OpenAI",
-        method_key: "api_key",
-        config: {},
-        secrets: {
-          api_key: "sk-test-last-account",
-        },
-      }),
-    });
     expect(accountRes.status).toBe(201);
-    const created = (await accountRes.json()) as {
-      account: { account_key: string };
-    };
+    const created = (await accountRes.json()) as { account: { account_key: string } };
 
-    const presetRes = await app.request("/config/models/presets", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        display_name: "Interaction Default",
-        provider_key: "openai",
-        model_id: "gpt-4.1",
-        options: {},
-      }),
+    const presetRes = await createModelPreset(app, {
+      display_name: "Interaction Default",
+      provider_key: "openai",
+      model_id: "gpt-4.1",
+      options: {},
     });
     expect(presetRes.status).toBe(201);
 
@@ -525,56 +528,26 @@ describe("provider + model config routes", () => {
 
   it("removes direct session model overrides when deleting a provider", async () => {
     const { app, container } = await createTestApp();
-    await seedCatalog(new ModelsDevCacheDal(container.db), {
-      anthropic: {
-        id: "anthropic",
-        name: "Anthropic",
-        env: ["ANTHROPIC_API_KEY"],
-        npm: "@ai-sdk/anthropic",
-        api: "https://api.anthropic.com/v1",
-        doc: "https://docs.anthropic.com",
-        models: {
-          "claude-3.5-sonnet": {
-            id: "claude-3.5-sonnet",
-            name: "Claude 3.5 Sonnet",
-            modalities: { output: ["text"] },
-          },
-        },
-      },
-    });
-
-    const accountRes = await app.request("/config/providers/accounts", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        provider_key: "anthropic",
-        display_name: "Primary Anthropic",
-        method_key: "api_key",
-        config: {},
-        secrets: {
-          api_key: "sk-test-direct-override",
-        },
+    await seedCatalog(
+      new ModelsDevCacheDal(container.db),
+      catalogFor("anthropic", {
+        "claude-3.5-sonnet": modelResponse("claude-3.5-sonnet", "Claude 3.5 Sonnet"),
       }),
+    );
+
+    const accountRes = await createProviderAccount(app, {
+      provider_key: "anthropic",
+      display_name: "Primary Anthropic",
+      method_key: "api_key",
+      config: {},
+      secrets: {
+        api_key: "sk-test-direct-override",
+      },
     });
     expect(accountRes.status).toBe(201);
 
-    const session = await container.sessionDal.getOrCreate({
-      scopeKeys: { tenantKey: "default", agentKey: "default", workspaceKey: "default" },
-      connectorKey: "ui",
-      providerThreadId: "thread-direct",
-      containerKind: "dm",
-    });
-    await container.db.run(
-      `INSERT INTO session_model_overrides (
-         tenant_id,
-         session_id,
-         model_id,
-         preset_key,
-         pinned_at,
-         updated_at
-       ) VALUES (?, ?, ?, NULL, datetime('now'), datetime('now'))`,
-      [DEFAULT_TENANT_ID, session.session_id, "anthropic/claude-3.5-sonnet"],
-    );
+    const session = await createDefaultSession(container, "thread-direct");
+    await insertSessionModelOverride(container, session.session_id, "anthropic/claude-3.5-sonnet");
 
     const deleteRes = await app.request("/config/providers/anthropic", {
       method: "DELETE",
@@ -595,63 +568,21 @@ describe("provider + model config routes", () => {
     const wildcardProviderKey = "open_ai";
     const otherProviderKey = "openxai";
 
-    await container.db.run(
-      `INSERT INTO auth_profiles (
-         tenant_id,
-         auth_profile_id,
-         auth_profile_key,
-         provider_key,
-         type,
-         status
-       ) VALUES (?, ?, ?, ?, 'api_key', 'active')`,
-      [DEFAULT_TENANT_ID, randomUUID(), "wildcard-account", wildcardProviderKey],
-    );
-    await container.db.run(
-      `INSERT INTO auth_profiles (
-         tenant_id,
-         auth_profile_id,
-         auth_profile_key,
-         provider_key,
-         type,
-         status
-       ) VALUES (?, ?, ?, ?, 'api_key', 'active')`,
-      [DEFAULT_TENANT_ID, randomUUID(), "other-account", otherProviderKey],
-    );
+    await insertApiKeyProfile(container, "wildcard-account", wildcardProviderKey);
+    await insertApiKeyProfile(container, "other-account", otherProviderKey);
 
-    const wildcardSession = await container.sessionDal.getOrCreate({
-      scopeKeys: { tenantKey: "default", agentKey: "default", workspaceKey: "default" },
-      connectorKey: "ui",
-      providerThreadId: "thread-wildcard",
-      containerKind: "dm",
-    });
-    const otherSession = await container.sessionDal.getOrCreate({
-      scopeKeys: { tenantKey: "default", agentKey: "default", workspaceKey: "default" },
-      connectorKey: "ui",
-      providerThreadId: "thread-other",
-      containerKind: "dm",
-    });
+    const wildcardSession = await createDefaultSession(container, "thread-wildcard");
+    const otherSession = await createDefaultSession(container, "thread-other");
 
-    await container.db.run(
-      `INSERT INTO session_model_overrides (
-         tenant_id,
-         session_id,
-         model_id,
-         preset_key,
-         pinned_at,
-         updated_at
-       ) VALUES (?, ?, ?, NULL, datetime('now'), datetime('now'))`,
-      [DEFAULT_TENANT_ID, wildcardSession.session_id, `${wildcardProviderKey}/gpt-4.1`],
+    await insertSessionModelOverride(
+      container,
+      wildcardSession.session_id,
+      `${wildcardProviderKey}/gpt-4.1`,
     );
-    await container.db.run(
-      `INSERT INTO session_model_overrides (
-         tenant_id,
-         session_id,
-         model_id,
-         preset_key,
-         pinned_at,
-         updated_at
-       ) VALUES (?, ?, ?, NULL, datetime('now'), datetime('now'))`,
-      [DEFAULT_TENANT_ID, otherSession.session_id, `${otherProviderKey}/gpt-4.1`],
+    await insertSessionModelOverride(
+      container,
+      otherSession.session_id,
+      `${otherProviderKey}/gpt-4.1`,
     );
 
     const deleteRes = await app.request(

@@ -6,53 +6,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import type { GatewayContainer } from "./container.js";
-import { createHealthRoute } from "./routes/health.js";
-import { createStatusRoutes } from "./routes/status.js";
-import { createUsageRoutes } from "./routes/usage.js";
-import { policy } from "./routes/policy.js";
-import { createPolicyBundleRoutes } from "./routes/policy-bundle.js";
-import { createMemoryExportRoutes } from "./routes/memory-export.js";
-import { createIngressRoutes } from "./routes/ingress.js";
-import { createRoutingConfigRoutes } from "./routes/routing-config.js";
-import { createPlanRoutes } from "./routes/plan.js";
-import { createAgentRoutes } from "./routes/agent.js";
-import { createAgentConfigRoutes } from "./routes/agent-config.js";
-import { createContextRoutes } from "./routes/context.js";
-import { createWorkflowRoutes } from "./routes/workflow.js";
-import { createApprovalRoutes } from "./routes/approval.js";
-import { createWatcherRoutes } from "./routes/watcher.js";
-import { createAutomationScheduleRoutes } from "./routes/automation-schedules.js";
-import { createCanvasRoutes } from "./routes/canvas.js";
-import { createAuditRoutes } from "./routes/audit.js";
-import { createSecretRoutes } from "./routes/secret.js";
-import { createArtifactRoutes } from "./routes/artifact.js";
-import { createSnapshotRoutes } from "./routes/snapshot.js";
-import { createPlaybookRoutes } from "./routes/playbook.js";
-import { createConnectionsRoute } from "./routes/connections.js";
-import { createPairingRoutes } from "./routes/pairing.js";
-import { createAuthProfileRoutes } from "./routes/auth-profiles.js";
-import { createAuthSessionRoutes } from "./routes/auth-session.js";
-import { createDeviceTokenRoutes } from "./routes/device-token.js";
-import { createPluginRoutes } from "./routes/plugins.js";
-import { createModelsDevRoutes } from "./routes/models-dev.js";
-import { createProviderOAuthRoutes } from "./routes/provider-oauth.js";
-import { createProviderConfigRoutes } from "./routes/provider-config.js";
-import { createModelConfigRoutes } from "./routes/model-config.js";
-import { createContractRoutes } from "./routes/contracts.js";
-import { createSystemRoutes } from "./routes/system.js";
-import { PlaybookRunner } from "./modules/playbook/runner.js";
-import { createOperatorUiRoutes } from "./routes/operator-ui.js";
-import { createPresenceRoutes } from "./routes/presence.js";
-import { createMetricsRoutes } from "./routes/metrics.js";
-import { loadAllPlaybooks } from "./modules/playbook/loader.js";
 import { ExecutionEngine } from "./modules/execution/engine.js";
-import { TelegramChannelQueue } from "./modules/channels/telegram.js";
-import { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
-import { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
-import { SessionProviderPinDal } from "./modules/models/session-pin-dal.js";
-import { ConfiguredModelPresetDal } from "./modules/models/configured-model-preset-dal.js";
-import { ExecutionProfileModelAssignmentDal } from "./modules/models/execution-profile-model-assignment-dal.js";
-import { WsEventDal } from "./modules/ws-event/dal.js";
 import type { Playbook } from "@tyrum/schemas";
 import type { AgentRegistry } from "./modules/agent/registry.js";
 import type { AuthTokenService } from "./modules/auth/auth-token-service.js";
@@ -65,7 +19,6 @@ import type { OutboxDal } from "./modules/backplane/outbox-dal.js";
 import { createHttpScopeAuthorizationMiddleware } from "./modules/authz/http-scope-middleware.js";
 import { randomUUID } from "node:crypto";
 import { VERSION } from "./version.js";
-import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
 import {
   createClientIpMiddleware,
   createTrustedProxyAllowlistFromEnv,
@@ -77,6 +30,15 @@ import {
 } from "./modules/auth/rate-limiter.js";
 import { createMetricsMiddleware, gatewayMetrics } from "./modules/observability/metrics.js";
 import { requestIdForAudit } from "./modules/observability/request-id.js";
+import {
+  createAppRouteDependencies,
+  registerAgentsAndWorkspaceRoutes,
+  registerArtifactsAuditAndUiRoutes,
+  registerAuthAndSecurityRoutes,
+  registerExecutionAndWorkflowRoutes,
+  registerModelsAndConfigRoutes,
+  registerSystemAndPublicRoutes,
+} from "./app-route-registrars.js";
 
 export interface AppOptions {
   agents?: AgentRegistry;
@@ -126,14 +88,8 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       });
     })();
 
-  const authProfileDal = new AuthProfileDal(container.db);
-  const pinDal = new SessionProviderPinDal(container.db);
-  const configuredModelPresetDal = new ConfiguredModelPresetDal(container.db);
-  const executionProfileModelAssignmentDal = new ExecutionProfileModelAssignmentDal(container.db);
-  const routingConfigDal = new RoutingConfigDal(container.db);
-  const wsEventDal = new WsEventDal(container.db);
-
   const secretProviderForTenant = opts.secretProviderForTenant;
+  const routeDeps = createAppRouteDependencies(container);
 
   const trustedProxies = createTrustedProxyAllowlistFromEnv(
     container.deploymentConfig.server.trustedProxies,
@@ -206,300 +162,25 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     app.use("*", createHttpScopeAuthorizationMiddleware({ audit: authAudit }));
   }
 
-  // Register all routes
-  app.route("/", createHealthRoute({ isLocalOnly }));
-  app.route("/", createMetricsRoutes({ registry: gatewayMetrics }));
-  app.route(
-    "/",
-    createStatusRoutes({
-      version: runtime.version,
-      instanceId: runtime.instanceId,
-      role: runtime.role,
-      dbKind: container.db.kind,
-      db: container.db,
-      isLocalOnly,
-      otelEnabled: runtime.otelEnabled,
-      connectionManager: opts.connectionManager,
-      policyService: container.policyService,
-      modelsDev: container.modelsDev,
-      agents: opts.agents,
-    }),
-  );
-  app.route("/", createContractRoutes());
-  app.route(
-    "/",
-    createPresenceRoutes({
-      instanceId: runtime.instanceId,
-      version: runtime.version,
-      role: runtime.role,
-      presenceDal: container.presenceDal,
-    }),
-  );
-  app.route(
-    "/",
-    createPairingRoutes({
-      logger: container.logger,
-      nodePairingDal: container.nodePairingDal,
-      wsEventDal,
-      ws: opts.connectionManager
-        ? {
-            connectionManager: opts.connectionManager,
-            maxBufferedBytes: wsMaxBufferedBytes,
-            cluster:
-              opts.wsCluster && opts.connectionDirectory
-                ? { ...opts.wsCluster, connectionDirectory: opts.connectionDirectory }
-                : undefined,
-          }
-        : undefined,
-    }),
-  );
-  app.route(
-    "/",
-    createUsageRoutes({
-      db: container.db,
-      authProfileDal,
-      pinDal,
-      secretProviderForTenant,
-      logger: container.logger,
-    }),
-  );
-  app.route("/", policy);
-  app.route(
-    "/",
-    createPolicyBundleRoutes({
-      logger: container.logger,
-      policyService: container.policyService,
-      policyOverrideDal: container.policyOverrideDal,
-      wsEventDal,
-      ws: opts.connectionManager
-        ? {
-            connectionManager: opts.connectionManager,
-            cluster: opts.wsCluster,
-            maxBufferedBytes: wsMaxBufferedBytes,
-          }
-        : undefined,
-    }),
-  );
-  if (opts.authTokens) {
-    app.route("/", createAuthSessionRoutes({ authTokens: opts.authTokens }));
-  }
-  if (opts.authTokens) {
-    app.route("/", createDeviceTokenRoutes({ authTokens: opts.authTokens }));
-  }
-  if (opts.authTokens) {
-    app.route(
-      "/",
-      createSystemRoutes({
-        db: container.db,
-        authTokens: opts.authTokens,
-      }),
-    );
-  }
-  app.route("/", createAuthProfileRoutes({ authProfileDal, pinDal }));
-  app.route(
-    "/",
-    createModelsDevRoutes({ modelsDev: container.modelsDev, modelCatalog: container.modelCatalog }),
-  );
-  if (secretProviderForTenant) {
-    app.route(
-      "/",
-      createProviderConfigRoutes({
-        db: container.db,
-        authProfileDal,
-        modelCatalog: container.modelCatalog,
-        secretProviderForTenant,
-        configuredModelPresetDal,
-        executionProfileModelAssignmentDal,
-      }),
-    );
-  }
-  app.route(
-    "/",
-    createModelConfigRoutes({
-      db: container.db,
-      modelCatalog: container.modelCatalog,
-      authProfileDal,
-      configuredModelPresetDal,
-      executionProfileModelAssignmentDal,
-    }),
-  );
-  if (secretProviderForTenant && isAuthProfilesEnabled()) {
-    app.route(
-      "/",
-      createProviderOAuthRoutes({
-        oauthPendingDal: container.oauthPendingDal,
-        oauthProviderRegistry: container.oauthProviderRegistry,
-        authProfileDal,
-        secretProviderForTenant,
-        logger: container.logger,
-      }),
-    );
-  }
-  if (opts.plugins) {
-    app.route("/", createPluginRoutes({ plugins: opts.plugins }));
-  }
-  app.route("/", createMemoryExportRoutes({ artifactStore: container.artifactStore }));
-  app.route(
-    "/",
-    createIngressRoutes({
-      telegramBot: container.telegramBot,
-      telegramWebhookSecret: container.deploymentConfig.channels.telegramWebhookSecret,
-      telegramQueue:
-        channelPipelineEnabled && container.telegramBot && opts.agents
-          ? new TelegramChannelQueue(container.db, {
-              sessionDal: container.sessionDal,
-              logger: container.logger,
-              ws: opts.connectionManager
-                ? {
-                    connectionManager: opts.connectionManager,
-                    cluster: opts.wsCluster,
-                    maxBufferedBytes: wsMaxBufferedBytes,
-                  }
-                : undefined,
-            })
-          : undefined,
-      agents: opts.agents,
-      memoryV1Dal: container.memoryV1Dal,
-      routingConfigDal,
-      logger: container.logger,
-      home: container.config?.tyrumHome,
-    }),
-  );
-  app.route(
-    "/",
-    createRoutingConfigRoutes({
-      logger: container.logger,
-      routingConfigDal,
-      ws: opts.connectionManager
-        ? {
-            connectionManager: opts.connectionManager,
-            cluster: opts.wsCluster,
-            maxBufferedBytes: wsMaxBufferedBytes,
-          }
-        : undefined,
-    }),
-  );
-  app.route("/", createPlanRoutes(container));
-  if (engine) {
-    app.route(
-      "/",
-      createWorkflowRoutes({ engine, policyService: container.policyService, agents: opts.agents }),
-    );
-  }
-  app.route(
-    "/",
-    createApprovalRoutes({
-      approvalDal: container.approvalDal,
-      logger: container.logger,
-      policyOverrideDal: container.policyOverrideDal,
-      wsEventDal,
-      ws: opts.connectionManager
-        ? {
-            connectionManager: opts.connectionManager,
-            maxBufferedBytes: wsMaxBufferedBytes,
-            cluster: opts.wsCluster,
-          }
-        : undefined,
-    }),
-  );
-  app.route("/", createAutomationScheduleRoutes(container));
-  app.route(
-    "/",
-    createWatcherRoutes(container.watcherProcessor, {
-      secretProviderForTenant,
-    }),
-  );
-  app.route(
-    "/",
-    createCanvasRoutes({
-      canvasDal: container.canvasDal,
-      identityScopeDal: container.identityScopeDal,
-    }),
-  );
-  app.route(
-    "/",
-    createAuditRoutes({
-      db: container.db,
-      eventLog: container.eventLog,
-      identityScopeDal: container.identityScopeDal,
-    }),
-  );
-  app.route(
-    "/",
-    createSnapshotRoutes({
-      db: container.db,
-      version: runtime.version,
-      importEnabled: container.deploymentConfig.snapshots.importEnabled,
-    }),
-  );
-  app.route(
-    "/",
-    createArtifactRoutes({
-      db: container.db,
-      artifactStore: container.artifactStore,
-      logger: container.logger,
-      policySnapshotDal: container.policySnapshotDal,
-      policyService: container.policyService,
-    }),
-  );
+  const routeContext = {
+    app,
+    container,
+    opts,
+    runtime,
+    isLocalOnly,
+    wsMaxBufferedBytes,
+    channelPipelineEnabled,
+    engine,
+    secretProviderForTenant,
+    routeDeps,
+  } as const;
 
-  // Playbook routes — load from home/playbooks or use pre-loaded set
-  const playbookHome = container.config?.tyrumHome;
-  const playbooks =
-    opts.playbooks ?? (playbookHome ? loadAllPlaybooks(`${playbookHome}/playbooks`) : []);
-  const playbookRunner = new PlaybookRunner();
-  app.route(
-    "/",
-    createPlaybookRoutes({
-      playbooks,
-      runner: playbookRunner,
-      engine,
-      policyService: container.policyService,
-      approvalDal: container.approvalDal,
-      db: container.db,
-    }),
-  );
-
-  // Operator web UI (static SPA).
-  app.route("/", createOperatorUiRoutes({ assetsDir: opts.operatorUiAssetsDir }));
-
-  if (secretProviderForTenant) {
-    app.route(
-      "/",
-      createSecretRoutes({
-        secretProviderForTenant,
-      }),
-    );
-  }
-
-  app.route(
-    "/",
-    createAgentConfigRoutes({
-      db: container.db,
-      identityScopeDal: container.identityScopeDal,
-    }),
-  );
-
-  if (opts.connectionManager) {
-    app.route("/", createConnectionsRoute(opts.connectionManager));
-  }
-
-  if (opts.agents) {
-    app.route(
-      "/",
-      createAgentRoutes({
-        agents: opts.agents,
-        identityScopeDal: container.identityScopeDal,
-      }),
-    );
-    app.route(
-      "/",
-      createContextRoutes({
-        agents: opts.agents,
-        contextReportDal: container.contextReportDal,
-      }),
-    );
-  }
+  registerSystemAndPublicRoutes(routeContext);
+  registerAuthAndSecurityRoutes(routeContext);
+  registerModelsAndConfigRoutes(routeContext);
+  registerExecutionAndWorkflowRoutes(routeContext);
+  registerAgentsAndWorkspaceRoutes(routeContext);
+  registerArtifactsAuditAndUiRoutes(routeContext);
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) {

@@ -196,7 +196,7 @@ describe("gateway approval engine action fallback", () => {
     }));
 
     vi.doMock("../../src/modules/agent/node-dispatch-service.js", () => ({
-      NodeDispatchService: class NodeDispatchService {},
+      NodeDispatchService: function NodeDispatchService() {},
     }));
 
     const { main } = await import("../../src/index.js");

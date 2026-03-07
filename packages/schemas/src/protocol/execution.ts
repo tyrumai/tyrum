@@ -27,6 +27,17 @@ import {
 // Operation payloads (typed) — execution
 // ---------------------------------------------------------------------------
 
+const wsRequest = <T extends string, P extends z.ZodTypeAny>(type: T, payload: P) =>
+  WsRequestEnvelope.extend({ type: z.literal(type), payload });
+const wsEvent = <T extends string, P extends z.ZodTypeAny>(type: T, payload: P) =>
+  WsEventEnvelope.extend({ type: z.literal(type), payload });
+const wsResponseOk = <T extends string>(type: T) =>
+  WsResponseOkEnvelope.extend({ type: z.literal(type) });
+const wsResponseErr = <T extends string>(type: T) =>
+  WsResponseErrEnvelope.extend({ type: z.literal(type) });
+const WsRunIdEventPayload = z.object({ run_id: ExecutionRunId }).strict();
+const WsPolicyOverrideEventPayload = z.object({ override: PolicyOverride }).strict();
+
 export const WsAttemptEvidencePayload = z
   .object({
     run_id: ExecutionRunId,
@@ -37,10 +48,7 @@ export const WsAttemptEvidencePayload = z
   .strict();
 export type WsAttemptEvidencePayload = z.infer<typeof WsAttemptEvidencePayload>;
 
-export const WsAttemptEvidenceRequest = WsRequestEnvelope.extend({
-  type: z.literal("attempt.evidence"),
-  payload: WsAttemptEvidencePayload,
-});
+export const WsAttemptEvidenceRequest = wsRequest("attempt.evidence", WsAttemptEvidencePayload);
 export type WsAttemptEvidenceRequest = z.infer<typeof WsAttemptEvidenceRequest>;
 
 export const WsTaskExecutePayload = z
@@ -53,10 +61,7 @@ export const WsTaskExecutePayload = z
   .strict();
 export type WsTaskExecutePayload = z.infer<typeof WsTaskExecutePayload>;
 
-export const WsTaskExecuteRequest = WsRequestEnvelope.extend({
-  type: z.literal("task.execute"),
-  payload: WsTaskExecutePayload,
-});
+export const WsTaskExecuteRequest = wsRequest("task.execute", WsTaskExecutePayload);
 export type WsTaskExecuteRequest = z.infer<typeof WsTaskExecuteRequest>;
 
 export const WsTaskExecuteResult = z
@@ -71,16 +76,12 @@ export type WsTaskExecuteResult = z.infer<typeof WsTaskExecuteResult>;
 // Operation responses (typed) — execution
 // ---------------------------------------------------------------------------
 
-export const WsAttemptEvidenceResponseOkEnvelope = WsResponseOkEnvelope.extend({
-  type: z.literal("attempt.evidence"),
-});
+export const WsAttemptEvidenceResponseOkEnvelope = wsResponseOk("attempt.evidence");
 export type WsAttemptEvidenceResponseOkEnvelope = z.infer<
   typeof WsAttemptEvidenceResponseOkEnvelope
 >;
 
-export const WsAttemptEvidenceResponseErrEnvelope = WsResponseErrEnvelope.extend({
-  type: z.literal("attempt.evidence"),
-});
+export const WsAttemptEvidenceResponseErrEnvelope = wsResponseErr("attempt.evidence");
 export type WsAttemptEvidenceResponseErrEnvelope = z.infer<
   typeof WsAttemptEvidenceResponseErrEnvelope
 >;
@@ -97,9 +98,7 @@ export const WsTaskExecuteResponseOkEnvelope = WsResponseOkEnvelope.extend({
 });
 export type WsTaskExecuteResponseOkEnvelope = z.infer<typeof WsTaskExecuteResponseOkEnvelope>;
 
-export const WsTaskExecuteResponseErrEnvelope = WsResponseErrEnvelope.extend({
-  type: z.literal("task.execute"),
-});
+export const WsTaskExecuteResponseErrEnvelope = wsResponseErr("task.execute");
 export type WsTaskExecuteResponseErrEnvelope = z.infer<typeof WsTaskExecuteResponseErrEnvelope>;
 
 export const WsTaskExecuteResponseEnvelope = z.union([
@@ -121,10 +120,7 @@ export const WsPlanUpdatePayload = z
   .strict();
 export type WsPlanUpdatePayload = z.infer<typeof WsPlanUpdatePayload>;
 
-export const WsPlanUpdateEvent = WsEventEnvelope.extend({
-  type: z.literal("plan.update"),
-  payload: WsPlanUpdatePayload,
-});
+export const WsPlanUpdateEvent = wsEvent("plan.update", WsPlanUpdatePayload);
 export type WsPlanUpdateEvent = z.infer<typeof WsPlanUpdateEvent>;
 
 export const WsRunUpdatedEventPayload = z
@@ -134,84 +130,43 @@ export const WsRunUpdatedEventPayload = z
   .strict();
 export type WsRunUpdatedEventPayload = z.infer<typeof WsRunUpdatedEventPayload>;
 
-export const WsRunUpdatedEvent = WsEventEnvelope.extend({
-  type: z.literal("run.updated"),
-  payload: WsRunUpdatedEventPayload,
-});
+export const WsRunUpdatedEvent = wsEvent("run.updated", WsRunUpdatedEventPayload);
 export type WsRunUpdatedEvent = z.infer<typeof WsRunUpdatedEvent>;
 
 export const WsRunPausedEventPayload = ExecutionRunPausedPayload;
 export type WsRunPausedEventPayload = z.infer<typeof WsRunPausedEventPayload>;
 
-export const WsRunPausedEvent = WsEventEnvelope.extend({
-  type: z.literal("run.paused"),
-  payload: WsRunPausedEventPayload,
-});
+export const WsRunPausedEvent = wsEvent("run.paused", WsRunPausedEventPayload);
 export type WsRunPausedEvent = z.infer<typeof WsRunPausedEvent>;
 
-export const WsRunQueuedEventPayload = z
-  .object({
-    run_id: ExecutionRunId,
-  })
-  .strict();
+export const WsRunQueuedEventPayload = WsRunIdEventPayload;
 export type WsRunQueuedEventPayload = z.infer<typeof WsRunQueuedEventPayload>;
 
-export const WsRunQueuedEvent = WsEventEnvelope.extend({
-  type: z.literal("run.queued"),
-  payload: WsRunQueuedEventPayload,
-});
+export const WsRunQueuedEvent = wsEvent("run.queued", WsRunQueuedEventPayload);
 export type WsRunQueuedEvent = z.infer<typeof WsRunQueuedEvent>;
 
-export const WsRunStartedEventPayload = z
-  .object({
-    run_id: ExecutionRunId,
-  })
-  .strict();
+export const WsRunStartedEventPayload = WsRunIdEventPayload;
 export type WsRunStartedEventPayload = z.infer<typeof WsRunStartedEventPayload>;
 
-export const WsRunStartedEvent = WsEventEnvelope.extend({
-  type: z.literal("run.started"),
-  payload: WsRunStartedEventPayload,
-});
+export const WsRunStartedEvent = wsEvent("run.started", WsRunStartedEventPayload);
 export type WsRunStartedEvent = z.infer<typeof WsRunStartedEvent>;
 
-export const WsRunResumedEventPayload = z
-  .object({
-    run_id: ExecutionRunId,
-  })
-  .strict();
+export const WsRunResumedEventPayload = WsRunIdEventPayload;
 export type WsRunResumedEventPayload = z.infer<typeof WsRunResumedEventPayload>;
 
-export const WsRunResumedEvent = WsEventEnvelope.extend({
-  type: z.literal("run.resumed"),
-  payload: WsRunResumedEventPayload,
-});
+export const WsRunResumedEvent = wsEvent("run.resumed", WsRunResumedEventPayload);
 export type WsRunResumedEvent = z.infer<typeof WsRunResumedEvent>;
 
-export const WsRunCompletedEventPayload = z
-  .object({
-    run_id: ExecutionRunId,
-  })
-  .strict();
+export const WsRunCompletedEventPayload = WsRunIdEventPayload;
 export type WsRunCompletedEventPayload = z.infer<typeof WsRunCompletedEventPayload>;
 
-export const WsRunCompletedEvent = WsEventEnvelope.extend({
-  type: z.literal("run.completed"),
-  payload: WsRunCompletedEventPayload,
-});
+export const WsRunCompletedEvent = wsEvent("run.completed", WsRunCompletedEventPayload);
 export type WsRunCompletedEvent = z.infer<typeof WsRunCompletedEvent>;
 
-export const WsRunFailedEventPayload = z
-  .object({
-    run_id: ExecutionRunId,
-  })
-  .strict();
+export const WsRunFailedEventPayload = WsRunIdEventPayload;
 export type WsRunFailedEventPayload = z.infer<typeof WsRunFailedEventPayload>;
 
-export const WsRunFailedEvent = WsEventEnvelope.extend({
-  type: z.literal("run.failed"),
-  payload: WsRunFailedEventPayload,
-});
+export const WsRunFailedEvent = wsEvent("run.failed", WsRunFailedEventPayload);
 export type WsRunFailedEvent = z.infer<typeof WsRunFailedEvent>;
 
 export const WsRunCancelledEventPayload = z
@@ -222,10 +177,7 @@ export const WsRunCancelledEventPayload = z
   .strict();
 export type WsRunCancelledEventPayload = z.infer<typeof WsRunCancelledEventPayload>;
 
-export const WsRunCancelledEvent = WsEventEnvelope.extend({
-  type: z.literal("run.cancelled"),
-  payload: WsRunCancelledEventPayload,
-});
+export const WsRunCancelledEvent = wsEvent("run.cancelled", WsRunCancelledEventPayload);
 export type WsRunCancelledEvent = z.infer<typeof WsRunCancelledEvent>;
 
 export const WsStepUpdatedEventPayload = z
@@ -235,10 +187,7 @@ export const WsStepUpdatedEventPayload = z
   .strict();
 export type WsStepUpdatedEventPayload = z.infer<typeof WsStepUpdatedEventPayload>;
 
-export const WsStepUpdatedEvent = WsEventEnvelope.extend({
-  type: z.literal("step.updated"),
-  payload: WsStepUpdatedEventPayload,
-});
+export const WsStepUpdatedEvent = wsEvent("step.updated", WsStepUpdatedEventPayload);
 export type WsStepUpdatedEvent = z.infer<typeof WsStepUpdatedEvent>;
 
 export const WsAttemptUpdatedEventPayload = z
@@ -248,10 +197,7 @@ export const WsAttemptUpdatedEventPayload = z
   .strict();
 export type WsAttemptUpdatedEventPayload = z.infer<typeof WsAttemptUpdatedEventPayload>;
 
-export const WsAttemptUpdatedEvent = WsEventEnvelope.extend({
-  type: z.literal("attempt.updated"),
-  payload: WsAttemptUpdatedEventPayload,
-});
+export const WsAttemptUpdatedEvent = wsEvent("attempt.updated", WsAttemptUpdatedEventPayload);
 export type WsAttemptUpdatedEvent = z.infer<typeof WsAttemptUpdatedEvent>;
 
 export const WsArtifactCreatedEventPayload = z
@@ -261,10 +207,7 @@ export const WsArtifactCreatedEventPayload = z
   .strict();
 export type WsArtifactCreatedEventPayload = z.infer<typeof WsArtifactCreatedEventPayload>;
 
-export const WsArtifactCreatedEvent = WsEventEnvelope.extend({
-  type: z.literal("artifact.created"),
-  payload: WsArtifactCreatedEventPayload,
-});
+export const WsArtifactCreatedEvent = wsEvent("artifact.created", WsArtifactCreatedEventPayload);
 export type WsArtifactCreatedEvent = z.infer<typeof WsArtifactCreatedEvent>;
 
 export const WsArtifactAttachedEventPayload = z
@@ -276,10 +219,7 @@ export const WsArtifactAttachedEventPayload = z
   .strict();
 export type WsArtifactAttachedEventPayload = z.infer<typeof WsArtifactAttachedEventPayload>;
 
-export const WsArtifactAttachedEvent = WsEventEnvelope.extend({
-  type: z.literal("artifact.attached"),
-  payload: WsArtifactAttachedEventPayload,
-});
+export const WsArtifactAttachedEvent = wsEvent("artifact.attached", WsArtifactAttachedEventPayload);
 export type WsArtifactAttachedEvent = z.infer<typeof WsArtifactAttachedEvent>;
 
 export const WsArtifactFetchedBy = z.discriminatedUnion("kind", [
@@ -308,10 +248,7 @@ export const WsArtifactFetchedEventPayload = z
   .strict();
 export type WsArtifactFetchedEventPayload = z.infer<typeof WsArtifactFetchedEventPayload>;
 
-export const WsArtifactFetchedEvent = WsEventEnvelope.extend({
-  type: z.literal("artifact.fetched"),
-  payload: WsArtifactFetchedEventPayload,
-});
+export const WsArtifactFetchedEvent = wsEvent("artifact.fetched", WsArtifactFetchedEventPayload);
 export type WsArtifactFetchedEvent = z.infer<typeof WsArtifactFetchedEvent>;
 
 export const WsAttemptEvidenceEventPayload = z
@@ -325,55 +262,40 @@ export const WsAttemptEvidenceEventPayload = z
   .strict();
 export type WsAttemptEvidenceEventPayload = z.infer<typeof WsAttemptEvidenceEventPayload>;
 
-export const WsAttemptEvidenceEvent = WsEventEnvelope.extend({
-  type: z.literal("attempt.evidence"),
-  payload: WsAttemptEvidenceEventPayload,
-});
+export const WsAttemptEvidenceEvent = wsEvent("attempt.evidence", WsAttemptEvidenceEventPayload);
 export type WsAttemptEvidenceEvent = z.infer<typeof WsAttemptEvidenceEvent>;
 
-export const WsPolicyOverrideCreatedEventPayload = z
-  .object({
-    override: PolicyOverride,
-  })
-  .strict();
+export const WsPolicyOverrideCreatedEventPayload = WsPolicyOverrideEventPayload;
 export type WsPolicyOverrideCreatedEventPayload = z.infer<
   typeof WsPolicyOverrideCreatedEventPayload
 >;
 
-export const WsPolicyOverrideCreatedEvent = WsEventEnvelope.extend({
-  type: z.literal("policy_override.created"),
-  payload: WsPolicyOverrideCreatedEventPayload,
-});
+export const WsPolicyOverrideCreatedEvent = wsEvent(
+  "policy_override.created",
+  WsPolicyOverrideCreatedEventPayload,
+);
 export type WsPolicyOverrideCreatedEvent = z.infer<typeof WsPolicyOverrideCreatedEvent>;
 
-export const WsPolicyOverrideRevokedEventPayload = z
-  .object({
-    override: PolicyOverride,
-  })
-  .strict();
+export const WsPolicyOverrideRevokedEventPayload = WsPolicyOverrideEventPayload;
 export type WsPolicyOverrideRevokedEventPayload = z.infer<
   typeof WsPolicyOverrideRevokedEventPayload
 >;
 
-export const WsPolicyOverrideRevokedEvent = WsEventEnvelope.extend({
-  type: z.literal("policy_override.revoked"),
-  payload: WsPolicyOverrideRevokedEventPayload,
-});
+export const WsPolicyOverrideRevokedEvent = wsEvent(
+  "policy_override.revoked",
+  WsPolicyOverrideRevokedEventPayload,
+);
 export type WsPolicyOverrideRevokedEvent = z.infer<typeof WsPolicyOverrideRevokedEvent>;
 
-export const WsPolicyOverrideExpiredEventPayload = z
-  .object({
-    override: PolicyOverride,
-  })
-  .strict();
+export const WsPolicyOverrideExpiredEventPayload = WsPolicyOverrideEventPayload;
 export type WsPolicyOverrideExpiredEventPayload = z.infer<
   typeof WsPolicyOverrideExpiredEventPayload
 >;
 
-export const WsPolicyOverrideExpiredEvent = WsEventEnvelope.extend({
-  type: z.literal("policy_override.expired"),
-  payload: WsPolicyOverrideExpiredEventPayload,
-});
+export const WsPolicyOverrideExpiredEvent = wsEvent(
+  "policy_override.expired",
+  WsPolicyOverrideExpiredEventPayload,
+);
 export type WsPolicyOverrideExpiredEvent = z.infer<typeof WsPolicyOverrideExpiredEvent>;
 
 export const WsAuditLink = z
@@ -415,10 +337,7 @@ export const WsAuthFailedEventPayload = z
   .strict();
 export type WsAuthFailedEventPayload = z.infer<typeof WsAuthFailedEventPayload>;
 
-export const WsAuthFailedEvent = WsEventEnvelope.extend({
-  type: z.literal("auth.failed"),
-  payload: WsAuthFailedEventPayload,
-});
+export const WsAuthFailedEvent = wsEvent("auth.failed", WsAuthFailedEventPayload);
 export type WsAuthFailedEvent = z.infer<typeof WsAuthFailedEvent>;
 
 export const WsAuthzDeniedSurface = z.enum(["http", "ws"]);
@@ -444,10 +363,7 @@ export const WsAuthzDeniedEventPayload = z
   .strict();
 export type WsAuthzDeniedEventPayload = z.infer<typeof WsAuthzDeniedEventPayload>;
 
-export const WsAuthzDeniedEvent = WsEventEnvelope.extend({
-  type: z.literal("authz.denied"),
-  payload: WsAuthzDeniedEventPayload,
-});
+export const WsAuthzDeniedEvent = wsEvent("authz.denied", WsAuthzDeniedEventPayload);
 export type WsAuthzDeniedEvent = z.infer<typeof WsAuthzDeniedEvent>;
 
 export const WsPluginLifecycleKind = z.enum(["loaded", "unloaded", "failed"]);
@@ -475,10 +391,7 @@ export const WsPluginLifecycleEventPayload = z
   .strict();
 export type WsPluginLifecycleEventPayload = z.infer<typeof WsPluginLifecycleEventPayload>;
 
-export const WsPluginLifecycleEvent = WsEventEnvelope.extend({
-  type: z.literal("plugin.lifecycle"),
-  payload: WsPluginLifecycleEventPayload,
-});
+export const WsPluginLifecycleEvent = wsEvent("plugin.lifecycle", WsPluginLifecycleEventPayload);
 export type WsPluginLifecycleEvent = z.infer<typeof WsPluginLifecycleEvent>;
 
 export const WsPluginToolInvocationOutcome = z.enum(["succeeded", "failed"]);
@@ -504,10 +417,10 @@ export const WsPluginToolInvokedEventPayload = z
   .strict();
 export type WsPluginToolInvokedEventPayload = z.infer<typeof WsPluginToolInvokedEventPayload>;
 
-export const WsPluginToolInvokedEvent = WsEventEnvelope.extend({
-  type: z.literal("plugin_tool.invoked"),
-  payload: WsPluginToolInvokedEventPayload,
-});
+export const WsPluginToolInvokedEvent = wsEvent(
+  "plugin_tool.invoked",
+  WsPluginToolInvokedEventPayload,
+);
 export type WsPluginToolInvokedEvent = z.infer<typeof WsPluginToolInvokedEvent>;
 
 export const WsUsageScopeKind = z.enum(["run", "session", "agent", "deployment"]);
@@ -602,10 +515,10 @@ export const WsProviderUsagePolledEventPayload = z
   .strict();
 export type WsProviderUsagePolledEventPayload = z.infer<typeof WsProviderUsagePolledEventPayload>;
 
-export const WsProviderUsagePolledEvent = WsEventEnvelope.extend({
-  type: z.literal("provider_usage.polled"),
-  payload: WsProviderUsagePolledEventPayload,
-});
+export const WsProviderUsagePolledEvent = wsEvent(
+  "provider_usage.polled",
+  WsProviderUsagePolledEventPayload,
+);
 export type WsProviderUsagePolledEvent = z.infer<typeof WsProviderUsagePolledEvent>;
 
 export const WsContextReportCreatedEventPayload = z
@@ -616,10 +529,10 @@ export const WsContextReportCreatedEventPayload = z
   .strict();
 export type WsContextReportCreatedEventPayload = z.infer<typeof WsContextReportCreatedEventPayload>;
 
-export const WsContextReportCreatedEvent = WsEventEnvelope.extend({
-  type: z.literal("context_report.created"),
-  payload: WsContextReportCreatedEventPayload,
-});
+export const WsContextReportCreatedEvent = wsEvent(
+  "context_report.created",
+  WsContextReportCreatedEventPayload,
+);
 export type WsContextReportCreatedEvent = z.infer<typeof WsContextReportCreatedEvent>;
 
 export const WsRoutingConfigUpdatedEventPayload = z
@@ -636,10 +549,10 @@ export const WsRoutingConfigUpdatedEventPayload = z
   .strict();
 export type WsRoutingConfigUpdatedEventPayload = z.infer<typeof WsRoutingConfigUpdatedEventPayload>;
 
-export const WsRoutingConfigUpdatedEvent = WsEventEnvelope.extend({
-  type: z.literal("routing.config.updated"),
-  payload: WsRoutingConfigUpdatedEventPayload,
-});
+export const WsRoutingConfigUpdatedEvent = wsEvent(
+  "routing.config.updated",
+  WsRoutingConfigUpdatedEventPayload,
+);
 export type WsRoutingConfigUpdatedEvent = z.infer<typeof WsRoutingConfigUpdatedEvent>;
 
 export const ChannelQueueOverflowPolicy = z.enum([
@@ -665,10 +578,10 @@ export const WsChannelQueueOverflowEventPayload = z
   .strict();
 export type WsChannelQueueOverflowEventPayload = z.infer<typeof WsChannelQueueOverflowEventPayload>;
 
-export const WsChannelQueueOverflowEvent = WsEventEnvelope.extend({
-  type: z.literal("channel.queue.overflow"),
-  payload: WsChannelQueueOverflowEventPayload,
-});
+export const WsChannelQueueOverflowEvent = wsEvent(
+  "channel.queue.overflow",
+  WsChannelQueueOverflowEventPayload,
+);
 export type WsChannelQueueOverflowEvent = z.infer<typeof WsChannelQueueOverflowEvent>;
 
 export const WsErrorEventPayload = z
@@ -679,8 +592,5 @@ export const WsErrorEventPayload = z
   .strict();
 export type WsErrorEventPayload = z.infer<typeof WsErrorEventPayload>;
 
-export const WsErrorEvent = WsEventEnvelope.extend({
-  type: z.literal("error"),
-  payload: WsErrorEventPayload,
-});
+export const WsErrorEvent = wsEvent("error", WsErrorEventPayload);
 export type WsErrorEvent = z.infer<typeof WsErrorEvent>;

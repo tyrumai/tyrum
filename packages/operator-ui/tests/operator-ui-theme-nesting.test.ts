@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import React from "react";
+import React, { act } from "react";
 import { createOperatorCore, createBearerTokenAuth } from "../../operator-core/src/index.js";
 import type { OperatorHttpClient, OperatorWsClient } from "../../operator-core/src/deps.js";
 import { ThemeProvider } from "../src/hooks/use-theme.js";
@@ -25,12 +25,12 @@ function stubLocalStorage() {
 }
 
 vi.mock("../src/components/pages/connect-page.js", async () => {
-  const React = await import("react");
+  const ReactModule = await import("react");
   const { useTheme } = await import("../src/hooks/use-theme.js");
   return {
     ConnectPage() {
       const { mode } = useTheme();
-      return React.createElement("div", { "data-testid": "theme-mode" }, mode);
+      return ReactModule.createElement("div", { "data-testid": "theme-mode" }, mode);
     },
   };
 });
@@ -81,7 +81,7 @@ describe("OperatorUiApp ThemeProvider nesting", () => {
     document.documentElement.dataset.themeMode = "";
   });
 
-  it("does not mount a nested ThemeProvider when already wrapped", () => {
+  it("does not mount a nested ThemeProvider when already wrapped", async () => {
     stubLocalStorage();
     localStorage.setItem(THEME_STORAGE_KEY, "light");
 
@@ -106,6 +106,10 @@ describe("OperatorUiApp ThemeProvider nesting", () => {
         ),
       ),
     );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     const mode = testRoot.container.querySelector('[data-testid="theme-mode"]')?.textContent;
     cleanupTestRoot(testRoot);

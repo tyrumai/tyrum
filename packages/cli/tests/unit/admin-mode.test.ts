@@ -9,11 +9,18 @@ const { httpCtorSpy, httpDeviceTokensIssueSpy, httpSecretsListSpy } = vi.hoisted
   httpSecretsListSpy: vi.fn(),
 }));
 
-vi.mock("@tyrum/client", async () => {
-  const actual = await vi.importActual<typeof import("@tyrum/client")>("@tyrum/client");
-
+async function createClientMock() {
   return {
-    ...actual,
+    TyrumHttpClientError: class TyrumHttpClientError extends Error {
+      code = "http_error";
+      status?: number;
+    },
+    normalizeFingerprint256: (value: string) => value.trim().toUpperCase(),
+    createNodeFileDeviceIdentityStorage: () => ({
+      load: vi.fn(),
+      save: vi.fn(),
+    }),
+    TyrumClient: function TyrumClient() {},
     createTyrumHttpClient: (options: unknown) => {
       httpCtorSpy(options);
       return {
@@ -42,7 +49,10 @@ vi.mock("@tyrum/client", async () => {
       };
     },
   };
-});
+}
+
+vi.mock("@tyrum/client", async () => await createClientMock());
+vi.mock("@tyrum/client/node", async () => await createClientMock());
 
 describe("@tyrum/cli elevated-mode", () => {
   const prevHome = process.env["TYRUM_HOME"];

@@ -30,14 +30,8 @@ interface ToolExecutionContext {
   sessionId: string;
   channel: string;
   threadId: string;
-  execution?: {
-    runId: string;
-    stepIndex: number;
-    stepId: string;
-    stepApprovalId?: string;
-  };
+  execution?: { runId: string; stepIndex: number; stepId: string; stepApprovalId?: string };
 }
-
 export type ToolCallPolicyState = {
   toolDesc: ToolDescriptor;
   toolCallId: string;
@@ -86,10 +80,7 @@ type ToolSetBuilderLogger = {
   info: (message: string, fields?: Record<string, unknown>) => void;
 };
 
-type ToolSetBuilderRedactionEngine = {
-  redactText: (text: string) => { redacted: string };
-};
-
+type ToolSetBuilderRedactionEngine = { redactText: (text: string) => { redacted: string } };
 export interface ToolSetBuilderDeps {
   home: string;
   tenantId: string;
@@ -121,9 +112,42 @@ export class ToolSetBuilder {
     const result: Record<string, Tool> = {};
     const modelToolNames = buildModelToolNameMap(tools.map((tool) => tool.id));
     let approvalStepIndex = 0;
-    let drivingProvenance: { source: string; trusted: boolean } = {
-      source: "user",
-      trusted: true,
+    let drivingProvenance: { source: string; trusted: boolean } = { source: "user", trusted: true };
+    const notApproved = (
+      toolId: string,
+      status: string,
+      approvalId?: string,
+      reason?: string,
+    ): string =>
+      JSON.stringify({
+        error: `tool execution not approved for '${toolId}'`,
+        ...(approvalId ? { approval_id: approvalId } : {}),
+        status,
+        ...(reason ? { reason } : {}),
+      });
+    const syncLaneQueue = async (): Promise<"interrupt" | "steer" | undefined> => {
+      if (!laneQueue) return undefined;
+      if (laneQueue.cancelToolCalls || laneQueue.interruptError) {
+        return laneQueue.interruptError ? "interrupt" : "steer";
+      }
+      const signal = await laneQueue.signals.claimSignal({
+        tenant_id: laneQueue.tenant_id,
+        ...laneQueue.scope,
+      });
+      if (signal?.kind === "interrupt") {
+        laneQueue.interruptError ??= new LaneQueueInterruptError();
+        laneQueue.cancelToolCalls = true;
+      }
+      if (signal?.kind === "steer") {
+        const text = signal.message_text.trim();
+        if (text.length > 0) laneQueue.pendingInjectionTexts.push(text);
+        laneQueue.cancelToolCalls = true;
+      }
+      return laneQueue.cancelToolCalls
+        ? laneQueue.interruptError
+          ? "interrupt"
+          : "steer"
+        : undefined;
     };
 
     const resolveToolCallPolicyState = async (input: {
@@ -133,10 +157,7 @@ export class ToolSetBuilder {
       inputProvenance: { source: string; trusted: boolean };
     }): Promise<ToolCallPolicyState> => {
       const existing = toolCallPolicyStates?.get(input.toolCallId);
-      if (existing && existing.toolDesc.id === input.toolDesc.id) {
-        return existing;
-      }
-
+      if (existing && existing.toolDesc.id === input.toolDesc.id) return existing;
       const matchTarget = canonicalizeToolMatchTarget(
         input.toolDesc.id,
         input.args,
@@ -153,7 +174,6 @@ export class ToolSetBuilder {
       if (policyEnabled) {
         const agentId = this.deps.agentId;
         const workspaceId = this.deps.workspaceId;
-
         const url =
           input.toolDesc.id === "tool.http.fetch" &&
           input.args &&
@@ -194,7 +214,6 @@ export class ToolSetBuilder {
         policyEnabled && !policy.isObserveOnly()
           ? policyDecision === "require_approval"
           : input.toolDesc.requires_confirmation;
-
       const suggestedOverrides = policyEnabled
         ? suggestedOverridesForToolCall({
             toolId: input.toolDesc.id,
@@ -202,7 +221,6 @@ export class ToolSetBuilder {
             workspaceId: this.deps.workspaceId,
           })
         : undefined;
-
       const state: ToolCallPolicyState = {
         toolDesc: input.toolDesc,
         toolCallId: input.toolCallId,
@@ -230,9 +248,7 @@ export class ToolSetBuilder {
       if (!execution?.stepApprovalId) return input.args;
 
       const secretProvider = this.deps.secretProvider;
-      if (!secretProvider) {
-        return input.args;
-      }
+      if (!secretProvider) return input.args;
 
       const approval = await this.deps.approvalDal.getById({
         tenantId: this.deps.tenantId,
@@ -274,46 +290,19 @@ export class ToolSetBuilder {
                 experimental_context?: unknown;
               },
             ): Promise<boolean> => {
-              if (laneQueue) {
-                if (laneQueue.cancelToolCalls || laneQueue.interruptError) {
-                  return false;
-                }
-
-                const signal = await laneQueue.signals.claimSignal({
-                  tenant_id: laneQueue.tenant_id,
-                  ...laneQueue.scope,
-                });
-                if (signal?.kind === "interrupt") {
-                  laneQueue.interruptError ??= new LaneQueueInterruptError();
-                  laneQueue.cancelToolCalls = true;
-                  return false;
-                }
-                if (signal?.kind === "steer") {
-                  const text = signal.message_text.trim();
-                  if (text.length > 0) {
-                    laneQueue.pendingInjectionTexts.push(text);
-                  }
-                  laneQueue.cancelToolCalls = true;
-                  return false;
-                }
-              }
-
+              if (await syncLaneQueue()) return false;
               const effectiveArgs = await resolveResumedToolArgs({
                 toolId: toolDesc.id,
                 toolCallId: options.toolCallId,
                 args,
               });
-
               const state = await resolveToolCallPolicyState({
                 toolDesc,
                 toolCallId: options.toolCallId,
                 args: effectiveArgs,
                 inputProvenance: { ...drivingProvenance },
               });
-
-              if (!state.shouldRequireApproval) {
-                return false;
-              }
+              if (!state.shouldRequireApproval) return false;
 
               const stepApprovalId = toolExecutionContext.execution?.stepApprovalId;
               if (stepApprovalId) {
@@ -333,9 +322,7 @@ export class ToolSetBuilder {
                     ctx["tool_id"] === toolDesc.id &&
                     ctx["tool_call_id"] === options.toolCallId &&
                     ctx["tool_match_target"] === state.matchTarget;
-                  if (matches && !hasToolResult(options.messages, options.toolCallId)) {
-                    return false;
-                  }
+                  if (matches && !hasToolResult(options.messages, options.toolCallId)) return false;
                 }
               }
 
@@ -348,30 +335,8 @@ export class ToolSetBuilder {
             }
           : undefined,
         execute: async (args: unknown, options: ToolExecutionOptions) => {
-          if (laneQueue) {
-            const signal = await laneQueue.signals.claimSignal({
-              tenant_id: laneQueue.tenant_id,
-              ...laneQueue.scope,
-            });
-            if (signal?.kind === "interrupt") {
-              laneQueue.interruptError ??= new LaneQueueInterruptError();
-              laneQueue.cancelToolCalls = true;
-            }
-            if (signal?.kind === "steer") {
-              const text = signal.message_text.trim();
-              if (text.length > 0) {
-                laneQueue.pendingInjectionTexts.push(text);
-              }
-              laneQueue.cancelToolCalls = true;
-            }
-
-            if (laneQueue.cancelToolCalls) {
-              return JSON.stringify({
-                error: "cancelled",
-                reason: laneQueue.interruptError ? "interrupt" : "steer",
-              });
-            }
-          }
+          const cancelReason = await syncLaneQueue();
+          if (cancelReason) return JSON.stringify({ error: "cancelled", reason: cancelReason });
 
           const toolCallId =
             typeof options?.toolCallId === "string" && options.toolCallId.trim().length > 0
@@ -383,7 +348,6 @@ export class ToolSetBuilder {
             toolCallId,
             args,
           });
-
           const state = await resolveToolCallPolicyState({
             toolDesc,
             toolCallId,
@@ -395,12 +359,11 @@ export class ToolSetBuilder {
           const policyEnabled = policy.isEnabled();
           const policySnapshotId = state.policySnapshotId;
 
-          if (policyEnabled && state.policyDecision === "deny" && !policy.isObserveOnly()) {
+          if (policyEnabled && state.policyDecision === "deny" && !policy.isObserveOnly())
             return JSON.stringify({
               error: `policy denied tool execution for '${toolDesc.id}'`,
               decision: "deny",
             });
-          }
 
           if (state.shouldRequireApproval) {
             const policyContext = {
@@ -410,7 +373,6 @@ export class ToolSetBuilder {
               suggested_overrides: state.suggestedOverrides,
               applied_override_ids: state.appliedOverrideIds,
             };
-
             const approvalStepIndexValue =
               state.approvalStepIndex === undefined
                 ? (() => {
@@ -423,12 +385,7 @@ export class ToolSetBuilder {
 
             if (toolExecutionContext.execution) {
               const stepApprovalId = toolExecutionContext.execution.stepApprovalId;
-              if (!stepApprovalId) {
-                return JSON.stringify({
-                  error: `tool execution not approved for '${toolDesc.id}'`,
-                  status: "pending",
-                });
-              }
+              if (!stepApprovalId) return notApproved(toolDesc.id, "pending");
 
               const approval = await this.deps.approvalDal.getById({
                 tenantId: this.deps.tenantId,
@@ -442,14 +399,13 @@ export class ToolSetBuilder {
                 ctx["tool_call_id"] === toolCallId &&
                 ctx["tool_match_target"] === state.matchTarget;
 
-              if (!approved || !matches) {
-                return JSON.stringify({
-                  error: `tool execution not approved for '${toolDesc.id}'`,
-                  approval_id: stepApprovalId,
-                  status: approval?.status ?? "pending",
-                  reason: extractApprovalReason(approval),
-                });
-              }
+              if (!approved || !matches)
+                return notApproved(
+                  toolDesc.id,
+                  approval?.status ?? "pending",
+                  stepApprovalId,
+                  extractApprovalReason(approval),
+                );
             } else {
               const decision = await this.awaitApprovalForToolExecution(
                 toolDesc,
@@ -459,14 +415,13 @@ export class ToolSetBuilder {
                 approvalStepIndexValue,
                 policyContext,
               );
-              if (!decision.approved) {
-                return JSON.stringify({
-                  error: `tool execution not approved for '${toolDesc.id}'`,
-                  approval_id: decision.approvalId,
-                  status: decision.status,
-                  reason: decision.reason,
-                });
-              }
+              if (!decision.approved)
+                return notApproved(
+                  toolDesc.id,
+                  decision.status,
+                  decision.approvalId,
+                  decision.reason,
+                );
             }
           }
 
@@ -516,20 +471,12 @@ export class ToolSetBuilder {
             if (res.error) {
               res.error = redact(res.error);
             }
-            if (res.provenance) {
-              res.provenance = {
-                ...res.provenance,
-                content: redact(res.provenance.content),
-              };
-            }
+            if (res.provenance)
+              res.provenance = { ...res.provenance, content: redact(res.provenance.content) };
           }
 
-          if (res.provenance) {
-            drivingProvenance = {
-              source: res.provenance.source,
-              trusted: res.provenance.trusted,
-            };
-          }
+          if (res.provenance)
+            drivingProvenance = { source: res.provenance.source, trusted: res.provenance.trusted };
 
           let content = res.error ? JSON.stringify({ error: res.error }) : res.output;
 
@@ -583,12 +530,7 @@ export class ToolSetBuilder {
       suggested_overrides?: unknown;
       applied_override_ids?: string[];
     },
-  ): Promise<{
-    approved: boolean;
-    status: ApprovalStatus;
-    approvalId: string;
-    reason?: string;
-  }> {
+  ): Promise<{ approved: boolean; status: ApprovalStatus; approvalId: string; reason?: string }> {
     const deadline = Date.now() + this.deps.approvalWaitMs;
     const approvalKey = `${context.planId}:step:${String(stepIndex)}:tool_call:${toolCallId}`;
     const approval = await this.deps.approvalDal.create({
@@ -633,32 +575,27 @@ export class ToolSetBuilder {
         tenantId: this.deps.tenantId,
         approvalId: approval.approval_id,
       });
-      if (!current) {
+      if (!current)
         return {
           approved: false,
           status: "expired",
           approvalId: approval.approval_id,
           reason: "approval record not found",
         };
-      }
-
-      if (current.status === "approved") {
+      if (current.status === "approved")
         return {
           approved: true,
           status: "approved",
           approvalId: current.approval_id,
           reason: extractApprovalReason(current),
         };
-      }
-
-      if (current.status === "denied" || current.status === "expired") {
+      if (current.status === "denied" || current.status === "expired")
         return {
           approved: false,
           status: current.status,
           approvalId: current.approval_id,
           reason: extractApprovalReason(current),
         };
-      }
 
       const sleepMs = Math.min(this.deps.approvalPollMs, Math.max(1, deadline - Date.now()));
       await new Promise((resolve) => setTimeout(resolve, sleepMs));
@@ -692,13 +629,8 @@ export class ToolSetBuilder {
       .filter((tool): tool is ToolDescriptor => Boolean(tool));
 
     const sideEffecting = pluginTools.filter(isSideEffectingPluginTool);
-    if (sideEffecting.length === 0) {
+    if (sideEffecting.length === 0 || !policy.isEnabled() || policy.isObserveOnly())
       return { allowlist: [...params.allowlist], pluginTools };
-    }
-
-    if (!policy.isEnabled() || policy.isObserveOnly()) {
-      return { allowlist: [...params.allowlist], pluginTools };
-    }
 
     try {
       const effective = await policy.loadEffectiveBundle();
@@ -725,11 +657,8 @@ export class ToolSetBuilder {
       );
 
       const allowlist = new Set<string>(params.allowlist);
-      for (const tool of gatedPluginTools) {
-        if (isSideEffectingPluginTool(tool)) {
-          allowlist.add(tool.id);
-        }
-      }
+      for (const tool of gatedPluginTools)
+        if (isSideEffectingPluginTool(tool)) allowlist.add(tool.id);
 
       return { allowlist: [...allowlist], pluginTools: gatedPluginTools };
     } catch {

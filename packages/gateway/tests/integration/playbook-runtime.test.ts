@@ -13,6 +13,7 @@ import { startApprovalEngineActionProcessorForTests } from "./helpers.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 const fixturesDir = join(__dirname, "../fixtures/playbooks");
+const runtimeJsonHeaders = { "content-type": "application/json" };
 
 function restoreEnv(key: string, value: string | undefined) {
   if (value === undefined) {
@@ -57,6 +58,54 @@ async function waitForRunStatus(
   throw new Error(`timed out waiting for run status: ${statuses.join(", ")}`);
 }
 
+async function createRuntimeContext(homeDir: string) {
+  const container = await createContainer({
+    dbPath: ":memory:",
+    migrationsDir,
+    tyrumHome: homeDir,
+  });
+  const engine = new ExecutionEngine({
+    db: container.db,
+    redactionEngine: container.redactionEngine,
+    policyService: container.policyService,
+    logger: container.logger,
+  });
+  const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
+  const app = createApp(container, { engine, playbooks });
+  return { container, engine, app };
+}
+
+async function startPausedRunForApproval(opts: {
+  app: ReturnType<typeof createApp>;
+  container: GatewayContainer;
+  engine: ExecutionEngine;
+  body?: Record<string, unknown>;
+}) {
+  const { app, container, engine } = opts;
+  const runResPromise = app.request("/playbooks/runtime", {
+    method: "POST",
+    headers: runtimeJsonHeaders,
+    body: JSON.stringify(
+      opts.body ?? { action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 },
+    ),
+  });
+
+  const runId = await waitForRunId(container);
+  const pauseExecutor: StepExecutor = {
+    execute: vi.fn(async () => {
+      throw new Error("step execution should not run before policy approval");
+    }),
+  };
+  await engine.workerTick({ workerId: "w1", executor: pauseExecutor, runId });
+
+  const runRes = await runResPromise;
+  const paused = (await runRes.json()) as { requiresApproval?: { resumeToken?: string } };
+  const resumeToken = paused.requiresApproval?.resumeToken ?? "";
+  expect(resumeToken).toBeTruthy();
+
+  return { runId, resumeToken };
+}
+
 const INLINE_PLAYBOOK = `
 id: inline-runtime-test
 name: Inline runtime test
@@ -87,6 +136,8 @@ steps:
 describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
+  let engine: ExecutionEngine | undefined;
+  let app: ReturnType<typeof createApp> | undefined;
 
   const originalEnv = {
     TYRUM_POLICY_ENABLED: process.env["TYRUM_POLICY_ENABLED"],
@@ -110,6 +161,8 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
     await container?.db.close();
     container = undefined;
+    engine = undefined;
+    app = undefined;
 
     if (homeDir) {
       await rm(homeDir, { recursive: true, force: true });
@@ -119,19 +172,11 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
   it("returns status=error envelope for invalid pipelines (no run created)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const engine = new ExecutionEngine({
-      db: container.db,
-      redactionEngine: container.redactionEngine,
-      policyService: container.policyService,
-      logger: container.logger,
-    });
-    const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
-    const app = createApp(container, { engine, playbooks });
+    ({ container, app } = await createRuntimeContext(homeDir));
 
     const res = await app.request("/playbooks/runtime", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: runtimeJsonHeaders,
       body: JSON.stringify({ action: "run", pipeline: "not: a playbook", timeoutMs: 50 }),
     });
 
@@ -149,19 +194,11 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
   it("returns status=error envelope when argsJson is invalid (no run created)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const engine = new ExecutionEngine({
-      db: container.db,
-      redactionEngine: container.redactionEngine,
-      policyService: container.policyService,
-      logger: container.logger,
-    });
-    const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
-    const app = createApp(container, { engine, playbooks });
+    ({ container, app } = await createRuntimeContext(homeDir));
 
     const res = await app.request("/playbooks/runtime", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: runtimeJsonHeaders,
       body: JSON.stringify({
         action: "run",
         pipeline: INLINE_PLAYBOOK,
@@ -184,19 +221,11 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
   it("returns status=error envelope for implicit shell commands (no run created)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const engine = new ExecutionEngine({
-      db: container.db,
-      redactionEngine: container.redactionEngine,
-      policyService: container.policyService,
-      logger: container.logger,
-    });
-    const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
-    const app = createApp(container, { engine, playbooks });
+    ({ container, app } = await createRuntimeContext(homeDir));
 
     const res = await app.request("/playbooks/runtime", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: runtimeJsonHeaders,
       body: JSON.stringify({ action: "run", pipeline: IMPLICIT_SHELL_PLAYBOOK, timeoutMs: 50 }),
     });
 
@@ -214,19 +243,11 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
   it("returns status=error envelope for invalid http commands (no run created)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const engine = new ExecutionEngine({
-      db: container.db,
-      redactionEngine: container.redactionEngine,
-      policyService: container.policyService,
-      logger: container.logger,
-    });
-    const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
-    const app = createApp(container, { engine, playbooks });
+    ({ container, app } = await createRuntimeContext(homeDir));
 
     const res = await app.request("/playbooks/runtime", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: runtimeJsonHeaders,
       body: JSON.stringify({ action: "run", pipeline: HTTP_MISSING_URL_PLAYBOOK, timeoutMs: 50 }),
     });
 
@@ -244,19 +265,11 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
   it("returns status=needs_approval with resumeToken when paused for policy approval", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const engine = new ExecutionEngine({
-      db: container.db,
-      redactionEngine: container.redactionEngine,
-      policyService: container.policyService,
-      logger: container.logger,
-    });
-    const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
-    const app = createApp(container, { engine, playbooks });
+    ({ container, engine, app } = await createRuntimeContext(homeDir));
 
     const resPromise = app.request("/playbooks/runtime", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: runtimeJsonHeaders,
       body: JSON.stringify({
         action: "run",
         pipeline: INLINE_PLAYBOOK,
@@ -301,40 +314,14 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
   it("resume approve=false returns status=cancelled", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const engine = new ExecutionEngine({
-      db: container.db,
-      redactionEngine: container.redactionEngine,
-      policyService: container.policyService,
-      logger: container.logger,
-    });
-    const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
-    const app = createApp(container, { engine, playbooks });
-
-    const runResPromise = app.request("/playbooks/runtime", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 }),
-    });
-
-    const runId = await waitForRunId(container);
-    const pauseExecutor: StepExecutor = {
-      execute: vi.fn(async () => {
-        throw new Error("step execution should not run before policy approval");
-      }),
-    };
-    await engine.workerTick({ workerId: "w1", executor: pauseExecutor, runId });
-
-    const runRes = await runResPromise;
-    const paused = (await runRes.json()) as { requiresApproval?: { resumeToken?: string } };
-    const resumeToken = paused.requiresApproval?.resumeToken ?? "";
-    expect(resumeToken).toBeTruthy();
+    ({ container, engine, app } = await createRuntimeContext(homeDir));
+    const { runId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
 
     const processor = startApprovalEngineActionProcessorForTests({ container, engine });
     try {
       const resumeRes = await app.request("/playbooks/runtime", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: runtimeJsonHeaders,
         body: JSON.stringify({
           action: "resume",
           token: resumeToken,
@@ -360,34 +347,8 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
   it("resume does not cancel when the approval was resolved concurrently (TOCTOU)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const engine = new ExecutionEngine({
-      db: container.db,
-      redactionEngine: container.redactionEngine,
-      policyService: container.policyService,
-      logger: container.logger,
-    });
-    const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
-    const app = createApp(container, { engine, playbooks });
-
-    const runResPromise = app.request("/playbooks/runtime", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 }),
-    });
-
-    const runId = await waitForRunId(container);
-    const pauseExecutor: StepExecutor = {
-      execute: vi.fn(async () => {
-        throw new Error("step execution should not run before policy approval");
-      }),
-    };
-    await engine.workerTick({ workerId: "w1", executor: pauseExecutor, runId });
-
-    const runRes = await runResPromise;
-    const paused = (await runRes.json()) as { requiresApproval?: { resumeToken?: string } };
-    const resumeToken = paused.requiresApproval?.resumeToken ?? "";
-    expect(resumeToken).toBeTruthy();
+    ({ container, engine, app } = await createRuntimeContext(homeDir));
+    const { runId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
 
     const nowIso = new Date().toISOString();
     await container.db.run(
@@ -406,7 +367,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
     const resumeRes = await app.request("/playbooks/runtime", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: runtimeJsonHeaders,
       body: JSON.stringify({
         action: "resume",
         token: resumeToken,
@@ -434,39 +395,13 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
   it("resume approve=true returns status=ok when the run completes", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const engine = new ExecutionEngine({
-      db: container.db,
-      redactionEngine: container.redactionEngine,
-      policyService: container.policyService,
-      logger: container.logger,
-    });
-    const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
-    const app = createApp(container, { engine, playbooks });
-
-    const runResPromise = app.request("/playbooks/runtime", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 }),
-    });
-
-    const runId = await waitForRunId(container);
-    const pauseExecutor: StepExecutor = {
-      execute: vi.fn(async () => {
-        throw new Error("step execution should not run before policy approval");
-      }),
-    };
-    await engine.workerTick({ workerId: "w1", executor: pauseExecutor, runId });
-
-    const runRes = await runResPromise;
-    const paused = (await runRes.json()) as { requiresApproval?: { resumeToken?: string } };
-    const resumeToken = paused.requiresApproval?.resumeToken ?? "";
-    expect(resumeToken).toBeTruthy();
+    ({ container, engine, app } = await createRuntimeContext(homeDir));
+    const { runId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
 
     const processor = startApprovalEngineActionProcessorForTests({ container, engine });
     const resumePromise = app.request("/playbooks/runtime", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: runtimeJsonHeaders,
       body: JSON.stringify({
         action: "resume",
         token: resumeToken,
@@ -503,34 +438,8 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
   it("resume approve=true returns status=error when the run fails", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const engine = new ExecutionEngine({
-      db: container.db,
-      redactionEngine: container.redactionEngine,
-      policyService: container.policyService,
-      logger: container.logger,
-    });
-    const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
-    const app = createApp(container, { engine, playbooks });
-
-    const runResPromise = app.request("/playbooks/runtime", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 }),
-    });
-
-    const runId = await waitForRunId(container);
-    const pauseExecutor: StepExecutor = {
-      execute: vi.fn(async () => {
-        throw new Error("step execution should not run before policy approval");
-      }),
-    };
-    await engine.workerTick({ workerId: "w1", executor: pauseExecutor, runId });
-
-    const runRes = await runResPromise;
-    const paused = (await runRes.json()) as { requiresApproval?: { resumeToken?: string } };
-    const resumeToken = paused.requiresApproval?.resumeToken ?? "";
-    expect(resumeToken).toBeTruthy();
+    ({ container, engine, app } = await createRuntimeContext(homeDir));
+    const { runId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
 
     const stepRow = await container.db.get<{ step_id: string }>(
       "SELECT step_id FROM execution_steps WHERE run_id = ? LIMIT 1",
@@ -543,7 +452,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     const processor = startApprovalEngineActionProcessorForTests({ container, engine });
     const resumePromise = app.request("/playbooks/runtime", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: runtimeJsonHeaders,
       body: JSON.stringify({
         action: "resume",
         token: resumeToken,

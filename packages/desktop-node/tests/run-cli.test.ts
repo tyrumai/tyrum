@@ -29,7 +29,7 @@ const {
   backendCtorSpy: vi.fn(),
 }));
 
-vi.mock("@tyrum/client", () => {
+vi.mock("@tyrum/client/node", () => {
   class TyrumClient {
     private readonly handlers = new Map<string, Set<(data: unknown) => void>>();
 
@@ -76,18 +76,14 @@ vi.mock("@tyrum/client", () => {
 });
 
 vi.mock("../src/providers/desktop-provider.js", () => ({
-  DesktopProvider: class DesktopProvider {
-    constructor(...args: unknown[]) {
-      providerCtorSpy(...args);
-    }
+  DesktopProvider: function DesktopProvider(...args: unknown[]) {
+    providerCtorSpy(...args);
   },
 }));
 
 vi.mock("../src/providers/backends/nutjs-desktop-backend.js", () => ({
-  NutJsDesktopBackend: class NutJsDesktopBackend {
-    constructor() {
-      backendCtorSpy();
-    }
+  NutJsDesktopBackend: function NutJsDesktopBackend() {
+    backendCtorSpy();
   },
 }));
 

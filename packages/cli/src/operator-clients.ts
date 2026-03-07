@@ -1,4 +1,4 @@
-import { TyrumClient, TyrumHttpClientError, createTyrumHttpClient } from "@tyrum/client";
+import { TyrumClient, TyrumHttpClientError, createTyrumHttpClient } from "@tyrum/client/node";
 
 import { resolveGatewayWsUrl } from "./operator-paths.js";
 import { requireOperatorConfig, requireOperatorDeviceIdentity } from "./operator-state.js";

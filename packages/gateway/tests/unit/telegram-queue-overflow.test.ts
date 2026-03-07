@@ -171,6 +171,8 @@ class InjectingOverflowDb implements SqlDb {
 }
 
 describe("Channel inbox queue overflow policies", () => {
+  const defaultThreadId = "chat-1";
+  const defaultLane = "main";
   let db: SqliteDb;
   let didOpenDb = false;
   let inbox: ChannelInboxDal;
@@ -188,43 +190,104 @@ describe("Channel inbox queue overflow policies", () => {
     await db.close();
   });
 
+  const queueKey = (accountId = "default", threadId = defaultThreadId) =>
+    `agent:default:telegram:${accountId}:dm:${threadId}`;
+
+  async function enqueueTextMessage(input: {
+    messageId: string;
+    text: string;
+    receivedAtMs: number;
+    threadId?: string;
+    accountId?: string;
+    source?: string;
+    key?: string;
+    lane?: string;
+  }): Promise<void> {
+    const threadId = input.threadId ?? defaultThreadId;
+    const accountId = input.accountId ?? "default";
+    await inbox.enqueue({
+      source: input.source ?? `telegram:${accountId}`,
+      thread_id: threadId,
+      message_id: input.messageId,
+      key: input.key ?? queueKey(accountId, threadId),
+      lane: input.lane ?? defaultLane,
+      received_at_ms: input.receivedAtMs,
+      payload: makeNormalizedTextMessage({
+        threadId,
+        messageId: input.messageId,
+        text: input.text,
+        accountId,
+      }),
+    });
+  }
+
+  async function enqueueLegacyMessage(input: {
+    messageId: string;
+    receivedAtMs: number;
+    caption?: string;
+    threadId?: string;
+    source?: string;
+    key?: string;
+    lane?: string;
+  }): Promise<void> {
+    const threadId = input.threadId ?? defaultThreadId;
+    await inbox.enqueue({
+      source: input.source ?? "telegram:default",
+      thread_id: threadId,
+      message_id: input.messageId,
+      key: input.key ?? queueKey(),
+      lane: input.lane ?? defaultLane,
+      received_at_ms: input.receivedAtMs,
+      payload: makeLegacyMediaPlaceholderMessage({
+        threadId,
+        messageId: input.messageId,
+        caption: input.caption,
+      }),
+    });
+  }
+
+  function createTelegramQueue(lane = defaultLane) {
+    const send = vi.fn();
+    const queue = new TelegramChannelQueue(db, {
+      agentId: "default",
+      accountId: "default",
+      lane,
+      dmScope: "per_account_channel_peer",
+      inboxConfig: {
+        inboundQueueCap: 1,
+        inboundQueueOverflowPolicy: "drop_newest",
+      },
+      ws: {
+        connectionManager: {
+          allClients: () => [
+            { role: "client", auth_claims: { tenant_id: DEFAULT_TENANT_ID }, ws: { send } },
+          ],
+        },
+      },
+    });
+    return { queue, send };
+  }
+
+  async function enqueueFollowup(
+    queue: TelegramChannelQueue,
+    messageId: string,
+    text: string,
+  ): Promise<void> {
+    await queue.enqueue(makeNormalizedTextMessage({ threadId: defaultThreadId, messageId, text }), {
+      queueMode: "followup",
+    });
+  }
+
   it("drop_oldest drops the oldest queued rows when cap is exceeded", async () => {
     inbox = new ChannelInboxDal(db, undefined, {
       inboundQueueCap: 2,
       inboundQueueOverflowPolicy: "drop_oldest",
     });
 
-    const key = "agent:default:telegram:default:dm:chat-1";
-
-    await inbox.enqueue({
-      source: "telegram:default",
-      thread_id: "chat-1",
-      message_id: "msg-1",
-      key,
-      lane: "main",
-      received_at_ms: 1_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-1", text: "one" }),
-    });
-
-    await inbox.enqueue({
-      source: "telegram:default",
-      thread_id: "chat-1",
-      message_id: "msg-2",
-      key,
-      lane: "main",
-      received_at_ms: 2_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-2", text: "two" }),
-    });
-
-    await inbox.enqueue({
-      source: "telegram:default",
-      thread_id: "chat-1",
-      message_id: "msg-3",
-      key,
-      lane: "main",
-      received_at_ms: 3_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-3", text: "three" }),
-    });
+    const key = queueKey();
+    await enqueueTextMessage({ messageId: "msg-1", text: "one", receivedAtMs: 1_000, key });
+    await enqueueTextMessage({ messageId: "msg-2", text: "two", receivedAtMs: 2_000, key });
+    await enqueueTextMessage({ messageId: "msg-3", text: "three", receivedAtMs: 3_000, key });
 
     const rows = await db.all<{ message_id: string; status: string }>(
       "SELECT message_id, status FROM channel_inbox ORDER BY received_at_ms ASC, inbox_id ASC",
@@ -242,37 +305,10 @@ describe("Channel inbox queue overflow policies", () => {
       inboundQueueOverflowPolicy: "drop_newest",
     });
 
-    const key = "agent:default:telegram:default:dm:chat-1";
-
-    await inbox.enqueue({
-      source: "telegram:default",
-      thread_id: "chat-1",
-      message_id: "msg-1",
-      key,
-      lane: "main",
-      received_at_ms: 1_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-1", text: "one" }),
-    });
-
-    await inbox.enqueue({
-      source: "telegram:default",
-      thread_id: "chat-1",
-      message_id: "msg-2",
-      key,
-      lane: "main",
-      received_at_ms: 2_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-2", text: "two" }),
-    });
-
-    await inbox.enqueue({
-      source: "telegram:default",
-      thread_id: "chat-1",
-      message_id: "msg-3",
-      key,
-      lane: "main",
-      received_at_ms: 3_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-3", text: "three" }),
-    });
+    const key = queueKey();
+    await enqueueTextMessage({ messageId: "msg-1", text: "one", receivedAtMs: 1_000, key });
+    await enqueueTextMessage({ messageId: "msg-2", text: "two", receivedAtMs: 2_000, key });
+    await enqueueTextMessage({ messageId: "msg-3", text: "three", receivedAtMs: 3_000, key });
 
     const rows = await db.all<{ message_id: string; status: string }>(
       "SELECT message_id, status FROM channel_inbox ORDER BY received_at_ms ASC, inbox_id ASC",
@@ -286,7 +322,7 @@ describe("Channel inbox queue overflow policies", () => {
 
   it("enforces cap when the queue grows during trimming (simulated concurrency)", async () => {
     const key = "agent:default:telegram:default:dm:chat-1";
-    const lane = "main";
+    const lane = defaultLane;
 
     const injectingDb = new InjectingOverflowDb(db, {
       key,
@@ -307,25 +343,8 @@ describe("Channel inbox queue overflow policies", () => {
       inboundQueueOverflowPolicy: "drop_oldest",
     });
 
-    await inbox.enqueue({
-      source: "telegram:default",
-      thread_id: "chat-1",
-      message_id: "msg-1",
-      key,
-      lane,
-      received_at_ms: 1_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-1", text: "one" }),
-    });
-
-    await inbox.enqueue({
-      source: "telegram:default",
-      thread_id: "chat-1",
-      message_id: "msg-2",
-      key,
-      lane,
-      received_at_ms: 2_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-2", text: "two" }),
-    });
+    await enqueueTextMessage({ messageId: "msg-1", text: "one", receivedAtMs: 1_000, key, lane });
+    await enqueueTextMessage({ messageId: "msg-2", text: "two", receivedAtMs: 2_000, key, lane });
 
     const queued = await db.all<{ message_id: string }>(
       `SELECT message_id
@@ -344,34 +363,18 @@ describe("Channel inbox queue overflow policies", () => {
       inboundQueueOverflowPolicy: "summarize_dropped",
     });
 
-    const key = "agent:default:telegram:default:dm:chat-1";
-
-    await inbox.enqueue({
-      source: "telegram:default",
-      thread_id: "chat-1",
-      message_id: "media-1",
+    const key = queueKey();
+    await enqueueLegacyMessage({
+      messageId: "media-1",
+      caption: "first photo",
+      receivedAtMs: 1_000,
       key,
-      lane: "main",
-      received_at_ms: 1_000,
-      payload: makeLegacyMediaPlaceholderMessage({
-        threadId: "chat-1",
-        messageId: "media-1",
-        caption: "first photo",
-      }),
     });
-
-    await inbox.enqueue({
-      source: "telegram:default",
-      thread_id: "chat-1",
-      message_id: "media-2",
+    await enqueueLegacyMessage({
+      messageId: "media-2",
+      caption: "second photo",
+      receivedAtMs: 2_000,
       key,
-      lane: "main",
-      received_at_ms: 2_000,
-      payload: makeLegacyMediaPlaceholderMessage({
-        threadId: "chat-1",
-        messageId: "media-2",
-        caption: "second photo",
-      }),
     });
 
     const rows = await db.all<{ message_id: string; status: string; payload_json: string }>(
@@ -393,37 +396,10 @@ describe("Channel inbox queue overflow policies", () => {
       inboundQueueOverflowPolicy: "summarize_dropped",
     });
 
-    const key = "agent:default:telegram:default:dm:chat-1";
-
-    await inbox.enqueue({
-      source: "telegram:default",
-      thread_id: "chat-1",
-      message_id: "msg-1",
-      key,
-      lane: "main",
-      received_at_ms: 1_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-1", text: "one" }),
-    });
-
-    await inbox.enqueue({
-      source: "telegram:default",
-      thread_id: "chat-1",
-      message_id: "msg-2",
-      key,
-      lane: "main",
-      received_at_ms: 2_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-2", text: "two" }),
-    });
-
-    await inbox.enqueue({
-      source: "telegram:default",
-      thread_id: "chat-1",
-      message_id: "msg-3",
-      key,
-      lane: "main",
-      received_at_ms: 3_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-3", text: "three" }),
-    });
+    const key = queueKey();
+    await enqueueTextMessage({ messageId: "msg-1", text: "one", receivedAtMs: 1_000, key });
+    await enqueueTextMessage({ messageId: "msg-2", text: "two", receivedAtMs: 2_000, key });
+    await enqueueTextMessage({ messageId: "msg-3", text: "three", receivedAtMs: 3_000, key });
 
     const rows = await db.all<{ message_id: string; status: string; payload_json: string }>(
       "SELECT message_id, status, payload_json FROM channel_inbox ORDER BY received_at_ms ASC, inbox_id ASC",
@@ -455,51 +431,27 @@ describe("Channel inbox queue overflow policies", () => {
       inboundQueueOverflowPolicy: "summarize_dropped",
     });
 
-    const key = "agent:default:telegram:work:dm:chat-1";
-
-    await inbox.enqueue({
-      source: "telegram:work",
-      thread_id: "chat-1",
-      message_id: "msg-1",
+    const key = queueKey("work");
+    await enqueueTextMessage({
+      messageId: "msg-1",
+      text: "one",
+      receivedAtMs: 1_000,
+      accountId: "work",
       key,
-      lane: "main",
-      received_at_ms: 1_000,
-      payload: makeNormalizedTextMessage({
-        threadId: "chat-1",
-        messageId: "msg-1",
-        text: "one",
-        accountId: "work",
-      }),
     });
-
-    await inbox.enqueue({
-      source: "telegram:work",
-      thread_id: "chat-1",
-      message_id: "msg-2",
+    await enqueueTextMessage({
+      messageId: "msg-2",
+      text: "two",
+      receivedAtMs: 2_000,
+      accountId: "work",
       key,
-      lane: "main",
-      received_at_ms: 2_000,
-      payload: makeNormalizedTextMessage({
-        threadId: "chat-1",
-        messageId: "msg-2",
-        text: "two",
-        accountId: "work",
-      }),
     });
-
-    await inbox.enqueue({
-      source: "telegram:work",
-      thread_id: "chat-1",
-      message_id: "msg-3",
+    await enqueueTextMessage({
+      messageId: "msg-3",
+      text: "three",
+      receivedAtMs: 3_000,
+      accountId: "work",
       key,
-      lane: "main",
-      received_at_ms: 3_000,
-      payload: makeNormalizedTextMessage({
-        threadId: "chat-1",
-        messageId: "msg-3",
-        text: "three",
-        accountId: "work",
-      }),
     });
 
     const rows = await db.all<{ message_id: string; payload_json: string }>(
@@ -516,35 +468,9 @@ describe("Channel inbox queue overflow policies", () => {
   });
 
   it("emits a WS event when overflow occurs (telegram queue)", async () => {
-    const send = vi.fn();
-    const ws = {
-      connectionManager: {
-        allClients: () => [
-          { role: "client", auth_claims: { tenant_id: DEFAULT_TENANT_ID }, ws: { send } },
-        ],
-      },
-    };
-
-    const queue = new TelegramChannelQueue(db, {
-      agentId: "default",
-      accountId: "default",
-      lane: "main",
-      dmScope: "per_account_channel_peer",
-      inboxConfig: {
-        inboundQueueCap: 1,
-        inboundQueueOverflowPolicy: "drop_newest",
-      },
-      ws,
-    });
-
-    await queue.enqueue(
-      makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-1", text: "one" }),
-      { queueMode: "followup" },
-    );
-    await queue.enqueue(
-      makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-2", text: "two" }),
-      { queueMode: "followup" },
-    );
+    const { queue, send } = createTelegramQueue();
+    await enqueueFollowup(queue, "msg-1", "one");
+    await enqueueFollowup(queue, "msg-2", "two");
 
     expect(send).toHaveBeenCalledTimes(1);
     const raw = send.mock.calls[0]?.[0];
@@ -556,35 +482,9 @@ describe("Channel inbox queue overflow policies", () => {
   });
 
   it("normalizes invalid lane values so overflow events are not dropped", async () => {
-    const send = vi.fn();
-    const ws = {
-      connectionManager: {
-        allClients: () => [
-          { role: "client", auth_claims: { tenant_id: DEFAULT_TENANT_ID }, ws: { send } },
-        ],
-      },
-    };
-
-    const queue = new TelegramChannelQueue(db, {
-      agentId: "default",
-      accountId: "default",
-      lane: "not-a-real-lane",
-      dmScope: "per_account_channel_peer",
-      inboxConfig: {
-        inboundQueueCap: 1,
-        inboundQueueOverflowPolicy: "drop_newest",
-      },
-      ws,
-    });
-
-    await queue.enqueue(
-      makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-1", text: "one" }),
-      { queueMode: "followup" },
-    );
-    await queue.enqueue(
-      makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-2", text: "two" }),
-      { queueMode: "followup" },
-    );
+    const { queue, send } = createTelegramQueue("not-a-real-lane");
+    await enqueueFollowup(queue, "msg-1", "one");
+    await enqueueFollowup(queue, "msg-2", "two");
 
     expect(send).toHaveBeenCalledTimes(1);
     const raw = send.mock.calls[0]?.[0];

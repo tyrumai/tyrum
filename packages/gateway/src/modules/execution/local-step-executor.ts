@@ -1,5 +1,4 @@
-import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
-import type { EvaluationContext } from "@tyrum/schemas";
+import type { ActionPrimitive as ActionPrimitiveT, EvaluationContext } from "@tyrum/schemas";
 import { spawn } from "node:child_process";
 import { resolve, relative, isAbsolute } from "node:path";
 import { isBlockedUrl, resolvesToBlockedAddress, sanitizeEnv } from "../agent/tool-executor.js";
@@ -148,6 +147,7 @@ function tryParseJson(text: string): unknown | undefined {
     return undefined;
   }
 }
+
 async function resolveSecrets(
   args: unknown,
   secretProvider: SecretProvider | undefined,

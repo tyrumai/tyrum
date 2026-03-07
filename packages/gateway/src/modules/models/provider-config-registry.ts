@@ -341,7 +341,7 @@ function extractTemplateVariables(raw: string | undefined): string[] {
     const value = match[1]?.trim();
     if (value) values.add(value);
   }
-  return Array.from(values).sort((a, b) => a.localeCompare(b));
+  return Array.from(values).toSorted((a, b) => a.localeCompare(b));
 }
 
 function listProviderTemplateVariables(provider: CatalogProvider): string[] {
@@ -354,7 +354,7 @@ function listProviderTemplateVariables(provider: CatalogProvider): string[] {
       values.add(variable);
     }
   }
-  return Array.from(values).sort((a, b) => a.localeCompare(b));
+  return Array.from(values).toSorted((a, b) => a.localeCompare(b));
 }
 
 function buildTemplateFields(provider: CatalogProvider): ProviderConfigFieldSpec[] {
@@ -460,12 +460,12 @@ export function listProviderRegistrySpecs(
     .filter((value): value is CatalogProvider => Boolean(value))
     .map((provider) => toRegistrySpec(provider))
     .filter((provider): provider is ProviderRegistrySpec => Boolean(provider))
-    .sort((left, right) => left.provider_key.localeCompare(right.provider_key));
+    .toSorted((left, right) => left.provider_key.localeCompare(right.provider_key));
 }
 
 export function findProviderMethodSpec(
   spec: ProviderRegistrySpec | undefined,
   methodKey: string,
 ): ProviderMethodSpec | undefined {
-  return spec?.methods.find((method) => method.method_key === methodKey);
+  return spec?.methods.find((providerMethod) => providerMethod.method_key === methodKey);
 }

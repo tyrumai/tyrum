@@ -19,7 +19,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "docs:public-check": "bash scripts/check-public-docs.sh",
-    "lint": "oxlint --quiet .",
+    "lint": "node scripts/lint/oxlint-ratchet.mjs",
     "lint:oxlint:report": "oxlint -f unix .",
     "format": "node scripts/format-repo.mjs --write",
     "format:check": "node scripts/format-repo.mjs --check",

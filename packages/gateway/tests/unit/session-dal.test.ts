@@ -460,7 +460,7 @@ describe("SessionDal", () => {
     const decodedCursor = JSON.parse(
       Buffer.from(page1.nextCursor as string, "base64url").toString("utf-8"),
     ) as Record<string, unknown>;
-    expect(Object.keys(decodedCursor).sort()).toEqual(["session_id", "updated_at"]);
+    expect(Object.keys(decodedCursor).toSorted()).toEqual(["session_id", "updated_at"]);
     expect(page1.sessions.map((s) => s.session_id)).toEqual([s3.session_key, s2.session_key]);
     expect(page1.sessions[0]?.turns_count).toBe(2);
     expect(page1.sessions[0]?.last_turn).toEqual({ role: "assistant", content: "world" });

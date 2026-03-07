@@ -81,10 +81,12 @@ describe("CORS", () => {
       expect(res.headers.get("Access-Control-Max-Age")).toBe("3600");
 
       const methods = parseCommaHeader(res.headers.get("Access-Control-Allow-Methods"));
-      expect(methods.sort()).toEqual(["DELETE", "GET", "OPTIONS", "PATCH", "POST", "PUT"].sort());
+      expect(methods.toSorted()).toEqual(
+        ["DELETE", "GET", "OPTIONS", "PATCH", "POST", "PUT"].toSorted(),
+      );
 
       const headers = parseCommaHeader(res.headers.get("Access-Control-Allow-Headers"));
-      expect(headers.sort()).toEqual(["Authorization", "Content-Type"].sort());
+      expect(headers.toSorted()).toEqual(["Authorization", "Content-Type"].toSorted());
     } finally {
       await container.db.close();
     }
