@@ -244,44 +244,47 @@ async function bootDesktopOperatorCore({
     const deviceIdentity = await createDeviceIdentity();
     if (isDisposed()) return;
 
+    const ipcFetch = createDesktopIpcFetch(api);
     const elevatedModeStore = createElevatedModeStore();
-    let manager: OperatorCoreManager;
+    let manager: OperatorCoreManager | null = null;
     try {
       manager = createDesktopOperatorCoreManager({
         connection,
-        ipcFetch: createDesktopIpcFetch(api),
+        ipcFetch,
         deviceIdentity,
         elevatedModeStore,
       });
+
+      const elevatedModeController = createDesktopElevatedModeController({
+        connection,
+        ipcFetch,
+        deviceIdentity,
+        elevatedModeStore,
+      });
+
+      if (isDisposed()) {
+        manager.dispose();
+        manager = null;
+        elevatedModeStore.dispose();
+        return;
+      }
+
+      installDesktopOperatorCoreManager({
+        manager,
+        elevatedModeStore,
+        managerRef,
+        unsubManagerRef,
+        elevatedModeStoreRef,
+        isDisposed,
+        setCore,
+      });
+      setElevatedModeController(elevatedModeController);
+      manager.getCore().connect();
     } catch (err) {
+      manager?.dispose();
       elevatedModeStore.dispose();
       throw err;
     }
-
-    const elevatedModeController = createDesktopElevatedModeController({
-      connection,
-      ipcFetch: createDesktopIpcFetch(api),
-      deviceIdentity,
-      elevatedModeStore,
-    });
-
-    if (isDisposed()) {
-      manager.dispose();
-      elevatedModeStore.dispose();
-      return;
-    }
-
-    installDesktopOperatorCoreManager({
-      manager,
-      elevatedModeStore,
-      managerRef,
-      unsubManagerRef,
-      elevatedModeStoreRef,
-      isDisposed,
-      setCore,
-    });
-    setElevatedModeController(elevatedModeController);
-    manager.getCore().connect();
   } catch (err) {
     if (isDisposed()) return;
     disposeDesktopOperatorCoreManager({

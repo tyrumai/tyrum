@@ -16,7 +16,9 @@ const {
   createPersistentElevatedModeControllerMock,
   createTyrumHttpClientMock,
   gatewayGetOperatorConnectionMock,
+  managerDisposeMock,
   retryingConnectionMock,
+  storeDisposeMock,
 } = vi.hoisted(() => {
   const connectMockInner = vi.fn();
   const controllerInner = { enter: vi.fn(async () => {}), exit: vi.fn(async () => {}) };
@@ -31,7 +33,8 @@ const {
     publicKey: "public",
     privateKey: "private",
   }));
-  const createElevatedModeStoreMockInner = vi.fn(() => ({ dispose: vi.fn() }));
+  const storeDisposeMockInner = vi.fn();
+  const createElevatedModeStoreMockInner = vi.fn(() => ({ dispose: storeDisposeMockInner }));
   const createTyrumHttpClientMockInner = vi.fn(() => ({}));
   const createOperatorCoreManagerMockInner = vi.fn(() => ({
     getCore: vi.fn(() => ({ connect: connectMockInner })),
@@ -49,7 +52,9 @@ const {
     createPersistentElevatedModeControllerMock: createPersistentElevatedModeControllerMockInner,
     createTyrumHttpClientMock: createTyrumHttpClientMockInner,
     gatewayGetOperatorConnectionMock: gatewayGetOperatorConnectionMockInner,
+    managerDisposeMock: managerDisposeMockInner,
     retryingConnectionMock: retryingConnectionMockInner,
+    storeDisposeMock: storeDisposeMockInner,
   };
 });
 
@@ -169,6 +174,38 @@ describe("useDesktopOperatorCore", () => {
     expect(connectMock).toHaveBeenCalledTimes(1);
     expect(state?.errorMessage).toBeNull();
     expect(state?.core).not.toBeNull();
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("disposes the fresh manager and store when controller creation throws", async () => {
+    createPersistentElevatedModeControllerMock.mockImplementationOnce(() => {
+      throw new Error("controller boom");
+    });
+
+    const { useDesktopOperatorCore } = await import("../src/renderer/lib/desktop-operator-core.js");
+    const { container, root } = createTestRoot();
+
+    let state: DesktopOperatorCoreState | null = null;
+    const Probe = () => {
+      state = useDesktopOperatorCore();
+      return null;
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(managerDisposeMock).toHaveBeenCalledTimes(1);
+    expect(storeDisposeMock).toHaveBeenCalledTimes(1);
+    expect(state?.errorMessage).toBe("controller boom");
+    expect(state?.core).toBeNull();
+    expect(state?.elevatedModeController).toBeNull();
 
     act(() => {
       root.unmount();
