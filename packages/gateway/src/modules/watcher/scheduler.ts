@@ -530,14 +530,6 @@ export class WatcherScheduler {
     }
     const automationPlanId = `automation-${firing.watcher_firing_id}`;
     const requestId = `automation-${firing.watcher_firing_id}`;
-<<<<<<< Updated upstream
-
-=======
-    const workspaceKey = await this.db.get<{ workspace_key: string }>(
-      "SELECT workspace_key FROM workspaces WHERE tenant_id = ? AND workspace_id = ? LIMIT 1",
-      [firing.tenant_id, watcher.workspace_id],
-    );
->>>>>>> Stashed changes
     const playbookBundle = playbook ? this.resolvePlaybookBundle(playbook) : undefined;
     const effective = await this.policyService.loadEffectiveBundle({ playbookBundle });
     const snapshot = await this.policyService.getOrCreateSnapshot(
