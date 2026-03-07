@@ -4,6 +4,7 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  readdirSync,
   unlinkSync,
   rmSync,
 } from "node:fs";
@@ -17,13 +18,11 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = join(scriptDir, "..");
 const repoRoot = resolve(desktopRoot, "../..");
 
-const sourcePath = join(desktopRoot, "../../packages/gateway/dist/index.mjs");
-const sourceMapPath = join(desktopRoot, "../../packages/gateway/dist/index.mjs.map");
+const sourceDistDir = join(desktopRoot, "../../packages/gateway/dist");
+const sourcePath = join(sourceDistDir, "index.mjs");
 const migrationsSourceDir = join(desktopRoot, "../../packages/gateway/migrations");
 
 const targetDir = join(desktopRoot, "dist/gateway");
-const targetPath = join(targetDir, "index.mjs");
-const targetMapPath = join(targetDir, "index.mjs.map");
 const migrationsTargetDir = join(targetDir, "migrations");
 
 if (!existsSync(sourcePath)) {
@@ -157,11 +156,13 @@ if (prebuildInstall.status !== 0) {
   }
 }
 
-copyFileSync(sourcePath, targetPath);
-if (existsSync(sourceMapPath)) {
-  copyFileSync(sourceMapPath, targetMapPath);
+// Copy all .mjs bundle files (entry + any code-split chunks) and their source maps.
+for (const file of readdirSync(sourceDistDir)) {
+  if (file.endsWith(".mjs") || file.endsWith(".mjs.map")) {
+    copyFileSync(join(sourceDistDir, file), join(targetDir, file));
+  }
 }
 
 cpSync(migrationsSourceDir, migrationsTargetDir, { recursive: true });
 
-console.log(`Staged embedded gateway bundle: ${sourcePath} -> ${targetPath}`);
+console.log(`Staged embedded gateway bundle: ${sourceDistDir} -> ${targetDir}`);
