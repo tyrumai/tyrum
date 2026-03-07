@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type PluginDirKind = "workspace" | "user" | "bundled";
+export type PluginDirKind = "workspace" | "user" | "bundled" | "shared";
 export type PluginDir = { kind: PluginDirKind; path: string };
 
 export function resolvePluginsDir(home: string): string {

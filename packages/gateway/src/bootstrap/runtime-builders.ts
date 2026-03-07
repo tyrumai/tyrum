@@ -24,9 +24,8 @@ import {
 import { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import { createMemoryV1BudgetsProvider } from "../modules/memory/v1-budgets-provider.js";
 import type { OtelRuntime } from "../modules/observability/otel.js";
+import { createPluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
-import { PluginRegistry } from "../modules/plugins/registry.js";
-import { isSharedStateMode } from "../modules/runtime-state/mode.js";
 import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
 import { WsEventDal } from "../modules/ws-event/dal.js";
 import { WorkSignalScheduler } from "../modules/workboard/signal-scheduler.js";
@@ -272,14 +271,13 @@ export async function startEdgeRuntime(
     return {};
   }
 
-  const plugins = await PluginRegistry.load({
+  const pluginCatalogProvider = createPluginCatalogProvider({
     home: context.tyrumHome,
     userHome: context.tyrumHome,
     logger: context.logger,
     container: context.container,
-    includeWorkspacePlugins: !isSharedStateMode(context.deploymentConfig),
-    includeUserPlugins: !isSharedStateMode(context.deploymentConfig),
   });
+  const plugins = await pluginCatalogProvider.loadGlobalRegistry();
   protocol.protocolDeps.plugins = plugins;
 
   const agents = context.deploymentConfig.agent.enabled
@@ -290,6 +288,7 @@ export async function startEdgeRuntime(
         defaultPolicyService: context.container.policyService,
         approvalNotifier: protocol.approvalNotifier,
         plugins,
+        pluginCatalogProvider,
         protocolDeps: protocol.protocolDeps,
         logger: context.logger,
       })

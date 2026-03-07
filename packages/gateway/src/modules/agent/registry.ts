@@ -8,6 +8,7 @@ import { join } from "node:path";
 import type { Logger } from "../observability/logger.js";
 import { AgentRuntime } from "./runtime.js";
 import type { PluginRegistry } from "../plugins/registry.js";
+import type { PluginCatalogProvider } from "../plugins/catalog-provider.js";
 import type { LanguageModel } from "ai";
 import type { ProtocolDeps } from "../../ws/protocol.js";
 import { isSharedStateMode } from "../runtime-state/mode.js";
@@ -47,6 +48,7 @@ export class AgentRegistry {
       defaultLanguageModel?: LanguageModel;
       approvalNotifier: ApprovalNotifier;
       plugins?: PluginRegistry;
+      pluginCatalogProvider?: PluginCatalogProvider;
       protocolDeps?: ProtocolDeps;
       logger: Logger;
     },
@@ -92,6 +94,8 @@ export class AgentRegistry {
       const home = this.resolveAgentHome(agentId);
       const secretProvider = this.getSecretProvider(tenantId, agentId);
       const policyService = this.getPolicyService(agentId);
+      const plugins =
+        (await this.opts.pluginCatalogProvider?.loadTenantRegistry(tenantId)) ?? this.opts.plugins;
 
       const runtime = new AgentRuntime({
         container: this.opts.container,
@@ -102,7 +106,7 @@ export class AgentRegistry {
         languageModel: this.opts.defaultLanguageModel,
         secretProvider,
         approvalNotifier: this.opts.approvalNotifier,
-        plugins: this.opts.plugins,
+        plugins,
         policyService,
         protocolDeps: this.opts.protocolDeps,
       });

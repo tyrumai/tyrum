@@ -652,13 +652,27 @@ export class PluginRegistry {
     includeUserPlugins?: boolean;
     includeBundledPlugins?: boolean;
   }): Promise<PluginRegistry> {
+    const dirs = resolvePluginSearchDirs(opts);
+    return await PluginRegistry.loadFromSearchDirs({
+      dirs,
+      logger: opts.logger,
+      container: opts.container,
+      fetchImpl: opts.fetchImpl,
+    });
+  }
+
+  static async loadFromSearchDirs(opts: {
+    dirs: PluginDir[];
+    logger: Logger;
+    container?: GatewayContainer;
+    fetchImpl?: typeof fetch;
+  }): Promise<PluginRegistry> {
     const registry = new PluginRegistry({
       logger: opts.logger,
       container: opts.container,
       fetchImpl: opts.fetchImpl,
     });
-    const dirs = resolvePluginSearchDirs(opts);
-    await registry.loadFromDirectories(dirs);
+    await registry.loadFromDirectories(opts.dirs);
     return registry;
   }
 
