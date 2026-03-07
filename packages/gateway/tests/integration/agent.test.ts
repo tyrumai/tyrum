@@ -174,6 +174,26 @@ describe("agent routes", () => {
     await container.db.close();
   });
 
+  it("does not surface local-only agent directories from /agent/list in shared mode", async () => {
+    await mkdir(join(homeDir!, "agents/agent-2"), { recursive: true });
+    await writeWorkspace(join(homeDir!, "agents/agent-2"));
+
+    const { app, agents, container } = await createTestApp({
+      tyrumHome: homeDir,
+      deploymentConfig: { state: { mode: "shared" } },
+    });
+
+    const res = await app.request("/agent/list");
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      agents: Array<{ agent_key: string; agent_id?: string }>;
+    };
+    expect(payload.agents.map((agent) => agent.agent_key)).toEqual(["default"]);
+
+    await agents?.shutdown();
+    await container.db.close();
+  });
+
   it("accepts agent_key query param for /agent/status", async () => {
     await mkdir(join(homeDir!, "agents/agent-2"), { recursive: true });
     await writeWorkspace(join(homeDir!, "agents/agent-2"));
