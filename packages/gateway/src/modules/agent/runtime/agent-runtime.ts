@@ -28,10 +28,7 @@ import {
 import { WITHIN_TURN_LOOP_STOP_REPLY } from "./runtime-constants.js";
 import { maybeRunPreCompactionMemoryFlush } from "./pre-compaction-memory-flush.js";
 import { buildDefaultAgentConfig } from "../default-config.js";
-import {
-  createLocalAgentContextStore,
-  type AgentContextStore,
-} from "../context-store.js";
+import { createLocalAgentContextStore, type AgentContextStore } from "../context-store.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import { ToolSetBuilder, type ToolCallPolicyState } from "./tool-set-builder.js";
 import {
@@ -61,7 +58,7 @@ import { resolveSessionModel as resolveSessionModelImpl } from "./session-model-
 import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 import { finalizeTurn } from "./turn-finalization.js";
 import { buildWorkFocusDigest } from "./work-focus-digest.js";
-import type { AgentContextReport, AgentRuntimeOptions } from "./types.js";
+import type { AgentContextReport, AgentLoadedContext, AgentRuntimeOptions } from "./types.js";
 import { resolveTyrumHome } from "../home.js";
 import { detectWithinTurnToolLoop } from "../loop-detection.js";
 import { SessionDal, type SessionRow } from "../session-dal.js";
