@@ -352,8 +352,8 @@ export class AgentRuntime {
     const ctx = await loadCurrentAgentContext({
       contextStore: this.contextStore,
       tenantId: this.tenantId,
-      agentId: this.agentId,
-      workspaceId: this.workspaceId,
+      agentId,
+      workspaceId,
       config,
     });
     const status = {
@@ -1372,8 +1372,8 @@ export class AgentRuntime {
     const ctx = await loadCurrentAgentContext({
       contextStore: this.contextStore,
       tenantId: this.tenantId,
-      agentId: this.agentId,
-      workspaceId: this.workspaceId,
+      agentId,
+      workspaceId,
       config,
     });
     this.maybeCleanupSessions(ctx.config.sessions.ttl_days, agentKey);
