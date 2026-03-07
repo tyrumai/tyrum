@@ -7,6 +7,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { PolicyService } from "../../src/modules/policy/service.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
+import { createGatewayConfigStore } from "../../src/modules/runtime-state/gateway-config-store.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -23,6 +24,67 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 }
 
 describe("PolicyService regressions (precedence + overrides)", () => {
+  it("loads shared deployment and agent bundles from the config store", async () => {
+    const db = openTestSqliteDb();
+    try {
+      await db.run(
+        `INSERT INTO policy_bundle_config_revisions (
+           tenant_id, scope_kind, agent_id, bundle_json, created_at, created_by_json, reason
+         ) VALUES (?, 'deployment', NULL, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
+          JSON.stringify({
+            v: 1,
+            tools: { default: "deny", allow: ["tool.exec"], require_approval: [], deny: [] },
+          }),
+          new Date().toISOString(),
+          JSON.stringify({ kind: "test" }),
+          "deployment",
+        ],
+      );
+      await db.run(
+        `INSERT INTO policy_bundle_config_revisions (
+           tenant_id, scope_kind, agent_id, bundle_json, created_at, created_by_json, reason
+         ) VALUES (?, 'agent', ?, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
+          DEFAULT_AGENT_ID,
+          JSON.stringify({
+            v: 1,
+            tools: { default: "deny", allow: [], require_approval: ["tool.exec"], deny: [] },
+          }),
+          new Date().toISOString(),
+          JSON.stringify({ kind: "test" }),
+          "agent",
+        ],
+      );
+
+      const policy = new PolicyService({
+        home: "/tmp/unused",
+        snapshotDal: new PolicySnapshotDal(db),
+        overrideDal: new PolicyOverrideDal(db),
+        includeAgentHomeBundle: false,
+        configStore: createGatewayConfigStore({
+          db,
+          home: "/tmp/unused",
+          deploymentConfig: { state: { mode: "shared" } },
+        }),
+      });
+
+      const res = await policy.evaluateToolCall({
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        toolId: "tool.exec",
+        toolMatchTarget: "echo ok",
+      });
+
+      expect(res.decision).toBe("require_approval");
+    } finally {
+      await db.close();
+    }
+  });
+
   it("can disable per-agent home policy bundles for shared mode", async () => {
     await withTempDir(async (home) => {
       const db = openTestSqliteDb();

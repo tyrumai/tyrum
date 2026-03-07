@@ -57,7 +57,8 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
   const app = new Hono();
 
   app.get("/policy/bundle", async (c) => {
-    const effective = await deps.policyService.loadEffectiveBundle();
+    const tenantId = requireTenantId(c);
+    const effective = await deps.policyService.loadEffectiveBundle({ tenantId });
     return c.json({
       status: "ok",
       generated_at: new Date().toISOString(),

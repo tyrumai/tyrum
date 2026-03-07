@@ -18,6 +18,8 @@ import type { PolicySnapshotDal, PolicySnapshotRow } from "./snapshot-dal.js";
 import type { PolicyOverrideDal } from "./override-dal.js";
 import { sha256HexFromString, stableJsonStringify } from "./canonical-json.js";
 import { mergePolicyBundles } from "./bundle-merge.js";
+import type { GatewayConfigStore } from "../runtime-state/gateway-config-store.js";
+import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
 async function fileExists(path: string): Promise<boolean> {
   try {
@@ -37,12 +39,14 @@ export interface PolicyEvaluation {
 }
 
 export class PolicyService {
-  private deploymentBundleCache:
-    | { path: string | null; bundle: PolicyBundleT; sha256: string }
-    | undefined;
-  private agentBundleCache:
-    | { path: string | null; bundle: PolicyBundleT | null; sha256: string | null }
-    | undefined;
+  private readonly deploymentBundleCache = new Map<
+    string,
+    { path: string | null; bundle: PolicyBundleT; sha256: string }
+  >();
+  private readonly agentBundleCache = new Map<
+    string,
+    { path: string | null; bundle: PolicyBundleT | null; sha256: string | null }
+  >();
 
   constructor(
     private readonly opts: {
@@ -56,6 +60,7 @@ export class PolicyService {
         bundlePath?: string;
       };
       includeAgentHomeBundle?: boolean;
+      configStore?: GatewayConfigStore;
     },
   ) {}
 
@@ -70,13 +75,19 @@ export class PolicyService {
     return false; // default: enforce
   }
 
-  async loadEffectiveBundle(params?: { playbookBundle?: PolicyBundleT }): Promise<{
+  async loadEffectiveBundle(params?: {
+    playbookBundle?: PolicyBundleT;
+    tenantId?: string;
+    agentId?: string;
+  }): Promise<{
     bundle: PolicyBundleT;
     sha256: string;
     sources: { deployment: string; agent: string | null; playbook: "inline" | null };
   }> {
-    const deployment = await this.loadDeploymentBundle();
-    const agent = await this.loadAgentBundle();
+    const tenantId = params?.tenantId?.trim() || DEFAULT_TENANT_ID;
+    const agentId = params?.agentId?.trim() || null;
+    const deployment = await this.loadDeploymentBundle(tenantId);
+    const agent = await this.loadAgentBundle({ tenantId, agentId });
     const playbookBundle = params?.playbookBundle;
 
     const merged = mergePolicyBundles([
@@ -113,7 +124,11 @@ export class PolicyService {
     playbookBundle?: PolicyBundleT;
     inputProvenance?: { source: string; trusted: boolean };
   }): Promise<PolicyEvaluation> {
-    const effective = await this.loadEffectiveBundle({ playbookBundle: params.playbookBundle });
+    const effective = await this.loadEffectiveBundle({
+      playbookBundle: params.playbookBundle,
+      tenantId: params.tenantId,
+      agentId: params.agentId,
+    });
     const snapshot = await this.getOrCreateSnapshot(params.tenantId, effective.bundle);
     return await this.evaluateToolCallAgainstBundle({
       tenantId: params.tenantId,
@@ -369,7 +384,11 @@ export class PolicyService {
     matchTarget: string;
     playbookBundle?: PolicyBundleT;
   }): Promise<PolicyEvaluation> {
-    const effective = await this.loadEffectiveBundle({ playbookBundle: params.playbookBundle });
+    const effective = await this.loadEffectiveBundle({
+      playbookBundle: params.playbookBundle,
+      tenantId: params.tenantId,
+      agentId: params.agentId,
+    });
     const snapshot = await this.getOrCreateSnapshot(params.tenantId, effective.bundle);
 
     const connectorsDomain = normalizeDomain(effective.bundle.connectors, "require_approval");
@@ -400,7 +419,7 @@ export class PolicyService {
     };
   }
 
-  async getStatus(): Promise<{
+  async getStatus(scope?: { tenantId?: string; agentId?: string }): Promise<{
     enabled: boolean;
     observe_only: boolean;
     effective_sha256: string;
@@ -409,7 +428,10 @@ export class PolicyService {
     const enabled = this.isEnabled();
     const observeOnly = this.isObserveOnly();
 
-    const effective = await this.loadEffectiveBundle();
+    const effective = await this.loadEffectiveBundle({
+      tenantId: scope?.tenantId,
+      agentId: scope?.agentId,
+    });
     return {
       enabled,
       observe_only: observeOnly,
@@ -421,79 +443,98 @@ export class PolicyService {
     };
   }
 
-  private async loadDeploymentBundle(): Promise<{
+  private async loadDeploymentBundle(tenantId: string): Promise<{
     path: string | null;
     bundle: PolicyBundleT;
     sha256: string;
   }> {
+    const cacheKey = tenantId;
+    const cached = this.deploymentBundleCache.get(cacheKey);
     const path = this.opts.deploymentPolicy?.bundlePath?.trim() || null;
-    if (this.deploymentBundleCache && this.deploymentBundleCache.path === path) {
-      return this.deploymentBundleCache;
+    if (cached && cached.path === path) {
+      return cached;
     }
 
-    let bundle: PolicyBundleT;
-    if (path) {
+    let bundle = (await this.opts.configStore?.getDeploymentPolicyBundle(tenantId)) ?? null;
+    if (!bundle && path) {
       try {
         bundle = await loadPolicyBundleFromFile(path);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.opts.logger?.warn("policy.bundle.deployment_load_failed", { path, error: message });
-        bundle = defaultPolicyBundle();
       }
-    } else {
-      bundle = defaultPolicyBundle();
     }
+    bundle ??= defaultPolicyBundle();
 
     const canonicalJson = stableJsonStringify(bundle);
     const sha256 = sha256HexFromString(canonicalJson);
-    this.deploymentBundleCache = { path, bundle, sha256 };
-    return this.deploymentBundleCache;
+    const entry = { path, bundle, sha256 };
+    this.deploymentBundleCache.set(cacheKey, entry);
+    return entry;
   }
 
-  private async loadAgentBundle(): Promise<{
+  private async loadAgentBundle(scope: { tenantId: string; agentId: string | null }): Promise<{
     path: string | null;
     bundle: PolicyBundleT | null;
     sha256: string | null;
   }> {
-    if (this.opts.includeAgentHomeBundle === false) {
-      this.agentBundleCache = { path: null, bundle: null, sha256: null };
-      return this.agentBundleCache;
+    const cacheKey = `${scope.tenantId}:${scope.agentId ?? "*"}`;
+
+    if (scope.agentId) {
+      const fromStore = await this.opts.configStore?.getAgentPolicyBundle({
+        tenantId: scope.tenantId,
+        agentId: scope.agentId,
+      });
+      if (fromStore) {
+        const sha256 = sha256HexFromString(stableJsonStringify(fromStore));
+        const cached = { path: "shared", bundle: fromStore, sha256 };
+        this.agentBundleCache.set(cacheKey, cached);
+        return cached;
+      }
     }
 
-    const candidates = [
+    if (this.opts.includeAgentHomeBundle === false) {
+      const empty = { path: null, bundle: null, sha256: null };
+      this.agentBundleCache.set(cacheKey, empty);
+      return empty;
+    }
+
+    let path: string | null = null;
+    for (const candidate of [
       `${this.opts.home}/policy.yml`,
       `${this.opts.home}/policy.yaml`,
       `${this.opts.home}/policy.json`,
-    ];
-
-    let path: string | null = null;
-    for (const candidate of candidates) {
+    ]) {
       if (await fileExists(candidate)) {
         path = candidate;
         break;
       }
     }
 
-    if (this.agentBundleCache && this.agentBundleCache.path === path) {
-      return this.agentBundleCache;
+    const cached = this.agentBundleCache.get(cacheKey);
+    if (cached && cached.path === path) {
+      return cached;
     }
 
     if (!path) {
-      this.agentBundleCache = { path: null, bundle: null, sha256: null };
-      return this.agentBundleCache;
+      const empty = { path: null, bundle: null, sha256: null };
+      this.agentBundleCache.set(cacheKey, empty);
+      return empty;
     }
 
     try {
       const bundle = await loadPolicyBundleFromFile(path);
       const canonicalJson = stableJsonStringify(bundle);
       const sha256 = sha256HexFromString(canonicalJson);
-      this.agentBundleCache = { path, bundle, sha256 };
-      return this.agentBundleCache;
+      const loaded = { path, bundle, sha256 };
+      this.agentBundleCache.set(cacheKey, loaded);
+      return loaded;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.opts.logger?.warn("policy.bundle.agent_load_failed", { path, error: message });
-      this.agentBundleCache = { path, bundle: null, sha256: null };
-      return this.agentBundleCache;
+      const empty = { path, bundle: null, sha256: null };
+      this.agentBundleCache.set(cacheKey, empty);
+      return empty;
     }
   }
 }

@@ -107,6 +107,7 @@ async function handleCommandExecuteMessage(
     void deps.hooks
       .fire({
         event: "command.execute",
+        tenantId: client.auth_claims?.tenant_id ?? undefined,
         metadata: { command: parsedReq.data.payload.command },
       })
       .catch((err) => {

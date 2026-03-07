@@ -1,4 +1,5 @@
 import type { GatewayBootContext, GatewayRuntime } from "./runtime-shared.js";
+import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -72,6 +73,7 @@ export function createShutdownHandler(
         ? runtime.protocol.hooksRuntime
             .fire({
               event: "gateway.shutdown",
+              tenantId: DEFAULT_TENANT_ID,
               metadata: { signal, instance_id: context.instanceId, role: context.role },
             })
             .catch((err) => {

@@ -24,6 +24,7 @@ import {
 import { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import { createMemoryV1BudgetsProvider } from "../modules/memory/v1-budgets-provider.js";
 import type { OtelRuntime } from "../modules/observability/otel.js";
+import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { PluginRegistry } from "../modules/plugins/registry.js";
 import { isSharedStateMode } from "../modules/runtime-state/mode.js";
 import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
@@ -94,12 +95,12 @@ export async function createProtocolRuntime(
       ? (edgeEngine ?? createExecutionEngine(context, { includeSecrets: false }))
       : undefined;
   const hooksRuntime =
-    context.lifecycleHooks.length > 0 && (context.shouldRunEdge || context.shouldRunWorker)
+    context.container.gatewayConfigStore && (context.shouldRunEdge || context.shouldRunWorker)
       ? new LifecycleHooksRuntime({
           db: context.container.db,
           engine: approvalEngine!,
           policyService: context.container.policyService,
-          hooks: context.lifecycleHooks,
+          configStore: context.container.gatewayConfigStore,
         })
       : undefined;
 
@@ -442,6 +443,7 @@ export function fireGatewayStartHook(context: GatewayBootContext, protocol: Prot
     void protocol.hooksRuntime
       .fire({
         event: "gateway.start",
+        tenantId: DEFAULT_TENANT_ID,
         metadata: { instance_id: context.instanceId, role: context.role },
       })
       .catch((err) => {

@@ -1,7 +1,6 @@
 import { wireContainer } from "../container.js";
 import { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";
-import { loadLifecycleHooksFromHome } from "../modules/hooks/config.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { maybeStartOtel } from "../modules/observability/otel.js";
 import { createDbSecretProviderFactory } from "../modules/secret/create-secret-provider.js";
@@ -177,9 +176,6 @@ async function createGatewayBootContext(
     tyrumHome,
     keyProvider: secretKeyProvider,
   });
-  const lifecycleHooks = isSharedStateMode(deploymentConfig)
-    ? []
-    : await loadLifecycleHooksFromHome(tyrumHome, logger);
 
   if (container.telegramBot) {
     console.log("Telegram bot initialized");
@@ -201,7 +197,7 @@ async function createGatewayBootContext(
     logger,
     authTokens,
     secretProviderForTenant: secrets.secretProviderForTenant,
-    lifecycleHooks,
+    lifecycleHooks: [],
   };
 }
 
