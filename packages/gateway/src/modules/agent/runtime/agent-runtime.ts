@@ -28,6 +28,11 @@ import {
 import { WITHIN_TURN_LOOP_STOP_REPLY } from "./runtime-constants.js";
 import { maybeRunPreCompactionMemoryFlush } from "./pre-compaction-memory-flush.js";
 import { buildDefaultAgentConfig } from "../default-config.js";
+import {
+  createLocalAgentContextStore,
+  type AgentContextStore,
+} from "../context-store.js";
+import { loadCurrentAgentContext } from "../load-context.js";
 import { ToolSetBuilder, type ToolCallPolicyState } from "./tool-set-builder.js";
 import {
   ToolExecutionApprovalRequiredError,
@@ -56,12 +61,10 @@ import { resolveSessionModel as resolveSessionModelImpl } from "./session-model-
 import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 import { finalizeTurn } from "./turn-finalization.js";
 import { buildWorkFocusDigest } from "./work-focus-digest.js";
-import type { AgentContextReport, AgentLoadedContext, AgentRuntimeOptions } from "./types.js";
-import { ensureWorkspaceInitialized, resolveTyrumHome } from "../home.js";
+import type { AgentContextReport, AgentRuntimeOptions } from "./types.js";
+import { resolveTyrumHome } from "../home.js";
 import { detectWithinTurnToolLoop } from "../loop-detection.js";
-import { MarkdownMemoryStore } from "../markdown-memory.js";
 import { SessionDal, type SessionRow } from "../session-dal.js";
-import { loadEnabledMcpServers, loadEnabledSkills, loadIdentity } from "../workspace.js";
 import { AgentConfigDal } from "../../config/agent-config-dal.js";
 import { isToolAllowed, selectToolDirectory } from "../tools.js";
 import { getExecutionProfile, normalizeExecutionProfileId } from "../execution-profiles.js";
@@ -187,6 +190,7 @@ function resolveAutomationMetadata(
 
 export class AgentRuntime {
   private readonly home: string;
+  private readonly contextStore: AgentContextStore;
   private readonly sessionDal: SessionDal;
   private readonly fetchImpl: typeof fetch;
   private readonly tenantId: string;
@@ -211,6 +215,12 @@ export class AgentRuntime {
 
   constructor(private readonly opts: AgentRuntimeOptions) {
     this.home = opts.home ?? resolveTyrumHome();
+    this.contextStore =
+      opts.contextStore ??
+      createLocalAgentContextStore({
+        home: this.home,
+        logger: opts.container.logger,
+      });
     this.sessionDal = opts.sessionDal ?? opts.container.sessionDal;
     this.fetchImpl = opts.fetchImpl ?? fetch;
     this.tenantId = opts.tenantId?.trim() || DEFAULT_TENANT_ID;
@@ -273,27 +283,6 @@ export class AgentRuntime {
         reason: "seed",
       })
     ).config;
-  }
-
-  private async loadContext(config: AgentConfigT): Promise<AgentLoadedContext> {
-    await ensureWorkspaceInitialized(this.home);
-    const identity = await loadIdentity(this.home);
-    const skills = await loadEnabledSkills(this.home, config, {
-      logger: this.opts.container.logger,
-    });
-    const mcpServers = await loadEnabledMcpServers(this.home, config, {
-      logger: this.opts.container.logger,
-    });
-    const memoryStore = new MarkdownMemoryStore(this.home);
-    await memoryStore.ensureInitialized();
-
-    return {
-      config,
-      identity,
-      skills,
-      mcpServers,
-      memoryStore,
-    };
   }
 
   private maybeCleanupSessions(ttlDays: number, agentKey: string): void {
@@ -364,7 +353,13 @@ export class AgentRuntime {
       tenantId: this.tenantId,
       agentId,
     });
-    const ctx = await this.loadContext(config);
+    const ctx = await loadCurrentAgentContext({
+      contextStore: this.contextStore,
+      tenantId: this.tenantId,
+      agentId: this.agentId,
+      workspaceId: this.workspaceId,
+      config,
+    });
     const status = {
       enabled: true,
       home: this.home,
@@ -1378,7 +1373,13 @@ export class AgentRuntime {
       tenantId: this.tenantId,
       agentId,
     });
-    const ctx = await this.loadContext(config);
+    const ctx = await loadCurrentAgentContext({
+      contextStore: this.contextStore,
+      tenantId: this.tenantId,
+      agentId: this.agentId,
+      workspaceId: this.workspaceId,
+      config,
+    });
     this.maybeCleanupSessions(ctx.config.sessions.ttl_days, agentKey);
 
     const containerKind: NormalizedContainerKind =
