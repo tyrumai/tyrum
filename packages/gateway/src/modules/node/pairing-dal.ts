@@ -164,7 +164,7 @@ export class NodePairingDal {
     return row ? { tenantId: row.tenant_id, nodeId: row.node_id } : undefined;
   }
 
-  async getByNodeId(nodeId: string, tenantId?: string): Promise<NodePairingRequestT | undefined> {
+  async getByNodeId(nodeId: string, tenantId: string): Promise<NodePairingRequestT | undefined> {
     const row = await this.db.get<RawNodePairingRow>(
       `SELECT *
        FROM node_pairings
@@ -175,7 +175,7 @@ export class NodePairingDal {
     return row ? toPairing(row) : undefined;
   }
 
-  async getById(pairingId: number, tenantId?: string): Promise<NodePairingRequestT | undefined> {
+  async getById(pairingId: number, tenantId: string): Promise<NodePairingRequestT | undefined> {
     const row = await this.db.get<RawNodePairingRow>(
       `SELECT *
        FROM node_pairings
@@ -186,20 +186,20 @@ export class NodePairingDal {
     return row ? toPairing(row) : undefined;
   }
 
-  async list(params?: {
-    tenantId?: string;
+  async list(params: {
+    tenantId: string;
     status?: NodePairingStatus;
     limit?: number;
   }): Promise<NodePairingRequestT[]> {
-    const tenantId = this.requireTenantId(params?.tenantId);
+    const tenantId = this.requireTenantId(params.tenantId);
     const where: string[] = [];
     const values: unknown[] = [tenantId];
     where.push("tenant_id = ?");
-    if (params?.status) {
+    if (params.status) {
       where.push("status = ?");
       values.push(params.status);
     }
-    const limit = Math.max(1, Math.min(500, params?.limit ?? 100));
+    const limit = Math.max(1, Math.min(500, params.limit ?? 100));
     const sql =
       `SELECT * FROM node_pairings` +
       (where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "") +
@@ -210,7 +210,7 @@ export class NodePairingDal {
   }
 
   async upsertOnConnect(params: {
-    tenantId?: string;
+    tenantId: string;
     nodeId: string;
     pubkey?: string | null;
     label?: string | null;
@@ -357,7 +357,7 @@ export class NodePairingDal {
   async resolve(
     params:
       | {
-          tenantId?: string;
+          tenantId: string;
           pairingId: number;
           decision: "approved";
           reason?: string;
@@ -367,7 +367,7 @@ export class NodePairingDal {
           nowIso?: string;
         }
       | {
-          tenantId?: string;
+          tenantId: string;
           pairingId: number;
           decision: "denied";
           reason?: string;
@@ -434,7 +434,7 @@ export class NodePairingDal {
   }
 
   async revoke(params: {
-    tenantId?: string;
+    tenantId: string;
     pairingId: number;
     reason?: string;
     resolvedBy?: unknown;
