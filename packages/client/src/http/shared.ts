@@ -1,7 +1,7 @@
 import { z, type ZodType } from "zod";
 
-import { loadNodePinnedTransportModule } from "../node/load-pinned-transport.js";
 import { normalizeFingerprint256 } from "../tls/fingerprint.js";
+import { loadNodePinnedTransportModule } from "../load-node-pinned-transport.js";
 
 export const NonEmptyString = z.string().trim().min(1);
 const ErrorBodySchema = z

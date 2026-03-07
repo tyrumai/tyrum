@@ -14,7 +14,7 @@ import {
   fromBase64Url,
   signProofWithPrivateKey,
 } from "./device-identity.js";
-import { loadNodePinnedTransportModule } from "./node/load-pinned-transport.js";
+import { loadNodePinnedTransportModule } from "./load-node-pinned-transport.js";
 import { normalizeFingerprint256 } from "./tls/fingerprint.js";
 import { TyrumClientProtocolCore } from "./ws-client.protocol.js";
 
