@@ -2,7 +2,7 @@ import type {
   IdentityPack as IdentityPackT,
   SkillManifest as SkillManifestT,
 } from "@tyrum/schemas";
-import type { MarkdownMemoryStore } from "../markdown-memory.js";
+import type { AgentMemoryStore } from "../context-store.js";
 import { tagContent } from "../provenance.js";
 import { sanitizeForModel } from "../sanitizer.js";
 import type { SessionMessage } from "../session-dal.js";
@@ -88,9 +88,7 @@ export function formatToolPrompt(tools: readonly ToolDescriptor[]): string {
     .join("\n");
 }
 
-export function formatMemoryPrompt(
-  hits: Awaited<ReturnType<MarkdownMemoryStore["search"]>>,
-): string {
+export function formatMemoryPrompt(hits: Awaited<ReturnType<AgentMemoryStore["search"]>>): string {
   if (hits.length === 0) {
     return "No matching long-term memory found.";
   }

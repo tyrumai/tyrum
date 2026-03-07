@@ -2,6 +2,22 @@ import { describe, expect, it } from "vitest";
 import { DeploymentConfig } from "../src/deployment-config.js";
 
 describe("DeploymentConfig lifecycle retention", () => {
+  it("defaults state.mode to local", () => {
+    const parsed = DeploymentConfig.parse({});
+
+    expect(parsed.state.mode).toBe("local");
+  });
+
+  it("accepts shared state mode", () => {
+    const parsed = DeploymentConfig.parse({
+      state: {
+        mode: "shared",
+      },
+    });
+
+    expect(parsed.state.mode).toBe("shared");
+  });
+
   it("applies safe defaults for session and channel retention", () => {
     const parsed = DeploymentConfig.parse({});
 

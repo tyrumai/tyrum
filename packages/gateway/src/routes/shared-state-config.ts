@@ -1,0 +1,531 @@
+import { Hono } from "hono";
+import { z } from "zod";
+import {
+  AgentKey,
+  IdentityPack,
+  McpServerSpec,
+  PluginManifest,
+  SkillManifest,
+} from "@tyrum/schemas";
+import type { SqlDb } from "../statestore/types.js";
+import type { IdentityScopeDal } from "../modules/identity/scope.js";
+import { DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
+import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
+import { AgentIdentityDal } from "../modules/agent/identity-dal.js";
+import { MarkdownMemoryDal, type MarkdownMemoryDoc } from "../modules/agent/markdown-memory-dal.js";
+import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
+import {
+  RuntimePackageDal,
+  type RuntimePackageKind,
+  type RuntimePackageRevision,
+} from "../modules/agent/runtime-package-dal.js";
+import { missingRequiredManifestFields } from "../modules/plugins/validation.js";
+
+function normalizeAgentKey(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "default";
+  const parsed = AgentKey.safeParse(trimmed);
+  if (!parsed.success) {
+    throw new Error(`invalid agent_key '${trimmed}' (${parsed.error.message})`);
+  }
+  return parsed.data;
+}
+
+const runtimePackageKindSchema = z.enum(["skill", "mcp", "plugin"]);
+const markdownDocKindSchema = z.enum(["core", "daily"]);
+
+const AgentIdentityUpdateRequest = z
+  .object({
+    identity: IdentityPack,
+    reason: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+const RevisionRevertRequest = z
+  .object({
+    revision: z.number().int().positive(),
+    reason: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+const RuntimePackageUpdateRequest = z
+  .object({
+    package: z.unknown(),
+    artifact_id: z.string().trim().min(1).optional(),
+    enabled: z.boolean().optional(),
+    reason: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+const MarkdownMemoryUpdateRequest = z
+  .object({
+    content: z.string(),
+  })
+  .strict();
+
+function parseRuntimePackageDocument(kind: RuntimePackageKind, value: unknown): unknown {
+  if (kind === "skill") {
+    return SkillManifest.parse(value);
+  }
+  if (kind === "mcp") {
+    return McpServerSpec.parse(value);
+  }
+
+  const plugin = PluginManifest.parse(value);
+  const missing = missingRequiredManifestFields(plugin as Record<string, unknown>);
+  if (missing.length > 0) {
+    throw new Error(`missing required plugin field(s): ${missing.join(", ")}`);
+  }
+  return plugin;
+}
+
+function packageRevisionResponse(revision: RuntimePackageRevision) {
+  return {
+    revision: revision.revision,
+    tenant_id: revision.tenantId,
+    kind: revision.packageKind,
+    key: revision.packageKey,
+    package: revision.packageData,
+    artifact_id: revision.artifactId ?? null,
+    enabled: revision.enabled,
+    package_sha256: revision.packageSha256,
+    created_at: revision.createdAt,
+    created_by: revision.createdBy,
+    reason: revision.reason ?? null,
+    reverted_from_revision: revision.revertedFromRevision ?? null,
+  };
+}
+
+function markdownDocResponse(doc: MarkdownMemoryDoc) {
+  return {
+    tenant_id: doc.tenantId,
+    agent_id: doc.agentId,
+    doc_kind: doc.docKind,
+    doc_key: doc.docKey,
+    content: doc.content,
+    created_at: doc.createdAt,
+    updated_at: doc.updatedAt,
+  };
+}
+
+export interface SharedStateConfigRouteDeps {
+  db: SqlDb;
+  identityScopeDal: IdentityScopeDal;
+  pluginCatalogProvider?: PluginCatalogProvider;
+}
+
+export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps): Hono {
+  const app = new Hono();
+  const identityDal = new AgentIdentityDal(deps.db);
+  const runtimePackageDal = new RuntimePackageDal(deps.db);
+  const markdownMemoryDal = new MarkdownMemoryDal(deps.db);
+
+  const resolveAgentId = async (tenantId: string, agentKey: string): Promise<string | null> => {
+    const row = await deps.db.get<{ agent_id: string }>(
+      `SELECT agent_id
+       FROM agents
+       WHERE tenant_id = ? AND agent_key = ?
+       LIMIT 1`,
+      [tenantId, agentKey],
+    );
+    return row?.agent_id ?? null;
+  };
+
+  app.get("/config/agents/:key/identity", async (c) => {
+    const tenantId = requireTenantId(c);
+    const agentKey = normalizeAgentKey(c.req.param("key"));
+    const agentId = await resolveAgentId(tenantId, agentKey);
+    if (!agentId) {
+      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
+    }
+
+    const revision = await identityDal.getLatest({ tenantId, agentId });
+    if (!revision) {
+      return c.json({ error: "not_found", message: "agent identity not found" }, 404);
+    }
+
+    return c.json(
+      {
+        revision: revision.revision,
+        tenant_id: revision.tenantId,
+        agent_id: revision.agentId,
+        agent_key: agentKey,
+        identity: revision.identity,
+        identity_sha256: revision.identitySha256,
+        created_at: revision.createdAt,
+        created_by: revision.createdBy,
+        reason: revision.reason ?? null,
+        reverted_from_revision: revision.revertedFromRevision ?? null,
+      },
+      200,
+    );
+  });
+
+  app.get("/config/agents/:key/identity/revisions", async (c) => {
+    const tenantId = requireTenantId(c);
+    const agentKey = normalizeAgentKey(c.req.param("key"));
+    const agentId = await resolveAgentId(tenantId, agentKey);
+    if (!agentId) {
+      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
+    }
+
+    const limitRaw = c.req.query("limit");
+    const limit =
+      typeof limitRaw === "string" && /^[0-9]+$/.test(limitRaw.trim())
+        ? Number(limitRaw)
+        : undefined;
+
+    const revisions = await identityDal.listRevisions({ tenantId, agentId, limit });
+    return c.json(
+      {
+        revisions: revisions.map((revision) => ({
+          revision: revision.revision,
+          identity_sha256: revision.identitySha256,
+          created_at: revision.createdAt,
+          created_by: revision.createdBy,
+          reason: revision.reason ?? null,
+          reverted_from_revision: revision.revertedFromRevision ?? null,
+        })),
+      },
+      200,
+    );
+  });
+
+  app.put("/config/agents/:key/identity", async (c) => {
+    const tenantId = requireTenantId(c);
+    const claims = requireAuthClaims(c);
+    const agentKey = normalizeAgentKey(c.req.param("key"));
+
+    let body: unknown;
+    try {
+      body = (await c.req.json()) as unknown;
+    } catch (err) {
+      void err;
+      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
+    }
+
+    const parsed = AgentIdentityUpdateRequest.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
+    }
+
+    const agentId = await deps.identityScopeDal.ensureAgentId(tenantId, agentKey);
+    const workspaceId = await deps.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+    await deps.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+
+    const revision = await identityDal.set({
+      tenantId,
+      agentId,
+      identity: parsed.data.identity,
+      createdBy: { kind: "tenant.token", token_id: claims.token_id },
+      reason: parsed.data.reason,
+    });
+
+    return c.json(
+      {
+        revision: revision.revision,
+        tenant_id: revision.tenantId,
+        agent_id: revision.agentId,
+        agent_key: agentKey,
+        identity: revision.identity,
+        identity_sha256: revision.identitySha256,
+        created_at: revision.createdAt,
+        created_by: revision.createdBy,
+        reason: revision.reason ?? null,
+        reverted_from_revision: revision.revertedFromRevision ?? null,
+      },
+      200,
+    );
+  });
+
+  app.post("/config/agents/:key/identity/revert", async (c) => {
+    const tenantId = requireTenantId(c);
+    const claims = requireAuthClaims(c);
+    const agentKey = normalizeAgentKey(c.req.param("key"));
+    const agentId = await resolveAgentId(tenantId, agentKey);
+    if (!agentId) {
+      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
+    }
+
+    let body: unknown;
+    try {
+      body = (await c.req.json()) as unknown;
+    } catch (err) {
+      void err;
+      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
+    }
+
+    const parsed = RevisionRevertRequest.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
+    }
+
+    const revision = await identityDal.revertToRevision({
+      tenantId,
+      agentId,
+      revision: parsed.data.revision,
+      createdBy: { kind: "tenant.token", token_id: claims.token_id },
+      reason: parsed.data.reason,
+    });
+
+    return c.json(
+      {
+        revision: revision.revision,
+        tenant_id: revision.tenantId,
+        agent_id: revision.agentId,
+        agent_key: agentKey,
+        identity: revision.identity,
+        identity_sha256: revision.identitySha256,
+        created_at: revision.createdAt,
+        created_by: revision.createdBy,
+        reason: revision.reason ?? null,
+        reverted_from_revision: revision.revertedFromRevision ?? null,
+      },
+      200,
+    );
+  });
+
+  app.get("/config/runtime-packages", async (c) => {
+    const tenantId = requireTenantId(c);
+    const parsedKind = runtimePackageKindSchema.safeParse(c.req.query("kind"));
+    if (!parsedKind.success) {
+      return c.json(
+        { error: "invalid_request", message: "kind must be skill, mcp, or plugin" },
+        400,
+      );
+    }
+
+    const revisions = await runtimePackageDal.listLatest({
+      tenantId,
+      packageKind: parsedKind.data,
+    });
+    return c.json({ packages: revisions.map(packageRevisionResponse) }, 200);
+  });
+
+  app.get("/config/runtime-packages/:kind/:key", async (c) => {
+    const tenantId = requireTenantId(c);
+    const parsedKind = runtimePackageKindSchema.safeParse(c.req.param("kind"));
+    if (!parsedKind.success) {
+      return c.json({ error: "invalid_request", message: parsedKind.error.message }, 400);
+    }
+    const packageKey = c.req.param("key").trim();
+    if (!packageKey) {
+      return c.json({ error: "invalid_request", message: "package key is required" }, 400);
+    }
+
+    const revision = await runtimePackageDal.getLatest({
+      tenantId,
+      packageKind: parsedKind.data,
+      packageKey,
+    });
+    if (!revision) {
+      return c.json({ error: "not_found", message: "runtime package not found" }, 404);
+    }
+
+    return c.json(packageRevisionResponse(revision), 200);
+  });
+
+  app.get("/config/runtime-packages/:kind/:key/revisions", async (c) => {
+    const tenantId = requireTenantId(c);
+    const parsedKind = runtimePackageKindSchema.safeParse(c.req.param("kind"));
+    if (!parsedKind.success) {
+      return c.json({ error: "invalid_request", message: parsedKind.error.message }, 400);
+    }
+    const packageKey = c.req.param("key").trim();
+    if (!packageKey) {
+      return c.json({ error: "invalid_request", message: "package key is required" }, 400);
+    }
+
+    const limitRaw = c.req.query("limit");
+    const limit =
+      typeof limitRaw === "string" && /^[0-9]+$/.test(limitRaw.trim())
+        ? Number(limitRaw)
+        : undefined;
+
+    const revisions = await runtimePackageDal.listRevisions({
+      tenantId,
+      packageKind: parsedKind.data,
+      packageKey,
+      limit,
+    });
+    return c.json({ revisions: revisions.map(packageRevisionResponse) }, 200);
+  });
+
+  app.put("/config/runtime-packages/:kind/:key", async (c) => {
+    const tenantId = requireTenantId(c);
+    const claims = requireAuthClaims(c);
+    const parsedKind = runtimePackageKindSchema.safeParse(c.req.param("kind"));
+    if (!parsedKind.success) {
+      return c.json({ error: "invalid_request", message: parsedKind.error.message }, 400);
+    }
+    const packageKey = c.req.param("key").trim();
+    if (!packageKey) {
+      return c.json({ error: "invalid_request", message: "package key is required" }, 400);
+    }
+
+    let body: unknown;
+    try {
+      body = (await c.req.json()) as unknown;
+    } catch (err) {
+      void err;
+      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
+    }
+
+    const parsed = RuntimePackageUpdateRequest.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
+    }
+
+    let packageDocument: unknown;
+    try {
+      packageDocument = parseRuntimePackageDocument(parsedKind.data, parsed.data.package);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: "invalid_request", message }, 400);
+    }
+
+    const revision = await runtimePackageDal.set({
+      tenantId,
+      packageKind: parsedKind.data,
+      packageKey,
+      packageData: packageDocument,
+      artifactId: parsed.data.artifact_id,
+      enabled: parsed.data.enabled,
+      createdBy: { kind: "tenant.token", token_id: claims.token_id },
+      reason: parsed.data.reason,
+    });
+    if (parsedKind.data === "plugin") {
+      await deps.pluginCatalogProvider?.invalidateTenantRegistry(tenantId);
+    }
+
+    return c.json(packageRevisionResponse(revision), 200);
+  });
+
+  app.post("/config/runtime-packages/:kind/:key/revert", async (c) => {
+    const tenantId = requireTenantId(c);
+    const claims = requireAuthClaims(c);
+    const parsedKind = runtimePackageKindSchema.safeParse(c.req.param("kind"));
+    if (!parsedKind.success) {
+      return c.json({ error: "invalid_request", message: parsedKind.error.message }, 400);
+    }
+    const packageKey = c.req.param("key").trim();
+    if (!packageKey) {
+      return c.json({ error: "invalid_request", message: "package key is required" }, 400);
+    }
+
+    let body: unknown;
+    try {
+      body = (await c.req.json()) as unknown;
+    } catch (err) {
+      void err;
+      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
+    }
+
+    const parsed = RevisionRevertRequest.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
+    }
+
+    const revision = await runtimePackageDal.revertToRevision({
+      tenantId,
+      packageKind: parsedKind.data,
+      packageKey,
+      revision: parsed.data.revision,
+      createdBy: { kind: "tenant.token", token_id: claims.token_id },
+      reason: parsed.data.reason,
+    });
+    if (parsedKind.data === "plugin") {
+      await deps.pluginCatalogProvider?.invalidateTenantRegistry(tenantId);
+    }
+
+    return c.json(packageRevisionResponse(revision), 200);
+  });
+
+  app.get("/config/agents/:key/markdown-memory", async (c) => {
+    const tenantId = requireTenantId(c);
+    const agentKey = normalizeAgentKey(c.req.param("key"));
+    const agentId = await resolveAgentId(tenantId, agentKey);
+    if (!agentId) {
+      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
+    }
+
+    const parsedDocKind = markdownDocKindSchema.safeParse(c.req.query("doc_kind"));
+    if (c.req.query("doc_kind") && !parsedDocKind.success) {
+      return c.json({ error: "invalid_request", message: parsedDocKind.error.message }, 400);
+    }
+
+    const docs = await markdownMemoryDal.listDocs({
+      tenantId,
+      agentId,
+      docKind: parsedDocKind.success ? parsedDocKind.data : undefined,
+    });
+    return c.json({ docs: docs.map(markdownDocResponse) }, 200);
+  });
+
+  app.get("/config/agents/:key/markdown-memory/:docKind/:docKey", async (c) => {
+    const tenantId = requireTenantId(c);
+    const agentKey = normalizeAgentKey(c.req.param("key"));
+    const agentId = await resolveAgentId(tenantId, agentKey);
+    if (!agentId) {
+      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
+    }
+    const parsedDocKind = markdownDocKindSchema.safeParse(c.req.param("docKind"));
+    if (!parsedDocKind.success) {
+      return c.json({ error: "invalid_request", message: parsedDocKind.error.message }, 400);
+    }
+
+    const doc = await markdownMemoryDal.getDoc({
+      tenantId,
+      agentId,
+      docKind: parsedDocKind.data,
+      docKey: c.req.param("docKey"),
+    });
+    if (!doc) {
+      return c.json({ error: "not_found", message: "markdown memory doc not found" }, 404);
+    }
+    return c.json(markdownDocResponse(doc), 200);
+  });
+
+  app.put("/config/agents/:key/markdown-memory/:docKind/:docKey", async (c) => {
+    const tenantId = requireTenantId(c);
+    const agentKey = normalizeAgentKey(c.req.param("key"));
+    const agentId = await deps.identityScopeDal.ensureAgentId(tenantId, agentKey);
+    const workspaceId = await deps.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+    await deps.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+
+    const parsedDocKind = markdownDocKindSchema.safeParse(c.req.param("docKind"));
+    if (!parsedDocKind.success) {
+      return c.json({ error: "invalid_request", message: parsedDocKind.error.message }, 400);
+    }
+
+    let body: unknown;
+    try {
+      body = (await c.req.json()) as unknown;
+    } catch (err) {
+      void err;
+      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
+    }
+
+    const parsed = MarkdownMemoryUpdateRequest.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
+    }
+
+    const doc = await markdownMemoryDal.putDoc({
+      tenantId,
+      agentId,
+      docKind: parsedDocKind.data,
+      docKey: c.req.param("docKey"),
+      content: parsed.data.content,
+    });
+    return c.json(markdownDocResponse(doc), 200);
+  });
+
+  return app;
+}

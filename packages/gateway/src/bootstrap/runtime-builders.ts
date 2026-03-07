@@ -24,7 +24,8 @@ import {
 import { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import { createMemoryV1BudgetsProvider } from "../modules/memory/v1-budgets-provider.js";
 import type { OtelRuntime } from "../modules/observability/otel.js";
-import { PluginRegistry } from "../modules/plugins/registry.js";
+import { createPluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
+import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
 import { WsEventDal } from "../modules/ws-event/dal.js";
 import { WorkSignalScheduler } from "../modules/workboard/signal-scheduler.js";
@@ -42,6 +43,7 @@ import type {
   GatewayServer,
   ProtocolRuntime,
 } from "./runtime-shared.js";
+import { isSharedStateMode } from "../modules/runtime-state/mode.js";
 export { startBackgroundSchedulers } from "./runtime-builders-background.js";
 export { createShutdownHandler, runShutdownCleanup } from "./runtime-builders-shutdown.js";
 
@@ -92,15 +94,23 @@ export async function createProtocolRuntime(
     context.shouldRunEdge || context.shouldRunWorker
       ? (edgeEngine ?? createExecutionEngine(context, { includeSecrets: false }))
       : undefined;
-  const hooksRuntime =
-    context.lifecycleHooks.length > 0 && (context.shouldRunEdge || context.shouldRunWorker)
-      ? new LifecycleHooksRuntime({
-          db: context.container.db,
-          engine: approvalEngine!,
-          policyService: context.container.policyService,
-          hooks: context.lifecycleHooks,
-        })
-      : undefined;
+  const shouldEnableHooksRuntime =
+    context.shouldRunEdge || context.shouldRunWorker
+      ? isSharedStateMode(context.deploymentConfig)
+        ? Boolean(context.container.gatewayConfigStore)
+        : context.lifecycleHooks.length > 0
+      : false;
+  const hooksRuntime = shouldEnableHooksRuntime
+    ? new LifecycleHooksRuntime({
+        db: context.container.db,
+        engine: approvalEngine!,
+        policyService: context.container.policyService,
+        configStore: isSharedStateMode(context.deploymentConfig)
+          ? context.container.gatewayConfigStore
+          : undefined,
+        hooks: isSharedStateMode(context.deploymentConfig) ? undefined : context.lifecycleHooks,
+      })
+    : undefined;
 
   const taskResults = new TaskResultRegistry();
   const wsEventDal = new WsEventDal(context.container.db);
@@ -270,13 +280,15 @@ export async function startEdgeRuntime(
     return {};
   }
 
-  const plugins = await PluginRegistry.load({
+  const pluginCatalogProvider = createPluginCatalogProvider({
     home: context.tyrumHome,
     userHome: context.tyrumHome,
     logger: context.logger,
     container: context.container,
   });
+  const plugins = await pluginCatalogProvider.loadGlobalRegistry();
   protocol.protocolDeps.plugins = plugins;
+  protocol.protocolDeps.pluginCatalogProvider = pluginCatalogProvider;
 
   const agents = context.deploymentConfig.agent.enabled
     ? new AgentRegistry({
@@ -286,6 +298,7 @@ export async function startEdgeRuntime(
         defaultPolicyService: context.container.policyService,
         approvalNotifier: protocol.approvalNotifier,
         plugins,
+        pluginCatalogProvider,
         protocolDeps: protocol.protocolDeps,
         logger: context.logger,
       })
@@ -308,6 +321,7 @@ export async function startEdgeRuntime(
   const app = createApp(context.container, {
     agents,
     plugins,
+    pluginCatalogProvider,
     authTokens: context.authTokens,
     secretProviderForTenant: context.secretProviderForTenant,
     isLocalOnly: context.isLocalOnly,
@@ -366,6 +380,7 @@ export async function startEdgeRuntime(
   const server = await createGatewayServer(context, app, wsHandler);
   return {
     plugins,
+    pluginCatalogProvider,
     agents,
     authRateLimiter,
     wsUpgradeRateLimiter,
@@ -439,6 +454,7 @@ export function fireGatewayStartHook(context: GatewayBootContext, protocol: Prot
     void protocol.hooksRuntime
       .fire({
         event: "gateway.start",
+        tenantId: DEFAULT_TENANT_ID,
         metadata: { instance_id: context.instanceId, role: context.role },
       })
       .catch((err) => {

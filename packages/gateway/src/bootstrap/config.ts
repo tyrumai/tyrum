@@ -2,10 +2,12 @@ import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AgentConfig, DeploymentConfig } from "@tyrum/schemas";
+import { DeploymentConfig } from "@tyrum/schemas";
 import type { GatewayContainer } from "../container.js";
 import type { SqlDb } from "../statestore/types.js";
 import { AgentConfigDal } from "../modules/config/agent-config-dal.js";
+import { buildDefaultAgentConfig } from "../modules/agent/default-config.js";
+import { resolveGatewayStateMode } from "../modules/runtime-state/mode.js";
 import { isPostgresDbUri } from "../statestore/db-uri.js";
 import { SqliteDb } from "../statestore/sqlite.js";
 import { PostgresDb } from "../statestore/postgres.js";
@@ -190,10 +192,7 @@ export async function seedDefaultAgentConfig(container: GatewayContainer): Promi
   await new AgentConfigDal(container.db).ensureSeeded({
     tenantId: defaultScope.tenantId,
     agentId: defaultScope.agentId,
-    defaultConfig: AgentConfig.parse({
-      model: { model: "openai/gpt-4.1" },
-      tools: { allow: ["tool.fs.read"] },
-    }),
+    defaultConfig: buildDefaultAgentConfig(resolveGatewayStateMode(container.deploymentConfig)),
     createdBy: { kind: "bootstrap" },
     reason: "seed",
   });

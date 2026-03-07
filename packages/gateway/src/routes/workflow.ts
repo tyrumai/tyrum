@@ -14,12 +14,14 @@ import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
 import type { ExecutionBudgets as ExecutionBudgetsT } from "@tyrum/schemas";
 import type { PolicyService } from "../modules/policy/service.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
+import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface WorkflowRouteDeps {
   engine: ExecutionEngine;
   policyService: PolicyService;
   agents?: AgentRegistry;
+  identityScopeDal?: IdentityScopeDal;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -80,19 +82,26 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
     }
     const budgets = budgetsParsed;
 
-    let agentId = "default";
+    let agentKey = "default";
     try {
       const parsedKey = parseTyrumKey(key as never);
       if (parsedKey.kind === "agent") {
-        agentId = parsedKey.agent_key;
+        agentKey = parsedKey.agent_key;
       }
     } catch (err) {
       void err;
       // ignore; treat as default agent
     }
 
-    const policy = deps.agents ? deps.agents.getPolicyService(agentId) : deps.policyService;
-    const effectivePolicy = await policy.loadEffectiveBundle();
+    const policy = deps.agents ? deps.agents.getPolicyService(agentKey) : deps.policyService;
+    const resolvedAgentId =
+      deps.agents && deps.identityScopeDal
+        ? await deps.identityScopeDal.ensureAgentId(tenantId, agentKey)
+        : undefined;
+    const effectivePolicy = await policy.loadEffectiveBundle({
+      tenantId,
+      agentId: resolvedAgentId,
+    });
     const snapshot = await policy.getOrCreateSnapshot(tenantId, effectivePolicy.bundle);
 
     const res = await deps.engine.enqueuePlan({

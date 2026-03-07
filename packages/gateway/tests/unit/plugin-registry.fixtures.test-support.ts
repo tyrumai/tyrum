@@ -64,18 +64,18 @@ export function pluginManifestYaml(opts?: PluginManifestOptions): string {
   return lines.join("\n");
 }
 
-export function pluginEntryModule(): string {
+export function pluginEntryModule(pluginId = "echo"): string {
   return `
 export function registerPlugin() {
   return {
     tools: [
       {
         descriptor: {
-          id: "plugin.echo.echo",
+          id: "plugin.${pluginId}.echo",
           description: "Echo back a string.",
           risk: "low",
           requires_confirmation: false,
-          keywords: ["echo"],
+          keywords: ["${pluginId}"],
           inputSchema: {
             type: "object",
             properties: { text: { type: "string" } },
@@ -91,7 +91,7 @@ export function registerPlugin() {
     ],
     commands: [
       {
-        name: "echo",
+        name: "${pluginId}",
         execute: async (argv) => ({ output: argv.join(" ") })
       }
     ]

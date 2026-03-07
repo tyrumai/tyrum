@@ -4,7 +4,7 @@ import type { PolicyService } from "../policy/service.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { SandboxHardeningProfile } from "../sandbox/hardening.js";
-import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../sandbox/elevated-execution.js";
+import { loadSandboxStatus } from "./sandbox-status.js";
 
 type StatusCountMap = Record<string, number>;
 type ActiveModelStatus = {
@@ -70,7 +70,7 @@ type QueueDepthStatus = {
   pending_total: number;
   inflight_total: number;
 };
-type SandboxStatus = {
+export type SandboxStatus = {
   mode: "disabled" | "observe" | "enforce";
   policy_enabled: boolean;
   policy_observe_only: boolean;
@@ -562,40 +562,6 @@ async function loadQueueDepth(
   };
 }
 
-async function loadSandboxStatus(
-  policyService: PolicyService | undefined,
-  policyStatus?: { enabled: boolean; observe_only: boolean; effective_sha256: string },
-  toolrunnerHardeningProfile: SandboxHardeningProfile = "baseline",
-): Promise<SandboxStatus | null> {
-  if (!policyService) return null;
-
-  const hardeningProfile = toolrunnerHardeningProfile;
-  const status = policyStatus ?? (await policyService.getStatus());
-  const mode: SandboxStatus["mode"] = !status.enabled
-    ? "disabled"
-    : status.observe_only
-      ? "observe"
-      : "enforce";
-
-  let elevatedExecutionAvailable: boolean | null = null;
-  try {
-    const effective = await policyService.loadEffectiveBundle();
-    elevatedExecutionAvailable = deriveElevatedExecutionAvailableFromPolicyBundle(effective.bundle);
-  } catch {
-    // Intentional: status sampling is best-effort; treat elevated execution availability as unknown.
-    elevatedExecutionAvailable = null;
-  }
-
-  return {
-    mode,
-    policy_enabled: status.enabled,
-    policy_observe_only: status.observe_only,
-    effective_policy_sha256: status.effective_sha256,
-    hardening_profile: hardeningProfile,
-    elevated_execution_available: elevatedExecutionAvailable,
-  };
-}
-
 export async function buildStatusDetails(deps: StatusDetailsDeps): Promise<StatusDetails> {
   const tenantId = deps.tenantId.trim();
   const [activeModel, authProfiles, catalog, sessionLanes, queueDepth, sandbox] = await Promise.all(
@@ -605,11 +571,12 @@ export async function buildStatusDetails(deps: StatusDetailsDeps): Promise<Statu
       loadCatalogFreshness(deps.db, deps.modelsDev),
       loadSessionLanes(deps.db, tenantId),
       loadQueueDepth(deps.db, tenantId),
-      loadSandboxStatus(
-        deps.policyService,
-        deps.policyStatus,
-        deps.toolrunnerHardeningProfile ?? "baseline",
-      ),
+      loadSandboxStatus({
+        tenantId,
+        policyService: deps.policyService,
+        policyStatus: deps.policyStatus,
+        toolrunnerHardeningProfile: deps.toolrunnerHardeningProfile ?? "baseline",
+      }),
     ],
   );
   return {

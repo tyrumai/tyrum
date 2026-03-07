@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveBundledPluginsDirFrom } from "../../src/modules/plugins/registry.js";
+import { resolveBundledPluginsDirFrom } from "../../src/modules/plugins/directories.js";
 
 describe("resolveBundledPluginsDirFrom", () => {
   it("resolves correctly from a dist/ bundle location", () => {

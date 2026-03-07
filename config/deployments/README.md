@@ -7,7 +7,7 @@ This folder contains **reference** (operator-facing) configuration templates for
 
 Templates are intentionally safe-by-default:
 
-- No secrets are committed. Generate/set `GATEWAY_TOKEN` locally.
+- No secrets are committed. Optionally set `GATEWAY_TOKEN` locally to provision a stable tenant admin token; otherwise capture the printed bootstrap token on first startup.
 - Split-role examples use `postgres://...` to avoid unsupported split-on-SQLite deployments.
 
 See `docs/advanced/deployment-profiles.md` for usage.

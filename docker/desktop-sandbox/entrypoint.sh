@@ -89,11 +89,7 @@ if [[ -z "${TYRUM_GATEWAY_WS_URL:-}" ]]; then
   export TYRUM_GATEWAY_WS_URL="ws://tyrum:8788/ws"
 fi
 
-if [[ -z "${TYRUM_GATEWAY_TOKEN_PATH:-}" && -z "${TYRUM_GATEWAY_TOKEN:-}" ]]; then
-  export TYRUM_GATEWAY_TOKEN_PATH="/gateway/.admin-token"
-fi
-
-if [[ -n "${TYRUM_GATEWAY_TOKEN_PATH:-}" ]]; then
+if [[ -z "${TYRUM_GATEWAY_TOKEN:-}" && -n "${TYRUM_GATEWAY_TOKEN_PATH:-}" ]]; then
   echo "desktop-sandbox: waiting for gateway token file (${TYRUM_GATEWAY_TOKEN_PATH})"
   for _ in $(seq 1 120); do
     if [[ -s "${TYRUM_GATEWAY_TOKEN_PATH}" ]]; then
@@ -105,6 +101,11 @@ if [[ -n "${TYRUM_GATEWAY_TOKEN_PATH:-}" ]]; then
     echo "desktop-sandbox: gateway token file not ready: ${TYRUM_GATEWAY_TOKEN_PATH}" >&2
     exit 1
   fi
+fi
+
+if [[ -z "${TYRUM_GATEWAY_TOKEN_PATH:-}" && -z "${TYRUM_GATEWAY_TOKEN:-}" ]]; then
+  echo "desktop-sandbox: missing gateway token (set TYRUM_GATEWAY_TOKEN or TYRUM_GATEWAY_TOKEN_PATH)" >&2
+  exit 1
 fi
 
 export TYRUM_NODE_LABEL="${TYRUM_NODE_LABEL:-tyrum-desktop-sandbox}"
@@ -122,7 +123,7 @@ if [[ -n "${TYRUM_GATEWAY_TOKEN:-}" ]]; then
   node_args+=(--token "$TYRUM_GATEWAY_TOKEN")
 fi
 
-if [[ -n "${TYRUM_GATEWAY_TOKEN_PATH:-}" ]]; then
+if [[ -z "${TYRUM_GATEWAY_TOKEN:-}" && -n "${TYRUM_GATEWAY_TOKEN_PATH:-}" ]]; then
   node_args+=(--token-path "$TYRUM_GATEWAY_TOKEN_PATH")
 fi
 

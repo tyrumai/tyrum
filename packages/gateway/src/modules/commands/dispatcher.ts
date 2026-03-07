@@ -7,6 +7,7 @@ import type { PolicyService } from "../policy/service.js";
 import type { PolicyOverrideDal } from "../policy/override-dal.js";
 import type { ContextReportDal } from "../context/report-dal.js";
 import type { PluginRegistry } from "../plugins/registry.js";
+import type { PluginCatalogProvider } from "../plugins/catalog-provider.js";
 import type { ModelsDevService } from "../models/models-dev-service.js";
 import type { ModelCatalogService } from "../models/model-catalog-service.js";
 import type { AgentRegistry } from "../agent/registry.js";
@@ -46,6 +47,7 @@ export interface CommandDeps {
   policyOverrideDal?: PolicyOverrideDal;
   contextReportDal?: ContextReportDal;
   plugins?: PluginRegistry;
+  pluginCatalogProvider?: PluginCatalogProvider;
   modelsDev?: ModelsDevService;
   modelCatalog?: ModelCatalogService;
   agents?: AgentRegistry;
@@ -65,8 +67,12 @@ export async function executeCommand(
     (await tryExecuteSessionCommand({ cmd, deps, toks }));
   if (result) return result;
 
-  if (deps.plugins) {
-    const pluginResult = await deps.plugins.tryExecuteCommand(raw);
+  const pluginRegistry =
+    deps.tenantId && deps.pluginCatalogProvider
+      ? await deps.pluginCatalogProvider.loadTenantRegistry(deps.tenantId)
+      : deps.plugins;
+  if (pluginRegistry) {
+    const pluginResult = await pluginRegistry.tryExecuteCommand(raw);
     if (pluginResult) return pluginResult;
   }
 

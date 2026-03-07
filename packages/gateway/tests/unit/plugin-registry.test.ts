@@ -96,6 +96,19 @@ describe("PluginRegistry", () => {
     expect(tool?.error).toBeUndefined();
   });
 
+  it("can skip workspace plugin directories when requested", async () => {
+    await setupPlugin();
+
+    const plugins = await PluginRegistry.load({
+      home: requireHome(),
+      logger: createSilentLogger(),
+      includeWorkspacePlugins: false,
+      includeUserPlugins: false,
+    });
+
+    expect(plugins.list()).toEqual([]);
+  });
+
   it("emits plugin.lifecycle loaded events with durable audit linkage", async () => {
     await setupPlugin();
 

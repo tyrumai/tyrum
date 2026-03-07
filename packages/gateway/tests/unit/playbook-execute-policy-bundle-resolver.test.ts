@@ -66,6 +66,9 @@ describe("POST /playbooks/:id/execute (policy bundle)", () => {
     expect(res.status).toBe(200);
 
     expect(resolvePlaybookPolicyBundle).toHaveBeenCalledTimes(1);
-    expect(loadEffectiveBundle).toHaveBeenCalledWith({ playbookBundle: sentinelBundle });
+    expect(loadEffectiveBundle).toHaveBeenCalledWith({
+      tenantId: DEFAULT_TENANT_ID,
+      playbookBundle: sentinelBundle,
+    });
   });
 });

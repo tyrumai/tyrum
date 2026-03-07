@@ -72,6 +72,11 @@ import { OauthRefreshLeaseDal as OauthRefreshLeaseDalImpl } from "./modules/oaut
 import { OAuthProviderRegistry as OAuthProviderRegistryImpl } from "./modules/oauth/provider-registry.js";
 import { IdentityScopeDal as IdentityScopeDalImpl } from "./modules/identity/scope.js";
 import { ChannelThreadDal as ChannelThreadDalImpl } from "./modules/channels/thread-dal.js";
+import { isSharedStateMode } from "./modules/runtime-state/mode.js";
+import {
+  createGatewayConfigStore,
+  type GatewayConfigStore,
+} from "./modules/runtime-state/gateway-config-store.js";
 
 export interface GatewayContainerConfig {
   dbPath: string;
@@ -111,6 +116,7 @@ export interface GatewayContainer {
   logger: Logger;
   config: GatewayContainerConfig;
   deploymentConfig: DeploymentConfigT;
+  gatewayConfigStore: GatewayConfigStore;
 }
 
 export function createContainer(
@@ -189,12 +195,21 @@ export function wireContainer(
     },
     redactionEngine,
   );
+  const gatewayConfigStore = createGatewayConfigStore({
+    db,
+    home: tyrumHome,
+    logger,
+    deploymentConfig,
+    includeAgentHomeBundle: !isSharedStateMode(deploymentConfig),
+  });
   const policyService = new PolicyServiceImpl({
     home: tyrumHome,
     snapshotDal: policySnapshotDal,
     overrideDal: policyOverrideDal,
     logger,
     deploymentPolicy: deploymentConfig.policy,
+    includeAgentHomeBundle: !isSharedStateMode(deploymentConfig),
+    configStore: gatewayConfigStore,
   });
 
   const modelsDevCacheDal = new ModelsDevCacheDal(db);
@@ -242,5 +257,6 @@ export function wireContainer(
     logger,
     config: resolvedConfig,
     deploymentConfig,
+    gatewayConfigStore,
   };
 }

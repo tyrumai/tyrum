@@ -91,7 +91,7 @@ export function resolveMemoryDir(home = resolveTyrumHome()): string {
   return join(home, "memory");
 }
 
-const DEFAULT_IDENTITY_MD = `---
+export const DEFAULT_IDENTITY_MD = `---
 name: Tyrum
 description: Local single-user assistant identity.
 style:
@@ -103,7 +103,7 @@ You are Tyrum.
 Respond directly, be explicit about assumptions, and preserve safety guardrails.
 `;
 
-const DEFAULT_CORE_MEMORY_MD = `# MEMORY
+export const DEFAULT_CORE_MEMORY_MD = `# MEMORY
 
 ## Learned Preferences
 

@@ -20,6 +20,19 @@ describe("selectToolDirectory", () => {
     expect(tools.map((t) => t.id)).not.toContain("tool.exec");
   });
 
+  it("excludes gateway-local fs and exec tools in shared mode", () => {
+    const tools = selectToolDirectory(
+      "read a file and run a command",
+      ["tool.fs.read", "tool.fs.write", "tool.exec", "tool.http.fetch"],
+      [],
+      8,
+      true,
+      "shared",
+    );
+
+    expect(tools.map((t) => t.id)).toEqual(["tool.http.fetch"]);
+  });
+
   it("applies confirmation filtering to MCP tools", () => {
     const mcpTool: ToolDescriptor = {
       id: "mcp.calendar.list_events",

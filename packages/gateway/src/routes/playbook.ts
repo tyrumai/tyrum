@@ -166,6 +166,7 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
     const playbookBundle = resolvePlaybookPolicyBundle(pb);
 
     const effectivePolicy = await deps.policyService.loadEffectiveBundle({
+      tenantId,
       playbookBundle,
     });
     const snapshot = await deps.policyService.getOrCreateSnapshot(tenantId, effectivePolicy.bundle);

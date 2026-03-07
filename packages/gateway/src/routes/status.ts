@@ -33,7 +33,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): Hono {
 
   app.get("/status", async (c) => {
     const tenantId = requireTenantId(c);
-    const policy = deps.policyService ? await deps.policyService.getStatus() : null;
+    const policy = deps.policyService ? await deps.policyService.getStatus({ tenantId }) : null;
     const details = await buildStatusDetails({
       tenantId,
       db: deps.db,

@@ -12,7 +12,6 @@ import type {
   WorkScope,
 } from "@tyrum/schemas";
 import {
-  AgentConfig,
   AgentKey,
   AgentStatusResponse,
   ContextReport as ContextReportSchema,
@@ -26,12 +25,16 @@ import {
   type LaneQueueState,
   type TurnEngineBridgeDeps,
 } from "./turn-engine-bridge.js";
+import { WITHIN_TURN_LOOP_STOP_REPLY } from "./runtime-constants.js";
 import { maybeRunPreCompactionMemoryFlush } from "./pre-compaction-memory-flush.js";
+import { buildDefaultAgentConfig } from "../default-config.js";
+import { createDefaultAgentContextStore, type AgentContextStore } from "../context-store.js";
+import { loadCurrentAgentContext } from "../load-context.js";
 import { ToolSetBuilder, type ToolCallPolicyState } from "./tool-set-builder.js";
 import {
+  buildSandboxPrompt,
   ToolExecutionApprovalRequiredError,
   createStaticLanguageModelV3,
-  deriveElevatedExecutionAvailable,
   deriveWorkItemTitle,
   extractToolApprovalResumeState,
   isStatusQuery,
@@ -56,11 +59,9 @@ import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 import { finalizeTurn } from "./turn-finalization.js";
 import { buildWorkFocusDigest } from "./work-focus-digest.js";
 import type { AgentContextReport, AgentLoadedContext, AgentRuntimeOptions } from "./types.js";
-import { ensureWorkspaceInitialized, resolveTyrumHome } from "../home.js";
+import { resolveTyrumHome } from "../home.js";
 import { detectWithinTurnToolLoop } from "../loop-detection.js";
-import { MarkdownMemoryStore } from "../markdown-memory.js";
 import { SessionDal, type SessionRow } from "../session-dal.js";
-import { loadEnabledMcpServers, loadEnabledSkills, loadIdentity } from "../workspace.js";
 import { AgentConfigDal } from "../../config/agent-config-dal.js";
 import { isToolAllowed, selectToolDirectory } from "../tools.js";
 import { getExecutionProfile, normalizeExecutionProfileId } from "../execution-profiles.js";
@@ -96,20 +97,12 @@ import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../../channel
 import { SessionSendPolicyOverrideDal } from "../../channels/send-policy-override-dal.js";
 import { DEFAULT_TENANT_ID } from "../../identity/scope.js";
 import { ScheduleService } from "../../automation/schedule-service.js";
+import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
 const DEFAULT_APPROVAL_POLL_MS = 500;
 const MAX_TURN_ENGINE_WAIT_MS = 60_000;
-
-const DEFAULT_AGENT_CONFIG: AgentConfigT = AgentConfig.parse({
-  model: { model: "openai/gpt-4.1" },
-  tools: { allow: ["tool.fs.read"] },
-});
-
-const WITHIN_TURN_LOOP_STOP_REPLY =
-  "Loop detected (repeated tool calls); stopping to avoid runaway execution. " +
-  "If you want me to continue, adjust the request/constraints or ask me to try a different approach.";
 
 function makeEventfulAbortSignal(upstream: AbortSignal | undefined): AbortSignal | undefined {
   if (!upstream) return undefined;
@@ -194,6 +187,7 @@ function resolveAutomationMetadata(
 
 export class AgentRuntime {
   private readonly home: string;
+  private readonly contextStore: AgentContextStore;
   private readonly sessionDal: SessionDal;
   private readonly fetchImpl: typeof fetch;
   private readonly tenantId: string;
@@ -218,6 +212,12 @@ export class AgentRuntime {
 
   constructor(private readonly opts: AgentRuntimeOptions) {
     this.home = opts.home ?? resolveTyrumHome();
+    this.contextStore =
+      opts.contextStore ??
+      createDefaultAgentContextStore({
+        home: this.home,
+        container: opts.container,
+      });
     this.sessionDal = opts.sessionDal ?? opts.container.sessionDal;
     this.fetchImpl = opts.fetchImpl ?? fetch;
     this.tenantId = opts.tenantId?.trim() || DEFAULT_TENANT_ID;
@@ -269,37 +269,18 @@ export class AgentRuntime {
     tenantId: string;
     agentId: string;
   }): Promise<AgentConfigT> {
-    const revision = await new AgentConfigDal(this.opts.container.db).ensureSeeded({
-      tenantId: scope.tenantId,
-      agentId: scope.agentId,
-      defaultConfig: DEFAULT_AGENT_CONFIG,
-      createdBy: { kind: "agent-runtime" },
-      reason: "seed",
-    });
-    return revision.config;
+    return (
+      await new AgentConfigDal(this.opts.container.db).ensureSeeded({
+        tenantId: scope.tenantId,
+        agentId: scope.agentId,
+        defaultConfig: buildDefaultAgentConfig(
+          resolveGatewayStateMode(this.opts.container.deploymentConfig),
+        ),
+        createdBy: { kind: "agent-runtime" },
+        reason: "seed",
+      })
+    ).config;
   }
-
-  private async loadContext(config: AgentConfigT): Promise<AgentLoadedContext> {
-    await ensureWorkspaceInitialized(this.home);
-    const identity = await loadIdentity(this.home);
-    const skills = await loadEnabledSkills(this.home, config, {
-      logger: this.opts.container.logger,
-    });
-    const mcpServers = await loadEnabledMcpServers(this.home, config, {
-      logger: this.opts.container.logger,
-    });
-    const memoryStore = new MarkdownMemoryStore(this.home);
-    await memoryStore.ensureInitialized();
-
-    return {
-      config,
-      identity,
-      skills,
-      mcpServers,
-      memoryStore,
-    };
-  }
-
   private maybeCleanupSessions(ttlDays: number, agentKey: string): void {
     const now = Date.now();
     if (now < this.cleanupAtMs) {
@@ -368,7 +349,13 @@ export class AgentRuntime {
       tenantId: this.tenantId,
       agentId,
     });
-    const ctx = await this.loadContext(config);
+    const ctx = await loadCurrentAgentContext({
+      contextStore: this.contextStore,
+      tenantId: this.tenantId,
+      agentId,
+      workspaceId,
+      config,
+    });
     const status = {
       enabled: true,
       home: this.home,
@@ -1382,7 +1369,13 @@ export class AgentRuntime {
       tenantId: this.tenantId,
       agentId,
     });
-    const ctx = await this.loadContext(config);
+    const ctx = await loadCurrentAgentContext({
+      contextStore: this.contextStore,
+      tenantId: this.tenantId,
+      agentId,
+      workspaceId,
+      config,
+    });
     this.maybeCleanupSessions(ctx.config.sessions.ttl_days, agentKey);
 
     const containerKind: NormalizedContainerKind =
@@ -1483,10 +1476,10 @@ export class AgentRuntime {
         ? this.mcpManager.listToolDescriptors(ctx.mcpServers)
         : this.mcpManager.listToolDescriptors([]),
     ]);
-
     const pluginToolsRaw = this.plugins?.getToolDescriptors() ?? [];
     const toolSetBuilder = new ToolSetBuilder({
       home: this.home,
+      stateMode: resolveGatewayStateMode(this.opts.container.deploymentConfig),
       tenantId: session.tenant_id,
       agentId: session.agent_id,
       workspaceId: session.workspace_id,
@@ -1510,16 +1503,16 @@ export class AgentRuntime {
       toolAllowlist,
       [...mcpTools, ...pluginTools],
       Number.POSITIVE_INFINITY,
+      true,
+      resolveGatewayStateMode(this.opts.container.deploymentConfig),
     );
     const filteredTools = toolCandidates
       .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
       .slice(0, 8);
-
     // Build MCP server spec lookup for ToolExecutor
-    const mcpSpecMap = new Map<string, McpServerSpecT>();
-    for (const server of ctx.mcpServers) {
-      mcpSpecMap.set(server.id, server);
-    }
+    const mcpSpecMap = new Map<string, McpServerSpecT>(
+      ctx.mcpServers.map((server) => [server.id, server]),
+    );
 
     const nodeDispatchService = this.opts.protocolDeps
       ? new NodeDispatchService(this.opts.protocolDeps)
@@ -1561,19 +1554,15 @@ export class AgentRuntime {
 
     const identityPrompt = formatIdentityPrompt(ctx.identity);
     const safetyPrompt = DATA_TAG_SAFETY_PROMPT;
-
     const hardeningProfile = resolveSandboxHardeningProfile(
       this.opts.container.deploymentConfig.toolrunner.hardeningProfile,
     );
-    const elevatedExecutionAvailable = await deriveElevatedExecutionAvailable(this.policyService);
-    const sandboxPrompt = [
-      "Sandbox:",
-      `Hardening profile: ${hardeningProfile}`,
-      `Elevated execution available: ${
-        elevatedExecutionAvailable === null ? "unknown" : String(elevatedExecutionAvailable)
-      }`,
-    ].join("\n");
-
+    const sandboxPrompt = await buildSandboxPrompt({
+      policyService: this.policyService,
+      hardeningProfile,
+      tenantId: this.tenantId,
+      agentId: session.agent_id,
+    });
     const systemPrompt = `${identityPrompt}\n\n${safetyPrompt}\n\n${sandboxPrompt}`;
     const skillsText = `Enabled skills:\n${formatSkillsPrompt(ctx.skills)}`;
     const toolsText = `Available tools:\n${formatToolPrompt(filteredTools)}`;

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { GatewayStateMode } from "../runtime-state/mode.js";
 
 export type ToolRisk = "low" | "medium" | "high";
 
@@ -389,17 +390,30 @@ function scoreTool(tool: ToolDescriptor, normalizedPrompt: string): number {
   return score;
 }
 
+export function isBuiltinToolAvailableInStateMode(
+  toolId: string,
+  stateMode: GatewayStateMode,
+): boolean {
+  if (stateMode === "local") {
+    return true;
+  }
+
+  return toolId !== "tool.fs.read" && toolId !== "tool.fs.write" && toolId !== "tool.exec";
+}
+
 export function selectToolDirectory(
   userPrompt: string,
   allowlist: readonly string[],
   mcpTools: readonly ToolDescriptor[],
   limit = 8,
   allowRequiresConfirmation = true,
+  stateMode: GatewayStateMode = "local",
 ): ToolDescriptor[] {
   const available: ToolDescriptor[] = [];
 
   for (const tool of BUILTIN_TOOL_REGISTRY) {
     if (
+      isBuiltinToolAvailableInStateMode(tool.id, stateMode) &&
       isToolAllowed(allowlist, tool.id) &&
       (allowRequiresConfirmation || !tool.requires_confirmation)
     ) {

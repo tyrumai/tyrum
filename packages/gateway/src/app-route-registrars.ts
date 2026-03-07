@@ -26,6 +26,7 @@ import { createPairingRoutes } from "./routes/pairing.js";
 import { createPlanRoutes } from "./routes/plan.js";
 import { createPlaybookRoutes } from "./routes/playbook.js";
 import { policy } from "./routes/policy.js";
+import { createGatewayConfigRoutes } from "./routes/gateway-config.js";
 import { createPolicyBundleRoutes } from "./routes/policy-bundle.js";
 import { createPluginRoutes } from "./routes/plugins.js";
 import { createPresenceRoutes } from "./routes/presence.js";
@@ -33,6 +34,7 @@ import { createProviderConfigRoutes } from "./routes/provider-config.js";
 import { createProviderOAuthRoutes } from "./routes/provider-oauth.js";
 import { createRoutingConfigRoutes } from "./routes/routing-config.js";
 import { createSecretRoutes } from "./routes/secret.js";
+import { createSharedStateConfigRoutes } from "./routes/shared-state-config.js";
 import { createSnapshotRoutes } from "./routes/snapshot.js";
 import { createStatusRoutes } from "./routes/status.js";
 import { createSystemRoutes } from "./routes/system.js";
@@ -41,6 +43,7 @@ import { createWatcherRoutes } from "./routes/watcher.js";
 import { createWorkflowRoutes } from "./routes/workflow.js";
 import { TelegramChannelQueue } from "./modules/channels/telegram.js";
 import { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
+import { LifecycleHookConfigDal } from "./modules/hooks/config-dal.js";
 import { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "./modules/models/session-pin-dal.js";
 import { ConfiguredModelPresetDal } from "./modules/models/configured-model-preset-dal.js";
@@ -50,6 +53,8 @@ import { loadAllPlaybooks } from "./modules/playbook/loader.js";
 import { WsEventDal } from "./modules/ws-event/dal.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
 import { gatewayMetrics } from "./modules/observability/metrics.js";
+import { PolicyBundleConfigDal } from "./modules/policy/config-dal.js";
+import { isLocalStateMode, isSharedStateMode } from "./modules/runtime-state/mode.js";
 
 export interface AppRouteDependencies {
   authProfileDal: AuthProfileDal;
@@ -264,7 +269,13 @@ export function registerModelsAndConfigRoutes(context: AppRouteContext): void {
   }
 
   if (context.opts.plugins) {
-    context.app.route("/", createPluginRoutes({ plugins: context.opts.plugins }));
+    context.app.route(
+      "/",
+      createPluginRoutes({
+        plugins: context.opts.plugins,
+        pluginCatalogProvider: context.opts.pluginCatalogProvider,
+      }),
+    );
   }
 
   context.app.route(
@@ -287,6 +298,7 @@ export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): vo
         engine: context.engine,
         policyService: context.container.policyService,
         agents: context.opts.agents,
+        identityScopeDal: context.container.identityScopeDal,
       }),
     );
   }
@@ -349,7 +361,9 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       memoryV1Dal: context.container.memoryV1Dal,
       routingConfigDal: context.routeDeps.routingConfigDal,
       logger: context.container.logger,
-      home: context.container.config?.tyrumHome,
+      home: isLocalStateMode(context.container.deploymentConfig)
+        ? context.container.config?.tyrumHome
+        : undefined,
     }),
   );
 
@@ -360,6 +374,25 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       identityScopeDal: context.container.identityScopeDal,
     }),
   );
+  if (isSharedStateMode(context.container.deploymentConfig)) {
+    context.app.route(
+      "/",
+      createGatewayConfigRoutes({
+        db: context.container.db,
+        identityScopeDal: context.container.identityScopeDal,
+        hooksDal: new LifecycleHookConfigDal(context.container.db),
+        policyBundleDal: new PolicyBundleConfigDal(context.container.db),
+      }),
+    );
+    context.app.route(
+      "/",
+      createSharedStateConfigRoutes({
+        db: context.container.db,
+        identityScopeDal: context.container.identityScopeDal,
+        pluginCatalogProvider: context.opts.pluginCatalogProvider,
+      }),
+    );
+  }
 
   if (context.opts.connectionManager) {
     context.app.route("/", createConnectionsRoute(context.opts.connectionManager));
@@ -370,7 +403,7 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       "/",
       createAgentRoutes({
         agents: context.opts.agents,
-        identityScopeDal: context.container.identityScopeDal,
+        db: context.container.db,
       }),
     );
     context.app.route(

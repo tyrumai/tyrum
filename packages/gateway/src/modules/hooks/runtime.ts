@@ -8,17 +8,12 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "../policy/service.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
+import type { GatewayConfigStore } from "../runtime-state/gateway-config-store.js";
 
 export type LifecycleHookEvent = {
   event: string;
+  tenantId?: string;
   metadata?: unknown;
-};
-
-export type LifecycleHookDefinition = {
-  hook_key: string;
-  event: string;
-  lane?: LaneT;
-  steps: readonly ActionPrimitiveT[];
 };
 
 export class LifecycleHooksRuntime {
@@ -27,19 +22,33 @@ export class LifecycleHooksRuntime {
       db: SqlDb;
       engine: ExecutionEngine;
       policyService: PolicyService;
-      hooks: readonly LifecycleHookDefinition[];
+      configStore?: GatewayConfigStore;
+      hooks?: readonly {
+        event: string;
+        hook_key: string;
+        lane?: LaneT;
+        steps: readonly ActionPrimitiveT[];
+      }[];
     },
   ) {}
 
   async fire(input: LifecycleHookEvent): Promise<readonly string[]> {
-    const matches = this.opts.hooks.filter((h) => h.event === input.event);
+    const tenantId = input.tenantId?.trim() || DEFAULT_TENANT_ID;
+    const localHooks = (this.opts.hooks ?? []).map((hook) => ({
+      event: hook.event,
+      hook_key: hook.hook_key,
+      lane: hook.lane ?? "cron",
+      steps: [...hook.steps],
+    }));
+    const hooks =
+      localHooks.length > 0
+        ? localHooks
+        : ((await this.opts.configStore?.getLifecycleHooks(tenantId)) ?? []);
+    const matches = hooks.filter((h) => h.event === input.event);
     if (matches.length === 0) return [];
 
-    const effective = await this.opts.policyService.loadEffectiveBundle();
-    const snapshot = await this.opts.policyService.getOrCreateSnapshot(
-      DEFAULT_TENANT_ID,
-      effective.bundle,
-    );
+    const effective = await this.opts.policyService.loadEffectiveBundle({ tenantId });
+    const snapshot = await this.opts.policyService.getOrCreateSnapshot(tenantId, effective.bundle);
 
     const runIds: string[] = [];
     for (const hook of matches) {
@@ -68,7 +77,7 @@ export class LifecycleHooksRuntime {
       };
 
       const { runId } = await this.opts.engine.enqueuePlan({
-        tenantId: DEFAULT_TENANT_ID,
+        tenantId,
         key: hook.hook_key,
         lane,
         planId,

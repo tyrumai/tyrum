@@ -32,7 +32,7 @@ async function executePolicyCommand(
     if (!deps.policyService) {
       return { output: "PolicyBundle is not available on this gateway instance.", data: null };
     }
-    const effective = await deps.policyService.loadEffectiveBundle();
+    const effective = await deps.policyService.loadEffectiveBundle({ tenantId });
     const payload = {
       effective: {
         sha256: effective.sha256,

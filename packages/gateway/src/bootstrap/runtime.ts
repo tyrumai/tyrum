@@ -5,6 +5,12 @@ import { loadLifecycleHooksFromHome } from "../modules/hooks/config.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { maybeStartOtel } from "../modules/observability/otel.js";
 import { createDbSecretProviderFactory } from "../modules/secret/create-secret-provider.js";
+import {
+  createLocalSecretKeyProvider,
+  createSharedSecretKeyProvider,
+} from "../modules/secret/key-provider.js";
+import { isSharedStateMode } from "../modules/runtime-state/mode.js";
+import { assertSharedStateModeGuardrails } from "../modules/runtime-state/validation.js";
 import { VERSION } from "../version.js";
 import {
   applyStartCommandDeploymentOverrides,
@@ -37,6 +43,12 @@ import {
   startEdgeRuntime,
 } from "./runtime-builders.js";
 import type { GatewayBootContext } from "./runtime-shared.js";
+
+function resolveProvisionedGatewayToken(): string | undefined {
+  const token =
+    process.env["TYRUM_GATEWAY_TOKEN"]?.trim() ?? process.env["GATEWAY_TOKEN"]?.trim() ?? "";
+  return token.length > 0 ? token : undefined;
+}
 
 async function ensureBootstrapTokens(authTokens: AuthTokenService): Promise<boolean> {
   const bootstrapTokens: Array<{ label: string; token: string }> = [];
@@ -140,9 +152,23 @@ async function createGatewayBootContext(
     { deploymentConfig },
   );
   container.modelsDev.startBackgroundRefresh();
+  assertSharedStateModeGuardrails({ dbPath, deploymentConfig });
   await seedDefaultAgentConfig(container);
 
-  const authTokens = new AuthTokenService(container.db);
+  const provisionedGatewayToken = resolveProvisionedGatewayToken();
+  const authTokens = new AuthTokenService(container.db, {
+    provisionedTokens: provisionedGatewayToken
+      ? [
+          {
+            token: provisionedGatewayToken,
+            tenantId: DEFAULT_TENANT_ID,
+            role: "admin",
+            scopes: ["*"],
+            tokenId: "provisioned-default-tenant-admin",
+          },
+        ]
+      : [],
+  });
   const hasDefaultTenantAdminToken = await ensureBootstrapTokens(authTokens);
   const transportPolicy = assertNonLoopbackDeploymentGuardrails({
     role,
@@ -160,9 +186,19 @@ async function createGatewayBootContext(
     version: VERSION,
   });
   logger.info("gateway.instance", { instance_id: instanceId });
+  const lifecycleHooks = isSharedStateMode(deploymentConfig)
+    ? []
+    : await loadLifecycleHooksFromHome(tyrumHome, logger);
 
-  const secrets = await createDbSecretProviderFactory({ db: container.db, dbPath, tyrumHome });
-  const lifecycleHooks = await loadLifecycleHooksFromHome(tyrumHome, logger);
+  const secretKeyProvider = isSharedStateMode(deploymentConfig)
+    ? createSharedSecretKeyProvider()
+    : createLocalSecretKeyProvider({ dbPath, tyrumHome });
+  const secrets = await createDbSecretProviderFactory({
+    db: container.db,
+    dbPath,
+    tyrumHome,
+    keyProvider: secretKeyProvider,
+  });
 
   if (container.telegramBot) {
     console.log("Telegram bot initialized");

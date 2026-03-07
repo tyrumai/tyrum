@@ -5,7 +5,7 @@ import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { redactSecretLikeText } from "./secrets.js";
 import { MemoryV1Dal } from "../../memory/v1-dal.js";
 import type { SessionMessage, SessionRow } from "../session-dal.js";
-import type { MarkdownMemoryStore } from "../markdown-memory.js";
+import type { AgentMemoryStore } from "../context-store.js";
 import type { SqlDb } from "../../../statestore/types.js";
 
 const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
@@ -58,7 +58,7 @@ type LoggerLike = {
 export async function maybeRunPreCompactionMemoryFlush(
   deps: { db: SqlDb; logger: LoggerLike; agentId: string },
   input: {
-    ctx: { config: AgentConfigT; memoryStore: MarkdownMemoryStore };
+    ctx: { config: AgentConfigT; memoryStore: AgentMemoryStore };
     session: SessionRow;
     model: LanguageModel;
     systemPrompt: string;

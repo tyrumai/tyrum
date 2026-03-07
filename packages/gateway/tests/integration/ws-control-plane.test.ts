@@ -19,6 +19,8 @@ import {
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
+import { PolicyBundleConfigDal } from "../../src/modules/policy/config-dal.js";
+import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 
 function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
@@ -258,6 +260,118 @@ describe("WS control-plane requests", () => {
       [runId],
     );
     expect(runRow2?.status).toBe("cancelled");
+
+    await agentRuntime.shutdown();
+    await container.db.close();
+  });
+
+  it("resolves workflow.run snapshots against the scoped shared agent policy", async () => {
+    tyrumHome = await mkdtemp(join(tmpdir(), "tyrum-ws-control-plane-"));
+    originalTyrumHome = process.env["TYRUM_HOME"];
+    process.env["TYRUM_HOME"] = tyrumHome;
+
+    const container = await createTestContainer({
+      deploymentConfig: { execution: { engineApiEnabled: true }, state: { mode: "shared" } },
+    });
+    const connectionManager = new ConnectionManager();
+    const engine = new ExecutionEngine({
+      db: container.db,
+      redactionEngine: container.redactionEngine,
+    });
+    const agentRuntime = new AgentRuntime({
+      container,
+      home: tyrumHome,
+      languageModel: createStubLanguageModel("hello"),
+    });
+
+    const helperAgentId = await container.identityScopeDal.ensureAgentId(
+      DEFAULT_TENANT_ID,
+      "helper",
+    );
+    const policyBundles = new PolicyBundleConfigDal(container.db);
+    await policyBundles.set({
+      scope: { tenantId: DEFAULT_TENANT_ID, scopeKind: "deployment" },
+      bundle: {
+        v: 1,
+        tools: { default: "deny", allow: ["tool.exec"], require_approval: [], deny: [] },
+      },
+      createdBy: { kind: "test" },
+    });
+    await policyBundles.set({
+      scope: { tenantId: DEFAULT_TENANT_ID, scopeKind: "agent", agentId: helperAgentId },
+      bundle: {
+        v: 1,
+        tools: { default: "deny", allow: [], require_approval: ["tool.exec"], deny: [] },
+      },
+      createdBy: { kind: "test" },
+    });
+
+    const authTokens = new AuthTokenService(container.db);
+    const adminToken = (
+      await authTokens.issueToken({ tenantId: DEFAULT_TENANT_ID, role: "admin", scopes: ["*"] })
+    ).token;
+
+    const wsHandler = createWsHandler({
+      connectionManager,
+      authTokens,
+      protocolDeps: {
+        connectionManager,
+        db: container.db,
+        identityScopeDal: container.identityScopeDal,
+        agents: makeAgents(agentRuntime, container.policyService),
+        engine,
+        policyService: container.policyService,
+      },
+    });
+    stopHeartbeat = wsHandler.stopHeartbeat;
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      wsHandler.handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
+    await waitForOpen(ws);
+    await completeHandshake(ws, { requestIdPrefix: "r", role: "client", capabilities: [] });
+
+    ws.send(
+      JSON.stringify({
+        request_id: "r-run-helper",
+        type: "workflow.run",
+        payload: {
+          key: "agent:helper:main",
+          lane: "main",
+          steps: [{ type: "CLI" }],
+        },
+      }),
+    );
+
+    const runRes = await waitForJsonMessageMatching(
+      ws,
+      (msg) => msg["type"] === "workflow.run" && Object.prototype.hasOwnProperty.call(msg, "ok"),
+      5_000,
+      "workflow.run helper",
+    );
+    expect(runRes["ok"], JSON.stringify(runRes)).toBe(true);
+
+    const runResult = runRes["result"] as Record<string, unknown>;
+    const job = await container.db.get<{ policy_snapshot_id: string }>(
+      "SELECT policy_snapshot_id FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+      [DEFAULT_TENANT_ID, String(runResult["job_id"])],
+    );
+    const snapshot = await new PolicySnapshotDal(container.db).getById(
+      DEFAULT_TENANT_ID,
+      job!.policy_snapshot_id,
+    );
+
+    expect(snapshot?.bundle.tools?.require_approval).toContain("tool.exec");
 
     await agentRuntime.shutdown();
     await container.db.close();

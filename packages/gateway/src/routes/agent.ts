@@ -5,17 +5,12 @@
  */
 
 import { Hono } from "hono";
-import { AgentKey, AgentTurnRequest } from "@tyrum/schemas";
+import { AgentTurnRequest } from "@tyrum/schemas";
 import type { AgentRegistry } from "../modules/agent/registry.js";
-import type { IdentityScopeDal } from "../modules/identity/scope.js";
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import type { SqlDb } from "../statestore/types.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 
-export function createAgentRoutes(opts: {
-  agents: AgentRegistry;
-  identityScopeDal: IdentityScopeDal;
-}): Hono {
+export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): Hono {
   const agent = new Hono();
 
   agent.get("/agent/list", async (c) => {
@@ -24,33 +19,36 @@ export function createAgentRoutes(opts: {
     const includeDefault =
       includeDefaultRaw === undefined ? true : !["0", "false", "no"].includes(includeDefaultRaw);
 
-    const baseHome = opts.agents.resolveAgentHome("default");
-    const agentsDir = join(baseHome, "agents");
-
-    let discovered: string[] = [];
-    try {
-      const entries = await readdir(agentsDir, { withFileTypes: true });
-      discovered = entries
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .filter((name) => name !== "default")
-        .filter((name) => AgentKey.safeParse(name).success)
-        .toSorted((a, b) => a.localeCompare(b));
-    } catch (err) {
-      const code =
-        err && typeof err === "object" && "code" in err
-          ? (err as { code?: unknown }).code
-          : undefined;
-      if (code !== "ENOENT") throw err;
+    const discovered = await opts.db.all<{
+      agent_key: string;
+      agent_id: string;
+    }>(
+      `SELECT agent_key, agent_id
+       FROM agents
+       WHERE tenant_id = ?
+       ORDER BY CASE WHEN agent_key = 'default' THEN 0 ELSE 1 END, agent_key ASC`,
+      [tenantId],
+    );
+    const discoveredKeys = await opts.agents.listDiscoveredAgentKeys();
+    const agentByKey = new Map<
+      string,
+      {
+        agent_key: string;
+        agent_id?: string;
+      }
+    >(discovered.map((record) => [record.agent_key, record]));
+    for (const agentKey of discoveredKeys) {
+      agentByKey.set(agentKey, agentByKey.get(agentKey) ?? { agent_key: agentKey });
     }
 
-    const agentKeys = includeDefault ? ["default", ...discovered] : discovered;
-    const agentRecords = await Promise.all(
-      agentKeys.map(async (agent_key) => ({
-        agent_key,
-        agent_id: await opts.identityScopeDal.ensureAgentId(tenantId, agent_key),
-      })),
-    );
+    const agentRecords = Array.from(agentByKey.values())
+      .filter((record) => includeDefault || record.agent_key !== "default")
+      .toSorted((left, right) => {
+        if (left.agent_key === right.agent_key) return 0;
+        if (left.agent_key === "default") return -1;
+        if (right.agent_key === "default") return 1;
+        return left.agent_key.localeCompare(right.agent_key);
+      });
 
     return c.json({ agents: agentRecords }, 200);
   });

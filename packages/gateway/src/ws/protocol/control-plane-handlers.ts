@@ -12,6 +12,7 @@ import {
 } from "@tyrum/schemas";
 import type { WsResponseEnvelope } from "@tyrum/schemas";
 import { executeCommand } from "../../modules/commands/dispatcher.js";
+import { IdentityScopeDal } from "../../modules/identity/scope.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
@@ -98,6 +99,7 @@ async function handleCommandExecuteMessage(
     policyOverrideDal: deps.policyOverrideDal,
     contextReportDal: deps.contextReportDal,
     plugins: deps.plugins,
+    pluginCatalogProvider: deps.pluginCatalogProvider,
     modelsDev: deps.modelsDev,
     modelCatalog: deps.modelCatalog,
     agents: deps.agents,
@@ -107,6 +109,7 @@ async function handleCommandExecuteMessage(
     void deps.hooks
       .fire({
         event: "command.execute",
+        tenantId: client.auth_claims?.tenant_id ?? undefined,
         metadata: { command: parsedReq.data.payload.command },
       })
       .catch((err) => {
@@ -166,9 +169,14 @@ async function handleWorkflowRunMessage(
     const requestId = parsedReq.data.payload.request_id ?? `req-${crypto.randomUUID()}`;
 
     const keyParsed = parseTyrumKey(parsedReq.data.payload.key);
-    const agentId = keyParsed.kind === "agent" ? keyParsed.agent_key : "default";
-    const policy = deps.agents ? deps.agents.getPolicyService(agentId) : deps.policyService!;
-    const effectivePolicy = await policy.loadEffectiveBundle();
+    const agentKey = keyParsed.kind === "agent" ? keyParsed.agent_key : "default";
+    const policy = deps.agents ? deps.agents.getPolicyService(agentKey) : deps.policyService!;
+    const identityScopeDal =
+      deps.agents && deps.db ? (deps.identityScopeDal ?? new IdentityScopeDal(deps.db)) : undefined;
+    const agentId = identityScopeDal
+      ? await identityScopeDal.ensureAgentId(tenantId, agentKey)
+      : undefined;
+    const effectivePolicy = await policy.loadEffectiveBundle({ tenantId, agentId });
     const snapshot = await policy.getOrCreateSnapshot(tenantId, effectivePolicy.bundle);
 
     const queued = await deps.engine.enqueuePlan({
