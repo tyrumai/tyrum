@@ -24,9 +24,9 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: "bg-primary text-white hover:bg-primary/90",
   success: "bg-success text-white hover:bg-success/90",
   warning: "bg-warning text-fg hover:bg-warning/90",
-  secondary: "bg-bg-card text-fg border border-border hover:bg-bg-subtle",
+  secondary: "border border-border bg-bg-card text-fg hover:bg-bg-subtle",
   danger: "bg-error text-white hover:bg-error/90",
-  ghost: "bg-transparent text-fg hover:bg-primary-dim",
+  ghost: "bg-transparent text-fg hover:bg-bg-subtle",
   outline: "bg-transparent text-fg border border-border hover:bg-bg-subtle",
 };
 
@@ -84,22 +84,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={isDisabled}
         aria-busy={isLoading || undefined}
         className={cn(
-          "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all duration-200 ease-out active:scale-95",
+          "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition-colors duration-150",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
           "disabled:pointer-events-none disabled:opacity-50",
-          variant === "primary"
-            ? "shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/40 hover:-translate-y-0.5"
-            : "",
-          variant === "success"
-            ? "shadow-md shadow-success/20 hover:shadow-lg hover:shadow-success/40 hover:-translate-y-0.5"
-            : "",
-          variant === "warning"
-            ? "shadow-md shadow-warning/20 hover:shadow-lg hover:shadow-warning/40 hover:-translate-y-0.5"
-            : "",
-          variant === "danger"
-            ? "shadow-md shadow-error/20 hover:shadow-lg hover:shadow-error/40 hover:-translate-y-0.5"
-            : "",
-          variant === "secondary" ? "backdrop-blur-xl hover:-translate-y-0.5" : "",
           VARIANT_CLASSES[variant],
           SIZE_CLASSES[size],
           className,

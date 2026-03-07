@@ -14,4 +14,16 @@ describe("themes.css", () => {
       expect(value).not.toBe("transparent");
     }
   });
+
+  it("uses a flat application background instead of gradients", () => {
+    const css = readFileSync(join(process.cwd(), "packages/operator-ui/src/themes.css"), "utf8");
+    const backgroundImages = Array.from(css.matchAll(/--tyrum-app-bg-image:\s*([^;]+);/g)).map(
+      (match) => match[1].trim(),
+    );
+
+    expect(backgroundImages.length).toBeGreaterThanOrEqual(3);
+    expect(backgroundImages.every((value) => value === "none")).toBe(true);
+    expect(css).not.toContain("linear-gradient");
+    expect(css).not.toContain("radial-gradient");
+  });
 });

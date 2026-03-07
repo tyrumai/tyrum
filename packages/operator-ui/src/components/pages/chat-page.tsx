@@ -91,7 +91,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
             onChange={(event) => {
               core.chatStore.setAgentId(event.currentTarget.value);
             }}
-            className="flex h-9 min-w-56 rounded-md border border-border bg-bg-card/40 px-3 py-1 text-sm text-fg shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+            className="flex h-9 min-w-56 rounded-lg border border-border bg-bg px-3 py-1 text-sm text-fg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0"
           >
             {chat.agents.agents.length === 0 ? (
               <option value={chat.agentId}>{chat.agentId}</option>
@@ -131,7 +131,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
         <Card className="flex h-full min-h-0 flex-col" data-testid="chat-threads-panel">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-sm font-medium text-fg-muted">Threads</div>
+              <h2 className="text-base font-semibold text-fg">Threads</h2>
               <Button
                 size="sm"
                 variant="secondary"
@@ -171,11 +171,11 @@ export function ChatPage({ core }: { core: OperatorCore }) {
                           data-testid={`chat-thread-${session.session_id}`}
                           data-active={isActive ? "true" : undefined}
                           className={cn(
-                            "w-full rounded-xl border px-3 py-2 text-left transition-colors",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+                            "w-full rounded-lg border px-3 py-2.5 text-left transition-colors duration-150",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
                             isActive
-                              ? "border-border bg-bg-subtle/80"
-                              : "border-border/50 bg-bg-card/40 hover:bg-bg-card/60",
+                              ? "border-border bg-bg-subtle"
+                              : "border-border bg-bg hover:bg-bg-subtle",
                           )}
                           onClick={() => {
                             void core.chatStore.openSession(session.session_id);
@@ -222,7 +222,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
           <CardHeader className="pb-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-sm font-medium text-fg">Conversation</div>
+                <h2 className="text-base font-semibold text-fg">Conversation</h2>
                 <div className="mt-1 truncate text-xs text-fg-muted">
                   {active ? active.thread_id : "Select a thread to view transcript."}
                 </div>
@@ -268,12 +268,15 @@ export function ChatPage({ core }: { core: OperatorCore }) {
                         >
                           <div
                             className={cn(
-                              "max-w-[85%] rounded-2xl border px-4 py-3 text-sm whitespace-pre-wrap",
+                              "max-w-[85%] rounded-lg border px-4 py-3 text-sm whitespace-pre-wrap",
                               isUser
-                                ? "border-border bg-bg-subtle/80 text-fg"
-                                : "border-border/50 bg-bg-card/40 text-fg",
+                                ? "border-border bg-bg-subtle text-fg"
+                                : "border-border bg-bg text-fg",
                             )}
                           >
+                            <div className="mb-1 text-xs text-fg-muted">
+                              {isUser ? "You" : "Assistant"}
+                            </div>
                             {turn.content}
                           </div>
                         </div>

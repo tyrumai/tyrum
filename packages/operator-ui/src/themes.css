@@ -1,46 +1,46 @@
 :root {
-  /* Dark is the default premium theme. */
+  /* Dark is the default operator theme. */
   color-scheme: dark;
 
-  --tyrum-color-bg: #05050a;
-  --tyrum-app-bg-image: linear-gradient(135deg, #0B0F19 0%, #05050A 50%, #110B1E 100%);
-  --tyrum-color-bg-subtle: rgba(15, 23, 42, 0.4);
-  --tyrum-color-bg-card: rgba(15, 23, 42, 0.6);
-  --tyrum-color-fg: #f8fafc;
-  --tyrum-color-fg-muted: #94a3b8;
-  --tyrum-color-border: rgba(255, 255, 255, 0.08);
+  --tyrum-color-bg: #161716;
+  --tyrum-app-bg-image: none;
+  --tyrum-color-bg-subtle: #1d1f1d;
+  --tyrum-color-bg-card: #202321;
+  --tyrum-color-fg: #f2f0ea;
+  --tyrum-color-fg-muted: #aaa59a;
+  --tyrum-color-border: #343833;
 
-  --tyrum-color-primary: #818cf8;
-  --tyrum-color-primary-dim: rgba(129, 140, 248, 0.15);
+  --tyrum-color-primary: #7b6b52;
+  --tyrum-color-primary-dim: rgb(123 107 82 / 0.16);
 
-  --tyrum-color-success: #34d399;
-  --tyrum-color-warning: #fbbf24;
-  --tyrum-color-error: #f87171;
-  --tyrum-color-neutral: #94a3b8;
-  --tyrum-color-focus-ring: rgba(129, 140, 248, 0.5);
-  --tyrum-color-selection: rgba(129, 140, 248, 0.3);
+  --tyrum-color-success: #4d8a61;
+  --tyrum-color-warning: #b3823c;
+  --tyrum-color-error: #c56a5f;
+  --tyrum-color-neutral: #8a887f;
+  --tyrum-color-focus-ring: rgb(123 107 82 / 0.35);
+  --tyrum-color-selection: rgb(123 107 82 / 0.22);
 }
 
 html[data-theme="light"] {
   color-scheme: light;
 
-  --tyrum-color-bg: #f8fafc;
-  --tyrum-app-bg-image: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
-  --tyrum-color-bg-subtle: rgba(255, 255, 255, 0.5);
-  --tyrum-color-bg-card: rgba(255, 255, 255, 0.8);
-  --tyrum-color-fg: #0f172a;
-  --tyrum-color-fg-muted: #64748b;
-  --tyrum-color-border: rgba(0, 0, 0, 0.06);
+  --tyrum-color-bg: #f4f1ea;
+  --tyrum-app-bg-image: none;
+  --tyrum-color-bg-subtle: #ece6dc;
+  --tyrum-color-bg-card: #fcfaf5;
+  --tyrum-color-fg: #201f1b;
+  --tyrum-color-fg-muted: #615b50;
+  --tyrum-color-border: #d6cfc2;
 
-  --tyrum-color-primary: #4f46e5;
-  --tyrum-color-primary-dim: rgba(79, 70, 229, 0.1);
+  --tyrum-color-primary: #8a5b2c;
+  --tyrum-color-primary-dim: rgb(138 91 44 / 0.12);
 
-  --tyrum-color-success: #10b981;
-  --tyrum-color-warning: #f59e0b;
-  --tyrum-color-error: #ef4444;
-  --tyrum-color-neutral: #64748b;
-  --tyrum-color-focus-ring: rgba(79, 70, 229, 0.4);
-  --tyrum-color-selection: rgba(79, 70, 229, 0.2);
+  --tyrum-color-success: #2f7d55;
+  --tyrum-color-warning: #a56d1f;
+  --tyrum-color-error: #b44c3f;
+  --tyrum-color-neutral: #6b665d;
+  --tyrum-color-focus-ring: rgb(138 91 44 / 0.28);
+  --tyrum-color-selection: rgb(138 91 44 / 0.16);
 }
 
 /* System mode: rely on prefers-color-scheme when data-theme-mode=system. */
@@ -52,22 +52,22 @@ html[data-theme-mode="system"] {
   html[data-theme-mode="system"] {
     color-scheme: light;
 
-    --tyrum-color-bg: #f8fafc;
-    --tyrum-app-bg-image: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
-    --tyrum-color-bg-subtle: rgba(255, 255, 255, 0.5);
-    --tyrum-color-bg-card: rgba(255, 255, 255, 0.8);
-    --tyrum-color-fg: #0f172a;
-    --tyrum-color-fg-muted: #64748b;
-    --tyrum-color-border: rgba(0, 0, 0, 0.06);
+    --tyrum-color-bg: #f4f1ea;
+    --tyrum-app-bg-image: none;
+    --tyrum-color-bg-subtle: #ece6dc;
+    --tyrum-color-bg-card: #fcfaf5;
+    --tyrum-color-fg: #201f1b;
+    --tyrum-color-fg-muted: #615b50;
+    --tyrum-color-border: #d6cfc2;
 
-    --tyrum-color-primary: #4f46e5;
-    --tyrum-color-primary-dim: rgba(79, 70, 229, 0.1);
+    --tyrum-color-primary: #8a5b2c;
+    --tyrum-color-primary-dim: rgb(138 91 44 / 0.12);
 
-    --tyrum-color-success: #10b981;
-    --tyrum-color-warning: #f59e0b;
-    --tyrum-color-error: #ef4444;
-    --tyrum-color-neutral: #64748b;
-    --tyrum-color-focus-ring: rgba(79, 70, 229, 0.4);
-    --tyrum-color-selection: rgba(79, 70, 229, 0.2);
+    --tyrum-color-success: #2f7d55;
+    --tyrum-color-warning: #a56d1f;
+    --tyrum-color-error: #b44c3f;
+    --tyrum-color-neutral: #6b665d;
+    --tyrum-color-focus-ring: rgb(138 91 44 / 0.28);
+    --tyrum-color-selection: rgb(138 91 44 / 0.16);
   }
 }

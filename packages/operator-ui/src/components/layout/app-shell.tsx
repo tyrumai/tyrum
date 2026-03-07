@@ -52,8 +52,8 @@ export function AppShell({
             ) : (
               <div
                 className={cn(
-                  "min-w-0 px-4 py-6",
-                  mode === "web" ? "mx-auto max-w-6xl" : null,
+                  "min-w-0 px-5 py-6",
+                  mode === "web" ? "mx-auto max-w-7xl" : null,
                   viewportLocked ? "flex h-full min-h-0 flex-col overflow-hidden" : null,
                 )}
               >

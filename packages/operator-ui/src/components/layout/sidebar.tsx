@@ -76,12 +76,12 @@ function SidebarNavButton({ item, activeItemId, collapsed, onNavigate }: Sidebar
       aria-current={active ? "page" : undefined}
       title={collapsed ? item.label : undefined}
       className={cn(
-        "flex w-full items-center rounded-md text-sm transition-colors",
+        "flex w-full items-center rounded-md text-sm transition-colors duration-150",
         collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
         "border-l-2 border-transparent",
         active
-          ? "border-primary bg-primary-dim text-fg font-medium"
-          : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
+          ? "border-primary bg-bg text-fg font-medium"
+          : "text-fg-muted hover:bg-bg hover:text-fg",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
       )}
       onClick={() => {
@@ -112,8 +112,8 @@ function SidebarHeader({ collapsed, showHeader }: SidebarHeaderProps) {
   if (!showHeader || collapsed) return null;
 
   return (
-    <div className="flex items-center gap-2 border-b border-border px-4 py-4">
-      <div className="text-base font-semibold">Tyrum</div>
+    <div className="flex items-center border-b border-border px-4 py-3">
+      <div className="text-sm font-semibold tracking-tight">Tyrum</div>
     </div>
   );
 }
@@ -164,7 +164,7 @@ function SidebarNav({
             <button
               type="button"
               data-testid="sidebar-secondary-toggle"
-              className="mt-3 flex w-full items-center gap-1 rounded-md px-3 py-1 text-xs font-medium uppercase tracking-wide text-fg-muted hover:text-fg"
+              className="mt-3 flex w-full items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium text-fg-muted hover:text-fg"
               onClick={onToggleSecondary}
             >
               <ChevronDown
@@ -176,9 +176,7 @@ function SidebarNav({
               <span>{secondaryLabel}</span>
             </button>
           ) : !collapsed ? (
-            <div className="mt-3 px-3 text-xs font-medium uppercase tracking-wide text-fg-muted">
-              {secondaryLabel}
-            </div>
+            <div className="mt-3 px-3 text-xs font-medium text-fg-muted">{secondaryLabel}</div>
           ) : null}
           {collapsed || secondaryVisible ? secondaryItems.map(renderNavItem) : null}
         </>
@@ -400,8 +398,8 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "flex h-screen shrink-0 flex-col border-r border-border bg-bg-subtle/80 backdrop-blur-2xl transition-[width] duration-200",
-        collapsed ? "w-12" : "w-52",
+        "flex h-screen shrink-0 flex-col border-r border-border bg-bg-subtle transition-[width] duration-200",
+        collapsed ? "w-14" : "w-60",
         className,
       )}
       {...props}

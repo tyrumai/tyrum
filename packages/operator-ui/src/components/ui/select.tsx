@@ -29,8 +29,8 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           aria-invalid={error ? "true" : undefined}
           aria-describedby={describedById}
           className={cn(
-            "box-border flex h-9 w-full rounded-md border border-border/80 bg-bg-card/40 px-3 py-1 text-sm text-fg shadow-inner transition-all duration-200",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-transparent hover:bg-bg-card/60 focus-visible:bg-bg-card/80",
+            "box-border flex h-9 w-full rounded-lg border border-border bg-bg px-3 py-1 text-sm text-fg transition-colors duration-150",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
             "disabled:cursor-not-allowed disabled:opacity-50",
             error ? "border-error focus-visible:ring-error" : null,
             className,
