@@ -22,12 +22,7 @@ const {
   decryptTokenMock: vi.fn(() => "tyrum-token.v1.embedded.token"),
   generateTokenMock: vi.fn(() => "generated-token"),
   encryptTokenMock: vi.fn((token: string) => `enc:${token}`),
-  undiciFetchMock: vi.fn(async () => {
-    return new Response(JSON.stringify({ status: "ok" }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  }),
+  undiciFetchMock: vi.fn(async () => createOkResponse()),
   existsSyncMock: vi.fn(),
   testState: {
     port: 8788,
@@ -123,6 +118,56 @@ vi.mock("../src/main/gateway-bin-path.js", () => ({
   resolveGatewayBinPath: vi.fn(() => "/tmp/mock-gateway-bin.mjs"),
 }));
 
+function createWindowStub(sentEvents?: Array<{ channel: string; payload: unknown }>): BrowserWindow {
+  return {
+    isDestroyed: () => false,
+    webContents: {
+      isDestroyed: () => false,
+      send: (channel: string, payload: unknown) => {
+        sentEvents?.push({ channel, payload });
+      },
+    },
+  } as unknown as BrowserWindow;
+}
+
+function createOkResponse(): Response {
+  return new Response(JSON.stringify({ status: "ok" }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function getRegisteredHandler(channel: string): (...args: unknown[]) => unknown {
+  const handler = registeredHandlers.get(channel);
+  expect(handler).toBeDefined();
+  return handler!;
+}
+
+async function registerGatewayIpcForTest(
+  sentEvents?: Array<{ channel: string; payload: unknown }>,
+): Promise<{
+  ensureEmbeddedGatewayToken: typeof import("../src/main/ipc/gateway-ipc.js").ensureEmbeddedGatewayToken;
+  registerGatewayIpc: typeof import("../src/main/ipc/gateway-ipc.js").registerGatewayIpc;
+  resolveOperatorConnection: typeof import("../src/main/ipc/gateway-ipc.js").resolveOperatorConnection;
+  startEmbeddedGatewayFromConfig: typeof import("../src/main/ipc/gateway-ipc.js").startEmbeddedGatewayFromConfig;
+  manager: unknown;
+}> {
+  const gatewayIpc = await import("../src/main/ipc/gateway-ipc.js");
+  const manager = gatewayIpc.registerGatewayIpc(createWindowStub(sentEvents));
+  return { ...gatewayIpc, manager };
+}
+
+function expectConnection(
+  connection: unknown,
+  expected: { mode: "embedded" | "remote"; wsUrl: string; httpBaseUrl: string; token: string },
+): void {
+  expect(connection).toEqual({
+    ...expected,
+    tlsCertFingerprint256: "",
+    tlsAllowSelfSigned: false,
+  });
+}
+
 describe("registerGatewayIpc handlers", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -146,12 +191,7 @@ describe("registerGatewayIpc handlers", () => {
     existsSyncMock.mockReset();
     existsSyncMock.mockImplementation(() => false);
     undiciFetchMock.mockReset();
-    undiciFetchMock.mockImplementation(async () => {
-      return new Response(JSON.stringify({ status: "ok" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    });
+    undiciFetchMock.mockImplementation(async () => createOkResponse());
     registeredHandlers.clear();
     ipcMainHandleMock.mockReset();
     ipcMainHandleMock.mockImplementation(
@@ -162,25 +202,11 @@ describe("registerGatewayIpc handlers", () => {
   });
 
   it("keeps reporting running status after start when status is requested later", async () => {
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
     const sentEvents: Array<{ channel: string; payload: unknown }> = [];
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: (channel: string, payload: unknown) => {
-          sentEvents.push({ channel, payload });
-        },
-      },
-    } as unknown as BrowserWindow;
+    await registerGatewayIpcForTest(sentEvents);
 
-    registerGatewayIpc(windowStub);
-
-    const startHandler = registeredHandlers.get("gateway:start");
-    const statusHandler = registeredHandlers.get("gateway:status");
-    expect(startHandler).toBeDefined();
-    expect(statusHandler).toBeDefined();
+    const startHandler = getRegisteredHandler("gateway:start");
+    const statusHandler = getRegisteredHandler("gateway:status");
 
     const startResult = await startHandler!({} as never);
     expect(startResult).toEqual({
@@ -203,29 +229,15 @@ describe("registerGatewayIpc handlers", () => {
   });
 
   it("returns embedded auth and display UI URLs", async () => {
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
-    expect(operatorConnectionHandler).toBeDefined();
+    await registerGatewayIpcForTest();
+    const operatorConnectionHandler = getRegisteredHandler("gateway:operator-connection");
 
     const connection = await operatorConnectionHandler!({} as never);
-    expect(connection).toEqual({
+    expectConnection(connection, {
       mode: "embedded",
       wsUrl: "ws://127.0.0.1:8788/ws",
       httpBaseUrl: "http://127.0.0.1:8788/",
       token: "tyrum-token.v1.embedded.token",
-      tlsCertFingerprint256: "",
-      tlsAllowSelfSigned: false,
     });
   });
 
@@ -237,20 +249,9 @@ describe("registerGatewayIpc handlers", () => {
       const legacyDbPath = join("/tmp/tyrum-home", "gateway", "gateway.db");
       existsSyncMock.mockImplementation((path) => path === legacyDbPath);
 
-      const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-      const windowStub = {
-        isDestroyed: () => false,
-        webContents: {
-          isDestroyed: () => false,
-          send: vi.fn(),
-        },
-      } as unknown as BrowserWindow;
-
-      const mgr = registerGatewayIpc(windowStub) as unknown as MockGatewayManager;
-
-      const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
-      expect(operatorConnectionHandler).toBeDefined();
+      const { manager } = await registerGatewayIpcForTest();
+      const mgr = manager as MockGatewayManager;
+      const operatorConnectionHandler = getRegisteredHandler("gateway:operator-connection");
 
       await operatorConnectionHandler!({} as never);
 
@@ -272,20 +273,8 @@ describe("registerGatewayIpc handlers", () => {
 
   it("rejects operator connection when the desktop is not configured yet", async () => {
     configExistsMock.mockReturnValue(false);
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
-    expect(operatorConnectionHandler).toBeDefined();
+    await registerGatewayIpcForTest();
+    const operatorConnectionHandler = getRegisteredHandler("gateway:operator-connection");
 
     await expect(operatorConnectionHandler!({} as never)).rejects.toThrow("not configured");
   });
@@ -297,29 +286,15 @@ describe("registerGatewayIpc handlers", () => {
       );
     });
 
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
-    expect(operatorConnectionHandler).toBeDefined();
+    await registerGatewayIpcForTest();
+    const operatorConnectionHandler = getRegisteredHandler("gateway:operator-connection");
 
     const connection = await operatorConnectionHandler!({} as never);
-    expect(connection).toEqual({
+    expectConnection(connection, {
       mode: "embedded",
       wsUrl: "ws://127.0.0.1:8788/ws",
       httpBaseUrl: "http://127.0.0.1:8788/",
       token: "tyrum-token.v1.bootstrap.token",
-      tlsCertFingerprint256: "",
-      tlsAllowSelfSigned: false,
     });
     expect(generateTokenMock).not.toHaveBeenCalled();
     expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.bootstrap.token");
@@ -335,29 +310,15 @@ describe("registerGatewayIpc handlers", () => {
   it("bootstraps and persists the embedded token on first launch when tokenRef is missing", async () => {
     testState.embeddedTokenRef = "";
 
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
-    expect(operatorConnectionHandler).toBeDefined();
+    await registerGatewayIpcForTest();
+    const operatorConnectionHandler = getRegisteredHandler("gateway:operator-connection");
 
     const connection = await operatorConnectionHandler!({} as never);
-    expect(connection).toEqual({
+    expectConnection(connection, {
       mode: "embedded",
       wsUrl: "ws://127.0.0.1:8788/ws",
       httpBaseUrl: "http://127.0.0.1:8788/",
       token: "tyrum-token.v1.bootstrap.token",
-      tlsCertFingerprint256: "",
-      tlsAllowSelfSigned: false,
     });
     expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.bootstrap.token");
     expect(saveConfigMock).toHaveBeenCalledWith(
@@ -389,19 +350,9 @@ describe("registerGatewayIpc handlers", () => {
     decryptTokenMock.mockImplementationOnce(() => "not-a-token");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    const { registerGatewayIpc, resolveOperatorConnection } =
-      await import("../src/main/ipc/gateway-ipc.js");
+    const { resolveOperatorConnection, manager } = await registerGatewayIpcForTest();
     const { loadConfig } = await import("../src/main/config/store.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    const mgr = registerGatewayIpc(windowStub) as unknown as { status: string };
+    const mgr = manager as { status: string };
     mgr.status = "running";
 
     expect(() => resolveOperatorConnection(loadConfig())).toThrow();
@@ -414,29 +365,15 @@ describe("registerGatewayIpc handlers", () => {
   });
 
   it("does not rotate embedded token when the gateway is already running", async () => {
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
-    expect(operatorConnectionHandler).toBeDefined();
+    await registerGatewayIpcForTest();
+    const operatorConnectionHandler = getRegisteredHandler("gateway:operator-connection");
 
     const first = await operatorConnectionHandler!({} as never);
-    expect(first).toEqual({
+    expectConnection(first, {
       mode: "embedded",
       wsUrl: "ws://127.0.0.1:8788/ws",
       httpBaseUrl: "http://127.0.0.1:8788/",
       token: "tyrum-token.v1.embedded.token",
-      tlsCertFingerprint256: "",
-      tlsAllowSelfSigned: false,
     });
 
     decryptTokenMock.mockImplementationOnce(() => {
@@ -453,19 +390,9 @@ describe("registerGatewayIpc handlers", () => {
   });
 
   it("does not rotate embedded token when resolving operator connection after embedded gateway start", async () => {
-    const { registerGatewayIpc, resolveOperatorConnection, startEmbeddedGatewayFromConfig } =
-      await import("../src/main/ipc/gateway-ipc.js");
+    const { resolveOperatorConnection, startEmbeddedGatewayFromConfig } =
+      await registerGatewayIpcForTest();
     const { loadConfig } = await import("../src/main/config/store.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
 
     await startEmbeddedGatewayFromConfig();
 
@@ -491,29 +418,15 @@ describe("registerGatewayIpc handlers", () => {
         : "tyrum-token.v1.embedded.token",
     );
 
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
-    expect(operatorConnectionHandler).toBeDefined();
+    await registerGatewayIpcForTest();
+    const operatorConnectionHandler = getRegisteredHandler("gateway:operator-connection");
 
     const connection = await operatorConnectionHandler!({} as never);
-    expect(connection).toEqual({
+    expectConnection(connection, {
       mode: "remote",
       wsUrl: "wss://remote.example/ws",
       httpBaseUrl: "https://remote.example/",
       token: "tyrum-token.v1.remote.token",
-      tlsCertFingerprint256: "",
-      tlsAllowSelfSigned: false,
     });
   });
 
@@ -526,29 +439,15 @@ describe("registerGatewayIpc handlers", () => {
         : "tyrum-token.v1.embedded.token",
     );
 
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
-    expect(operatorConnectionHandler).toBeDefined();
+    await registerGatewayIpcForTest();
+    const operatorConnectionHandler = getRegisteredHandler("gateway:operator-connection");
 
     const connection = await operatorConnectionHandler!({} as never);
-    expect(connection).toEqual({
+    expectConnection(connection, {
       mode: "remote",
       wsUrl: "ws://remote.example/ws",
       httpBaseUrl: "http://remote.example/",
       token: "0123456789abcdef0123456789abcdef",
-      tlsCertFingerprint256: "",
-      tlsAllowSelfSigned: false,
     });
   });
 
@@ -556,20 +455,8 @@ describe("registerGatewayIpc handlers", () => {
     testState.mode = "remote";
     testState.remoteWsUrl = "https://remote.example/ws";
 
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
-    expect(operatorConnectionHandler).toBeDefined();
+    await registerGatewayIpcForTest();
+    const operatorConnectionHandler = getRegisteredHandler("gateway:operator-connection");
 
     await expect(operatorConnectionHandler!({} as never)).rejects.toThrow(
       "expected ws:// or wss://",
@@ -577,28 +464,11 @@ describe("registerGatewayIpc handlers", () => {
   });
 
   it("proxies HTTP requests to the configured gateway base URL", async () => {
-    const fetchMock = vi.fn(async () => {
-      return new Response(JSON.stringify({ status: "ok" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    });
+    const fetchMock = vi.fn(async () => createOkResponse());
     vi.stubGlobal("fetch", fetchMock);
 
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const httpFetchHandler = registeredHandlers.get("gateway:http-fetch");
-    expect(httpFetchHandler).toBeDefined();
+    await registerGatewayIpcForTest();
+    const httpFetchHandler = getRegisteredHandler("gateway:http-fetch");
 
     const result = await httpFetchHandler!({} as never, {
       url: "http://127.0.0.1:8788/status",
@@ -633,27 +503,10 @@ describe("registerGatewayIpc handlers", () => {
     });
     vi.stubGlobal("fetch", globalFetchMock);
 
-    undiciFetchMock.mockImplementation(async () => {
-      return new Response(JSON.stringify({ status: "ok" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    });
+    undiciFetchMock.mockImplementation(async () => createOkResponse());
 
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const httpFetchHandler = registeredHandlers.get("gateway:http-fetch");
-    expect(httpFetchHandler).toBeDefined();
+    await registerGatewayIpcForTest();
+    const httpFetchHandler = getRegisteredHandler("gateway:http-fetch");
 
     const result = await httpFetchHandler!({} as never, {
       url: "https://127.0.0.1:8788/status",
@@ -685,28 +538,11 @@ describe("registerGatewayIpc handlers", () => {
       );
     });
 
-    const fetchMock = vi.fn(async () => {
-      return new Response(JSON.stringify({ status: "ok" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    });
+    const fetchMock = vi.fn(async () => createOkResponse());
     vi.stubGlobal("fetch", fetchMock);
 
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const httpFetchHandler = registeredHandlers.get("gateway:http-fetch");
-    expect(httpFetchHandler).toBeDefined();
+    await registerGatewayIpcForTest();
+    const httpFetchHandler = getRegisteredHandler("gateway:http-fetch");
 
     const result = await httpFetchHandler!({} as never, {
       url: "http://127.0.0.1:8788/status",
@@ -725,20 +561,8 @@ describe("registerGatewayIpc handlers", () => {
   });
 
   it("rejects HTTP proxy requests that include cookies", async () => {
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const httpFetchHandler = registeredHandlers.get("gateway:http-fetch");
-    expect(httpFetchHandler).toBeDefined();
+    await registerGatewayIpcForTest();
+    const httpFetchHandler = getRegisteredHandler("gateway:http-fetch");
 
     await expect(
       httpFetchHandler!({} as never, {
@@ -749,20 +573,8 @@ describe("registerGatewayIpc handlers", () => {
   });
 
   it("rejects HTTP proxy requests to other origins", async () => {
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const httpFetchHandler = registeredHandlers.get("gateway:http-fetch");
-    expect(httpFetchHandler).toBeDefined();
+    await registerGatewayIpcForTest();
+    const httpFetchHandler = getRegisteredHandler("gateway:http-fetch");
 
     await expect(
       httpFetchHandler!({} as never, {

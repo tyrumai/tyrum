@@ -49,23 +49,11 @@ function createTestStreams(): {
   };
 }
 
-function createStore<T>(snapshot: T): {
-  getSnapshot: () => T;
-  subscribe: (listener: () => void) => () => void;
-} {
-  return {
-    getSnapshot() {
-      return snapshot;
-    },
-    subscribe() {
-      return () => {};
-    },
-  };
+function createStore<T>(snapshot: T): { getSnapshot: () => T; subscribe: (listener: () => void) => () => void } {
+  return { getSnapshot: () => snapshot, subscribe: () => () => {} };
 }
 
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
+async function sleep(ms: number): Promise<void> { await new Promise((resolve) => setTimeout(resolve, ms)); }
 
 const ANSI_ESCAPE_PATTERN =
   // eslint-disable-next-line no-control-regex
@@ -133,28 +121,125 @@ function createMemorySnapshot(
   };
 }
 
-const DEFAULT_CONFIG = {
-  httpBaseUrl: "http://127.0.0.1:8788",
-  wsUrl: "ws://127.0.0.1:8788/ws",
-  token: "token",
-  deviceIdentityPath: "/tmp/device-identity.json",
-  reconnect: false,
-  tlsCertFingerprint256: undefined,
-  tlsAllowSelfSigned: false,
-} as const;
+const DEFAULT_MEMORY_ITEM = { v: 1, memory_item_id: "mem-1", agent_id: "agent-1", kind: "note", tags: [], sensitivity: "private", provenance: { source_kind: "operator", refs: [] }, created_at: "2026-02-26T00:00:00.000Z", body_md: "hello" } as const;
+
+function createMemoryStore(snapshot = createMemorySnapshot(), overrides: Partial<Record<"list" | "search" | "loadMore" | "inspect" | "forget" | "export", unknown>> = {}) {
+  return {
+    ...createStore(snapshot),
+    list: vi.fn(async () => {}),
+    search: vi.fn(async (_input: { query: string }) => {}),
+    loadMore: vi.fn(async () => {}),
+    inspect: vi.fn(async (_memoryItemId: string) => {}),
+    forget: vi.fn(async (_selectors: unknown[]) => {}),
+    export: vi.fn(async () => {}),
+    ...overrides,
+  };
+}
+
+async function openMemory(io: ReturnType<typeof createTestStreams>, memoryStore: { list: ReturnType<typeof vi.fn> }) {
+  io.stdin.write("6");
+  await waitFor(() => memoryStore.list.mock.calls.length === 1);
+  memoryStore.list.mockClear();
+}
+
+const DEFAULT_CONFIG = { httpBaseUrl: "http://127.0.0.1:8788", wsUrl: "ws://127.0.0.1:8788/ws", token: "token", deviceIdentityPath: "/tmp/device-identity.json", reconnect: false, tlsCertFingerprint256: undefined, tlsAllowSelfSigned: false } as const;
+
+function createEmptyApprovalsStore(overrides: Partial<{ pendingIds: number[]; byId: Record<number, unknown> }> = {}) {
+  return {
+    ...createStore({
+      pendingIds: [],
+      byId: {},
+      loading: false,
+      error: null,
+      ...overrides,
+    }),
+    refreshPending: vi.fn(async () => {}),
+    resolve: vi.fn(async () => {}),
+  };
+}
+
+function createPairingStore(overrides: Partial<{
+  byId: Record<number, unknown>; pendingIds: number[]; loading: boolean; error: unknown; lastSyncedAt: string | null
+}> = {}) {
+  return {
+    ...createStore({
+      byId: {},
+      pendingIds: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+      ...overrides,
+    }),
+    refresh: vi.fn(async () => {}),
+    approve: vi.fn(async () => {}),
+    deny: vi.fn(async () => {}),
+    revoke: vi.fn(async () => {}),
+  };
+}
+
+function createStatusStore() {
+  return createStore({ status: null, usage: null, presenceByInstanceId: {}, loading: { status: false, usage: false, presence: false }, error: { status: null, usage: null, presence: null }, lastSyncedAt: null });
+}
+
+function createRunsStore() { return createStore({ runsById: {}, stepIdsByRunId: {}, stepsById: {}, attemptIdsByStepId: {}, attemptsById: {} }); }
+
+function createElevatedModeStore(status: "active" | "inactive", overrides: Partial<{
+  elevatedToken: string | null; enteredAt: string | null; expiresAt: string | null; remainingMs: number | null
+}> = {}) {
+  return createStore({
+    status,
+    elevatedToken: status === "active" ? "elevated" : null,
+    enteredAt: status === "active" ? "2026-02-26T00:00:00.000Z" : null,
+    expiresAt: status === "active" ? "2026-02-26T00:10:00.000Z" : null,
+    remainingMs: status === "active" ? 60_000 : null,
+    ...overrides,
+  });
+}
+
+function createConnectionStore(status: "connected" | "disconnected", overrides: Partial<{
+  clientId: string; transportError: string | null; lastDisconnect: { code: number; reason: string } | null
+}> = {}) {
+  return createStore({
+    status,
+    clientId: "client-1",
+    transportError: status === "disconnected" ? "network down" : null,
+    lastDisconnect: status === "disconnected" ? { code: 1006, reason: "closed" } : null,
+    ...overrides,
+  });
+}
+
+function createCore({ connect, disconnect, memoryStore, elevatedModeStore, connectionStore, approvalsStore = createEmptyApprovalsStore(), pairingStore = createPairingStore() }: {
+  connect: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn>; memoryStore: unknown; elevatedModeStore: ReturnType<typeof createStore>; connectionStore: ReturnType<typeof createStore>; approvalsStore?: ReturnType<typeof createEmptyApprovalsStore>; pairingStore?: ReturnType<typeof createPairingStore>
+}) {
+  return {
+    connect,
+    disconnect,
+    elevatedModeStore,
+    connectionStore,
+    approvalsStore,
+    pairingStore,
+    statusStore: createStatusStore(),
+    runsStore: createRunsStore(),
+    memoryStore,
+  };
+}
+
+function renderTuiApp(core: unknown) {
+  const runtime = createRuntime(core);
+  const io = createTestStreams();
+  const instance = render(React.createElement(TuiApp, { runtime, config: DEFAULT_CONFIG }), {
+    stdout: io.stdout,
+    stdin: io.stdin,
+    exitOnCtrlC: false,
+    patchConsole: false,
+  });
+  return { io, instance };
+}
 
 function createRuntime(core: unknown): {
-  manager: { getCore: () => unknown; subscribe: () => () => void; dispose: () => void };
-  enterElevatedMode: (token: string) => Promise<void>;
-  exitElevatedMode: () => void;
-  dispose: () => void;
+  manager: { getCore: () => unknown; subscribe: () => () => void; dispose: () => void }; enterElevatedMode: (token: string) => Promise<void>; exitElevatedMode: () => void; dispose: () => void
 } {
-  const manager = {
-    getCore: () => core,
-    subscribe: () => () => {},
-    dispose: () => {},
-  };
-
+  const manager = { getCore: () => core, subscribe: () => () => {}, dispose: () => {} };
   return {
     manager,
     enterElevatedMode: vi.fn(async () => {}),
@@ -171,108 +256,27 @@ describe("TuiApp", () => {
   it("renders routes and opens Elevated Mode dialog", async () => {
     const connect = vi.fn();
     const disconnect = vi.fn();
-    const core = {
+    const core = createCore({
       connect,
       disconnect,
-      elevatedModeStore: createStore({
-        status: "inactive",
-        elevatedToken: null,
-        enteredAt: null,
-        expiresAt: null,
-        remainingMs: null,
+      elevatedModeStore: createElevatedModeStore("inactive"),
+      connectionStore: createConnectionStore("disconnected"),
+      approvalsStore: createEmptyApprovalsStore({
+        pendingIds: [1],
+        byId: {
+          1: { approval_id: 1, status: "pending", kind: "tool", prompt: "Approve?", created_at: "2026-02-26T00:00:00.000Z" },
+        },
       }),
-      connectionStore: createStore({
-        status: "disconnected",
-        clientId: "client-1",
-        transportError: "network down",
-        lastDisconnect: { code: 1006, reason: "closed" },
+      pairingStore: createPairingStore({
+        byId: {
+          10: { pairing_id: 10, status: "pending", node: { node_id: "node-1", label: null, capabilities: [] }, capability_allowlist: [], trust_level: null, created_at: "2026-02-26T00:00:00.000Z", updated_at: "2026-02-26T00:00:00.000Z" },
+          11: { pairing_id: 11, status: "approved", node: { node_id: "node-2", label: "Node 2", capabilities: [] }, capability_allowlist: [], trust_level: "local", created_at: "2026-02-26T00:00:00.000Z", updated_at: "2026-02-26T00:00:00.000Z" },
+        },
+        pendingIds: [10],
       }),
-      memoryStore: {
-        ...createStore(createMemorySnapshot()),
-        list: vi.fn(async () => {}),
-        search: vi.fn(async () => {}),
-        loadMore: vi.fn(async () => {}),
-        inspect: vi.fn(async () => {}),
-        forget: vi.fn(async () => {}),
-        export: vi.fn(async () => {}),
-      },
-      approvalsStore: {
-        ...createStore({
-          pendingIds: [1],
-          byId: {
-            1: {
-              approval_id: 1,
-              status: "pending",
-              kind: "tool",
-              prompt: "Approve?",
-              created_at: "2026-02-26T00:00:00.000Z",
-            },
-          },
-          loading: false,
-          error: null,
-        }),
-        refreshPending: vi.fn(async () => {}),
-        resolve: vi.fn(async () => {}),
-      },
-      pairingStore: {
-        ...createStore({
-          byId: {
-            10: {
-              pairing_id: 10,
-              status: "pending",
-              node: { node_id: "node-1", label: null, capabilities: [] },
-              capability_allowlist: [],
-              trust_level: null,
-              created_at: "2026-02-26T00:00:00.000Z",
-              updated_at: "2026-02-26T00:00:00.000Z",
-            },
-            11: {
-              pairing_id: 11,
-              status: "approved",
-              node: { node_id: "node-2", label: "Node 2", capabilities: [] },
-              capability_allowlist: [],
-              trust_level: "local",
-              created_at: "2026-02-26T00:00:00.000Z",
-              updated_at: "2026-02-26T00:00:00.000Z",
-            },
-          },
-          pendingIds: [10],
-          loading: false,
-          error: null,
-          lastSyncedAt: null,
-        }),
-        refresh: vi.fn(async () => {}),
-        approve: vi.fn(async () => {}),
-        deny: vi.fn(async () => {}),
-        revoke: vi.fn(async () => {}),
-      },
-      statusStore: createStore({
-        status: null,
-        usage: null,
-        presenceByInstanceId: {},
-        loading: { status: false, usage: false, presence: false },
-        error: { status: null, usage: null, presence: null },
-        lastSyncedAt: null,
-      }),
-      runsStore: createStore({
-        runsById: {},
-        stepIdsByRunId: {},
-        stepsById: {},
-        attemptIdsByStepId: {},
-        attemptsById: {},
-      }),
-    };
-
-    const runtime = createRuntime(core);
-    const config = DEFAULT_CONFIG;
-
-    const io = createTestStreams();
-    const instance = render(React.createElement(TuiApp, { runtime, config }), {
-      stdout: io.stdout,
-      stdin: io.stdin,
-      exitOnCtrlC: false,
-      patchConsole: false,
+      memoryStore: createMemoryStore(),
     });
+    const { io, instance } = renderTuiApp(core);
 
     try {
       await waitFor(() => connect.mock.calls.length === 1);
@@ -322,109 +326,28 @@ describe("TuiApp", () => {
       },
     } as unknown as Promise<never>;
 
-    const item = {
-      v: 1,
-      memory_item_id: "mem-1",
-      agent_id: "agent-1",
-      kind: "note",
-      tags: [],
-      sensitivity: "private",
-      provenance: { source_kind: "operator", refs: [] },
-      created_at: "2026-02-26T00:00:00.000Z",
-      body_md: "hello",
-    } as const;
+    const memoryStore = createMemoryStore(
+      createMemorySnapshot({
+        browse: {
+          request: { kind: "list", filter: undefined, limit: undefined },
+          results: { kind: "list", items: [DEFAULT_MEMORY_ITEM], nextCursor: null },
+        },
+      }),
+      { export: vi.fn(() => exportCatchTracker) },
+    );
 
-    const memoryStore = {
-      ...createStore(
-        createMemorySnapshot({
-          browse: {
-            request: { kind: "list", filter: undefined, limit: undefined },
-            results: { kind: "list", items: [item], nextCursor: null },
-          },
-        }),
-      ),
-      list: vi.fn(async () => {}),
-      search: vi.fn(async (_input: { query: string }) => {}),
-      loadMore: vi.fn(async () => {}),
-      inspect: vi.fn(async (_memoryItemId: string) => {}),
-      forget: vi.fn(async (_selectors: unknown[]) => {}),
-      export: vi.fn(() => exportCatchTracker),
-    };
-
-    const core = {
+    const core = createCore({
       connect,
       disconnect,
-      elevatedModeStore: createStore({
-        status: "active",
-        elevatedToken: "elevated",
-        enteredAt: "2026-02-26T00:00:00.000Z",
-        expiresAt: "2026-02-26T00:10:00.000Z",
-        remainingMs: 60_000,
-      }),
-      connectionStore: createStore({
-        status: "connected",
-        clientId: "client-1",
-        transportError: null,
-        lastDisconnect: null,
-      }),
-      approvalsStore: {
-        ...createStore({
-          pendingIds: [],
-          byId: {},
-          loading: false,
-          error: null,
-        }),
-        refreshPending: vi.fn(async () => {}),
-        resolve: vi.fn(async () => {}),
-      },
-      pairingStore: {
-        ...createStore({
-          byId: {},
-          pendingIds: [],
-          loading: false,
-          error: null,
-          lastSyncedAt: null,
-        }),
-        refresh: vi.fn(async () => {}),
-        approve: vi.fn(async () => {}),
-        deny: vi.fn(async () => {}),
-        revoke: vi.fn(async () => {}),
-      },
-      statusStore: createStore({
-        status: null,
-        usage: null,
-        presenceByInstanceId: {},
-        loading: { status: false, usage: false, presence: false },
-        error: { status: null, usage: null, presence: null },
-        lastSyncedAt: null,
-      }),
-      runsStore: createStore({
-        runsById: {},
-        stepIdsByRunId: {},
-        stepsById: {},
-        attemptIdsByStepId: {},
-        attemptsById: {},
-      }),
+      elevatedModeStore: createElevatedModeStore("active"),
+      connectionStore: createConnectionStore("connected"),
       memoryStore,
-    };
-
-    const runtime = createRuntime(core);
-    const config = DEFAULT_CONFIG;
-
-    const io = createTestStreams();
-    const instance = render(React.createElement(TuiApp, { runtime, config }), {
-      stdout: io.stdout,
-      stdin: io.stdin,
-      exitOnCtrlC: false,
-      patchConsole: false,
     });
+    const { io, instance } = renderTuiApp(core);
 
     try {
       await waitFor(() => connect.mock.calls.length === 1);
-
-      io.stdin.write("6");
-      await waitFor(() => memoryStore.list.mock.calls.length === 1);
-      memoryStore.list.mockClear();
+      await openMemory(io, memoryStore);
 
       io.stdin.write("r");
       await waitFor(() => memoryStore.list.mock.calls.length === 1);
@@ -444,7 +367,9 @@ describe("TuiApp", () => {
       await sleep(25);
       io.stdin.write("\r");
       await waitFor(() => memoryStore.forget.mock.calls.length === 1);
-      expect(memoryStore.forget).toHaveBeenCalledWith([{ kind: "id", memory_item_id: "mem-1" }]);
+      expect(memoryStore.forget).toHaveBeenCalledWith([
+        { kind: "id", memory_item_id: DEFAULT_MEMORY_ITEM.memory_item_id },
+      ]);
 
       io.stdin.write("p");
       await waitFor(() => memoryStore.export.mock.calls.length === 1);
@@ -460,22 +385,10 @@ describe("TuiApp", () => {
     const disconnect = vi.fn();
     let finalOutput = "";
 
-    const item = {
-      v: 1,
-      memory_item_id: "mem-1",
-      agent_id: "agent-1",
-      kind: "note",
-      tags: [],
-      sensitivity: "private",
-      provenance: { source_kind: "operator", refs: [] },
-      created_at: "2026-02-26T00:00:00.000Z",
-      body_md: "hello",
-    } as const;
-
     let memorySnapshot = createMemorySnapshot({
       browse: {
         request: { kind: "list", filter: undefined, limit: undefined },
-        results: { kind: "list", items: [item], nextCursor: null },
+        results: { kind: "list", items: [DEFAULT_MEMORY_ITEM], nextCursor: null },
       },
     });
 
@@ -506,80 +419,18 @@ describe("TuiApp", () => {
       export: vi.fn(async () => {}),
     };
 
-    const core = {
+    const core = createCore({
       connect,
       disconnect,
-      elevatedModeStore: createStore({
-        status: "active",
-        elevatedToken: "elevated",
-        enteredAt: "2026-02-26T00:00:00.000Z",
-        expiresAt: "2026-02-26T00:10:00.000Z",
-        remainingMs: 60_000,
-      }),
-      connectionStore: createStore({
-        status: "connected",
-        clientId: "client-1",
-        transportError: null,
-        lastDisconnect: null,
-      }),
-      approvalsStore: {
-        ...createStore({
-          pendingIds: [],
-          byId: {},
-          loading: false,
-          error: null,
-        }),
-        refreshPending: vi.fn(async () => {}),
-        resolve: vi.fn(async () => {}),
-      },
-      pairingStore: {
-        ...createStore({
-          byId: {},
-          pendingIds: [],
-          loading: false,
-          error: null,
-          lastSyncedAt: null,
-        }),
-        refresh: vi.fn(async () => {}),
-        approve: vi.fn(async () => {}),
-        deny: vi.fn(async () => {}),
-        revoke: vi.fn(async () => {}),
-      },
-      statusStore: createStore({
-        status: null,
-        usage: null,
-        presenceByInstanceId: {},
-        loading: { status: false, usage: false, presence: false },
-        error: { status: null, usage: null, presence: null },
-        lastSyncedAt: null,
-      }),
-      runsStore: createStore({
-        runsById: {},
-        stepIdsByRunId: {},
-        stepsById: {},
-        attemptIdsByStepId: {},
-        attemptsById: {},
-      }),
+      elevatedModeStore: createElevatedModeStore("active"),
+      connectionStore: createConnectionStore("connected"),
       memoryStore,
-    };
-
-    const runtime = createRuntime(core);
-    const config = DEFAULT_CONFIG;
-
-    const io = createTestStreams();
-    const instance = render(React.createElement(TuiApp, { runtime, config }), {
-      stdout: io.stdout,
-      stdin: io.stdin,
-      exitOnCtrlC: false,
-      patchConsole: false,
     });
+    const { io, instance } = renderTuiApp(core);
 
     try {
       await waitFor(() => connect.mock.calls.length === 1);
-
-      io.stdin.write("6");
-      await waitFor(() => memoryStore.list.mock.calls.length === 1);
-      memoryStore.list.mockClear();
+      await openMemory(io, memoryStore);
 
       io.stdin.write("f");
       await sleep(25);
@@ -605,90 +456,20 @@ describe("TuiApp", () => {
     const connect = vi.fn();
     const disconnect = vi.fn();
 
-    const memoryStore = {
-      ...createStore(createMemorySnapshot()),
-      list: vi.fn(async () => {}),
-      search: vi.fn(async (_input: { query: string }) => {}),
-      loadMore: vi.fn(async () => {}),
-      inspect: vi.fn(async () => {}),
-      forget: vi.fn(async (_selectors: unknown[]) => {}),
-      export: vi.fn(async () => {}),
-    };
+    const memoryStore = createMemoryStore();
 
-    const core = {
+    const core = createCore({
       connect,
       disconnect,
-      elevatedModeStore: createStore({
-        status: "inactive",
-        elevatedToken: null,
-        enteredAt: null,
-        expiresAt: null,
-        remainingMs: null,
-      }),
-      connectionStore: createStore({
-        status: "connected",
-        clientId: "client-1",
-        transportError: null,
-        lastDisconnect: null,
-      }),
-      approvalsStore: {
-        ...createStore({
-          pendingIds: [],
-          byId: {},
-          loading: false,
-          error: null,
-        }),
-        refreshPending: vi.fn(async () => {}),
-        resolve: vi.fn(async () => {}),
-      },
-      pairingStore: {
-        ...createStore({
-          byId: {},
-          pendingIds: [],
-          loading: false,
-          error: null,
-          lastSyncedAt: null,
-        }),
-        refresh: vi.fn(async () => {}),
-        approve: vi.fn(async () => {}),
-        deny: vi.fn(async () => {}),
-        revoke: vi.fn(async () => {}),
-      },
-      statusStore: createStore({
-        status: null,
-        usage: null,
-        presenceByInstanceId: {},
-        loading: { status: false, usage: false, presence: false },
-        error: { status: null, usage: null, presence: null },
-        lastSyncedAt: null,
-      }),
-      runsStore: createStore({
-        runsById: {},
-        stepIdsByRunId: {},
-        stepsById: {},
-        attemptIdsByStepId: {},
-        attemptsById: {},
-      }),
+      elevatedModeStore: createElevatedModeStore("inactive"),
+      connectionStore: createConnectionStore("connected"),
       memoryStore,
-    };
-
-    const runtime = createRuntime(core);
-    const config = DEFAULT_CONFIG;
-
-    const io = createTestStreams();
-    const instance = render(React.createElement(TuiApp, { runtime, config }), {
-      stdout: io.stdout,
-      stdin: io.stdin,
-      exitOnCtrlC: false,
-      patchConsole: false,
     });
+    const { io, instance } = renderTuiApp(core);
 
     try {
       await waitFor(() => connect.mock.calls.length === 1);
-
-      io.stdin.write("6");
-      await waitFor(() => memoryStore.list.mock.calls.length === 1);
-      memoryStore.list.mockClear();
+      await openMemory(io, memoryStore);
 
       io.stdin.write("/");
       await sleep(25);

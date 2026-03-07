@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import {
   ConfiguredProviderAccount,
   ConfiguredProviderListResponse,
@@ -39,6 +39,10 @@ export interface ProviderConfigRouteDeps {
   executionProfileModelAssignmentDal: ExecutionProfileModelAssignmentDal;
 }
 
+const invalidRequest = (c: Context, message: string, status = 400) =>
+  c.json({ error: "invalid_request", message }, status);
+const notFound = (c: Context, message: string) => c.json({ error: "not_found", message }, 404);
+
 function toContractAccount(row: AuthProfileRow) {
   return ConfiguredProviderAccount.parse({
     account_id: row.auth_profile_id,
@@ -59,21 +63,13 @@ function validateConfigFieldValue(
   value: unknown,
   field: ProviderMethodSpec["fields"][number],
 ): { ok: true; value: unknown } | { ok: false; message: string } {
-  if (field.input === "boolean") {
-    if (typeof value === "boolean") {
-      return { ok: true, value };
-    }
-    return { ok: false, message: `${field.key} must be a boolean` };
-  }
-
-  if (typeof value !== "string") {
-    return { ok: false, message: `${field.key} must be a string` };
-  }
-
+  if (field.input === "boolean")
+    return typeof value === "boolean"
+      ? { ok: true, value }
+      : { ok: false, message: `${field.key} must be a boolean` };
+  if (typeof value !== "string") return { ok: false, message: `${field.key} must be a string` };
   const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return { ok: false, message: `${field.key} must not be empty` };
-  }
+  if (trimmed.length === 0) return { ok: false, message: `${field.key} must not be empty` };
   return { ok: true, value: trimmed };
 }
 
@@ -81,13 +77,9 @@ function validateSecretFieldValue(
   value: unknown,
   field: ProviderMethodSpec["fields"][number],
 ): { ok: true; value: string } | { ok: false; message: string } {
-  if (typeof value !== "string") {
-    return { ok: false, message: `${field.key} must be a string` };
-  }
+  if (typeof value !== "string") return { ok: false, message: `${field.key} must be a string` };
   const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return { ok: false, message: `${field.key} must not be empty` };
-  }
+  if (trimmed.length === 0) return { ok: false, message: `${field.key} must not be empty` };
   return { ok: true, value: trimmed };
 }
 
@@ -168,9 +160,7 @@ async function loadRegistrySpecs(
   tenantId: string,
 ): Promise<Map<string, ProviderRegistrySpec>> {
   const loaded = await modelCatalog.getEffectiveCatalog({ tenantId });
-  return new Map(
-    listProviderRegistrySpecs(loaded.catalog).map((provider) => [provider.provider_key, provider]),
-  );
+  return new Map(listProviderRegistrySpecs(loaded.catalog).map((provider) => [provider.provider_key, provider]));
 }
 
 async function listProviderGroups(deps: ProviderConfigRouteDeps, tenantId: string) {
@@ -205,17 +195,11 @@ async function listProviderGroups(deps: ProviderConfigRouteDeps, tenantId: strin
 
   const providers = Array.from(grouped.values())
     .map((provider) => {
-      provider.accounts = provider.accounts.toSorted((a, b) =>
-        a.display_name.localeCompare(b.display_name),
-      );
+      provider.accounts = provider.accounts.toSorted((a, b) => a.display_name.localeCompare(b.display_name));
       return provider;
     })
     .toSorted((a, b) => a.name.localeCompare(b.name) || a.provider_key.localeCompare(b.provider_key));
-
-  return ConfiguredProviderListResponse.parse({
-    status: "ok",
-    providers,
-  });
+  return ConfiguredProviderListResponse.parse({ status: "ok", providers });
 }
 
 async function storeManagedSecrets(input: {
@@ -226,8 +210,7 @@ async function storeManagedSecrets(input: {
   const configuredSecretKeys: Record<string, string> = {};
   for (const [slotKey, value] of Object.entries(input.secretValues)) {
     const secretKey = buildManagedProviderSecretKey(input.accountKey, slotKey);
-    await input.secretProvider.store(secretKey, value);
-    configuredSecretKeys[slotKey] = secretKey;
+    await input.secretProvider.store(secretKey, value); configuredSecretKeys[slotKey] = secretKey;
   }
   return configuredSecretKeys;
 }
@@ -236,9 +219,7 @@ async function revokeManagedSecrets(
   secretProvider: SecretProvider,
   secretKeys: string[],
 ): Promise<void> {
-  for (const secretKey of secretKeys) {
-    await secretProvider.revoke(secretKey).catch(() => false);
-  }
+  for (const secretKey of secretKeys) await secretProvider.revoke(secretKey).catch(() => false);
 }
 
 async function resolveProviderDeletionRequirements(input: {
@@ -253,11 +234,12 @@ async function resolveProviderDeletionRequirements(input: {
     providerKey: input.deletedProviderKey,
   });
   const deletedPresetKeys = new Set(presets.map((preset) => preset.preset_key));
-  const assignments = deletedPresetKeys.size
-    ? (await input.assignmentDal.list({ tenantId: input.tenantId })).filter((assignment) =>
-        deletedPresetKeys.has(assignment.preset_key),
-      )
-    : [];
+  const assignments =
+    deletedPresetKeys.size > 0
+      ? (await input.assignmentDal.list({ tenantId: input.tenantId })).filter((assignment) =>
+          deletedPresetKeys.has(assignment.preset_key),
+        )
+      : [];
 
   const requiredExecutionProfileIds = assignments
     .map((assignment) => assignment.execution_profile_id)
@@ -308,12 +290,7 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
     const tenantId = requireTenantId(c);
     const loaded = await deps.modelCatalog.getEffectiveCatalog({ tenantId });
     const providers = listProviderRegistrySpecs(loaded.catalog);
-    return c.json(
-      ProviderRegistryResponse.parse({
-        status: "ok",
-        providers,
-      }),
-    );
+    return c.json(ProviderRegistryResponse.parse({ status: "ok", providers }));
   });
 
   app.get("/config/providers", async (c) => {
@@ -325,28 +302,20 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
     const tenantId = requireTenantId(c);
     const body = (await c.req.json().catch(() => undefined)) as unknown;
     const parsed = ProviderAccountCreateRequest.safeParse(body);
-    if (!parsed.success) {
-      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
-    }
+    if (!parsed.success) return invalidRequest(c, parsed.error.message);
 
     const registrySpecs = await loadRegistrySpecs(deps.modelCatalog, tenantId);
     const providerSpec = registrySpecs.get(parsed.data.provider_key);
     const method = findProviderMethodSpec(providerSpec, parsed.data.method_key);
-    if (!providerSpec || !providerSpec.supported || !method) {
-      return c.json(
-        { error: "invalid_request", message: "provider or authentication method is not supported" },
-        400,
-      );
-    }
+    if (!providerSpec || !providerSpec.supported || !method)
+      return invalidRequest(c, "provider or authentication method is not supported");
 
     const validated = validateProviderAccountInput({
       method,
       config: parsed.data.config,
       secretValues: parsed.data.secrets,
     });
-    if (!validated.ok) {
-      return c.json({ error: "invalid_request", message: validated.message }, 400);
-    }
+    if (!validated.ok) return invalidRequest(c, validated.message);
 
     const existingRows = await deps.authProfileDal.list({
       tenantId,
@@ -377,13 +346,7 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
         secretKeys: managedSecretKeys,
       });
 
-      return c.json(
-        ProviderAccountMutateResponse.parse({
-          status: "ok",
-          account: toContractAccount(row),
-        }),
-        201,
-      );
+      return c.json(ProviderAccountMutateResponse.parse({ status: "ok", account: toContractAccount(row) }), 201);
     } catch (error) {
       await revokeManagedSecrets(secretProvider, Object.values(managedSecretKeys));
       throw error;
@@ -395,27 +358,18 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
     const accountKey = c.req.param("key");
     const body = (await c.req.json().catch(() => undefined)) as unknown;
     const parsed = ProviderAccountUpdateRequest.safeParse(body);
-    if (!parsed.success) {
-      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
-    }
+    if (!parsed.success) return invalidRequest(c, parsed.error.message);
 
     const existing = await deps.authProfileDal.getByKey({
       tenantId,
       authProfileKey: accountKey,
     });
-    if (!existing) {
-      return c.json({ error: "not_found", message: "provider account not found" }, 404);
-    }
+    if (!existing) return notFound(c, "provider account not found");
 
     const registrySpecs = await loadRegistrySpecs(deps.modelCatalog, tenantId);
     const providerSpec = registrySpecs.get(existing.provider_key);
     const method = findProviderMethodSpec(providerSpec, existing.method_key);
-    if (!method) {
-      return c.json(
-        { error: "invalid_request", message: "provider account is using an unsupported method" },
-        400,
-      );
-    }
+    if (!method) return invalidRequest(c, "provider account is using an unsupported method");
 
     const validated = validateProviderAccountInput({
       method,
@@ -426,9 +380,7 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
       secretValues: parsed.data.secrets ?? {},
       existingSecretKeys: existing.secret_keys,
     });
-    if (!validated.ok) {
-      return c.json({ error: "invalid_request", message: validated.message }, 400);
-    }
+    if (!validated.ok) return invalidRequest(c, validated.message);
 
     const secretProvider = deps.secretProviderForTenant(tenantId);
     const updatedSecretKeys = {
@@ -458,26 +410,16 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
                 return acc;
               }, {}),
     });
-    if (!row) {
-      return c.json({ error: "not_found", message: "provider account not found" }, 404);
-    }
+    if (!row) return notFound(c, "provider account not found");
 
     if (parsed.data.status && parsed.data.status !== existing.status) {
       row =
         parsed.data.status === "disabled"
           ? await deps.authProfileDal.disableByKey({ tenantId, authProfileKey: accountKey })
           : await deps.authProfileDal.enableByKey({ tenantId, authProfileKey: accountKey });
-      if (!row) {
-        return c.json({ error: "not_found", message: "provider account not found" }, 404);
-      }
+      if (!row) return notFound(c, "provider account not found");
     }
-
-    return c.json(
-      ProviderAccountMutateResponse.parse({
-        status: "ok",
-        account: toContractAccount(row),
-      }),
-    );
+    return c.json(ProviderAccountMutateResponse.parse({ status: "ok", account: toContractAccount(row) }));
   });
 
   app.delete("/config/providers/accounts/:key", async (c) => {
@@ -487,9 +429,7 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
       tenantId,
       authProfileKey: accountKey,
     });
-    if (!existing) {
-      return c.json({ error: "not_found", message: "provider account not found" }, 404);
-    }
+    if (!existing) return notFound(c, "provider account not found");
 
     const providerAccounts = await deps.authProfileDal.list({
       tenantId,
@@ -504,38 +444,30 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
         deletedProviderKey: existing.provider_key,
       });
       if ("conflict" in resolved) {
-        return c.json(
-          {
-            ...resolved.conflict,
-            message:
-              "cannot delete the last provider account while configured model presets or execution-profile assignments still reference this provider; delete the provider instead",
-          },
-          409,
-        );
+        return c.json({
+          ...resolved.conflict,
+          message:
+            "cannot delete the last provider account while configured model presets or execution-profile assignments still reference this provider; delete the provider instead",
+        }, 409);
       }
       if (resolved.deletedPresetKeys.size > 0) {
-        return c.json(
-          {
-            error: "invalid_request",
-            message:
-              "cannot delete the last provider account while configured model presets still reference this provider; delete the provider instead",
-          },
-          409,
-        );
+        return c.json({
+          error: "invalid_request",
+          message:
+            "cannot delete the last provider account while configured model presets still reference this provider; delete the provider instead",
+        }, 409);
       }
     }
 
     await deps.db.transaction(async (tx) => {
-      await tx.run(
-        `DELETE FROM session_provider_pins
-         WHERE tenant_id = ? AND auth_profile_id = ?`,
-        [tenantId, existing.auth_profile_id],
-      );
-      await tx.run(
-        `DELETE FROM auth_profiles
-         WHERE tenant_id = ? AND auth_profile_key = ?`,
-        [tenantId, existing.auth_profile_key],
-      );
+      await tx.run("DELETE FROM session_provider_pins WHERE tenant_id = ? AND auth_profile_id = ?", [
+        tenantId,
+        existing.auth_profile_id,
+      ]);
+      await tx.run("DELETE FROM auth_profiles WHERE tenant_id = ? AND auth_profile_key = ?", [
+        tenantId,
+        existing.auth_profile_key,
+      ]);
     });
 
     await revokeManagedSecrets(
@@ -553,15 +485,11 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
       providerKey,
       limit: 500,
     });
-    if (accounts.length === 0) {
-      return c.json({ error: "not_found", message: "provider not found" }, 404);
-    }
+    if (accounts.length === 0) return notFound(c, "provider not found");
 
     const body = (await c.req.json().catch(() => undefined)) as unknown;
     const parsed = ModelConfigDeleteRequest.safeParse(body ?? {});
-    if (!parsed.success) {
-      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
-    }
+    if (!parsed.success) return invalidRequest(c, parsed.error.message);
 
     try {
       const resolved = await resolveProviderDeletionRequirements({
@@ -571,9 +499,7 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
         deletedProviderKey: providerKey,
         replacementAssignments: parsed.data.replacement_assignments,
       });
-      if ("conflict" in resolved) {
-        return c.json(resolved.conflict, 409);
-      }
+      if ("conflict" in resolved) return c.json(resolved.conflict, 409);
 
       const deletedPresetKeys = Array.from(resolved.deletedPresetKeys);
       const profileIds = accounts.map((row) => row.auth_profile_id);
@@ -590,47 +516,31 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
         }
         if (deletedPresetKeys.length > 0) {
           const presetPlaceholders = deletedPresetKeys.map(() => "?").join(", ");
-          await tx.run(
-            `DELETE FROM session_model_overrides
-             WHERE tenant_id = ?
-               AND preset_key IN (${presetPlaceholders})`,
-            [tenantId, ...deletedPresetKeys],
-          );
-          await tx.run(
-            `DELETE FROM configured_model_presets
-             WHERE tenant_id = ?
-               AND provider_key = ?`,
-            [tenantId, providerKey],
-          );
+          await tx.run(`DELETE FROM session_model_overrides WHERE tenant_id = ? AND preset_key IN (${presetPlaceholders})`, [tenantId, ...deletedPresetKeys]);
+          await tx.run("DELETE FROM configured_model_presets WHERE tenant_id = ? AND provider_key = ?", [
+            tenantId,
+            providerKey,
+          ]);
         }
-        await tx.run(
-          `DELETE FROM session_model_overrides
-           WHERE tenant_id = ?
-             AND model_id LIKE ? ESCAPE '\\'`,
-          [tenantId, `${escapeLikePattern(providerKey)}/%`],
-        );
+        await tx.run("DELETE FROM session_model_overrides WHERE tenant_id = ? AND model_id LIKE ? ESCAPE '\\'", [
+          tenantId,
+          `${escapeLikePattern(providerKey)}/%`,
+        ]);
         if (profileIds.length > 0) {
           const profilePlaceholders = profileIds.map(() => "?").join(", ");
-          await tx.run(
-            `DELETE FROM session_provider_pins
-             WHERE tenant_id = ?
-               AND auth_profile_id IN (${profilePlaceholders})`,
-            [tenantId, ...profileIds],
-          );
+          await tx.run(`DELETE FROM session_provider_pins WHERE tenant_id = ? AND auth_profile_id IN (${profilePlaceholders})`, [tenantId, ...profileIds]);
         }
-        await tx.run(
-          `DELETE FROM auth_profiles
-           WHERE tenant_id = ?
-             AND provider_key = ?`,
-          [tenantId, providerKey],
-        );
+        await tx.run("DELETE FROM auth_profiles WHERE tenant_id = ? AND provider_key = ?", [
+          tenantId,
+          providerKey,
+        ]);
       });
 
       await revokeManagedSecrets(deps.secretProviderForTenant(tenantId), secretKeys);
       return c.json(ModelConfigDeleteResponse.parse({ status: "ok" }));
     } catch (error) {
       const message = error instanceof Error ? error.message : "invalid replacement preset";
-      return c.json({ error: "invalid_request", message }, 400);
+      return invalidRequest(c, message);
     }
   });
 

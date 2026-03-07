@@ -1,11 +1,4 @@
-import type {
-  LanguageModelV2,
-  LanguageModelV2CallOptions,
-  LanguageModelV3,
-  LanguageModelV3CallOptions,
-  LanguageModelV3GenerateResult,
-  LanguageModelV3StreamResult,
-} from "@ai-sdk/provider";
+import type { LanguageModelV2, LanguageModelV2CallOptions, LanguageModelV3, LanguageModelV3CallOptions, LanguageModelV3GenerateResult, LanguageModelV3StreamResult } from "@ai-sdk/provider";
 import { APICallError } from "ai";
 import type { LanguageModel } from "ai";
 import type { AgentConfig as AgentConfigT } from "@tyrum/schemas";
@@ -17,19 +10,7 @@ import { SessionModelOverrideDal } from "../../models/session-model-override-dal
 import { createProviderFromNpm } from "../../models/provider-factory.js";
 import type { SecretProvider } from "../../secret/provider.js";
 import { coerceRecord, coerceStringRecord } from "../../util/coerce.js";
-import {
-  buildProviderResolutionSetup,
-  getStopFallbackApiCallError,
-  isAuthInvalidStatus,
-  isCredentialPaymentOrEntitlementStatus,
-  isTransientStatus,
-  listOrderedEligibleProfilesForProvider,
-  OAUTH_REFRESH_LEASE_UNAVAILABLE,
-  parseProviderModelId,
-  providerRequiresConfiguredAccount,
-  resolveProfileSecrets,
-  resolveProviderBaseURL,
-} from "./provider-resolution.js";
+import { buildProviderResolutionSetup, getStopFallbackApiCallError, isAuthInvalidStatus, isCredentialPaymentOrEntitlementStatus, isTransientStatus, listOrderedEligibleProfilesForProvider, OAUTH_REFRESH_LEASE_UNAVAILABLE, parseProviderModelId, providerRequiresConfiguredAccount, resolveProfileSecrets, resolveProviderBaseURL } from "./provider-resolution.js";
 
 export interface ResolveSessionModelDeps {
   container: GatewayContainer;
@@ -39,11 +20,7 @@ export interface ResolveSessionModelDeps {
   fetchImpl: typeof fetch;
 }
 
-const V2_PROVIDER_NPMS = new Set([
-  "@gitlab/gitlab-ai-provider",
-  "@jerome-benoit/sap-ai-provider-v2",
-  "venice-ai-sdk-provider",
-]);
+const V2_PROVIDER_NPMS = new Set(["@gitlab/gitlab-ai-provider", "@jerome-benoit/sap-ai-provider-v2", "venice-ai-sdk-provider"]);
 
 function expectedSpecificationVersionForNpm(npm: string): "v2" | "v3" {
   return V2_PROVIDER_NPMS.has(npm) ? "v2" : "v3";
@@ -98,10 +75,7 @@ export async function resolveSessionModel(
           });
         })();
 
-  type CandidateInput = {
-    rawModelId: string;
-    optionsOverride?: Record<string, unknown>;
-  };
+  type CandidateInput = { rawModelId: string; optionsOverride?: Record<string, unknown> };
 
   const candidateInputs: CandidateInput[] = (() => {
     const baseCandidates = [
@@ -118,41 +92,20 @@ export async function resolveSessionModel(
       optionsOverride: preset.options,
     });
 
-    if (sessionPreset) {
-      return [presetCandidate(sessionPreset), ...baseCandidates];
-    }
-
-    if (overrideModelId) {
-      return [{ rawModelId: overrideModelId }, ...baseCandidates];
-    }
-
-    if (assignedPreset) {
-      return [presetCandidate(assignedPreset), ...baseCandidates];
-    }
-
-    return baseCandidates;
+    if (sessionPreset) return [presetCandidate(sessionPreset), ...baseCandidates];
+    if (overrideModelId) return [{ rawModelId: overrideModelId }, ...baseCandidates];
+    return assignedPreset ? [presetCandidate(assignedPreset), ...baseCandidates] : baseCandidates;
   })();
 
   const rawCandidateIds = candidateInputs
     .map((candidate) => candidate.rawModelId.trim())
     .filter((value, index, values) => value.length > 0 && values.indexOf(value) === index);
 
-  const loaded = await deps.container.modelCatalog.getEffectiveCatalog({
-    tenantId: input.tenantId,
-  });
-  const catalog = loaded.catalog;
+  const catalog = (await deps.container.modelCatalog.getEffectiveCatalog({ tenantId: input.tenantId })).catalog;
 
   type ProviderEntry = (typeof catalog)[string];
   type ModelEntry = NonNullable<ProviderEntry["models"]>[string];
-  type ResolvedCandidate = {
-    providerId: string;
-    modelId: string;
-    provider: ProviderEntry;
-    model: ModelEntry;
-    npm: string;
-    api: string | undefined;
-    optionsOverride?: Record<string, unknown>;
-  };
+  type ResolvedCandidate = { providerId: string; modelId: string; provider: ProviderEntry; model: ModelEntry; npm: string; api: string | undefined; optionsOverride?: Record<string, unknown> };
 
   const invalidCandidateIds: string[] = [];
   const optionsByCandidateId = new Map<string, Record<string, unknown>>();
@@ -184,24 +137,16 @@ export async function resolveSessionModel(
     parsedCandidates.push(parsed);
   }
 
-  if (invalidCandidateIds.length > 0) {
-    throw new Error(
-      `invalid agent model id(s) (expected provider/model): ${invalidCandidateIds.join(", ")}`,
-    );
-  }
+  if (invalidCandidateIds.length > 0) throw new Error(`invalid agent model id(s) (expected provider/model): ${invalidCandidateIds.join(", ")}`);
 
   const resolvedCandidates: ResolvedCandidate[] = parsedCandidates
     .map((candidate): ResolvedCandidate | undefined => {
       const { providerId, modelId } = candidate;
       const provider = catalog[providerId];
-      if (!provider) return undefined;
-      const providerEnabled = (provider as { enabled?: boolean }).enabled ?? true;
-      if (!providerEnabled) return undefined;
-      const model = provider.models?.[modelId];
-      if (!model) return undefined;
-      const modelEnabled = (model as { enabled?: boolean }).enabled ?? true;
-      if (!modelEnabled) return undefined;
-
+      const model = provider?.models?.[modelId];
+      if (!provider || !model) return undefined;
+      if (!((provider as { enabled?: boolean }).enabled ?? true)) return undefined;
+      if (!((model as { enabled?: boolean }).enabled ?? true)) return undefined;
       const providerOverride = (model as { provider?: { npm?: string; api?: string } }).provider;
       const npm = providerOverride?.npm ?? provider.npm;
       const api = providerOverride?.api ?? provider.api;
@@ -226,13 +171,8 @@ export async function resolveSessionModel(
     throw new Error(`model not found in models.dev catalog: ${attemptedLabel}`);
   }
 
-  const specsByCandidate = resolvedCandidates.map((candidate) => ({
-    candidateId: `${candidate.providerId}/${candidate.modelId}`,
-    specificationVersion: expectedSpecificationVersionForNpm(candidate.npm),
-  }));
-  const distinctSpecs = Array.from(
-    new Set(specsByCandidate.map((entry) => entry.specificationVersion)),
-  );
+  const specsByCandidate = resolvedCandidates.map((candidate) => ({ candidateId: `${candidate.providerId}/${candidate.modelId}`, specificationVersion: expectedSpecificationVersionForNpm(candidate.npm) }));
+  const distinctSpecs = Array.from(new Set(specsByCandidate.map((entry) => entry.specificationVersion)));
   if (distinctSpecs.length > 1) {
     const details = specsByCandidate
       .map((entry) => `${entry.candidateId} (${entry.specificationVersion})`)
@@ -241,15 +181,7 @@ export async function resolveSessionModel(
   }
 
   const fetchImpl = input.fetchImpl ?? deps.fetchImpl;
-  const {
-    secretProvider,
-    authProfileDal,
-    pinDal,
-    oauthProviderRegistry,
-    oauthRefreshLeaseDal,
-    logger,
-    oauthLeaseOwner,
-  } = buildProviderResolutionSetup({
+  const { secretProvider, authProfileDal, pinDal, oauthProviderRegistry, oauthRefreshLeaseDal, logger, oauthLeaseOwner } = buildProviderResolutionSetup({
     container: deps.container,
     secretProvider: deps.secretProvider,
     oauthLeaseOwner: deps.oauthLeaseOwner,
@@ -258,9 +190,7 @@ export async function resolveSessionModel(
 
   type ResolvedLanguageModel = LanguageModelV2 | LanguageModelV3;
 
-  async function buildRotatingModel(
-    chosen: (typeof resolvedCandidates)[number],
-  ): Promise<ResolvedLanguageModel> {
+  async function buildRotatingModel(chosen: (typeof resolvedCandidates)[number]): Promise<ResolvedLanguageModel> {
     const mergedOptions = (() => {
       const providerOptions =
         coerceRecord((chosen.provider as { options?: unknown }).options) ?? {};
@@ -299,6 +229,24 @@ export async function resolveSessionModel(
       providerApi: chosen.api,
       providerEnv: (chosen.provider as { env?: unknown }).env,
     });
+    const missingCredentialsError = () =>
+      new Error(`no active auth profiles with credentials configured for provider '${chosen.providerId}'`);
+    const pinSessionProfile = (authProfileId: string): void => {
+      if (!input.sessionId) return;
+      void pinDal
+        .upsert({
+          tenantId: input.tenantId,
+          sessionId: input.sessionId,
+          providerKey: chosen.providerId,
+          authProfileId,
+        })
+        .catch(() => {});
+    };
+    const invokeModel = async <T, TCallOptions>(model: ResolvedLanguageModel, options: TCallOptions, invoke: (model: ResolvedLanguageModel, options: TCallOptions) => PromiseLike<T>, authProfileId?: string): Promise<T> => {
+      const result = await invoke(model, options);
+      if (authProfileId) pinSessionProfile(authProfileId);
+      return result;
+    };
 
     async function buildModelFromProfile(
       profile?: AuthProfileRow,
@@ -382,36 +330,17 @@ export async function resolveSessionModel(
       });
 
       if (orderedProfiles.length === 0) {
-        if (requiresConfiguredAccount) {
-          throw new Error(
-            `no active auth profiles with credentials configured for provider '${chosen.providerId}'`,
-          );
-        }
+        if (requiresConfiguredAccount) throw missingCredentialsError();
         const model = await buildModelFromProfile();
-        if (!model || model === OAUTH_REFRESH_LEASE_UNAVAILABLE) {
-          throw new Error(
-            `no active auth profiles with credentials configured for provider '${chosen.providerId}'`,
-          );
-        }
-        return await invoke(model, options);
+        if (!model || model === OAUTH_REFRESH_LEASE_UNAVAILABLE) throw missingCredentialsError();
+        return await invokeModel(model, options, invoke);
       }
 
       for (const profile of orderedProfiles) {
         const model = await buildModelFromProfile(profile);
         if (!model || model === OAUTH_REFRESH_LEASE_UNAVAILABLE) continue;
         try {
-          const res = await invoke(model, options);
-          if (input.sessionId) {
-            void pinDal
-              .upsert({
-                tenantId: input.tenantId,
-                sessionId: input.sessionId,
-                providerKey: chosen.providerId,
-                authProfileId: profile.auth_profile_id,
-              })
-              .catch(() => {});
-          }
-          return res;
+          return await invokeModel(model, options, invoke, profile.auth_profile_id);
         } catch (err) {
           lastErr = err;
           if (APICallError.isInstance(err)) {
@@ -428,18 +357,12 @@ export async function resolveSessionModel(
                 }
                 if (refreshedModel) {
                   try {
-                    const res = await invoke(refreshedModel, options);
-                    if (input.sessionId) {
-                      void pinDal
-                        .upsert({
-                          tenantId: input.tenantId,
-                          sessionId: input.sessionId,
-                          providerKey: chosen.providerId,
-                          authProfileId: profile.auth_profile_id,
-                        })
-                        .catch(() => {});
-                    }
-                    return res;
+                    return await invokeModel(
+                      refreshedModel,
+                      options,
+                      invoke,
+                      profile.auth_profile_id,
+                    );
                   } catch (retryErr) {
                     lastErr = retryErr;
                     if (APICallError.isInstance(retryErr)) {
@@ -482,18 +405,14 @@ export async function resolveSessionModel(
         }
       }
 
-      if (!lastErr) {
-        lastErr = new Error(
-          `no active auth profiles with credentials configured for provider '${chosen.providerId}'`,
-        );
-      }
+      if (!lastErr) lastErr = missingCredentialsError();
 
       const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
       throw new Error(`model call failed for ${providerLabel}: ${message}`, { cause: lastErr });
     }
 
     if (expectedSpec === "v2") {
-      const rotating: LanguageModelV2 = {
+      return {
         specificationVersion: "v2",
         provider: chosen.providerId,
         modelId: chosen.modelId,
@@ -509,10 +428,9 @@ export async function resolveSessionModel(
           );
         },
       };
-      return rotating;
     }
 
-    const rotating: LanguageModelV3 = {
+    return {
       specificationVersion: "v3",
       provider: chosen.providerId,
       modelId: chosen.modelId,
@@ -530,17 +448,10 @@ export async function resolveSessionModel(
         );
       },
     };
-    return rotating;
   }
 
-  const rotatingModels: ResolvedLanguageModel[] = [];
-  for (const entry of resolvedCandidates) {
-    rotatingModels.push(await buildRotatingModel(entry));
-  }
-
-  if (rotatingModels.length === 1) {
-    return rotatingModels[0]!;
-  }
+  const rotatingModels = await Promise.all(resolvedCandidates.map((entry) => buildRotatingModel(entry)));
+  if (rotatingModels.length === 1) return rotatingModels[0]!;
 
   const primarySpec = rotatingModels[0]!.specificationVersion;
   const compatibleRotatingModels = rotatingModels.filter(
@@ -554,75 +465,56 @@ export async function resolveSessionModel(
     .map((entry) => `${entry.providerId}/${entry.modelId}`)
     .join(", ");
   const primary = compatibleRotatingModels[0]!;
+  async function callCompatibleModels<T, TCallOptions>(
+    options: TCallOptions,
+    invoke: (model: ResolvedLanguageModel, options: TCallOptions) => PromiseLike<T>,
+  ): Promise<T> {
+    let lastErr: unknown;
+    for (const model of compatibleRotatingModels) {
+      try {
+        return await invoke(model, options);
+      } catch (err) {
+        if (getStopFallbackApiCallError(err)) throw err;
+        lastErr = err;
+      }
+    }
+    const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+    throw new Error(`model call failed for candidates ${attempted}: ${message}`);
+  }
 
   if (primarySpec === "v2") {
-    const multi: LanguageModelV2 = {
+    return {
       specificationVersion: "v2",
       provider: primary.provider,
       modelId: primary.modelId,
       supportedUrls: primary.supportedUrls,
       async doGenerate(options: LanguageModelV2CallOptions) {
-        let lastErr: unknown;
-        for (const model of compatibleRotatingModels) {
-          try {
-            return await (model as LanguageModelV2).doGenerate(options);
-          } catch (err) {
-            if (getStopFallbackApiCallError(err)) throw err;
-            lastErr = err;
-          }
-        }
-        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-        throw new Error(`model call failed for candidates ${attempted}: ${message}`);
+        return await callCompatibleModels(options, (model, currentOptions) =>
+          (model as LanguageModelV2).doGenerate(currentOptions as LanguageModelV2CallOptions),
+        );
       },
       async doStream(options: LanguageModelV2CallOptions) {
-        let lastErr: unknown;
-        for (const model of compatibleRotatingModels) {
-          try {
-            return await (model as LanguageModelV2).doStream(options);
-          } catch (err) {
-            if (getStopFallbackApiCallError(err)) throw err;
-            lastErr = err;
-          }
-        }
-        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-        throw new Error(`model call failed for candidates ${attempted}: ${message}`);
+        return await callCompatibleModels(options, (model, currentOptions) =>
+          (model as LanguageModelV2).doStream(currentOptions as LanguageModelV2CallOptions),
+        );
       },
     };
-    return multi;
   }
 
-  const multi: LanguageModelV3 = {
+  return {
     specificationVersion: "v3",
     provider: primary.provider,
     modelId: primary.modelId,
     supportedUrls: primary.supportedUrls,
     async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
-      let lastErr: unknown;
-      for (const model of compatibleRotatingModels) {
-        try {
-          return await (model as LanguageModelV3).doGenerate(options);
-        } catch (err) {
-          if (getStopFallbackApiCallError(err)) throw err;
-          lastErr = err;
-        }
-      }
-      const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-      throw new Error(`model call failed for candidates ${attempted}: ${message}`);
+      return await callCompatibleModels(options, (model, currentOptions) =>
+        (model as LanguageModelV3).doGenerate(currentOptions as LanguageModelV3CallOptions),
+      );
     },
     async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
-      let lastErr: unknown;
-      for (const model of compatibleRotatingModels) {
-        try {
-          return await (model as LanguageModelV3).doStream(options);
-        } catch (err) {
-          if (getStopFallbackApiCallError(err)) throw err;
-          lastErr = err;
-        }
-      }
-      const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-      throw new Error(`model call failed for candidates ${attempted}: ${message}`);
+      return await callCompatibleModels(options, (model, currentOptions) =>
+        (model as LanguageModelV3).doStream(currentOptions as LanguageModelV3CallOptions),
+      );
     },
   };
-
-  return multi;
 }

@@ -12,6 +12,189 @@ import {
   decorateAppWithDefaultAuth,
 } from "./helpers.js";
 
+type UsageApp = Awaited<ReturnType<typeof createTestApp>>;
+type UsageContainer = UsageApp["container"];
+type AttemptSeed = {
+  jobId: string;
+  runId: string;
+  stepId: string;
+  attemptId: string;
+  key: string;
+  lane: string;
+  totalTokens: number;
+};
+type PinnedProviderUsageApp = {
+  app: UsageApp["app"];
+  authProfileKey: string;
+  close: () => Promise<void>;
+};
+
+async function insertAttempt(container: UsageContainer, input: AttemptSeed): Promise<void> {
+  await container.db.run(
+    `INSERT INTO execution_jobs (
+       tenant_id,
+       job_id,
+       agent_id,
+       workspace_id,
+       key,
+       lane,
+       status,
+       trigger_json,
+       input_json,
+       latest_run_id
+     )
+     VALUES (?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)`,
+    [
+      DEFAULT_TENANT_ID,
+      input.jobId,
+      DEFAULT_AGENT_ID,
+      DEFAULT_WORKSPACE_ID,
+      input.key,
+      input.lane,
+      "{}",
+      "{}",
+      input.runId,
+    ],
+  );
+  await container.db.run(
+    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+     VALUES (?, ?, ?, ?, ?, 'succeeded', 1)`,
+    [DEFAULT_TENANT_ID, input.runId, input.jobId, input.key, input.lane],
+  );
+  await container.db.run(
+    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
+     VALUES (?, ?, ?, 0, 'succeeded', ?)`,
+    [DEFAULT_TENANT_ID, input.stepId, input.runId, "{}"],
+  );
+
+  const costJson = JSON.stringify({
+    duration_ms: 1000,
+    total_tokens: input.totalTokens,
+    usd_micros: input.totalTokens,
+  });
+
+  await container.db.run(
+    `INSERT INTO execution_attempts (
+       tenant_id,
+       attempt_id,
+       step_id,
+       attempt,
+       status,
+       started_at,
+       finished_at,
+       artifacts_json,
+       cost_json
+     ) VALUES (?, ?, ?, 1, 'succeeded', ?, ?, '[]', ?)`,
+    [
+      DEFAULT_TENANT_ID,
+      input.attemptId,
+      input.stepId,
+      new Date().toISOString(),
+      new Date().toISOString(),
+      costJson,
+    ],
+  );
+}
+
+async function createPinnedProviderUsageApp(input: {
+  authProfileId: string;
+  authProfileKey: string;
+  sessionId: string;
+}): Promise<PinnedProviderUsageApp> {
+  const container = await createTestContainer();
+  const { authTokens, tenantAdminToken, secretProviderForTenant } =
+    await createTestAuthAndSecrets(container);
+  const secretProvider = secretProviderForTenant(DEFAULT_TENANT_ID);
+  const app = createApp(container, { authTokens, secretProviderForTenant });
+  decorateAppWithDefaultAuth(app, tenantAdminToken);
+  const handle = await secretProvider.store("OPENROUTER_API_KEY", "ignored-by-env-provider");
+
+  await container.db.run(
+    `INSERT INTO auth_profiles (
+       tenant_id,
+       auth_profile_id,
+       auth_profile_key,
+       provider_key,
+       type,
+       status
+     ) VALUES (?, ?, ?, 'openrouter', 'api_key', 'active')`,
+    [DEFAULT_TENANT_ID, input.authProfileId, input.authProfileKey],
+  );
+  const secret = await container.db.get<{ secret_id: string }>(
+    "SELECT secret_id FROM secrets WHERE tenant_id = ? AND secret_key = ? LIMIT 1",
+    [DEFAULT_TENANT_ID, handle.handle_id],
+  );
+  expect(secret?.secret_id).toBeTruthy();
+  await container.db.run(
+    `INSERT INTO auth_profile_secrets (tenant_id, auth_profile_id, slot_key, secret_id)
+     VALUES (?, ?, 'api_key', ?)`,
+    [DEFAULT_TENANT_ID, input.authProfileId, secret!.secret_id],
+  );
+
+  const channelAccountId = `channel-account-${input.sessionId}`;
+  const channelThreadId = `channel-thread-${input.sessionId}`;
+  await container.db.run(
+    `INSERT INTO channel_accounts (
+       tenant_id,
+       workspace_id,
+       channel_account_id,
+       connector_key,
+       account_key
+     ) VALUES (?, ?, ?, 'test', ?)`,
+    [DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID, channelAccountId, `account:${input.sessionId}`],
+  );
+  await container.db.run(
+    `INSERT INTO channel_threads (
+       tenant_id,
+       workspace_id,
+       channel_thread_id,
+       channel_account_id,
+       provider_thread_id,
+       container_kind
+     ) VALUES (?, ?, ?, ?, ?, 'dm')`,
+    [
+      DEFAULT_TENANT_ID,
+      DEFAULT_WORKSPACE_ID,
+      channelThreadId,
+      channelAccountId,
+      `thread:${input.sessionId}`,
+    ],
+  );
+  await container.db.run(
+    `INSERT INTO sessions (
+       tenant_id,
+       session_id,
+       session_key,
+       agent_id,
+       workspace_id,
+       channel_thread_id,
+       summary,
+       turns_json
+     ) VALUES (?, ?, ?, ?, ?, ?, '', '[]')`,
+    [
+      DEFAULT_TENANT_ID,
+      input.sessionId,
+      `agent:default:test:${input.sessionId}`,
+      DEFAULT_AGENT_ID,
+      DEFAULT_WORKSPACE_ID,
+      channelThreadId,
+    ],
+  );
+  await container.db.run(
+    `INSERT INTO session_provider_pins (tenant_id, session_id, provider_key, auth_profile_id)
+     VALUES (?, ?, 'openrouter', ?)`,
+    [DEFAULT_TENANT_ID, input.sessionId, input.authProfileId],
+  );
+
+  return {
+    app,
+    authProfileKey: input.authProfileKey,
+    close: async () => {
+      await container.db.close();
+    },
+  };
+}
+
 describe("usage routes", () => {
   it("rolls up attempt costs across execution attempts", async () => {
     const { app, container } = await createTestApp();
@@ -126,82 +309,7 @@ describe("usage routes", () => {
     const alphaSecondaryKey = "agent:alpha:dm:peer-alpha";
     const betaKey = "agent:beta:main";
 
-    const insertAttempt = async (input: {
-      jobId: string;
-      runId: string;
-      stepId: string;
-      attemptId: string;
-      key: string;
-      lane: string;
-      totalTokens: number;
-    }): Promise<void> => {
-      await container.db.run(
-        `INSERT INTO execution_jobs (
-           tenant_id,
-           job_id,
-           agent_id,
-           workspace_id,
-           key,
-           lane,
-           status,
-           trigger_json,
-           input_json,
-           latest_run_id
-         )
-         VALUES (?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)`,
-        [
-          DEFAULT_TENANT_ID,
-          input.jobId,
-          DEFAULT_AGENT_ID,
-          DEFAULT_WORKSPACE_ID,
-          input.key,
-          input.lane,
-          "{}",
-          "{}",
-          input.runId,
-        ],
-      );
-      await container.db.run(
-        `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
-         VALUES (?, ?, ?, ?, ?, 'succeeded', 1)`,
-        [DEFAULT_TENANT_ID, input.runId, input.jobId, input.key, input.lane],
-      );
-      await container.db.run(
-        `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
-         VALUES (?, ?, ?, 0, 'succeeded', ?)`,
-        [DEFAULT_TENANT_ID, input.stepId, input.runId, "{}"],
-      );
-
-      const costJson = JSON.stringify({
-        duration_ms: 1000,
-        total_tokens: input.totalTokens,
-        usd_micros: input.totalTokens,
-      });
-
-      await container.db.run(
-        `INSERT INTO execution_attempts (
-           tenant_id,
-           attempt_id,
-           step_id,
-           attempt,
-           status,
-           started_at,
-           finished_at,
-           artifacts_json,
-           cost_json
-         ) VALUES (?, ?, ?, 1, 'succeeded', ?, ?, '[]', ?)`,
-        [
-          DEFAULT_TENANT_ID,
-          input.attemptId,
-          input.stepId,
-          new Date().toISOString(),
-          new Date().toISOString(),
-          costJson,
-        ],
-      );
-    };
-
-    await insertAttempt({
+    await insertAttempt(container, {
       jobId: "job-alpha-1",
       runId: "run-alpha-1",
       stepId: "step-alpha-1",
@@ -211,7 +319,7 @@ describe("usage routes", () => {
       totalTokens: 10,
     });
 
-    await insertAttempt({
+    await insertAttempt(container, {
       jobId: "job-alpha-2",
       runId: "run-alpha-2",
       stepId: "step-alpha-2",
@@ -221,7 +329,7 @@ describe("usage routes", () => {
       totalTokens: 5,
     });
 
-    await insertAttempt({
+    await insertAttempt(container, {
       jobId: "job-alpha-3",
       runId: "run-alpha-3",
       stepId: "step-alpha-3",
@@ -231,7 +339,7 @@ describe("usage routes", () => {
       totalTokens: 7,
     });
 
-    await insertAttempt({
+    await insertAttempt(container, {
       jobId: "job-beta-1",
       runId: "run-beta-1",
       stepId: "step-beta-1",
@@ -274,82 +382,7 @@ describe("usage routes", () => {
   it("treats agent_key rollups as case-sensitive", async () => {
     const { app, container } = await createTestApp();
 
-    const insertAttempt = async (input: {
-      jobId: string;
-      runId: string;
-      stepId: string;
-      attemptId: string;
-      key: string;
-      lane: string;
-      totalTokens: number;
-    }): Promise<void> => {
-      await container.db.run(
-        `INSERT INTO execution_jobs (
-           tenant_id,
-           job_id,
-           agent_id,
-           workspace_id,
-           key,
-           lane,
-           status,
-           trigger_json,
-           input_json,
-           latest_run_id
-         )
-         VALUES (?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)`,
-        [
-          DEFAULT_TENANT_ID,
-          input.jobId,
-          DEFAULT_AGENT_ID,
-          DEFAULT_WORKSPACE_ID,
-          input.key,
-          input.lane,
-          "{}",
-          "{}",
-          input.runId,
-        ],
-      );
-      await container.db.run(
-        `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
-         VALUES (?, ?, ?, ?, ?, 'succeeded', 1)`,
-        [DEFAULT_TENANT_ID, input.runId, input.jobId, input.key, input.lane],
-      );
-      await container.db.run(
-        `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
-         VALUES (?, ?, ?, 0, 'succeeded', ?)`,
-        [DEFAULT_TENANT_ID, input.stepId, input.runId, "{}"],
-      );
-
-      const costJson = JSON.stringify({
-        duration_ms: 1000,
-        total_tokens: input.totalTokens,
-        usd_micros: input.totalTokens,
-      });
-
-      await container.db.run(
-        `INSERT INTO execution_attempts (
-           tenant_id,
-           attempt_id,
-           step_id,
-           attempt,
-           status,
-           started_at,
-           finished_at,
-           artifacts_json,
-           cost_json
-         ) VALUES (?, ?, ?, 1, 'succeeded', ?, ?, '[]', ?)`,
-        [
-          DEFAULT_TENANT_ID,
-          input.attemptId,
-          input.stepId,
-          new Date().toISOString(),
-          new Date().toISOString(),
-          costJson,
-        ],
-      );
-    };
-
-    await insertAttempt({
+    await insertAttempt(container, {
       jobId: "job-alpha-lower-1",
       runId: "run-alpha-lower-1",
       stepId: "step-alpha-lower-1",
@@ -359,7 +392,7 @@ describe("usage routes", () => {
       totalTokens: 10,
     });
 
-    await insertAttempt({
+    await insertAttempt(container, {
       jobId: "job-alpha-upper-1",
       runId: "run-alpha-upper-1",
       stepId: "step-alpha-upper-1",
@@ -392,93 +425,11 @@ describe("usage routes", () => {
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     try {
-      const container = await createTestContainer();
-      const { authTokens, tenantAdminToken, secretProviderForTenant } =
-        await createTestAuthAndSecrets(container);
-      const secretProvider = secretProviderForTenant(DEFAULT_TENANT_ID);
-      const app = createApp(container, { authTokens, secretProviderForTenant });
-      decorateAppWithDefaultAuth(app, tenantAdminToken);
-      const handle = await secretProvider.store("OPENROUTER_API_KEY", "ignored-by-env-provider");
-
-      const authProfileId = "auth-profile-openrouter-1";
-      const authProfileKey = "profile-openrouter-1";
-      await container.db.run(
-        `INSERT INTO auth_profiles (
-           tenant_id,
-           auth_profile_id,
-           auth_profile_key,
-           provider_key,
-           type,
-           status
-         ) VALUES (?, ?, ?, 'openrouter', 'api_key', 'active')`,
-        [DEFAULT_TENANT_ID, authProfileId, authProfileKey],
-      );
-      const secret = await container.db.get<{ secret_id: string }>(
-        "SELECT secret_id FROM secrets WHERE tenant_id = ? AND secret_key = ? LIMIT 1",
-        [DEFAULT_TENANT_ID, handle.handle_id],
-      );
-      expect(secret?.secret_id).toBeTruthy();
-      await container.db.run(
-        `INSERT INTO auth_profile_secrets (tenant_id, auth_profile_id, slot_key, secret_id)
-         VALUES (?, ?, 'api_key', ?)`,
-        [DEFAULT_TENANT_ID, authProfileId, secret!.secret_id],
-      );
-
-      const sessionId = "session-usage-provider-1";
-      const channelAccountId = "channel-account-usage-provider-1";
-      const channelThreadId = "channel-thread-usage-provider-1";
-      await container.db.run(
-        `INSERT INTO channel_accounts (
-           tenant_id,
-           workspace_id,
-           channel_account_id,
-           connector_key,
-           account_key
-         ) VALUES (?, ?, ?, 'test', ?)`,
-        [DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID, channelAccountId, `account:${sessionId}`],
-      );
-      await container.db.run(
-        `INSERT INTO channel_threads (
-           tenant_id,
-           workspace_id,
-           channel_thread_id,
-           channel_account_id,
-           provider_thread_id,
-           container_kind
-         ) VALUES (?, ?, ?, ?, ?, 'dm')`,
-        [
-          DEFAULT_TENANT_ID,
-          DEFAULT_WORKSPACE_ID,
-          channelThreadId,
-          channelAccountId,
-          `thread:${sessionId}`,
-        ],
-      );
-      await container.db.run(
-        `INSERT INTO sessions (
-           tenant_id,
-           session_id,
-           session_key,
-           agent_id,
-           workspace_id,
-           channel_thread_id,
-           summary,
-           turns_json
-         ) VALUES (?, ?, ?, ?, ?, ?, '', '[]')`,
-        [
-          DEFAULT_TENANT_ID,
-          sessionId,
-          `agent:default:test:${sessionId}`,
-          DEFAULT_AGENT_ID,
-          DEFAULT_WORKSPACE_ID,
-          channelThreadId,
-        ],
-      );
-      await container.db.run(
-        `INSERT INTO session_provider_pins (tenant_id, session_id, provider_key, auth_profile_id)
-         VALUES (?, ?, 'openrouter', ?)`,
-        [DEFAULT_TENANT_ID, sessionId, authProfileId],
-      );
+      const { app, authProfileKey, close } = await createPinnedProviderUsageApp({
+        authProfileId: "auth-profile-openrouter-1",
+        authProfileKey: "profile-openrouter-1",
+        sessionId: "session-usage-provider-1",
+      });
 
       const first = await app.request("/usage");
       expect(first.status).toBe(200);
@@ -502,7 +453,7 @@ describe("usage routes", () => {
       });
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
-      await container.db.close();
+      await close();
     } finally {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
@@ -519,93 +470,11 @@ describe("usage routes", () => {
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     try {
-      const container = await createTestContainer();
-      const { authTokens, tenantAdminToken, secretProviderForTenant } =
-        await createTestAuthAndSecrets(container);
-      const secretProvider = secretProviderForTenant(DEFAULT_TENANT_ID);
-      const app = createApp(container, { authTokens, secretProviderForTenant });
-      decorateAppWithDefaultAuth(app, tenantAdminToken);
-      const handle = await secretProvider.store("OPENROUTER_API_KEY", "ignored-by-env-provider");
-
-      const authProfileId = "auth-profile-openrouter-error-1";
-      const authProfileKey = "profile-openrouter-error-1";
-      await container.db.run(
-        `INSERT INTO auth_profiles (
-           tenant_id,
-           auth_profile_id,
-           auth_profile_key,
-           provider_key,
-           type,
-           status
-         ) VALUES (?, ?, ?, 'openrouter', 'api_key', 'active')`,
-        [DEFAULT_TENANT_ID, authProfileId, authProfileKey],
-      );
-      const secret = await container.db.get<{ secret_id: string }>(
-        "SELECT secret_id FROM secrets WHERE tenant_id = ? AND secret_key = ? LIMIT 1",
-        [DEFAULT_TENANT_ID, handle.handle_id],
-      );
-      expect(secret?.secret_id).toBeTruthy();
-      await container.db.run(
-        `INSERT INTO auth_profile_secrets (tenant_id, auth_profile_id, slot_key, secret_id)
-         VALUES (?, ?, 'api_key', ?)`,
-        [DEFAULT_TENANT_ID, authProfileId, secret!.secret_id],
-      );
-
-      const sessionId = "session-usage-provider-error-1";
-      const channelAccountId = "channel-account-usage-provider-error-1";
-      const channelThreadId = "channel-thread-usage-provider-error-1";
-      await container.db.run(
-        `INSERT INTO channel_accounts (
-           tenant_id,
-           workspace_id,
-           channel_account_id,
-           connector_key,
-           account_key
-         ) VALUES (?, ?, ?, 'test', ?)`,
-        [DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID, channelAccountId, `account:${sessionId}`],
-      );
-      await container.db.run(
-        `INSERT INTO channel_threads (
-           tenant_id,
-           workspace_id,
-           channel_thread_id,
-           channel_account_id,
-           provider_thread_id,
-           container_kind
-         ) VALUES (?, ?, ?, ?, ?, 'dm')`,
-        [
-          DEFAULT_TENANT_ID,
-          DEFAULT_WORKSPACE_ID,
-          channelThreadId,
-          channelAccountId,
-          `thread:${sessionId}`,
-        ],
-      );
-      await container.db.run(
-        `INSERT INTO sessions (
-           tenant_id,
-           session_id,
-           session_key,
-           agent_id,
-           workspace_id,
-           channel_thread_id,
-           summary,
-           turns_json
-         ) VALUES (?, ?, ?, ?, ?, ?, '', '[]')`,
-        [
-          DEFAULT_TENANT_ID,
-          sessionId,
-          `agent:default:test:${sessionId}`,
-          DEFAULT_AGENT_ID,
-          DEFAULT_WORKSPACE_ID,
-          channelThreadId,
-        ],
-      );
-      await container.db.run(
-        `INSERT INTO session_provider_pins (tenant_id, session_id, provider_key, auth_profile_id)
-         VALUES (?, ?, 'openrouter', ?)`,
-        [DEFAULT_TENANT_ID, sessionId, authProfileId],
-      );
+      const { app, authProfileKey, close } = await createPinnedProviderUsageApp({
+        authProfileId: "auth-profile-openrouter-error-1",
+        authProfileKey: "profile-openrouter-error-1",
+        sessionId: "session-usage-provider-error-1",
+      });
 
       const first = await app.request("/usage");
       expect(first.status).toBe(200);
@@ -631,7 +500,7 @@ describe("usage routes", () => {
       });
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
-      await container.db.close();
+      await close();
     } finally {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();

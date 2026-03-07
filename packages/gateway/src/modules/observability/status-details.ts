@@ -7,81 +7,34 @@ import type { SandboxHardeningProfile } from "../sandbox/hardening.js";
 import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../sandbox/elevated-execution.js";
 
 type StatusCountMap = Record<string, number>;
-
-type ActiveModelStatus = {
-  model_id: string;
-  provider: string | null;
-  model: string | null;
-  fallback_models: string[];
-};
-
+type ActiveModelStatus = { model_id: string; provider: string | null; model: string | null; fallback_models: string[] };
+type SelectedAuthProfile = { agent_id: string; session_id: string; provider: string; profile_id: string; updated_at: string };
 type AuthProfilesStatus = {
-  enabled: boolean;
-  total: number;
-  active: number;
-  disabled: number;
-  cooldown_active: number;
-  oauth_expired: number;
-  oauth_expiring_within_24h: number;
-  providers: string[];
-  disabled_reasons: Array<{ reason: string; count: number }>;
-  selected: {
-    agent_id: string;
-    session_id: string;
-    provider: string;
-    profile_id: string;
-    updated_at: string;
-  } | null;
+  enabled: boolean; total: number; active: number; disabled: number; cooldown_active: number;
+  oauth_expired: number; oauth_expiring_within_24h: number; providers: string[];
+  disabled_reasons: Array<{ reason: string; count: number }>; selected: SelectedAuthProfile | null;
 };
-
 type CatalogFreshnessStatus = {
-  source: string | null;
-  source_version: string | null;
-  provider_count: number;
-  model_count: number;
-  fetched_at: string | null;
-  updated_at: string | null;
-  fetched_age_ms: number | null;
-  cache_age_ms: number | null;
-  last_refresh_status: "ok" | "error" | "unavailable";
-  last_error: string | null;
+  source: string | null; source_version: string | null; provider_count: number; model_count: number;
+  fetched_at: string | null; updated_at: string | null; fetched_age_ms: number | null; cache_age_ms: number | null;
+  last_refresh_status: "ok" | "error" | "unavailable"; last_error: string | null;
 };
-
 type SessionLaneStatus = {
-  key: string;
-  lane: string;
-  latest_run_id: string | null;
-  latest_run_status: string | null;
-  queued_runs: number;
-  lease_owner: string | null;
-  lease_expires_at_ms: number | null;
-  lease_active: boolean;
+  key: string; lane: string; latest_run_id: string | null; latest_run_status: string | null; queued_runs: number;
+  lease_owner: string | null; lease_expires_at_ms: number | null; lease_active: boolean;
 };
-
+type QueueStateStatus = { queued: number; running?: number; paused?: number; processing?: number; sending?: number };
 type QueueDepthStatus = {
-  execution_runs: { queued: number; running: number; paused: number };
-  execution_jobs: { queued: number; running: number };
-  channel_inbox: { queued: number; processing: number };
-  channel_outbox: { queued: number; sending: number };
-  watcher_firings: { queued: number; processing: number };
-  pending_total: number;
-  inflight_total: number;
+  execution_runs: QueueStateStatus; execution_jobs: QueueStateStatus; channel_inbox: QueueStateStatus;
+  channel_outbox: QueueStateStatus; watcher_firings: QueueStateStatus; pending_total: number; inflight_total: number;
 };
-
 type SandboxStatus = {
-  mode: "disabled" | "observe" | "enforce";
-  policy_enabled: boolean;
-  policy_observe_only: boolean;
-  effective_policy_sha256: string;
-  hardening_profile: SandboxHardeningProfile;
-  elevated_execution_available: boolean | null;
+  mode: "disabled" | "observe" | "enforce"; policy_enabled: boolean; policy_observe_only: boolean;
+  effective_policy_sha256: string; hardening_profile: SandboxHardeningProfile; elevated_execution_available: boolean | null;
 };
 
 export interface StatusDetails {
-  model_auth: {
-    active_model: ActiveModelStatus | null;
-    auth_profiles: AuthProfilesStatus | null;
-  };
+  model_auth: { active_model: ActiveModelStatus | null; auth_profiles: AuthProfilesStatus | null };
   catalog_freshness: CatalogFreshnessStatus;
   session_lanes: SessionLaneStatus[];
   queue_depth: QueueDepthStatus | null;
@@ -89,13 +42,9 @@ export interface StatusDetails {
 }
 
 export interface StatusDetailsDeps {
-  tenantId: string;
-  db?: SqlDb;
-  policyService?: PolicyService;
+  tenantId: string; db?: SqlDb; policyService?: PolicyService;
   policyStatus?: { enabled: boolean; observe_only: boolean; effective_sha256: string };
-  toolrunnerHardeningProfile?: SandboxHardeningProfile;
-  agents?: AgentRegistry;
-  modelsDev?: ModelsDevService;
+  toolrunnerHardeningProfile?: SandboxHardeningProfile; agents?: AgentRegistry; modelsDev?: ModelsDevService;
 }
 
 function parseIsoToMs(value: string | null | undefined): number | null {
@@ -179,10 +128,7 @@ async function countByStatus(
   return counts;
 }
 
-async function loadActiveModel(
-  agents: AgentRegistry | undefined,
-  tenantId: string,
-): Promise<ActiveModelStatus | null> {
+async function loadActiveModel(agents: AgentRegistry | undefined, tenantId: string): Promise<ActiveModelStatus | null> {
   if (!agents) return null;
 
   try {
@@ -204,10 +150,7 @@ async function loadActiveModel(
   }
 }
 
-async function loadAuthProfileHealth(
-  db: SqlDb | undefined,
-  tenantId: string,
-): Promise<AuthProfilesStatus | null> {
+async function loadAuthProfileHealth(db: SqlDb | undefined, tenantId: string): Promise<AuthProfilesStatus | null> {
   if (!db) return null;
 
   const normalizeTime = (value: string | Date): string =>
@@ -285,22 +228,11 @@ async function loadAuthProfileHealth(
   };
 }
 
-async function loadCatalogFreshness(
-  db: SqlDb | undefined,
-  modelsDev: ModelsDevService | undefined,
-): Promise<CatalogFreshnessStatus> {
+async function loadCatalogFreshness(db: SqlDb | undefined, modelsDev: ModelsDevService | undefined): Promise<CatalogFreshnessStatus> {
   const nowMs = Date.now();
   const fallback: CatalogFreshnessStatus = {
-    source: null,
-    source_version: null,
-    provider_count: 0,
-    model_count: 0,
-    fetched_at: null,
-    updated_at: null,
-    fetched_age_ms: null,
-    cache_age_ms: null,
-    last_refresh_status: "unavailable",
-    last_error: null,
+    source: null, source_version: null, provider_count: 0, model_count: 0, fetched_at: null,
+    updated_at: null, fetched_age_ms: null, cache_age_ms: null, last_refresh_status: "unavailable", last_error: null,
   };
 
   if (modelsDev) {
@@ -309,16 +241,11 @@ async function loadCatalogFreshness(
       const fetchedAtMs = parseIsoToMs(loaded.status.fetched_at);
       const updatedAtMs = parseIsoToMs(loaded.status.updated_at);
       return {
-        source: loaded.status.source,
-        source_version: loaded.status.sha256,
-        provider_count: loaded.status.provider_count,
-        model_count: loaded.status.model_count,
-        fetched_at: loaded.status.fetched_at,
-        updated_at: loaded.status.updated_at,
+        source: loaded.status.source, source_version: loaded.status.sha256, provider_count: loaded.status.provider_count,
+        model_count: loaded.status.model_count, fetched_at: loaded.status.fetched_at, updated_at: loaded.status.updated_at,
         fetched_age_ms: fetchedAtMs === null ? null : Math.max(0, nowMs - fetchedAtMs),
         cache_age_ms: updatedAtMs === null ? null : Math.max(0, nowMs - updatedAtMs),
-        last_refresh_status: loaded.status.last_error ? "error" : "ok",
-        last_error: loaded.status.last_error,
+        last_refresh_status: loaded.status.last_error ? "error" : "ok", last_error: loaded.status.last_error,
       };
     } catch {
       // Intentional: fall back to the DB snapshot when the in-memory service is unavailable.
@@ -328,24 +255,10 @@ async function loadCatalogFreshness(
   if (!db) return fallback;
 
   let row:
-    | {
-        source: string;
-        fetched_at: string | null;
-        updated_at: string;
-        sha256: string;
-        last_error: string | null;
-        json: string;
-      }
+    | { source: string; fetched_at: string | null; updated_at: string; sha256: string; last_error: string | null; json: string }
     | undefined;
   try {
-    row = await db.get<{
-      source: string;
-      fetched_at: string | null;
-      updated_at: string;
-      sha256: string;
-      last_error: string | null;
-      json: string;
-    }>(
+    row = await db.get<{ source: string; fetched_at: string | null; updated_at: string; sha256: string; last_error: string | null; json: string }>(
       `SELECT source, fetched_at, updated_at, sha256, last_error, json
        FROM models_dev_cache
        WHERE id = 1`,
@@ -360,23 +273,15 @@ async function loadCatalogFreshness(
   const fetchedAtMs = parseIsoToMs(row.fetched_at);
   const updatedAtMs = parseIsoToMs(row.updated_at);
   return {
-    source: row.source,
-    source_version: row.sha256,
-    provider_count: counts.providerCount,
-    model_count: counts.modelCount,
-    fetched_at: row.fetched_at,
-    updated_at: row.updated_at,
+    source: row.source, source_version: row.sha256, provider_count: counts.providerCount, model_count: counts.modelCount,
+    fetched_at: row.fetched_at, updated_at: row.updated_at,
     fetched_age_ms: fetchedAtMs === null ? null : Math.max(0, nowMs - fetchedAtMs),
     cache_age_ms: updatedAtMs === null ? null : Math.max(0, nowMs - updatedAtMs),
-    last_refresh_status: row.last_error ? "error" : "ok",
-    last_error: row.last_error,
+    last_refresh_status: row.last_error ? "error" : "ok", last_error: row.last_error,
   };
 }
 
-async function loadSessionLanes(
-  db: SqlDb | undefined,
-  tenantId: string,
-): Promise<SessionLaneStatus[]> {
+async function loadSessionLanes(db: SqlDb | undefined, tenantId: string): Promise<SessionLaneStatus[]> {
   if (!db) return [];
 
   const nowMs = Date.now();
@@ -494,10 +399,7 @@ async function loadSessionLanes(
   });
 }
 
-async function loadQueueDepth(
-  db: SqlDb | undefined,
-  tenantId: string,
-): Promise<QueueDepthStatus | null> {
+async function loadQueueDepth(db: SqlDb | undefined, tenantId: string): Promise<QueueDepthStatus | null> {
   if (!db) return null;
 
   const emptyCounts = (statuses: readonly string[]): StatusCountMap =>
@@ -538,40 +440,14 @@ async function loadQueueDepth(
   const firings = firingsRes.counts;
 
   return {
-    execution_runs: {
-      queued: runs["queued"] ?? 0,
-      running: runs["running"] ?? 0,
-      paused: runs["paused"] ?? 0,
-    },
-    execution_jobs: {
-      queued: jobs["queued"] ?? 0,
-      running: jobs["running"] ?? 0,
-    },
-    channel_inbox: {
-      queued: inbox["queued"] ?? 0,
-      processing: inbox["processing"] ?? 0,
-    },
-    channel_outbox: {
-      queued: outbox["queued"] ?? 0,
-      sending: outbox["sending"] ?? 0,
-    },
-    watcher_firings: {
-      queued: firings["queued"] ?? 0,
-      processing: firings["processing"] ?? 0,
-    },
-    pending_total:
-      (runs["queued"] ?? 0) +
-      (jobs["queued"] ?? 0) +
-      (inbox["queued"] ?? 0) +
-      (outbox["queued"] ?? 0) +
-      (firings["queued"] ?? 0),
+    execution_runs: { queued: runs["queued"] ?? 0, running: runs["running"] ?? 0, paused: runs["paused"] ?? 0 },
+    execution_jobs: { queued: jobs["queued"] ?? 0, running: jobs["running"] ?? 0 },
+    channel_inbox: { queued: inbox["queued"] ?? 0, processing: inbox["processing"] ?? 0 },
+    channel_outbox: { queued: outbox["queued"] ?? 0, sending: outbox["sending"] ?? 0 },
+    watcher_firings: { queued: firings["queued"] ?? 0, processing: firings["processing"] ?? 0 },
+    pending_total: (runs["queued"] ?? 0) + (jobs["queued"] ?? 0) + (inbox["queued"] ?? 0) + (outbox["queued"] ?? 0) + (firings["queued"] ?? 0),
     inflight_total:
-      (runs["running"] ?? 0) +
-      (runs["paused"] ?? 0) +
-      (jobs["running"] ?? 0) +
-      (inbox["processing"] ?? 0) +
-      (outbox["sending"] ?? 0) +
-      (firings["processing"] ?? 0),
+      (runs["running"] ?? 0) + (runs["paused"] ?? 0) + (jobs["running"] ?? 0) + (inbox["processing"] ?? 0) + (outbox["sending"] ?? 0) + (firings["processing"] ?? 0),
   };
 }
 
@@ -611,29 +487,13 @@ async function loadSandboxStatus(
 
 export async function buildStatusDetails(deps: StatusDetailsDeps): Promise<StatusDetails> {
   const tenantId = deps.tenantId.trim();
-  const [activeModel, authProfiles, catalog, sessionLanes, queueDepth, sandbox] = await Promise.all(
-    [
-      loadActiveModel(deps.agents, tenantId),
-      loadAuthProfileHealth(deps.db, tenantId),
-      loadCatalogFreshness(deps.db, deps.modelsDev),
-      loadSessionLanes(deps.db, tenantId),
-      loadQueueDepth(deps.db, tenantId),
-      loadSandboxStatus(
-        deps.policyService,
-        deps.policyStatus,
-        deps.toolrunnerHardeningProfile ?? "baseline",
-      ),
-    ],
-  );
-
-  return {
-    model_auth: {
-      active_model: activeModel,
-      auth_profiles: authProfiles,
-    },
-    catalog_freshness: catalog,
-    session_lanes: sessionLanes,
-    queue_depth: queueDepth,
-    sandbox,
-  };
+  const [activeModel, authProfiles, catalog, sessionLanes, queueDepth, sandbox] = await Promise.all([
+    loadActiveModel(deps.agents, tenantId),
+    loadAuthProfileHealth(deps.db, tenantId),
+    loadCatalogFreshness(deps.db, deps.modelsDev),
+    loadSessionLanes(deps.db, tenantId),
+    loadQueueDepth(deps.db, tenantId),
+    loadSandboxStatus(deps.policyService, deps.policyStatus, deps.toolrunnerHardeningProfile ?? "baseline"),
+  ]);
+  return { model_auth: { active_model: activeModel, auth_profiles: authProfiles }, catalog_freshness: catalog, session_lanes: sessionLanes, queue_depth: queueDepth, sandbox };
 }

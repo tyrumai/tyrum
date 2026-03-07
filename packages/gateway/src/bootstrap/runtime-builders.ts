@@ -14,18 +14,12 @@ import { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import { OutboxLifecycleScheduler } from "../modules/backplane/outbox-lifecycle.js";
 import { OutboxPoller } from "../modules/backplane/outbox-poller.js";
 import { TelegramChannelProcessor } from "../modules/channels/telegram.js";
-import {
-  ExecutionEngine,
-  type StepExecutor as ExecutionStepExecutor,
-} from "../modules/execution/engine.js";
+import { ExecutionEngine, type StepExecutor as ExecutionStepExecutor } from "../modules/execution/engine.js";
 import { createGatewayStepExecutor } from "../modules/execution/gateway-step-executor.js";
 import { createKubernetesToolRunnerStepExecutor } from "../modules/execution/kubernetes-toolrunner-step-executor.js";
 import { createNodeDispatchStepExecutor } from "../modules/execution/node-dispatch-step-executor.js";
 import { createToolRunnerStepExecutor } from "../modules/execution/toolrunner-step-executor.js";
-import {
-  startExecutionWorkerLoop,
-  type ExecutionWorkerLoop,
-} from "../modules/execution/worker-loop.js";
+import { startExecutionWorkerLoop, type ExecutionWorkerLoop } from "../modules/execution/worker-loop.js";
 import { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import { createMemoryV1BudgetsProvider } from "../modules/memory/v1-budgets-provider.js";
 import { gatewayMetrics } from "../modules/observability/metrics.js";
@@ -43,19 +37,9 @@ import { ConnectionManager } from "../ws/connection-manager.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
 import { TaskResultRegistry, type TaskResult } from "../ws/protocol/task-result-registry.js";
 import { resolveGatewayEntrypointPath } from "./entrypoint-path.js";
-import type {
-  BackgroundSchedulers,
-  EdgeRuntime,
-  GatewayBootContext,
-  GatewayRuntime,
-  GatewayServer,
-  ProtocolRuntime,
-} from "./runtime-shared.js";
+import type { BackgroundSchedulers, EdgeRuntime, GatewayBootContext, GatewayRuntime, GatewayServer, ProtocolRuntime } from "./runtime-shared.js";
 
-function createExecutionEngine(
-  context: GatewayBootContext,
-  options?: { includeSecrets?: boolean },
-): ExecutionEngine {
+function createExecutionEngine(context: GatewayBootContext, options?: { includeSecrets?: boolean }): ExecutionEngine {
   return new ExecutionEngine({
     db: context.container.db,
     redactionEngine: context.container.redactionEngine,
@@ -66,12 +50,7 @@ function createExecutionEngine(
   });
 }
 
-function toTaskResult(
-  success: boolean,
-  result: unknown,
-  evidence: unknown,
-  error: string | undefined,
-): TaskResult {
+function toTaskResult(success: boolean, result: unknown, evidence: unknown, error: string | undefined): TaskResult {
   if (success) {
     const taskResult: TaskResult = { ok: true };
     if (result !== undefined) taskResult.result = result;
@@ -87,72 +66,53 @@ function toTaskResult(
 
 export function startBackgroundSchedulers(context: GatewayBootContext): BackgroundSchedulers {
   const keepProcessAlive = context.role === "scheduler";
+  const shouldRunScheduler = context.role === "all" || context.role === "scheduler";
+  const watcherScheduler = shouldRunScheduler
+    ? new WatcherScheduler({
+        db: context.container.db,
+        memoryV1Dal: context.container.memoryV1Dal,
+        eventBus: context.container.eventBus,
+        automationEnabled: context.deploymentConfig.automation.enabled,
+        keepProcessAlive,
+      })
+    : undefined;
+  const artifactLifecycleScheduler = shouldRunScheduler
+    ? new ArtifactLifecycleScheduler({
+        db: context.container.db,
+        artifactStore: context.container.artifactStore,
+        policySnapshotDal: context.container.policySnapshotDal,
+        keepProcessAlive,
+        logger: context.container.logger,
+      })
+    : undefined;
+  const outboxLifecycleScheduler = shouldRunScheduler
+    ? new OutboxLifecycleScheduler({
+        db: context.container.db,
+        keepProcessAlive,
+        logger: context.container.logger,
+        metrics: gatewayMetrics,
+      })
+    : undefined;
+  const stateStoreLifecycleScheduler = shouldRunScheduler
+    ? new StateStoreLifecycleScheduler({
+        db: context.container.db,
+        channelTerminalRetentionDays: context.deploymentConfig.lifecycle.channels.terminalRetentionDays,
+        keepProcessAlive,
+        logger: context.container.logger,
+        metrics: gatewayMetrics,
+        sessionsTtlDays: context.deploymentConfig.lifecycle.sessions.ttlDays,
+      })
+    : undefined;
 
-  const watcherScheduler =
-    context.role === "all" || context.role === "scheduler"
-      ? new WatcherScheduler({
-          db: context.container.db,
-          memoryV1Dal: context.container.memoryV1Dal,
-          eventBus: context.container.eventBus,
-          automationEnabled: context.deploymentConfig.automation.enabled,
-          keepProcessAlive,
-        })
-      : undefined;
-
-  const artifactLifecycleScheduler =
-    context.role === "all" || context.role === "scheduler"
-      ? new ArtifactLifecycleScheduler({
-          db: context.container.db,
-          artifactStore: context.container.artifactStore,
-          policySnapshotDal: context.container.policySnapshotDal,
-          keepProcessAlive,
-          logger: context.container.logger,
-        })
-      : undefined;
-
-  const outboxLifecycleScheduler =
-    context.role === "all" || context.role === "scheduler"
-      ? new OutboxLifecycleScheduler({
-          db: context.container.db,
-          keepProcessAlive,
-          logger: context.container.logger,
-          metrics: gatewayMetrics,
-        })
-      : undefined;
-
-  const stateStoreLifecycleScheduler =
-    context.role === "all" || context.role === "scheduler"
-      ? new StateStoreLifecycleScheduler({
-          db: context.container.db,
-          channelTerminalRetentionDays:
-            context.deploymentConfig.lifecycle.channels.terminalRetentionDays,
-          keepProcessAlive,
-          logger: context.container.logger,
-          metrics: gatewayMetrics,
-          sessionsTtlDays: context.deploymentConfig.lifecycle.sessions.ttlDays,
-        })
-      : undefined;
-
-  if (context.shouldRunEdge) {
-    context.container.watcherProcessor.start();
-  }
+  if (context.shouldRunEdge) context.container.watcherProcessor.start();
   watcherScheduler?.start();
   artifactLifecycleScheduler?.start();
   outboxLifecycleScheduler?.start();
   stateStoreLifecycleScheduler?.start();
-
-  return {
-    watcherScheduler,
-    artifactLifecycleScheduler,
-    outboxLifecycleScheduler,
-    stateStoreLifecycleScheduler,
-  };
+  return { watcherScheduler, artifactLifecycleScheduler, outboxLifecycleScheduler, stateStoreLifecycleScheduler };
 }
 
-export async function createProtocolRuntime(
-  context: GatewayBootContext,
-  otel: OtelRuntime,
-): Promise<ProtocolRuntime> {
+export async function createProtocolRuntime(context: GatewayBootContext, otel: OtelRuntime): Promise<ProtocolRuntime> {
   const wsMaxBufferedBytes = context.deploymentConfig.websocket.maxBufferedBytes;
   const connectionManager = new ConnectionManager();
   const outboxDal = new OutboxDal(context.container.db, context.container.redactionEngine);
@@ -180,11 +140,11 @@ export async function createProtocolRuntime(
   const hooksRuntime =
     context.lifecycleHooks.length > 0 && (context.shouldRunEdge || context.shouldRunWorker)
       ? new LifecycleHooksRuntime({
-          db: context.container.db,
-          engine: approvalEngine!,
-          policyService: context.container.policyService,
-          hooks: context.lifecycleHooks,
-        })
+        db: context.container.db,
+        engine: approvalEngine!,
+        policyService: context.container.policyService,
+        hooks: context.lifecycleHooks,
+      })
       : undefined;
 
   const taskResults = new TaskResultRegistry();
@@ -197,10 +157,7 @@ export async function createProtocolRuntime(
     redactionEngine: context.container.redactionEngine,
     memoryV1Dal: context.container.memoryV1Dal,
     artifactStore: context.container.artifactStore,
-    authAudit: new AuthAudit({
-      eventLog: context.container.eventLog,
-      logger: context.logger,
-    }),
+    authAudit: new AuthAudit({ eventLog: context.container.eventLog, logger: context.logger }),
     contextReportDal: context.container.contextReportDal,
     runtime: {
       version: VERSION,
@@ -219,27 +176,13 @@ export async function createProtocolRuntime(
     modelsDev: context.container.modelsDev,
     modelCatalog: context.container.modelCatalog,
     maxBufferedBytes: wsMaxBufferedBytes,
-    cluster: context.shouldRunEdge
-      ? {
-          edgeId: context.instanceId,
-          outboxDal,
-          connectionDirectory,
-        }
-      : undefined,
+    cluster: context.shouldRunEdge ? { edgeId: context.instanceId, outboxDal, connectionDirectory } : undefined,
     taskResults,
     hooks: hooksRuntime,
-    onTaskResult: (taskId, success, result, evidence, error) => {
-      taskResults.resolve(taskId, toTaskResult(success, result, evidence, error));
-    },
-    onConnectionClosed: (connectionId) => {
-      taskResults.rejectAllForConnection(connectionId);
-    },
-    onApprovalDecision: (
-      tenantId: string,
-      approvalId: string,
-      approved: boolean,
-      reason: string | undefined,
-    ) => {
+    onTaskResult: (taskId, success, result, evidence, error) =>
+      taskResults.resolve(taskId, toTaskResult(success, result, evidence, error)),
+    onConnectionClosed: (connectionId) => taskResults.rejectAllForConnection(connectionId),
+    onApprovalDecision: (tenantId: string, approvalId: string, approved: boolean, reason: string | undefined) => {
       void context.container.approvalDal
         .resolveWithEngineAction({
           tenantId,
@@ -252,25 +195,18 @@ export async function createProtocolRuntime(
           const row = res?.approval;
           const transitioned = res?.transitioned ?? false;
           const desiredStatus = approved ? "approved" : "denied";
-          const decisionMatches = row?.status === desiredStatus;
-
           context.logger.info("approval.decided", {
             approval_id: approvalId,
             approved,
             status: row?.status ?? "missing",
             reason,
-            decision_matches: decisionMatches,
+            decision_matches: row?.status === desiredStatus,
             transitioned,
           });
         })
         .catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
-          context.logger.error("approval.decide_failed", {
-            approval_id: approvalId,
-            approved,
-            reason,
-            error: message,
-          });
+          context.logger.error("approval.decide_failed", { approval_id: approvalId, approved, reason, error: message });
         });
     },
   };
@@ -286,19 +222,7 @@ export async function createProtocolRuntime(
     : undefined;
   approvalEngineActionProcessor?.start();
 
-  return {
-    connectionManager,
-    connectionDirectory,
-    outboxDal,
-    workSignalScheduler,
-    wsEngine,
-    edgeEngine,
-    hooksRuntime,
-    approvalEngineActionProcessor,
-    taskResults,
-    protocolDeps,
-    approvalNotifier: new WsNotifier(protocolDeps),
-  };
+  return { connectionManager, connectionDirectory, outboxDal, workSignalScheduler, wsEngine, edgeEngine, hooksRuntime, approvalEngineActionProcessor, taskResults, protocolDeps, approvalNotifier: new WsNotifier(protocolDeps) };
 }
 
 async function createGatewayServer(
@@ -377,15 +301,15 @@ export async function startEdgeRuntime(
 
   const agents = context.deploymentConfig.agent.enabled
     ? new AgentRegistry({
-        container: context.container,
-        baseHome: context.tyrumHome,
-        secretProviderForTenant: context.secretProviderForTenant,
-        defaultPolicyService: context.container.policyService,
-        approvalNotifier: protocol.approvalNotifier,
-        plugins,
-        protocolDeps: protocol.protocolDeps,
-        logger: context.logger,
-      })
+      container: context.container,
+      baseHome: context.tyrumHome,
+      secretProviderForTenant: context.secretProviderForTenant,
+      defaultPolicyService: context.container.policyService,
+      approvalNotifier: protocol.approvalNotifier,
+      plugins,
+      protocolDeps: protocol.protocolDeps,
+      logger: context.logger,
+    })
     : undefined;
   protocol.protocolDeps.agents = agents;
 
@@ -393,14 +317,8 @@ export async function startEdgeRuntime(
   const authRateLimitMax = context.deploymentConfig.auth.rateLimit.max;
   const wsUpgradeRateLimitMax = Math.max(1, Math.floor(authRateLimitMax / 2));
 
-  const authRateLimiter = new SlidingWindowRateLimiter({
-    windowMs: authRateLimitWindowS * 1_000,
-    max: authRateLimitMax,
-  });
-  const wsUpgradeRateLimiter = new SlidingWindowRateLimiter({
-    windowMs: authRateLimitWindowS * 1_000,
-    max: wsUpgradeRateLimitMax,
-  });
+  const authRateLimiter = new SlidingWindowRateLimiter({ windowMs: authRateLimitWindowS * 1_000, max: authRateLimitMax });
+  const wsUpgradeRateLimiter = new SlidingWindowRateLimiter({ windowMs: authRateLimitWindowS * 1_000, max: wsUpgradeRateLimitMax });
 
   const app = createApp(context.container, {
     agents,
@@ -412,16 +330,8 @@ export async function startEdgeRuntime(
     connectionDirectory: protocol.connectionDirectory,
     authRateLimiter,
     engine: protocol.edgeEngine,
-    wsCluster: {
-      edgeId: context.instanceId,
-      outboxDal: protocol.outboxDal,
-    },
-    runtime: {
-      version: VERSION,
-      instanceId: context.instanceId,
-      role: context.role,
-      otelEnabled: otel.enabled,
-    },
+    wsCluster: { edgeId: context.instanceId, outboxDal: protocol.outboxDal },
+    runtime: { version: VERSION, instanceId: context.instanceId, role: context.role, otelEnabled: otel.enabled },
   });
 
   const wsHandler = createWsHandler({
@@ -432,10 +342,7 @@ export async function startEdgeRuntime(
     upgradeRateLimiter: wsUpgradeRateLimiter,
     presenceDal: context.container.presenceDal,
     nodePairingDal: context.container.nodePairingDal,
-    cluster: {
-      instanceId: context.instanceId,
-      connectionDirectory: protocol.connectionDirectory,
-    },
+    cluster: { instanceId: context.instanceId, connectionDirectory: protocol.connectionDirectory },
   });
 
   const outboxPoller = new OutboxPoller({
@@ -450,53 +357,35 @@ export async function startEdgeRuntime(
   const telegramProcessor =
     agents && context.container.telegramBot && context.deploymentConfig.channels.pipelineEnabled
       ? new TelegramChannelProcessor({
-          db: context.container.db,
-          sessionDal: context.container.sessionDal,
-          agents,
-          telegramBot: context.container.telegramBot,
-          owner: context.instanceId,
-          logger: context.logger,
-          typingMode: context.deploymentConfig.channels.typingMode,
-          typingRefreshMs: context.deploymentConfig.channels.typingRefreshMs,
-          typingAutomationEnabled: context.deploymentConfig.channels.typingAutomationEnabled,
-          memoryV1Dal: context.container.memoryV1Dal,
-          approvalDal: context.container.approvalDal,
-          approvalNotifier: protocol.approvalNotifier,
-        })
+        db: context.container.db,
+        sessionDal: context.container.sessionDal,
+        agents,
+        telegramBot: context.container.telegramBot,
+        owner: context.instanceId,
+        logger: context.logger,
+        typingMode: context.deploymentConfig.channels.typingMode,
+        typingRefreshMs: context.deploymentConfig.channels.typingRefreshMs,
+        typingAutomationEnabled: context.deploymentConfig.channels.typingAutomationEnabled,
+        memoryV1Dal: context.container.memoryV1Dal,
+        approvalDal: context.container.approvalDal,
+        approvalNotifier: protocol.approvalNotifier,
+      })
       : undefined;
   telegramProcessor?.start();
 
   const server = await createGatewayServer(context, app, wsHandler);
-
-  return {
-    plugins,
-    agents,
-    authRateLimiter,
-    wsUpgradeRateLimiter,
-    wsHandler,
-    outboxPoller,
-    telegramProcessor,
-    server,
-  };
+  return { plugins, agents, authRateLimiter, wsUpgradeRateLimiter, wsHandler, outboxPoller, telegramProcessor, server };
 }
 
-export function createWorkerLoop(
-  context: GatewayBootContext,
-  protocol: ProtocolRuntime,
-): ExecutionWorkerLoop | undefined {
-  if (!context.shouldRunWorker) {
-    return undefined;
-  }
+export function createWorkerLoop(context: GatewayBootContext, protocol: ProtocolRuntime): ExecutionWorkerLoop | undefined {
+  if (!context.shouldRunWorker) return undefined;
 
   const engine = createExecutionEngine(context);
   const resolveExecutor = (): ExecutionStepExecutor => {
     const toolrunner = context.deploymentConfig.execution.toolrunner;
     if (toolrunner.launcher === "kubernetes") {
-      if (!isPostgresDbUri(context.dbPath)) {
-        throw new Error(
-          "execution.toolrunner.launcher=kubernetes requires --db to be a Postgres URI",
-        );
-      }
+      if (!isPostgresDbUri(context.dbPath))
+        throw new Error("execution.toolrunner.launcher=kubernetes requires --db to be a Postgres URI");
       return createKubernetesToolRunnerStepExecutor({
         namespace: toolrunner.namespace,
         image: toolrunner.image,
@@ -525,26 +414,16 @@ export function createWorkerLoop(
     nodeDispatchService: new NodeDispatchService(protocol.protocolDeps),
     fallback: toolExecutor,
   }) satisfies ExecutionStepExecutor;
-  const executor = createGatewayStepExecutor({
-    container: context.container,
-    toolExecutor: nodeDispatchExecutor,
-  }) satisfies ExecutionStepExecutor;
+  const executor = createGatewayStepExecutor({ container: context.container, toolExecutor: nodeDispatchExecutor }) satisfies ExecutionStepExecutor;
 
-  return startExecutionWorkerLoop({
-    engine,
-    workerId: context.instanceId,
-    executor,
-    logger: context.logger,
-  });
+  return startExecutionWorkerLoop({ engine, workerId: context.instanceId, executor, logger: context.logger });
 }
 
 export function fireGatewayStartHook(context: GatewayBootContext, protocol: ProtocolRuntime): void {
-  if (!context.shouldRunEdge) {
-    console.log(`Tyrum gateway v${VERSION} started in role '${context.role}'.`);
-  }
+  if (!context.shouldRunEdge) console.log(`Tyrum gateway v${VERSION} started in role '${context.role}'.`);
 
   if (protocol.hooksRuntime && context.shouldRunWorker) {
-    void protocol.hooksRuntime
+      void protocol.hooksRuntime
       .fire({
         event: "gateway.start",
         metadata: { instance_id: context.instanceId, role: context.role },
@@ -556,10 +435,7 @@ export function fireGatewayStartHook(context: GatewayBootContext, protocol: Prot
   }
 }
 
-export function createShutdownHandler(
-  context: GatewayBootContext,
-  runtime: GatewayRuntime,
-): (signal: string) => void {
+export function createShutdownHandler(context: GatewayBootContext, runtime: GatewayRuntime): (signal: string) => void {
   let shuttingDown = false;
 
   return (signal: string): void => {
@@ -570,14 +446,8 @@ export function createShutdownHandler(
     const hardExitTimeoutMs = 15_000;
     const hardExitDeadlineMs = shutdownStartedAtMs + hardExitTimeoutMs;
 
-    const sleep = (ms: number): Promise<void> => {
-      return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
-    };
-
-    const waitForRunsToStart = async (
-      runIds: readonly string[],
-      timeoutMs: number,
-    ): Promise<void> => {
+    const sleep = (ms: number): Promise<void> => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+    const waitForRunsToStart = async (runIds: readonly string[], timeoutMs: number): Promise<void> => {
       if (runIds.length === 0 || timeoutMs <= 0) return;
 
       const placeholders = runIds.map(() => "?").join(", ");
@@ -607,9 +477,7 @@ export function createShutdownHandler(
       try {
         if (!runtime.edge.server) return resolve();
         runtime.edge.server.close(() => resolve());
-      } catch {
-        resolve();
-      }
+      } catch { resolve(); }
     });
 
     runtime.edge.wsHandler?.stopHeartbeat();
@@ -625,10 +493,7 @@ export function createShutdownHandler(
             })
             .catch((err) => {
               const message = err instanceof Error ? err.message : String(err);
-              context.logger.warn("hooks.fire_failed", {
-                event: "gateway.shutdown",
-                error: message,
-              });
+              context.logger.warn("hooks.fire_failed", { event: "gateway.shutdown", error: message });
               return [];
             })
         : Promise.resolve([]);
@@ -651,9 +516,7 @@ export function createShutdownHandler(
       try {
         if (!runtime.edge.wsHandler) return resolve();
         runtime.edge.wsHandler.wss.close(() => resolve());
-      } catch {
-        resolve();
-      }
+      } catch { resolve(); }
     });
 
     context.container.watcherProcessor.stop();
@@ -668,14 +531,7 @@ export function createShutdownHandler(
     context.container.modelsDev.stopBackgroundRefresh();
 
     void runShutdownCleanup(
-      [
-        closeServer,
-        closeWss,
-        shutdownHookRuns,
-        runtime.edge.agents?.shutdown() ?? Promise.resolve(),
-        runtime.otel.shutdown(),
-        stopWorker,
-      ],
+      [closeServer, closeWss, shutdownHookRuns, runtime.edge.agents?.shutdown() ?? Promise.resolve(), runtime.otel.shutdown(), stopWorker],
       () => context.container.db.close(),
     ).finally(() => {
       clearTimeout(hardExitTimer);

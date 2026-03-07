@@ -1,36 +1,19 @@
 import { z } from "zod";
 import {
-  WsApprovalListRequest,
-  WsApprovalListResponseErrEnvelope,
-  WsApprovalListResponseOkEnvelope,
-  WsApprovalRequest,
-  WsApprovalRequestResponseErrEnvelope,
-  WsApprovalRequestResponseOkEnvelope,
-  WsApprovalRequestedEvent,
-  WsApprovalResolveRequest,
-  WsApprovalResolveResponseErrEnvelope,
-  WsApprovalResolveResponseOkEnvelope,
-  WsApprovalResolvedEvent,
+  WsApprovalListRequest, WsApprovalListResponseErrEnvelope, WsApprovalListResponseOkEnvelope,
+  WsApprovalRequest, WsApprovalRequestResponseErrEnvelope, WsApprovalRequestResponseOkEnvelope,
+  WsApprovalRequestedEvent, WsApprovalResolveRequest, WsApprovalResolveResponseErrEnvelope,
+  WsApprovalResolveResponseOkEnvelope, WsApprovalResolvedEvent,
 } from "./approvals.js";
 import {
-  WsCapabilityReadyEvent,
-  WsCapabilityReadyRequest,
-  WsCapabilityReadyResponseErrEnvelope,
+  WsCapabilityReadyEvent, WsCapabilityReadyRequest, WsCapabilityReadyResponseErrEnvelope,
   WsCapabilityReadyResponseOkEnvelope,
 } from "./capability-ready.js";
 import {
-  WsConnectInitRequest,
-  WsConnectInitResponseErrEnvelope,
-  WsConnectInitResponseOkEnvelope,
-  WsConnectProofRequest,
-  WsConnectProofResponseErrEnvelope,
-  WsConnectProofResponseOkEnvelope,
-  WsConnectRequest,
-  WsConnectResponseErrEnvelope,
-  WsConnectResponseOkEnvelope,
-  WsPingRequest,
-  WsPingResponseErrEnvelope,
-  WsPingResponseOkEnvelope,
+  WsConnectInitRequest, WsConnectInitResponseErrEnvelope, WsConnectInitResponseOkEnvelope,
+  WsConnectProofRequest, WsConnectProofResponseErrEnvelope, WsConnectProofResponseOkEnvelope,
+  WsConnectRequest, WsConnectResponseErrEnvelope, WsConnectResponseOkEnvelope, WsPingRequest,
+  WsPingResponseErrEnvelope, WsPingResponseOkEnvelope,
 } from "./connect.js";
 import {
   WsArtifactAttachedEvent,
@@ -101,25 +84,14 @@ import {
   WsMemoryUpdateResponseOkEnvelope,
 } from "./memory.js";
 import {
-  WsPairingApproveRequest,
-  WsPairingApproveResponseErrEnvelope,
-  WsPairingApproveResponseOkEnvelope,
-  WsPairingApprovedEvent,
-  WsPairingDenyRequest,
-  WsPairingDenyResponseErrEnvelope,
-  WsPairingDenyResponseOkEnvelope,
-  WsPairingRequestedEvent,
-  WsPairingResolvedEvent,
-  WsPairingRevokeRequest,
-  WsPairingRevokeResponseErrEnvelope,
-  WsPairingRevokeResponseOkEnvelope,
+  WsPairingApproveRequest, WsPairingApproveResponseErrEnvelope, WsPairingApproveResponseOkEnvelope,
+  WsPairingApprovedEvent, WsPairingDenyRequest, WsPairingDenyResponseErrEnvelope,
+  WsPairingDenyResponseOkEnvelope, WsPairingRequestedEvent, WsPairingResolvedEvent,
+  WsPairingRevokeRequest, WsPairingRevokeResponseErrEnvelope, WsPairingRevokeResponseOkEnvelope,
 } from "./pairing.js";
 import {
-  WsPresenceBeaconRequest,
-  WsPresenceBeaconResponseErrEnvelope,
-  WsPresenceBeaconResponseOkEnvelope,
-  WsPresencePrunedEvent,
-  WsPresenceUpsertedEvent,
+  WsPresenceBeaconRequest, WsPresenceBeaconResponseErrEnvelope, WsPresenceBeaconResponseOkEnvelope,
+  WsPresencePrunedEvent, WsPresenceUpsertedEvent,
 } from "./presence.js";
 import {
   WsDeliveryReceiptEvent,

@@ -1,11 +1,3 @@
-/**
- * Watcher scheduler — periodic tick for time-based watchers.
- *
- * Queries active periodic watchers on each tick, creates a durable firing
- * record (deduped per watcher+slot), and then processes queued firings with
- * DB-lease ownership for cluster safety.
- */
-
 import type { Emitter } from "mitt";
 import type { GatewayEvents } from "../../event-bus.js";
 import type {
@@ -36,10 +28,7 @@ const DEFAULT_FIRING_LEASE_TTL_MS = 60_000;
 const DEFAULT_PROCESS_BATCH = 25;
 
 class LostFiringLeaseError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "LostFiringLeaseError";
-  }
+  constructor(message: string) { super(message); this.name = "LostFiringLeaseError"; }
 }
 
 interface RawPeriodicWatcherRow {
@@ -74,15 +63,9 @@ export interface WatcherSchedulerOptions {
   tickMs?: number;
   firingLeaseTtlMs?: number;
   maxFiringsPerTick?: number;
-  /** Enables execution of watchers via the execution engine (default: false). */
   automationEnabled?: boolean;
-  /**
-   * When true, the scheduler interval will keep the Node.js process alive.
-   * Defaults to false so background scheduling doesn't block graceful shutdown.
-   */
   keepProcessAlive?: boolean;
 }
-
 export class WatcherScheduler {
   private readonly db: SqlDb;
   private readonly memoryV1Dal: MemoryV1Dal;
@@ -121,7 +104,6 @@ export class WatcherScheduler {
     this.playbookRunner = opts.playbookRunner;
     this.playbooksById = new Map((opts.playbooks ?? []).map((p) => [p.manifest.id, p]));
   }
-
   start(): void {
     if (this.timer) return;
     this.timer = setInterval(() => {
@@ -130,25 +112,18 @@ export class WatcherScheduler {
         this.logger?.error("watcher.scheduler_tick_failed", { error: message });
       });
     }, this.tickMs);
-    if (!this.keepProcessAlive) {
-      // Don't prevent process exit (useful in embedded / test scenarios).
-      this.timer.unref();
-    }
+    if (!this.keepProcessAlive) this.timer.unref();
   }
-
   stop(): void {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = undefined;
     }
   }
-
-  /** Exposed for testing -- runs one scheduler cycle. */
   async tick(): Promise<void> {
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
     const activeWhere = sqlActiveWhereClause(this.db);
-
     const watchers = await this.getActivePeriodicWatchers();
     for (const watcher of watchers) {
       const config = this.parsePeriodicConfig(watcher.trigger_config_json);
@@ -169,8 +144,6 @@ export class WatcherScheduler {
           watcherId: watcher.watcher_id,
           scheduledAtMs: slotMs,
         });
-
-        // Best-effort: advance watcher cursor even if the firing already existed.
         await this.db.run(
           `UPDATE watchers
            SET last_fired_at_ms = ?, updated_at = ?
@@ -196,7 +169,6 @@ export class WatcherScheduler {
         });
       }
     }
-
     let processed = 0;
     while (processed < this.maxFiringsPerTick) {
       const firing = await this.firingDal.claimNext({
@@ -209,7 +181,6 @@ export class WatcherScheduler {
       processed += 1;
     }
   }
-
   private async getActivePeriodicWatchers(): Promise<RawPeriodicWatcherRow[]> {
     const activeWhere = sqlActiveWhereClause(this.db);
     return await this.db.all<RawPeriodicWatcherRow>(
@@ -219,13 +190,11 @@ export class WatcherScheduler {
       activeWhere.params,
     );
   }
-
   private parsePeriodicConfig(raw: string): SchedulerPeriodicConfig | undefined {
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw) as unknown;
     } catch {
-      // Intentional: malformed watcher configs are ignored so one bad row does not break scheduling.
       return undefined;
     }
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -247,7 +216,6 @@ export class WatcherScheduler {
     if (typeof intervalMs !== "number" || !Number.isFinite(intervalMs) || intervalMs <= 0) {
       return undefined;
     }
-
     let execution: NormalizedScheduleConfig["execution"] | undefined;
     if (Array.isArray(record["steps"])) {
       const steps: ActionPrimitive[] = [];
@@ -291,11 +259,9 @@ export class WatcherScheduler {
       laneRaw,
     };
   }
-
   private isAutomationExecutionEnabled(): boolean {
     return this.automationEnabled;
   }
-
   private resolvePlaybookBundle(playbook: Playbook): PolicyBundleT | undefined {
     const allowed = playbook.manifest.allowed_domains ?? [];
     if (!Array.isArray(allowed) || allowed.length === 0) return undefined;
@@ -309,7 +275,6 @@ export class WatcherScheduler {
       },
     });
   }
-
   private buildAutomationTurnRequest(input: {
     watcher: RawPeriodicWatcherRow;
     firing: WatcherFiringRow;
@@ -341,8 +306,8 @@ export class WatcherScheduler {
           : `${input.config.cadence.expression} (${input.config.cadence.timezone})`
       }`,
       "",
-      "Instruction:",
-      instruction ?? "Review context and act according to the configured automation schedule.",
+        "Instruction:",
+        instruction ?? "Review context and act according to the configured automation schedule.",
     ];
     if (kind === "heartbeat" && input.config.delivery.mode === "quiet") {
       messageLines.push("", "Return an empty reply when there is no useful user-facing action.");
@@ -371,7 +336,6 @@ export class WatcherScheduler {
       },
     };
   }
-
   private async processFiring(firing: WatcherFiringRow): Promise<void> {
     const watcher = await this.db.get<RawPeriodicWatcherRow>(
       `SELECT *
@@ -397,11 +361,8 @@ export class WatcherScheduler {
         : cfg?.execution.kind === "agent_turn"
           ? cfg.schedule_kind
           : "";
-
     if (triggerType === "webhook") {
-      // Webhook firings already have an operator-visible episode recorded at ingestion time.
-      // The scheduler's responsibility is to lease + finalize the durable firing row.
-      if (!this.isAutomationExecutionEnabled()) {
+      if (!this.automationEnabled) {
         await this.firingDal.markEnqueued({
           tenantId: firing.tenant_id,
           watcherFiringId: firing.watcher_firing_id,
@@ -409,8 +370,6 @@ export class WatcherScheduler {
         });
         return;
       }
-
-      // Automation execution is enabled, but webhook-triggered automation is not yet wired here.
       await this.firingDal.markFailed({
         tenantId: firing.tenant_id,
         watcherFiringId: firing.watcher_firing_id,
@@ -419,7 +378,6 @@ export class WatcherScheduler {
       });
       return;
     }
-
     if (triggerType !== "periodic") {
       await this.firingDal.markFailed({
         tenantId: firing.tenant_id,
@@ -429,7 +387,6 @@ export class WatcherScheduler {
       });
       return;
     }
-
     const occurredAtIso = new Date(firing.scheduled_at_ms).toISOString();
     try {
       await recordMemoryV1SystemEpisode(
@@ -459,15 +416,12 @@ export class WatcherScheduler {
         error: message,
       });
     }
-
     this.eventBus.emit("watcher:fired", {
       watcherId: firing.watcher_id,
       planId,
       triggerType,
     });
-
-    // If automation execution isn't enabled (default), mark the firing as handled.
-    if (!this.isAutomationExecutionEnabled()) {
+    if (!this.automationEnabled) {
       await this.firingDal.markEnqueued({
         tenantId: firing.tenant_id,
         watcherFiringId: firing.watcher_firing_id,
@@ -475,7 +429,6 @@ export class WatcherScheduler {
       });
       return;
     }
-
     if (!this.engine || !this.policyService) {
       await this.firingDal.markFailed({
         tenantId: firing.tenant_id,
@@ -485,7 +438,6 @@ export class WatcherScheduler {
       });
       return;
     }
-
     if (!cfg) {
       await this.firingDal.markFailed({
         tenantId: firing.tenant_id,
@@ -554,7 +506,6 @@ export class WatcherScheduler {
         },
       ];
     }
-
     if (!steps) {
       playbook = this.playbooksById.get(playbookId);
       if (!playbook) {
@@ -577,20 +528,24 @@ export class WatcherScheduler {
       }
       steps = this.playbookRunner.run(playbook).steps;
     }
-
     const automationPlanId = `automation-${firing.watcher_firing_id}`;
     const requestId = `automation-${firing.watcher_firing_id}`;
+<<<<<<< Updated upstream
 
+=======
+    const workspaceKey = await this.db.get<{ workspace_key: string }>(
+      "SELECT workspace_key FROM workspaces WHERE tenant_id = ? AND workspace_id = ? LIMIT 1",
+      [firing.tenant_id, watcher.workspace_id],
+    );
+>>>>>>> Stashed changes
     const playbookBundle = playbook ? this.resolvePlaybookBundle(playbook) : undefined;
     const effective = await this.policyService.loadEffectiveBundle({ playbookBundle });
     const snapshot = await this.policyService.getOrCreateSnapshot(
       firing.tenant_id,
       effective.bundle,
     );
-
     try {
       const result = await this.db.transaction(async (tx) => {
-        // Ensure we still own this firing before enqueuing.
         const current = await tx.get<{ status: string; lease_owner: string | null }>(
           `SELECT status, lease_owner
            FROM watcher_firings
@@ -655,12 +610,9 @@ export class WatcherScheduler {
         }
         return enqueued;
       });
-
       if (!result) {
-        // Lost lease; no-op.
         return;
       }
-
       this.logger?.info("watcher.firing_enqueued", {
         firing_id: firing.watcher_firing_id,
         watcher_id: firing.watcher_id,
@@ -669,7 +621,6 @@ export class WatcherScheduler {
       });
     } catch (err) {
       if (err instanceof LostFiringLeaseError) {
-        // Another scheduler likely took over; we rolled back any partial writes.
         this.logger?.debug("watcher.firing_lost_lease", {
           firing_id: firing.watcher_firing_id,
           watcher_id: firing.watcher_id,
