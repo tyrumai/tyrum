@@ -6,18 +6,13 @@ import { NodeDispatchService } from "../modules/agent/node-dispatch-service.js";
 import { AgentRegistry } from "../modules/agent/registry.js";
 import { AuthAudit } from "../modules/auth/audit.js";
 import { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
-import { ArtifactLifecycleScheduler } from "../modules/artifact/lifecycle.js";
 import { ApprovalEngineActionProcessor } from "../modules/approval/engine-action-processor.js";
 import { WsNotifier } from "../modules/approval/notifier.js";
 import { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import { OutboxDal } from "../modules/backplane/outbox-dal.js";
-import { OutboxLifecycleScheduler } from "../modules/backplane/outbox-lifecycle.js";
 import { OutboxPoller } from "../modules/backplane/outbox-poller.js";
 import { TelegramChannelProcessor } from "../modules/channels/telegram.js";
-import {
-  ExecutionEngine,
-  type StepExecutor as ExecutionStepExecutor,
-} from "../modules/execution/engine.js";
+import { type StepExecutor as ExecutionStepExecutor } from "../modules/execution/engine.js";
 import { createGatewayStepExecutor } from "../modules/execution/gateway-step-executor.js";
 import { createKubernetesToolRunnerStepExecutor } from "../modules/execution/kubernetes-toolrunner-step-executor.js";
 import { createNodeDispatchStepExecutor } from "../modules/execution/node-dispatch-step-executor.js";
@@ -28,12 +23,9 @@ import {
 } from "../modules/execution/worker-loop.js";
 import { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import { createMemoryV1BudgetsProvider } from "../modules/memory/v1-budgets-provider.js";
-import { gatewayMetrics } from "../modules/observability/metrics.js";
 import type { OtelRuntime } from "../modules/observability/otel.js";
 import { PluginRegistry } from "../modules/plugins/registry.js";
-import { StateStoreLifecycleScheduler } from "../modules/statestore/lifecycle.js";
 import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
-import { WatcherScheduler } from "../modules/watcher/scheduler.js";
 import { WsEventDal } from "../modules/ws-event/dal.js";
 import { WorkSignalScheduler } from "../modules/workboard/signal-scheduler.js";
 import { createWsHandler } from "../routes/ws.js";
@@ -43,28 +35,15 @@ import { ConnectionManager } from "../ws/connection-manager.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
 import { TaskResultRegistry, type TaskResult } from "../ws/protocol/task-result-registry.js";
 import { resolveGatewayEntrypointPath } from "./entrypoint-path.js";
+import { createExecutionEngine } from "./runtime-builders-engine.js";
 import type {
-  BackgroundSchedulers,
   EdgeRuntime,
   GatewayBootContext,
   GatewayServer,
   ProtocolRuntime,
 } from "./runtime-shared.js";
+export { startBackgroundSchedulers } from "./runtime-builders-background.js";
 export { createShutdownHandler, runShutdownCleanup } from "./runtime-builders-shutdown.js";
-
-function createExecutionEngine(
-  context: GatewayBootContext,
-  options?: { includeSecrets?: boolean },
-): ExecutionEngine {
-  return new ExecutionEngine({
-    db: context.container.db,
-    redactionEngine: context.container.redactionEngine,
-    secretProviderForTenant:
-      options?.includeSecrets === false ? undefined : context.secretProviderForTenant,
-    policyService: context.container.policyService,
-    logger: context.logger,
-  });
-}
 
 function toTaskResult(
   success: boolean,
@@ -83,60 +62,6 @@ function toTaskResult(
   if (result !== undefined) taskResult.result = result;
   if (evidence !== undefined) taskResult.evidence = evidence;
   return taskResult;
-}
-
-export function startBackgroundSchedulers(context: GatewayBootContext): BackgroundSchedulers {
-  const keepProcessAlive = context.role === "scheduler";
-  const shouldRunScheduler = context.role === "all" || context.role === "scheduler";
-  const watcherScheduler = shouldRunScheduler
-    ? new WatcherScheduler({
-        db: context.container.db,
-        memoryV1Dal: context.container.memoryV1Dal,
-        eventBus: context.container.eventBus,
-        automationEnabled: context.deploymentConfig.automation.enabled,
-        keepProcessAlive,
-      })
-    : undefined;
-  const artifactLifecycleScheduler = shouldRunScheduler
-    ? new ArtifactLifecycleScheduler({
-        db: context.container.db,
-        artifactStore: context.container.artifactStore,
-        policySnapshotDal: context.container.policySnapshotDal,
-        keepProcessAlive,
-        logger: context.container.logger,
-      })
-    : undefined;
-  const outboxLifecycleScheduler = shouldRunScheduler
-    ? new OutboxLifecycleScheduler({
-        db: context.container.db,
-        keepProcessAlive,
-        logger: context.container.logger,
-        metrics: gatewayMetrics,
-      })
-    : undefined;
-  const stateStoreLifecycleScheduler = shouldRunScheduler
-    ? new StateStoreLifecycleScheduler({
-        db: context.container.db,
-        channelTerminalRetentionDays:
-          context.deploymentConfig.lifecycle.channels.terminalRetentionDays,
-        keepProcessAlive,
-        logger: context.container.logger,
-        metrics: gatewayMetrics,
-        sessionsTtlDays: context.deploymentConfig.lifecycle.sessions.ttlDays,
-      })
-    : undefined;
-
-  if (context.shouldRunEdge) context.container.watcherProcessor.start();
-  watcherScheduler?.start();
-  artifactLifecycleScheduler?.start();
-  outboxLifecycleScheduler?.start();
-  stateStoreLifecycleScheduler?.start();
-  return {
-    watcherScheduler,
-    artifactLifecycleScheduler,
-    outboxLifecycleScheduler,
-    stateStoreLifecycleScheduler,
-  };
 }
 
 export async function createProtocolRuntime(
