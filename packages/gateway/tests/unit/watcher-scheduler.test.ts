@@ -528,6 +528,93 @@ describe("WatcherScheduler", () => {
     expect((steps[0]!.args["metadata"] as Record<string, unknown>)["automation"]).toBeDefined();
   });
 
+  it("fails closed when watcher scope keys cannot be resolved", async () => {
+    const enqueuedInputs: Array<Record<string, unknown>> = [];
+    const policyBundle = PolicyBundle.parse({ v: 1 });
+    const schedulerWithEngine = new WatcherScheduler({
+      db,
+      memoryV1Dal,
+      eventBus,
+      owner: "scheduler-1",
+      firingLeaseTtlMs: 10_000,
+      automationEnabled: true,
+      engine: {
+        enqueuePlanInTx: async (tx, input) => {
+          enqueuedInputs.push(input as unknown as Record<string, unknown>);
+          const jobId = randomUUID();
+          const runId = randomUUID();
+          await tx.run(
+            `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
+             VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)`,
+            [
+              DEFAULT_TENANT_ID,
+              jobId,
+              DEFAULT_AGENT_ID,
+              DEFAULT_WORKSPACE_ID,
+              input.key,
+              input.lane,
+              "{}",
+            ],
+          );
+          await tx.run(
+            `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
+             VALUES (?, ?, ?, ?, ?, 'queued', 1)`,
+            [DEFAULT_TENANT_ID, runId, jobId, input.key, input.lane],
+          );
+          return { jobId, runId };
+        },
+      } as unknown as ExecutionEngine,
+      policyService: {
+        loadEffectiveBundle: async () => ({
+          bundle: policyBundle,
+          sha256: "sha256",
+          sources: { deployment: "default", agent: null, playbook: null },
+        }),
+        getOrCreateSnapshot: async () => ({
+          policy_snapshot_id: "snapshot-1",
+          sha256: "sha256",
+          created_at: new Date().toISOString(),
+          bundle: policyBundle,
+        }),
+      } as unknown as PolicyService,
+    });
+
+    const dbGet = db.get.bind(db);
+    const getSpy = vi.spyOn(db, "get").mockImplementation(async (sql, params = []) => {
+      if (sql.includes("SELECT t.tenant_key, ws.workspace_key, ag.agent_key")) {
+        return undefined;
+      }
+      return dbGet(sql, params);
+    });
+
+    try {
+      await processor.createWatcher("plan-1", "periodic", {
+        v: 1,
+        schedule_kind: "heartbeat",
+        enabled: true,
+        cadence: { type: "interval", interval_ms: 1000 },
+        execution: {
+          kind: "agent_turn",
+          instruction: "Review signals and act only if useful.",
+        },
+        delivery: { mode: "quiet" },
+      });
+
+      await schedulerWithEngine.tick();
+
+      expect(enqueuedInputs).toHaveLength(0);
+
+      const firing = await db.get<{ status: string; error: string | null }>(
+        "SELECT status, error FROM watcher_firings",
+      );
+      expect(firing).toBeDefined();
+      expect(firing!.status).toBe("failed");
+      expect(firing!.error).toMatch(/failed to resolve watcher scope keys/i);
+    } finally {
+      getSpy.mockRestore();
+    }
+  });
+
   it("fails periodic automation when lane is invalid (does not silently reroute)", async () => {
     const prev = process.env["TYRUM_AUTOMATION_ENABLED"];
     process.env["TYRUM_AUTOMATION_ENABLED"] = "1";

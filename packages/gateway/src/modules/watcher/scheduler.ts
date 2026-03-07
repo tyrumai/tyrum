@@ -520,9 +520,18 @@ export class WatcherScheduler {
        WHERE t.tenant_id = ?
          AND ws.workspace_id = ?
          AND ag.agent_id = ?
-       LIMIT 1`,
+      LIMIT 1`,
       [firing.tenant_id, watcher.workspace_id, watcher.agent_id],
     );
+    if (!scopeKeys?.tenant_key || !scopeKeys.workspace_key || !scopeKeys.agent_key) {
+      await this.firingDal.markFailed({
+        tenantId: firing.tenant_id,
+        watcherFiringId: firing.watcher_firing_id,
+        owner: this.owner,
+        error: "failed to resolve watcher scope keys",
+      });
+      return;
+    }
 
     let steps: ActionPrimitive[] | undefined =
       cfg.execution.kind === "steps" ? cfg.execution.steps : undefined;
@@ -536,9 +545,9 @@ export class WatcherScheduler {
             watcher,
             firing,
             config: cfg,
-            tenantKey: scopeKeys?.tenant_key ?? "default",
-            agentKey: scopeKeys?.agent_key ?? "default",
-            workspaceKey: scopeKeys?.workspace_key ?? "default",
+            tenantKey: scopeKeys.tenant_key,
+            agentKey: scopeKeys.agent_key,
+            workspaceKey: scopeKeys.workspace_key,
           }),
         },
       ];
@@ -596,7 +605,7 @@ export class WatcherScheduler {
           lane,
           planId: automationPlanId,
           requestId,
-          workspaceKey: scopeKeys?.workspace_key ?? "default",
+          workspaceKey: scopeKeys.workspace_key,
           steps: steps!,
           policySnapshotId: snapshot.policy_snapshot_id,
           trigger: {
