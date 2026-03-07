@@ -105,4 +105,44 @@ describe("AgentRegistry shared policy wiring", () => {
 
     await registry.shutdown();
   });
+
+  it("keeps serving cached runtimes when plugin refresh fails", async () => {
+    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-plugin-failure");
+    const firstPlugins = Object.create(PluginRegistry.prototype) as PluginRegistry;
+    const loadTenantRegistry = vi
+      .fn<(_: string) => Promise<PluginRegistry>>()
+      .mockResolvedValueOnce(firstPlugins)
+      .mockRejectedValueOnce(new Error("db down"));
+    const setPluginsSpy = vi.spyOn(AgentRuntime.prototype, "setPlugins");
+    const warnSpy = vi.spyOn(container.logger, "warn");
+
+    const registry = new AgentRegistry({
+      container,
+      baseHome: home,
+      secretProviderForTenant: () => ({ resolve: async () => undefined }) as never,
+      defaultPolicyService: container.policyService,
+      approvalNotifier: { notify: () => undefined } as never,
+      pluginCatalogProvider: {
+        loadGlobalRegistry: vi.fn(async () => firstPlugins),
+        loadTenantRegistry,
+        invalidateTenantRegistry: vi.fn(async () => undefined),
+        shutdown: vi.fn(async () => undefined),
+      },
+      logger: container.logger,
+    });
+
+    const runtime = await registry.getRuntime({ tenantId, agentKey: "default" });
+    await expect(registry.getRuntime({ tenantId, agentKey: "default" })).resolves.toBe(runtime);
+    expect(setPluginsSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      "agents.runtime_plugin_refresh_failed",
+      expect.objectContaining({
+        tenant_id: tenantId,
+        agent_id: "default",
+        error: "db down",
+      }),
+    );
+
+    await registry.shutdown();
+  });
 });

@@ -70,13 +70,22 @@ export async function fireGatewayLifecycleHooks(
 ): Promise<readonly string[]> {
   const runIds: string[] = [];
   for (const tenantId of await listLifecycleHookTenantIds(context)) {
-    runIds.push(
-      ...(await hooksRuntime.fire({
+    try {
+      runIds.push(
+        ...(await hooksRuntime.fire({
+          event: input.event,
+          tenantId,
+          metadata: input.metadata,
+        })),
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      context.logger.warn("hooks.fire_failed", {
         event: input.event,
-        tenantId,
-        metadata: input.metadata,
-      })),
-    );
+        tenant_id: tenantId,
+        error: message,
+      });
+    }
   }
   return runIds;
 }

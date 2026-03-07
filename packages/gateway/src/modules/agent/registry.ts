@@ -133,6 +133,26 @@ export class AgentRegistry {
     );
   }
 
+  private async refreshRuntimePlugins(
+    runtime: AgentRuntime,
+    tenantId: string,
+    agentId: string,
+  ): Promise<void> {
+    try {
+      const plugins = await this.resolvePluginsForTenant(tenantId);
+      if (plugins) {
+        runtime.setPlugins(plugins);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.opts.logger.warn("agents.runtime_plugin_refresh_failed", {
+        tenant_id: tenantId,
+        agent_id: agentId,
+        error: message,
+      });
+    }
+  }
+
   async getRuntime(input: { tenantId: string; agentKey: string }): Promise<AgentRuntime> {
     const tenantId = input.tenantId.trim();
     const agentId = normalizeAgentId(input.agentKey);
@@ -140,10 +160,7 @@ export class AgentRegistry {
     const existing = this.runtimeByAgentId.get(cacheKey);
     if (existing) {
       const runtime = await existing;
-      const plugins = await this.resolvePluginsForTenant(tenantId);
-      if (plugins) {
-        runtime.setPlugins(plugins);
-      }
+      await this.refreshRuntimePlugins(runtime, tenantId, agentId);
       return runtime;
     }
 

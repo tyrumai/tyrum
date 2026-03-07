@@ -81,4 +81,29 @@ describe("shared lifecycle hooks", () => {
       expect.objectContaining({ event: "gateway.shutdown", tenantId: "tenant-b" }),
     );
   });
+
+  it("continues firing hooks for later tenants when one tenant fails", async () => {
+    const { context } = createContext();
+    const fire = vi
+      .fn<({ tenantId }: { tenantId: string }) => Promise<readonly string[]>>()
+      .mockImplementation(async ({ tenantId }) => {
+        if (tenantId === DEFAULT_TENANT_ID) {
+          return ["run-default"];
+        }
+        throw new Error("boom");
+      });
+
+    await expect(
+      fireGatewayLifecycleHooks(context as never, { fire }, { event: "gateway.shutdown" }),
+    ).resolves.toEqual(["run-default"]);
+    expect(fire).toHaveBeenCalledTimes(2);
+    expect(context.logger.warn).toHaveBeenCalledWith(
+      "hooks.fire_failed",
+      expect.objectContaining({
+        event: "gateway.shutdown",
+        tenant_id: "tenant-b",
+        error: "boom",
+      }),
+    );
+  });
 });
