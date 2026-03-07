@@ -197,6 +197,7 @@ import {
   formatDeviceIdentityError,
   signProofWithPrivateKey,
 } from "./device-identity.js";
+import { loadNodePinnedTransportModule } from "./node/load-pinned-transport.js";
 import { normalizeFingerprint256 } from "./tls/fingerprint.js";
 
 // ---------------------------------------------------------------------------
@@ -341,16 +342,6 @@ const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
 const DEFAULT_PROTOCOL_REV = 2;
 const TERMINAL_RECONNECT_CLOSE_CODES = new Set<number>([4005, 4006, 4007, 4008]);
-
-type NodePinnedTransportModule = typeof import("./node/pinned-transport.js");
-
-async function loadNodePinnedTransportModule(): Promise<NodePinnedTransportModule> {
-  const globalAny = globalThis as unknown as Record<PropertyKey, unknown>;
-  const specifier =
-    "./node/pinned-transport.js" +
-    String(globalAny[Symbol.for("tyrum:node-pinned-transport")] ?? "");
-  return (await import(specifier)) as NodePinnedTransportModule;
-}
 
 const WS_ACK_RESULT = {
   safeParse: (
@@ -860,7 +851,7 @@ export class TyrumClient {
     const dispatcher = anyWs.__tyrumDispatcher;
     if (!dispatcher || typeof dispatcher.destroy !== "function") return;
     anyWs.__tyrumDispatcher = null;
-    void loadNodePinnedTransportModule()
+    void loadNodePinnedTransportModule(".")
       .then((module) => module.destroyPinnedNodeDispatcher(dispatcher as any))
       .catch(() => {});
   }
@@ -906,27 +897,23 @@ export class TyrumClient {
     const caCertPemRaw = typeof this.opts.tlsCaCertPem === "string" ? this.opts.tlsCaCertPem : "";
     const caCertPemTrimmed = caCertPemRaw.trim();
     const caCertPem = caCertPemTrimmed.length ? caCertPemTrimmed : undefined;
-    const nodeTransport = await loadNodePinnedTransportModule();
-    try {
-      const { ws, dispatcher } = await nodeTransport.createPinnedNodeWebSocket({
-        url: this.opts.url,
-        protocols: this.buildProtocols(),
-        pinRaw,
-        expectedFingerprint256: expected,
-        allowSelfSigned,
-        caCertPem,
-        onTransportError: (message) => {
-          this.transportErrorHint = message;
-        },
-        onPinFailure: () => {
-          this.suppressReconnect = true;
-        },
-      });
-      (ws as unknown as { __tyrumDispatcher?: unknown }).__tyrumDispatcher = dispatcher;
-      return ws;
-    } catch (err) {
-      throw err;
-    }
+    const nodeTransport = await loadNodePinnedTransportModule(".");
+    const { ws, dispatcher } = await nodeTransport.createPinnedNodeWebSocket({
+      url: this.opts.url,
+      protocols: this.buildProtocols(),
+      pinRaw,
+      expectedFingerprint256: expected,
+      allowSelfSigned,
+      caCertPem,
+      onTransportError: (message) => {
+        this.transportErrorHint = message;
+      },
+      onPinFailure: () => {
+        this.suppressReconnect = true;
+      },
+    });
+    (ws as unknown as { __tyrumDispatcher?: unknown }).__tyrumDispatcher = dispatcher;
+    return ws;
   }
 
   private async openSocketAttempt(attempt: number): Promise<void> {

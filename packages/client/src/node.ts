@@ -1,7 +1,6 @@
 import {
   buildConnectProofTranscript,
   computeDeviceIdFromPublicKeyDer,
-  createBrowserLocalStorageDeviceIdentityStorage,
   createDeviceIdentity,
   DeviceIdentityError,
   formatDeviceIdentityError,
@@ -145,7 +144,6 @@ export {
   normalizeFingerprint256,
   buildConnectProofTranscript,
   computeDeviceIdFromPublicKeyDer,
-  createBrowserLocalStorageDeviceIdentityStorage,
   createDeviceIdentity,
   createNodeFileDeviceIdentityStorage,
   createPinnedNodeTransportState,

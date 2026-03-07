@@ -1,5 +1,6 @@
 import { z, type ZodType } from "zod";
 
+import { loadNodePinnedTransportModule } from "../node/load-pinned-transport.js";
 import { normalizeFingerprint256 } from "../tls/fingerprint.js";
 
 export const NonEmptyString = z.string().trim().min(1);
@@ -184,16 +185,6 @@ function isNodeRuntime(): boolean {
   );
 }
 
-type NodePinnedTransportModule = typeof import("../node/pinned-transport.js");
-
-async function loadNodePinnedTransportModule(): Promise<NodePinnedTransportModule> {
-  const globalAny = globalThis as unknown as Record<PropertyKey, unknown>;
-  const specifier =
-    "../node/pinned-transport.js" +
-    String(globalAny[Symbol.for("tyrum:node-pinned-transport")] ?? "");
-  return (await import(specifier)) as NodePinnedTransportModule;
-}
-
 function createPinnedNodeFetch(options: {
   pinRaw: string;
   expectedFingerprint256: string;
@@ -217,7 +208,7 @@ function createPinnedNodeFetch(options: {
     ) => Promise<Response>;
     dispatcher: { destroy?: () => Promise<void> | void };
   }> {
-    const nodeTransport = await loadNodePinnedTransportModule();
+    const nodeTransport = await loadNodePinnedTransportModule("..");
     return await nodeTransport.createPinnedNodeTransportState(options);
   }
 
