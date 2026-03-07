@@ -39,6 +39,7 @@ When gateway auth is enabled (default for most deployments), requests are authen
 
 - **Admin token**: Break-glass; bypasses scope enforcement.
 - **Device token**: Scoped; per-request scope enforcement applies (HTTP + WS).
+- Tenant-scoped runtime surfaces require a non-empty `tenant_id` claim. Missing or blank tenant context is rejected; the gateway does not fall back to a default tenant for pairing or execution paths.
 
 ### HTTP scopes (device tokens)
 
@@ -287,6 +288,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.pairing`
+- Tenant context: Requires a tenant-scoped token with a non-empty `tenant_id`
 - Request: Optional query param `status` (`pending|approved|denied|revoked`)
 - Response:
   - `200` JSON `{ status: "ok", pairings: [...] }`
@@ -296,6 +298,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.pairing`
+- Tenant context: Requires a tenant-scoped token with a non-empty `tenant_id`
 - Request: JSON `{ trust_level: "local"|"remote", capability_allowlist: CapabilityDescriptor[], reason?: string }`
 - Response:
   - `200` JSON `{ status: "ok", pairing: ... }`
@@ -307,6 +310,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.pairing`
+- Tenant context: Requires a tenant-scoped token with a non-empty `tenant_id`
 - Request: JSON `{ reason?: string }`
 - Response:
   - `200` JSON `{ status: "ok", pairing: ... }`
@@ -316,6 +320,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.pairing`
+- Tenant context: Requires a tenant-scoped token with a non-empty `tenant_id`
 - Request: JSON `{ reason?: string }`
 - Response:
   - `200` JSON `{ status: "ok", pairing: ... }`

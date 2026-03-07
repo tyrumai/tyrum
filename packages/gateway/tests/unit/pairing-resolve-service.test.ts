@@ -20,6 +20,7 @@ describe("resolveNodePairing", () => {
 
   async function seedPendingPairing(nodeId: string): Promise<number> {
     const pairing = await nodePairingDal.upsertOnConnect({
+      tenantId: DEFAULT_TENANT_ID,
       nodeId,
       pubkey: `${nodeId}-pubkey`,
       label: nodeId,

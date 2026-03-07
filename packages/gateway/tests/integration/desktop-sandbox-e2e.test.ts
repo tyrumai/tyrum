@@ -136,7 +136,11 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
         try {
           const pairing = await waitForPendingDesktopPairing({
             listPending: async () => {
-              const pending = await container.nodePairingDal.list({ status: "pending", limit: 25 });
+              const pending = await container.nodePairingDal.list({
+                tenantId: DEFAULT_TENANT_ID,
+                status: "pending",
+                limit: 25,
+              });
               return pending.map((p) => ({
                 pairing_id: p.pairing_id,
                 node: { capabilities: p.node.capabilities as unknown as string[] },
@@ -147,6 +151,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
 
           const desktopDescriptorId = descriptorIdForClientCapability("desktop");
           await container.nodePairingDal.resolve({
+            tenantId: DEFAULT_TENANT_ID,
             pairingId: pairing.pairing_id,
             decision: "approved",
             trustLevel: "local",

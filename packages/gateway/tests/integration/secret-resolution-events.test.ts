@@ -7,6 +7,7 @@ import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import type { SecretHandle } from "@tyrum/schemas";
 import { createTestContainer } from "./helpers.js";
+import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 
 function stubMcpManager(): McpManager {
   return {
@@ -71,6 +72,12 @@ describe("secret resolution events", () => {
       allowPublicDnsLookup,
       undefined,
       container.secretResolutionAuditDal,
+      {
+        db: container.db,
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: null,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+      },
     );
 
     await executor.execute(

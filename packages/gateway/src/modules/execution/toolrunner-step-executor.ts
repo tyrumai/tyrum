@@ -42,9 +42,10 @@ class ToolRunnerStepExecutor implements StepExecutor {
     planId: string,
     stepIndex: number,
     timeoutMs: number,
-    _context: StepExecutionContext,
+    context: StepExecutionContext,
   ): Promise<StepResult> {
     const payload = JSON.stringify({
+      tenant_id: context.tenantId,
       plan_id: planId,
       step_index: stepIndex,
       timeout_ms: timeoutMs,

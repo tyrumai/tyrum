@@ -32,6 +32,7 @@ describe("Pairing routes", () => {
   let didOpenDb = false;
   let nodePairingDal: NodePairingDal;
   let app: Hono;
+  const tenantId = DEFAULT_TENANT_ID;
 
   beforeEach(() => {
     didOpenDb = false;
@@ -43,7 +44,7 @@ describe("Pairing routes", () => {
       c.set("authClaims", {
         token_kind: "admin",
         token_id: "test-token",
-        tenant_id: DEFAULT_TENANT_ID,
+        tenant_id: tenantId,
         role: "admin",
         scopes: ["*"],
       });
@@ -60,6 +61,7 @@ describe("Pairing routes", () => {
 
   async function seedPendingPairing(): Promise<number> {
     const pending = await nodePairingDal.upsertOnConnect({
+      tenantId,
       nodeId: "node-1",
       pubkey: "pubkey-1",
       label: "node-1",
@@ -155,7 +157,7 @@ describe("Pairing routes", () => {
       authClaims: {
         token_kind: "device",
         token_id: "token-node",
-        tenant_id: DEFAULT_TENANT_ID,
+        tenant_id: tenantId,
         role: "node",
         device_id: "node-1",
         scopes: ["*"],
@@ -167,7 +169,7 @@ describe("Pairing routes", () => {
       authClaims: {
         token_kind: "admin",
         token_id: "token-client",
-        tenant_id: DEFAULT_TENANT_ID,
+        tenant_id: tenantId,
         role: "admin",
         scopes: ["*"],
       },
@@ -178,7 +180,7 @@ describe("Pairing routes", () => {
       c.set("authClaims", {
         token_kind: "admin",
         token_id: "test-token",
-        tenant_id: DEFAULT_TENANT_ID,
+        tenant_id: tenantId,
         role: "admin",
         scopes: ["*"],
       });
@@ -220,5 +222,57 @@ describe("Pairing routes", () => {
     expect(JSON.parse(String(healthyClientWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
       type: "pairing.resolved",
     });
+  });
+
+  it("does not deliver pairing.approved to nodes without a tenant claim", async () => {
+    const pairingId = await seedPendingPairing();
+    const connectionManager = new ConnectionManager();
+    const unscopedNodeWs = createMockWs();
+
+    connectionManager.addClient(unscopedNodeWs as never, ["cli"] as never, {
+      id: "unscoped-node",
+      role: "node",
+      deviceId: "node-1",
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-node",
+        tenant_id: undefined,
+        role: "node",
+        device_id: "node-1",
+        scopes: ["*"],
+      },
+    });
+
+    const wsApp = new Hono();
+    wsApp.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "test-token",
+        tenant_id: tenantId,
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
+    wsApp.route(
+      "/",
+      createPairingRoutes({
+        nodePairingDal,
+        ws: { connectionManager },
+      }),
+    );
+
+    const res = await wsApp.request(`/pairings/${String(pairingId)}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reason: "ok",
+        trust_level: "remote",
+        capability_allowlist: [],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(unscopedNodeWs.send).not.toHaveBeenCalled();
   });
 });

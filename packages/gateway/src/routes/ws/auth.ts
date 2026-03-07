@@ -17,7 +17,7 @@ export interface WsTokenInfo {
 
 export type WsAuthState =
   | { kind: "claims"; claims: AuthTokenClaims }
-  | { kind: "scoped_node"; expectedNodeId: string };
+  | { kind: "scoped_node"; expectedNodeId: string; tenantId: string };
 
 function parseProtocolHeader(value: string | string[] | undefined): string[] {
   if (Array.isArray(value)) {
@@ -196,8 +196,14 @@ export async function resolveWsAuth(input: {
   }
 
   if (!input.nodePairingDal) return undefined;
-  const nodeId = await input.nodePairingDal
-    .getNodeIdForScopedToken(input.token)
+  const binding = await input.nodePairingDal
+    .getScopedTokenBinding(input.token)
     .catch(() => undefined);
-  return nodeId ? { kind: "scoped_node", expectedNodeId: nodeId } : undefined;
+  return binding
+    ? {
+        kind: "scoped_node",
+        expectedNodeId: binding.nodeId,
+        tenantId: binding.tenantId,
+      }
+    : undefined;
 }

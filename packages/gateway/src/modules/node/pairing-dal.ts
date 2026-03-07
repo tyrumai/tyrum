@@ -8,7 +8,7 @@ import {
 import { NodePairingRequest } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { createHash, randomBytes } from "node:crypto";
-import { DEFAULT_TENANT_ID } from "../identity/scope.js";
+import { requireTenantIdValue } from "../identity/scope.js";
 
 type NodePairingStatus = "pending" | "approved" | "denied" | "revoked";
 
@@ -125,66 +125,81 @@ function toPairing(row: RawNodePairingRow): NodePairingRequestT {
 export class NodePairingDal {
   constructor(private readonly db: SqlDb) {}
 
+  private requireTenantId(tenantId: string | null | undefined): string {
+    return requireTenantIdValue(tenantId);
+  }
+
   async getNodeIdForScopedToken(
     scopedToken: string,
-    tenantId: string = DEFAULT_TENANT_ID,
+    tenantId?: string,
   ): Promise<string | undefined> {
+    const binding = await this.getScopedTokenBinding(scopedToken, tenantId);
+    return binding?.nodeId;
+  }
+
+  async getScopedTokenBinding(
+    scopedToken: string,
+    tenantId?: string,
+  ): Promise<{ tenantId: string; nodeId: string } | undefined> {
     const token = scopedToken.trim();
     if (token.length === 0) return undefined;
     const hash = sha256Hex(token);
-    const row = await this.db.get<{ node_id: string }>(
-      `SELECT node_id
-       FROM node_pairings
-       WHERE tenant_id = ?
-         AND status = 'approved'
-         AND scoped_token_sha256 = ?`,
-      [tenantId, hash],
-    );
-    return row?.node_id;
+    const row =
+      typeof tenantId === "string"
+        ? await this.db.get<{ tenant_id: string; node_id: string }>(
+            `SELECT tenant_id, node_id
+             FROM node_pairings
+             WHERE tenant_id = ?
+               AND status = 'approved'
+               AND scoped_token_sha256 = ?`,
+            [this.requireTenantId(tenantId), hash],
+          )
+        : await this.db.get<{ tenant_id: string; node_id: string }>(
+            `SELECT tenant_id, node_id
+             FROM node_pairings
+             WHERE status = 'approved'
+               AND scoped_token_sha256 = ?`,
+            [hash],
+          );
+    return row ? { tenantId: row.tenant_id, nodeId: row.node_id } : undefined;
   }
 
-  async getByNodeId(
-    nodeId: string,
-    tenantId: string = DEFAULT_TENANT_ID,
-  ): Promise<NodePairingRequestT | undefined> {
+  async getByNodeId(nodeId: string, tenantId: string): Promise<NodePairingRequestT | undefined> {
     const row = await this.db.get<RawNodePairingRow>(
       `SELECT *
        FROM node_pairings
        WHERE tenant_id = ?
          AND node_id = ?`,
-      [tenantId, nodeId],
+      [this.requireTenantId(tenantId), nodeId],
     );
     return row ? toPairing(row) : undefined;
   }
 
-  async getById(
-    pairingId: number,
-    tenantId: string = DEFAULT_TENANT_ID,
-  ): Promise<NodePairingRequestT | undefined> {
+  async getById(pairingId: number, tenantId: string): Promise<NodePairingRequestT | undefined> {
     const row = await this.db.get<RawNodePairingRow>(
       `SELECT *
        FROM node_pairings
        WHERE tenant_id = ?
          AND pairing_id = ?`,
-      [tenantId, pairingId],
+      [this.requireTenantId(tenantId), pairingId],
     );
     return row ? toPairing(row) : undefined;
   }
 
-  async list(params?: {
-    tenantId?: string;
+  async list(params: {
+    tenantId: string;
     status?: NodePairingStatus;
     limit?: number;
   }): Promise<NodePairingRequestT[]> {
-    const tenantId = params?.tenantId?.trim() || DEFAULT_TENANT_ID;
+    const tenantId = this.requireTenantId(params.tenantId);
     const where: string[] = [];
     const values: unknown[] = [tenantId];
     where.push("tenant_id = ?");
-    if (params?.status) {
+    if (params.status) {
       where.push("status = ?");
       values.push(params.status);
     }
-    const limit = Math.max(1, Math.min(500, params?.limit ?? 100));
+    const limit = Math.max(1, Math.min(500, params.limit ?? 100));
     const sql =
       `SELECT * FROM node_pairings` +
       (where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "") +
@@ -195,7 +210,7 @@ export class NodePairingDal {
   }
 
   async upsertOnConnect(params: {
-    tenantId?: string;
+    tenantId: string;
     nodeId: string;
     pubkey?: string | null;
     label?: string | null;
@@ -203,7 +218,7 @@ export class NodePairingDal {
     metadata?: unknown;
     nowIso?: string;
   }): Promise<NodePairingRequestT> {
-    const tenantId = params.tenantId?.trim() || DEFAULT_TENANT_ID;
+    const tenantId = this.requireTenantId(params.tenantId);
     const nowIso = params.nowIso ?? new Date().toISOString();
     const capabilitiesJson = JSON.stringify(params.capabilities ?? []);
     const metadataJson = JSON.stringify(params.metadata ?? {});
@@ -342,7 +357,7 @@ export class NodePairingDal {
   async resolve(
     params:
       | {
-          tenantId?: string;
+          tenantId: string;
           pairingId: number;
           decision: "approved";
           reason?: string;
@@ -352,7 +367,7 @@ export class NodePairingDal {
           nowIso?: string;
         }
       | {
-          tenantId?: string;
+          tenantId: string;
           pairingId: number;
           decision: "denied";
           reason?: string;
@@ -360,7 +375,7 @@ export class NodePairingDal {
           nowIso?: string;
         },
   ): Promise<{ pairing: NodePairingRequestT; scopedToken?: string } | undefined> {
-    const tenantId = params.tenantId?.trim() || DEFAULT_TENANT_ID;
+    const tenantId = this.requireTenantId(params.tenantId);
     const nowIso = params.nowIso ?? new Date().toISOString();
 
     const existing = await this.db.get<RawNodePairingRow>(
@@ -419,13 +434,13 @@ export class NodePairingDal {
   }
 
   async revoke(params: {
-    tenantId?: string;
+    tenantId: string;
     pairingId: number;
     reason?: string;
     resolvedBy?: unknown;
     nowIso?: string;
   }): Promise<NodePairingRequestT | undefined> {
-    const tenantId = params.tenantId?.trim() || DEFAULT_TENANT_ID;
+    const tenantId = this.requireTenantId(params.tenantId);
     const nowIso = params.nowIso ?? new Date().toISOString();
 
     const result = await this.db.run(

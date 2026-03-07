@@ -38,8 +38,7 @@ export function emitPairingApprovedEvent(
   for (const client of deps.connectionManager.allClients()) {
     if (client.role !== "node") continue;
     if (client.device_id !== input.nodeId) continue;
-    if (client.auth_claims?.tenant_id && client.auth_claims.tenant_id !== normalizedTenantId)
-      continue;
+    if (client.auth_claims?.tenant_id !== normalizedTenantId) continue;
     safeSendWs(client, payload, {
       connectionManager: deps.connectionManager,
       deliveryMode: "local_direct",
