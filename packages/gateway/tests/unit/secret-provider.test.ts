@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { createDbSecretProvider } from "../../src/modules/secret/create-secret-provider.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import {
+  createSharedSecretKeyProvider,
+  SHARED_MASTER_KEY_ENV_VAR,
+} from "../../src/modules/secret/key-provider.js";
 
 describe("DbSecretProvider", () => {
   let tempDir: string;
@@ -129,6 +133,34 @@ describe("DbSecretProvider", () => {
       expect(await provider.resolve(handle)).toBeNull();
       expect(await provider.list()).toEqual([]);
     } finally {
+      await db.close();
+    }
+  });
+
+  it("roundtrips secrets with a shared key provider and avoids local master.key writes", async () => {
+    const db = openTestSqliteDb(dbPath);
+    const previous = process.env[SHARED_MASTER_KEY_ENV_VAR];
+    process.env[SHARED_MASTER_KEY_ENV_VAR] = Buffer.alloc(32, 9).toString("base64");
+
+    try {
+      const provider = await createDbSecretProvider({
+        db,
+        dbPath,
+        tyrumHome,
+        tenantId: DEFAULT_TENANT_ID,
+        keyProvider: createSharedSecretKeyProvider(),
+      });
+
+      const handle = await provider.store("shared_secret", "value-from-shared-key");
+
+      expect(await provider.resolve(handle)).toBe("value-from-shared-key");
+      expect(existsSync(join(tyrumHome, "master.key"))).toBe(false);
+    } finally {
+      if (previous === undefined) {
+        delete process.env[SHARED_MASTER_KEY_ENV_VAR];
+      } else {
+        process.env[SHARED_MASTER_KEY_ENV_VAR] = previous;
+      }
       await db.close();
     }
   });

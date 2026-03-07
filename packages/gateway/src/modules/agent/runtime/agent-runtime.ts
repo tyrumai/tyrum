@@ -12,7 +12,6 @@ import type {
   WorkScope,
 } from "@tyrum/schemas";
 import {
-  AgentConfig,
   AgentKey,
   AgentStatusResponse,
   ContextReport as ContextReportSchema,
@@ -26,7 +25,9 @@ import {
   type LaneQueueState,
   type TurnEngineBridgeDeps,
 } from "./turn-engine-bridge.js";
+import { WITHIN_TURN_LOOP_STOP_REPLY } from "./runtime-constants.js";
 import { maybeRunPreCompactionMemoryFlush } from "./pre-compaction-memory-flush.js";
+import { buildDefaultAgentConfig } from "../default-config.js";
 import { ToolSetBuilder, type ToolCallPolicyState } from "./tool-set-builder.js";
 import {
   ToolExecutionApprovalRequiredError,
@@ -96,20 +97,12 @@ import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../../channel
 import { SessionSendPolicyOverrideDal } from "../../channels/send-policy-override-dal.js";
 import { DEFAULT_TENANT_ID } from "../../identity/scope.js";
 import { ScheduleService } from "../../automation/schedule-service.js";
+import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
 const DEFAULT_APPROVAL_POLL_MS = 500;
 const MAX_TURN_ENGINE_WAIT_MS = 60_000;
-
-const DEFAULT_AGENT_CONFIG: AgentConfigT = AgentConfig.parse({
-  model: { model: "openai/gpt-4.1" },
-  tools: { allow: ["tool.fs.read"] },
-});
-
-const WITHIN_TURN_LOOP_STOP_REPLY =
-  "Loop detected (repeated tool calls); stopping to avoid runaway execution. " +
-  "If you want me to continue, adjust the request/constraints or ask me to try a different approach.";
 
 function makeEventfulAbortSignal(upstream: AbortSignal | undefined): AbortSignal | undefined {
   if (!upstream) return undefined;
@@ -269,14 +262,17 @@ export class AgentRuntime {
     tenantId: string;
     agentId: string;
   }): Promise<AgentConfigT> {
-    const revision = await new AgentConfigDal(this.opts.container.db).ensureSeeded({
-      tenantId: scope.tenantId,
-      agentId: scope.agentId,
-      defaultConfig: DEFAULT_AGENT_CONFIG,
-      createdBy: { kind: "agent-runtime" },
-      reason: "seed",
-    });
-    return revision.config;
+    return (
+      await new AgentConfigDal(this.opts.container.db).ensureSeeded({
+        tenantId: scope.tenantId,
+        agentId: scope.agentId,
+        defaultConfig: buildDefaultAgentConfig(
+          resolveGatewayStateMode(this.opts.container.deploymentConfig),
+        ),
+        createdBy: { kind: "agent-runtime" },
+        reason: "seed",
+      })
+    ).config;
   }
 
   private async loadContext(config: AgentConfigT): Promise<AgentLoadedContext> {
@@ -1510,6 +1506,8 @@ export class AgentRuntime {
       toolAllowlist,
       [...mcpTools, ...pluginTools],
       Number.POSITIVE_INFINITY,
+      true,
+      resolveGatewayStateMode(this.opts.container.deploymentConfig),
     );
     const filteredTools = toolCandidates
       .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))

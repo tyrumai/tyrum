@@ -5,17 +5,12 @@
  */
 
 import { Hono } from "hono";
-import { AgentKey, AgentTurnRequest } from "@tyrum/schemas";
+import { AgentTurnRequest } from "@tyrum/schemas";
 import type { AgentRegistry } from "../modules/agent/registry.js";
-import type { IdentityScopeDal } from "../modules/identity/scope.js";
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import type { SqlDb } from "../statestore/types.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 
-export function createAgentRoutes(opts: {
-  agents: AgentRegistry;
-  identityScopeDal: IdentityScopeDal;
-}): Hono {
+export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): Hono {
   const agent = new Hono();
 
   agent.get("/agent/list", async (c) => {
@@ -24,32 +19,18 @@ export function createAgentRoutes(opts: {
     const includeDefault =
       includeDefaultRaw === undefined ? true : !["0", "false", "no"].includes(includeDefaultRaw);
 
-    const baseHome = opts.agents.resolveAgentHome("default");
-    const agentsDir = join(baseHome, "agents");
-
-    let discovered: string[] = [];
-    try {
-      const entries = await readdir(agentsDir, { withFileTypes: true });
-      discovered = entries
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .filter((name) => name !== "default")
-        .filter((name) => AgentKey.safeParse(name).success)
-        .toSorted((a, b) => a.localeCompare(b));
-    } catch (err) {
-      const code =
-        err && typeof err === "object" && "code" in err
-          ? (err as { code?: unknown }).code
-          : undefined;
-      if (code !== "ENOENT") throw err;
-    }
-
-    const agentKeys = includeDefault ? ["default", ...discovered] : discovered;
-    const agentRecords = await Promise.all(
-      agentKeys.map(async (agent_key) => ({
-        agent_key,
-        agent_id: await opts.identityScopeDal.ensureAgentId(tenantId, agent_key),
-      })),
+    const discovered = await opts.db.all<{
+      agent_key: string;
+      agent_id: string;
+    }>(
+      `SELECT agent_key, agent_id
+       FROM agents
+       WHERE tenant_id = ?
+       ORDER BY CASE WHEN agent_key = 'default' THEN 0 ELSE 1 END, agent_key ASC`,
+      [tenantId],
+    );
+    const agentRecords = discovered.filter(
+      (record) => includeDefault || record.agent_key !== "default",
     );
 
     return c.json({ agents: agentRecords }, 200);

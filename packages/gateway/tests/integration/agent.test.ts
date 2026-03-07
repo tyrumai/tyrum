@@ -133,10 +133,8 @@ describe("agent routes", () => {
   });
 
   it("lists available agents via /agent/list", async () => {
-    await mkdir(join(homeDir!, "agents/agent-1"), { recursive: true });
-    await writeWorkspace(join(homeDir!, "agents/agent-1"));
-
     const { app, agents, container } = await createTestApp({ tyrumHome: homeDir });
+    await container.identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "agent-1");
 
     const res = await app.request("/agent/list");
     expect(res.status).toBe(200);
@@ -163,6 +161,7 @@ describe("agent routes", () => {
     await writeWorkspace(join(homeDir!, "agents/agent-2"));
 
     const { app, agents, container } = await createTestApp({ tyrumHome: homeDir });
+    await container.identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "agent-2");
     const getRuntimeSpy = vi.spyOn(agents!, "getRuntime");
     const res = await app.request("/agent/status?agent_key=agent-2");
     expect(res.status).toBe(200);

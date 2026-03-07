@@ -58,6 +58,13 @@ export const DeploymentConfigArtifacts = z
   .strict();
 export type DeploymentConfigArtifacts = z.infer<typeof DeploymentConfigArtifacts>;
 
+export const DeploymentConfigState = z
+  .object({
+    mode: z.enum(["local", "shared"]).default("local"),
+  })
+  .strict();
+export type DeploymentConfigState = z.infer<typeof DeploymentConfigState>;
+
 export const DeploymentConfigToolRunner = z
   .object({
     hardeningProfile: z.enum(["baseline", "hardened"]).default("baseline"),
@@ -193,6 +200,7 @@ export type DeploymentConfigLogging = z.infer<typeof DeploymentConfigLogging>;
 export const DeploymentConfig = z
   .object({
     v: z.number().int().min(1).default(1),
+    state: DeploymentConfigState.prefault({}),
     server: DeploymentConfigServer.prefault({}),
     auth: DeploymentConfigAuth.prefault({}),
     otel: DeploymentConfigOtel.prefault({}),

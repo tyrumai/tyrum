@@ -5,6 +5,12 @@ import { loadLifecycleHooksFromHome } from "../modules/hooks/config.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { maybeStartOtel } from "../modules/observability/otel.js";
 import { createDbSecretProviderFactory } from "../modules/secret/create-secret-provider.js";
+import {
+  createLocalSecretKeyProvider,
+  createSharedSecretKeyProvider,
+} from "../modules/secret/key-provider.js";
+import { isSharedStateMode } from "../modules/runtime-state/mode.js";
+import { assertSharedStateModeGuardrails } from "../modules/runtime-state/validation.js";
 import { VERSION } from "../version.js";
 import {
   applyStartCommandDeploymentOverrides,
@@ -140,6 +146,7 @@ async function createGatewayBootContext(
     { deploymentConfig },
   );
   container.modelsDev.startBackgroundRefresh();
+  assertSharedStateModeGuardrails({ dbPath, deploymentConfig });
   await seedDefaultAgentConfig(container);
 
   const authTokens = new AuthTokenService(container.db);
@@ -161,8 +168,18 @@ async function createGatewayBootContext(
   });
   logger.info("gateway.instance", { instance_id: instanceId });
 
-  const secrets = await createDbSecretProviderFactory({ db: container.db, dbPath, tyrumHome });
-  const lifecycleHooks = await loadLifecycleHooksFromHome(tyrumHome, logger);
+  const secretKeyProvider = isSharedStateMode(deploymentConfig)
+    ? createSharedSecretKeyProvider()
+    : createLocalSecretKeyProvider({ dbPath, tyrumHome });
+  const secrets = await createDbSecretProviderFactory({
+    db: container.db,
+    dbPath,
+    tyrumHome,
+    keyProvider: secretKeyProvider,
+  });
+  const lifecycleHooks = isSharedStateMode(deploymentConfig)
+    ? []
+    : await loadLifecycleHooksFromHome(tyrumHome, logger);
 
   if (container.telegramBot) {
     console.log("Telegram bot initialized");
