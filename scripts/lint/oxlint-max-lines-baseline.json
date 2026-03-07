@@ -18,7 +18,6 @@
   "packages/gateway/src/modules/observability/status-details.ts": 572,
   "packages/gateway/src/modules/plugins/registry.ts": 1130,
   "packages/gateway/src/modules/watcher/scheduler.ts": 580,
-  "packages/gateway/src/routes/provider-config.ts": 522,
   "packages/gateway/src/ws/protocol/workboard-handlers.ts": 640,
   "packages/gateway/tests/integration/provider-model-config-routes.test.ts": 556,
   "packages/gateway/tests/integration/ws-handler.test.ts": 1461,
@@ -28,11 +27,6 @@
   "packages/gateway/tests/unit/workboard-dal.test.ts": 1718,
   "packages/gateway/tests/unit/ws-protocol.test.ts": 2678,
   "packages/gateway/tests/unit/ws-workboard.test.ts": 1878,
-  "packages/operator-core/src/stores/memory-store.ts": 743,
-  "packages/operator-ui/src/components/pages/agents-page.tsx": 605,
   "packages/operator-ui/tests/operator-ui.test.ts": 4376,
-  "packages/schemas/src/protocol/execution.ts": 501,
-  "packages/schemas/src/protocol/unions.ts": 510,
-  "packages/schemas/src/protocol/work.ts": 616,
   "packages/tui/tests/app.test.ts": 532
 }
