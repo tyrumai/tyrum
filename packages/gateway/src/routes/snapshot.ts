@@ -14,6 +14,7 @@ import {
   type SnapshotTable as SnapshotTableT,
 } from "@tyrum/schemas";
 import { Hono } from "hono";
+import { parseScheduleConfig } from "../modules/automation/schedule-service.js";
 import type { SqlDb } from "../statestore/types.js";
 import { repairPostgresSequences } from "./snapshot-sequence-repair.js";
 
@@ -209,6 +210,40 @@ async function rowCount(db: SqlDb, table: string): Promise<number> {
   return typeof raw === "number" && Number.isFinite(raw) ? raw : 0;
 }
 
+async function pruneSeededDefaultHeartbeatSchedules(db: SqlDb): Promise<void> {
+  if (!(await tableExists(db, "watchers"))) {
+    return;
+  }
+
+  const rows = await db.all<{ watcher_id: string; trigger_config_json: string }>(
+    `SELECT watcher_id, trigger_config_json
+     FROM watchers`,
+  );
+  const watcherIds = rows
+    .filter((row) => {
+      const config = parseScheduleConfig(row.trigger_config_json);
+      return config?.schedule_kind === "heartbeat" && config.seeded_default === true;
+    })
+    .map((row) => row.watcher_id);
+  if (watcherIds.length === 0) {
+    return;
+  }
+
+  const placeholders = watcherIds.map(() => "?").join(", ");
+  if (await tableExists(db, "watcher_firings")) {
+    await db.run(
+      `DELETE FROM watcher_firings
+       WHERE watcher_id IN (${placeholders})`,
+      watcherIds,
+    );
+  }
+  await db.run(
+    `DELETE FROM watchers
+     WHERE watcher_id IN (${placeholders})`,
+    watcherIds,
+  );
+}
+
 async function importTable(db: SqlDb, table: string, data: SnapshotTableT): Promise<number> {
   const existingColumns = new Set(await listColumns(db, table));
   for (const col of data.columns) {
@@ -396,6 +431,10 @@ export function createSnapshotRoutes(deps: SnapshotRouteDeps): Hono {
     ];
 
     const outcome = await deps.db.transaction(async (tx) => {
+      if (importTables.includes("watchers")) {
+        await pruneSeededDefaultHeartbeatSchedules(tx);
+      }
+
       const counts: Record<string, number> = {};
       for (const table of importTables) {
         if (!(await tableExists(tx, table))) {

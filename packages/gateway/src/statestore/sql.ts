@@ -16,6 +16,7 @@ export function sqlBoolParam(db: DbKind, value: boolean): SqlBoolParam {
   return value ? 1 : 0;
 }
 
-export function sqlActiveWhereClause(db: DbKind): SqlClause {
-  return { sql: "active = ?", params: [sqlBoolParam(db, true)] };
+export function sqlActiveWhereClause(db: DbKind, opts?: { column?: string }): SqlClause {
+  const column = opts?.column?.trim() || "active";
+  return { sql: `${column} = ?`, params: [sqlBoolParam(db, true)] };
 }

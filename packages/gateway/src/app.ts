@@ -21,6 +21,7 @@ import { createContextRoutes } from "./routes/context.js";
 import { createWorkflowRoutes } from "./routes/workflow.js";
 import { createApprovalRoutes } from "./routes/approval.js";
 import { createWatcherRoutes } from "./routes/watcher.js";
+import { createAutomationScheduleRoutes } from "./routes/automation-schedules.js";
 import { createCanvasRoutes } from "./routes/canvas.js";
 import { createAuditRoutes } from "./routes/audit.js";
 import { createSecretRoutes } from "./routes/secret.js";
@@ -401,6 +402,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
         : undefined,
     }),
   );
+  app.route("/", createAutomationScheduleRoutes(container));
   app.route(
     "/",
     createWatcherRoutes(container.watcherProcessor, {

@@ -307,6 +307,45 @@ export class ExecutionEngine {
     await this.artifactRecorder.recordArtifactsTx(tx, scope, artifacts);
   }
 
+  private async resolveWorkspaceScopeForEnqueue(
+    tx: SqlDb,
+    identityScopeDal: IdentityScopeDal,
+    tenantId: string,
+    input: EnqueuePlanInput,
+  ): Promise<{ workspaceId: string; workspaceKey: string }> {
+    const explicitWorkspaceKey = input.workspaceKey?.trim();
+    if (explicitWorkspaceKey) {
+      const workspaceKey = normalizeWorkspaceKey(explicitWorkspaceKey);
+      const workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, workspaceKey);
+      return { workspaceId, workspaceKey };
+    }
+
+    const legacyWorkspaceInput = input.workspaceId?.trim();
+    if (!legacyWorkspaceInput) {
+      const workspaceKey = normalizeWorkspaceKey(undefined);
+      const workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, workspaceKey);
+      return { workspaceId, workspaceKey };
+    }
+
+    const existingWorkspace = await tx.get<{ workspace_id: string; workspace_key: string }>(
+      `SELECT workspace_id, workspace_key
+       FROM workspaces
+       WHERE tenant_id = ? AND workspace_id = ?
+       LIMIT 1`,
+      [tenantId, legacyWorkspaceInput],
+    );
+    if (existingWorkspace?.workspace_id) {
+      return {
+        workspaceId: existingWorkspace.workspace_id,
+        workspaceKey: existingWorkspace.workspace_key,
+      };
+    }
+
+    const workspaceKey = normalizeWorkspaceKey(legacyWorkspaceInput);
+    const workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, workspaceKey);
+    return { workspaceId, workspaceKey };
+  }
+
   async enqueuePlanInTx(tx: SqlDb, input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
     const jobId = randomUUID();
     const runId = randomUUID();
@@ -314,8 +353,6 @@ export class ExecutionEngine {
     if (!tenantId) {
       throw new Error("tenantId is required to enqueue execution plans");
     }
-    const workspaceKey = normalizeWorkspaceKey(input.workspaceId);
-
     let agentKey = "default";
     try {
       const parsedKey = parseTyrumKey(input.key as never);
@@ -328,7 +365,12 @@ export class ExecutionEngine {
 
     const identityScopeDal = new IdentityScopeDal(tx);
     const agentId = await identityScopeDal.ensureAgentId(tenantId, agentKey);
-    const workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, workspaceKey);
+    const { workspaceId } = await this.resolveWorkspaceScopeForEnqueue(
+      tx,
+      identityScopeDal,
+      tenantId,
+      input,
+    );
     await identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
 
     const baseMetadata = {

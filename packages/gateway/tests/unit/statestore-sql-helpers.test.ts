@@ -47,4 +47,13 @@ describe("statestore SQL helpers", () => {
       await client.end();
     }
   });
+
+  it("supports an explicit column reference for aliased queries", () => {
+    const clause = sqlActiveWhereClause({ kind: "sqlite" }, { column: "w.active" });
+
+    expect(clause).toEqual({
+      sql: "w.active = ?",
+      params: [1],
+    });
+  });
 });

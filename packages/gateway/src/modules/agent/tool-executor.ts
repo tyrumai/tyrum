@@ -6,6 +6,7 @@ import { isIP } from "node:net";
 import { dirname, resolve, relative, isAbsolute } from "node:path";
 import { ActionPrimitiveKind, CapabilityDescriptor } from "@tyrum/schemas";
 import {
+  ActionPrimitive as ActionPrimitiveSchema,
   descriptorIdForClientCapability,
   requiredCapability,
   type ActionPrimitive,
@@ -21,8 +22,15 @@ import type { SecretResolutionAuditDal } from "../secret/resolution-audit-dal.js
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
+import type { IdentityScopeDal } from "../identity/scope.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
 import type { ArtifactStore } from "../artifact/store.js";
+import {
+  ScheduleService,
+  type ScheduleCadence,
+  type ScheduleExecution,
+  type ScheduleKind,
+} from "../automation/schedule-service.js";
 import {
   NoCapableNodeError,
   NodeDispatchDeniedError,
@@ -331,6 +339,7 @@ export class ToolExecutor {
     private readonly workspaceLease?: WorkspaceLeaseConfig,
     private readonly nodeDispatchService?: NodeDispatchService,
     private readonly artifactStore?: ArtifactStore,
+    private readonly identityScopeDal?: IdentityScopeDal,
   ) {}
 
   private workspaceLeaseOwner(toolCallId: string): string {
@@ -424,6 +433,27 @@ export class ToolExecutor {
                   error: "node dispatch is not configured",
                 };
             break;
+          case "tool.automation.schedule.list":
+            result = await this.executeAutomationScheduleList(toolCallId, resolvedArgs);
+            break;
+          case "tool.automation.schedule.get":
+            result = await this.executeAutomationScheduleGet(toolCallId, resolvedArgs);
+            break;
+          case "tool.automation.schedule.create":
+            result = await this.executeAutomationScheduleCreate(toolCallId, resolvedArgs);
+            break;
+          case "tool.automation.schedule.update":
+            result = await this.executeAutomationScheduleUpdate(toolCallId, resolvedArgs);
+            break;
+          case "tool.automation.schedule.pause":
+            result = await this.executeAutomationSchedulePause(toolCallId, resolvedArgs);
+            break;
+          case "tool.automation.schedule.resume":
+            result = await this.executeAutomationScheduleResume(toolCallId, resolvedArgs);
+            break;
+          case "tool.automation.schedule.delete":
+            result = await this.executeAutomationScheduleDelete(toolCallId, resolvedArgs);
+            break;
           default:
             result = {
               tool_call_id: toolCallId,
@@ -480,6 +510,300 @@ export class ToolExecutor {
       throw new Error(`path escapes workspace: ${filePath}`);
     }
     return resolvedPath;
+  }
+
+  private getScheduleService(): ScheduleService {
+    const db = this.workspaceLease?.db;
+    if (!db || !this.identityScopeDal) {
+      throw new Error("automation schedule tools are not configured");
+    }
+    return new ScheduleService(db, this.identityScopeDal);
+  }
+
+  private async resolveScheduleScope(args: unknown): Promise<{
+    tenantId: string;
+    agentKey?: string;
+    workspaceKey?: string;
+  }> {
+    const parsed = args as Record<string, unknown> | null;
+    const tenantId = this.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID;
+    const agentKey =
+      typeof parsed?.["agent_key"] === "string" && parsed["agent_key"].trim().length > 0
+        ? parsed["agent_key"].trim()
+        : undefined;
+    const workspaceKey =
+      typeof parsed?.["workspace_key"] === "string" && parsed["workspace_key"].trim().length > 0
+        ? parsed["workspace_key"].trim()
+        : undefined;
+    return { tenantId, agentKey, workspaceKey };
+  }
+
+  private parseScheduleCadence(args: Record<string, unknown> | null): ScheduleCadence | undefined {
+    const cadence = args?.["cadence"];
+    if (!cadence || typeof cadence !== "object" || Array.isArray(cadence)) return undefined;
+    const record = cadence as Record<string, unknown>;
+    if (record["type"] === "interval") {
+      const intervalMs = record["interval_ms"];
+      if (typeof intervalMs !== "number" || !Number.isFinite(intervalMs) || intervalMs <= 0) {
+        return undefined;
+      }
+      return { type: "interval", interval_ms: Math.floor(intervalMs) };
+    }
+    if (record["type"] === "cron") {
+      const expression =
+        typeof record["expression"] === "string" ? record["expression"].trim() : "";
+      const timezone = typeof record["timezone"] === "string" ? record["timezone"].trim() : "";
+      if (!expression || !timezone) return undefined;
+      return { type: "cron", expression, timezone };
+    }
+    return undefined;
+  }
+
+  private parseScheduleExecution(
+    args: Record<string, unknown> | null,
+  ): ScheduleExecution | undefined {
+    const execution = args?.["execution"];
+    if (!execution || typeof execution !== "object" || Array.isArray(execution)) return undefined;
+    const record = execution as Record<string, unknown>;
+    if (record["kind"] === "agent_turn") {
+      const instruction =
+        typeof record["instruction"] === "string" && record["instruction"].trim().length > 0
+          ? record["instruction"].trim()
+          : undefined;
+      return { kind: "agent_turn", ...(instruction ? { instruction } : undefined) };
+    }
+    if (record["kind"] === "playbook") {
+      const playbookId =
+        typeof record["playbook_id"] === "string" ? record["playbook_id"].trim() : "";
+      if (!playbookId) return undefined;
+      return { kind: "playbook", playbook_id: playbookId };
+    }
+    if (record["kind"] === "steps") {
+      const steps = record["steps"];
+      if (!Array.isArray(steps) || steps.length === 0) return undefined;
+      const parsedSteps: ActionPrimitive[] = [];
+      for (const step of steps) {
+        const parsedStep = ActionPrimitiveSchema.safeParse(step);
+        if (!parsedStep.success) {
+          throw new Error(`invalid steps schedule action: ${parsedStep.error.message}`);
+        }
+        parsedSteps.push(parsedStep.data);
+      }
+      return { kind: "steps", steps: parsedSteps };
+    }
+    return undefined;
+  }
+
+  private async executeAutomationScheduleList(
+    toolCallId: string,
+    args: unknown,
+  ): Promise<ToolResult> {
+    const service = this.getScheduleService();
+    const scope = await this.resolveScheduleScope(args);
+    const parsed = args as Record<string, unknown> | null;
+    const schedules = await service.listSchedules({
+      tenantId: scope.tenantId,
+      agentKey: scope.agentKey,
+      workspaceKey: scope.workspaceKey,
+      includeDeleted: parsed?.["include_deleted"] === true,
+    });
+    return {
+      tool_call_id: toolCallId,
+      output: JSON.stringify({ schedules }),
+    };
+  }
+
+  private async executeAutomationScheduleGet(
+    toolCallId: string,
+    args: unknown,
+  ): Promise<ToolResult> {
+    const service = this.getScheduleService();
+    const parsed = args as Record<string, unknown> | null;
+    const scheduleId =
+      typeof parsed?.["schedule_id"] === "string" ? parsed["schedule_id"].trim() : "";
+    if (!scheduleId) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: "missing required argument: schedule_id",
+      };
+    }
+    const schedule = await service.getSchedule({
+      tenantId: this.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID,
+      scheduleId,
+      includeDeleted: parsed?.["include_deleted"] === true,
+    });
+    return {
+      tool_call_id: toolCallId,
+      output: JSON.stringify({ schedule: schedule ?? null }),
+    };
+  }
+
+  private async executeAutomationScheduleCreate(
+    toolCallId: string,
+    args: unknown,
+  ): Promise<ToolResult> {
+    const service = this.getScheduleService();
+    const parsed = args as Record<string, unknown> | null;
+    const kind =
+      parsed?.["kind"] === "heartbeat" || parsed?.["kind"] === "cron"
+        ? (parsed["kind"] as ScheduleKind)
+        : undefined;
+    const cadence = this.parseScheduleCadence(parsed);
+    const execution = this.parseScheduleExecution(parsed);
+    if (!kind || !cadence || !execution) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: "kind, cadence, and execution are required",
+      };
+    }
+
+    const scope = await this.resolveScheduleScope(args);
+    const schedule = await service.createSchedule({
+      tenantId: scope.tenantId,
+      agentKey: scope.agentKey,
+      workspaceKey: scope.workspaceKey,
+      kind,
+      enabled: parsed?.["enabled"] === false ? false : true,
+      cadence,
+      execution,
+      delivery:
+        parsed?.["delivery"] && typeof parsed["delivery"] === "object"
+          ? {
+              mode:
+                (parsed["delivery"] as Record<string, unknown>)["mode"] === "notify"
+                  ? "notify"
+                  : (parsed["delivery"] as Record<string, unknown>)["mode"] === "quiet"
+                    ? "quiet"
+                    : undefined,
+            }
+          : undefined,
+    });
+    return {
+      tool_call_id: toolCallId,
+      output: JSON.stringify({ schedule }),
+    };
+  }
+
+  private async executeAutomationScheduleUpdate(
+    toolCallId: string,
+    args: unknown,
+  ): Promise<ToolResult> {
+    const service = this.getScheduleService();
+    const parsed = args as Record<string, unknown> | null;
+    const scheduleId =
+      typeof parsed?.["schedule_id"] === "string" ? parsed["schedule_id"].trim() : "";
+    if (!scheduleId) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: "missing required argument: schedule_id",
+      };
+    }
+
+    const patch: {
+      enabled?: boolean;
+      kind?: ScheduleKind;
+      cadence?: ScheduleCadence;
+      execution?: ScheduleExecution;
+      delivery?: { mode?: "quiet" | "notify" };
+    } = {};
+    if (parsed?.["enabled"] === true || parsed?.["enabled"] === false) {
+      patch.enabled = parsed["enabled"] as boolean;
+    }
+    if (parsed?.["kind"] === "heartbeat" || parsed?.["kind"] === "cron") {
+      patch.kind = parsed["kind"] as ScheduleKind;
+    }
+    const cadence = this.parseScheduleCadence(parsed);
+    if (cadence) patch.cadence = cadence;
+    const execution = this.parseScheduleExecution(parsed);
+    if (execution) patch.execution = execution;
+    if (parsed?.["delivery"] && typeof parsed["delivery"] === "object") {
+      const mode = (parsed["delivery"] as Record<string, unknown>)["mode"];
+      if (mode === "quiet" || mode === "notify") {
+        patch.delivery = { mode };
+      }
+    }
+
+    const schedule = await service.updateSchedule({
+      tenantId: this.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID,
+      scheduleId,
+      patch,
+    });
+    return {
+      tool_call_id: toolCallId,
+      output: JSON.stringify({ schedule }),
+    };
+  }
+
+  private async executeAutomationSchedulePause(
+    toolCallId: string,
+    args: unknown,
+  ): Promise<ToolResult> {
+    const service = this.getScheduleService();
+    const parsed = args as Record<string, unknown> | null;
+    const scheduleId =
+      typeof parsed?.["schedule_id"] === "string" ? parsed["schedule_id"].trim() : "";
+    if (!scheduleId) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: "missing required argument: schedule_id",
+      };
+    }
+    const schedule = await service.pauseSchedule({
+      tenantId: this.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID,
+      scheduleId,
+    });
+    return { tool_call_id: toolCallId, output: JSON.stringify({ schedule }) };
+  }
+
+  private async executeAutomationScheduleResume(
+    toolCallId: string,
+    args: unknown,
+  ): Promise<ToolResult> {
+    const service = this.getScheduleService();
+    const parsed = args as Record<string, unknown> | null;
+    const scheduleId =
+      typeof parsed?.["schedule_id"] === "string" ? parsed["schedule_id"].trim() : "";
+    if (!scheduleId) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: "missing required argument: schedule_id",
+      };
+    }
+    const schedule = await service.resumeSchedule({
+      tenantId: this.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID,
+      scheduleId,
+    });
+    return { tool_call_id: toolCallId, output: JSON.stringify({ schedule }) };
+  }
+
+  private async executeAutomationScheduleDelete(
+    toolCallId: string,
+    args: unknown,
+  ): Promise<ToolResult> {
+    const service = this.getScheduleService();
+    const parsed = args as Record<string, unknown> | null;
+    const scheduleId =
+      typeof parsed?.["schedule_id"] === "string" ? parsed["schedule_id"].trim() : "";
+    if (!scheduleId) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: "missing required argument: schedule_id",
+      };
+    }
+    await service.deleteSchedule({
+      tenantId: this.workspaceLease?.tenantId ?? DEFAULT_TENANT_ID,
+      scheduleId,
+    });
+    return {
+      tool_call_id: toolCallId,
+      output: JSON.stringify({ schedule_id: scheduleId, deleted: true }),
+    };
   }
 
   private async executeNodeDispatch(

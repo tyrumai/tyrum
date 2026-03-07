@@ -24,6 +24,7 @@ const FORBIDDEN_BODY = {
 
 const METHOD_SCOPED_OPERATOR_ROUTE_PREFIXES = [
   "/agent",
+  "/automation",
   "/artifacts",
   "/canvas",
   "/connections",

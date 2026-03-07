@@ -854,6 +854,98 @@ Additional plugin-defined routers may be mounted under:
   - `503` misconfigured (missing secret provider / invalid watcher config)
   - `401`, `403`
 
+### Automation schedules
+
+User-facing automation should prefer schedules over raw watchers. Schedule APIs map onto the same durable automation backend but expose explicit `heartbeat` vs `cron`, cadence, enable/disable, and delete semantics.
+
+#### GET /automation/schedules
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.read`
+- Query params:
+  - `agent_key?`
+  - `workspace_key?`
+  - `include_deleted?=true|false`
+- Response:
+  - `200` JSON `{ schedules: [...] }`
+  - `401`, `403`
+
+#### GET /automation/schedules/:id
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.read`
+- Request: Path param `:id`
+- Response:
+  - `200` JSON `{ schedule }`
+  - `400` invalid id
+  - `404` not found
+  - `401`, `403`
+
+#### POST /automation/schedules
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.write`
+- Request: JSON
+  - `kind: "heartbeat" | "cron"`
+  - `enabled?: boolean`
+  - `agent_key?: string`
+  - `workspace_key?: string`
+  - `cadence: { type: "interval", interval_ms } | { type: "cron", expression, timezone }`
+  - `execution: { kind: "agent_turn", instruction? } | { kind: "playbook", playbook_id } | { kind: "steps", steps }`
+  - `delivery?: { mode: "quiet" | "notify" }`
+- Response:
+  - `201` JSON `{ schedule }`
+  - `400` invalid request
+  - `401`, `403`
+
+#### PATCH /automation/schedules/:id
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.write`
+- Request: Path param `:id`, JSON patch with any of:
+  - `kind`
+  - `enabled`
+  - `cadence`
+  - `execution`
+  - `delivery`
+- Response:
+  - `200` JSON `{ schedule }`
+  - `400` invalid request
+  - `404` not found
+  - `401`, `403`
+
+#### POST /automation/schedules/:id/pause
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.write`
+- Request: Path param `:id`
+- Response:
+  - `200` JSON `{ schedule }`
+  - `400` invalid id
+  - `404` not found
+  - `401`, `403`
+
+#### POST /automation/schedules/:id/resume
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.write`
+- Request: Path param `:id`
+- Response:
+  - `200` JSON `{ schedule }`
+  - `400` invalid id
+  - `404` not found
+  - `401`, `403`
+
+#### DELETE /automation/schedules/:id
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.write`
+- Request: Path param `:id`
+- Response:
+  - `200` JSON `{ schedule_id, deleted: true }`
+  - `400` invalid id
+  - `401`, `403`
+
 ### Canvas artifacts
 
 #### POST /canvas/publish

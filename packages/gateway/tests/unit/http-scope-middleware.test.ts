@@ -15,6 +15,9 @@ describe("HTTP scope middleware route mapping", () => {
     expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/watchers" })).toEqual([
       "operator.write",
     ]);
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/automation/schedules" }),
+    ).toEqual(["operator.write"]);
     expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/workflow/run" })).toEqual([
       "operator.write",
     ]);
