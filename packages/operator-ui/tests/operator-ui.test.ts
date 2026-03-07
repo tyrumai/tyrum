@@ -2878,7 +2878,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("supports Cmd/Ctrl+1-7 page navigation shortcuts", () => {
+  it("supports Cmd/Ctrl+1-9/0 page navigation shortcuts across the primary routes", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -2897,13 +2897,32 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    act(() => {
+    await act(async () => {
       window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "1", ctrlKey: true, bubbles: true }),
+        new KeyboardEvent("keydown", { key: "7", ctrlKey: true, bubbles: true }),
       );
+      await Promise.resolve();
     });
 
-    expect(container.querySelector('[data-testid="dashboard-card-connection"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="agents-tab-runs"]')).not.toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "9", ctrlKey: true, bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="configure-page"]')).not.toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "0", ctrlKey: true, bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Settings");
 
     act(() => {
       root?.unmount();
@@ -2911,7 +2930,7 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("ignores Cmd/Ctrl+1-7 shortcuts while disconnected and lands on dashboard after reconnect", async () => {
+  it("ignores Cmd/Ctrl+1-9/0 shortcuts while disconnected and lands on dashboard after reconnect", async () => {
     const ws = new FakeWsClient(false);
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({

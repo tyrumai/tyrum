@@ -110,16 +110,8 @@ const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = [
 const PLATFORM_DESKTOP_NAV_ORDER: OperatorUiRouteId[] = ["node-configure"];
 const PLATFORM_WEB_NAV_ORDER: OperatorUiRouteId[] = ["browser"];
 
-const KEYBOARD_NAV_ORDER: OperatorUiRouteId[] = [
-  "dashboard",
-  "chat",
-  "memory",
-  "approvals",
-  "runs",
-  "workboard",
-  "pairing",
-  "settings",
-];
+const KEYBOARD_NAV_ORDER: OperatorUiRouteId[] = SIDEBAR_NAV_ORDER;
+const KEYBOARD_NAV_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
 
 function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {
   return Object.prototype.hasOwnProperty.call(NAV_ITEM_CONFIG, value);
@@ -262,13 +254,17 @@ function OperatorUiAppRoot({
 
   useKeyboardShortcut(
     showOperatorRoutes
-      ? KEYBOARD_NAV_ORDER.map((id, index) => ({
-          key: String(index + 1),
-          requireCmdOrCtrl: true,
-          handler: () => {
-            navigate(id);
-          },
-        }))
+      ? KEYBOARD_NAV_ORDER.flatMap((id, index) => {
+          const key = KEYBOARD_NAV_KEYS[index];
+          if (!key) return [];
+          return {
+            key,
+            requireCmdOrCtrl: true,
+            handler: () => {
+              navigate(id);
+            },
+          };
+        })
       : [],
   );
 
