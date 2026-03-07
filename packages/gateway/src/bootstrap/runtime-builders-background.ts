@@ -17,9 +17,6 @@ export async function startBackgroundSchedulers(
   const automationEnabled = context.deploymentConfig.automation.enabled;
   const schedulerEngine =
     shouldRunScheduler && automationEnabled ? createExecutionEngine(context) : undefined;
-  const playbookHome = context.container.config?.tyrumHome;
-  const playbooks = playbookHome ? loadAllPlaybooks(`${playbookHome}/playbooks`) : [];
-  const playbookRunner = new PlaybookRunner();
 
   if (shouldRunScheduler && automationEnabled) {
     const scheduleService = new ScheduleService(
@@ -33,18 +30,24 @@ export async function startBackgroundSchedulers(
   }
 
   const watcherScheduler = shouldRunScheduler
-    ? new WatcherScheduler({
-        db: context.container.db,
-        memoryV1Dal: context.container.memoryV1Dal,
-        eventBus: context.container.eventBus,
-        logger: context.logger,
-        engine: schedulerEngine,
-        policyService: context.container.policyService,
-        playbooks,
-        playbookRunner,
-        automationEnabled,
-        keepProcessAlive,
-      })
+    ? (() => {
+        const playbookHome = context.container.config?.tyrumHome;
+        const playbooks = playbookHome ? loadAllPlaybooks(`${playbookHome}/playbooks`) : [];
+        const playbookRunner = new PlaybookRunner();
+
+        return new WatcherScheduler({
+          db: context.container.db,
+          memoryV1Dal: context.container.memoryV1Dal,
+          eventBus: context.container.eventBus,
+          logger: context.logger,
+          engine: schedulerEngine,
+          policyService: context.container.policyService,
+          playbooks,
+          playbookRunner,
+          automationEnabled,
+          keepProcessAlive,
+        });
+      })()
     : undefined;
   const artifactLifecycleScheduler = shouldRunScheduler
     ? new ArtifactLifecycleScheduler({

@@ -229,4 +229,74 @@ describe("gateway automation scheduler startup", () => {
       engine: undefined,
     });
   });
+
+  it("does not load playbooks for non-scheduler roles", async () => {
+    vi.resetModules();
+
+    const loadAllPlaybooks = vi.fn(() => []);
+    const PlaybookRunner = vi.fn(function PlaybookRunner() {});
+    const WatcherScheduler = vi.fn(function WatcherScheduler() {});
+    WatcherScheduler.prototype.start = function start() {};
+    WatcherScheduler.prototype.stop = function stop() {};
+    function ArtifactLifecycleScheduler() {}
+    ArtifactLifecycleScheduler.prototype.start = function start() {};
+    ArtifactLifecycleScheduler.prototype.stop = function stop() {};
+    function OutboxLifecycleScheduler() {}
+    OutboxLifecycleScheduler.prototype.start = function start() {};
+    OutboxLifecycleScheduler.prototype.stop = function stop() {};
+    function StateStoreLifecycleScheduler() {}
+    StateStoreLifecycleScheduler.prototype.start = function start() {};
+    StateStoreLifecycleScheduler.prototype.stop = function stop() {};
+
+    vi.doMock("../../src/modules/playbook/loader.js", () => ({
+      loadAllPlaybooks,
+    }));
+
+    vi.doMock("../../src/modules/playbook/runner.js", () => ({
+      PlaybookRunner,
+    }));
+
+    vi.doMock("../../src/modules/watcher/scheduler.js", () => ({
+      WatcherScheduler,
+    }));
+
+    vi.doMock("../../src/modules/artifact/lifecycle.js", () => ({
+      ArtifactLifecycleScheduler,
+    }));
+
+    vi.doMock("../../src/modules/backplane/outbox-lifecycle.js", () => ({
+      OutboxLifecycleScheduler,
+    }));
+
+    vi.doMock("../../src/modules/statestore/lifecycle.js", () => ({
+      StateStoreLifecycleScheduler,
+    }));
+
+    const { startBackgroundSchedulers } = await import("../../src/bootstrap/runtime-builders.js");
+
+    await startBackgroundSchedulers({
+      role: "worker",
+      deploymentConfig: DeploymentConfig.parse({ automation: { enabled: true } }),
+      container: {
+        db: { kind: "sqlite" },
+        identityScopeDal: {},
+        memoryV1Dal: {},
+        eventBus: {},
+        policyService: {},
+        redactionEngine: {},
+        watcherProcessor: { start: vi.fn() },
+        artifactStore: {},
+        policySnapshotDal: {},
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        config: { tyrumHome: "/tmp/tyrum-test" },
+      },
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      secretProviderForTenant: vi.fn(),
+      shouldRunEdge: false,
+    } as any);
+
+    expect(loadAllPlaybooks).not.toHaveBeenCalled();
+    expect(PlaybookRunner).not.toHaveBeenCalled();
+    expect(WatcherScheduler).not.toHaveBeenCalled();
+  });
 });
