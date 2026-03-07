@@ -1,4 +1,5 @@
 import { AgentKey } from "@tyrum/schemas";
+import { readdir } from "node:fs/promises";
 import type { PolicyService } from "../policy/service.js";
 import { PolicyService as PolicyServiceImpl } from "../policy/service.js";
 import type { GatewayContainer } from "../../container.js";
@@ -58,6 +59,43 @@ export class AgentRegistry {
     const id = normalizeAgentId(agentId);
     if (id === "default") return this.opts.baseHome;
     return join(this.opts.baseHome, "agents", id);
+  }
+
+  async listDiscoveredAgentKeys(): Promise<string[]> {
+    const keys = new Set<string>(["default"]);
+
+    try {
+      const entries = await readdir(join(this.opts.baseHome, "agents"), { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const parsed = AgentKey.safeParse(entry.name.trim());
+        if (parsed.success) {
+          keys.add(parsed.data);
+        }
+      }
+    } catch (err) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (((err as { code?: unknown }).code as string | undefined) === "ENOENT" ||
+          ((err as { code?: unknown }).code as string | undefined) === "ENOTDIR")
+      ) {
+        return ["default"];
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      this.opts.logger.warn("agents.discovery_failed", {
+        base_home: this.opts.baseHome,
+        error: message,
+      });
+    }
+
+    return Array.from(keys).toSorted((left, right) => {
+      if (left === right) return 0;
+      if (left === "default") return -1;
+      if (right === "default") return 1;
+      return left.localeCompare(right);
+    });
   }
 
   getPolicyService(agentId: string): PolicyService {

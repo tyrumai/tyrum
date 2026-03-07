@@ -298,6 +298,7 @@ export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): vo
         engine: context.engine,
         policyService: context.container.policyService,
         agents: context.opts.agents,
+        identityScopeDal: context.container.identityScopeDal,
       }),
     );
   }

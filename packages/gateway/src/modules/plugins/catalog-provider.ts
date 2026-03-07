@@ -367,6 +367,7 @@ function resolveMaterializedPluginDirName(revision: RuntimePackageRevision): str
     const plugin = PluginManifest.parse(revision.packageData) as PluginManifestT;
     return `${sanitizeDirSegment(plugin.id)}-${String(revision.revision)}`;
   } catch {
+    // Intentional: invalid manifests are skipped during directory-name derivation.
     return undefined;
   }
 }

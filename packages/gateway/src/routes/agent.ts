@@ -29,9 +29,26 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
        ORDER BY CASE WHEN agent_key = 'default' THEN 0 ELSE 1 END, agent_key ASC`,
       [tenantId],
     );
-    const agentRecords = discovered.filter(
-      (record) => includeDefault || record.agent_key !== "default",
-    );
+    const discoveredKeys = await opts.agents.listDiscoveredAgentKeys();
+    const agentByKey = new Map<
+      string,
+      {
+        agent_key: string;
+        agent_id?: string;
+      }
+    >(discovered.map((record) => [record.agent_key, record]));
+    for (const agentKey of discoveredKeys) {
+      agentByKey.set(agentKey, agentByKey.get(agentKey) ?? { agent_key: agentKey });
+    }
+
+    const agentRecords = Array.from(agentByKey.values())
+      .filter((record) => includeDefault || record.agent_key !== "default")
+      .toSorted((left, right) => {
+        if (left.agent_key === right.agent_key) return 0;
+        if (left.agent_key === "default") return -1;
+        if (right.agent_key === "default") return 1;
+        return left.agent_key.localeCompare(right.agent_key);
+      });
 
     return c.json({ agents: agentRecords }, 200);
   });

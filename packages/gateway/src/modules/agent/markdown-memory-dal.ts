@@ -141,4 +141,45 @@ export class MarkdownMemoryDal {
     }
     return persisted;
   }
+
+  async appendDoc(params: {
+    tenantId: string;
+    agentId: string;
+    docKind: "core" | "daily";
+    docKey: string;
+    suffix: string;
+    occurredAtIso?: string;
+  }): Promise<MarkdownMemoryDoc> {
+    const timestamp = params.occurredAtIso ?? new Date().toISOString();
+    await this.db.run(
+      `INSERT INTO agent_markdown_memory_docs (
+         tenant_id,
+         agent_id,
+         doc_kind,
+         doc_key,
+         content_md,
+         created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (tenant_id, agent_id, doc_kind, doc_key)
+       DO UPDATE SET
+         content_md = agent_markdown_memory_docs.content_md || excluded.content_md,
+         updated_at = excluded.updated_at`,
+      [
+        params.tenantId,
+        params.agentId,
+        params.docKind,
+        params.docKey,
+        params.suffix,
+        timestamp,
+        timestamp,
+      ],
+    );
+
+    const persisted = await this.getDoc(params);
+    if (!persisted) {
+      throw new Error("markdown memory doc append failed");
+    }
+    return persisted;
+  }
 }

@@ -5,6 +5,8 @@ import {
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
 import { createTestApp } from "./helpers.js";
+import { PolicyBundleConfigDal } from "../../src/modules/policy/config-dal.js";
+import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 
 describe("workflow routes", () => {
   it("POST /workflow/run enqueues a durable execution run", async () => {
@@ -153,6 +155,60 @@ describe("workflow routes", () => {
     );
     expect(step?.status).toBe("queued");
 
+    await container.db.close();
+  });
+
+  it("POST /workflow/run resolves shared policy snapshots against the scoped agent id", async () => {
+    const { app, container, agents } = await createTestApp({
+      deploymentConfig: { execution: { engineApiEnabled: true }, state: { mode: "shared" } },
+    });
+
+    const helperAgentId = await container.identityScopeDal.ensureAgentId(
+      DEFAULT_TENANT_ID,
+      "helper",
+    );
+    const policyBundles = new PolicyBundleConfigDal(container.db);
+    await policyBundles.set({
+      scope: { tenantId: DEFAULT_TENANT_ID, scopeKind: "deployment" },
+      bundle: {
+        v: 1,
+        tools: { default: "deny", allow: ["tool.exec"], require_approval: [], deny: [] },
+      },
+      createdBy: { kind: "test" },
+    });
+    await policyBundles.set({
+      scope: { tenantId: DEFAULT_TENANT_ID, scopeKind: "agent", agentId: helperAgentId },
+      bundle: {
+        v: 1,
+        tools: { default: "deny", allow: [], require_approval: ["tool.exec"], deny: [] },
+      },
+      createdBy: { kind: "test" },
+    });
+
+    const res = await app.request("/workflow/run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        key: "agent:helper:main",
+        lane: "main",
+        steps: [{ type: "CLI" }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as { job_id: string };
+    const job = await container.db.get<{ policy_snapshot_id: string }>(
+      "SELECT policy_snapshot_id FROM execution_jobs WHERE tenant_id = ? AND job_id = ?",
+      [DEFAULT_TENANT_ID, payload.job_id],
+    );
+    const snapshot = await new PolicySnapshotDal(container.db).getById(
+      DEFAULT_TENANT_ID,
+      job!.policy_snapshot_id,
+    );
+
+    expect(snapshot?.bundle.tools?.require_approval).toContain("tool.exec");
+
+    await agents?.shutdown();
     await container.db.close();
   });
 });

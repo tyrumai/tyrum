@@ -71,12 +71,12 @@ describe("PluginCatalogProvider incremental tenant materialization", () => {
       const echoArtifact = await container.artifactStore.put({
         kind: "file",
         mime_type: "text/javascript",
-        body: Buffer.from(pluginEntryModule(), "utf-8"),
+        body: Buffer.from(pluginEntryModule("echo"), "utf-8"),
       });
       const helperArtifact = await container.artifactStore.put({
         kind: "file",
         mime_type: "text/javascript",
-        body: Buffer.from(pluginEntryModule(), "utf-8"),
+        body: Buffer.from(pluginEntryModule("helper"), "utf-8"),
       });
       await dal.set({
         tenantId: DEFAULT_TENANT_ID,

@@ -1,4 +1,6 @@
-import { stat } from "node:fs/promises";
+import { access, readdir, stat } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { constants } from "node:fs";
 import { join } from "node:path";
 import { DeploymentConfig } from "@tyrum/schemas";
 import type { SqlDb } from "../statestore/types.js";
@@ -15,6 +17,37 @@ import {
   resolveGatewayHome,
   resolveGatewayMigrationsDir,
 } from "./config.js";
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function sourceHomeHasImportablePlugins(sourceHome: string): Promise<boolean> {
+  const pluginsRoot = join(sourceHome, "plugins");
+  let entries: Dirent<string>[];
+  try {
+    entries = await readdir(pluginsRoot, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const pluginDir = join(pluginsRoot, entry.name);
+    for (const manifestName of ["plugin.yml", "plugin.yaml", "plugin.json"]) {
+      if (await pathExists(join(pluginDir, manifestName))) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
 
 export async function runImportHome(cmd: {
   source_home: string;
@@ -45,6 +78,15 @@ export async function runImportHome(cmd: {
       createdBy: { kind: "cli.import_home" },
       reason: "seed",
     });
+    if (
+      db.kind === "postgres" &&
+      deployment.config.artifacts.store === "fs" &&
+      (await sourceHomeHasImportablePlugins(sourceHome))
+    ) {
+      throw new Error(
+        "target deployment uses filesystem artifacts; configure shared artifact storage before importing plugin bundles into a Postgres/shared database",
+      );
+    }
 
     const redactionEngine = new RedactionEngine();
     const artifactStore = createArtifactStore(

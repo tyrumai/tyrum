@@ -58,19 +58,13 @@ export class SharedMarkdownMemoryStore implements AgentMemoryStore {
   async appendDaily(entry: string, date = new Date()): Promise<string> {
     await this.ensureInitialized();
     const docKey = isoDay(date);
-    const existing = await this.dal.getDoc({
-      ...this.scope,
-      docKind: "daily",
-      docKey,
-    });
     const timestamp = date.toISOString();
     const block = `\n## ${timestamp}\n${entry.trim()}\n`;
-    const content = `${existing?.content ?? ""}${block}`;
-    await this.dal.putDoc({
+    await this.dal.appendDoc({
       ...this.scope,
       docKind: "daily",
       docKey,
-      content,
+      suffix: block,
     });
     return `db://markdown-memory/${this.scope.tenantId}/${this.scope.agentId}/daily/${docKey}`;
   }
