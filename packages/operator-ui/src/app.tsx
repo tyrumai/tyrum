@@ -366,9 +366,16 @@ function useDesktopNodeAutoConnection({
     if (connection.status === "connected") {
       if (nodeLinkedRef.current) return;
       nodeLinkedRef.current = true;
-      void hostApi.node.connect().catch(() => {
-        nodeLinkedRef.current = false;
-      });
+      void hostApi.node
+        .connect()
+        .then((result) => {
+          if (result.status === "disconnected") {
+            nodeLinkedRef.current = false;
+          }
+        })
+        .catch(() => {
+          nodeLinkedRef.current = false;
+        });
       return;
     }
 

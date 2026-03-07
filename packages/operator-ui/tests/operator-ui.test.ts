@@ -1917,6 +1917,82 @@ describe("operator-ui", () => {
     delete (window as unknown as Record<string, unknown>)["tyrumDesktop"];
   });
 
+  it("retries desktop node auto-connect after a raced connect resolves disconnected", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const desktopApi = {
+      getConfig: vi.fn(async () => ({
+        mode: "embedded",
+        embedded: { port: 8788 },
+        permissions: { profile: "balanced", overrides: {} },
+        capabilities: { desktop: true, playwright: true, cli: true, http: true },
+        cli: { allowedCommands: [], allowedWorkingDirs: [] },
+        web: { allowedDomains: [], headless: true },
+      })),
+      setConfig: vi.fn(async () => {}),
+      gateway: {
+        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
+        start: vi.fn(async () => ({ status: "running", port: 8788 })),
+        stop: vi.fn(async () => ({ status: "stopped" })),
+      },
+      node: {
+        connect: vi
+          .fn(async () => ({ status: "connected" }))
+          .mockResolvedValueOnce({ status: "disconnected" }),
+        disconnect: vi.fn(async () => ({ status: "disconnected" })),
+      },
+      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
+      checkMacPermissions: vi.fn(async () => null),
+      requestMacPermission: vi.fn(async () => ({ granted: true })),
+    };
+
+    (window as unknown as Record<string, unknown>)["tyrumDesktop"] = desktopApi;
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(desktopApi.node.connect).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      ws.emit("disconnected", { code: 1006, reason: "transport lost" });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      ws.emit("connected", { clientId: null });
+      await Promise.resolve();
+    });
+
+    expect(desktopApi.node.connect).toHaveBeenCalledTimes(2);
+    expect(desktopApi.node.disconnect).toHaveBeenCalledTimes(0);
+
+    act(() => {
+      root?.unmount();
+    });
+
+    expect(desktopApi.node.disconnect).toHaveBeenCalledTimes(1);
+
+    container.remove();
+    delete (window as unknown as Record<string, unknown>)["tyrumDesktop"];
+  });
+
   it("disables node settings save while settings are saving", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
