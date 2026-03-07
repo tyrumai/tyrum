@@ -16,7 +16,22 @@ import {
 import { DEFAULT_A11Y_MAX_DEPTH, pruneUiTree } from "./a11y/prune-ui-tree.js";
 import type { DesktopA11yBackend } from "./backends/desktop-a11y-backend.js";
 import type { DesktopBackend } from "./backends/desktop-backend.js";
-import type { OcrEngine, OcrMatch } from "./ocr/types.js";
+import type { OcrEngine } from "./ocr/types.js";
+
+import {
+  type PixelPoint,
+  type Capture,
+  SCREENSHOT_DISABLED,
+  INPUT_DISABLED,
+  COORDINATE_SPACE,
+  parsePixelRef,
+  OcrTimeoutError,
+  resolveOcrTimeoutMs,
+  withTimeout,
+  isAtspiRef,
+  toErrorMessage,
+  collectOcrMatches,
+} from "./desktop-provider-helpers.js";
 
 export interface DesktopProviderPermissions {
   desktopScreenshot: boolean;
@@ -26,93 +41,12 @@ export interface DesktopProviderPermissions {
 
 export type ConfirmationFn = (prompt: string) => Promise<boolean>;
 
-type PixelPoint = { x: number; y: number };
-type Capture = { width: number; height: number; buffer: Buffer };
 type SnapshotState = {
   mode: "pixel" | "hybrid";
   accessibility: boolean;
   windows: DesktopWindow[];
   tree?: DesktopUiTree;
 };
-
-const DEFAULT_OCR_TIMEOUT_MS = 30_000;
-const MAX_OCR_TIMEOUT_MS = 60_000;
-const MAX_OCR_MATCH_TEXT_BYTES = 8_192;
-const MAX_OCR_MATCH_TEXT_CHARS = 512;
-const SCREENSHOT_DISABLED = "Desktop screenshot is disabled by permission profile";
-const INPUT_DISABLED = "Desktop input is disabled by permission profile";
-const COORDINATE_SPACE = { origin: "top-left", units: "px" } as const;
-
-function parsePixelRef(ref: string): PixelPoint | null {
-  const match = /^pixel:\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(ref.trim());
-  if (!match) return null;
-  const x = Number(match[1]);
-  const y = Number(match[2]);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-  return { x, y };
-}
-
-class OcrTimeoutError extends Error {
-  constructor(timeoutMs: number) {
-    super(`OCR timeout after ${String(timeoutMs)}ms`);
-    this.name = "OcrTimeoutError";
-  }
-}
-
-function resolveOcrTimeoutMs(): number {
-  const raw = process.env["TYRUM_DESKTOP_OCR_TIMEOUT_MS"]?.trim();
-  if (!raw) return DEFAULT_OCR_TIMEOUT_MS;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed)) return DEFAULT_OCR_TIMEOUT_MS;
-  const value = Math.floor(parsed);
-  if (value <= 0) return DEFAULT_OCR_TIMEOUT_MS;
-  return Math.min(value, MAX_OCR_TIMEOUT_MS);
-}
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  if (timeoutMs <= 0) return promise;
-
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new OcrTimeoutError(timeoutMs)), timeoutMs);
-  });
-
-  return Promise.race([promise, timeoutPromise]).finally(() => {
-    if (timer) clearTimeout(timer);
-  });
-}
-
-function normalizeForContainsText(value: string, caseInsensitive: boolean): string {
-  const trimmed = value.trim();
-  return caseInsensitive ? trimmed.toLowerCase() : trimmed;
-}
-
-function rectsIntersect(a: DesktopUiRect, b: DesktopUiRect): boolean {
-  const ax2 = a.x + a.width;
-  const ay2 = a.y + a.height;
-  const bx2 = b.x + b.width;
-  const by2 = b.y + b.height;
-  return a.x < bx2 && ax2 > b.x && a.y < by2 && ay2 > b.y;
-}
-
-function boundTextAroundMatch(value: string, matchIndex: number): string {
-  if (value.length <= MAX_OCR_MATCH_TEXT_CHARS) return value;
-  const windowSize = MAX_OCR_MATCH_TEXT_CHARS;
-  const safeIndex = matchIndex >= 0 ? matchIndex : 0;
-  const preferredStart = safeIndex - Math.floor(windowSize / 4);
-  const maxStart = Math.max(0, value.length - windowSize);
-  const start = Math.max(0, Math.min(maxStart, preferredStart));
-  const sliced = value.slice(start, start + windowSize).trim();
-  return sliced.length > 0 ? sliced : value.slice(0, windowSize).trim();
-}
-
-function isAtspiRef(ref: string): boolean {
-  return ref.trim().toLowerCase().startsWith("atspi:");
-}
-
-function toErrorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 export class DesktopProvider implements CapabilityProvider {
   readonly capability: ClientCapability = "desktop";
@@ -271,40 +205,6 @@ export class DesktopProvider implements CapabilityProvider {
     }
   }
 
-  private collectOcrMatches(
-    candidates: OcrMatch[],
-    queryText: string,
-    caseInsensitive: boolean,
-    boundsFilter: DesktopUiRect | undefined,
-    limit: number,
-  ): DesktopQueryMatch[] {
-    const matches: DesktopQueryMatch[] = [];
-    const normalizedNeedle = normalizeForContainsText(queryText, caseInsensitive);
-    let totalTextBytes = 0;
-    for (const candidate of candidates) {
-      const candidateText = candidate.text.trim();
-      if (!candidateText) continue;
-      const matchIndex = normalizeForContainsText(candidateText, caseInsensitive).indexOf(
-        normalizedNeedle,
-      );
-      if (matchIndex === -1 || (boundsFilter && !rectsIntersect(candidate.bounds, boundsFilter)))
-        continue;
-      const boundedText = boundTextAroundMatch(candidateText, matchIndex);
-      if (!boundedText) continue;
-      const nextBytes = Buffer.byteLength(boundedText, "utf8");
-      if (totalTextBytes + nextBytes > MAX_OCR_MATCH_TEXT_BYTES) continue;
-      totalTextBytes += nextBytes;
-      matches.push({
-        kind: "ocr",
-        text: boundedText,
-        bounds: candidate.bounds,
-        confidence: candidate.confidence,
-      });
-      if (matches.length >= limit) break;
-    }
-    return matches;
-  }
-
   private actResult(
     args: DesktopActArgs,
     mode: "a11y" | "pixel",
@@ -449,7 +349,7 @@ export class DesktopProvider implements CapabilityProvider {
       return this.fail(`OCR failed: ${toErrorMessage(err)}`);
     }
     const boundsFilter = args.selector.kind === "ocr" ? args.selector.bounds : undefined;
-    const matches = this.collectOcrMatches(
+    const matches = collectOcrMatches(
       candidates,
       queryText,
       caseInsensitive,

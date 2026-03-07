@@ -32,6 +32,13 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import { awaitApprovalForToolExecution } from "../../src/modules/agent/runtime/tool-set-builder-helpers.js";
+import { resolveExecutionProfile } from "../../src/modules/agent/runtime/intake-delegation.js";
+
+vi.mock("../../src/modules/agent/runtime/tool-set-builder-helpers.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../src/modules/agent/runtime/tool-set-builder-helpers.js")>();
+  return { ...original, awaitApprovalForToolExecution: vi.fn(original.awaitApprovalForToolExecution) };
+});
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -425,10 +432,10 @@ describe("AgentRuntime", () => {
     const subagentId = "subagent-1";
     const key = `agent:default:subagent:${subagentId}`;
 
-    const profile = await (runtime as any).resolveExecutionProfile({
-      laneQueueScope: { key, lane: "subagent" },
-      metadata: { subagent_id: subagentId },
-    });
+    const profile = await resolveExecutionProfile(
+      { container, agentId: "default", workspaceId: "default" },
+      { laneQueueScope: { key, lane: "subagent" }, metadata: { subagent_id: subagentId } },
+    );
 
     expect(profile.id).toBe("explorer_ro");
     expect(warnSpy).toHaveBeenCalledWith(
@@ -2022,14 +2029,12 @@ describe("AgentRuntime", () => {
 
     const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
 
-    const approvalSpy = vi.fn(async () => ({
+    vi.mocked(awaitApprovalForToolExecution).mockClear();
+    const approvalSpy = vi.mocked(awaitApprovalForToolExecution).mockResolvedValue({
       approved: true,
-      status: "approved" as const,
-      approvalId: 1,
-    }));
-    (
-      toolSetBuilder as unknown as { awaitApprovalForToolExecution: unknown }
-    ).awaitApprovalForToolExecution = approvalSpy;
+      status: "approved",
+      approvalId: "approval-1",
+    });
 
     const toolDesc = {
       id: "tool.exec",
@@ -2413,14 +2418,12 @@ describe("AgentRuntime", () => {
 
     const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
 
-    const approvalSpy = vi.fn(async () => ({
+    vi.mocked(awaitApprovalForToolExecution).mockClear();
+    const approvalSpy = vi.mocked(awaitApprovalForToolExecution).mockResolvedValue({
       approved: true,
-      status: "approved" as const,
-      approvalId: 1,
-    }));
-    (
-      toolSetBuilder as unknown as { awaitApprovalForToolExecution: unknown }
-    ).awaitApprovalForToolExecution = approvalSpy;
+      status: "approved",
+      approvalId: "approval-1",
+    });
 
     const toolDesc = {
       id: "tool.fs.read",
@@ -2470,6 +2473,7 @@ describe("AgentRuntime", () => {
       }),
     );
     expect(approvalSpy).toHaveBeenCalledWith(
+      expect.any(Object),
       expect.objectContaining({ id: "tool.fs.read" }),
       expect.any(Object),
       expect.any(String),
@@ -2505,14 +2509,12 @@ describe("AgentRuntime", () => {
 
     const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
 
-    const approvalSpy = vi.fn(async () => ({
+    vi.mocked(awaitApprovalForToolExecution).mockClear();
+    const approvalSpy = vi.mocked(awaitApprovalForToolExecution).mockResolvedValue({
       approved: true,
-      status: "approved" as const,
-      approvalId: 1,
-    }));
-    (
-      toolSetBuilder as unknown as { awaitApprovalForToolExecution: unknown }
-    ).awaitApprovalForToolExecution = approvalSpy;
+      status: "approved",
+      approvalId: "approval-1",
+    });
 
     const toolDesc = {
       id: "tool.node.dispatch",
@@ -2574,6 +2576,7 @@ describe("AgentRuntime", () => {
     );
 
     expect(approvalSpy).toHaveBeenCalledWith(
+      expect.any(Object),
       expect.objectContaining({ id: "tool.node.dispatch" }),
       expect.any(Object),
       expect.any(String),
@@ -2614,14 +2617,12 @@ describe("AgentRuntime", () => {
 
     const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
 
-    const approvalSpy = vi.fn(async () => ({
+    vi.mocked(awaitApprovalForToolExecution).mockClear();
+    const approvalSpy = vi.mocked(awaitApprovalForToolExecution).mockResolvedValue({
       approved: true,
-      status: "approved" as const,
-      approvalId: 1,
-    }));
-    (
-      toolSetBuilder as unknown as { awaitApprovalForToolExecution: unknown }
-    ).awaitApprovalForToolExecution = approvalSpy;
+      status: "approved",
+      approvalId: "approval-1",
+    });
 
     const toolDesc = {
       id: "tool.exec",
@@ -2669,7 +2670,7 @@ describe("AgentRuntime", () => {
       }),
     );
 
-    const policyContext = approvalSpy.mock.calls[0]?.[5] as
+    const policyContext = approvalSpy.mock.calls[0]?.[6] as
       | { suggested_overrides?: unknown }
       | undefined;
     expect(policyContext?.suggested_overrides).toBeUndefined();

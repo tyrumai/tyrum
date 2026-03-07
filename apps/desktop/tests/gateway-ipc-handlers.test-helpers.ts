@@ -1,0 +1,81 @@
+import { EventEmitter } from "node:events";
+import { expect } from "vitest";
+import type { BrowserWindow } from "electron";
+
+export class MockGatewayManager extends EventEmitter {
+  public status: "stopped" | "starting" | "running" | "error" = "stopped";
+  public lastStartOptions: unknown;
+
+  async start(opts?: unknown): Promise<void> {
+    this.lastStartOptions = opts;
+    this.status = "running";
+    this.emit("status-change", "running");
+  }
+
+  async stop(): Promise<void> {
+    this.status = "stopped";
+    this.emit("status-change", "stopped");
+  }
+
+  getBootstrapToken(label: string): string | undefined {
+    if (label === "default-tenant-admin") {
+      return "tyrum-token.v1.bootstrap.token";
+    }
+    return undefined;
+  }
+}
+
+export function createWindowStub(
+  sentEvents?: Array<{ channel: string; payload: unknown }>,
+): BrowserWindow {
+  return {
+    isDestroyed: () => false,
+    webContents: {
+      isDestroyed: () => false,
+      send: (channel: string, payload: unknown) => {
+        sentEvents?.push({ channel, payload });
+      },
+    },
+  } as unknown as BrowserWindow;
+}
+
+export function createOkResponse(): Response {
+  return new Response(JSON.stringify({ status: "ok" }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+export function getRegisteredHandler(
+  registeredHandlers: Map<string, (...args: unknown[]) => unknown>,
+  channel: string,
+): (...args: unknown[]) => unknown {
+  const handler = registeredHandlers.get(channel);
+  expect(handler).toBeDefined();
+  return handler!;
+}
+
+export async function registerGatewayIpcForTest(
+  sentEvents?: Array<{ channel: string; payload: unknown }>,
+): Promise<{
+  ensureEmbeddedGatewayToken: typeof import("../src/main/ipc/gateway-ipc.js").ensureEmbeddedGatewayToken;
+  registerGatewayIpc: typeof import("../src/main/ipc/gateway-ipc.js").registerGatewayIpc;
+  resolveOperatorConnection: typeof import("../src/main/ipc/gateway-ipc.js").resolveOperatorConnection;
+  startEmbeddedGatewayFromConfig: typeof import("../src/main/ipc/gateway-ipc.js").startEmbeddedGatewayFromConfig;
+  manager: unknown;
+}> {
+  const gatewayIpc = await import("../src/main/ipc/gateway-ipc.js");
+  const manager = gatewayIpc.registerGatewayIpc(createWindowStub(sentEvents));
+  return { ...gatewayIpc, manager };
+}
+
+export function expectConnection(
+  connection: unknown,
+  expected: { mode: "embedded" | "remote"; wsUrl: string; httpBaseUrl: string; token: string },
+): void {
+  expect(connection).toEqual({
+    ...expected,
+    tlsCertFingerprint256: "",
+    tlsAllowSelfSigned: false,
+  });
+}
