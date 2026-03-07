@@ -1,4 +1,4 @@
-import { expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {

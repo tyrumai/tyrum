@@ -12,11 +12,9 @@ import type {
 import {
   ensureValidTimeZone,
   formatIso,
-  nextCronFireAtMs,
   parseCronExpression,
   resolveIntervalScheduleSlotMs,
   resolveNextScheduleFireMs,
-  resolvePendingScheduleFireMs,
 } from "./schedule-service-cron.js";
 
 export {

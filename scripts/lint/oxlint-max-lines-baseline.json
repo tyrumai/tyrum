@@ -1,21 +1,4 @@
 {
-  "apps/desktop/tests/gateway-ipc-handlers.test.ts": 501,
-  "packages/client/tests/ws-client.test.ts": 2602,
-  "packages/desktop-node/src/providers/backends/atspi-a11y-backend.ts": 619,
-  "packages/desktop-node/src/providers/desktop-provider.ts": 583,
   "packages/gateway/src/modules/agent/runtime/agent-runtime.ts": 1850,
-  "packages/gateway/src/modules/agent/runtime/session-model-resolution.ts": 532,
-  "packages/gateway/src/modules/agent/runtime/tool-set-builder.ts": 608,
-  "packages/gateway/src/modules/automation/schedule-service.ts": 959,
-  "packages/gateway/src/modules/observability/status-details.ts": 572,
-  "packages/gateway/src/modules/plugins/registry.ts": 1130,
-  "packages/gateway/src/modules/watcher/scheduler.ts": 580,
-  "packages/gateway/src/ws/protocol/workboard-handlers.ts": 640,
-  "packages/gateway/tests/integration/provider-model-config-routes.test.ts": 556,
-  "packages/gateway/tests/integration/ws-handler.test.ts": 1461,
-  "packages/gateway/tests/unit/agent-runtime.test.ts": 2587,
-  "packages/gateway/tests/unit/ws-protocol.test.ts": 2678,
-  "packages/gateway/tests/unit/ws-workboard.test.ts": 1878,
-  "packages/operator-ui/tests/operator-ui.test.ts": 4376,
-  "packages/tui/tests/app.test.ts": 532
+  "packages/gateway/tests/unit/agent-runtime.test.ts": 2587
 }
