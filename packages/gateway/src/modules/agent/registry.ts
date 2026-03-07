@@ -62,11 +62,11 @@ export class AgentRegistry {
   }
 
   async listDiscoveredAgentKeys(): Promise<string[]> {
-    const keys = new Set<string>(["default"]);
-
     if (isSharedStateMode(this.opts.container.deploymentConfig)) {
       return ["default"];
     }
+
+    const keys = new Set<string>(["default"]);
 
     try {
       const entries = await readdir(join(this.opts.baseHome, "agents"), { withFileTypes: true });
