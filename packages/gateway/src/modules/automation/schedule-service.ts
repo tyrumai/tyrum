@@ -990,6 +990,17 @@ export class ScheduleService {
   }
 
   async deleteSchedule(input: { tenantId: string; scheduleId: string }): Promise<void> {
+    const existing = await this.db.get<{ watcher_id: string }>(
+      `SELECT watcher_id
+       FROM watchers
+       WHERE tenant_id = ? AND watcher_id = ? AND trigger_type = 'periodic'
+       LIMIT 1`,
+      [input.tenantId, input.scheduleId],
+    );
+    if (!existing) {
+      throw new Error("schedule not found");
+    }
+
     await this.db.run(
       `UPDATE watchers
        SET active = ?, updated_at = ?

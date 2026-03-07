@@ -238,8 +238,14 @@ export function createAutomationScheduleRoutes(container: GatewayContainer): Hon
     if (!scheduleId) {
       return c.json({ error: "invalid_request", message: "invalid schedule id" }, 400);
     }
-    await service.deleteSchedule({ tenantId: DEFAULT_TENANT_ID, scheduleId });
-    return c.json({ schedule_id: scheduleId, deleted: true });
+    try {
+      await service.deleteSchedule({ tenantId: DEFAULT_TENANT_ID, scheduleId });
+      return c.json({ schedule_id: scheduleId, deleted: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = message.includes("not found") ? 404 : 400;
+      return c.json({ error: status === 404 ? "not_found" : "invalid_request", message }, status);
+    }
   });
 
   return app;

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import {
@@ -217,6 +218,15 @@ describe("ScheduleService", () => {
         schedule.target_scope.workspace_key === "default",
     );
     expect(matching).toHaveLength(1);
+  });
+
+  it("rejects deleting a schedule that does not exist", async () => {
+    await expect(
+      service.deleteSchedule({
+        tenantId: DEFAULT_TENANT_ID,
+        scheduleId: randomUUID(),
+      }),
+    ).rejects.toThrow(/schedule not found/i);
   });
 
   it("rejects invalid steps schedules before persisting them", async () => {

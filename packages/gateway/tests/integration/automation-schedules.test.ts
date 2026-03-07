@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import { wireContainer, type GatewayContainer } from "../../src/container.js";
@@ -87,5 +88,15 @@ describe("automation schedule routes", () => {
     expect(createRes.status).toBe(400);
     const body = (await createRes.json()) as { message: string };
     expect(body.message).toMatch(/invalid steps schedule action/i);
+  });
+
+  it("returns 404 when deleting a schedule that does not exist", async () => {
+    const deleteRes = await app.request(`/automation/schedules/${randomUUID()}`, {
+      method: "DELETE",
+    });
+
+    expect(deleteRes.status).toBe(404);
+    const body = (await deleteRes.json()) as { error: string; message: string };
+    expect(body).toEqual({ error: "not_found", message: "schedule not found" });
   });
 });
