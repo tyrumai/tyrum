@@ -1,5 +1,61 @@
 [
   {
+    "table": "agent_identity_revisions",
+    "column": "identity_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "agent_identity_revisions",
+    "column": "created_by_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "runtime_package_revisions",
+    "column": "package_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "runtime_package_revisions",
+    "column": "created_by_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "lifecycle_hook_configs",
+    "column": "hooks_json",
+    "shape": "array",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "lifecycle_hook_configs",
+    "column": "created_by_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "policy_bundle_config_revisions",
+    "column": "bundle_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "policy_bundle_config_revisions",
+    "column": "created_by_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
     "table": "agent_configs",
     "column": "config_json",
     "shape": "object",

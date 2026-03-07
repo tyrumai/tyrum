@@ -28,7 +28,7 @@ import {
 import { WITHIN_TURN_LOOP_STOP_REPLY } from "./runtime-constants.js";
 import { maybeRunPreCompactionMemoryFlush } from "./pre-compaction-memory-flush.js";
 import { buildDefaultAgentConfig } from "../default-config.js";
-import { createLocalAgentContextStore, type AgentContextStore } from "../context-store.js";
+import { createDefaultAgentContextStore, type AgentContextStore } from "../context-store.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import { ToolSetBuilder, type ToolCallPolicyState } from "./tool-set-builder.js";
 import {
@@ -214,9 +214,9 @@ export class AgentRuntime {
     this.home = opts.home ?? resolveTyrumHome();
     this.contextStore =
       opts.contextStore ??
-      createLocalAgentContextStore({
+      createDefaultAgentContextStore({
         home: this.home,
-        logger: opts.container.logger,
+        container: opts.container,
       });
     this.sessionDal = opts.sessionDal ?? opts.container.sessionDal;
     this.fetchImpl = opts.fetchImpl ?? fetch;

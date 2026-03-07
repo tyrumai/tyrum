@@ -19,7 +19,7 @@ import {
 import { parseFrontmatterDocument } from "./frontmatter.js";
 import type { Logger } from "../observability/logger.js";
 
-export type SkillProvenanceSource = SkillProvenanceSourceT;
+export type SkillProvenanceSource = SkillProvenanceSourceT | "shared";
 export type SkillProvenance = { source: SkillProvenanceSource; path: string };
 export type LoadedSkillManifest = SkillManifestT & { provenance: SkillProvenance };
 
@@ -41,7 +41,7 @@ export async function loadIdentity(home: string): Promise<IdentityPackT> {
   });
 }
 
-async function loadSkillFromDir(
+export async function loadSkillFromDir(
   skillsDir: string,
   skillId: string,
   source: SkillProvenanceSource,

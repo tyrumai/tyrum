@@ -33,6 +33,7 @@ import { createProviderConfigRoutes } from "./routes/provider-config.js";
 import { createProviderOAuthRoutes } from "./routes/provider-oauth.js";
 import { createRoutingConfigRoutes } from "./routes/routing-config.js";
 import { createSecretRoutes } from "./routes/secret.js";
+import { createSharedStateConfigRoutes } from "./routes/shared-state-config.js";
 import { createSnapshotRoutes } from "./routes/snapshot.js";
 import { createStatusRoutes } from "./routes/status.js";
 import { createSystemRoutes } from "./routes/system.js";
@@ -359,6 +360,13 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
   context.app.route(
     "/",
     createAgentConfigRoutes({
+      db: context.container.db,
+      identityScopeDal: context.container.identityScopeDal,
+    }),
+  );
+  context.app.route(
+    "/",
+    createSharedStateConfigRoutes({
       db: context.container.db,
       identityScopeDal: context.container.identityScopeDal,
     }),
