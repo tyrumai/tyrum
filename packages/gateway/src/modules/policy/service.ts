@@ -4,7 +4,6 @@ import type {
   PolicyDecision as PolicyDecisionT,
   RuleDecision as RuleDecisionT,
 } from "@tyrum/schemas";
-import { PolicyBundle } from "@tyrum/schemas";
 import { access } from "node:fs/promises";
 import { wildcardMatch } from "./wildcard.js";
 import type { Logger } from "../observability/logger.js";
@@ -13,12 +12,12 @@ import {
   mostRestrictiveDecision,
   normalizeDomain,
   normalizeUrlForPolicy,
-  type PolicyDomainConfig,
 } from "./domain.js";
 import { defaultPolicyBundle, loadPolicyBundleFromFile } from "./bundle-loader.js";
 import type { PolicySnapshotDal, PolicySnapshotRow } from "./snapshot-dal.js";
 import type { PolicyOverrideDal } from "./override-dal.js";
 import { sha256HexFromString, stableJsonStringify } from "./canonical-json.js";
+import { mergePolicyBundles } from "./bundle-merge.js";
 
 async function fileExists(path: string): Promise<boolean> {
   try {
@@ -28,37 +27,6 @@ async function fileExists(path: string): Promise<boolean> {
     // Intentional: treat missing policy files as absent.
     return false;
   }
-}
-
-function unionStrings(a: readonly string[], b: readonly string[]): string[] {
-  if (a.length === 0) return [...b];
-  if (b.length === 0) return [...a];
-  return [...new Set([...a, ...b])];
-}
-
-function mergeDomain(
-  domains: Array<PolicyDomainConfig | undefined>,
-  fallbackDefault: Decision,
-): PolicyDomainConfig {
-  let defaultDecision: Decision = fallbackDefault;
-  let allow: string[] = [];
-  let requireApproval: string[] = [];
-  let deny: string[] = [];
-
-  for (const domain of domains) {
-    if (!domain) continue;
-    defaultDecision = mostRestrictiveDecision(defaultDecision, domain.default);
-    allow = unionStrings(allow, domain.allow);
-    requireApproval = unionStrings(requireApproval, domain.require_approval);
-    deny = unionStrings(deny, domain.deny);
-  }
-
-  return {
-    default: defaultDecision,
-    allow,
-    require_approval: requireApproval,
-    deny,
-  };
 }
 
 export interface PolicyEvaluation {
@@ -522,214 +490,4 @@ export class PolicyService {
       return this.agentBundleCache;
     }
   }
-}
-
-function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBundleT {
-  const base = PolicyBundle.parse({ v: 1 });
-
-  const tools = mergeDomain(
-    bundles.map((b) => (b?.tools ? normalizeDomain(b.tools, "require_approval") : undefined)),
-    normalizeDomain(base.tools, "require_approval").default,
-  );
-  const networkEgress = mergeDomain(
-    bundles.map((b) =>
-      b?.network_egress ? normalizeDomain(b.network_egress, "require_approval") : undefined,
-    ),
-    normalizeDomain(base.network_egress, "require_approval").default,
-  );
-  const secrets = mergeDomain(
-    bundles.map((b) => (b?.secrets ? normalizeDomain(b.secrets, "require_approval") : undefined)),
-    normalizeDomain(base.secrets, "require_approval").default,
-  );
-  const connectors = mergeDomain(
-    bundles.map((b) =>
-      b?.connectors ? normalizeDomain(b.connectors, "require_approval") : undefined,
-    ),
-    normalizeDomain(base.connectors, "require_approval").default,
-  );
-
-  const artifactsDefault = bundles.reduce<Decision>(
-    (acc, b) => (b?.artifacts?.default ? mostRestrictiveDecision(acc, b.artifacts.default) : acc),
-    base.artifacts?.default ?? "allow",
-  );
-  const retentionDaysDefaults = bundles
-    .map((b) => b?.artifacts?.retention?.default_days)
-    .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
-  const quotaMaxBytesDefaults = bundles
-    .map((b) => b?.artifacts?.quota?.default_max_bytes)
-    .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
-
-  const retentionDefaultDays = [...retentionDaysDefaults];
-  const maxBytesDefault = [...quotaMaxBytesDefaults];
-
-  const retentionBySensitivityValues = bundles
-    .map((b) => b?.artifacts?.retention?.by_sensitivity)
-    .filter((v): v is Record<string, unknown> => !!v && typeof v === "object");
-  const quotaBySensitivityValues = bundles
-    .map((b) => b?.artifacts?.quota?.by_sensitivity)
-    .filter((v): v is Record<string, unknown> => !!v && typeof v === "object");
-
-  const retentionBySensitivity = {
-    normal: retentionBySensitivityValues
-      .map((v) => v["normal"])
-      .filter((n): n is number => typeof n === "number" && Number.isFinite(n) && n > 0)
-      .reduce<number | undefined>(
-        (acc, n) => (acc === undefined ? n : Math.min(acc, n)),
-        undefined,
-      ),
-    sensitive: retentionBySensitivityValues
-      .map((v) => v["sensitive"])
-      .filter((n): n is number => typeof n === "number" && Number.isFinite(n) && n > 0)
-      .reduce<number | undefined>(
-        (acc, n) => (acc === undefined ? n : Math.min(acc, n)),
-        undefined,
-      ),
-  } as const;
-
-  const quotaBySensitivity = {
-    normal: quotaBySensitivityValues
-      .map((v) => v["normal"])
-      .filter((n): n is number => typeof n === "number" && Number.isFinite(n) && n > 0)
-      .reduce<number | undefined>(
-        (acc, n) => (acc === undefined ? n : Math.min(acc, n)),
-        undefined,
-      ),
-    sensitive: quotaBySensitivityValues
-      .map((v) => v["sensitive"])
-      .filter((n): n is number => typeof n === "number" && Number.isFinite(n) && n > 0)
-      .reduce<number | undefined>(
-        (acc, n) => (acc === undefined ? n : Math.min(acc, n)),
-        undefined,
-      ),
-  } as const;
-
-  const retentionByLabel: Record<string, number> = {};
-  for (const bundle of bundles) {
-    const raw = bundle?.artifacts?.retention?.by_label;
-    if (!raw) continue;
-    for (const [label, value] of Object.entries(raw)) {
-      if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) continue;
-      const prev = retentionByLabel[label];
-      retentionByLabel[label] = prev === undefined ? value : Math.min(prev, value);
-    }
-  }
-
-  const quotaByLabel: Record<string, number> = {};
-  for (const bundle of bundles) {
-    const raw = bundle?.artifacts?.quota?.by_label;
-    if (!raw) continue;
-    for (const [label, value] of Object.entries(raw)) {
-      if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) continue;
-      const prev = quotaByLabel[label];
-      quotaByLabel[label] = prev === undefined ? value : Math.min(prev, value);
-    }
-  }
-
-  const retentionByLabelSensitivity: Record<string, { normal?: number; sensitive?: number }> = {};
-  for (const bundle of bundles) {
-    const raw = bundle?.artifacts?.retention?.by_label_sensitivity;
-    if (!raw) continue;
-    for (const [label, value] of Object.entries(raw)) {
-      if (!value || typeof value !== "object") continue;
-      const entry = retentionByLabelSensitivity[label] ?? (retentionByLabelSensitivity[label] = {});
-
-      const normal = (value as Record<string, unknown>)["normal"];
-      if (typeof normal === "number" && Number.isFinite(normal) && normal > 0) {
-        entry.normal = entry.normal === undefined ? normal : Math.min(entry.normal, normal);
-      }
-
-      const sensitive = (value as Record<string, unknown>)["sensitive"];
-      if (typeof sensitive === "number" && Number.isFinite(sensitive) && sensitive > 0) {
-        entry.sensitive =
-          entry.sensitive === undefined ? sensitive : Math.min(entry.sensitive, sensitive);
-      }
-    }
-  }
-
-  const quotaByLabelSensitivity: Record<string, { normal?: number; sensitive?: number }> = {};
-  for (const bundle of bundles) {
-    const raw = bundle?.artifacts?.quota?.by_label_sensitivity;
-    if (!raw) continue;
-    for (const [label, value] of Object.entries(raw)) {
-      if (!value || typeof value !== "object") continue;
-      const entry = quotaByLabelSensitivity[label] ?? (quotaByLabelSensitivity[label] = {});
-
-      const normal = (value as Record<string, unknown>)["normal"];
-      if (typeof normal === "number" && Number.isFinite(normal) && normal > 0) {
-        entry.normal = entry.normal === undefined ? normal : Math.min(entry.normal, normal);
-      }
-
-      const sensitive = (value as Record<string, unknown>)["sensitive"];
-      if (typeof sensitive === "number" && Number.isFinite(sensitive) && sensitive > 0) {
-        entry.sensitive =
-          entry.sensitive === undefined ? sensitive : Math.min(entry.sensitive, sensitive);
-      }
-    }
-  }
-
-  const retentionDefault =
-    retentionDefaultDays.length > 0 ? Math.min(...retentionDefaultDays) : undefined;
-  const maxBytesDefaultValue =
-    maxBytesDefault.length > 0 ? Math.min(...maxBytesDefault) : undefined;
-
-  const provenanceValues = new Set(
-    bundles
-      .map((b) => b?.provenance?.untrusted_shell_requires_approval)
-      .filter((v): v is boolean => typeof v === "boolean"),
-  );
-  const provenanceShellApproval = provenanceValues.has(true) || !provenanceValues.has(false);
-
-  return PolicyBundle.parse({
-    v: 1,
-    tools,
-    network_egress: networkEgress,
-    secrets,
-    connectors,
-    artifacts: {
-      default: artifactsDefault,
-      retention:
-        retentionDefault !== undefined ||
-        Object.keys(retentionByLabel).length > 0 ||
-        retentionBySensitivity.normal !== undefined ||
-        retentionBySensitivity.sensitive !== undefined ||
-        Object.keys(retentionByLabelSensitivity).length > 0
-          ? {
-              default_days: retentionDefault,
-              by_label: Object.keys(retentionByLabel).length > 0 ? retentionByLabel : undefined,
-              by_sensitivity:
-                retentionBySensitivity.normal !== undefined ||
-                retentionBySensitivity.sensitive !== undefined
-                  ? retentionBySensitivity
-                  : undefined,
-              by_label_sensitivity:
-                Object.keys(retentionByLabelSensitivity).length > 0
-                  ? retentionByLabelSensitivity
-                  : undefined,
-            }
-          : undefined,
-      quota:
-        maxBytesDefaultValue !== undefined ||
-        Object.keys(quotaByLabel).length > 0 ||
-        quotaBySensitivity.normal !== undefined ||
-        quotaBySensitivity.sensitive !== undefined ||
-        Object.keys(quotaByLabelSensitivity).length > 0
-          ? {
-              default_max_bytes: maxBytesDefaultValue,
-              by_label: Object.keys(quotaByLabel).length > 0 ? quotaByLabel : undefined,
-              by_sensitivity:
-                quotaBySensitivity.normal !== undefined ||
-                quotaBySensitivity.sensitive !== undefined
-                  ? quotaBySensitivity
-                  : undefined,
-              by_label_sensitivity:
-                Object.keys(quotaByLabelSensitivity).length > 0
-                  ? quotaByLabelSensitivity
-                  : undefined,
-            }
-          : undefined,
-    },
-    provenance: {
-      untrusted_shell_requires_approval: provenanceShellApproval,
-    },
-  });
 }

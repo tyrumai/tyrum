@@ -1,78 +1,23 @@
 // @vitest-environment jsdom
 
+import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import React, { act } from "react";
-import type { DesktopApi } from "../../src/desktop-api.js";
-import { BrowserNodeProvider } from "../../src/browser-node/browser-node-provider.js";
-import { OperatorUiHostProvider } from "../../src/host/host-api.js";
-import { NodeConfigurePage } from "../../src/components/pages/node-configure-page.js";
-import { BrowserCapabilitiesPage } from "../../src/components/pages/platform/browser-capabilities-page.js";
-import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
-
-type HostValue =
-  | {
-      kind: "web";
-    }
-  | {
-      kind: "desktop";
-      api: DesktopApi | null;
-    };
-
-function renderWithHost(host: HostValue, element: React.ReactElement) {
-  return renderIntoDocument(React.createElement(OperatorUiHostProvider, { value: host }, element));
-}
-
-async function flushEffects(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-  });
-}
-
-function clickTab(container: HTMLElement, label: string): void {
-  const tab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find((el) =>
-    el.textContent?.includes(label),
-  );
-  expect(tab).not.toBeUndefined();
-  tab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-}
-
-function clickButton(container: HTMLElement, label: string): void {
-  const button = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((el) =>
-    el.textContent?.includes(label),
-  );
-  expect(button).not.toBeUndefined();
-  button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-}
-
-function clickByTestId(container: HTMLElement, testId: string): void {
-  const button = container.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
-  expect(button).not.toBeNull();
-  button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-}
-
-function getInputByLabel(container: HTMLElement, labelText: string): HTMLInputElement {
-  const label = Array.from(container.querySelectorAll<HTMLLabelElement>("label")).find((el) =>
-    el.textContent?.includes(labelText),
-  );
-  expect(label).not.toBeUndefined();
-  const id = label?.getAttribute("for");
-  expect(id).toBeTruthy();
-  const input = id ? container.querySelector<HTMLInputElement>(`input[id="${id}"]`) : null;
-  expect(input).not.toBeNull();
-  return input!;
-}
-
-function getTextareaByLabel(container: HTMLElement, labelText: string): HTMLTextAreaElement {
-  const label = Array.from(container.querySelectorAll<HTMLLabelElement>("label")).find((el) =>
-    el.textContent?.includes(labelText),
-  );
-  expect(label).not.toBeUndefined();
-  const id = label?.getAttribute("for");
-  expect(id).toBeTruthy();
-  const textarea = id ? container.querySelector<HTMLTextAreaElement>(`textarea[id="${id}"]`) : null;
-  expect(textarea).not.toBeNull();
-  return textarea!;
-}
+import {
+  clickButtonAndFlush,
+  clickByTestIdAndFlush,
+  clickLabelAndFlush,
+  clickSwitchAndFlush,
+  clickTabAndFlush,
+  createDesktopApi,
+  createNodeConfig,
+  flushEffects,
+  getInputByLabel,
+  getTextareaByLabel,
+  withBrowserCapabilitiesPage,
+  withDesktopNodeConfigurePage,
+  withHostNodeConfigurePage,
+} from "./platform-pages.test-support.js";
+import { setNativeValue } from "../test-utils.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -80,65 +25,42 @@ afterEach(() => {
 });
 
 describe("Platform pages", () => {
-  it("renders the browser capabilities page", () => {
+  it("renders the browser capabilities page", async () => {
     const storage = globalThis.localStorage;
     if (storage && typeof storage.removeItem === "function") {
       storage.removeItem("tyrum.operator-ui.browserNode.enabled");
     }
-    const testRoot = renderIntoDocument(
-      React.createElement(
-        BrowserNodeProvider,
-        { wsUrl: "ws://example.test/ws" },
-        React.createElement(BrowserCapabilitiesPage),
-      ),
-    );
-    try {
-      expect(testRoot.container.textContent).toContain("Browser Capabilities");
-      expect(testRoot.container.textContent).toContain("Browser node executor");
-    } finally {
-      cleanupTestRoot(testRoot);
-    }
+
+    await withBrowserCapabilitiesPage(({ container }) => {
+      expect(container.textContent).toContain("Browser Capabilities");
+      expect(container.textContent).toContain("Browser node executor");
+    });
   });
 
-  it("shows node-configure fallback states for non-desktop and missing desktop api", () => {
-    const webRoot = renderWithHost({ kind: "web" }, React.createElement(NodeConfigurePage));
-    try {
-      expect(webRoot.container.textContent).toContain(
+  it("shows node-configure fallback states for non-desktop and missing desktop api", async () => {
+    await withHostNodeConfigurePage({ kind: "web" }, ({ container }) => {
+      expect(container.textContent).toContain(
         "Node configuration is only available in the desktop app.",
       );
-    } finally {
-      cleanupTestRoot(webRoot);
-    }
+    });
 
-    const missingApiRoot = renderWithHost(
-      { kind: "desktop", api: null },
-      React.createElement(NodeConfigurePage),
-    );
-    try {
-      expect(missingApiRoot.container.textContent).toContain("Desktop API not available.");
-    } finally {
-      cleanupTestRoot(missingApiRoot);
-    }
+    await withHostNodeConfigurePage({ kind: "desktop", api: null }, ({ container }) => {
+      expect(container.textContent).toContain("Desktop API not available.");
+    });
   });
 
   it("saves general node settings and requests a desktop rebootstrap when connection settings change", async () => {
     const setConfig = vi.fn(async () => {});
     const onReloadPage = vi.fn();
-    const desktopApi = {
-      getConfig: vi.fn(async () => ({
-        mode: "embedded",
-        embedded: { port: 8788 },
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig({
         remote: {
           wsUrl: "wss://saved.example/ws",
           tokenRef: "saved-token",
           tlsCertFingerprint256: "AA:BB",
           tlsAllowSelfSigned: false,
         },
-        permissions: { profile: "balanced", overrides: {} },
-        capabilities: { desktop: true, playwright: true, cli: true, http: true },
-        cli: { allowedCommands: [], allowedWorkingDirs: [] },
-        web: { allowedDomains: [], headless: true },
-      })),
+      }),
       setConfig,
       background: {
         getState: vi.fn(async () => ({
@@ -156,256 +78,118 @@ describe("Platform pages", () => {
           mode: "embedded",
         })),
       },
-      gateway: {
-        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
-        start: vi.fn(async () => ({ status: "running", port: 8788 })),
-        stop: vi.fn(async () => ({ status: "stopped" })),
-      },
-      node: {
-        connect: vi.fn(async () => ({ status: "connected" })),
-        disconnect: vi.fn(async () => ({ status: "disconnected" })),
-      },
-      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
-    } satisfies DesktopApi;
+    });
 
-    const testRoot = renderWithHost(
-      { kind: "desktop", api: desktopApi },
-      React.createElement(NodeConfigurePage, { onReloadPage }),
+    await withDesktopNodeConfigurePage(
+      desktopApi,
+      async ({ container }) => {
+        await flushEffects();
+        await clickButtonAndFlush(container, "Remote");
+
+        const wsUrlInput = getInputByLabel(container, "Gateway WebSocket URL");
+        const tokenInput = getInputByLabel(container, "Token");
+        const fingerprintInput = getInputByLabel(
+          container,
+          "TLS certificate fingerprint (SHA-256, optional)",
+        );
+
+        act(() => {
+          setNativeValue(wsUrlInput, "  wss://edge.example/ws  ");
+          setNativeValue(tokenInput, "  top-secret-token  ");
+          setNativeValue(fingerprintInput, "  AB:CD:EF  ");
+        });
+
+        await clickSwitchAndFlush(container, 0);
+        await clickByTestIdAndFlush(container, "node-configure-save-general");
+
+        expect(setConfig).toHaveBeenCalledTimes(1);
+        expect(setConfig).toHaveBeenCalledWith({
+          permissions: { profile: "balanced", overrides: {} },
+          capabilities: { desktop: true, playwright: true, cli: true, http: true },
+          cli: { allowedCommands: [], allowedWorkingDirs: [] },
+          web: { allowedDomains: [], headless: true },
+          mode: "remote",
+          remote: {
+            wsUrl: "wss://edge.example/ws",
+            tokenRef: "top-secret-token",
+            tlsCertFingerprint256: "AB:CD:EF",
+            tlsAllowSelfSigned: true,
+          },
+        });
+        expect(desktopApi.node.disconnect).toHaveBeenCalledTimes(1);
+        expect(desktopApi.gateway.stop).toHaveBeenCalledTimes(1);
+        expect(onReloadPage).toHaveBeenCalledTimes(1);
+      },
+      { onReloadPage },
     );
-    try {
-      await flushEffects();
-
-      await act(async () => {
-        clickButton(testRoot.container, "Remote");
-        await Promise.resolve();
-      });
-
-      const wsUrlInput = getInputByLabel(testRoot.container, "Gateway WebSocket URL");
-      const tokenInput = getInputByLabel(testRoot.container, "Token");
-      const fingerprintInput = getInputByLabel(
-        testRoot.container,
-        "TLS certificate fingerprint (SHA-256, optional)",
-      );
-
-      act(() => {
-        setNativeValue(wsUrlInput, "  wss://edge.example/ws  ");
-        setNativeValue(tokenInput, "  top-secret-token  ");
-        setNativeValue(fingerprintInput, "  AB:CD:EF  ");
-      });
-
-      await act(async () => {
-        const tlsSwitch = Array.from(
-          testRoot.container.querySelectorAll<HTMLButtonElement>('[role="switch"]'),
-        )[0];
-        expect(tlsSwitch).not.toBeUndefined();
-        tlsSwitch?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await Promise.resolve();
-      });
-
-      await act(async () => {
-        clickByTestId(testRoot.container, "node-configure-save-general");
-        await Promise.resolve();
-      });
-
-      expect(setConfig).toHaveBeenCalledTimes(1);
-      expect(setConfig).toHaveBeenCalledWith({
-        permissions: { profile: "balanced", overrides: {} },
-        capabilities: { desktop: true, playwright: true, cli: true, http: true },
-        cli: { allowedCommands: [], allowedWorkingDirs: [] },
-        web: { allowedDomains: [], headless: true },
-        mode: "remote",
-        remote: {
-          wsUrl: "wss://edge.example/ws",
-          tokenRef: "top-secret-token",
-          tlsCertFingerprint256: "AB:CD:EF",
-          tlsAllowSelfSigned: true,
-        },
-      });
-      expect(desktopApi.node.disconnect).toHaveBeenCalledTimes(1);
-      expect(desktopApi.gateway.stop).toHaveBeenCalledTimes(1);
-      expect(onReloadPage).toHaveBeenCalledTimes(1);
-    } finally {
-      cleanupTestRoot(testRoot);
-    }
   });
 
   it("clears general saved feedback after browser or shell edits", async () => {
     const setConfig = vi.fn(async () => {});
-    const desktopApi = {
-      getConfig: vi.fn(async () => ({
-        mode: "embedded",
-        embedded: { port: 8788 },
-        permissions: { profile: "balanced", overrides: {} },
-        capabilities: { desktop: true, playwright: true, cli: true, http: true },
-        cli: { allowedCommands: [], allowedWorkingDirs: [] },
-        web: { allowedDomains: [], headless: true },
-      })),
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
       setConfig,
-      gateway: {
-        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
-        start: vi.fn(async () => ({ status: "running", port: 8788 })),
-        stop: vi.fn(async () => ({ status: "stopped" })),
-      },
-      node: {
-        connect: vi.fn(async () => ({ status: "connected" })),
-        disconnect: vi.fn(async () => ({ status: "disconnected" })),
-      },
-      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
-    } satisfies DesktopApi;
+    });
 
-    const testRoot = renderWithHost(
-      { kind: "desktop", api: desktopApi },
-      React.createElement(NodeConfigurePage),
-    );
-    try {
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
       await flushEffects();
+      await clickLabelAndFlush(container, "Safe");
+      await clickByTestIdAndFlush(container, "node-configure-save-general");
 
-      const safeLabel = Array.from(testRoot.container.querySelectorAll("label")).find((el) =>
-        el.textContent?.includes("Safe"),
-      );
-      expect(safeLabel).not.toBeUndefined();
-      act(() => {
-        safeLabel?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
-      await act(async () => {
-        clickByTestId(testRoot.container, "node-configure-save-general");
-        await Promise.resolve();
-      });
-
-      const generalSaveButton = testRoot.container.querySelector<HTMLButtonElement>(
+      const generalSaveButton = container.querySelector<HTMLButtonElement>(
         '[data-testid="node-configure-save-general"]',
       );
       expect(generalSaveButton?.textContent).toContain("Saved!");
 
-      await act(async () => {
-        clickTab(testRoot.container, "Shell");
-        await Promise.resolve();
-      });
-
-      const commandsTextarea = getTextareaByLabel(testRoot.container, "Allowed commands");
+      await clickTabAndFlush(container, "Shell");
+      const commandsTextarea = getTextareaByLabel(container, "Allowed commands");
       act(() => {
         setNativeValue(commandsTextarea, "echo hello");
       });
 
-      await act(async () => {
-        clickTab(testRoot.container, "General");
-        await Promise.resolve();
-      });
-
+      await clickTabAndFlush(container, "General");
       expect(
-        testRoot.container.querySelector<HTMLButtonElement>(
-          '[data-testid="node-configure-save-general"]',
-        )?.textContent,
+        container.querySelector<HTMLButtonElement>('[data-testid="node-configure-save-general"]')
+          ?.textContent,
       ).toBe("Save General Settings");
-    } finally {
-      cleanupTestRoot(testRoot);
-    }
+    });
   });
 
   it("switches the displayed profile to custom after manual capability changes", async () => {
-    const desktopApi = {
-      getConfig: vi.fn(async () => ({
-        permissions: { profile: "balanced", overrides: {} },
-        capabilities: { desktop: true, playwright: true, cli: true, http: true },
-        cli: { allowedCommands: [], allowedWorkingDirs: [] },
-        web: { allowedDomains: [], headless: true },
-      })),
-      setConfig: vi.fn(async () => {}),
-      gateway: {
-        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
-        start: vi.fn(async () => ({ status: "running", port: 8788 })),
-        stop: vi.fn(async () => ({ status: "stopped" })),
-      },
-      node: {
-        connect: vi.fn(async () => ({ status: "connected" })),
-        disconnect: vi.fn(async () => ({ status: "disconnected" })),
-      },
-      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
-    } satisfies DesktopApi;
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
+    });
 
-    const testRoot = renderWithHost(
-      { kind: "desktop", api: desktopApi },
-      React.createElement(NodeConfigurePage),
-    );
-    try {
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
       await flushEffects();
+      await clickLabelAndFlush(container, "Safe");
+      await clickTabAndFlush(container, "Browser");
+      await clickByTestIdAndFlush(container, "node-capability-browser");
+      await clickTabAndFlush(container, "General");
 
-      const safeLabel = Array.from(testRoot.container.querySelectorAll("label")).find((el) =>
-        el.textContent?.includes("Safe"),
-      );
-      expect(safeLabel).not.toBeUndefined();
-      act(() => {
-        safeLabel?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
-      await act(async () => {
-        clickTab(testRoot.container, "Browser");
-        await Promise.resolve();
-      });
-
-      await act(async () => {
-        clickByTestId(testRoot.container, "node-capability-browser");
-        await Promise.resolve();
-      });
-
-      await act(async () => {
-        clickTab(testRoot.container, "General");
-        await Promise.resolve();
-      });
-
-      const customRadio = testRoot.container.querySelector<HTMLElement>("#node-profile-custom");
+      const customRadio = container.querySelector<HTMLElement>("#node-profile-custom");
       expect(customRadio?.getAttribute("data-state")).toBe("checked");
-    } finally {
-      cleanupTestRoot(testRoot);
-    }
+    });
   });
 
   it("preserves trailing newlines while editing allowlists and trims them on save", async () => {
     const setConfig = vi.fn(async () => {});
-    const desktopApi = {
-      getConfig: vi.fn(async () => ({
-        permissions: { profile: "balanced", overrides: {} },
-        capabilities: { desktop: true, playwright: true, cli: true, http: true },
-        cli: { allowedCommands: [], allowedWorkingDirs: [] },
-        web: { allowedDomains: [], headless: true },
-      })),
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
       setConfig,
-      gateway: {
-        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
-        start: vi.fn(async () => ({ status: "running", port: 8788 })),
-        stop: vi.fn(async () => ({ status: "stopped" })),
-      },
-      node: {
-        connect: vi.fn(async () => ({ status: "connected" })),
-        disconnect: vi.fn(async () => ({ status: "disconnected" })),
-      },
-      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
-    } satisfies DesktopApi;
+    });
 
-    const testRoot = renderWithHost(
-      { kind: "desktop", api: desktopApi },
-      React.createElement(NodeConfigurePage),
-    );
-    try {
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
       await flushEffects();
+      await clickTabAndFlush(container, "Shell");
 
-      await act(async () => {
-        clickTab(testRoot.container, "Shell");
-        await Promise.resolve();
-      });
-
-      const commandsTextarea = getTextareaByLabel(testRoot.container, "Allowed commands");
+      const commandsTextarea = getTextareaByLabel(container, "Allowed commands");
       act(() => {
         setNativeValue(commandsTextarea, "git status\n");
       });
 
       expect(commandsTextarea.value).toBe("git status\n");
-
-      await act(async () => {
-        clickByTestId(testRoot.container, "node-configure-save-security");
-        await Promise.resolve();
-      });
+      await clickByTestIdAndFlush(container, "node-configure-save-security");
 
       expect(setConfig).toHaveBeenCalledTimes(1);
       expect(setConfig).toHaveBeenCalledWith({
@@ -417,180 +201,96 @@ describe("Platform pages", () => {
         },
         web: { allowedDomains: [], headless: true },
       });
-    } finally {
-      cleanupTestRoot(testRoot);
-    }
+    });
   });
 
   it("preserves the restrictive fallback when capabilities are missing from config", async () => {
-    const desktopApi = {
-      getConfig: vi.fn(async () => ({
+    const desktopApi = createDesktopApi({
+      config: {
         permissions: { profile: "balanced", overrides: {} },
-      })),
-      setConfig: vi.fn(async () => {}),
-      gateway: {
-        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
-        start: vi.fn(async () => ({ status: "running", port: 8788 })),
-        stop: vi.fn(async () => ({ status: "stopped" })),
       },
-      node: {
-        connect: vi.fn(async () => ({ status: "connected" })),
-        disconnect: vi.fn(async () => ({ status: "disconnected" })),
-      },
-      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
-    } satisfies DesktopApi;
+    });
 
-    const testRoot = renderWithHost(
-      { kind: "desktop", api: desktopApi },
-      React.createElement(NodeConfigurePage),
-    );
-    try {
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
       await flushEffects();
 
-      const balancedRadio = testRoot.container.querySelector<HTMLElement>("#node-profile-balanced");
-      const customRadio = testRoot.container.querySelector<HTMLElement>("#node-profile-custom");
-      const desktopTab = Array.from(
-        testRoot.container.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
-      ).find((element) => element.textContent?.includes("Desktop"));
-      const browserTab = Array.from(
-        testRoot.container.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
-      ).find((element) => element.textContent?.includes("Browser"));
-      const shellTab = Array.from(
-        testRoot.container.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
-      ).find((element) => element.textContent?.includes("Shell"));
-      const webTab = Array.from(
-        testRoot.container.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
-      ).find((element) => element.textContent?.includes("Web"));
+      const balancedRadio = container.querySelector<HTMLElement>("#node-profile-balanced");
+      const customRadio = container.querySelector<HTMLElement>("#node-profile-custom");
 
       expect(balancedRadio?.getAttribute("data-state")).toBe("unchecked");
       expect(customRadio?.getAttribute("data-state")).toBe("checked");
 
-      await act(async () => {
-        desktopTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-        await Promise.resolve();
-      });
+      await clickTabAndFlush(container, "Desktop");
       expect(
-        testRoot.container
+        container
           .querySelector<HTMLButtonElement>('[data-testid="node-capability-desktop"]')
           ?.getAttribute("aria-checked"),
       ).toBe("true");
 
-      await act(async () => {
-        browserTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-        await Promise.resolve();
-      });
+      await clickTabAndFlush(container, "Browser");
       expect(
-        testRoot.container
+        container
           .querySelector<HTMLButtonElement>('[data-testid="node-capability-browser"]')
           ?.getAttribute("aria-checked"),
       ).toBe("false");
 
-      await act(async () => {
-        shellTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-        await Promise.resolve();
-      });
+      await clickTabAndFlush(container, "Shell");
       expect(
-        testRoot.container
+        container
           .querySelector<HTMLButtonElement>('[data-testid="node-capability-shell"]')
           ?.getAttribute("aria-checked"),
       ).toBe("false");
 
-      await act(async () => {
-        webTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-        await Promise.resolve();
-      });
+      await clickTabAndFlush(container, "Web");
       expect(
-        testRoot.container
+        container
           .querySelector<HTMLButtonElement>('[data-testid="node-capability-web"]')
           ?.getAttribute("aria-checked"),
       ).toBe("false");
-    } finally {
-      cleanupTestRoot(testRoot);
-    }
+    });
   });
 
   it("clears general and security saved indicators independently", async () => {
     vi.useFakeTimers();
 
-    const desktopApi = {
-      getConfig: vi.fn(async () => ({
-        mode: "embedded",
-        embedded: { port: 8788 },
-        permissions: { profile: "balanced", overrides: {} },
-        capabilities: { desktop: true, playwright: true, cli: true, http: true },
-        cli: { allowedCommands: [], allowedWorkingDirs: [] },
-        web: { allowedDomains: [], headless: true },
-      })),
-      setConfig: vi.fn(async () => {}),
-      gateway: {
-        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
-        start: vi.fn(async () => ({ status: "running", port: 8788 })),
-        stop: vi.fn(async () => ({ status: "stopped" })),
-      },
-      node: {
-        connect: vi.fn(async () => ({ status: "connected" })),
-        disconnect: vi.fn(async () => ({ status: "disconnected" })),
-      },
-      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
-    } satisfies DesktopApi;
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
+    });
 
-    const testRoot = renderWithHost(
-      { kind: "desktop", api: desktopApi },
-      React.createElement(NodeConfigurePage),
-    );
     try {
-      await flushEffects();
+      await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
+        await flushEffects();
 
-      const portInput = getInputByLabel(testRoot.container, "Embedded gateway port");
-      act(() => {
-        setNativeValue(portInput, "8789");
+        const portInput = getInputByLabel(container, "Embedded gateway port");
+        act(() => {
+          setNativeValue(portInput, "8789");
+        });
+
+        await clickByTestIdAndFlush(container, "node-configure-save-general");
+        expect(container.textContent).toContain("Saved!");
+
+        await clickTabAndFlush(container, "Browser");
+        await clickByTestIdAndFlush(container, "node-capability-browser");
+        await clickByTestIdAndFlush(container, "node-configure-save-security");
+        expect(container.textContent).toContain("Saved!");
+
+        await act(async () => {
+          vi.advanceTimersByTime(2_001);
+          await Promise.resolve();
+        });
+
+        const securitySaveButton = container.querySelector<HTMLButtonElement>(
+          '[data-testid="node-configure-save-security"]',
+        );
+        expect(securitySaveButton?.textContent).toContain("Save Node Settings");
+
+        await clickTabAndFlush(container, "General");
+        const generalSaveButton = container.querySelector<HTMLButtonElement>(
+          '[data-testid="node-configure-save-general"]',
+        );
+        expect(generalSaveButton?.textContent).toContain("Save General Settings");
       });
-
-      await act(async () => {
-        clickByTestId(testRoot.container, "node-configure-save-general");
-        await Promise.resolve();
-      });
-
-      expect(testRoot.container.textContent).toContain("Saved!");
-
-      await act(async () => {
-        clickTab(testRoot.container, "Browser");
-        await Promise.resolve();
-      });
-
-      await act(async () => {
-        clickByTestId(testRoot.container, "node-capability-browser");
-        await Promise.resolve();
-      });
-
-      await act(async () => {
-        clickByTestId(testRoot.container, "node-configure-save-security");
-        await Promise.resolve();
-      });
-
-      expect(testRoot.container.textContent).toContain("Saved!");
-
-      await act(async () => {
-        vi.advanceTimersByTime(2_001);
-        await Promise.resolve();
-      });
-
-      const securitySaveButton = testRoot.container.querySelector<HTMLButtonElement>(
-        '[data-testid="node-configure-save-security"]',
-      );
-      expect(securitySaveButton?.textContent).toContain("Save Node Settings");
-
-      await act(async () => {
-        clickTab(testRoot.container, "General");
-        await Promise.resolve();
-      });
-
-      const generalSaveButton = testRoot.container.querySelector<HTMLButtonElement>(
-        '[data-testid="node-configure-save-general"]',
-      );
-      expect(generalSaveButton?.textContent).toContain("Save General Settings");
     } finally {
-      cleanupTestRoot(testRoot);
       vi.useRealTimers();
     }
   });
@@ -603,39 +303,18 @@ describe("Platform pages", () => {
           resolveSetConfig = resolve;
         }),
     );
-
-    const desktopApi = {
-      getConfig: vi.fn(async () => ({
-        mode: "embedded",
-        embedded: { port: 8788 },
-        permissions: { profile: "balanced", overrides: {} },
-        capabilities: { desktop: true, playwright: true, cli: true, http: true },
-        cli: { allowedCommands: [], allowedWorkingDirs: [] },
-        web: { allowedDomains: [], headless: true },
-      })),
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
       setConfig,
-      gateway: {
-        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
-        start: vi.fn(async () => ({ status: "running", port: 8788 })),
-        stop: vi.fn(async () => ({ status: "stopped" })),
-      },
-      node: {
-        connect: vi.fn(async () => ({ status: "connected" })),
-        disconnect: vi.fn(async () => ({ status: "disconnected" })),
-      },
-      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
-    } satisfies DesktopApi;
+    });
 
-    const testRoot = renderWithHost(
-      { kind: "desktop", api: desktopApi },
-      React.createElement(NodeConfigurePage),
-    );
-    try {
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
       await flushEffects();
 
-      const portInput = getInputByLabel(testRoot.container, "Embedded gateway port");
-      const safeRadio = testRoot.container.querySelector<HTMLElement>("#node-profile-safe");
+      const portInput = getInputByLabel(container, "Embedded gateway port");
+      const safeRadio = container.querySelector<HTMLElement>("#node-profile-safe");
       expect(safeRadio).not.toBeNull();
+
       act(() => {
         setNativeValue(portInput, "8789");
       });
@@ -645,87 +324,43 @@ describe("Platform pages", () => {
         await Promise.resolve();
       });
 
-      await act(async () => {
-        clickByTestId(testRoot.container, "node-configure-save-general");
-        await Promise.resolve();
-      });
-
+      await clickByTestIdAndFlush(container, "node-configure-save-general");
       expect(setConfig).toHaveBeenCalledTimes(1);
 
-      await act(async () => {
-        clickTab(testRoot.container, "Browser");
-        await Promise.resolve();
-      });
-
-      const securitySaveButton = testRoot.container.querySelector<HTMLButtonElement>(
+      await clickTabAndFlush(container, "Browser");
+      const securitySaveButton = container.querySelector<HTMLButtonElement>(
         '[data-testid="node-configure-save-security"]',
       );
       expect(securitySaveButton?.disabled).toBe(true);
 
-      await act(async () => {
-        clickByTestId(testRoot.container, "node-capability-browser");
-        await Promise.resolve();
-      });
-
-      await act(async () => {
-        clickByTestId(testRoot.container, "node-configure-save-security");
-        await Promise.resolve();
-      });
-
+      await clickByTestIdAndFlush(container, "node-capability-browser");
+      await clickByTestIdAndFlush(container, "node-configure-save-security");
       expect(setConfig).toHaveBeenCalledTimes(1);
 
       await act(async () => {
         resolveSetConfig?.();
         await Promise.resolve();
       });
-    } finally {
-      cleanupTestRoot(testRoot);
-    }
+    });
   });
 
   it("saves shell allowlist changes through node settings", async () => {
     const setConfig = vi.fn(async () => {});
-    const desktopApi = {
-      getConfig: vi.fn(async () => ({
-        permissions: { profile: "balanced", overrides: {} },
-        capabilities: { desktop: true, playwright: true, cli: true, http: true },
-        cli: { allowedCommands: [], allowedWorkingDirs: [] },
-        web: { allowedDomains: [], headless: true },
-      })),
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
       setConfig,
-      gateway: {
-        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
-        start: vi.fn(async () => ({ status: "running", port: 8788 })),
-        stop: vi.fn(async () => ({ status: "stopped" })),
-      },
-      node: {
-        connect: vi.fn(async () => ({ status: "connected" })),
-        disconnect: vi.fn(async () => ({ status: "disconnected" })),
-      },
-      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
-    } satisfies DesktopApi;
+    });
 
-    const testRoot = renderWithHost(
-      { kind: "desktop", api: desktopApi },
-      React.createElement(NodeConfigurePage),
-    );
-    try {
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
       await flushEffects();
+      await clickTabAndFlush(container, "Shell");
 
-      await act(async () => {
-        clickTab(testRoot.container, "Shell");
-        await Promise.resolve();
-      });
-
-      const commandsTextarea = getTextareaByLabel(testRoot.container, "Allowed commands");
+      const commandsTextarea = getTextareaByLabel(container, "Allowed commands");
       act(() => {
         setNativeValue(commandsTextarea, "git status\nnode --version");
       });
 
-      await act(async () => {
-        clickByTestId(testRoot.container, "node-configure-save-security");
-        await Promise.resolve();
-      });
+      await clickByTestIdAndFlush(container, "node-configure-save-security");
 
       expect(setConfig).toHaveBeenCalledTimes(1);
       expect(setConfig).toHaveBeenCalledWith({
@@ -737,115 +372,54 @@ describe("Platform pages", () => {
         },
         web: { allowedDomains: [], headless: true },
       });
-    } finally {
-      cleanupTestRoot(testRoot);
-    }
+    });
   });
 
   it("disables the security save button after a successful save", async () => {
-    const desktopApi = {
-      getConfig: vi.fn(async () => ({
-        permissions: { profile: "balanced", overrides: {} },
-        capabilities: { desktop: true, playwright: true, cli: true, http: true },
-        cli: { allowedCommands: [], allowedWorkingDirs: [] },
-        web: { allowedDomains: [], headless: true },
-      })),
-      setConfig: vi.fn(async () => {}),
-      gateway: {
-        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
-        start: vi.fn(async () => ({ status: "running", port: 8788 })),
-        stop: vi.fn(async () => ({ status: "stopped" })),
-      },
-      node: {
-        connect: vi.fn(async () => ({ status: "connected" })),
-        disconnect: vi.fn(async () => ({ status: "disconnected" })),
-      },
-      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
-    } satisfies DesktopApi;
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
+    });
 
-    const testRoot = renderWithHost(
-      { kind: "desktop", api: desktopApi },
-      React.createElement(NodeConfigurePage),
-    );
-    try {
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
       await flushEffects();
+      await clickTabAndFlush(container, "Shell");
 
-      await act(async () => {
-        clickTab(testRoot.container, "Shell");
-        await Promise.resolve();
-      });
-
-      const commandsTextarea = getTextareaByLabel(testRoot.container, "Allowed commands");
+      const commandsTextarea = getTextareaByLabel(container, "Allowed commands");
       act(() => {
         setNativeValue(commandsTextarea, "git status");
       });
 
-      const saveButtonBeforeSave = testRoot.container.querySelector<HTMLButtonElement>(
+      const saveButtonBeforeSave = container.querySelector<HTMLButtonElement>(
         '[data-testid="node-configure-save-security"]',
       );
       expect(saveButtonBeforeSave?.disabled).toBe(false);
 
-      await act(async () => {
-        clickByTestId(testRoot.container, "node-configure-save-security");
-        await Promise.resolve();
-      });
+      await clickByTestIdAndFlush(container, "node-configure-save-security");
 
-      const saveButtonAfterSave = testRoot.container.querySelector<HTMLButtonElement>(
+      const saveButtonAfterSave = container.querySelector<HTMLButtonElement>(
         '[data-testid="node-configure-save-security"]',
       );
       expect(saveButtonAfterSave?.textContent).toContain("Saved!");
       expect(saveButtonAfterSave?.disabled).toBe(true);
-    } finally {
-      cleanupTestRoot(testRoot);
-    }
+    });
   });
 
   it("keeps mac permission request errors visible", async () => {
-    const desktopApi = {
-      getConfig: vi.fn(async () => ({
-        permissions: { profile: "balanced", overrides: {} },
-        capabilities: { desktop: true, playwright: true, cli: true, http: true },
-        cli: { allowedCommands: [], allowedWorkingDirs: [] },
-        web: { allowedDomains: [], headless: true },
-      })),
-      setConfig: vi.fn(async () => {}),
-      gateway: {
-        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
-        start: vi.fn(async () => ({ status: "running", port: 8788 })),
-        stop: vi.fn(async () => ({ status: "stopped" })),
-      },
-      node: {
-        connect: vi.fn(async () => ({ status: "connected" })),
-        disconnect: vi.fn(async () => ({ status: "disconnected" })),
-      },
-      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
       checkMacPermissions: vi.fn(async () => null),
       requestMacPermission: vi.fn(async () => {
         throw new Error("Permission request failed.");
       }),
-    } satisfies DesktopApi;
+    });
 
-    const testRoot = renderWithHost(
-      { kind: "desktop", api: desktopApi },
-      React.createElement(NodeConfigurePage),
-    );
-    try {
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
       await flushEffects();
-
-      await act(async () => {
-        clickTab(testRoot.container, "Desktop");
-        await Promise.resolve();
-      });
-
-      await act(async () => {
-        clickByTestId(testRoot.container, "node-request-accessibility");
-        await Promise.resolve();
-      });
+      await clickTabAndFlush(container, "Desktop");
+      await clickByTestIdAndFlush(container, "node-request-accessibility");
 
       expect(desktopApi.requestMacPermission).toHaveBeenCalledTimes(1);
-      expect(testRoot.container.textContent).toContain("Permission request failed.");
-    } finally {
-      cleanupTestRoot(testRoot);
-    }
+      expect(container.textContent).toContain("Permission request failed.");
+    });
   });
 });

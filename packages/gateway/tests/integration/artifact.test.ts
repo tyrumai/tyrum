@@ -2,77 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createApp } from "../../src/app.js";
 import { S3ArtifactStore } from "../../src/modules/artifact/store.js";
-import {
-  DEFAULT_AGENT_ID,
-  DEFAULT_TENANT_ID,
-  DEFAULT_WORKSPACE_ID,
-} from "../../src/modules/identity/scope.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { createTestContainer } from "./helpers.js";
 import {
-  createTestAuthAndSecrets,
-  createTestContainer,
-  decorateAppWithDefaultAuth,
-} from "./helpers.js";
-
-type SqlRunner = {
-  run(sql: string, params?: unknown[]): Promise<unknown>;
-};
-
-type ExecutionScopeIds = {
-  jobId: string;
-  runId: string;
-  stepId: string;
-  attemptId: string;
-};
-
-async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds): Promise<void> {
-  await db.run(
-    `INSERT INTO execution_jobs (
-       tenant_id,
-       job_id,
-       agent_id,
-       workspace_id,
-       key,
-       lane,
-       status,
-       trigger_json,
-       input_json,
-       latest_run_id
-     )
-     VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
-    [
-      DEFAULT_TENANT_ID,
-      ids.jobId,
-      DEFAULT_AGENT_ID,
-      DEFAULT_WORKSPACE_ID,
-      "agent:agent-1:thread:thread-1",
-      "main",
-      "{}",
-      "{}",
-      ids.runId,
-    ],
-  );
-
-  await db.run(
-    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, ?, 'running', 1)`,
-    [DEFAULT_TENANT_ID, ids.runId, ids.jobId, "agent:agent-1:thread:thread-1", "main"],
-  );
-
-  await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
-     VALUES (?, ?, ?, 0, 'running', ?)`,
-    [DEFAULT_TENANT_ID, ids.stepId, ids.runId, "{}"],
-  );
-
-  await db.run(
-    `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, artifacts_json)
-     VALUES (?, ?, ?, 1, 'running', '[]')`,
-    [DEFAULT_TENANT_ID, ids.attemptId, ids.stepId],
-  );
-}
+  type ExecutionScopeIds,
+  insertExecutionArtifactRecord,
+  linkArtifactToExecution,
+  putTextArtifact,
+  seedExecutionScope,
+  setupArtifactRouteTest,
+} from "./artifact.test-support.js";
 
 describe("artifact routes", () => {
   let originalTyrumHome: string | undefined;
@@ -97,30 +38,9 @@ describe("artifact routes", () => {
     }
   });
 
-  async function setup(container?: GatewayContainer) {
-    const resolvedContainer = container ?? (await createTestContainer({ tyrumHome: homeDir }));
-    const { authTokens, tenantAdminToken, secretProviderForTenant } =
-      await createTestAuthAndSecrets(resolvedContainer, { tyrumHome: homeDir });
-    const app = createApp(resolvedContainer, { authTokens, secretProviderForTenant });
-    const { requestUnauthenticated } = decorateAppWithDefaultAuth(app, tenantAdminToken);
-    return {
-      app,
-      container: resolvedContainer,
-      tenantAdminToken,
-      requestUnauthenticated,
-    };
-  }
-
   it("GET /artifacts/:id rejects bare artifact_id-only fetch paths", async () => {
-    const { app, container } = await setup();
-
-    const ref = await container.artifactStore.put({
-      kind: "log",
-      mime_type: "text/plain",
-      body: Buffer.from("hello", "utf8"),
-      labels: ["log"],
-      metadata: { test: true },
-    });
+    const { app, container } = await setupArtifactRouteTest(homeDir);
+    const ref = await putTextArtifact(container);
 
     const metaRes = await app.request(`/artifacts/${ref.artifact_id}/metadata`);
     expect(metaRes.status).toBe(400);
@@ -132,7 +52,7 @@ describe("artifact routes", () => {
   });
 
   it("GET /runs/:runId/artifacts/:id streams bytes for stored artifacts with metadata", async () => {
-    const { app, container } = await setup();
+    const { app, container } = await setupArtifactRouteTest(homeDir);
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-1",
       runId: "run-artifacts-1",
@@ -140,56 +60,13 @@ describe("artifact routes", () => {
       attemptId: "attempt-artifacts-1",
     };
     await seedExecutionScope(container.db, scope);
+    const ref = await putTextArtifact(container);
 
-    const ref = await container.artifactStore.put({
-      kind: "log",
-      mime_type: "text/plain",
-      body: Buffer.from("hello", "utf8"),
-      labels: ["log"],
-      metadata: { test: true },
+    await linkArtifactToExecution(container.db, ref, {
+      runId: scope.runId,
+      stepId: scope.stepId,
+      attemptId: scope.attemptId,
     });
-
-    await container.db.run(
-      `INSERT INTO execution_artifacts (
-         tenant_id,
-         artifact_id,
-         workspace_id,
-         agent_id,
-         run_id,
-         step_id,
-         attempt_id,
-         kind,
-         uri,
-         created_at,
-         mime_type,
-         size_bytes,
-         sha256,
-         labels_json,
-         metadata_json,
-         sensitivity,
-         policy_snapshot_id
-       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        ref.artifact_id,
-        DEFAULT_WORKSPACE_ID,
-        DEFAULT_AGENT_ID,
-        scope.runId,
-        scope.stepId,
-        scope.attemptId,
-        ref.kind,
-        ref.uri,
-        ref.created_at,
-        ref.mime_type ?? null,
-        ref.size_bytes ?? null,
-        ref.sha256 ?? null,
-        JSON.stringify(ref.labels ?? []),
-        JSON.stringify(ref.metadata ?? {}),
-        "normal",
-        null,
-      ],
-    );
 
     const metaRes = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}/metadata`);
     expect(metaRes.status).toBe(200);
@@ -206,7 +83,8 @@ describe("artifact routes", () => {
   });
 
   it("GET /runs/:runId/artifacts/:id emits artifact.fetched with requester identity and policy snapshot refs", async () => {
-    const { container, requestUnauthenticated, tenantAdminToken } = await setup();
+    const { container, requestUnauthenticated, tenantAdminToken } =
+      await setupArtifactRouteTest(homeDir);
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-request-id",
       runId: "run-artifacts-request-id",
@@ -214,61 +92,19 @@ describe("artifact routes", () => {
       attemptId: "attempt-artifacts-request-id",
     };
     await seedExecutionScope(container.db, scope);
-
-    const ref = await container.artifactStore.put({
-      kind: "log",
-      mime_type: "text/plain",
-      body: Buffer.from("hello", "utf8"),
-      labels: ["log"],
-      metadata: { test: true },
-    });
+    const ref = await putTextArtifact(container);
 
     await container.db.run(
       `INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json)
        VALUES (?, ?, ?, ?)`,
       [DEFAULT_TENANT_ID, "ps-artifacts-request-id", "sha256-artifacts-request-id", "{}"],
     );
-    await container.db.run(
-      `INSERT INTO execution_artifacts (
-         tenant_id,
-         artifact_id,
-         workspace_id,
-         agent_id,
-         run_id,
-         step_id,
-         attempt_id,
-         kind,
-         uri,
-         created_at,
-         mime_type,
-         size_bytes,
-         sha256,
-         labels_json,
-         metadata_json,
-         sensitivity,
-         policy_snapshot_id
-       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        ref.artifact_id,
-        DEFAULT_WORKSPACE_ID,
-        DEFAULT_AGENT_ID,
-        scope.runId,
-        scope.stepId,
-        scope.attemptId,
-        ref.kind,
-        ref.uri,
-        ref.created_at,
-        ref.mime_type ?? null,
-        ref.size_bytes ?? null,
-        ref.sha256 ?? null,
-        JSON.stringify(ref.labels ?? []),
-        JSON.stringify(ref.metadata ?? {}),
-        "normal",
-        "ps-artifacts-request-id",
-      ],
-    );
+    await linkArtifactToExecution(container.db, ref, {
+      runId: scope.runId,
+      stepId: scope.stepId,
+      attemptId: scope.attemptId,
+      policySnapshotId: "ps-artifacts-request-id",
+    });
 
     const requestId = "req-artifacts-123";
     const res = await requestUnauthenticated(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`, {
@@ -315,56 +151,13 @@ describe("artifact routes", () => {
       attemptId: "attempt-artifacts-signed-url",
     };
     await seedExecutionScope(container.db, scope);
+    const ref = await putTextArtifact(container);
 
-    const ref = await container.artifactStore.put({
-      kind: "log",
-      mime_type: "text/plain",
-      body: Buffer.from("hello", "utf8"),
-      labels: ["log"],
-      metadata: { test: true },
+    await linkArtifactToExecution(container.db, ref, {
+      runId: scope.runId,
+      stepId: scope.stepId,
+      attemptId: scope.attemptId,
     });
-
-    await container.db.run(
-      `INSERT INTO execution_artifacts (
-         tenant_id,
-         artifact_id,
-         workspace_id,
-         agent_id,
-         run_id,
-         step_id,
-         attempt_id,
-         kind,
-         uri,
-         created_at,
-         mime_type,
-         size_bytes,
-         sha256,
-         labels_json,
-         metadata_json,
-         sensitivity,
-         policy_snapshot_id
-       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        ref.artifact_id,
-        DEFAULT_WORKSPACE_ID,
-        DEFAULT_AGENT_ID,
-        scope.runId,
-        scope.stepId,
-        scope.attemptId,
-        ref.kind,
-        ref.uri,
-        ref.created_at,
-        ref.mime_type ?? null,
-        ref.size_bytes ?? null,
-        ref.sha256 ?? null,
-        JSON.stringify(ref.labels ?? []),
-        JSON.stringify(ref.metadata ?? {}),
-        "normal",
-        null,
-      ],
-    );
 
     const signedUrl = `https://objects.example.test/${ref.artifact_id}?sig=test`;
     const put = container.artifactStore.put.bind(container.artifactStore);
@@ -376,7 +169,7 @@ describe("artifact routes", () => {
       getSignedUrl: vi.fn(async () => signedUrl),
     };
 
-    const { app } = await setup(container);
+    const { app } = await setupArtifactRouteTest(homeDir, container);
     const res = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(signedUrl);
@@ -442,51 +235,24 @@ describe("artifact routes", () => {
       async () => signedUrl,
     );
 
-    await container.db.run(
-      `INSERT INTO execution_artifacts (
-         tenant_id,
-         artifact_id,
-         workspace_id,
-         agent_id,
-         run_id,
-         step_id,
-         attempt_id,
-         kind,
-         uri,
-         created_at,
-         mime_type,
-         size_bytes,
-         sha256,
-         labels_json,
-         metadata_json,
-         sensitivity,
-         policy_snapshot_id
-       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        artifactId,
-        DEFAULT_WORKSPACE_ID,
-        DEFAULT_AGENT_ID,
-        scope.runId,
-        scope.stepId,
-        scope.attemptId,
-        "log",
-        `artifact://${artifactId}`,
-        "2026-02-19T12:00:00.000Z",
-        "text/plain",
-        5,
-        "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
-        "[]",
-        "{}",
-        "normal",
-        null,
-      ],
-    );
+    await insertExecutionArtifactRecord(container.db, {
+      artifactId,
+      kind: "log",
+      uri: `artifact://${artifactId}`,
+      createdAt: "2026-02-19T12:00:00.000Z",
+      mimeType: "text/plain",
+      sizeBytes: 5,
+      sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+      labels: [],
+      metadata: {},
+      runId: scope.runId,
+      stepId: scope.stepId,
+      attemptId: scope.attemptId,
+    });
 
     container.artifactStore = store;
 
-    const { app } = await setup(container);
+    const { app } = await setupArtifactRouteTest(homeDir, container);
     const res = await app.request(`/runs/${scope.runId}/artifacts/${artifactId}`);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(signedUrl);
@@ -503,56 +269,14 @@ describe("artifact routes", () => {
       attemptId: "attempt-artifacts-signed-url-invalid-meta",
     };
     await seedExecutionScope(container.db, scope);
+    const ref = await putTextArtifact(container);
 
-    const ref = await container.artifactStore.put({
-      kind: "log",
-      mime_type: "text/plain",
-      body: Buffer.from("hello", "utf8"),
-      labels: ["log"],
-      metadata: { test: true },
+    await linkArtifactToExecution(container.db, ref, {
+      runId: scope.runId,
+      stepId: scope.stepId,
+      attemptId: scope.attemptId,
+      uri: "not-a-valid-artifact-uri",
     });
-
-    await container.db.run(
-      `INSERT INTO execution_artifacts (
-         tenant_id,
-         artifact_id,
-         workspace_id,
-         agent_id,
-         run_id,
-         step_id,
-         attempt_id,
-         kind,
-         uri,
-         created_at,
-         mime_type,
-         size_bytes,
-         sha256,
-         labels_json,
-         metadata_json,
-         sensitivity,
-         policy_snapshot_id
-       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        ref.artifact_id,
-        DEFAULT_WORKSPACE_ID,
-        DEFAULT_AGENT_ID,
-        scope.runId,
-        scope.stepId,
-        scope.attemptId,
-        ref.kind,
-        "not-a-valid-artifact-uri",
-        ref.created_at,
-        ref.mime_type ?? null,
-        ref.size_bytes ?? null,
-        ref.sha256 ?? null,
-        JSON.stringify(ref.labels ?? []),
-        JSON.stringify(ref.metadata ?? {}),
-        "normal",
-        null,
-      ],
-    );
 
     const signedUrl = `https://objects.example.test/${ref.artifact_id}?sig=test`;
     const put = container.artifactStore.put.bind(container.artifactStore);
@@ -564,7 +288,7 @@ describe("artifact routes", () => {
       getSignedUrl: vi.fn(async () => signedUrl),
     };
 
-    const { app } = await setup(container);
+    const { app } = await setupArtifactRouteTest(homeDir, container);
     const res = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(signedUrl);
@@ -574,57 +298,15 @@ describe("artifact routes", () => {
   });
 
   it("GET /runs/:runId/artifacts/:id denies unlinked artifacts that lack durable execution scope", async () => {
-    const { container, app } = await setup();
+    const { container, app } = await setupArtifactRouteTest(homeDir);
+    const ref = await putTextArtifact(container);
 
-    const ref = await container.artifactStore.put({
-      kind: "log",
-      mime_type: "text/plain",
-      body: Buffer.from("hello", "utf8"),
-      labels: ["log"],
-      metadata: { test: true },
+    await linkArtifactToExecution(container.db, ref, {
+      agentId: null,
+      runId: null,
+      stepId: null,
+      attemptId: null,
     });
-
-    await container.db.run(
-      `INSERT INTO execution_artifacts (
-         tenant_id,
-         artifact_id,
-         workspace_id,
-         agent_id,
-         run_id,
-         step_id,
-         attempt_id,
-         kind,
-         uri,
-         created_at,
-         mime_type,
-         size_bytes,
-         sha256,
-         labels_json,
-         metadata_json,
-         sensitivity,
-         policy_snapshot_id
-       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        ref.artifact_id,
-        DEFAULT_WORKSPACE_ID,
-        null,
-        null,
-        null,
-        null,
-        ref.kind,
-        ref.uri,
-        ref.created_at,
-        ref.mime_type ?? null,
-        ref.size_bytes ?? null,
-        ref.sha256 ?? null,
-        JSON.stringify(ref.labels ?? []),
-        JSON.stringify(ref.metadata ?? {}),
-        "normal",
-        null,
-      ],
-    );
 
     const metaRes = await app.request(
       `/runs/run-does-not-matter/artifacts/${ref.artifact_id}/metadata`,
@@ -638,7 +320,7 @@ describe("artifact routes", () => {
   });
 
   it("GET /runs/:runId/artifacts/:id denies artifacts with inconsistent execution linkage", async () => {
-    const { container, app } = await setup();
+    const { container, app } = await setupArtifactRouteTest(homeDir);
     const scopeA: ExecutionScopeIds = {
       jobId: "job-artifacts-a",
       runId: "run-artifacts-a",
@@ -654,55 +336,13 @@ describe("artifact routes", () => {
     await seedExecutionScope(container.db, scopeA);
     await seedExecutionScope(container.db, scopeB);
 
-    const ref = await container.artifactStore.put({
-      kind: "log",
-      mime_type: "text/plain",
-      body: Buffer.from("hello", "utf8"),
-      labels: ["log"],
-      metadata: { test: true },
-    });
+    const ref = await putTextArtifact(container);
 
-    await container.db.run(
-      `INSERT INTO execution_artifacts (
-         tenant_id,
-         artifact_id,
-         workspace_id,
-         agent_id,
-         run_id,
-         step_id,
-         attempt_id,
-         kind,
-         uri,
-         created_at,
-         mime_type,
-         size_bytes,
-         sha256,
-         labels_json,
-         metadata_json,
-         sensitivity,
-         policy_snapshot_id
-       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        ref.artifact_id,
-        DEFAULT_WORKSPACE_ID,
-        DEFAULT_AGENT_ID,
-        scopeA.runId,
-        scopeB.stepId,
-        scopeB.attemptId,
-        ref.kind,
-        ref.uri,
-        ref.created_at,
-        ref.mime_type ?? null,
-        ref.size_bytes ?? null,
-        ref.sha256 ?? null,
-        JSON.stringify(ref.labels ?? []),
-        JSON.stringify(ref.metadata ?? {}),
-        "normal",
-        null,
-      ],
-    );
+    await linkArtifactToExecution(container.db, ref, {
+      runId: scopeA.runId,
+      stepId: scopeB.stepId,
+      attemptId: scopeB.attemptId,
+    });
 
     const metaRes = await app.request(
       `/runs/${scopeA.runId}/artifacts/${ref.artifact_id}/metadata`,
@@ -716,7 +356,7 @@ describe("artifact routes", () => {
   });
 
   it("GET /runs/:runId/artifacts/:id denies scope mismatches (runId does not match artifact scope)", async () => {
-    const { container, app } = await setup();
+    const { container, app } = await setupArtifactRouteTest(homeDir);
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-scope",
       runId: "run-artifacts-scope",
@@ -725,55 +365,13 @@ describe("artifact routes", () => {
     };
     await seedExecutionScope(container.db, scope);
 
-    const ref = await container.artifactStore.put({
-      kind: "log",
-      mime_type: "text/plain",
-      body: Buffer.from("hello", "utf8"),
-      labels: ["log"],
-      metadata: { test: true },
-    });
+    const ref = await putTextArtifact(container);
 
-    await container.db.run(
-      `INSERT INTO execution_artifacts (
-         tenant_id,
-         artifact_id,
-         workspace_id,
-         agent_id,
-         run_id,
-         step_id,
-         attempt_id,
-         kind,
-         uri,
-         created_at,
-         mime_type,
-         size_bytes,
-         sha256,
-         labels_json,
-         metadata_json,
-         sensitivity,
-         policy_snapshot_id
-       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        ref.artifact_id,
-        DEFAULT_WORKSPACE_ID,
-        DEFAULT_AGENT_ID,
-        scope.runId,
-        scope.stepId,
-        scope.attemptId,
-        ref.kind,
-        ref.uri,
-        ref.created_at,
-        ref.mime_type ?? null,
-        ref.size_bytes ?? null,
-        ref.sha256 ?? null,
-        JSON.stringify(ref.labels ?? []),
-        JSON.stringify(ref.metadata ?? {}),
-        "normal",
-        null,
-      ],
-    );
+    await linkArtifactToExecution(container.db, ref, {
+      runId: scope.runId,
+      stepId: scope.stepId,
+      attemptId: scope.attemptId,
+    });
 
     const metaRes = await app.request(
       `/runs/run-wrong-scope/artifacts/${ref.artifact_id}/metadata`,

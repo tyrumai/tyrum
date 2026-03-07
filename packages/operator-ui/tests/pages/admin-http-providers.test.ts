@@ -1,336 +1,99 @@
 // @vitest-environment jsdom
 
+import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import React, { act } from "react";
-import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
-import { ElevatedModeProvider } from "../../src/elevated-mode.js";
-import { AdminHttpProvidersPanel } from "../../src/components/pages/admin-http-providers.js";
-import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
+import { setNativeValue } from "../test-utils.js";
+import {
+  cleanupPanel,
+  click,
+  clickAndFlush,
+  createAdminHttpProvidersTestCore,
+  createPreset,
+  createProviderAccount,
+  createProviderGroup,
+  getButton,
+  getByTestId,
+  getLabeledInput,
+  getLabeledSelect,
+  getToggleButton,
+  openAddAccountDialog,
+  openEditAccountDialog,
+  renderAdminHttpProvidersPanel,
+  setSelectValue,
+  setSelectValueWithoutAct,
+} from "./admin-http-providers.test-support.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
-function setSelectValue(select: HTMLSelectElement, value: string): void {
-  act(() => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set as
-      | ((this: HTMLSelectElement, value: string) => void)
-      | undefined;
-    setter?.call(select, value);
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-}
-
-function setSelectValueWithoutAct(select: HTMLSelectElement, value: string): void {
-  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set as
-    | ((this: HTMLSelectElement, value: string) => void)
-    | undefined;
-  setter?.call(select, value);
-  select.dispatchEvent(new Event("change", { bubbles: true }));
-}
-
-function findLabeledInput(root: ParentNode, labelPrefix: string): HTMLInputElement | null {
-  const label = Array.from(root.querySelectorAll<HTMLLabelElement>("label")).find((candidate) =>
-    candidate.textContent?.trim().startsWith(labelPrefix),
-  );
-  const id = label?.htmlFor;
-  return id ? root.querySelector<HTMLInputElement>(`input[id="${id}"]`) : null;
-}
-
-function findLabeledSelect(root: ParentNode, labelPrefix: string): HTMLSelectElement | null {
-  const label = Array.from(root.querySelectorAll<HTMLLabelElement>("label")).find((candidate) =>
-    candidate.textContent?.trim().startsWith(labelPrefix),
-  );
-  const id = label?.htmlFor;
-  return id ? root.querySelector<HTMLSelectElement>(`select[id="${id}"]`) : null;
-}
-
-function findButton(root: ParentNode, text: string): HTMLButtonElement | null {
-  return (
-    Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
-      (button) => button.textContent?.trim() === text,
-    ) ?? null
-  );
-}
-
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-  });
-}
-
-function createTestCore(input?: {
-  providers?: Array<Record<string, unknown>>;
-  presets?: Array<Record<string, unknown>>;
-}) {
-  const elevatedModeStore = createElevatedModeStore({
-    tickIntervalMs: 0,
-    now: () => Date.parse("2026-03-01T00:00:00.000Z"),
-  });
-  elevatedModeStore.enter({
-    elevatedToken: "test-elevated-token",
-    expiresAt: "2026-03-01T00:10:00.000Z",
-  });
-
-  const registry = [
-    {
-      provider_key: "openai",
-      name: "OpenAI",
-      doc: "https://platform.openai.com/docs",
-      supported: true,
-      methods: [
-        {
-          method_key: "api_key",
-          label: "API key",
-          type: "api_key",
-          fields: [
-            {
-              key: "api_key",
-              label: "API key",
-              description: null,
-              kind: "secret",
-              input: "password",
-              required: true,
-            },
-            {
-              key: "base_url",
-              label: "Base URL",
-              description: "Optional API endpoint override",
-              kind: "config",
-              input: "text",
-              required: false,
-            },
-            {
-              key: "use_responses_api",
-              label: "Use Responses API",
-              description: "Enable the Responses API transport.",
-              kind: "config",
-              input: "boolean",
-              required: false,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      provider_key: "anthropic",
-      name: "Anthropic",
-      doc: "https://docs.anthropic.com",
-      supported: true,
-      methods: [
-        {
-          method_key: "api_key",
-          label: "API key",
-          type: "api_key",
-          fields: [
-            {
-              key: "api_key",
-              label: "API key",
-              description: null,
-              kind: "secret",
-              input: "password",
-              required: true,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      provider_key: "unsupported",
-      name: "Unsupported",
-      doc: null,
-      supported: false,
-      methods: [],
-    },
-  ];
-
-  let providers = input?.providers ?? [];
-  let presets = input?.presets ?? [];
-
-  const core = {
-    httpBaseUrl: "http://example.test",
-    elevatedModeStore,
-    http: {
-      providerConfig: {
-        listRegistry: vi.fn(async () => ({ status: "ok", providers: registry }) as unknown),
-        listProviders: vi.fn(async () => ({ status: "ok", providers }) as unknown),
-        createAccount: vi.fn(async () => ({ status: "ok" }) as unknown),
-        updateAccount: vi.fn(async () => ({ status: "ok" }) as unknown),
-        deleteAccount: vi.fn(async () => ({ status: "ok" }) as unknown),
-        deleteProvider: vi.fn(async () => ({ status: "ok" }) as unknown),
-      },
-      modelConfig: {
-        listPresets: vi.fn(async () => ({ status: "ok", presets }) as unknown),
-      },
-    },
-  } as unknown as OperatorCore;
-
-  return {
-    core,
-    setProviders(nextProviders: Array<Record<string, unknown>>) {
-      providers = nextProviders;
-    },
-    setPresets(nextPresets: Array<Record<string, unknown>>) {
-      presets = nextPresets;
-    },
-  };
-}
-
 describe("AdminHttpProvidersPanel", () => {
   it("updates the default display name when the selected provider changes", async () => {
-    const { core } = createTestCore();
+    const { core } = createAdminHttpProvidersTestCore();
+    const panel = await openAddAccountDialog(core);
 
-    const { container, root } = renderIntoDocument(
-      React.createElement(
-        ElevatedModeProvider,
-        { core, mode: "web" },
-        React.createElement(AdminHttpProvidersPanel, { core }),
-      ),
-    );
+    const providerSelect = getLabeledSelect(panel.dialog, "Provider");
+    const displayNameInput = getLabeledInput(panel.dialog, "Display name");
 
-    await flush();
+    expect(displayNameInput.value).toBe("OpenAI");
+    setSelectValue(providerSelect, "anthropic");
+    expect(displayNameInput.value).toBe("Anthropic");
 
-    const addButton = container.querySelector<HTMLButtonElement>(
-      "[data-testid='providers-add-open']",
-    );
-    expect(addButton).not.toBeNull();
-    act(() => {
-      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const dialog = document.body.querySelector<HTMLElement>(
-      "[data-testid='providers-account-dialog']",
-    );
-    expect(dialog).not.toBeNull();
-
-    const providerSelect = findLabeledSelect(dialog!, "Provider");
-    const displayNameInput = findLabeledInput(dialog!, "Display name");
-    expect(providerSelect).not.toBeNull();
-    expect(displayNameInput).not.toBeNull();
-    expect(displayNameInput?.value).toBe("OpenAI");
-
-    setSelectValue(providerSelect!, "anthropic");
-
-    expect(displayNameInput?.value).toBe("Anthropic");
-
-    cleanupTestRoot({ container, root });
+    cleanupPanel(panel);
   });
 
   it("preserves a custom display name when the selected provider changes", async () => {
-    const { core } = createTestCore();
+    const { core } = createAdminHttpProvidersTestCore();
+    const panel = await openAddAccountDialog(core);
 
-    const { container, root } = renderIntoDocument(
-      React.createElement(
-        ElevatedModeProvider,
-        { core, mode: "web" },
-        React.createElement(AdminHttpProvidersPanel, { core }),
-      ),
-    );
-
-    await flush();
-
-    const addButton = container.querySelector<HTMLButtonElement>(
-      "[data-testid='providers-add-open']",
-    );
-    expect(addButton).not.toBeNull();
-    act(() => {
-      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const dialog = document.body.querySelector<HTMLElement>(
-      "[data-testid='providers-account-dialog']",
-    );
-    expect(dialog).not.toBeNull();
-
-    const providerSelect = findLabeledSelect(dialog!, "Provider");
-    const displayNameInput = findLabeledInput(dialog!, "Display name");
-    expect(providerSelect).not.toBeNull();
-    expect(displayNameInput).not.toBeNull();
+    const providerSelect = getLabeledSelect(panel.dialog, "Provider");
+    const displayNameInput = getLabeledInput(panel.dialog, "Display name");
 
     act(() => {
-      setNativeValue(displayNameInput!, "Team account");
+      setNativeValue(displayNameInput, "Team account");
     });
+    setSelectValue(providerSelect, "anthropic");
 
-    setSelectValue(providerSelect!, "anthropic");
-
-    expect(displayNameInput?.value).toBe("Team account");
-
-    cleanupTestRoot({ container, root });
+    expect(displayNameInput.value).toBe("Team account");
+    cleanupPanel(panel);
   });
 
   it("keeps the auto-filled display name aligned during rapid provider changes", async () => {
-    const { core } = createTestCore();
+    const { core } = createAdminHttpProvidersTestCore();
+    const panel = await openAddAccountDialog(core);
 
-    const { container, root } = renderIntoDocument(
-      React.createElement(
-        ElevatedModeProvider,
-        { core, mode: "web" },
-        React.createElement(AdminHttpProvidersPanel, { core }),
-      ),
-    );
+    const providerSelect = getLabeledSelect(panel.dialog, "Provider");
+    const displayNameInput = getLabeledInput(panel.dialog, "Display name");
 
-    await flush();
-
-    const addButton = container.querySelector<HTMLButtonElement>(
-      "[data-testid='providers-add-open']",
-    );
-    expect(addButton).not.toBeNull();
+    expect(displayNameInput.value).toBe("OpenAI");
     act(() => {
-      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      setSelectValueWithoutAct(providerSelect, "anthropic");
+      setSelectValueWithoutAct(providerSelect, "openai");
     });
 
-    const dialog = document.body.querySelector<HTMLElement>(
-      "[data-testid='providers-account-dialog']",
-    );
-    expect(dialog).not.toBeNull();
-
-    const providerSelect = findLabeledSelect(dialog!, "Provider");
-    const displayNameInput = findLabeledInput(dialog!, "Display name");
-    expect(providerSelect).not.toBeNull();
-    expect(displayNameInput).not.toBeNull();
-    expect(displayNameInput?.value).toBe("OpenAI");
-
-    act(() => {
-      setSelectValueWithoutAct(providerSelect!, "anthropic");
-      setSelectValueWithoutAct(providerSelect!, "openai");
-    });
-
-    expect(providerSelect?.value).toBe("openai");
-    expect(displayNameInput?.value).toBe("OpenAI");
-
-    cleanupTestRoot({ container, root });
+    expect(providerSelect.value).toBe("openai");
+    expect(displayNameInput.value).toBe("OpenAI");
+    cleanupPanel(panel);
   });
 
   it("creates provider accounts from the add dialog", async () => {
-    const { core, setProviders } = createTestCore();
+    const account = createProviderAccount("openai", {
+      account_id: "00000000-0000-4000-8000-000000000101",
+      display_name: "Primary OpenAI",
+      config: {
+        base_url: "https://proxy.example.test/v1",
+        use_responses_api: true,
+      },
+    });
+    const { core, setProviders } = createAdminHttpProvidersTestCore();
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
       expect(url).toBe("http://example.test/config/providers/accounts");
       expect(init?.method).toBe("POST");
-
-      const headers = new Headers(init?.headers);
-      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
-
-      const account = {
-        account_id: "00000000-0000-4000-8000-000000000101",
-        account_key: "openai-primary",
-        provider_key: "openai",
-        display_name: "Primary OpenAI",
-        method_key: "api_key",
-        type: "api_key",
-        status: "active",
-        config: {
-          base_url: "https://proxy.example.test/v1",
-          use_responses_api: true,
-        },
-        configured_secret_keys: ["api_key"],
-        created_at: "2026-03-01T00:00:00.000Z",
-        updated_at: "2026-03-01T00:00:00.000Z",
-      };
-      const bodyRaw = String(init?.body ?? "");
-      expect(JSON.parse(bodyRaw)).toEqual({
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-elevated-token");
+      expect(JSON.parse(String(init?.body ?? ""))).toEqual({
         provider_key: "openai",
         method_key: "api_key",
         display_name: "Primary OpenAI",
@@ -338,115 +101,49 @@ describe("AdminHttpProvidersPanel", () => {
           base_url: "https://proxy.example.test/v1",
           use_responses_api: true,
         },
-        secrets: {
-          api_key: "sk-openai",
-        },
+        secrets: { api_key: "sk-openai" },
       });
 
-      setProviders([
-        {
-          provider_key: "openai",
-          name: "OpenAI",
-          doc: "https://platform.openai.com/docs",
-          supported: true,
-          accounts: [account],
-        },
-      ]);
-
+      setProviders([createProviderGroup("openai", { accounts: [account] })]);
       return new Response(JSON.stringify({ status: "ok", account }), { status: 201 });
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { container, root } = renderIntoDocument(
-      React.createElement(
-        ElevatedModeProvider,
-        { core, mode: "web" },
-        React.createElement(AdminHttpProvidersPanel, { core }),
-      ),
-    );
+    const panel = await openAddAccountDialog(core);
 
-    await flush();
+    expect(panel.container.textContent).toContain("Some providers are not configurable yet");
 
-    expect(container.textContent).toContain("Some providers are not configurable yet");
-
-    const addButton = container.querySelector<HTMLButtonElement>(
-      "[data-testid='providers-add-open']",
-    );
-    expect(addButton).not.toBeNull();
-    act(() => {
-      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const dialog = document.body.querySelector<HTMLElement>(
-      "[data-testid='providers-account-dialog']",
-    );
-    expect(dialog).not.toBeNull();
-
-    const displayNameInput = findLabeledInput(dialog!, "Display name");
-    const baseUrlInput = findLabeledInput(dialog!, "Base URL");
-    const apiKeyInput = findLabeledInput(dialog!, "API key");
-    const configToggleLabel = Array.from(
-      dialog?.querySelectorAll<HTMLLabelElement>("label") ?? [],
-    ).find((label) => label.textContent?.includes("Use Responses API"));
-    const configToggle = configToggleLabel?.querySelector<HTMLElement>("button");
-
-    expect(displayNameInput).not.toBeNull();
-    expect(baseUrlInput).not.toBeNull();
-    expect(apiKeyInput).not.toBeNull();
-    expect(configToggle).not.toBeNull();
+    const displayNameInput = getLabeledInput(panel.dialog, "Display name");
+    const baseUrlInput = getLabeledInput(panel.dialog, "Base URL");
+    const apiKeyInput = getLabeledInput(panel.dialog, "API key");
+    const configToggle = getToggleButton(panel.dialog, "Use Responses API");
 
     act(() => {
-      setNativeValue(displayNameInput!, "Primary OpenAI");
-      setNativeValue(baseUrlInput!, "https://proxy.example.test/v1");
-      setNativeValue(apiKeyInput!, "sk-openai");
-      configToggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      setNativeValue(displayNameInput, "Primary OpenAI");
+      setNativeValue(baseUrlInput, "https://proxy.example.test/v1");
+      setNativeValue(apiKeyInput, "sk-openai");
+      configToggle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const saveButton = document.body.querySelector<HTMLButtonElement>(
-      "[data-testid='providers-save']",
-    );
-    expect(saveButton).not.toBeNull();
-
-    await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    await flush();
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "providers-save"));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("Primary OpenAI");
-    expect(container.textContent).toContain("Provider documentation");
+    expect(panel.container.textContent).toContain("Primary OpenAI");
+    expect(panel.container.textContent).toContain("Provider documentation");
 
-    cleanupTestRoot({ container, root });
+    cleanupPanel(panel);
   });
 
   it("edits, disables, and removes provider accounts", async () => {
-    const initialAccount = {
-      account_id: "00000000-0000-4000-8000-000000000111",
-      account_key: "openai-primary",
-      provider_key: "openai",
+    const initialAccount = createProviderAccount("openai", {
       display_name: "Primary OpenAI",
-      method_key: "api_key",
-      type: "api_key",
-      status: "active",
       config: {
         base_url: "https://proxy.example.test/v1",
         use_responses_api: false,
       },
-      configured_secret_keys: ["api_key"],
-      created_at: "2026-03-01T00:00:00.000Z",
-      updated_at: "2026-03-01T00:00:00.000Z",
-    };
-    const { core, setProviders } = createTestCore({
-      providers: [
-        {
-          provider_key: "openai",
-          name: "OpenAI",
-          doc: "https://platform.openai.com/docs",
-          supported: true,
-          accounts: [initialAccount],
-        },
-      ],
+    });
+    const { core, setProviders } = createAdminHttpProvidersTestCore({
+      providers: [createProviderGroup("openai", { accounts: [initialAccount] })],
     });
 
     let accountStatus: "active" | "disabled" = "active";
@@ -462,15 +159,7 @@ describe("AdminHttpProvidersPanel", () => {
             display_name: "Renamed OpenAI",
             status: accountStatus,
           };
-          setProviders([
-            {
-              provider_key: "openai",
-              name: "OpenAI",
-              doc: "https://platform.openai.com/docs",
-              supported: true,
-              accounts: [updatedAccount],
-            },
-          ]);
+          setProviders([createProviderGroup("openai", { accounts: [updatedAccount] })]);
           return new Response(JSON.stringify({ status: "ok", account: updatedAccount }), {
             status: 200,
           });
@@ -484,23 +173,14 @@ describe("AdminHttpProvidersPanel", () => {
           },
           secrets: {},
         });
-        const updatedAccount = {
-          ...initialAccount,
+        const updatedAccount = createProviderAccount("openai", {
           display_name: "Renamed OpenAI",
           config: {
             base_url: "https://new.example.test/v1",
             use_responses_api: true,
           },
-        };
-        setProviders([
-          {
-            provider_key: "openai",
-            name: "OpenAI",
-            doc: "https://platform.openai.com/docs",
-            supported: true,
-            accounts: [updatedAccount],
-          },
-        ]);
+        });
+        setProviders([createProviderGroup("openai", { accounts: [updatedAccount] })]);
         return new Response(JSON.stringify({ status: "ok", account: updatedAccount }), {
           status: 200,
         });
@@ -513,156 +193,67 @@ describe("AdminHttpProvidersPanel", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { container, root } = renderIntoDocument(
-      React.createElement(
-        ElevatedModeProvider,
-        { core, mode: "web" },
-        React.createElement(AdminHttpProvidersPanel, { core }),
-      ),
-    );
+    const panel = await openEditAccountDialog(core);
 
-    await flush();
+    const providerSelect = getLabeledSelect(panel.dialog, "Provider");
+    const methodSelect = getLabeledSelect(panel.dialog, "Authentication method");
+    const displayNameInput = getLabeledInput(panel.dialog, "Display name");
+    const baseUrlInput = getLabeledInput(panel.dialog, "Base URL");
+    const apiKeyInput = getLabeledInput(panel.dialog, "API key");
+    const configToggle = getToggleButton(panel.dialog, "Use Responses API");
 
-    const editButton = findButton(container, "Edit");
-    expect(editButton).not.toBeNull();
-    act(() => {
-      editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const dialog = document.body.querySelector<HTMLElement>(
-      "[data-testid='providers-account-dialog']",
-    );
-    expect(dialog).not.toBeNull();
-
-    const providerSelect = findLabeledSelect(dialog!, "Provider");
-    const methodSelect = findLabeledSelect(dialog!, "Authentication method");
-    const displayNameInput = findLabeledInput(dialog!, "Display name");
-    const baseUrlInput = findLabeledInput(dialog!, "Base URL");
-    const apiKeyInput = findLabeledInput(dialog!, "API key");
-    const configToggleLabel = Array.from(
-      dialog?.querySelectorAll<HTMLLabelElement>("label") ?? [],
-    ).find((label) => label.textContent?.includes("Use Responses API"));
-    const configToggle = configToggleLabel?.querySelector<HTMLElement>("button");
-
-    expect(providerSelect?.disabled).toBe(true);
-    expect(methodSelect?.disabled).toBe(true);
-    expect(displayNameInput?.value).toBe("Primary OpenAI");
-    expect(baseUrlInput?.value).toBe("https://proxy.example.test/v1");
-    expect(apiKeyInput?.value).toBe("");
-    expect(dialog?.textContent).toContain("Leave blank to keep the current value.");
+    expect(providerSelect.disabled).toBe(true);
+    expect(methodSelect.disabled).toBe(true);
+    expect(displayNameInput.value).toBe("Primary OpenAI");
+    expect(baseUrlInput.value).toBe("https://proxy.example.test/v1");
+    expect(apiKeyInput.value).toBe("");
+    expect(panel.dialog.textContent).toContain("Leave blank to keep the current value.");
 
     act(() => {
-      setNativeValue(displayNameInput!, "Renamed OpenAI");
-      setNativeValue(baseUrlInput!, "https://new.example.test/v1");
-      configToggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      setNativeValue(displayNameInput, "Renamed OpenAI");
+      setNativeValue(baseUrlInput, "https://new.example.test/v1");
+      configToggle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const saveButton = document.body.querySelector<HTMLButtonElement>(
-      "[data-testid='providers-save']",
-    );
-    expect(saveButton).not.toBeNull();
-
-    await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    await flush();
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "providers-save"));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("Renamed OpenAI");
+    expect(panel.container.textContent).toContain("Renamed OpenAI");
 
-    const disableButton = findButton(container, "Disable");
-    expect(disableButton).not.toBeNull();
-
-    await act(async () => {
-      disableButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    await flush();
+    await clickAndFlush(getButton(panel.container, "Disable"));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(container.textContent).toContain("disabled");
+    expect(panel.container.textContent).toContain("disabled");
 
-    const removeButtons = Array.from(
-      container.querySelectorAll<HTMLButtonElement>("button"),
-    ).filter((button) => button.textContent?.trim() === "Remove");
-    const removeAccountButton = removeButtons.at(-1) ?? null;
+    const removeAccountButton =
+      Array.from(panel.container.querySelectorAll<HTMLButtonElement>("button")).findLast(
+        (button) => button.textContent?.trim() === "Remove",
+      ) ?? null;
+
     expect(removeAccountButton).not.toBeNull();
-    act(() => {
-      removeAccountButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const confirmCheckbox = document.body.querySelector<HTMLElement>(
-      "[data-testid='confirm-danger-checkbox']",
-    );
-    const confirmButton = document.body.querySelector<HTMLButtonElement>(
-      "[data-testid='confirm-danger-confirm']",
-    );
-    expect(confirmCheckbox).not.toBeNull();
-    expect(confirmButton).not.toBeNull();
-
-    act(() => {
-      confirmCheckbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    await act(async () => {
-      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    await flush();
+    click(removeAccountButton);
+    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(container.textContent).toContain("No providers configured");
+    expect(panel.container.textContent).toContain("No providers configured");
 
-    cleanupTestRoot({ container, root });
+    cleanupPanel(panel);
   });
 
   it("requires replacement presets when provider removal conflicts with assignments", async () => {
-    const providerGroup = {
-      provider_key: "openai",
-      name: "OpenAI",
-      doc: "https://platform.openai.com/docs",
-      supported: true,
-      accounts: [
-        {
-          account_id: "00000000-0000-4000-8000-000000000121",
-          account_key: "openai-primary",
-          provider_key: "openai",
-          display_name: "Primary OpenAI",
-          method_key: "api_key",
-          type: "api_key",
-          status: "active",
-          config: {},
-          configured_secret_keys: ["api_key"],
-          created_at: "2026-03-01T00:00:00.000Z",
-          updated_at: "2026-03-01T00:00:00.000Z",
-        },
+    const { core, setProviders, setPresets } = createAdminHttpProvidersTestCore({
+      providers: [
+        createProviderGroup("openai", {
+          accounts: [
+            createProviderAccount("openai", {
+              account_id: "00000000-0000-4000-8000-000000000121",
+              display_name: "Primary OpenAI",
+            }),
+          ],
+        }),
       ],
-    };
-    const { core, setProviders, setPresets } = createTestCore({
-      providers: [providerGroup],
-      presets: [
-        {
-          preset_id: "00000000-0000-4000-8000-000000000131",
-          preset_key: "openai-default",
-          display_name: "OpenAI Default",
-          provider_key: "openai",
-          model_id: "gpt-4.1",
-          options: {},
-          created_at: "2026-03-01T00:00:00.000Z",
-          updated_at: "2026-03-01T00:00:00.000Z",
-        },
-        {
-          preset_id: "00000000-0000-4000-8000-000000000132",
-          preset_key: "anthropic-default",
-          display_name: "Anthropic Default",
-          provider_key: "anthropic",
-          model_id: "claude-3.7-sonnet",
-          options: {},
-          created_at: "2026-03-01T00:00:00.000Z",
-          updated_at: "2026-03-01T00:00:00.000Z",
-        },
-      ],
+      presets: [createPreset("openai"), createPreset("anthropic")],
     });
 
     let deleteAttempts = 0;
@@ -674,28 +265,7 @@ describe("AdminHttpProvidersPanel", () => {
 
       if (deleteAttempts === 1) {
         expect(init?.body).toBeUndefined();
-        setPresets([
-          {
-            preset_id: "00000000-0000-4000-8000-000000000131",
-            preset_key: "openai-default",
-            display_name: "OpenAI Default",
-            provider_key: "openai",
-            model_id: "gpt-4.1",
-            options: {},
-            created_at: "2026-03-01T00:00:00.000Z",
-            updated_at: "2026-03-01T00:00:00.000Z",
-          },
-          {
-            preset_id: "00000000-0000-4000-8000-000000000132",
-            preset_key: "anthropic-default",
-            display_name: "Anthropic Default",
-            provider_key: "anthropic",
-            model_id: "claude-3.7-sonnet",
-            options: {},
-            created_at: "2026-03-01T00:00:00.000Z",
-            updated_at: "2026-03-01T00:00:00.000Z",
-          },
-        ]);
+        setPresets([createPreset("openai"), createPreset("anthropic")]);
         return new Response(
           JSON.stringify({
             error: "assignment_required",
@@ -714,62 +284,29 @@ describe("AdminHttpProvidersPanel", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { container, root } = renderIntoDocument(
-      React.createElement(
-        ElevatedModeProvider,
-        { core, mode: "web" },
-        React.createElement(AdminHttpProvidersPanel, { core }),
-      ),
-    );
+    const panel = await renderAdminHttpProvidersPanel(core);
 
-    await flush();
-
-    const removeProviderButton = findButton(container, "Remove provider");
-    expect(removeProviderButton).not.toBeNull();
-    act(() => {
-      removeProviderButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const confirmDialog = document.body.querySelector<HTMLElement>(
-      "[data-testid='confirm-danger-dialog']",
-    );
-    const confirmCheckbox = document.body.querySelector<HTMLElement>(
-      "[data-testid='confirm-danger-checkbox']",
-    );
-    const confirmButton = document.body.querySelector<HTMLButtonElement>(
-      "[data-testid='confirm-danger-confirm']",
-    );
-    expect(confirmDialog).not.toBeNull();
-    expect(confirmCheckbox).not.toBeNull();
-    expect(confirmButton).not.toBeNull();
-
-    act(() => {
-      confirmCheckbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    await act(async () => {
-      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
+    click(getButton(panel.container, "Remove provider"));
+    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(document.body.textContent).toContain(
       "Select replacement presets before removing this provider.",
     );
 
-    const replacementSelect = findLabeledSelect(confirmDialog!, "Interaction replacement");
-    expect(replacementSelect).not.toBeNull();
-    setSelectValue(replacementSelect!, "anthropic-default");
-
-    await act(async () => {
-      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    await flush();
+    setSelectValue(
+      getLabeledSelect(
+        getByTestId<HTMLElement>(document.body, "confirm-danger-dialog"),
+        "Interaction replacement",
+      ),
+      "anthropic-default",
+    );
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(container.textContent).toContain("No providers configured");
+    expect(panel.container.textContent).toContain("No providers configured");
 
-    cleanupTestRoot({ container, root });
+    cleanupPanel(panel);
   });
 });

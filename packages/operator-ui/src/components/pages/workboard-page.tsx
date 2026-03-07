@@ -6,13 +6,11 @@ import type {
   WorkStateKVScope,
   OperatorCore,
 } from "@tyrum/operator-core";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Alert } from "../ui/alert.js";
-import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
-import { Card, CardContent } from "../ui/card.js";
 import { StatusDot, type StatusDotVariant } from "../ui/status-dot.js";
 import {
   WORK_ITEM_STATUSES,
@@ -25,19 +23,11 @@ import {
   upsertWorkStateKvEntry,
   type WorkStateKvEntry,
 } from "../workboard/workboard-store.js";
+import { WorkBoardDrilldown } from "./workboard-page-drilldown.js";
+import { WorkItemColumn } from "./workboard-page.shared.js";
 
 export type WorkBoardPageProps = {
   core: OperatorCore;
-};
-
-const STATUS_LABELS: Record<(typeof WORK_ITEM_STATUSES)[number], string> = {
-  backlog: "Backlog",
-  ready: "Ready",
-  doing: "Doing",
-  blocked: "Blocked",
-  done: "Done",
-  failed: "Failed",
-  cancelled: "Cancelled",
 };
 
 const DEFAULT_SCOPE = {
@@ -52,105 +42,6 @@ function makeAgentScope(): WorkStateKVScope {
 
 function makeWorkItemScope(workItemId: string): WorkStateKVScope {
   return { kind: "work_item", ...DEFAULT_SCOPE, work_item_id: workItemId };
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="grid gap-2">
-      <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function EmptyState({ children }: { children: ReactNode }) {
-  return <div className="text-sm text-fg-muted">{children}</div>;
-}
-
-function DetailListSection<T>({
-  title,
-  items,
-  empty,
-  renderItem,
-}: {
-  title: string;
-  items: readonly T[];
-  empty: string;
-  renderItem: (item: T) => ReactNode;
-}) {
-  return (
-    <Section title={title}>
-      {items.length === 0 ? <EmptyState>{empty}</EmptyState> : <div className="grid gap-2">{items.map(renderItem)}</div>}
-    </Section>
-  );
-}
-
-function KvSection({ title, entries }: { title: string; entries: readonly WorkStateKvEntry[] }) {
-  return (
-    <Section title={title}>
-      {entries.length === 0 ? (
-        <EmptyState>No entries.</EmptyState>
-      ) : (
-        <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-bg-subtle p-3 font-mono text-xs text-fg">
-          {entries.map((entry) => `${entry.key} = ${JSON.stringify(entry.value_json)}`).join("\n")}
-        </pre>
-      )}
-    </Section>
-  );
-}
-
-function WorkItemColumn({
-  status,
-  items,
-  selectedWorkItemId,
-  onSelect,
-}: {
-  status: (typeof WORK_ITEM_STATUSES)[number];
-  items: readonly WorkItem[];
-  selectedWorkItemId: string | null;
-  onSelect: (workItemId: string) => void;
-}) {
-  return (
-    <Card className="w-64 shrink-0">
-      <CardContent className="grid gap-3 pt-6">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold text-fg">{STATUS_LABELS[status]}</span>
-          <Badge variant="outline">{items.length}</Badge>
-        </div>
-        {items.length === 0 ? (
-          <EmptyState>No items</EmptyState>
-        ) : (
-          <div className="grid gap-2">
-            {items.map((item) => {
-              const active = item.work_item_id === selectedWorkItemId;
-              return (
-                <div
-                  key={item.work_item_id}
-                  className={[
-                    "cursor-pointer rounded-lg border p-3 transition-colors",
-                    active ? "border-primary bg-primary-dim" : "border-border bg-bg-subtle hover:bg-bg",
-                  ].join(" ")}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onSelect(item.work_item_id)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") onSelect(item.work_item_id);
-                  }}
-                >
-                  <div className="text-sm font-semibold leading-snug text-fg">{item.title}</div>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-fg-muted"><span>{item.kind}</span><span>prio {item.priority}</span></div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
-                    <span><span className="text-fg-muted">id</span> <span className="font-mono">{item.work_item_id.slice(0, 8)}</span></span>
-                    {item.last_active_at ? <span>active {new Date(item.last_active_at).toLocaleString()}</span> : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
 }
 
 export function WorkBoardPage({ core }: WorkBoardPageProps) {
@@ -441,192 +332,25 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         ))}
       </div>
 
-      <Card>
-        <CardContent className="grid gap-4 pt-6">
-          <div className="text-sm font-semibold text-fg">Drilldown</div>
-          {!selectedWorkItemId ? (
-            <div className="text-sm text-fg-muted">Select a WorkItem to inspect details.</div>
-          ) : drilldownBusy ? (
-            <div className="text-sm text-fg-muted">Loading…</div>
-          ) : drilldownError ? (
-            <Alert variant="error" title="Drilldown error" description={drilldownError} />
-          ) : !selectedItem ? (
-            <EmptyState>WorkItem not loaded.</EmptyState>
-          ) : (
-            <div className="grid gap-6">
-              <Section title="WorkItem">
-                <div className="text-sm font-semibold text-fg">{selectedItem.title}</div>
-                <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
-                  <span>status <strong className="text-fg">{selectedItem.status}</strong></span>
-                  <span>kind {selectedItem.kind}</span>
-                  <span>priority {selectedItem.priority}</span>
-                </div>
-                {canMarkReadySelected || canResumeSelected || canCancelSelected ? (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {canMarkReadySelected ? (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => void transitionSelected("ready", "operator triaged")}
-                        disabled={transitionTarget !== null}
-                        isLoading={transitionTarget === "ready"}
-                      >
-                        {transitionTarget === "ready" ? "Triaging…" : "Mark Ready"}
-                      </Button>
-                    ) : null}
-                    {canResumeSelected ? (
-                      <Button
-                        size="sm"
-                        onClick={() => void transitionSelected("doing", "operator resumed")}
-                        disabled={transitionTarget !== null}
-                        isLoading={transitionTarget === "doing"}
-                      >
-                        {transitionTarget === "doing" ? "Resuming…" : "Resume"}
-                      </Button>
-                    ) : null}
-                    {canCancelSelected ? (
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => {
-                          if (!globalThis.confirm("Cancel this WorkItem?")) return;
-                          void transitionSelected("cancelled", "operator cancelled");
-                        }}
-                        disabled={transitionTarget !== null}
-                        isLoading={transitionTarget === "cancelled"}
-                      >
-                        {transitionTarget === "cancelled" ? "Cancelling…" : "Cancel"}
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : null}
-                <div className="font-mono text-xs text-fg-muted">{selectedItem.work_item_id}</div>
-              </Section>
-
-              <Section title="Timestamps">
-                <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
-                  <span>created {new Date(selectedItem.created_at).toLocaleString()}</span>
-                  {selectedItem.updated_at ? (
-                    <span>updated {new Date(selectedItem.updated_at).toLocaleString()}</span>
-                  ) : null}
-                  {selectedItem.last_active_at ? (
-                    <span>
-                      last active {new Date(selectedItem.last_active_at).toLocaleString()}
-                    </span>
-                  ) : null}
-                </div>
-              </Section>
-
-              <Section title="Acceptance">
-                <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-bg-subtle p-3 font-mono text-xs text-fg">
-                  {selectedItem.acceptance === undefined
-                    ? "—"
-                    : JSON.stringify(selectedItem.acceptance, null, 2)}
-                </pre>
-              </Section>
-
-              <Section title="Tasks">
-                <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
-                  <span>running {taskCounts.running}</span>
-                  <span>leased {taskCounts.leased}</span>
-                  <span>paused {taskCounts.paused}</span>
-                  <span>completed {taskCounts.completed}</span>
-                </div>
-                {taskList.length > 0 ? (
-                  <div className="grid gap-2">
-                    {taskList.map((task) => (
-                      <div
-                        key={task.task_id}
-                        className="rounded-lg border border-border bg-bg-subtle p-3"
-                      >
-                        <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
-                          <span><strong className="text-fg">{task.status}</strong></span>
-                          <span className="font-mono">{task.task_id}</span>
-                          <span>{new Date(task.last_event_at).toLocaleString()}</span>
-                        </div>
-                        {(task.run_id ||
-                          typeof task.approval_id === "number" ||
-                          task.result_summary) && (
-                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
-                            {task.run_id ? <span>run {task.run_id}</span> : null}
-                            {typeof task.approval_id === "number" ? (
-                              <span>approval {task.approval_id}</span>
-                            ) : null}
-                            {task.result_summary ? <span>result {task.result_summary}</span> : null}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </Section>
-
-              <DetailListSection
-                title="Blockers"
-                items={approvalBlockers}
-                empty="No approval blockers."
-                renderItem={(task) => (
-                  <div key={task.task_id} className="rounded-lg border border-border bg-bg-subtle p-3">
-                    <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
-                      <span>approval {task.approval_id}</span>
-                      <span className="font-mono">{task.task_id}</span>
-                    </div>
-                  </div>
-                )}
-              />
-
-              <DetailListSection
-                title="Decisions"
-                items={decisions}
-                empty="No DecisionRecords."
-                renderItem={(decision) => (
-                  <div key={decision.decision_id} className="rounded-lg border border-border bg-bg-subtle p-3">
-                    <div className="text-sm font-semibold text-fg">{decision.question}</div>
-                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-fg-muted"><span>chosen {decision.chosen}</span><span>{new Date(decision.created_at).toLocaleString()}</span></div>
-                    <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-fg">{decision.rationale_md}</pre>
-                  </div>
-                )}
-              />
-
-              <DetailListSection
-                title="Artifacts"
-                items={artifacts}
-                empty="No WorkArtifacts."
-                renderItem={(artifact) => (
-                  <div key={artifact.artifact_id} className="rounded-lg border border-border bg-bg-subtle p-3">
-                    <div className="flex flex-wrap gap-2 text-xs text-fg-muted"><span className="font-semibold text-fg">{artifact.kind}</span><span>{new Date(artifact.created_at).toLocaleString()}</span></div>
-                    <div className="mt-1 text-sm font-semibold text-fg">{artifact.title}</div>
-                    {artifact.body_md ? <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-fg">{artifact.body_md}</pre> : null}
-                    {artifact.refs.length > 0 ? <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted"><span className="text-fg-muted">refs</span><span className="font-mono">{artifact.refs.join(", ")}</span></div> : null}
-                    <div className="mt-2 font-mono text-xs text-fg-muted">{artifact.artifact_id}</div>
-                  </div>
-                )}
-              />
-
-              <DetailListSection
-                title="Signals"
-                items={signals}
-                empty="No WorkSignals."
-                renderItem={(signal) => (
-                  <div key={signal.signal_id} className="rounded-lg border border-border bg-bg-subtle p-3">
-                    <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
-                      <span className="font-semibold text-fg">{signal.trigger_kind}</span>
-                      <span>status <strong className="text-fg">{signal.status}</strong></span>
-                      <span>{new Date(signal.created_at).toLocaleString()}</span>
-                      {signal.last_fired_at ? <span>last fired {new Date(signal.last_fired_at).toLocaleString()}</span> : null}
-                    </div>
-                    <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-fg">{JSON.stringify(signal.trigger_spec_json, null, 2)}</pre>
-                    <div className="mt-2 font-mono text-xs text-fg-muted">{signal.signal_id}</div>
-                  </div>
-                )}
-              />
-
-              <KvSection title="State KV (agent)" entries={agentKvEntries} />
-              <KvSection title="State KV (work item)" entries={workItemKvEntries} />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <WorkBoardDrilldown
+        selectedWorkItemId={selectedWorkItemId}
+        drilldownBusy={drilldownBusy}
+        drilldownError={drilldownError}
+        selectedItem={selectedItem}
+        transitionTarget={transitionTarget}
+        canMarkReadySelected={canMarkReadySelected}
+        canResumeSelected={canResumeSelected}
+        canCancelSelected={canCancelSelected}
+        onTransition={transitionSelected}
+        taskCounts={taskCounts}
+        taskList={taskList}
+        approvalBlockers={approvalBlockers}
+        decisions={decisions}
+        artifacts={artifacts}
+        signals={signals}
+        agentKvEntries={agentKvEntries}
+        workItemKvEntries={workItemKvEntries}
+      />
     </div>
   );
 }

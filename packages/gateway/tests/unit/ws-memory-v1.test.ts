@@ -1,271 +1,91 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { describe, expect, it, vi } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
-import { handleClientMessage } from "../../src/ws/protocol.js";
-import type { ProtocolDeps } from "../../src/ws/protocol.js";
-import { openTestSqliteDb } from "../helpers/sqlite-db.js";
-import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
-import { FsArtifactStore } from "../../src/modules/artifact/store.js";
 import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
-
-interface MockWebSocket {
-  send: ReturnType<typeof vi.fn>;
-  close: ReturnType<typeof vi.fn>;
-  on: ReturnType<typeof vi.fn>;
-  readyState: number;
-}
-
-function createMockWs(): MockWebSocket {
-  return {
-    send: vi.fn(),
-    close: vi.fn(),
-    on: vi.fn(() => undefined as never),
-    readyState: 1,
-  };
-}
-
-function makeClient(
-  cm: ConnectionManager,
-  opts?: { role?: "client" | "node"; authClaims?: unknown },
-): { id: string; ws: MockWebSocket } {
-  const ws = createMockWs();
-  const authClaims =
-    opts?.authClaims ??
-    ({
-      token_kind: "admin",
-      token_id: "token-1",
-      tenant_id: DEFAULT_TENANT_ID,
-      role: "admin",
-      scopes: ["*"],
-    } as const);
-  const id = cm.addClient(ws as never, [] as never, { role: opts?.role, authClaims } as never);
-  return { id, ws };
-}
-
-function makeDeps(cm: ConnectionManager, overrides?: Partial<ProtocolDeps>): ProtocolDeps {
-  return { connectionManager: cm, ...overrides };
-}
-
-function parseSentJson(ws: MockWebSocket): unknown[] {
-  return ws.send.mock.calls
-    .map((c) => c[0])
-    .map((raw) =>
-      typeof raw === "string" ? raw : raw instanceof Buffer ? raw.toString("utf8") : "",
-    )
-    .filter((raw) => raw.length > 0)
-    .map((raw) => JSON.parse(raw) as unknown);
-}
+import {
+  createMemoryProtocolDeps,
+  createOperatorAudience,
+  expectAudienceEvent,
+  expectErrorCode,
+  expectOk,
+  makeClient,
+  registerWsMemoryV1Lifecycle,
+  requireClient,
+  requireWsMemoryV1Context,
+  sendProtocolMessage,
+} from "./ws-memory-v1.test-support.js";
 
 describe("WS memory v1 handlers", () => {
-  let baseDir: string;
-  let db: ReturnType<typeof openTestSqliteDb>;
-  let didOpenDb = false;
-  let memoryV1Dal: MemoryV1Dal;
-  let artifactStore: FsArtifactStore;
-
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-02-19T12:00:00.000Z"));
-
-    baseDir = mkdtempSync(join(tmpdir(), "tyrum-ws-memory-v1-test-"));
-    didOpenDb = false;
-    db = openTestSqliteDb();
-    didOpenDb = true;
-    memoryV1Dal = new MemoryV1Dal(db);
-    artifactStore = new FsArtifactStore(baseDir);
-  });
-
-  afterEach(async () => {
-    vi.useRealTimers();
-    if (didOpenDb) {
-      didOpenDb = false;
-      await db.close();
-    }
-    rmSync(baseDir, { recursive: true, force: true });
-  });
+  const state = registerWsMemoryV1Lifecycle();
 
   it("handles memory.create/update/get/list/search/delete and broadcasts events to operator clients", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
-    const { id: requesterId, ws: requesterWs } = makeClient(cm);
-    const { ws: otherOperatorWs } = makeClient(cm, {
-      authClaims: {
-        token_kind: "device",
-        token_id: "token-op-1",
-        tenant_id: DEFAULT_TENANT_ID,
-        role: "client",
-        device_id: "dev_client_1",
-        scopes: ["operator.read"],
-      },
-    });
-    const { ws: pairingOnlyWs } = makeClient(cm, {
-      authClaims: {
-        token_kind: "device",
-        token_id: "token-pair-1",
-        tenant_id: DEFAULT_TENANT_ID,
-        role: "client",
-        device_id: "dev_client_2",
-        scopes: ["operator.pairing"],
-      },
-    });
-    const { ws: nodeWs } = makeClient(cm, { role: "node" });
+    const audience = createOperatorAudience(cm);
+    const deps = createMemoryProtocolDeps(cm, ctx);
+    const requester = requireClient(cm, audience.requesterId);
 
-    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
-    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
-    (deps as unknown as { artifactStore: FsArtifactStore }).artifactStore = artifactStore;
-
-    const requester = cm.getClient(requesterId)!;
-
-    const createRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-create-1",
-        type: "memory.create",
-        payload: {
-          v: 1,
-          item: {
-            kind: "note",
-            body_md: "Remember to check dashboards.",
-            tags: ["project"],
-            sensitivity: "private",
-            provenance: { source_kind: "operator" },
-          },
+    const createdItem = expectOk<{ item: { memory_item_id: string } }>(
+      await sendProtocolMessage(requester, deps, "r-create-1", "memory.create", {
+        v: 1,
+        item: {
+          kind: "note",
+          body_md: "Remember to check dashboards.",
+          tags: ["project"],
+          sensitivity: "private",
+          provenance: { source_kind: "operator" },
         },
       }),
-      deps,
-    );
-
-    expect(createRes).toBeDefined();
-    expect((createRes as unknown as { ok: boolean }).ok).toBe(true);
-
-    const createdItem = (createRes as unknown as { result: { item: { memory_item_id: string } } })
-      .result.item;
+    ).item;
     expect(createdItem.memory_item_id).toMatch(/^[0-9a-f-]{36}$/i);
 
-    const createEvents = parseSentJson(requesterWs).filter(
-      (m) => (m as { type?: unknown }).type === "memory.item.created",
-    );
-    expect(createEvents.length).toBe(1);
-
-    const createdEvent = createEvents[0] as {
+    const [createdEvent] = expectAudienceEvent(audience, "memory.item.created") as Array<{
       type: string;
       payload: { item: { memory_item_id: string } };
-    };
+    }>;
     expect(createdEvent.payload.item.memory_item_id).toBe(createdItem.memory_item_id);
 
-    expect(
-      parseSentJson(otherOperatorWs).some(
-        (m) => (m as { type?: unknown }).type === "memory.item.created",
-      ),
-    ).toBe(true);
-    expect(
-      parseSentJson(pairingOnlyWs).some(
-        (m) => (m as { type?: unknown }).type === "memory.item.created",
-      ),
-    ).toBe(false);
-    expect(
-      parseSentJson(nodeWs).some((m) => (m as { type?: unknown }).type === "memory.item.created"),
-    ).toBe(false);
-
     vi.setSystemTime(new Date("2026-02-19T12:00:01.000Z"));
-    const updateRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-update-1",
-        type: "memory.update",
-        payload: {
-          v: 1,
-          memory_item_id: createdItem.memory_item_id,
-          patch: { body_md: "Updated." },
-        },
+    expectOk(
+      await sendProtocolMessage(requester, deps, "r-update-1", "memory.update", {
+        v: 1,
+        memory_item_id: createdItem.memory_item_id,
+        patch: { body_md: "Updated." },
       }),
-      deps,
     );
-    expect((updateRes as unknown as { ok: boolean }).ok).toBe(true);
+    expectAudienceEvent(audience, "memory.item.updated");
 
-    const updateEvents = parseSentJson(requesterWs).filter(
-      (m) => (m as { type?: unknown }).type === "memory.item.updated",
-    );
-    expect(updateEvents.length).toBe(1);
-    expect(
-      parseSentJson(otherOperatorWs).some(
-        (m) => (m as { type?: unknown }).type === "memory.item.updated",
-      ),
-    ).toBe(true);
-    expect(
-      parseSentJson(pairingOnlyWs).some(
-        (m) => (m as { type?: unknown }).type === "memory.item.updated",
-      ),
-    ).toBe(false);
-    expect(
-      parseSentJson(nodeWs).some((m) => (m as { type?: unknown }).type === "memory.item.updated"),
-    ).toBe(false);
-
-    const getRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-get-1",
-        type: "memory.get",
-        payload: { v: 1, memory_item_id: createdItem.memory_item_id },
+    expectOk(
+      await sendProtocolMessage(requester, deps, "r-get-1", "memory.get", {
+        v: 1,
+        memory_item_id: createdItem.memory_item_id,
       }),
-      deps,
     );
-    expect((getRes as unknown as { ok: boolean }).ok).toBe(true);
-
-    const listRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-list-1",
-        type: "memory.list",
-        payload: { v: 1, filter: { kinds: ["note"] }, limit: 50 },
+    expectOk(
+      await sendProtocolMessage(requester, deps, "r-list-1", "memory.list", {
+        v: 1,
+        filter: { kinds: ["note"] },
+        limit: 50,
       }),
-      deps,
     );
-    expect((listRes as unknown as { ok: boolean }).ok).toBe(true);
-
-    const searchRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-search-1",
-        type: "memory.search",
-        payload: { v: 1, query: "updated", limit: 20 },
+    expectOk(
+      await sendProtocolMessage(requester, deps, "r-search-1", "memory.search", {
+        v: 1,
+        query: "updated",
+        limit: 20,
       }),
-      deps,
     );
-    expect((searchRes as unknown as { ok: boolean }).ok).toBe(true);
-
-    const deleteRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-delete-1",
-        type: "memory.delete",
-        payload: { v: 1, memory_item_id: createdItem.memory_item_id, reason: "cleanup" },
+    expectOk(
+      await sendProtocolMessage(requester, deps, "r-delete-1", "memory.delete", {
+        v: 1,
+        memory_item_id: createdItem.memory_item_id,
+        reason: "cleanup",
       }),
-      deps,
     );
-    expect((deleteRes as unknown as { ok: boolean }).ok).toBe(true);
-
-    const deleteEvents = parseSentJson(requesterWs).filter(
-      (m) => (m as { type?: unknown }).type === "memory.item.deleted",
-    );
-    expect(deleteEvents.length).toBe(1);
-    expect(
-      parseSentJson(otherOperatorWs).some(
-        (m) => (m as { type?: unknown }).type === "memory.item.deleted",
-      ),
-    ).toBe(true);
-    expect(
-      parseSentJson(pairingOnlyWs).some(
-        (m) => (m as { type?: unknown }).type === "memory.item.deleted",
-      ),
-    ).toBe(false);
-    expect(
-      parseSentJson(nodeWs).some((m) => (m as { type?: unknown }).type === "memory.item.deleted"),
-    ).toBe(false);
+    expectAudienceEvent(audience, "memory.item.deleted");
   });
 
   it("forbids write memory operations for scoped tokens without operator.write", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, {
       authClaims: {
@@ -277,46 +97,32 @@ describe("WS memory v1 handlers", () => {
         scopes: ["operator.read"],
       },
     });
-    const client = cm.getClient(id)!;
+    const deps = createMemoryProtocolDeps(cm, ctx);
 
-    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
-    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
-
-    const res = await handleClientMessage(
-      client,
-      JSON.stringify({
-        request_id: "r-create-1",
-        type: "memory.create",
-        payload: {
-          v: 1,
-          item: {
-            kind: "note",
-            body_md: "nope",
-            provenance: { source_kind: "operator" },
-          },
+    expectErrorCode(
+      await sendProtocolMessage(requireClient(cm, id), deps, "r-create-1", "memory.create", {
+        v: 1,
+        item: {
+          kind: "note",
+          body_md: "nope",
+          provenance: { source_kind: "operator" },
         },
       }),
-      deps,
+      "forbidden",
     );
-
-    expect(res).toBeDefined();
-    expect((res as unknown as { ok: boolean }).ok).toBe(false);
-    expect((res as unknown as { error: { code: string } }).error.code).toBe("forbidden");
   });
 
   it("uses payload.agent_id to access non-default agent memory", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
     const { id: requesterId } = makeClient(cm);
-    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
-    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
-    (deps as unknown as { artifactStore: FsArtifactStore }).artifactStore = artifactStore;
-
-    const requester = cm.getClient(requesterId)!;
-    const identityScopeDal = new IdentityScopeDal(db);
+    const deps = createMemoryProtocolDeps(cm, ctx, { includeArtifactStore: true });
+    const requester = requireClient(cm, requesterId);
+    const identityScopeDal = new IdentityScopeDal(ctx.db);
     const agentId = await identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "agent-2");
     const defaultAgentId = await identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "default");
 
-    const created = await memoryV1Dal.create(
+    const created = await ctx.memoryV1Dal.create(
       {
         kind: "note",
         body_md: "Scoped memory",
@@ -326,7 +132,7 @@ describe("WS memory v1 handlers", () => {
       },
       { tenantId: DEFAULT_TENANT_ID, agentId },
     );
-    const defaultCreated = await memoryV1Dal.create(
+    const defaultCreated = await ctx.memoryV1Dal.create(
       {
         kind: "note",
         body_md: "Default memory",
@@ -337,164 +143,120 @@ describe("WS memory v1 handlers", () => {
       { tenantId: DEFAULT_TENANT_ID, agentId: defaultAgentId },
     );
 
-    const listRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-list-agent-2",
-        type: "memory.list",
-        payload: { v: 1, agent_id: "agent-2", limit: 50 },
+    const listRes = expectOk<{ items: Array<{ memory_item_id: string }> }>(
+      await sendProtocolMessage(requester, deps, "r-list-agent-2", "memory.list", {
+        v: 1,
+        agent_id: "agent-2",
+        limit: 50,
       }),
-      deps,
     );
-    expect((listRes as { ok: boolean }).ok).toBe(true);
-    expect(
-      (listRes as { result: { items: Array<{ memory_item_id: string }> } }).result.items,
-    ).toEqual([expect.objectContaining({ memory_item_id: created.memory_item_id })]);
+    expect(listRes.items).toEqual([expect.objectContaining({ memory_item_id: created.memory_item_id })]);
 
-    const defaultListRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-list-default",
-        type: "memory.list",
-        payload: { v: 1, limit: 50 },
+    const defaultListRes = expectOk<{ items: Array<{ memory_item_id: string }> }>(
+      await sendProtocolMessage(requester, deps, "r-list-default", "memory.list", {
+        v: 1,
+        limit: 50,
       }),
-      deps,
     );
-    expect((defaultListRes as { ok: boolean }).ok).toBe(true);
-    expect(
-      (defaultListRes as { result: { items: Array<{ memory_item_id: string }> } }).result.items,
-    ).toEqual([expect.objectContaining({ memory_item_id: defaultCreated.memory_item_id })]);
+    expect(defaultListRes.items).toEqual([
+      expect.objectContaining({ memory_item_id: defaultCreated.memory_item_id }),
+    ]);
 
-    const searchRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-search-agent-2",
-        type: "memory.search",
-        payload: { v: 1, agent_id: "agent-2", query: "Scoped", limit: 50 },
+    const searchRes = expectOk<{ hits: Array<{ memory_item_id: string }> }>(
+      await sendProtocolMessage(requester, deps, "r-search-agent-2", "memory.search", {
+        v: 1,
+        agent_id: "agent-2",
+        query: "Scoped",
+        limit: 50,
       }),
-      deps,
     );
-    expect((searchRes as { ok: boolean }).ok).toBe(true);
-    expect(
-      (searchRes as { result: { hits: Array<{ memory_item_id: string }> } }).result.hits,
-    ).toEqual([expect.objectContaining({ memory_item_id: created.memory_item_id })]);
+    expect(searchRes.hits).toEqual([expect.objectContaining({ memory_item_id: created.memory_item_id })]);
 
-    const getRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-get-agent-2",
-        type: "memory.get",
-        payload: { v: 1, agent_id: "agent-2", memory_item_id: created.memory_item_id },
+    expectOk(
+      await sendProtocolMessage(requester, deps, "r-get-agent-2", "memory.get", {
+        v: 1,
+        agent_id: "agent-2",
+        memory_item_id: created.memory_item_id,
       }),
-      deps,
-    );
-    expect((getRes as { ok: boolean }).ok).toBe(true);
-
-    const updateRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-update-agent-2",
-        type: "memory.update",
-        payload: {
-          v: 1,
-          agent_id: "agent-2",
-          memory_item_id: created.memory_item_id,
-          patch: { body_md: "Scoped memory updated" },
-        },
-      }),
-      deps,
-    );
-    expect((updateRes as { ok: boolean }).ok).toBe(true);
-    expect((updateRes as { result: { item: { body_md: string } } }).result.item.body_md).toBe(
-      "Scoped memory updated",
     );
 
-    const exportRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-export-agent-2",
-        type: "memory.export",
-        payload: { v: 1, agent_id: "agent-2", include_tombstones: false },
+    const updated = expectOk<{ item: { body_md: string } }>(
+      await sendProtocolMessage(requester, deps, "r-update-agent-2", "memory.update", {
+        v: 1,
+        agent_id: "agent-2",
+        memory_item_id: created.memory_item_id,
+        patch: { body_md: "Scoped memory updated" },
       }),
-      deps,
     );
-    expect((exportRes as { ok: boolean }).ok).toBe(true);
-    const artifactId = (exportRes as { result: { artifact_id: string } }).result.artifact_id;
-    const artifact = await artifactStore.get(artifactId);
+    expect(updated.item.body_md).toBe("Scoped memory updated");
+
+    const { artifact_id: artifactId } = expectOk<{ artifact_id: string }>(
+      await sendProtocolMessage(requester, deps, "r-export-agent-2", "memory.export", {
+        v: 1,
+        agent_id: "agent-2",
+        include_tombstones: false,
+      }),
+    );
+    const artifact = await ctx.artifactStore.get(artifactId);
     expect(artifact).not.toBeNull();
     const body = artifact!.body.toString("utf8");
     expect(body).toContain("Scoped memory updated");
     expect(body).not.toContain("Default memory");
 
-    const forgetRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-forget-agent-2",
-        type: "memory.forget",
-        payload: {
-          v: 1,
-          agent_id: "agent-2",
-          confirm: "FORGET",
-          selectors: [{ kind: "tag", tag: "project" }],
-        },
+    expectOk(
+      await sendProtocolMessage(requester, deps, "r-forget-agent-2", "memory.forget", {
+        v: 1,
+        agent_id: "agent-2",
+        confirm: "FORGET",
+        selectors: [{ kind: "tag", tag: "project" }],
       }),
-      deps,
     );
-    expect((forgetRes as { ok: boolean }).ok).toBe(true);
 
-    const afterForgetListRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-list-agent-2-after-forget",
-        type: "memory.list",
-        payload: { v: 1, agent_id: "agent-2", limit: 50 },
-      }),
-      deps,
+    const afterForgetListRes = expectOk<{ items: Array<{ memory_item_id: string }> }>(
+      await sendProtocolMessage(
+        requester,
+        deps,
+        "r-list-agent-2-after-forget",
+        "memory.list",
+        { v: 1, agent_id: "agent-2", limit: 50 },
+      ),
     );
-    expect((afterForgetListRes as { ok: boolean }).ok).toBe(true);
-    expect(
-      (afterForgetListRes as { result: { items: Array<{ memory_item_id: string }> } }).result.items,
-    ).toEqual([]);
+    expect(afterForgetListRes.items).toEqual([]);
 
-    const afterForgetDefaultListRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-list-default-after-forget",
-        type: "memory.list",
-        payload: { v: 1, limit: 50 },
-      }),
-      deps,
+    const afterForgetDefaultListRes = expectOk<{ items: Array<{ memory_item_id: string }> }>(
+      await sendProtocolMessage(
+        requester,
+        deps,
+        "r-list-default-after-forget",
+        "memory.list",
+        { v: 1, limit: 50 },
+      ),
     );
-    expect((afterForgetDefaultListRes as { ok: boolean }).ok).toBe(true);
-    expect(
-      (afterForgetDefaultListRes as { result: { items: Array<{ memory_item_id: string }> } }).result
-        .items,
-    ).toEqual([expect.objectContaining({ memory_item_id: defaultCreated.memory_item_id })]);
+    expect(afterForgetDefaultListRes.items).toEqual([
+      expect.objectContaining({ memory_item_id: defaultCreated.memory_item_id }),
+    ]);
   });
 
   it("passes only resolved scope and DAL search fields into memoryV1Dal.search", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
     const { id: requesterId } = makeClient(cm);
-    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
-    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
+    const deps = createMemoryProtocolDeps(cm, ctx);
 
-    const requester = cm.getClient(requesterId)!;
-    const identityScopeDal = new IdentityScopeDal(db);
+    const requester = requireClient(cm, requesterId);
+    const identityScopeDal = new IdentityScopeDal(ctx.db);
     const agentId = await identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "agent-2");
 
-    const searchSpy = vi.spyOn(memoryV1Dal, "search");
+    const searchSpy = vi.spyOn(ctx.memoryV1Dal, "search");
 
-    const searchRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-search-agent-2-spy",
-        type: "memory.search",
-        payload: { v: 1, agent_id: "agent-2", query: "Scoped", limit: 50 },
+    expectOk(
+      await sendProtocolMessage(requester, deps, "r-search-agent-2-spy", "memory.search", {
+        v: 1,
+        agent_id: "agent-2",
+        query: "Scoped",
+        limit: 50,
       }),
-      deps,
     );
-
-    expect((searchRes as { ok: boolean }).ok).toBe(true);
     expect(searchSpy).toHaveBeenCalledTimes(1);
 
     const [input, scope] = searchSpy.mock.calls[0]!;
@@ -508,422 +270,222 @@ describe("WS memory v1 handlers", () => {
   });
 
   it("handles memory.forget and emits memory.item.forgotten", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
-    const { id: requesterId, ws: requesterWs } = makeClient(cm);
-    const { ws: otherOperatorWs } = makeClient(cm, {
-      authClaims: {
-        token_kind: "device",
-        token_id: "token-op-2",
-        tenant_id: DEFAULT_TENANT_ID,
-        role: "client",
-        device_id: "dev_client_1",
-        scopes: ["operator.read"],
-      },
-    });
-    const { ws: pairingOnlyWs } = makeClient(cm, {
-      authClaims: {
-        token_kind: "device",
-        token_id: "token-pair-2",
-        tenant_id: DEFAULT_TENANT_ID,
-        role: "client",
-        device_id: "dev_client_2",
-        scopes: ["operator.pairing"],
-      },
-    });
-    const { ws: nodeWs } = makeClient(cm, { role: "node" });
+    const audience = createOperatorAudience(cm);
+    const deps = createMemoryProtocolDeps(cm, ctx);
+    const requester = requireClient(cm, audience.requesterId);
 
-    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
-    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
-
-    const requester = cm.getClient(requesterId)!;
-
-    const createRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-create-1",
-        type: "memory.create",
-        payload: {
-          v: 1,
-          item: {
-            kind: "note",
-            body_md: "Forget me.",
-            tags: ["project"],
-            provenance: { source_kind: "operator" },
-          },
+    expectOk(
+      await sendProtocolMessage(requester, deps, "r-create-1", "memory.create", {
+        v: 1,
+        item: {
+          kind: "note",
+          body_md: "Forget me.",
+          tags: ["project"],
+          provenance: { source_kind: "operator" },
         },
       }),
-      deps,
     );
-    expect((createRes as unknown as { ok: boolean }).ok).toBe(true);
-
-    const forgetRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-forget-1",
-        type: "memory.forget",
-        payload: { v: 1, confirm: "FORGET", selectors: [{ kind: "tag", tag: "project" }] },
+    expectOk(
+      await sendProtocolMessage(requester, deps, "r-forget-1", "memory.forget", {
+        v: 1,
+        confirm: "FORGET",
+        selectors: [{ kind: "tag", tag: "project" }],
       }),
-      deps,
     );
-
-    expect((forgetRes as unknown as { ok: boolean }).ok).toBe(true);
-
-    const forgotEvents = parseSentJson(requesterWs).filter(
-      (m) => (m as { type?: unknown }).type === "memory.item.forgotten",
-    );
-    expect(forgotEvents.length).toBe(1);
-    expect(
-      parseSentJson(otherOperatorWs).some(
-        (m) => (m as { type?: unknown }).type === "memory.item.forgotten",
-      ),
-    ).toBe(true);
-    expect(
-      parseSentJson(pairingOnlyWs).some(
-        (m) => (m as { type?: unknown }).type === "memory.item.forgotten",
-      ),
-    ).toBe(false);
-    expect(
-      parseSentJson(nodeWs).some((m) => (m as { type?: unknown }).type === "memory.item.forgotten"),
-    ).toBe(false);
+    expectAudienceEvent(audience, "memory.item.forgotten");
   });
 
   it("stores a memory export artifact and emits memory.export.completed", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
-    const { id: requesterId, ws: requesterWs } = makeClient(cm);
-    const { ws: otherOperatorWs } = makeClient(cm, {
-      authClaims: {
-        token_kind: "device",
-        token_id: "token-op-3",
-        tenant_id: DEFAULT_TENANT_ID,
-        role: "client",
-        device_id: "dev_client_1",
-        scopes: ["operator.read"],
+    const audience = createOperatorAudience(cm);
+    const deps = createMemoryProtocolDeps(cm, ctx, { includeArtifactStore: true });
+    const requester = requireClient(cm, audience.requesterId);
+
+    await sendProtocolMessage(requester, deps, "r-create-1", "memory.create", {
+      v: 1,
+      item: {
+        kind: "note",
+        body_md: "Export me.",
+        provenance: { source_kind: "operator" },
       },
     });
-    const { ws: pairingOnlyWs } = makeClient(cm, {
-      authClaims: {
-        token_kind: "device",
-        token_id: "token-pair-3",
-        tenant_id: DEFAULT_TENANT_ID,
-        role: "client",
-        device_id: "dev_client_2",
-        scopes: ["operator.pairing"],
-      },
-    });
-    const { ws: nodeWs } = makeClient(cm, { role: "node" });
-    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
-    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
-    (deps as unknown as { artifactStore: FsArtifactStore }).artifactStore = artifactStore;
 
-    const requester = cm.getClient(requesterId)!;
-
-    await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-create-1",
-        type: "memory.create",
-        payload: {
-          v: 1,
-          item: {
-            kind: "note",
-            body_md: "Export me.",
-            provenance: { source_kind: "operator" },
-          },
-        },
+    const { artifact_id: artifactId } = expectOk<{ artifact_id: string }>(
+      await sendProtocolMessage(requester, deps, "r-export-1", "memory.export", {
+        v: 1,
+        include_tombstones: false,
       }),
-      deps,
     );
-
-    const exportRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-export-1",
-        type: "memory.export",
-        payload: { v: 1, include_tombstones: false },
-      }),
-      deps,
-    );
-
-    expect(exportRes).toBeDefined();
-    expect((exportRes as unknown as { ok: boolean }).ok).toBe(true);
-    const artifactId = (exportRes as unknown as { result: { artifact_id: string } }).result
-      .artifact_id;
     expect(artifactId).toMatch(/^[0-9a-f-]{36}$/i);
 
-    const got = await artifactStore.get(artifactId);
+    const got = await ctx.artifactStore.get(artifactId);
     expect(got).not.toBeNull();
     expect(got!.body.toString("utf8")).toContain("Export me.");
-
-    const exportEvents = parseSentJson(requesterWs).filter(
-      (m) => (m as { type?: unknown }).type === "memory.export.completed",
-    );
-    expect(exportEvents.length).toBe(1);
-    expect(
-      parseSentJson(otherOperatorWs).some(
-        (m) => (m as { type?: unknown }).type === "memory.export.completed",
-      ),
-    ).toBe(true);
-    expect(
-      parseSentJson(pairingOnlyWs).some(
-        (m) => (m as { type?: unknown }).type === "memory.export.completed",
-      ),
-    ).toBe(false);
-    expect(
-      parseSentJson(nodeWs).some(
-        (m) => (m as { type?: unknown }).type === "memory.export.completed",
-      ),
-    ).toBe(false);
+    expectAudienceEvent(audience, "memory.export.completed");
   });
 
   it("returns not_found when memory.get refers to a missing item", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
     const { id } = makeClient(cm);
-    const client = cm.getClient(id)!;
+    const deps = createMemoryProtocolDeps(cm, ctx);
 
-    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
-    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
-
-    const res = await handleClientMessage(
-      client,
-      JSON.stringify({
-        request_id: "r-get-1",
-        type: "memory.get",
-        payload: { v: 1, memory_item_id: "00000000-0000-0000-0000-000000000000" },
+    expectErrorCode(
+      await sendProtocolMessage(requireClient(cm, id), deps, "r-get-1", "memory.get", {
+        v: 1,
+        memory_item_id: "00000000-0000-0000-0000-000000000000",
       }),
-      deps,
+      "not_found",
     );
-
-    expect(res).toBeDefined();
-    expect((res as unknown as { ok: boolean }).ok).toBe(false);
-    expect((res as unknown as { error: { code: string } }).error.code).toBe("not_found");
   });
 
   it("returns invalid_request when cursors are malformed", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
     const { id } = makeClient(cm);
-    const client = cm.getClient(id)!;
+    const deps = createMemoryProtocolDeps(cm, ctx);
 
-    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
-    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
-
-    const res = await handleClientMessage(
-      client,
-      JSON.stringify({
-        request_id: "r-list-1",
-        type: "memory.list",
-        payload: { v: 1, cursor: "not-a-cursor" },
+    expectErrorCode(
+      await sendProtocolMessage(requireClient(cm, id), deps, "r-list-1", "memory.list", {
+        v: 1,
+        cursor: "not-a-cursor",
       }),
-      deps,
+      "invalid_request",
     );
-
-    expect(res).toBeDefined();
-    expect((res as unknown as { ok: boolean }).ok).toBe(false);
-    expect((res as unknown as { error: { code: string } }).error.code).toBe("invalid_request");
   });
 
   it("returns unsupported_request when memory.export is called without an ArtifactStore", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
     const { id } = makeClient(cm);
-    const client = cm.getClient(id)!;
+    const deps = createMemoryProtocolDeps(cm, ctx);
 
-    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
-    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
-
-    const res = await handleClientMessage(
-      client,
-      JSON.stringify({
-        request_id: "r-export-1",
-        type: "memory.export",
-        payload: { v: 1 },
+    expectErrorCode(
+      await sendProtocolMessage(requireClient(cm, id), deps, "r-export-1", "memory.export", {
+        v: 1,
       }),
-      deps,
+      "unsupported_request",
     );
-
-    expect(res).toBeDefined();
-    expect((res as unknown as { ok: boolean }).ok).toBe(false);
-    expect((res as unknown as { error: { code: string } }).error.code).toBe("unsupported_request");
   });
 
   it("rejects memory APIs from node-role WS clients", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, { role: "node" });
-    const client = cm.getClient(id)!;
+    const deps = createMemoryProtocolDeps(cm, ctx);
 
-    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
-    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
-
-    const res = await handleClientMessage(
-      client,
-      JSON.stringify({
-        request_id: "r-list-1",
-        type: "memory.list",
-        payload: { v: 1, limit: 10 },
+    expectErrorCode(
+      await sendProtocolMessage(requireClient(cm, id), deps, "r-list-1", "memory.list", {
+        v: 1,
+        limit: 10,
       }),
-      deps,
+      "unauthorized",
     );
-
-    expect(res).toBeDefined();
-    expect((res as unknown as { ok: boolean }).ok).toBe(false);
-    expect((res as unknown as { error: { code: string } }).error.code).toBe("unauthorized");
   });
 
   it("returns unsupported_request when memory v1 DAL is not configured", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
     const { id } = makeClient(cm);
-    const client = cm.getClient(id)!;
+    const deps = { connectionManager: cm, db: ctx.db };
 
-    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
-
-    const res = await handleClientMessage(
-      client,
-      JSON.stringify({
-        request_id: "r-list-1",
-        type: "memory.list",
-        payload: { v: 1, limit: 10 },
+    expectErrorCode(
+      await sendProtocolMessage(requireClient(cm, id), deps, "r-list-1", "memory.list", {
+        v: 1,
+        limit: 10,
       }),
-      deps,
+      "unsupported_request",
     );
-
-    expect(res).toBeDefined();
-    expect((res as unknown as { ok: boolean }).ok).toBe(false);
-    expect((res as unknown as { error: { code: string } }).error.code).toBe("unsupported_request");
   });
 
   it("returns invalid_request for kind-incompatible memory.update patches", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
     const { id: requesterId } = makeClient(cm);
+    const deps = createMemoryProtocolDeps(cm, ctx);
+    const requester = requireClient(cm, requesterId);
 
-    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
-    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
-    (deps as unknown as { artifactStore: FsArtifactStore }).artifactStore = artifactStore;
-
-    const requester = cm.getClient(requesterId)!;
-
-    const createRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-create-1",
-        type: "memory.create",
-        payload: {
-          v: 1,
-          item: {
-            kind: "note",
-            body_md: "Remember to check dashboards.",
-            tags: ["project"],
-            sensitivity: "private",
-            provenance: { source_kind: "operator" },
-          },
+    const createdItem = expectOk<{ item: { memory_item_id: string } }>(
+      await sendProtocolMessage(requester, deps, "r-create-1", "memory.create", {
+        v: 1,
+        item: {
+          kind: "note",
+          body_md: "Remember to check dashboards.",
+          tags: ["project"],
+          sensitivity: "private",
+          provenance: { source_kind: "operator" },
         },
       }),
-      deps,
-    );
+    ).item;
 
-    expect((createRes as unknown as { ok: boolean }).ok).toBe(true);
-    const createdItem = (createRes as unknown as { result: { item: { memory_item_id: string } } })
-      .result.item;
-
-    const updateRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-update-1",
-        type: "memory.update",
-        payload: {
-          v: 1,
-          memory_item_id: createdItem.memory_item_id,
-          patch: { occurred_at: "2026-02-19T12:00:01.000Z" },
-        },
+    const error = expectErrorCode(
+      await sendProtocolMessage(requester, deps, "r-update-1", "memory.update", {
+        v: 1,
+        memory_item_id: createdItem.memory_item_id,
+        patch: { occurred_at: "2026-02-19T12:00:01.000Z" },
       }),
-      deps,
-    );
-
-    expect(updateRes).toBeDefined();
-    expect((updateRes as unknown as { ok: boolean }).ok).toBe(false);
-    expect((updateRes as unknown as { error: { code: string; message: string } }).error.code).toBe(
       "invalid_request",
     );
-    expect(
-      (updateRes as unknown as { error: { code: string; message: string } }).error.message,
-    ).toContain("incompatible patch fields");
+    expect(error.message).toContain("incompatible patch fields");
   });
 
   it("classifies memory.search guardrail failures as invalid_request", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
     const { id: requesterId } = makeClient(cm, { role: "client" });
-
-    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
-    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
-
-    const requester = cm.getClient(requesterId)!;
+    const deps = createMemoryProtocolDeps(cm, ctx);
     const tooLongQuery = "x".repeat(1025);
 
-    const res = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-search-guardrail-1",
-        type: "memory.search",
-        payload: { v: 1, query: tooLongQuery, limit: 20 },
-      }),
-      deps,
-    );
-
-    expect(res).toBeDefined();
-    expect((res as unknown as { ok: boolean }).ok).toBe(false);
-    expect((res as unknown as { error: { code: string; message: string } }).error.code).toBe(
+    const error = expectErrorCode(
+      await sendProtocolMessage(
+        requireClient(cm, requesterId),
+        deps,
+        "r-search-guardrail-1",
+        "memory.search",
+        { v: 1, query: tooLongQuery, limit: 20 },
+      ),
       "invalid_request",
     );
-    expect(
-      (res as unknown as { error: { code: string; message: string } }).error.message,
-    ).toContain("query too long");
+    expect(error.message).toContain("query too long");
   });
 
   it("does not fail memory.create when budgets provider/consolidation throws", async () => {
+    const ctx = requireWsMemoryV1Context(state);
     const cm = new ConnectionManager();
-    const { id: requesterId, ws: requesterWs } = makeClient(cm);
+    const { id: requesterId } = makeClient(cm);
+    const requester = requireClient(cm, requesterId);
+    const requesterWs = requester.ws as unknown as { send: ReturnType<typeof vi.fn> };
+    const logger = { warn: vi.fn(), error: vi.fn() };
+    const deps = createMemoryProtocolDeps(cm, ctx, {
+      logger,
+      memoryV1BudgetsProvider: async () => {
+        throw new Error("boom");
+      },
+    });
 
-    const logger = {
-      warn: vi.fn(),
-      error: vi.fn(),
-    };
-
-    const deps = makeDeps(cm, { db, logger } as unknown as Partial<ProtocolDeps>);
-    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
-    (
-      deps as unknown as {
-        memoryV1BudgetsProvider: (tenantId: string, agentId?: string) => Promise<unknown>;
-      }
-    ).memoryV1BudgetsProvider = async () => {
-      throw new Error("boom");
-    };
-
-    const requester = cm.getClient(requesterId)!;
-    const createRes = await handleClientMessage(
-      requester,
-      JSON.stringify({
-        request_id: "r-create-err-1",
-        type: "memory.create",
-        payload: {
-          v: 1,
-          item: {
-            kind: "note",
-            body_md: "Remember to check dashboards.",
-            tags: [],
-            sensitivity: "private",
-            provenance: { source_kind: "operator" },
-          },
+    expectOk(
+      await sendProtocolMessage(requester, deps, "r-create-err-1", "memory.create", {
+        v: 1,
+        item: {
+          kind: "note",
+          body_md: "Remember to check dashboards.",
+          tags: [],
+          sensitivity: "private",
+          provenance: { source_kind: "operator" },
         },
       }),
-      deps,
     );
 
-    expect(createRes).toBeDefined();
-    expect((createRes as unknown as { ok: boolean }).ok).toBe(true);
-
-    const createEvents = parseSentJson(requesterWs).filter(
-      (m) => (m as { type?: unknown }).type === "memory.item.created",
-    );
-    expect(createEvents.length).toBe(1);
-
-    expect(logger.error.mock.calls.some((c) => c[0] === "memory.v1.consolidation_failed")).toBe(
+    expect(
+      requesterWs.send.mock.calls.some((call) => {
+        const [message] = call;
+        return typeof message === "string" && message.includes("\"memory.item.created\"");
+      }),
+    ).toBe(true);
+    expect(logger.error.mock.calls.some((call) => call[0] === "memory.v1.consolidation_failed")).toBe(
       true,
     );
   });
