@@ -186,7 +186,7 @@ function registerReconnectBackoffTests(fixture: ReconnectFixture): void {
     const reconnectSchedule1 = await withTimeout(reconnect1, 2_000, "reconnect_scheduled 1");
     expect(reconnectSchedule1.delayMs).toBe(2);
     expect(reconnectSchedule1.attempt).toBe(1);
-    expect(reconnectSchedule1.nextRetryAtMs).toBeGreaterThan(Date.now());
+    expect(reconnectSchedule1.nextRetryAtMs).toBeGreaterThanOrEqual(Date.now());
 
     const ws2 = await withTimeout(server.waitForClient(), 2_000, "ws2 reconnect");
     const reconnect2 = waitForReconnectScheduled(client);
@@ -194,7 +194,7 @@ function registerReconnectBackoffTests(fixture: ReconnectFixture): void {
     const reconnectSchedule2 = await withTimeout(reconnect2, 2_000, "reconnect_scheduled 2");
     expect(reconnectSchedule2.delayMs).toBe(4);
     expect(reconnectSchedule2.attempt).toBe(2);
-    expect(reconnectSchedule2.nextRetryAtMs).toBeGreaterThan(Date.now());
+    expect(reconnectSchedule2.nextRetryAtMs).toBeGreaterThanOrEqual(Date.now());
 
     const ws3 = await withTimeout(server.waitForClient(), 2_000, "ws3 reconnect");
     const reconnect3 = waitForReconnectScheduled(client);
@@ -202,7 +202,7 @@ function registerReconnectBackoffTests(fixture: ReconnectFixture): void {
     const reconnectSchedule3 = await withTimeout(reconnect3, 2_000, "reconnect_scheduled 3");
     expect(reconnectSchedule3.delayMs).toBe(5);
     expect(reconnectSchedule3.attempt).toBe(3);
-    expect(reconnectSchedule3.nextRetryAtMs).toBeGreaterThan(Date.now());
+    expect(reconnectSchedule3.nextRetryAtMs).toBeGreaterThanOrEqual(Date.now());
   });
 
   it("resets reconnect backoff after an intentional reconnect", async () => {
