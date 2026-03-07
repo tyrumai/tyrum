@@ -173,8 +173,8 @@ class SharedPluginCatalogProvider implements PluginCatalogProvider {
       ...resolvePluginSearchDirs({
         home: this.opts.home,
         userHome: this.opts.userHome,
-        includeWorkspacePlugins: false,
-        includeUserPlugins: false,
+        includeWorkspacePlugins: true,
+        includeUserPlugins: true,
         includeBundledPlugins: true,
       }),
     ];

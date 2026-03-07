@@ -25,7 +25,6 @@ import { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import { createMemoryV1BudgetsProvider } from "../modules/memory/v1-budgets-provider.js";
 import type { OtelRuntime } from "../modules/observability/otel.js";
 import { createPluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
-import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
 import { WsEventDal } from "../modules/ws-event/dal.js";
 import { WorkSignalScheduler } from "../modules/workboard/signal-scheduler.js";
@@ -37,6 +36,7 @@ import type { ProtocolDeps } from "../ws/protocol.js";
 import { TaskResultRegistry, type TaskResult } from "../ws/protocol/task-result-registry.js";
 import { resolveGatewayEntrypointPath } from "./entrypoint-path.js";
 import { createExecutionEngine } from "./runtime-builders-engine.js";
+import { fireGatewayLifecycleHooks } from "./runtime-builders-shutdown.js";
 import type {
   EdgeRuntime,
   GatewayBootContext,
@@ -451,15 +451,12 @@ export function fireGatewayStartHook(context: GatewayBootContext, protocol: Prot
     console.log(`Tyrum gateway v${VERSION} started in role '${context.role}'.`);
 
   if (protocol.hooksRuntime && context.shouldRunWorker) {
-    void protocol.hooksRuntime
-      .fire({
-        event: "gateway.start",
-        tenantId: DEFAULT_TENANT_ID,
-        metadata: { instance_id: context.instanceId, role: context.role },
-      })
-      .catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        context.logger.warn("hooks.fire_failed", { event: "gateway.start", error: message });
-      });
+    void fireGatewayLifecycleHooks(context, protocol.hooksRuntime, {
+      event: "gateway.start",
+      metadata: { instance_id: context.instanceId, role: context.role },
+    }).catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      context.logger.warn("hooks.fire_failed", { event: "gateway.start", error: message });
+    });
   }
 }

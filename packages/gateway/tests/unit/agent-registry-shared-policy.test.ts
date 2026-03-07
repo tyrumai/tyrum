@@ -1,10 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRegistry } from "../../src/modules/agent/registry.js";
+import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { PolicyBundleConfigDal } from "../../src/modules/policy/config-dal.js";
+import { PluginRegistry } from "../../src/modules/plugins/registry.js";
 
 const migrationsDir = join(import.meta.dirname, "../../migrations/sqlite");
 
@@ -21,6 +23,7 @@ describe("AgentRegistry shared policy wiring", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await container.db.close();
     await rm(home, { recursive: true, force: true });
   });
@@ -67,5 +70,79 @@ describe("AgentRegistry shared policy wiring", () => {
     });
 
     expect(evaluation.decision).toBe("require_approval");
+  });
+
+  it("refreshes plugins on cached runtimes when tenant registries change", async () => {
+    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-plugins");
+    const firstPlugins = Object.create(PluginRegistry.prototype) as PluginRegistry;
+    const secondPlugins = Object.create(PluginRegistry.prototype) as PluginRegistry;
+    const loadTenantRegistry = vi
+      .fn<(_: string) => Promise<PluginRegistry>>()
+      .mockResolvedValueOnce(firstPlugins)
+      .mockResolvedValueOnce(secondPlugins);
+    const setPluginsSpy = vi.spyOn(AgentRuntime.prototype, "setPlugins");
+
+    const registry = new AgentRegistry({
+      container,
+      baseHome: home,
+      secretProviderForTenant: () => ({ resolve: async () => undefined }) as never,
+      defaultPolicyService: container.policyService,
+      approvalNotifier: { notify: () => undefined } as never,
+      pluginCatalogProvider: {
+        loadGlobalRegistry: vi.fn(async () => firstPlugins),
+        loadTenantRegistry,
+        invalidateTenantRegistry: vi.fn(async () => undefined),
+        shutdown: vi.fn(async () => undefined),
+      },
+      logger: container.logger,
+    });
+
+    const runtime = await registry.getRuntime({ tenantId, agentKey: "default" });
+    expect(await registry.getRuntime({ tenantId, agentKey: "default" })).toBe(runtime);
+    expect(loadTenantRegistry).toHaveBeenCalledTimes(2);
+    expect(setPluginsSpy).toHaveBeenCalledTimes(1);
+    expect(setPluginsSpy).toHaveBeenCalledWith(secondPlugins);
+
+    await registry.shutdown();
+  });
+
+  it("keeps serving cached runtimes when plugin refresh fails", async () => {
+    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-plugin-failure");
+    const firstPlugins = Object.create(PluginRegistry.prototype) as PluginRegistry;
+    const loadTenantRegistry = vi
+      .fn<(_: string) => Promise<PluginRegistry>>()
+      .mockResolvedValueOnce(firstPlugins)
+      .mockRejectedValueOnce(new Error("db down"));
+    const setPluginsSpy = vi.spyOn(AgentRuntime.prototype, "setPlugins");
+    const warnSpy = vi.spyOn(container.logger, "warn");
+
+    const registry = new AgentRegistry({
+      container,
+      baseHome: home,
+      secretProviderForTenant: () => ({ resolve: async () => undefined }) as never,
+      defaultPolicyService: container.policyService,
+      approvalNotifier: { notify: () => undefined } as never,
+      pluginCatalogProvider: {
+        loadGlobalRegistry: vi.fn(async () => firstPlugins),
+        loadTenantRegistry,
+        invalidateTenantRegistry: vi.fn(async () => undefined),
+        shutdown: vi.fn(async () => undefined),
+      },
+      logger: container.logger,
+    });
+
+    const runtime = await registry.getRuntime({ tenantId, agentKey: "default" });
+    await expect(registry.getRuntime({ tenantId, agentKey: "default" })).resolves.toBe(runtime);
+    expect(setPluginsSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      "agents.runtime_plugin_refresh_failed",
+      expect.objectContaining({
+        tenant_id: tenantId,
+        agent_id: "default",
+        error: "db down",
+      }),
+    );
+
+    await registry.shutdown();
   });
 });
