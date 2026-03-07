@@ -1,4 +1,5 @@
 import type { DesktopBackgroundState } from "../../desktop-api.js";
+import { toast } from "sonner";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -64,6 +65,13 @@ export function SecurityProfileCard({
 
 export function NodeConnectionCard(props: {
   connection: ConnectionState;
+  currentOperatorConnection: {
+    mode: ConnectionState["mode"];
+    token: string;
+  } | null;
+  currentTokenLoading: boolean;
+  currentTokenError: string | null;
+  connectionDirty: boolean;
   backgroundState: DesktopBackgroundState | null;
   backgroundBusy: boolean;
   backgroundError: string | null;
@@ -75,6 +83,32 @@ export function NodeConnectionCard(props: {
   onRemoteTlsAllowSelfSignedChange: (value: boolean) => void;
   onToggleBackgroundMode: (enabled: boolean) => void;
 }) {
+  const savedModeLabel =
+    props.currentOperatorConnection?.mode === "embedded" ? "Embedded" : "Remote";
+  const currentTokenHelperText = props.currentTokenLoading
+    ? "Loading current gateway token…"
+    : props.currentTokenError
+      ? undefined
+    : props.connectionDirty && props.currentOperatorConnection
+      ? `Visible token matches saved ${savedModeLabel} settings until you save changes.`
+      : "Use this token to sign in to the gateway UI at /ui.";
+
+  const copyCurrentToken = async (): Promise<void> => {
+    const token = props.currentOperatorConnection?.token ?? "";
+    const clipboard = globalThis.navigator?.clipboard;
+    if (!token || !clipboard?.writeText) {
+      toast.error("Failed to copy to clipboard");
+      return;
+    }
+
+    try {
+      await clipboard.writeText(token);
+      toast.success("Copied to clipboard");
+    } catch {
+      toast.error("Failed to copy to clipboard");
+    }
+  };
+
   return (
     <Card>
       <CardContent className="grid gap-4 pt-6">
@@ -96,6 +130,41 @@ export function NodeConnectionCard(props: {
           </Button>
         </div>
 
+        <Input
+          label="Current gateway token"
+          type="text"
+          readOnly
+          spellCheck={false}
+          autoCapitalize="none"
+          autoCorrect="off"
+          className="pr-20 font-mono text-xs"
+          value={props.currentOperatorConnection?.token ?? ""}
+          placeholder={props.currentTokenLoading ? "Loading current gateway token…" : undefined}
+          helperText={currentTokenHelperText}
+          suffix={
+            <button
+              type="button"
+              data-testid="node-current-token-copy"
+              aria-label="Copy gateway token"
+              disabled={props.currentTokenLoading || !props.currentOperatorConnection?.token}
+              className="text-xs font-medium text-fg-muted enabled:hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => {
+                void copyCurrentToken();
+              }}
+            >
+              Copy
+            </button>
+          }
+        />
+
+        {props.currentTokenError ? (
+          <Alert
+            variant="error"
+            title="Current token unavailable"
+            description={props.currentTokenError}
+          />
+        ) : null}
+
         {props.connection.mode === "embedded" ? (
           <Input
             label="Embedded gateway port"
@@ -115,15 +184,15 @@ export function NodeConnectionCard(props: {
               placeholder="wss://host:port/ws"
             />
             <Input
-              label="Token"
+              label="Replace token"
               type="password"
               value={props.connection.remoteToken}
               onChange={(event) => props.onRemoteTokenChange(event.target.value)}
               placeholder="Bearer token"
               helperText={
                 props.connection.hasSavedRemoteToken && props.connection.remoteToken.trim() === ""
-                  ? "A token is already saved. Leave blank to reuse it, or enter a new token to replace it."
-                  : undefined
+                  ? "Leave blank to keep the current saved token, or enter a new token to replace it."
+                  : "Enter the token to save for remote mode."
               }
             />
             <Input
