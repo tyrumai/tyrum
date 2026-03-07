@@ -110,7 +110,8 @@ describe("TuiApp", () => {
       expect(connect).toHaveBeenCalledTimes(2);
 
       io.stdin.write("\u001b");
-      await sleep(25);
+      // Allow Ink's terminal input parser to flush the Escape key before the next shortcut.
+      await sleep(150);
 
       io.stdin.write("c");
       await waitFor(() => connect.mock.calls.length === 3);
