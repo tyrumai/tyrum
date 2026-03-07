@@ -783,9 +783,9 @@ export class ScheduleService {
       params.push(input.workspaceKey.trim());
     }
     if (!input?.includeDeleted) {
-      const activeWhere = sqlActiveWhereClause(this.db);
-      where.push(activeWhere.sql.replaceAll("active", "w.active"));
+      const activeWhere = sqlActiveWhereClause(this.db, { column: "w.active" });
       params.push(...activeWhere.params);
+      where.push(activeWhere.sql);
     }
 
     const rows = await this.db.all<RawScheduleRow>(
@@ -821,9 +821,9 @@ export class ScheduleService {
     const where = ["w.tenant_id = ?", "w.watcher_id = ?", "w.trigger_type = 'periodic'"];
     const params: unknown[] = [tenantId, scheduleId];
     if (!input.includeDeleted) {
-      const activeWhere = sqlActiveWhereClause(this.db);
-      where.push(activeWhere.sql.replaceAll("active", "w.active"));
+      const activeWhere = sqlActiveWhereClause(this.db, { column: "w.active" });
       params.push(...activeWhere.params);
+      where.push(activeWhere.sql);
     }
 
     const row = await this.db.get<RawScheduleRow>(
