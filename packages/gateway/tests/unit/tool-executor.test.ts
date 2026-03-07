@@ -12,6 +12,7 @@ import {
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../../src/modules/workspace/lease.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
+import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
@@ -560,6 +561,51 @@ describe("ToolExecutor", () => {
       const result = await executor.execute("tool.unknown", "call-8", {});
 
       expect(result.error).toBe("unknown tool: tool.unknown");
+    });
+
+    it("rejects invalid automation schedule steps before dispatching to the service", async () => {
+      homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
+      const db = openTestSqliteDb();
+
+      try {
+        const executor = new ToolExecutor(
+          homeDir,
+          stubMcpManager(),
+          new Map(),
+          fetch,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          {
+            db,
+            tenantId: DEFAULT_TENANT_ID,
+            agentId: null,
+            workspaceId: DEFAULT_WORKSPACE_ID,
+          },
+          undefined,
+          undefined,
+          new IdentityScopeDal(db),
+        );
+
+        const result = await executor.execute(
+          "tool.automation.schedule.create",
+          "call-schedule-invalid-steps-1",
+          {
+            kind: "cron",
+            cadence: { type: "interval", interval_ms: 60_000 },
+            execution: {
+              kind: "steps",
+              steps: [{ type: "Nope", args: {} }],
+            },
+          },
+        );
+
+        expect(result.output).toBe("");
+        expect(result.error).toMatch(/invalid steps schedule action/i);
+      } finally {
+        await db.close();
+      }
     });
   });
 

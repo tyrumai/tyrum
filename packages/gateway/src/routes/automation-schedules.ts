@@ -1,4 +1,8 @@
-import { UuidSchema, type ActionPrimitive } from "@tyrum/schemas";
+import {
+  ActionPrimitive as ActionPrimitiveSchema,
+  UuidSchema,
+  type ActionPrimitive,
+} from "@tyrum/schemas";
 import { Hono } from "hono";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import {
@@ -38,6 +42,19 @@ function parseCadence(raw: unknown): ScheduleCadence | undefined {
   return undefined;
 }
 
+function parseActionSteps(raw: unknown): ActionPrimitive[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const steps: ActionPrimitive[] = [];
+  for (const step of raw) {
+    const parsed = ActionPrimitiveSchema.safeParse(step);
+    if (!parsed.success) {
+      throw new Error(`invalid steps schedule action: ${parsed.error.message}`);
+    }
+    steps.push(parsed.data);
+  }
+  return steps;
+}
+
 function parseExecution(raw: unknown): ScheduleExecution | undefined {
   if (!isRecord(raw)) return undefined;
   const kind = raw["kind"];
@@ -54,9 +71,9 @@ function parseExecution(raw: unknown): ScheduleExecution | undefined {
     return { kind, playbook_id: playbookId };
   }
   if (kind === "steps") {
-    const steps = raw["steps"];
-    if (!Array.isArray(steps) || steps.length === 0) return undefined;
-    return { kind, steps: steps as ActionPrimitive[] };
+    const steps = parseActionSteps(raw["steps"]);
+    if (!steps) return undefined;
+    return { kind, steps };
   }
   return undefined;
 }
@@ -96,20 +113,21 @@ export function createAutomationScheduleRoutes(container: GatewayContainer): Hon
 
   app.post("/automation/schedules", async (c) => {
     const body = (await c.req.json()) as Record<string, unknown>;
-    const kind = body["kind"];
-    const cadence = parseCadence(body["cadence"]);
-    const execution = parseExecution(body["execution"]);
-    if ((kind !== "heartbeat" && kind !== "cron") || !cadence || !execution) {
-      return c.json(
-        {
-          error: "invalid_request",
-          message: "kind, cadence, and execution are required",
-        },
-        400,
-      );
-    }
 
     try {
+      const kind = body["kind"];
+      const cadence = parseCadence(body["cadence"]);
+      const execution = parseExecution(body["execution"]);
+      if ((kind !== "heartbeat" && kind !== "cron") || !cadence || !execution) {
+        return c.json(
+          {
+            error: "invalid_request",
+            message: "kind, cadence, and execution are required",
+          },
+          400,
+        );
+      }
+
       const schedule = await service.createSchedule({
         tenantId: DEFAULT_TENANT_ID,
         agentKey: typeof body["agent_key"] === "string" ? body["agent_key"] : undefined,
@@ -153,18 +171,19 @@ export function createAutomationScheduleRoutes(container: GatewayContainer): Hon
     if (body["kind"] === "heartbeat" || body["kind"] === "cron") {
       patch.kind = body["kind"] as ScheduleKind;
     }
-    const cadence = parseCadence(body["cadence"]);
-    if (cadence) patch.cadence = cadence;
-    const execution = parseExecution(body["execution"]);
-    if (execution) patch.execution = execution;
-    if (isRecord(body["delivery"])) {
-      const mode = body["delivery"]["mode"];
-      if (mode === "quiet" || mode === "notify") {
-        patch.delivery = { mode };
-      }
-    }
 
     try {
+      const cadence = parseCadence(body["cadence"]);
+      if (cadence) patch.cadence = cadence;
+      const execution = parseExecution(body["execution"]);
+      if (execution) patch.execution = execution;
+      if (isRecord(body["delivery"])) {
+        const mode = body["delivery"]["mode"];
+        if (mode === "quiet" || mode === "notify") {
+          patch.delivery = { mode };
+        }
+      }
+
       const schedule = await service.updateSchedule({
         tenantId: DEFAULT_TENANT_ID,
         scheduleId,

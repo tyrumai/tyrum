@@ -6,6 +6,7 @@ import { isIP } from "node:net";
 import { dirname, resolve, relative, isAbsolute } from "node:path";
 import { ActionPrimitiveKind, CapabilityDescriptor } from "@tyrum/schemas";
 import {
+  ActionPrimitive as ActionPrimitiveSchema,
   descriptorIdForClientCapability,
   requiredCapability,
   type ActionPrimitive,
@@ -580,7 +581,15 @@ export class ToolExecutor {
     if (record["kind"] === "steps") {
       const steps = record["steps"];
       if (!Array.isArray(steps) || steps.length === 0) return undefined;
-      return { kind: "steps", steps: steps as ActionPrimitive[] };
+      const parsedSteps: ActionPrimitive[] = [];
+      for (const step of steps) {
+        const parsedStep = ActionPrimitiveSchema.safeParse(step);
+        if (!parsedStep.success) {
+          throw new Error(`invalid steps schedule action: ${parsedStep.error.message}`);
+        }
+        parsedSteps.push(parsedStep.data);
+      }
+      return { kind: "steps", steps: parsedSteps };
     }
     return undefined;
   }

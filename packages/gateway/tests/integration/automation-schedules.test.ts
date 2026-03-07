@@ -69,4 +69,23 @@ describe("automation schedule routes", () => {
     );
     expect(deleteRes.status).toBe(200);
   });
+
+  it("rejects invalid steps schedules before calling the service layer", async () => {
+    const createRes = await app.request("/automation/schedules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "cron",
+        cadence: { type: "interval", interval_ms: 60_000 },
+        execution: {
+          kind: "steps",
+          steps: [{ type: "Nope", args: {} }],
+        },
+      }),
+    });
+
+    expect(createRes.status).toBe(400);
+    const body = (await createRes.json()) as { message: string };
+    expect(body.message).toMatch(/invalid steps schedule action/i);
+  });
 });
