@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfig, AgentConfigGetResponse } from "@tyrum/schemas";
 import { createTestApp } from "./helpers.js";
 
 describe("Agent config routes integration", () => {
@@ -140,9 +140,10 @@ describe("Agent config routes integration", () => {
       body: JSON.stringify({ revision: v1.revision, reason: "revert to v1" }),
     });
     expect(revert.status).toBe(200);
-    const reverted = (await revert.json()) as { revision: number; reverted_from_revision: number };
+    const reverted = AgentConfigGetResponse.parse((await revert.json()) as unknown);
     expect(reverted.revision).toBeGreaterThan(v2.revision);
     expect(reverted.reverted_from_revision).toBe(v1.revision);
+    expect(reverted.persona).toEqual(expect.objectContaining({ name: "Hypatia", tone: "direct" }));
 
     const list = await app.request("/config/agents");
     expect(list.status).toBe(200);

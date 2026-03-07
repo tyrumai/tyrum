@@ -10,8 +10,11 @@ import {
   AgentConfigGetResponse,
   AgentConfigListResponse,
   AgentConfigUpdateRequest,
-  AgentConfigUpdateResponse,
   AgentKey,
+} from "@tyrum/schemas";
+import type {
+  AgentConfig,
+  AgentConfigGetResponse as AgentConfigGetResponseT,
 } from "@tyrum/schemas";
 import type { SqlDb } from "../statestore/types.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
@@ -33,6 +36,37 @@ function normalizeAgentKey(raw: string): string {
     throw new Error(`invalid agent_key '${trimmed}' (${parsed.error.message})`);
   }
   return parsed.data;
+}
+
+interface AgentConfigRevisionResponseInput {
+  revision: number;
+  tenantId: string;
+  agentId: string;
+  config: AgentConfig;
+  configSha256: string;
+  createdAt: string;
+  createdBy: unknown;
+  reason: string | null;
+  revertedFromRevision: number | null;
+}
+
+function buildAgentConfigRevisionResponse(
+  agentKey: string,
+  revision: AgentConfigRevisionResponseInput,
+): AgentConfigGetResponseT {
+  return AgentConfigGetResponse.parse({
+    revision: revision.revision,
+    tenant_id: revision.tenantId,
+    agent_id: revision.agentId,
+    agent_key: agentKey,
+    config: revision.config,
+    persona: resolveAgentPersona({ agentKey, config: revision.config }),
+    config_sha256: revision.configSha256,
+    created_at: revision.createdAt,
+    created_by: revision.createdBy,
+    reason: revision.reason,
+    reverted_from_revision: revision.revertedFromRevision,
+  });
 }
 
 const AgentConfigRevertRequest = z
@@ -106,18 +140,16 @@ export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
     }
 
     return c.json(
-      AgentConfigGetResponse.parse({
+      buildAgentConfigRevisionResponse(agentKey, {
         revision: revision.revision,
-        tenant_id: revision.tenantId,
-        agent_id: revision.agentId,
-        agent_key: agentKey,
+        tenantId: revision.tenantId,
+        agentId: revision.agentId,
         config: revision.config,
-        persona: resolveAgentPersona({ agentKey, config: revision.config }),
-        config_sha256: revision.configSha256,
-        created_at: revision.createdAt,
-        created_by: revision.createdBy,
+        configSha256: revision.configSha256,
+        createdAt: revision.createdAt,
+        createdBy: revision.createdBy,
         reason: revision.reason ?? null,
-        reverted_from_revision: revision.revertedFromRevision ?? null,
+        revertedFromRevision: revision.revertedFromRevision ?? null,
       }),
       200,
     );
@@ -184,18 +216,16 @@ export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
     });
 
     return c.json(
-      AgentConfigUpdateResponse.parse({
+      buildAgentConfigRevisionResponse(agentKey, {
         revision: revision.revision,
-        tenant_id: revision.tenantId,
-        agent_id: revision.agentId,
-        agent_key: agentKey,
+        tenantId: revision.tenantId,
+        agentId: revision.agentId,
         config: revision.config,
-        persona: resolveAgentPersona({ agentKey, config: revision.config }),
-        config_sha256: revision.configSha256,
-        created_at: revision.createdAt,
-        created_by: revision.createdBy,
+        configSha256: revision.configSha256,
+        createdAt: revision.createdAt,
+        createdBy: revision.createdBy,
         reason: revision.reason ?? null,
-        reverted_from_revision: revision.revertedFromRevision ?? null,
+        revertedFromRevision: revision.revertedFromRevision ?? null,
       }),
       200,
     );
@@ -233,19 +263,17 @@ export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
     });
 
     return c.json(
-      {
+      buildAgentConfigRevisionResponse(agentKey, {
         revision: revision.revision,
-        tenant_id: revision.tenantId,
-        agent_id: revision.agentId,
-        agent_key: agentKey,
+        tenantId: revision.tenantId,
+        agentId: revision.agentId,
         config: revision.config,
-        persona: resolveAgentPersona({ agentKey, config: revision.config }),
-        config_sha256: revision.configSha256,
-        created_at: revision.createdAt,
-        created_by: revision.createdBy,
+        configSha256: revision.configSha256,
+        createdAt: revision.createdAt,
+        createdBy: revision.createdBy,
         reason: revision.reason ?? null,
-        reverted_from_revision: revision.revertedFromRevision ?? null,
-      },
+        revertedFromRevision: revision.revertedFromRevision ?? null,
+      }),
       200,
     );
   });
