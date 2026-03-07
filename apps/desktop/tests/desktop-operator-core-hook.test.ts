@@ -16,10 +16,7 @@ const {
   createPersistentElevatedModeControllerMock,
   createTyrumHttpClientMock,
   gatewayGetOperatorConnectionMock,
-  managerDisposeMock,
-  managerSubscribeMock,
   retryingConnectionMock,
-  unsubscribeMock,
 } = vi.hoisted(() => {
   const connectMockInner = vi.fn();
   const controllerInner = { enter: vi.fn(async () => {}), exit: vi.fn(async () => {}) };
@@ -52,10 +49,7 @@ const {
     createPersistentElevatedModeControllerMock: createPersistentElevatedModeControllerMockInner,
     createTyrumHttpClientMock: createTyrumHttpClientMockInner,
     gatewayGetOperatorConnectionMock: gatewayGetOperatorConnectionMockInner,
-    managerDisposeMock: managerDisposeMockInner,
-    managerSubscribeMock: managerSubscribeMockInner,
     retryingConnectionMock: retryingConnectionMockInner,
-    unsubscribeMock: unsubscribeMockInner,
   };
 });
 

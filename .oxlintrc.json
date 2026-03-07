@@ -18,17 +18,8 @@
   },
   "rules": {
     "max-lines": ["warn", { "max": 500, "skipBlankLines": true, "skipComments": true }],
-    "max-lines-per-function": ["warn", { "max": 80, "skipBlankLines": true, "skipComments": true }],
     "preserve-caught-error": "off",
     "unicorn/consistent-function-scoping": "off",
     "no-await-in-loop": "off"
-  },
-  "overrides": [
-    {
-      "files": ["**/tests/**", "**/__tests__/**", "**/*.test.*", "**/*.spec.*"],
-      "rules": {
-        "max-lines-per-function": "off"
-      }
-    }
-  ]
+  }
 }
