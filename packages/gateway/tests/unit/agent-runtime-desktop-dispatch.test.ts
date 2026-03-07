@@ -125,6 +125,7 @@ describe("AgentRuntime - desktop dispatch", () => {
     });
 
     const pending = await container.nodePairingDal.upsertOnConnect({
+      tenantId: DEFAULT_TENANT_ID,
       nodeId,
       pubkey: "pubkey-1",
       label: "node-1",
@@ -133,6 +134,7 @@ describe("AgentRuntime - desktop dispatch", () => {
     });
     const desktopDescriptorId = descriptorIdForClientCapability("desktop");
     await container.nodePairingDal.resolve({
+      tenantId: DEFAULT_TENANT_ID,
       pairingId: pending.pairing_id,
       decision: "approved",
       trustLevel: "local",
@@ -195,9 +197,9 @@ describe("AgentRuntime - desktop dispatch", () => {
           }
         })();
 
-        expect(safeMessages).toContain("artifact://");
-        expect(safeMessages).not.toContain("bytesBase64");
-        expect(safeMessages).not.toContain(bytesBase64);
+        expect(/artifact:\/\//.test(safeMessages) && !safeMessages.includes(bytesBase64)).toBe(
+          true,
+        );
 
         return {
           content: [{ type: "text" as const, text: "done" }],

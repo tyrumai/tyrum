@@ -42,12 +42,10 @@ describe("AgentRuntime - context reports and identity keys", () => {
     expect(report).toBeDefined();
 
     const identitySection = report!.system_prompt.sections.find(
-      (section) => section.id === "identity",
-    );
-    const safetySection = report!.system_prompt.sections.find((section) => section.id === "safety");
-    const sandboxSection = report!.system_prompt.sections.find(
-      (section) => section.id === "sandbox",
-    );
+        (section) => section.id === "identity",
+      ),
+      safetySection = report!.system_prompt.sections.find((section) => section.id === "safety"),
+      sandboxSection = report!.system_prompt.sections.find((section) => section.id === "sandbox");
     expect(identitySection).toBeDefined();
     expect(safetySection).toBeDefined();
     expect(sandboxSection).toBeDefined();
