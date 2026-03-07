@@ -69,9 +69,9 @@ export function MemoryDetailPanel({
       {item ? (
         <Card>
           <CardContent className="grid gap-4 pt-6">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{item.kind}</Badge>
-              <span className="truncate font-mono text-xs text-fg-muted">
+              <span className="font-mono text-xs text-fg-muted break-all">
                 {item.memory_item_id}
               </span>
             </div>
@@ -79,12 +79,15 @@ export function MemoryDetailPanel({
             {item.kind === "fact" ? (
               <div className="grid gap-1">
                 <div className="text-xs font-medium text-fg-muted">Key</div>
-                <div data-testid="memory-detail-fact-key" className="text-sm font-medium text-fg">
+                <div
+                  data-testid="memory-detail-fact-key"
+                  className="break-words text-sm font-medium text-fg [overflow-wrap:anywhere]"
+                >
                   {item.key}
                 </div>
                 <pre
                   data-testid="memory-detail-fact-value"
-                  className="mt-1 overflow-x-auto rounded-md bg-bg-subtle p-3 text-xs text-fg"
+                  className="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-bg-subtle p-3 text-xs text-fg [overflow-wrap:anywhere]"
                 >
                   {stringifyJson(item.value)}
                 </pre>
@@ -110,7 +113,7 @@ export function MemoryDetailPanel({
                 onChange={(event) => {
                   onSensitivityDraftChange(event.currentTarget.value as MemorySensitivity);
                 }}
-                className="flex h-9 w-full rounded-md border border-border bg-bg-card/40 px-3 py-1 text-sm text-fg shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                className="flex h-9 w-full rounded-lg border border-border bg-bg px-3 py-1 text-sm text-fg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0"
               >
                 {MEMORY_SENSITIVITIES.map((sensitivity) => (
                   <option key={sensitivity} value={sensitivity}>
@@ -153,7 +156,7 @@ export function MemoryDetailPanel({
               />
             ) : null}
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
                 data-testid="memory-save"

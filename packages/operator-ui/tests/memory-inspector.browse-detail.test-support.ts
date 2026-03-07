@@ -125,7 +125,7 @@ export function registerMemoryInspectorBrowseAndDetailTests(): void {
 
     const { cleanup, testRoot } = await mountMemoryInspector({ ws });
 
-    await selectMemoryItem(testRoot.container, item.memory_item_id);
+    const memoryItemButton = await selectMemoryItem(testRoot.container, item.memory_item_id);
 
     const keyField = expectElement<HTMLDivElement>(
       testRoot.container,
@@ -138,6 +138,10 @@ export function registerMemoryInspectorBrowseAndDetailTests(): void {
       '[data-testid="memory-detail-fact-value"]',
     );
     expect(valueField.textContent).toContain('"Ada"');
+    expect(valueField.className).toContain("max-h-64");
+    expect(valueField.className).toContain("overflow-y-auto");
+    expect(memoryItemButton.className).toContain("border-primary");
+    expect(memoryItemButton.className).toContain("bg-bg-subtle");
 
     cleanup();
   });

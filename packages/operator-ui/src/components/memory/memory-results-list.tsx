@@ -17,9 +17,7 @@ export function MemoryResultsList({
 }: MemoryResultsListProps) {
   return (
     <div className="grid gap-2">
-      <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
-        Results ({browseRows.length})
-      </div>
+      <div className="text-sm font-medium text-fg-muted">Results ({browseRows.length})</div>
       {browseRows.length === 0 && !browseLoading ? (
         <Card>
           <CardContent className="py-8 text-center text-sm text-fg-muted">
@@ -34,25 +32,27 @@ export function MemoryResultsList({
             type="button"
             data-testid={`memory-item-${row.memoryItemId}`}
             className={cn(
-              "w-full rounded-md border-l-2 border-transparent px-3 py-2 text-left text-sm transition-colors",
+              "w-full rounded-md border px-3 py-2 text-left text-sm transition-colors",
               "hover:bg-bg-subtle",
-              inspectedItemId === row.memoryItemId ? "border-primary bg-primary-dim" : "",
+              inspectedItemId === row.memoryItemId
+                ? "border-primary bg-bg-subtle"
+                : "border-border bg-bg",
             )}
             onClick={() => {
               onInspect(row.memoryItemId);
             }}
           >
-            <div className="truncate font-mono text-xs text-fg-muted">{row.memoryItemId}</div>
+            <div className="font-mono text-xs text-fg-muted break-all">{row.memoryItemId}</div>
             <div
               data-testid={`memory-item-snippet-${row.memoryItemId}`}
-              className="truncate text-fg"
+              className="break-words text-fg [overflow-wrap:anywhere]"
             >
               {row.snippet}
             </div>
             {row.provenance ? (
               <div
                 data-testid={`memory-item-provenance-${row.memoryItemId}`}
-                className="truncate text-xs text-fg-muted"
+                className="break-words text-xs text-fg-muted [overflow-wrap:anywhere]"
               >
                 {row.provenance}
               </div>

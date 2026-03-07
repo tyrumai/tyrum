@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { WorkBoardPage } from "../../src/components/pages/workboard-page.js";
-import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+import { cleanupTestRoot, renderIntoDocument, stubMatchMedia } from "../test-utils.js";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
@@ -170,11 +170,9 @@ function clickButton(container: HTMLElement, label: string): void {
 }
 
 function getStatusColumn(container: HTMLElement, label: string): HTMLElement {
-  const heading = Array.from(container.querySelectorAll<HTMLSpanElement>("span")).find(
-    (el) => el.textContent === label,
+  const column = container.querySelector<HTMLElement>(
+    `[data-testid="workboard-column-${label.toLowerCase()}"]`,
   );
-  expect(heading).not.toBeUndefined();
-  const column = heading?.closest<HTMLElement>(".w-64");
   expect(column).not.toBeNull();
   return column as HTMLElement;
 }
@@ -194,6 +192,48 @@ describe("WorkBoardPage", () => {
       expect(core.disconnect).toHaveBeenCalledTimes(1);
       expect(core.connect).toHaveBeenCalledTimes(1);
     } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("uses a status selector on narrow screens without horizontal board scrolling", () => {
+    const { core } = createCore("connected");
+    const matchMedia = stubMatchMedia("(min-width: 1024px)", false);
+    const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
+
+    try {
+      const selector = testRoot.container.querySelector(
+        '[data-testid="workboard-status-selector"]',
+      );
+      const board = testRoot.container.querySelector<HTMLElement>(
+        '[data-testid="workboard-board"]',
+      );
+      expect(selector).not.toBeNull();
+      expect(board).toBeNull();
+      expect(testRoot.container.textContent).toContain("Backlog");
+    } finally {
+      matchMedia.cleanup();
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("renders an aligned board header on large screens", () => {
+    const { core } = createCore("connected");
+    const matchMedia = stubMatchMedia("(min-width: 1024px)", true);
+    const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
+
+    try {
+      const board = testRoot.container.querySelector<HTMLElement>(
+        '[data-testid="workboard-board"]',
+      );
+      const boardHeader = testRoot.container.querySelector<HTMLElement>(
+        '[data-testid="workboard-board-header"]',
+      );
+      expect(board).not.toBeNull();
+      expect(boardHeader).not.toBeNull();
+      expect(boardHeader?.className).toContain("grid-cols-7");
+    } finally {
+      matchMedia.cleanup();
       cleanupTestRoot(testRoot);
     }
   });
@@ -275,13 +315,14 @@ describe("WorkBoardPage", () => {
       },
     );
 
+    const matchMedia = stubMatchMedia("(min-width: 1024px)", true);
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
     try {
       await flushEffects();
       expect(testRoot.container.textContent).toContain("Ship regression tests");
 
       const workItemCard = Array.from(
-        testRoot.container.querySelectorAll<HTMLElement>('[role="button"]'),
+        testRoot.container.querySelectorAll<HTMLButtonElement>('button[data-testid^="work-item-"]'),
       ).find((el) => el.textContent?.includes("Ship regression tests"));
       expect(workItemCard).not.toBeUndefined();
 
@@ -433,6 +474,7 @@ describe("WorkBoardPage", () => {
       expect(core.disconnect).toHaveBeenCalledTimes(1);
       expect(core.connect).toHaveBeenCalledTimes(1);
     } finally {
+      matchMedia.cleanup();
       cleanupTestRoot(testRoot);
     }
   });

@@ -64,6 +64,10 @@ describe("Sidebar", () => {
 
     const active = container.querySelector("[data-testid='nav-approvals']");
     expect(active?.getAttribute("data-active")).toBe("true");
+    expect(active?.className).toContain("border-border");
+    expect(
+      container.querySelector("[data-testid='nav-approvals-active-indicator']"),
+    ).not.toBeNull();
 
     const statusControls = container.querySelector("[data-testid='sidebar-status-controls']");
     expect(statusControls).not.toBeNull();

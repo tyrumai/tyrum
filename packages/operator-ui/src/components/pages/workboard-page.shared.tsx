@@ -4,7 +4,7 @@ import { Badge } from "../ui/badge.js";
 import { Card, CardContent } from "../ui/card.js";
 import type { WorkStateKvEntry } from "../workboard/workboard-store.js";
 
-const STATUS_LABELS: Record<WorkItem["status"], string> = {
+export const STATUS_LABELS: Record<WorkItem["status"], string> = {
   backlog: "Backlog",
   ready: "Ready",
   doing: "Doing",
@@ -17,7 +17,7 @@ const STATUS_LABELS: Record<WorkItem["status"], string> = {
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="grid gap-2">
-      <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{title}</div>
+      <div className="text-sm font-semibold text-fg">{title}</div>
       {children}
     </div>
   );
@@ -61,7 +61,7 @@ export function KvSection({
       {entries.length === 0 ? (
         <EmptyState>No entries.</EmptyState>
       ) : (
-        <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-bg-subtle p-3 font-mono text-xs text-fg">
+        <pre className="whitespace-pre-wrap break-words rounded-md border border-border bg-bg-subtle p-3 font-mono text-xs text-fg [overflow-wrap:anywhere]">
           {entries.map((entry) => `${entry.key} = ${JSON.stringify(entry.value_json)}`).join("\n")}
         </pre>
       )}
@@ -69,7 +69,77 @@ export function KvSection({
   );
 }
 
-export function WorkItemColumn({
+function WorkItemCard({
+  item,
+  selectedWorkItemId,
+  onSelect,
+}: {
+  item: WorkItem;
+  selectedWorkItemId: string | null;
+  onSelect: (workItemId: string) => void;
+}) {
+  const active = item.work_item_id === selectedWorkItemId;
+
+  return (
+    <button
+      type="button"
+      key={item.work_item_id}
+      data-testid={`work-item-${item.work_item_id}`}
+      data-active={active ? "true" : undefined}
+      className={[
+        "grid gap-2 rounded-md border px-3 py-3 text-left transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
+        active ? "border-primary bg-bg text-fg" : "border-border bg-bg hover:bg-bg-subtle",
+      ].join(" ")}
+      onClick={() => onSelect(item.work_item_id)}
+    >
+      <div className="break-words text-sm font-semibold leading-snug text-fg [overflow-wrap:anywhere]">
+        {item.title}
+      </div>
+      <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
+        <span>{item.kind}</span>
+        <span>prio {item.priority}</span>
+      </div>
+      <div className="grid gap-1 text-xs text-fg-muted">
+        <span className="font-mono break-all">{item.work_item_id}</span>
+        {item.last_active_at ? (
+          <span className="break-words [overflow-wrap:anywhere]">
+            active {new Date(item.last_active_at).toLocaleString()}
+          </span>
+        ) : null}
+      </div>
+    </button>
+  );
+}
+
+export function WorkStatusList({
+  items,
+  selectedWorkItemId,
+  onSelect,
+}: {
+  items: readonly WorkItem[];
+  selectedWorkItemId: string | null;
+  onSelect: (workItemId: string) => void;
+}) {
+  if (items.length === 0) {
+    return <EmptyState>No items</EmptyState>;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {items.map((item) => (
+        <WorkItemCard
+          key={item.work_item_id}
+          item={item}
+          selectedWorkItemId={selectedWorkItemId}
+          onSelect={onSelect}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function WorkStatusPanel({
   status,
   items,
   selectedWorkItemId,
@@ -81,53 +151,13 @@ export function WorkItemColumn({
   onSelect: (workItemId: string) => void;
 }) {
   return (
-    <Card className="w-64 shrink-0">
-      <CardContent className="grid gap-3 pt-6">
+    <Card>
+      <CardContent className="grid gap-3 pt-5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-semibold text-fg">{STATUS_LABELS[status]}</span>
           <Badge variant="outline">{items.length}</Badge>
         </div>
-        {items.length === 0 ? (
-          <EmptyState>No items</EmptyState>
-        ) : (
-          <div className="grid gap-2">
-            {items.map((item) => {
-              const active = item.work_item_id === selectedWorkItemId;
-              return (
-                <div
-                  key={item.work_item_id}
-                  className={[
-                    "cursor-pointer rounded-lg border p-3 transition-colors",
-                    active
-                      ? "border-primary bg-primary-dim"
-                      : "border-border bg-bg-subtle hover:bg-bg",
-                  ].join(" ")}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onSelect(item.work_item_id)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") onSelect(item.work_item_id);
-                  }}
-                >
-                  <div className="text-sm font-semibold leading-snug text-fg">{item.title}</div>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-fg-muted">
-                    <span>{item.kind}</span>
-                    <span>prio {item.priority}</span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
-                    <span>
-                      <span className="text-fg-muted">id</span>{" "}
-                      <span className="font-mono">{item.work_item_id.slice(0, 8)}</span>
-                    </span>
-                    {item.last_active_at ? (
-                      <span>active {new Date(item.last_active_at).toLocaleString()}</span>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <WorkStatusList items={items} selectedWorkItemId={selectedWorkItemId} onSelect={onSelect} />
       </CardContent>
     </Card>
   );

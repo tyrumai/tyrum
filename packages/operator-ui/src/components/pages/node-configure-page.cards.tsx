@@ -34,9 +34,7 @@ export function SecurityProfileCard({
               key={option.id}
               className={[
                 "flex items-start gap-3 rounded-md border p-3",
-                profile === option.id
-                  ? "border-primary bg-primary-dim"
-                  : "border-border bg-bg-card",
+                profile === option.id ? "border-primary bg-bg" : "border-border bg-bg",
                 option.disabled ? "opacity-80" : "",
               ].join(" ")}
             >
@@ -133,14 +131,15 @@ export function NodeConnectionCard(props: {
               onChange={(event) => props.onRemoteTlsFingerprintChange(event.target.value)}
               placeholder="AA:BB:CC:…"
             />
-            <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-bg-card/40 px-3 py-2">
-              <div className="grid gap-0.5">
+            <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border bg-bg px-3 py-2">
+              <div className="min-w-0 grid gap-0.5">
                 <div className="text-sm font-medium text-fg">Allow self-signed TLS</div>
                 <div className="text-xs text-fg-muted">
                   Requires a fingerprint; skips CA verification.
                 </div>
               </div>
               <Switch
+                className="shrink-0"
                 checked={props.connection.remoteTlsAllowSelfSigned}
                 onCheckedChange={props.onRemoteTlsAllowSelfSignedChange}
               />
@@ -149,15 +148,16 @@ export function NodeConnectionCard(props: {
         )}
 
         {props.backgroundState ? (
-          <div className="grid gap-3 rounded-md border border-border bg-bg-card/40 px-3 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="grid gap-0.5">
+          <div className="grid gap-3 rounded-md border border-border bg-bg px-3 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 grid gap-0.5">
                 <div className="text-sm font-medium text-fg">Background mode</div>
                 <div className="text-xs text-fg-muted">
                   Keep Tyrum running in the tray/menu bar and launch at login when supported.
                 </div>
               </div>
               <Switch
+                className="shrink-0"
                 checked={props.backgroundState.enabled}
                 disabled={props.backgroundBusy}
                 onCheckedChange={props.onToggleBackgroundMode}
@@ -201,12 +201,13 @@ export function CapabilityCard(props: {
   return (
     <Card>
       <CardContent className="grid gap-4 pt-6">
-        <div className="flex items-center justify-between gap-4 border-b border-border py-2">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border py-2">
+          <div className="min-w-0">
             <div className="text-sm font-semibold text-fg">{props.title}</div>
             <div className="text-sm text-fg-muted">{props.description}</div>
           </div>
           <Switch
+            className="shrink-0"
             data-testid={props.capabilityTestId}
             checked={props.enabled}
             onCheckedChange={props.onEnabledChange}
@@ -346,9 +347,9 @@ export function SaveActions(props: {
 
 function AllowlistHeader(props: { title: string; active: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <div className="text-sm font-semibold text-fg">{props.title}</div>
-      <Badge variant={props.active ? "danger" : "success"}>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0 text-sm font-semibold text-fg">{props.title}</div>
+      <Badge variant={props.active ? "danger" : "success"} className="shrink-0">
         {props.active ? "active (default deny)" : "inactive (default allow)"}
       </Badge>
     </div>

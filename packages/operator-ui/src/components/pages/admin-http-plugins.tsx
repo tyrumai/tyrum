@@ -41,7 +41,7 @@ function PluginsActions({
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
-        <div className="min-w-[240px] flex-1">
+        <div className="min-w-0 flex-1 basis-64">
           <Input
             label="Plugin ID"
             value={pluginId}

@@ -11,13 +11,6 @@ import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import type { RunTimelineEntry } from "./runs-page.lib.js";
 
-const TRUNCATED_ID_CHARS = 8;
-
-function truncateId(id: string): string {
-  if (id.length <= TRUNCATED_ID_CHARS) return id;
-  return id.slice(-TRUNCATED_ID_CHARS);
-}
-
 function formatDurationMs(durationMs: number): string {
   if (!Number.isFinite(durationMs) || durationMs < 0) return "-";
   if (durationMs < 1000) return `${Math.round(durationMs)}ms`;
@@ -115,14 +108,14 @@ function CopyableId({ id }: { id: string }) {
       aria-label={`Copy ID ${id}`}
       title={id}
       className={cn(
-        "font-mono text-xs text-fg-muted hover:text-fg",
-        "rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+        "max-w-full break-all text-left font-mono text-xs text-fg-muted hover:text-fg",
+        "rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
       )}
       onClick={() => {
         void copy();
       }}
     >
-      {truncateId(id)}
+      {id}
     </button>
   );
 }
@@ -153,7 +146,9 @@ export function RunsPageCard({ core, run, isExpanded, onToggleRun, timeline }: R
             {statusLabel}
           </Badge>
           <CopyableId id={run.run_id} />
-          <span className="text-xs text-fg-muted">{relativeTime}</span>
+          <span className="break-words text-xs text-fg-muted [overflow-wrap:anywhere]">
+            {relativeTime}
+          </span>
         </div>
         <Button
           variant="ghost"
@@ -224,17 +219,19 @@ function RunTimelineStep({
 
   return (
     <div className="grid gap-2">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <StatusDot
-            variant={stepDotVariant}
-            pulse={step.status === "running"}
-            aria-hidden={true}
-          />
-          <div className="truncate text-sm font-medium text-fg">
-            Step {step.step_index} • {step.action.type}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="grid min-w-0 gap-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <StatusDot
+              variant={stepDotVariant}
+              pulse={step.status === "running"}
+              aria-hidden={true}
+            />
+            <div className="break-words text-sm font-medium text-fg [overflow-wrap:anywhere]">
+              Step {step.step_index} • {step.action.type}
+            </div>
           </div>
-          <div className="text-xs text-fg-muted">
+          <div className="ml-6 text-xs text-fg-muted">
             {stepStatusLabel} • {attemptCount} attempt
             {attemptCount === 1 ? "" : "s"}
           </div>
@@ -270,19 +267,26 @@ function RunAttemptRow({
       : `started ${formatRelativeTime(attempt.started_at)}`;
 
   return (
-    <div key={attempt.attempt_id} className="flex items-center justify-between gap-3 text-sm">
-      <div className="flex min-w-0 items-center gap-2">
-        <StatusDot
-          variant={resolveAttemptStatusDotVariant(attempt.status)}
-          pulse={attempt.status === "running"}
-          aria-hidden={true}
-        />
-        <div className="text-fg">Attempt {attempt.attempt}</div>
-        <div className="truncate text-xs text-fg-muted">
+    <div
+      key={attempt.attempt_id}
+      className="flex flex-wrap items-start justify-between gap-3 text-sm"
+    >
+      <div className="grid min-w-0 gap-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <StatusDot
+            variant={resolveAttemptStatusDotVariant(attempt.status)}
+            pulse={attempt.status === "running"}
+            aria-hidden={true}
+          />
+          <div className="break-words text-fg [overflow-wrap:anywhere]">
+            Attempt {attempt.attempt}
+          </div>
+        </div>
+        <div className="ml-6 break-words text-xs text-fg-muted [overflow-wrap:anywhere]">
           {resolveAttemptStatusLabel(attempt.status)} • {timing}
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex max-w-full flex-wrap items-center gap-2">
         <AttemptArtifactsDialog
           core={core}
           runId={runId}

@@ -280,7 +280,7 @@ export function MemoryInspector({ core, agentId }: MemoryInspectorProps) {
         }}
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
         <MemoryResultsList
           browseRows={browseRows}
           browseLoading={memory.browse.loading}

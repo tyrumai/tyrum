@@ -99,7 +99,7 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
         <div className="grid gap-1">
           <div className="text-sm font-medium text-fg">Pairing request</div>
           <div className="text-sm text-fg-muted">
-            Node <span className="font-medium text-fg">{pairing.node.node_id}</span>
+            Node <span className="break-all font-medium text-fg">{pairing.node.node_id}</span>
           </div>
           {pairing.node.label ? (
             <div className="text-xs text-fg-muted">{pairing.node.label}</div>
@@ -184,7 +184,10 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
                         });
                       }}
                     />
-                    <Label htmlFor={checkboxId} className="text-sm font-normal text-fg">
+                    <Label
+                      htmlFor={checkboxId}
+                      className="break-words text-sm font-normal text-fg [overflow-wrap:anywhere]"
+                    >
                       {capability.id}
                     </Label>
                   </div>
@@ -253,7 +256,7 @@ function ApprovedPairingCard({ core, pairing }: { core: OperatorCore; pairing: P
         <div className="grid gap-1">
           <div className="text-sm font-medium text-fg">Trusted device</div>
           <div className="text-sm text-fg-muted">
-            Node <span className="font-medium text-fg">{pairing.node.node_id}</span>
+            Node <span className="break-all font-medium text-fg">{pairing.node.node_id}</span>
           </div>
           {pairing.trust_level ? (
             <div className="text-sm text-fg-muted">

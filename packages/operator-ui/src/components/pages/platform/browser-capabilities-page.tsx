@@ -58,8 +58,8 @@ export function BrowserCapabilitiesPage() {
 
       <Card>
         <CardContent className="grid gap-4 pt-6">
-          <div className="flex items-center justify-between gap-3">
-            <div className="grid gap-1">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 grid gap-1">
               <div className="text-sm font-semibold text-fg">Browser node executor</div>
               <div className="text-sm text-fg-muted">
                 Enables workflows to request location, camera, and microphone via a paired browser
@@ -82,7 +82,7 @@ export function BrowserCapabilitiesPage() {
           {browserNode.deviceId ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm text-fg-muted">
-                Node ID <code className="font-mono text-xs">{browserNode.deviceId}</code>
+                Node ID <code className="break-all font-mono text-xs">{browserNode.deviceId}</code>
               </div>
               <Button
                 size="sm"

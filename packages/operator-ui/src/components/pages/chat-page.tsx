@@ -1,5 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
+import { ChevronLeft } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useMediaQuery } from "../../hooks/use-media-query.js";
 import { cn } from "../../lib/cn.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
@@ -40,13 +42,317 @@ function deriveThreadPreview(session: {
   return "";
 }
 
+interface ChatThreadSummary {
+  agent_id: string;
+  session_id: string;
+  channel: string;
+  thread_id: string;
+  summary: string;
+  last_turn?: { role: string; content: string } | undefined;
+  created_at: string;
+  updated_at: string;
+  title: string;
+  preview: string;
+}
+
+function ChatToolbar({
+  agentId,
+  agents,
+  disabled,
+  onAgentChange,
+  onNewChat,
+}: {
+  agentId: string;
+  agents: Array<{ agent_id: string }>;
+  disabled: boolean;
+  onAgentChange: (value: string) => void;
+  onNewChat: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Chat</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          data-testid="chat-agent-select"
+          aria-label="Agent"
+          value={agentId}
+          disabled={disabled}
+          onChange={(event) => {
+            onAgentChange(event.currentTarget.value);
+          }}
+          className="flex h-9 min-w-56 rounded-lg border border-border bg-bg px-3 py-1 text-sm text-fg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0"
+        >
+          {agents.length === 0 ? (
+            <option value={agentId}>{agentId}</option>
+          ) : (
+            agents.map((agent) => (
+              <option key={agent.agent_id} value={agent.agent_id}>
+                {agent.agent_id}
+              </option>
+            ))
+          )}
+        </select>
+        <Button size="sm" data-testid="chat-new" disabled={disabled} onClick={onNewChat}>
+          New chat
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ChatThreadsPanel({
+  connected,
+  loading,
+  errorMessage,
+  threads,
+  activeSessionId,
+  onRefresh,
+  onLoadMore,
+  canLoadMore,
+  onOpenThread,
+}: {
+  connected: boolean;
+  loading: boolean;
+  errorMessage: string | null;
+  threads: ChatThreadSummary[];
+  activeSessionId: string | null;
+  onRefresh: () => void;
+  onLoadMore: () => void;
+  canLoadMore: boolean;
+  onOpenThread: (sessionId: string) => void;
+}) {
+  return (
+    <Card className="flex h-full min-h-0 flex-col" data-testid="chat-threads-panel">
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-fg">Threads</h2>
+          <Button
+            size="sm"
+            variant="secondary"
+            data-testid="chat-refresh-sessions"
+            disabled={!connected || loading}
+            onClick={onRefresh}
+          >
+            Refresh
+          </Button>
+        </div>
+      </CardHeader>
+      <Separator />
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+        {errorMessage ? (
+          <Alert variant="error" title="Failed to load sessions" description={errorMessage} />
+        ) : null}
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {loading && threads.length === 0 ? (
+            <div className="text-sm text-fg-muted">Loading…</div>
+          ) : threads.length === 0 ? (
+            <div className="text-sm text-fg-muted">No chats yet.</div>
+          ) : (
+            <ScrollArea className="h-full">
+              <div className="grid gap-2 pr-3">
+                {threads.map((session) => {
+                  const isActive = activeSessionId === session.session_id;
+                  return (
+                    <button
+                      key={session.session_id}
+                      type="button"
+                      data-testid={`chat-thread-${session.session_id}`}
+                      data-active={isActive ? "true" : undefined}
+                      className={cn(
+                        "w-full rounded-lg border px-3 py-3 text-left transition-colors duration-150",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
+                        isActive
+                          ? "border-border bg-bg-subtle"
+                          : "border-border bg-bg hover:bg-bg-subtle",
+                      )}
+                      onClick={() => {
+                        onOpenThread(session.session_id);
+                      }}
+                    >
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-fg break-words [overflow-wrap:anywhere]">
+                            {session.title}
+                          </div>
+                          <div className="mt-1 text-xs text-fg-muted break-words [overflow-wrap:anywhere]">
+                            {session.preview || "—"}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-xs text-fg-muted">
+                          {formatRelativeTime(session.updated_at)}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          )}
+        </div>
+      </CardContent>
+      <CardFooter className="justify-between gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          data-testid="chat-load-more"
+          disabled={!canLoadMore || loading}
+          onClick={onLoadMore}
+        >
+          Load more
+        </Button>
+        <div className="text-xs text-fg-muted">{threads.length} threads</div>
+      </CardFooter>
+    </Card>
+  );
+}
+
+function ChatConversationPanel({
+  activeThreadId,
+  activeTurns,
+  loadError,
+  sendError,
+  deleteDisabled,
+  onDelete,
+  draft,
+  setDraft,
+  send,
+  sendBusy,
+  canSend,
+  onBack,
+}: {
+  activeThreadId: string | null;
+  activeTurns: Array<{ role: string; content: string }>;
+  loadError: string | null;
+  sendError: string | null;
+  deleteDisabled: boolean;
+  onDelete: () => void;
+  draft: string;
+  setDraft: (value: string) => void;
+  send: () => Promise<void>;
+  sendBusy: boolean;
+  canSend: boolean;
+  onBack?: () => void;
+}) {
+  return (
+    <Card className="flex h-full min-h-0 flex-col" data-testid="chat-conversation-panel">
+      <CardHeader className="pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              {onBack ? (
+                <Button size="sm" variant="ghost" data-testid="chat-back" onClick={onBack}>
+                  <ChevronLeft className="h-4 w-4" />
+                  Back
+                </Button>
+              ) : null}
+              <h2 className="text-base font-semibold text-fg">Conversation</h2>
+            </div>
+            <div className="mt-2 text-xs text-fg-muted break-all">
+              {activeThreadId ?? "Select a thread to view transcript."}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="danger"
+              data-testid="chat-delete"
+              disabled={deleteDisabled}
+              onClick={onDelete}
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <Separator />
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+        {loadError ? (
+          <Alert variant="error" title="Failed to load transcript" description={loadError} />
+        ) : null}
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <ScrollArea className="h-full" data-testid="chat-transcript">
+            <div className="grid gap-4 pr-3">
+              {activeTurns.length === 0 ? (
+                <div className="text-sm text-fg-muted">
+                  {activeThreadId ? "No messages yet." : "Pick a thread or start a new chat."}
+                </div>
+              ) : (
+                activeTurns.map((turn, index) => {
+                  const isUser = turn.role === "user";
+                  return (
+                    <div
+                      key={`${turn.role}-${index}`}
+                      className={cn("grid", isUser ? "justify-end" : "justify-start")}
+                    >
+                      <div
+                        className={cn(
+                          "w-fit max-w-full rounded-lg border px-4 py-3 text-sm whitespace-pre-wrap md:max-w-[42rem]",
+                          isUser
+                            ? "border-border bg-bg-subtle text-fg"
+                            : "border-border bg-bg text-fg",
+                        )}
+                      >
+                        <div className="mb-1 text-xs text-fg-muted">
+                          {isUser ? "You" : "Assistant"}
+                        </div>
+                        <div className="break-words [overflow-wrap:anywhere]">{turn.content}</div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      </CardContent>
+      <Separator />
+      <CardFooter className="flex-col items-stretch gap-3">
+        {sendError ? (
+          <Alert variant="error" title="Failed to send" description={sendError} />
+        ) : null}
+        <Textarea
+          data-testid="chat-composer"
+          aria-label="Message"
+          placeholder={activeThreadId ? "Type a message…" : "Select a thread first."}
+          value={draft}
+          disabled={!activeThreadId || sendBusy}
+          onChange={(event) => {
+            setDraft(event.currentTarget.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            if (event.shiftKey) return;
+            event.preventDefault();
+            void send();
+          }}
+          className="min-h-24"
+        />
+        <div className="flex items-center justify-end">
+          <Button
+            data-testid="chat-send"
+            disabled={!canSend}
+            isLoading={sendBusy}
+            onClick={() => {
+              void send();
+            }}
+          >
+            Send
+          </Button>
+        </div>
+      </CardFooter>
+    </Card>
+  );
+}
+
 export function ChatPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);
   const isConnected = connection.status === "connected";
   const chat = useOperatorStore(core.chatStore);
+  const lgUp = useMediaQuery("(min-width: 1024px)");
 
   const [draft, setDraft] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<"threads" | "conversation">("threads");
 
   const threads = useMemo(() => {
     return chat.sessions.sessions.map((session) => ({
@@ -66,6 +372,13 @@ export function ChatPage({ core }: { core: OperatorCore }) {
     void core.chatStore.refreshSessions();
   }, [core.chatStore, isConnected, chat.agentId]);
 
+  useEffect(() => {
+    if (lgUp) return;
+    if (!chat.active.sessionId) {
+      setMobileView("threads");
+    }
+  }, [chat.active.sessionId, lgUp]);
+
   const send = async (): Promise<void> => {
     const text = draft.trim();
     if (!text) return;
@@ -75,46 +388,41 @@ export function ChatPage({ core }: { core: OperatorCore }) {
     }
   };
 
+  const openThread = async (sessionId: string): Promise<void> => {
+    await core.chatStore.openSession(sessionId);
+    if (!lgUp) {
+      setMobileView("conversation");
+    }
+  };
+
+  const startNewChat = async (): Promise<void> => {
+    await core.chatStore.newChat();
+    if (!lgUp) {
+      setMobileView("conversation");
+    }
+  };
+
   const active = chat.active.session;
   const activeTurns = active?.turns ?? [];
+  const showThreads = lgUp || mobileView === "threads";
+  const showConversation = lgUp || mobileView === "conversation";
+  const canSend = Boolean(active) && !chat.send.sending && draft.trim().length > 0;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6" data-testid="chat-page">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Chat</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            data-testid="chat-agent-select"
-            aria-label="Agent"
-            value={chat.agentId}
-            disabled={!isConnected || chat.agents.loading}
-            onChange={(event) => {
-              core.chatStore.setAgentId(event.currentTarget.value);
-            }}
-            className="flex h-9 min-w-56 rounded-lg border border-border bg-bg px-3 py-1 text-sm text-fg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0"
-          >
-            {chat.agents.agents.length === 0 ? (
-              <option value={chat.agentId}>{chat.agentId}</option>
-            ) : (
-              chat.agents.agents.map((agent) => (
-                <option key={agent.agent_id} value={agent.agent_id}>
-                  {agent.agent_id}
-                </option>
-              ))
-            )}
-          </select>
-          <Button
-            size="sm"
-            data-testid="chat-new"
-            disabled={!isConnected}
-            onClick={() => {
-              void core.chatStore.newChat();
-            }}
-          >
-            New chat
-          </Button>
-        </div>
-      </div>
+      {lgUp || mobileView === "threads" ? (
+        <ChatToolbar
+          agentId={chat.agentId}
+          agents={chat.agents.agents}
+          disabled={!isConnected || chat.agents.loading}
+          onAgentChange={(value) => {
+            core.chatStore.setAgentId(value);
+          }}
+          onNewChat={() => {
+            void startNewChat();
+          }}
+        />
+      ) : null}
 
       {chat.agents.error ? (
         <Alert
@@ -125,204 +433,56 @@ export function ChatPage({ core }: { core: OperatorCore }) {
       ) : null}
 
       <div
-        className="grid min-h-0 flex-1 gap-6 grid-rows-[minmax(0,2fr)_minmax(0,3fr)] md:grid-cols-[320px_minmax(0,1fr)] md:grid-rows-1"
+        className={cn(
+          "flex min-h-0 flex-1 flex-col gap-4",
+          lgUp ? "lg:grid lg:grid-cols-[19rem_minmax(0,1fr)] lg:gap-6" : null,
+        )}
         data-testid="chat-panels"
       >
-        <Card className="flex h-full min-h-0 flex-col" data-testid="chat-threads-panel">
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base font-semibold text-fg">Threads</h2>
-              <Button
-                size="sm"
-                variant="secondary"
-                data-testid="chat-refresh-sessions"
-                disabled={!isConnected || chat.sessions.loading}
-                onClick={() => {
-                  void core.chatStore.refreshSessions();
-                }}
-              >
-                Refresh
-              </Button>
-            </div>
-          </CardHeader>
-          <Separator />
-          <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-            {chat.sessions.error ? (
-              <Alert
-                variant="error"
-                title="Failed to load sessions"
-                description={chat.sessions.error.message}
-              />
-            ) : null}
-            <div className="min-h-0 flex-1 overflow-hidden">
-              {chat.sessions.loading && threads.length === 0 ? (
-                <div className="text-sm text-fg-muted">Loading…</div>
-              ) : threads.length === 0 ? (
-                <div className="text-sm text-fg-muted">No chats yet.</div>
-              ) : (
-                <ScrollArea className="h-full">
-                  <div className="grid gap-2 pr-3">
-                    {threads.map((session) => {
-                      const isActive = chat.active.sessionId === session.session_id;
-                      return (
-                        <button
-                          key={session.session_id}
-                          type="button"
-                          data-testid={`chat-thread-${session.session_id}`}
-                          data-active={isActive ? "true" : undefined}
-                          className={cn(
-                            "w-full rounded-lg border px-3 py-2.5 text-left transition-colors duration-150",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
-                            isActive
-                              ? "border-border bg-bg-subtle"
-                              : "border-border bg-bg hover:bg-bg-subtle",
-                          )}
-                          onClick={() => {
-                            void core.chatStore.openSession(session.session_id);
-                          }}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-medium text-fg">
-                                {session.title}
-                              </div>
-                              <div className="mt-1 truncate text-xs text-fg-muted">
-                                {session.preview || "—"}
-                              </div>
-                            </div>
-                            <div className="shrink-0 text-xs text-fg-muted">
-                              {formatRelativeTime(session.updated_at)}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              )}
-            </div>
-          </CardContent>
-          <CardFooter className="justify-between gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              data-testid="chat-load-more"
-              disabled={!chat.sessions.nextCursor || chat.sessions.loading}
-              onClick={() => {
-                void core.chatStore.loadMoreSessions();
-              }}
-            >
-              Load more
-            </Button>
-            <div className="text-xs text-fg-muted">{threads.length} threads</div>
-          </CardFooter>
-        </Card>
+        {showThreads ? (
+          <ChatThreadsPanel
+            connected={isConnected}
+            loading={chat.sessions.loading}
+            errorMessage={chat.sessions.error?.message ?? null}
+            threads={threads}
+            activeSessionId={chat.active.sessionId}
+            onRefresh={() => {
+              void core.chatStore.refreshSessions();
+            }}
+            onLoadMore={() => {
+              void core.chatStore.loadMoreSessions();
+            }}
+            canLoadMore={Boolean(chat.sessions.nextCursor)}
+            onOpenThread={(sessionId) => {
+              void openThread(sessionId);
+            }}
+          />
+        ) : null}
 
-        <Card className="flex h-full min-h-0 flex-col" data-testid="chat-conversation-panel">
-          <CardHeader className="pb-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h2 className="text-base font-semibold text-fg">Conversation</h2>
-                <div className="mt-1 truncate text-xs text-fg-muted">
-                  {active ? active.thread_id : "Select a thread to view transcript."}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="danger"
-                  data-testid="chat-delete"
-                  disabled={!active || chat.active.loading}
-                  onClick={() => {
-                    setDeleteOpen(true);
-                  }}
-                >
-                  Delete
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <Separator />
-          <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-            {chat.active.error ? (
-              <Alert
-                variant="error"
-                title="Failed to load transcript"
-                description={chat.active.error.message}
-              />
-            ) : null}
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <ScrollArea className="h-full" data-testid="chat-transcript">
-                <div className="grid gap-3 pr-3">
-                  {activeTurns.length === 0 ? (
-                    <div className="text-sm text-fg-muted">
-                      {active ? "No messages yet." : "Pick a thread or start a new chat."}
-                    </div>
-                  ) : (
-                    activeTurns.map((turn, index) => {
-                      const isUser = turn.role === "user";
-                      return (
-                        <div
-                          key={`${turn.role}-${index}`}
-                          className={cn("flex", isUser ? "justify-end" : "justify-start")}
-                        >
-                          <div
-                            className={cn(
-                              "max-w-[85%] rounded-lg border px-4 py-3 text-sm whitespace-pre-wrap",
-                              isUser
-                                ? "border-border bg-bg-subtle text-fg"
-                                : "border-border bg-bg text-fg",
-                            )}
-                          >
-                            <div className="mb-1 text-xs text-fg-muted">
-                              {isUser ? "You" : "Assistant"}
-                            </div>
-                            {turn.content}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </ScrollArea>
-            </div>
-          </CardContent>
-          <Separator />
-          <CardFooter className="flex-col items-stretch gap-3">
-            {chat.send.error ? (
-              <Alert variant="error" title="Failed to send" description={chat.send.error.message} />
-            ) : null}
-            <Textarea
-              data-testid="chat-composer"
-              aria-label="Message"
-              placeholder={active ? "Type a message…" : "Select a thread first."}
-              value={draft}
-              disabled={!active || chat.send.sending}
-              onChange={(event) => {
-                setDraft(event.currentTarget.value);
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                if (event.shiftKey) return;
-                event.preventDefault();
-                void send();
-              }}
-              className="min-h-24"
-            />
-            <div className="flex items-center justify-end">
-              <Button
-                data-testid="chat-send"
-                disabled={!active || chat.send.sending || draft.trim().length === 0}
-                isLoading={chat.send.sending}
-                onClick={() => {
-                  void send();
-                }}
-              >
-                Send
-              </Button>
-            </div>
-          </CardFooter>
-        </Card>
+        {showConversation ? (
+          <ChatConversationPanel
+            activeThreadId={active?.thread_id ?? null}
+            activeTurns={activeTurns}
+            loadError={chat.active.error?.message ?? null}
+            sendError={chat.send.error?.message ?? null}
+            deleteDisabled={!active || chat.active.loading}
+            onDelete={() => {
+              setDeleteOpen(true);
+            }}
+            draft={draft}
+            setDraft={setDraft}
+            send={send}
+            sendBusy={chat.send.sending}
+            canSend={canSend}
+            onBack={
+              lgUp
+                ? undefined
+                : () => {
+                    setMobileView("threads");
+                  }
+            }
+          />
+        ) : null}
       </div>
 
       <ConfirmDangerDialog
@@ -333,6 +493,9 @@ export function ChatPage({ core }: { core: OperatorCore }) {
         confirmLabel="Delete"
         onConfirm={async () => {
           await core.chatStore.deleteActive();
+          if (!lgUp) {
+            setMobileView("threads");
+          }
         }}
       />
     </div>

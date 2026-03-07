@@ -66,7 +66,9 @@ export function WorkBoardDrilldown({
         ) : (
           <div className="grid gap-6">
             <Section title="WorkItem">
-              <div className="text-sm font-semibold text-fg">{selectedItem.title}</div>
+              <div className="break-words text-sm font-semibold text-fg [overflow-wrap:anywhere]">
+                {selectedItem.title}
+              </div>
               <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
                 <span>
                   status <strong className="text-fg">{selectedItem.status}</strong>
@@ -113,7 +115,9 @@ export function WorkBoardDrilldown({
                   ) : null}
                 </div>
               ) : null}
-              <div className="font-mono text-xs text-fg-muted">{selectedItem.work_item_id}</div>
+              <div className="font-mono text-xs text-fg-muted break-all">
+                {selectedItem.work_item_id}
+              </div>
             </Section>
 
             <Section title="Timestamps">
@@ -129,7 +133,7 @@ export function WorkBoardDrilldown({
             </Section>
 
             <Section title="Acceptance">
-              <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-bg-subtle p-3 font-mono text-xs text-fg">
+              <pre className="whitespace-pre-wrap break-words rounded-md border border-border bg-bg-subtle p-3 font-mono text-xs text-fg [overflow-wrap:anywhere]">
                 {selectedItem.acceptance === undefined
                   ? "—"
                   : JSON.stringify(selectedItem.acceptance, null, 2)}
@@ -154,18 +158,24 @@ export function WorkBoardDrilldown({
                         <span>
                           <strong className="text-fg">{task.status}</strong>
                         </span>
-                        <span className="font-mono">{task.task_id}</span>
+                        <span className="font-mono break-all">{task.task_id}</span>
                         <span>{new Date(task.last_event_at).toLocaleString()}</span>
                       </div>
                       {(task.run_id ||
                         typeof task.approval_id === "number" ||
                         task.result_summary) && (
                         <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
-                          {task.run_id ? <span>run {task.run_id}</span> : null}
+                          {task.run_id ? (
+                            <span className="break-all">run {task.run_id}</span>
+                          ) : null}
                           {typeof task.approval_id === "number" ? (
                             <span>approval {task.approval_id}</span>
                           ) : null}
-                          {task.result_summary ? <span>result {task.result_summary}</span> : null}
+                          {task.result_summary ? (
+                            <span className="break-words [overflow-wrap:anywhere]">
+                              result {task.result_summary}
+                            </span>
+                          ) : null}
                         </div>
                       )}
                     </div>
@@ -185,7 +195,7 @@ export function WorkBoardDrilldown({
                 >
                   <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
                     <span>approval {task.approval_id}</span>
-                    <span className="font-mono">{task.task_id}</span>
+                    <span className="font-mono break-all">{task.task_id}</span>
                   </div>
                 </div>
               )}
@@ -205,7 +215,7 @@ export function WorkBoardDrilldown({
                     <span>chosen {decision.chosen}</span>
                     <span>{new Date(decision.created_at).toLocaleString()}</span>
                   </div>
-                  <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-fg">
+                  <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-xs text-fg [overflow-wrap:anywhere]">
                     {decision.rationale_md}
                   </pre>
                 </div>
@@ -227,17 +237,19 @@ export function WorkBoardDrilldown({
                   </div>
                   <div className="mt-1 text-sm font-semibold text-fg">{artifact.title}</div>
                   {artifact.body_md ? (
-                    <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-fg">
+                    <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-xs text-fg [overflow-wrap:anywhere]">
                       {artifact.body_md}
                     </pre>
                   ) : null}
                   {artifact.refs.length > 0 ? (
                     <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
                       <span className="text-fg-muted">refs</span>
-                      <span className="font-mono">{artifact.refs.join(", ")}</span>
+                      <span className="font-mono break-all">{artifact.refs.join(", ")}</span>
                     </div>
                   ) : null}
-                  <div className="mt-2 font-mono text-xs text-fg-muted">{artifact.artifact_id}</div>
+                  <div className="mt-2 font-mono text-xs text-fg-muted break-all">
+                    {artifact.artifact_id}
+                  </div>
                 </div>
               )}
             />
@@ -261,10 +273,12 @@ export function WorkBoardDrilldown({
                       <span>last fired {new Date(signal.last_fired_at).toLocaleString()}</span>
                     ) : null}
                   </div>
-                  <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-fg">
+                  <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-xs text-fg [overflow-wrap:anywhere]">
                     {JSON.stringify(signal.trigger_spec_json, null, 2)}
                   </pre>
-                  <div className="mt-2 font-mono text-xs text-fg-muted">{signal.signal_id}</div>
+                  <div className="mt-2 font-mono text-xs text-fg-muted break-all">
+                    {signal.signal_id}
+                  </div>
                 </div>
               )}
             />

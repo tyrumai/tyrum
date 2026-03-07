@@ -76,24 +76,32 @@ function SidebarNavButton({ item, activeItemId, collapsed, onNavigate }: Sidebar
       aria-current={active ? "page" : undefined}
       title={collapsed ? item.label : undefined}
       className={cn(
-        "flex w-full items-center rounded-md text-sm transition-colors duration-150",
-        collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
-        "border-l-2 border-transparent",
+        "relative flex w-full rounded-md border text-sm transition-colors duration-150",
+        collapsed ? "justify-center border-transparent px-2 py-2" : "items-start gap-2 px-3 py-2",
         active
-          ? "border-primary bg-bg text-fg font-medium"
-          : "text-fg-muted hover:bg-bg hover:text-fg",
+          ? "border-border bg-bg text-fg font-medium"
+          : "border-transparent text-fg-muted hover:border-border hover:bg-bg hover:text-fg",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
       )}
       onClick={() => {
         onNavigate(item.id);
       }}
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      {active ? (
+        <span
+          aria-hidden="true"
+          data-testid={`${item.testId ?? `nav-${item.id}`}-active-indicator`}
+          className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-primary"
+        />
+      ) : null}
+      <Icon className={cn("h-4 w-4 shrink-0", collapsed ? null : "mt-0.5")} />
       {!collapsed ? (
         <>
-          <span className="flex-1 truncate">{item.label}</span>
+          <span className="min-w-0 flex-1 break-words leading-5 [overflow-wrap:anywhere]">
+            {item.label}
+          </span>
           {badgeCount > 0 ? (
-            <Badge variant={item.badgeVariant ?? "default"} className="ml-auto">
+            <Badge variant={item.badgeVariant ?? "default"} className="ml-auto shrink-0">
               {badgeText}
             </Badge>
           ) : null}
@@ -253,7 +261,10 @@ function SidebarStatusControls({ collapsed, connectionStatus }: SidebarStatusCon
                 aria-label={`Connection ${connectionDisplay.label}`}
               />
               {!collapsed ? (
-                <span data-testid="connection-status-label" className="truncate">
+                <span
+                  data-testid="connection-status-label"
+                  className="min-w-0 break-words leading-5 [overflow-wrap:anywhere]"
+                >
                   {connectionDisplay.label}
                 </span>
               ) : null}
