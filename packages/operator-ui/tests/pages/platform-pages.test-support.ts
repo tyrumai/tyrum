@@ -54,8 +54,7 @@ function createDefaultOperatorConnection(
       config["remote"] && typeof config["remote"] === "object"
         ? (config["remote"] as Record<string, unknown>)
         : {};
-    const wsUrl =
-      typeof remote["wsUrl"] === "string" ? remote["wsUrl"] : "ws://127.0.0.1:8788/ws";
+    const wsUrl = typeof remote["wsUrl"] === "string" ? remote["wsUrl"] : "ws://127.0.0.1:8788/ws";
     const httpBaseUrl = wsUrl.startsWith("wss://")
       ? wsUrl.replace(/^wss:\/\//, "https://").replace(/\/ws$/, "/")
       : wsUrl.replace(/^ws:\/\//, "http://").replace(/\/ws$/, "/");

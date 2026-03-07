@@ -89,9 +89,9 @@ export function NodeConnectionCard(props: {
     ? "Loading current gateway token…"
     : props.currentTokenError
       ? undefined
-    : props.connectionDirty && props.currentOperatorConnection
-      ? `Visible token matches saved ${savedModeLabel} settings until you save changes.`
-      : "Use this token to sign in to the gateway UI at /ui.";
+      : props.connectionDirty && props.currentOperatorConnection
+        ? `Visible token matches saved ${savedModeLabel} settings until you save changes.`
+        : "Use this token to sign in to the gateway UI at /ui.";
 
   const copyCurrentToken = async (): Promise<void> => {
     const token = props.currentOperatorConnection?.token ?? "";
