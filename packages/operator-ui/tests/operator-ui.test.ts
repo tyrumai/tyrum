@@ -2912,7 +2912,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("supports Cmd/Ctrl+1-9/0 page navigation shortcuts across the primary routes", async () => {
+  it("supports Cmd/Ctrl+1-7 page navigation shortcuts across the primary routes", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -2939,27 +2939,10 @@ describe("operator-ui", () => {
       await Promise.resolve();
     });
 
-    expect(container.querySelector('[data-testid="agents-tab-runs"]')).not.toBeNull();
-
-    await act(async () => {
-      window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "9", ctrlKey: true, bubbles: true }),
-      );
-      await vi.dynamicImportSettled();
-      await Promise.resolve();
-    });
-
     expect(container.querySelector('[data-testid="configure-page"]')).not.toBeNull();
-
-    await act(async () => {
-      window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "0", ctrlKey: true, bubbles: true }),
-      );
-      await vi.dynamicImportSettled();
-      await Promise.resolve();
-    });
-
-    expect(container.textContent).toContain("Settings");
+    expect(container.querySelector('[data-testid="nav-memory"]')).toBeNull();
+    expect(container.querySelector('[data-testid="nav-runs"]')).toBeNull();
+    expect(container.querySelector('[data-testid="nav-settings"]')).toBeNull();
 
     act(() => {
       root?.unmount();

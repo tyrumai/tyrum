@@ -206,13 +206,10 @@ type OperatorUiA11yRouteId =
   | "connect"
   | "dashboard"
   | "chat"
-  | "memory"
   | "approvals"
-  | "runs"
   | "agents"
   | "pairing"
   | "configure"
-  | "settings"
   | "node-configure"
   | "browser";
 
@@ -293,23 +290,17 @@ describe("operator-ui a11y", () => {
     { mode: "desktop", route: "connect" },
     { mode: "desktop", route: "dashboard" },
     { mode: "desktop", route: "chat" },
-    { mode: "desktop", route: "memory" },
     { mode: "desktop", route: "approvals" },
-    { mode: "desktop", route: "runs" },
     { mode: "desktop", route: "agents" },
     { mode: "desktop", route: "pairing" },
-    { mode: "desktop", route: "settings" },
     { mode: "desktop", route: "node-configure" },
     { mode: "desktop", route: "configure" },
     { mode: "web", route: "connect" },
     { mode: "web", route: "dashboard" },
     { mode: "web", route: "chat" },
-    { mode: "web", route: "memory" },
     { mode: "web", route: "approvals" },
-    { mode: "web", route: "runs" },
     { mode: "web", route: "agents" },
     { mode: "web", route: "pairing" },
-    { mode: "web", route: "settings" },
     { mode: "web", route: "configure" },
     { mode: "web", route: "browser" },
   ];

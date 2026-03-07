@@ -2,16 +2,13 @@ import type { OperatorCore } from "@tyrum/operator-core";
 import type { LucideIcon } from "lucide-react";
 import {
   Bot,
-  Database,
   Globe,
   LayoutGrid,
   Link2,
   MessageSquare,
   Monitor,
-  Play,
   Shield,
   ShieldCheck,
-  SlidersHorizontal,
   SquareKanban,
 } from "lucide-react";
 import { lazy, type LazyExoticComponent, type ComponentType, type ReactNode } from "react";
@@ -37,17 +34,9 @@ const ChatPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/chat-page.js"),
   "ChatPage",
 );
-const MemoryPage = lazyNamed<{ core: OperatorCore }>(
-  () => import("./components/pages/memory-page.js"),
-  "MemoryPage",
-);
 const ApprovalsPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/approvals-page.js"),
   "ApprovalsPage",
-);
-const RunsPage = lazyNamed<{ core: OperatorCore }>(
-  () => import("./components/pages/runs-page.js"),
-  "RunsPage",
 );
 const WorkBoardPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/workboard-page.js"),
@@ -65,10 +54,6 @@ const ConfigurePage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/configure-page.js"),
   "ConfigurePage",
 );
-const SettingsPage = lazyNamed<{ core: OperatorCore; mode: OperatorUiMode }>(
-  () => import("./components/pages/settings-page.js"),
-  "SettingsPage",
-);
 const NodeConfigurePage = lazyNamed<{ onReloadPage?: () => void }>(
   () => import("./components/pages/node-configure-page.js"),
   "NodeConfigurePage",
@@ -81,14 +66,11 @@ const BrowserCapabilitiesPage = lazyNamed<Record<string, never>>(
 export type OperatorUiRouteId =
   | "dashboard"
   | "chat"
-  | "memory"
   | "approvals"
-  | "runs"
   | "workboard"
   | "agents"
   | "pairing"
   | "configure"
-  | "settings"
   | "node-configure"
   | "browser";
 
@@ -131,15 +113,6 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     render: ({ core }) => <ChatPage core={core} />,
   },
   {
-    id: "memory",
-    label: "Memory",
-    icon: Database,
-    navGroup: "sidebar",
-    shortcut: true,
-    hostKinds: ["desktop", "web"],
-    render: ({ core }) => <MemoryPage core={core} />,
-  },
-  {
     id: "approvals",
     label: "Approvals",
     icon: ShieldCheck,
@@ -147,15 +120,6 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     shortcut: true,
     hostKinds: ["desktop", "web"],
     render: ({ core }) => <ApprovalsPage core={core} />,
-  },
-  {
-    id: "runs",
-    label: "Runs",
-    icon: Play,
-    navGroup: "sidebar",
-    shortcut: true,
-    hostKinds: ["desktop", "web"],
-    render: ({ core }) => <RunsPage core={core} />,
   },
   {
     id: "workboard",
@@ -192,15 +156,6 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     shortcut: true,
     hostKinds: ["desktop", "web"],
     render: ({ core }) => <ConfigurePage core={core} />,
-  },
-  {
-    id: "settings",
-    label: "Settings",
-    icon: SlidersHorizontal,
-    navGroup: "sidebar",
-    shortcut: true,
-    hostKinds: ["desktop", "web"],
-    render: ({ core, mode }) => <SettingsPage core={core} mode={mode} />,
   },
   {
     id: "node-configure",
