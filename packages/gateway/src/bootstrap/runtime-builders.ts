@@ -25,6 +25,7 @@ import { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import { createMemoryV1BudgetsProvider } from "../modules/memory/v1-budgets-provider.js";
 import type { OtelRuntime } from "../modules/observability/otel.js";
 import { PluginRegistry } from "../modules/plugins/registry.js";
+import { isSharedStateMode } from "../modules/runtime-state/mode.js";
 import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
 import { WsEventDal } from "../modules/ws-event/dal.js";
 import { WorkSignalScheduler } from "../modules/workboard/signal-scheduler.js";
@@ -275,6 +276,8 @@ export async function startEdgeRuntime(
     userHome: context.tyrumHome,
     logger: context.logger,
     container: context.container,
+    includeWorkspacePlugins: !isSharedStateMode(context.deploymentConfig),
+    includeUserPlugins: !isSharedStateMode(context.deploymentConfig),
   });
   protocol.protocolDeps.plugins = plugins;
 

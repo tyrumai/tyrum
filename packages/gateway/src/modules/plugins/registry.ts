@@ -7,10 +7,10 @@ import type { ErrorObject } from "ajv";
 import { Ajv2019 } from "ajv/dist/2019.js";
 import type { Hono } from "hono";
 import { randomUUID } from "node:crypto";
-import { readFileSync, type Dirent } from "node:fs";
+import { type Dirent } from "node:fs";
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { isAbsolute, join, relative } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { GatewayContainer } from "../../container.js";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
 import { OPERATOR_WS_AUDIENCE } from "../../ws/audience.js";
@@ -24,6 +24,11 @@ import {
   PLUGIN_LOCK_FILENAME,
   type PluginInstallInfo,
 } from "./lockfile.js";
+import {
+  type PluginDir,
+  type PluginDirKind,
+  resolvePluginSearchDirs,
+} from "./directories.js";
 import { missingRequiredManifestFields, resolveSafeChildPath } from "./validation.js";
 
 const PLUGIN_LIFECYCLE_AUDIT_PLAN_ID = "gateway.plugins.lifecycle";
@@ -93,8 +98,6 @@ type LoadedPlugin = {
   router?: Hono;
   loaded_at: string;
 };
-type PluginDirKind = "workspace" | "user" | "bundled";
-type PluginDir = { kind: PluginDirKind; path: string };
 type NormalizeSchemaOptions = {
   root?: unknown;
   skipAdditionalPropertiesDefault?: boolean;
@@ -114,7 +117,6 @@ const toolIdAllowed = (manifest: PluginManifestT, toolId: string) =>
 const commandAllowed = (manifest: PluginManifestT, name: string) =>
   Boolean(manifest.contributes?.commands?.includes(name));
 const cloneManifest = (manifest: PluginManifestT) => structuredClone(manifest) as PluginManifestT;
-const resolvePluginsDir = (home: string) => join(home, "plugins");
 const isTrustedOwner = (uid: number, currentUid: number) => uid === currentUid || uid === 0;
 const isWorldWritable = (mode: number) => (mode & 0o002) !== 0;
 const selectContainerForPlugin = (manifest: PluginManifestT, container?: GatewayContainer) =>
@@ -386,32 +388,6 @@ function validatePluginConfig(params: {
   }
 }
 
-function tryReadPackageJsonName(path: string): string | undefined {
-  try {
-    const parsed = JSON.parse(readFileSync(path, "utf-8")) as unknown;
-    return isRecord(parsed) && typeof parsed["name"] === "string" ? parsed["name"] : undefined;
-  } catch {
-    // Intentional: invalid package.json content should not block plugin loading.
-    return undefined;
-  }
-}
-
-function resolveBundledPluginsDir(): string {
-  return resolveBundledPluginsDirFrom(dirname(fileURLToPath(import.meta.url)));
-}
-
-export function resolveBundledPluginsDirFrom(startDir: string): string {
-  let current = startDir;
-  for (let i = 0; i < 10; i += 1) {
-    if (tryReadPackageJsonName(join(current, "package.json")) === "@tyrum/gateway")
-      return join(current, "plugins");
-    const parent = dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-  return join(startDir, "../../../plugins");
-}
-
 function isWithinDir(parent: string, child: string): boolean {
   const rel = relative(parent, child);
   return rel === "" || (!isAbsolute(rel) && rel.split(/[\\/]/g)[0] !== "..");
@@ -676,15 +652,16 @@ export class PluginRegistry {
     logger: Logger;
     container?: GatewayContainer;
     fetchImpl?: typeof fetch;
+    includeWorkspacePlugins?: boolean;
+    includeUserPlugins?: boolean;
+    includeBundledPlugins?: boolean;
   }): Promise<PluginRegistry> {
     const registry = new PluginRegistry({
       logger: opts.logger,
       container: opts.container,
       fetchImpl: opts.fetchImpl,
     });
-    const dirs: PluginDir[] = [{ kind: "workspace", path: resolvePluginsDir(opts.home) }];
-    if (opts.userHome) dirs.push({ kind: "user", path: resolvePluginsDir(opts.userHome) });
-    dirs.push({ kind: "bundled", path: resolveBundledPluginsDir() });
+    const dirs = resolvePluginSearchDirs(opts);
     await registry.loadFromDirectories(dirs);
     return registry;
   }
