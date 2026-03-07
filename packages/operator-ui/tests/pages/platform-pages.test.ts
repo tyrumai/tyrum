@@ -595,6 +595,94 @@ describe("Platform pages", () => {
     }
   });
 
+  it("blocks a second save while a general save is still in flight", async () => {
+    let resolveSetConfig: (() => void) | null = null;
+    const setConfig = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSetConfig = resolve;
+        }),
+    );
+
+    const desktopApi = {
+      getConfig: vi.fn(async () => ({
+        mode: "embedded",
+        embedded: { port: 8788 },
+        permissions: { profile: "balanced", overrides: {} },
+        capabilities: { desktop: true, playwright: true, cli: true, http: true },
+        cli: { allowedCommands: [], allowedWorkingDirs: [] },
+        web: { allowedDomains: [], headless: true },
+      })),
+      setConfig,
+      gateway: {
+        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
+        start: vi.fn(async () => ({ status: "running", port: 8788 })),
+        stop: vi.fn(async () => ({ status: "stopped" })),
+      },
+      node: {
+        connect: vi.fn(async () => ({ status: "connected" })),
+        disconnect: vi.fn(async () => ({ status: "disconnected" })),
+      },
+      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
+    } satisfies DesktopApi;
+
+    const testRoot = renderWithHost(
+      { kind: "desktop", api: desktopApi },
+      React.createElement(NodeConfigurePage),
+    );
+    try {
+      await flushEffects();
+
+      const portInput = getInputByLabel(testRoot.container, "Embedded gateway port");
+      const safeRadio = testRoot.container.querySelector<HTMLElement>("#node-profile-safe");
+      expect(safeRadio).not.toBeNull();
+      act(() => {
+        setNativeValue(portInput, "8789");
+      });
+
+      await act(async () => {
+        safeRadio?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        clickByTestId(testRoot.container, "node-configure-save-general");
+        await Promise.resolve();
+      });
+
+      expect(setConfig).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        clickTab(testRoot.container, "Browser");
+        await Promise.resolve();
+      });
+
+      const securitySaveButton = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="node-configure-save-security"]',
+      );
+      expect(securitySaveButton?.disabled).toBe(true);
+
+      await act(async () => {
+        clickByTestId(testRoot.container, "node-capability-browser");
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        clickByTestId(testRoot.container, "node-configure-save-security");
+        await Promise.resolve();
+      });
+
+      expect(setConfig).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveSetConfig?.();
+        await Promise.resolve();
+      });
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
   it("saves shell allowlist changes through node settings", async () => {
     const setConfig = vi.fn(async () => {});
     const desktopApi = {

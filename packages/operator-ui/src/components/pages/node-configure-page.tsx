@@ -159,6 +159,7 @@ function DesktopNodeConfigurePage({
 }) {
   const [tab, setTab] = useState<ConfigureTab>("general");
   const model = useDesktopNodeConfigureModel(api, onReloadPage);
+  const saveBusy = model.generalSaving || model.securitySaving;
 
   if (model.loading) {
     return (
@@ -223,7 +224,7 @@ function DesktopNodeConfigurePage({
             testId="node-configure-save-general"
             isLoading={model.generalSaving}
             saved={model.generalSaved}
-            disabled={!model.generalDirty && !model.securityDirty}
+            disabled={saveBusy || (!model.generalDirty && !model.securityDirty)}
             errorMessage={model.generalError}
             onSave={model.saveGeneral}
           />
@@ -251,7 +252,7 @@ function DesktopNodeConfigurePage({
             testId="node-configure-save-security"
             isLoading={model.securitySaving}
             saved={model.securitySaved}
-            disabled={!model.securityDirty}
+            disabled={saveBusy || !model.securityDirty}
             errorMessage={model.securityError}
             onSave={model.saveSecurity}
           />
@@ -299,7 +300,7 @@ function DesktopNodeConfigurePage({
             testId="node-configure-save-security"
             isLoading={model.securitySaving}
             saved={model.securitySaved}
-            disabled={!model.securityDirty}
+            disabled={saveBusy || !model.securityDirty}
             errorMessage={model.securityError}
             onSave={model.saveSecurity}
           />
@@ -339,7 +340,7 @@ function DesktopNodeConfigurePage({
             testId="node-configure-save-security"
             isLoading={model.securitySaving}
             saved={model.securitySaved}
-            disabled={!model.securityDirty}
+            disabled={saveBusy || !model.securityDirty}
             errorMessage={model.securityError}
             onSave={model.saveSecurity}
           />
@@ -363,7 +364,7 @@ function DesktopNodeConfigurePage({
             testId="node-configure-save-security"
             isLoading={model.securitySaving}
             saved={model.securitySaved}
-            disabled={!model.securityDirty}
+            disabled={saveBusy || !model.securityDirty}
             errorMessage={model.securityError}
             onSave={model.saveSecurity}
           />
@@ -769,6 +770,7 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
   });
   const initialSecurityRef = useRef<SecurityState | null>(null);
   const initialConnectionRef = useRef<ConnectionState | null>(null);
+  const saveInFlightRef = useRef<"general" | "security" | null>(null);
 
   useEffect(() => {
     return () => {
@@ -871,18 +873,22 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
   };
 
   const saveSecurity = () => {
-    if (securitySaving || !securityDirty) return;
+    if (saveInFlightRef.current || securitySaving || !securityDirty) return;
+    saveInFlightRef.current = "security";
     setSecuritySaving(true);
     setSecurityError(null);
     setSecuritySaved(false);
     void persistSecurity()
       .then(() => saveSucceeded("security", setSecuritySaved, setSecurityError))
       .catch((error: unknown) => setSecurityError(formatErrorMessage(error)))
-      .finally(() => setSecuritySaving(false));
+      .finally(() => {
+        saveInFlightRef.current = null;
+        setSecuritySaving(false);
+      });
   };
 
   const saveGeneral = () => {
-    if (generalSaving || (!generalDirty && !securityDirty)) return;
+    if (saveInFlightRef.current || generalSaving || (!generalDirty && !securityDirty)) return;
 
     const validationError = validateConnectionState(connection);
     if (validationError) {
@@ -891,6 +897,7 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
       return;
     }
 
+    saveInFlightRef.current = "general";
     setGeneralSaving(true);
     setGeneralError(null);
     setGeneralSaved(false);
@@ -944,7 +951,10 @@ function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () => void
         saveSucceeded("general", setGeneralSaved, setGeneralError);
       })
       .catch((error: unknown) => setGeneralError(formatErrorMessage(error)))
-      .finally(() => setGeneralSaving(false));
+      .finally(() => {
+        saveInFlightRef.current = null;
+        setGeneralSaving(false);
+      });
   };
 
   const toggleBackgroundMode = (enabled: boolean) => {
