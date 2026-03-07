@@ -87,6 +87,20 @@ function setControlledInputValue(input: HTMLInputElement, value: string): void {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+function clickButtonByTestId(container: HTMLElement, testId: string): void {
+  const button = container.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
+  expect(button).not.toBeNull();
+  button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+}
+
+function clickTabByLabel(container: HTMLElement, label: string): void {
+  const tab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find((el) =>
+    el.textContent?.includes(label),
+  );
+  expect(tab).not.toBeUndefined();
+  tab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+}
+
 function requestInfoToUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") return input;
   if (input instanceof URL) return input.toString();
@@ -791,7 +805,9 @@ describe("operator-ui", () => {
     expect(container.querySelector(".stack")).toBeNull();
     expect(container.querySelector(".alert")).toBeNull();
 
-    const desktopLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-desktop"]');
+    const desktopLink = container.querySelector<HTMLButtonElement>(
+      '[data-testid="nav-node-configure"]',
+    );
     expect(desktopLink).not.toBeNull();
 
     await act(async () => {
@@ -1830,7 +1846,7 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("exposes desktop setup controls in desktop mode", async () => {
+  it("routes desktop mode to node configuration and auto-connects the local node", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -1844,16 +1860,19 @@ describe("operator-ui", () => {
       getConfig: vi.fn(async () => ({
         mode: "embedded",
         embedded: { port: 8788 },
-        capabilities: { desktop: true, playwright: false, cli: false, http: false },
+        permissions: { profile: "balanced", overrides: {} },
+        capabilities: { desktop: true, playwright: true, cli: true, http: true },
+        cli: { allowedCommands: [], allowedWorkingDirs: [] },
+        web: { allowedDomains: [], headless: true },
       })),
       setConfig: vi.fn(async () => {}),
       gateway: {
-        getStatus: vi.fn(async () => ({ status: "stopped", port: 8788 })),
+        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
         start: vi.fn(async () => ({ status: "running", port: 8788 })),
         stop: vi.fn(async () => ({ status: "stopped" })),
       },
       node: {
-        connect: vi.fn(async () => ({ status: "connecting" })),
+        connect: vi.fn(async () => ({ status: "connected" })),
         disconnect: vi.fn(async () => ({ status: "disconnected" })),
       },
       onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
@@ -1872,50 +1891,109 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    const desktopLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-desktop"]');
-    expect(desktopLink).not.toBeNull();
-
     await act(async () => {
-      desktopLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    const startButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="desktop-start-gateway"]',
-    );
-    expect(startButton).not.toBeNull();
-
-    await act(async () => {
-      startButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(desktopApi.gateway.start).toHaveBeenCalledTimes(1);
-    expect(desktopApi.setConfig).toHaveBeenCalledTimes(0);
-
-    const connectNodeButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="desktop-connect-node"]',
-    );
-    expect(connectNodeButton).not.toBeNull();
-
-    await act(async () => {
-      connectNodeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
 
     expect(desktopApi.node.connect).toHaveBeenCalledTimes(1);
-    expect(
-      container.querySelector<HTMLButtonElement>('[data-testid="desktop-disconnect-node"]'),
-    ).not.toBeNull();
+
+    await act(async () => {
+      clickButtonByTestId(container, "nav-node-configure");
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Node Configuration");
+    expect(container.querySelector('[data-testid="nav-node-configure"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="nav-desktop"]')).toBeNull();
+    expect(container.querySelector('[data-testid="nav-connection"]')).toBeNull();
 
     act(() => {
       root?.unmount();
     });
+
+    expect(desktopApi.node.disconnect).toHaveBeenCalledTimes(1);
+
     container.remove();
     delete (window as unknown as Record<string, unknown>)["tyrumDesktop"];
   });
 
-  it("disables desktop capability toggles while settings are saving", async () => {
+  it("retries desktop node auto-connect after a raced connect resolves disconnected", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const desktopApi = {
+      getConfig: vi.fn(async () => ({
+        mode: "embedded",
+        embedded: { port: 8788 },
+        permissions: { profile: "balanced", overrides: {} },
+        capabilities: { desktop: true, playwright: true, cli: true, http: true },
+        cli: { allowedCommands: [], allowedWorkingDirs: [] },
+        web: { allowedDomains: [], headless: true },
+      })),
+      setConfig: vi.fn(async () => {}),
+      gateway: {
+        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
+        start: vi.fn(async () => ({ status: "running", port: 8788 })),
+        stop: vi.fn(async () => ({ status: "stopped" })),
+      },
+      node: {
+        connect: vi
+          .fn(async () => ({ status: "connected" }))
+          .mockResolvedValueOnce({ status: "disconnected" }),
+        disconnect: vi.fn(async () => ({ status: "disconnected" })),
+      },
+      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
+      checkMacPermissions: vi.fn(async () => null),
+      requestMacPermission: vi.fn(async () => ({ granted: true })),
+    };
+
+    (window as unknown as Record<string, unknown>)["tyrumDesktop"] = desktopApi;
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(desktopApi.node.connect).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      ws.emit("disconnected", { code: 1006, reason: "transport lost" });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      ws.emit("connected", { clientId: null });
+      await Promise.resolve();
+    });
+
+    expect(desktopApi.node.connect).toHaveBeenCalledTimes(2);
+    expect(desktopApi.node.disconnect).toHaveBeenCalledTimes(0);
+
+    act(() => {
+      root?.unmount();
+    });
+
+    expect(desktopApi.node.disconnect).toHaveBeenCalledTimes(1);
+
+    container.remove();
+    delete (window as unknown as Record<string, unknown>)["tyrumDesktop"];
+  });
+
+  it("disables node settings save while settings are saving", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -1932,20 +2010,21 @@ describe("operator-ui", () => {
 
     const desktopApi = {
       getConfig: vi.fn(async () => ({
-        mode: "embedded",
-        embedded: { port: 8788 },
-        capabilities: { desktop: true, playwright: false, cli: false, http: false },
+        permissions: { profile: "balanced", overrides: {} },
+        capabilities: { desktop: true, playwright: true, cli: true, http: true },
+        cli: { allowedCommands: [], allowedWorkingDirs: [] },
+        web: { allowedDomains: [], headless: true },
       })),
       setConfig: vi.fn(async () => {
         await setConfigPromise;
       }),
       gateway: {
-        getStatus: vi.fn(async () => ({ status: "stopped", port: 8788 })),
+        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
         start: vi.fn(async () => ({ status: "running", port: 8788 })),
         stop: vi.fn(async () => ({ status: "stopped" })),
       },
       node: {
-        connect: vi.fn(async () => ({ status: "connecting" })),
+        connect: vi.fn(async () => ({ status: "connected" })),
         disconnect: vi.fn(async () => ({ status: "disconnected" })),
       },
       onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
@@ -1964,42 +2043,37 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    const desktopLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-desktop"]');
-    expect(desktopLink).not.toBeNull();
-
     await act(async () => {
-      desktopLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      clickButtonByTestId(container, "nav-node-configure");
       await Promise.resolve();
     });
 
-    const capabilityCheckboxes = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('[data-testid^="desktop-capability-"]'),
-    );
-    expect(capabilityCheckboxes.length).toBeGreaterThanOrEqual(4);
+    await act(async () => {
+      clickTabByLabel(container, "Browser");
+      await Promise.resolve();
+    });
 
     await act(async () => {
-      capabilityCheckboxes[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      clickButtonByTestId(container, "node-capability-browser");
       await Promise.resolve();
     });
 
     const saveButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="desktop-save-capabilities"]',
+      '[data-testid="node-configure-save-security"]',
     );
     expect(saveButton).not.toBeNull();
     expect(saveButton!.disabled).toBe(false);
 
     await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      clickButtonByTestId(container, "node-configure-save-security");
       await Promise.resolve();
     });
 
-    const updatedCheckboxes = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('[data-testid^="desktop-capability-"]'),
+    const updatedSaveButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="node-configure-save-security"]',
     );
-    expect(updatedCheckboxes.length).toBeGreaterThanOrEqual(4);
-    for (const checkbox of updatedCheckboxes) {
-      expect(checkbox.disabled).toBe(true);
-    }
+    expect(updatedSaveButton).not.toBeNull();
+    expect(updatedSaveButton!.disabled).toBe(true);
 
     resolveSetConfig?.();
     await act(async () => {
@@ -2013,7 +2087,7 @@ describe("operator-ui", () => {
     delete (window as unknown as Record<string, unknown>)["tyrumDesktop"];
   });
 
-  it("does not show Saving status while requesting mac permissions", async () => {
+  it("does not show saving status while requesting mac permissions", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -2030,18 +2104,19 @@ describe("operator-ui", () => {
 
     const desktopApi = {
       getConfig: vi.fn(async () => ({
-        mode: "embedded",
-        embedded: { port: 8788 },
-        capabilities: { desktop: true, playwright: false, cli: false, http: false },
+        permissions: { profile: "balanced", overrides: {} },
+        capabilities: { desktop: true, playwright: true, cli: true, http: true },
+        cli: { allowedCommands: [], allowedWorkingDirs: [] },
+        web: { allowedDomains: [], headless: true },
       })),
       setConfig: vi.fn(async () => {}),
       gateway: {
-        getStatus: vi.fn(async () => ({ status: "stopped", port: 8788 })),
+        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
         start: vi.fn(async () => ({ status: "running", port: 8788 })),
         stop: vi.fn(async () => ({ status: "stopped" })),
       },
       node: {
-        connect: vi.fn(async () => ({ status: "connecting" })),
+        connect: vi.fn(async () => ({ status: "connected" })),
         disconnect: vi.fn(async () => ({ status: "disconnected" })),
       },
       onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
@@ -2063,22 +2138,24 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    const desktopLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-desktop"]');
-    expect(desktopLink).not.toBeNull();
+    await act(async () => {
+      clickButtonByTestId(container, "nav-node-configure");
+      await Promise.resolve();
+    });
 
     await act(async () => {
-      desktopLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      clickTabByLabel(container, "Desktop");
       await Promise.resolve();
     });
 
     const saveButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="desktop-save-capabilities"]',
+      '[data-testid="node-configure-save-security"]',
     );
     expect(saveButton).not.toBeNull();
-    expect(saveButton!.textContent).toContain("Save settings");
+    expect(saveButton!.textContent).toContain("Save Node Settings");
 
     const requestAccessibilityButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="desktop-request-accessibility"]',
+      '[data-testid="node-request-accessibility"]',
     );
     expect(requestAccessibilityButton).not.toBeNull();
 
@@ -2088,7 +2165,7 @@ describe("operator-ui", () => {
     });
 
     const updatedSaveButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="desktop-save-capabilities"]',
+      '[data-testid="node-configure-save-security"]',
     );
     expect(updatedSaveButton).not.toBeNull();
     expect(updatedSaveButton!.textContent).not.toContain("Saving...");
@@ -2105,7 +2182,7 @@ describe("operator-ui", () => {
     delete (window as unknown as Record<string, unknown>)["tyrumDesktop"];
   });
 
-  it("keeps mac permission request errors visible", async () => {
+  it("keeps mac permission request errors visible in node configuration", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -2117,18 +2194,19 @@ describe("operator-ui", () => {
 
     const desktopApi = {
       getConfig: vi.fn(async () => ({
-        mode: "embedded",
-        embedded: { port: 8788 },
-        capabilities: { desktop: true, playwright: false, cli: false, http: false },
+        permissions: { profile: "balanced", overrides: {} },
+        capabilities: { desktop: true, playwright: true, cli: true, http: true },
+        cli: { allowedCommands: [], allowedWorkingDirs: [] },
+        web: { allowedDomains: [], headless: true },
       })),
       setConfig: vi.fn(async () => {}),
       gateway: {
-        getStatus: vi.fn(async () => ({ status: "stopped", port: 8788 })),
+        getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
         start: vi.fn(async () => ({ status: "running", port: 8788 })),
         stop: vi.fn(async () => ({ status: "stopped" })),
       },
       node: {
-        connect: vi.fn(async () => ({ status: "connecting" })),
+        connect: vi.fn(async () => ({ status: "connected" })),
         disconnect: vi.fn(async () => ({ status: "disconnected" })),
       },
       onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
@@ -2149,16 +2227,18 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    const desktopLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-desktop"]');
-    expect(desktopLink).not.toBeNull();
+    await act(async () => {
+      clickButtonByTestId(container, "nav-node-configure");
+      await Promise.resolve();
+    });
 
     await act(async () => {
-      desktopLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      clickTabByLabel(container, "Desktop");
       await Promise.resolve();
     });
 
     const requestAccessibilityButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="desktop-request-accessibility"]',
+      '[data-testid="node-request-accessibility"]',
     );
     expect(requestAccessibilityButton).not.toBeNull();
 
@@ -2798,7 +2878,7 @@ describe("operator-ui", () => {
     }
   });
 
-  it("supports Cmd/Ctrl+1-7 page navigation shortcuts", () => {
+  it("supports Cmd/Ctrl+1-9/0 page navigation shortcuts across the primary routes", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -2817,13 +2897,32 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    act(() => {
+    await act(async () => {
       window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "1", ctrlKey: true, bubbles: true }),
+        new KeyboardEvent("keydown", { key: "7", ctrlKey: true, bubbles: true }),
       );
+      await Promise.resolve();
     });
 
-    expect(container.querySelector('[data-testid="dashboard-card-connection"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="agents-tab-runs"]')).not.toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "9", ctrlKey: true, bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="configure-page"]')).not.toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "0", ctrlKey: true, bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Settings");
 
     act(() => {
       root?.unmount();
@@ -2831,7 +2930,7 @@ describe("operator-ui", () => {
     container.remove();
   });
 
-  it("ignores Cmd/Ctrl+1-7 shortcuts while disconnected and lands on dashboard after reconnect", async () => {
+  it("ignores Cmd/Ctrl+1-9/0 shortcuts while disconnected and lands on dashboard after reconnect", async () => {
     const ws = new FakeWsClient(false);
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -3741,7 +3840,6 @@ describe("operator-ui", () => {
 
     await openConfigureGeneral(container);
 
-    expect(container.querySelector('[data-testid="nav-settings"]')).toBeNull();
     expect(container.querySelector('[data-testid="configure-general-panel"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="configure-theme"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="configure-update"]')).not.toBeNull();

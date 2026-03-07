@@ -16,6 +16,26 @@ function createWindowStub(): BrowserWindow {
   } as unknown as BrowserWindow;
 }
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: unknown) => void;
+} {
+  let resolve: ((value: T) => void) | null = null;
+  let reject: ((error: unknown) => void) | null = null;
+
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  if (!resolve || !reject) {
+    throw new Error("Failed to create deferred promise");
+  }
+
+  return { promise, resolve, reject };
+}
+
 vi.mock("electron", () => ({
   ipcMain: {
     handle: ipcMainHandleMock,
@@ -307,6 +327,53 @@ describe("node-ipc", () => {
 
     expect(firstRuntime?.disconnect).toHaveBeenCalledTimes(1);
     expect(firstBackend?.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores stale connect completions after a disconnect wins the race", async () => {
+    const { loadConfig } = await import("../src/main/config/store.js");
+    (loadConfig as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      mode: "embedded",
+      embedded: { port: 8788, dbPath: "/tmp/test.db", tokenRef: "enc:tok" },
+      remote: { wsUrl: "ws://127.0.0.1:8788/ws", tokenRef: "" },
+      permissions: { profile: "default", overrides: {} },
+      capabilities: { desktop: false, playwright: false, cli: false, http: false },
+      cli: { allowedCommands: [], allowedWorkingDirs: [] },
+      web: { allowedDomains: [], headless: true },
+    });
+
+    const startDeferred = createDeferred<void>();
+    const { startEmbeddedGatewayFromConfig } = await import("../src/main/ipc/gateway-ipc.js");
+    (startEmbeddedGatewayFromConfig as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      () => startDeferred.promise,
+    );
+
+    const { registerNodeIpc } = await import("../src/main/ipc/node-ipc.js");
+    registerNodeIpc(createWindowStub());
+
+    const connectHandler = registeredHandlers.get("node:connect");
+    const disconnectHandler = registeredHandlers.get("node:disconnect");
+    expect(connectHandler).toBeDefined();
+    expect(disconnectHandler).toBeDefined();
+
+    const connectPromise = (
+      connectHandler as () => Promise<{ status: "connecting" | "disconnected" }>
+    )();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const { NodeRuntime } = await import("../src/main/node-runtime.js");
+    const NodeRuntimeMock = NodeRuntime as unknown as ReturnType<typeof vi.fn>;
+    const firstRuntime = NodeRuntimeMock.mock.results[0]?.value as
+      | { connect: (wsUrl: string, token: string) => void; disconnect: () => void }
+      | undefined;
+    expect(firstRuntime).toBeDefined();
+
+    await (disconnectHandler as () => Promise<{ status: string }>)();
+    startDeferred.resolve();
+
+    await expect(connectPromise).resolves.toHaveProperty("status");
+    expect(firstRuntime?.disconnect).toHaveBeenCalledTimes(1);
+    expect(firstRuntime?.connect).not.toHaveBeenCalled();
   });
 
   it("responds to consent requests over IPC when runtime exists", async () => {

@@ -32,7 +32,7 @@ const {
   const appHandlersInner = new Map<string, (...args: unknown[]) => void>();
   const backgroundControllerDepsRefInner: {
     current: {
-      onRequestNavigate: (request: { pageId: "connection" }) => void;
+      onRequestNavigate: (request: { pageId: "node-configure" }) => void;
       onShowMainWindow: () => void;
     } | null;
   } = { current: null };
@@ -298,7 +298,7 @@ describe("main window recreation for background callbacks", () => {
     expect(browserWindowInstances).toHaveLength(1);
     browserWindowInstances[0].handlers.get("closed")?.();
 
-    backgroundControllerDepsRef.current?.onRequestNavigate({ pageId: "connection" });
+    backgroundControllerDepsRef.current?.onRequestNavigate({ pageId: "node-configure" });
 
     expect(browserWindowMock).toHaveBeenCalledTimes(2);
     const recreatedWindow = browserWindowInstances[1];
@@ -310,7 +310,7 @@ describe("main window recreation for background callbacks", () => {
     recreatedWindow.readyToShowHandler?.();
 
     expect(recreatedWindow.webContents.send).toHaveBeenCalledWith("navigation:request", {
-      pageId: "connection",
+      pageId: "node-configure",
     });
   });
 });

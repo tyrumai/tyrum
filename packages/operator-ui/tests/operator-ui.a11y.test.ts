@@ -140,12 +140,58 @@ function samplePresenceResponse() {
   } as const;
 }
 
+function sampleAgentStatusResponse() {
+  return {
+    enabled: true,
+    home: "/tmp/agents/default",
+    identity: {
+      name: "Default Agent",
+      description: "Primary operator agent",
+    },
+    model: {
+      model: "openai/gpt-4.1",
+      variant: "balanced",
+      fallback: ["openai/gpt-4.1-mini"],
+    },
+    skills: ["review", "deploy"],
+    workspace_skills_trusted: true,
+    mcp: [
+      {
+        id: "filesystem",
+        name: "Filesystem",
+        enabled: true,
+        transport: "stdio",
+      },
+    ],
+    tools: ["shell", "http"],
+    sessions: {
+      ttl_days: 30,
+      max_turns: 20,
+      context_pruning: {
+        max_messages: 32,
+        tool_prune_keep_last_messages: 4,
+      },
+      loop_detection: {
+        within_turn: {
+          consecutive_repeat_limit: 2,
+          cycle_repeat_limit: 3,
+        },
+        cross_turn: {
+          window_assistant_messages: 8,
+          similarity_threshold: 0.92,
+        },
+      },
+    },
+  } as const;
+}
+
 function createFakeHttpClient(): { http: OperatorHttpClient } {
   const http: OperatorHttpClient = {
     status: { get: vi.fn(async () => sampleStatusResponse()) },
     usage: { get: vi.fn(async () => sampleUsageResponse()) },
     presence: { list: vi.fn(async () => samplePresenceResponse()) },
     agentList: { get: vi.fn(async () => ({ agents: [{ agent_key: "default" }] }) as const) },
+    agentStatus: { get: vi.fn(async () => sampleAgentStatusResponse()) },
     pairings: {
       list: vi.fn(async () => ({ status: "ok", pairings: [] }) as const),
       approve: vi.fn(async () => ({ status: "ok", pairing: null }) as const),
@@ -160,11 +206,14 @@ type OperatorUiA11yRouteId =
   | "connect"
   | "dashboard"
   | "chat"
+  | "memory"
   | "approvals"
+  | "runs"
   | "agents"
   | "pairing"
   | "configure"
-  | "desktop"
+  | "settings"
+  | "node-configure"
   | "browser";
 
 async function expectNoAxeViolationsForRoute({
@@ -244,17 +293,23 @@ describe("operator-ui a11y", () => {
     { mode: "desktop", route: "connect" },
     { mode: "desktop", route: "dashboard" },
     { mode: "desktop", route: "chat" },
+    { mode: "desktop", route: "memory" },
     { mode: "desktop", route: "approvals" },
+    { mode: "desktop", route: "runs" },
     { mode: "desktop", route: "agents" },
     { mode: "desktop", route: "pairing" },
-    { mode: "desktop", route: "desktop" },
+    { mode: "desktop", route: "settings" },
+    { mode: "desktop", route: "node-configure" },
     { mode: "desktop", route: "configure" },
     { mode: "web", route: "connect" },
     { mode: "web", route: "dashboard" },
     { mode: "web", route: "chat" },
+    { mode: "web", route: "memory" },
     { mode: "web", route: "approvals" },
+    { mode: "web", route: "runs" },
     { mode: "web", route: "agents" },
     { mode: "web", route: "pairing" },
+    { mode: "web", route: "settings" },
     { mode: "web", route: "configure" },
     { mode: "web", route: "browser" },
   ];

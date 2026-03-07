@@ -11,9 +11,12 @@ describe("Operator UI app/page component structure", () => {
       { specifier: "../src/components/pages/runs-page.js", exportName: "RunsPage" },
       { specifier: "../src/components/pages/agents-page.js", exportName: "AgentsPage" },
       { specifier: "../src/components/pages/pairing-page.js", exportName: "PairingPage" },
+      {
+        specifier: "../src/components/pages/node-configure-page.js",
+        exportName: "NodeConfigurePage",
+      },
       { specifier: "../src/components/pages/settings-page.js", exportName: "SettingsPage" },
       { specifier: "../src/components/pages/configure-page.js", exportName: "ConfigurePage" },
-      { specifier: "../src/components/pages/desktop-page.js", exportName: "DesktopPage" },
     ] as const;
 
     for (const { specifier, exportName } of expected) {

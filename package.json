@@ -30,6 +30,7 @@
     "overrides": {
       "@develar/schema-utils>ajv": "8.18.0",
       "@develar/schema-utils>ajv-keywords": "5.1.0",
+      "@modelcontextprotocol/sdk>express-rate-limit": "8.3.0",
       "dmg-license>ajv": "8.18.0",
       "dbus-next>xml2js": "0.5.0",
       "fast-xml-parser": "5.3.8",
@@ -77,6 +78,7 @@
     "prettier": "^3.8.1",
     "tsdown": "^0.21.0",
     "typescript": "^5.8.3",
+    "verror": "1.10.1",
     "vitest": "^4.0.18",
     "vitest-axe": "^0.1.0"
   }

@@ -123,20 +123,32 @@ function registerProviders(
   }
 }
 
-async function handleNodeConnect(): Promise<{ status: "connecting" }> {
+async function handleNodeConnect(): Promise<{ status: "connecting" | "disconnected" }> {
   // Clean up any prior runtime/backends (e.g., if user clicks connect twice).
   await cleanupNodeResources();
 
   const config = loadConfig();
   const permissions = resolvePermissions(config.permissions.profile, config.permissions.overrides);
 
-  runtime = createRuntime(config, permissions);
+  const nextRuntime = createRuntime(config, permissions);
+  runtime = nextRuntime;
 
-  const { wsUrl, token, config: effectiveConfig } = await resolveNodeConnection(config);
-  registerProviders(runtime, effectiveConfig, permissions);
-  runtime.connect(wsUrl, token);
+  try {
+    const { wsUrl, token, config: effectiveConfig } = await resolveNodeConnection(config);
+    if (runtime !== nextRuntime) {
+      return { status: "disconnected" };
+    }
 
-  return { status: "connecting" };
+    registerProviders(nextRuntime, effectiveConfig, permissions);
+    nextRuntime.connect(wsUrl, token);
+
+    return { status: "connecting" };
+  } catch (error) {
+    if (runtime === nextRuntime) {
+      await cleanupNodeResources();
+    }
+    throw error;
+  }
 }
 
 async function handleNodeDisconnect(): Promise<{ status: "disconnected" }> {

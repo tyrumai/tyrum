@@ -1,18 +1,18 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import {
   Bot,
-  Cable,
+  Database,
   Globe,
   LayoutGrid,
   Link2,
-  Lock,
   MessageSquare,
   Monitor,
+  Play,
   SquareKanban,
   Shield,
   ShieldCheck,
-  Wrench,
+  SlidersHorizontal,
 } from "lucide-react";
 import { ElevatedModeProvider } from "./elevated-mode.js";
 import { ErrorBoundary } from "./components/error/error-boundary.js";
@@ -25,13 +25,13 @@ import { ChatPage } from "./components/pages/chat-page.js";
 import { ConnectPage } from "./components/pages/connect-page.js";
 import { ConfigurePage } from "./components/pages/configure-page.js";
 import { DashboardPage } from "./components/pages/dashboard-page.js";
-import { DesktopPage } from "./components/pages/desktop-page.js";
+import { MemoryPage } from "./components/pages/memory-page.js";
 import { PairingPage } from "./components/pages/pairing-page.js";
+import { RunsPage } from "./components/pages/runs-page.js";
+import { SettingsPage } from "./components/pages/settings-page.js";
 import { WorkBoardPage } from "./components/pages/workboard-page.js";
+import { NodeConfigurePage } from "./components/pages/node-configure-page.js";
 import { BrowserCapabilitiesPage } from "./components/pages/platform/browser-capabilities-page.js";
-import { PlatformConnectionPage } from "./components/pages/platform/connection-page.js";
-import { PlatformDebugPage } from "./components/pages/platform/debug-page.js";
-import { PlatformPermissionsPage } from "./components/pages/platform/permissions-page.js";
 import { ToastProvider } from "./components/toast/toast-provider.js";
 import { ThemeProvider, useThemeOptional } from "./hooks/use-theme.js";
 import { useKeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
@@ -58,15 +58,15 @@ export interface OperatorUiAppProps {
 type OperatorUiRouteId =
   | "dashboard"
   | "chat"
+  | "memory"
   | "approvals"
+  | "runs"
   | "workboard"
   | "agents"
   | "pairing"
   | "configure"
-  | "desktop"
-  | "connection"
-  | "permissions"
-  | "debug"
+  | "settings"
+  | "node-configure"
   | "browser";
 
 type NavIcon = ComponentType<{ className?: string }>;
@@ -74,46 +74,44 @@ type NavIcon = ComponentType<{ className?: string }>;
 const NAV_ITEM_CONFIG: Record<OperatorUiRouteId, { label: string; icon: NavIcon }> = {
   dashboard: { label: "Dashboard", icon: LayoutGrid },
   chat: { label: "Chat", icon: MessageSquare },
+  memory: { label: "Memory", icon: Database },
   approvals: { label: "Approvals", icon: ShieldCheck },
+  runs: { label: "Runs", icon: Play },
   workboard: { label: "Work", icon: SquareKanban },
   agents: { label: "Agents", icon: Bot },
   pairing: { label: "Pairings", icon: Link2 },
   configure: { label: "Configure", icon: Shield },
-  desktop: { label: "Desktop", icon: Monitor },
-  connection: { label: "Connection", icon: Cable },
-  permissions: { label: "Permissions", icon: Lock },
-  debug: { label: "Debug", icon: Wrench },
+  settings: { label: "Settings", icon: SlidersHorizontal },
+  "node-configure": { label: "Configure", icon: Monitor },
   browser: { label: "Browser", icon: Globe },
 };
 const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
   "dashboard",
   "chat",
+  "memory",
   "approvals",
+  "runs",
   "workboard",
   "agents",
   "pairing",
   "configure",
+  "settings",
 ];
 
-const MOBILE_NAV_ORDER: OperatorUiRouteId[] = ["dashboard", "chat", "approvals", "workboard"];
-const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["agents", "pairing", "configure"];
-const PLATFORM_DESKTOP_NAV_ORDER: OperatorUiRouteId[] = [
-  "desktop",
-  "connection",
-  "permissions",
-  "debug",
+const MOBILE_NAV_ORDER: OperatorUiRouteId[] = ["dashboard", "approvals", "runs", "settings"];
+const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = [
+  "chat",
+  "memory",
+  "agents",
+  "workboard",
+  "pairing",
+  "configure",
 ];
+const PLATFORM_DESKTOP_NAV_ORDER: OperatorUiRouteId[] = ["node-configure"];
 const PLATFORM_WEB_NAV_ORDER: OperatorUiRouteId[] = ["browser"];
 
-const KEYBOARD_NAV_ORDER: OperatorUiRouteId[] = [
-  "dashboard",
-  "chat",
-  "approvals",
-  "workboard",
-  "agents",
-  "pairing",
-  "configure",
-];
+const KEYBOARD_NAV_ORDER: OperatorUiRouteId[] = SIDEBAR_NAV_ORDER;
+const KEYBOARD_NAV_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
 
 function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {
   return Object.prototype.hasOwnProperty.call(NAV_ITEM_CONFIG, value);
@@ -133,6 +131,7 @@ export function OperatorUiApp({
           core={core}
           mode={mode}
           elevatedModeController={elevatedModeController}
+          onReloadPage={onReloadPage}
           onReconfigureGateway={onReconfigureGateway}
         />
       </OperatorUiAppHostBoundary>
@@ -160,8 +159,12 @@ function OperatorUiAppRoot({
   core,
   mode,
   elevatedModeController,
+  onReloadPage,
   onReconfigureGateway,
-}: Pick<OperatorUiAppProps, "core" | "mode" | "elevatedModeController" | "onReconfigureGateway">) {
+}: Pick<
+  OperatorUiAppProps,
+  "core" | "mode" | "elevatedModeController" | "onReloadPage" | "onReconfigureGateway"
+>) {
   const [route, setRoute] = useState<OperatorUiRouteId>("dashboard");
   const connection = useOperatorStore(core.connectionStore);
   const autoSync = useOperatorStore(core.autoSyncStore);
@@ -176,6 +179,12 @@ function OperatorUiAppRoot({
   const existingTheme = useThemeOptional();
   const host = useHostApiOptional();
   const hostKind: HostKind = host?.kind ?? (mode === "desktop" ? "desktop" : "web");
+
+  useDesktopNodeAutoConnection({
+    connection,
+    hostKind,
+    hostApi: host?.kind === "desktop" ? host.api : null,
+  });
 
   const activeAgentIds = new Set<string>();
   for (const run of Object.values(runs.runsById)) {
@@ -245,13 +254,17 @@ function OperatorUiAppRoot({
 
   useKeyboardShortcut(
     showOperatorRoutes
-      ? KEYBOARD_NAV_ORDER.map((id, index) => ({
-          key: String(index + 1),
-          requireCmdOrCtrl: true,
-          handler: () => {
-            navigate(id);
-          },
-        }))
+      ? KEYBOARD_NAV_ORDER.flatMap((id, index) => {
+          const key = KEYBOARD_NAV_KEYS[index];
+          if (!key) return [];
+          return {
+            key,
+            requireCmdOrCtrl: true,
+            handler: () => {
+              navigate(id);
+            },
+          };
+        })
       : [],
   );
 
@@ -269,7 +282,7 @@ function OperatorUiAppRoot({
             <Sidebar
               items={sidebarItems}
               secondaryItems={platformItems}
-              secondaryLabel="Platform"
+              secondaryLabel="Node"
               activeItemId={route}
               onNavigate={navigate}
               connectionStatus={connection.status}
@@ -300,15 +313,15 @@ function OperatorUiAppRoot({
           <>
             {route === "dashboard" && <DashboardPage core={core} onNavigate={navigate} />}
             {route === "chat" && <ChatPage core={core} />}
+            {route === "memory" && <MemoryPage core={core} />}
             {route === "approvals" && <ApprovalsPage core={core} />}
+            {route === "runs" && <RunsPage core={core} />}
             {route === "agents" && <AgentsPage core={core} />}
             {route === "workboard" && <WorkBoardPage core={core} />}
             {route === "pairing" && <PairingPage core={core} />}
             {route === "configure" && <ConfigurePage core={core} />}
-            {route === "desktop" && mode === "desktop" && <DesktopPage core={core} />}
-            {route === "connection" && <PlatformConnectionPage core={core} />}
-            {route === "permissions" && <PlatformPermissionsPage />}
-            {route === "debug" && <PlatformDebugPage />}
+            {route === "settings" && <SettingsPage core={core} mode={mode} />}
+            {route === "node-configure" && <NodeConfigurePage onReloadPage={onReloadPage} />}
             {route === "browser" && hostKind === "web" && <BrowserCapabilitiesPage />}
           </>
         )}
@@ -327,4 +340,57 @@ function OperatorUiAppRoot({
   );
 
   return existingTheme ? app : <ThemeProvider>{app}</ThemeProvider>;
+}
+
+function useDesktopNodeAutoConnection({
+  connection,
+  hostKind,
+  hostApi,
+}: {
+  connection: { status: "disconnected" | "connecting" | "connected"; recovering: boolean };
+  hostKind: HostKind;
+  hostApi: ReturnType<typeof getDesktopApi>;
+}) {
+  const nodeLinkedRef = useRef(false);
+
+  useEffect(() => {
+    if (hostKind !== "desktop" || !hostApi) {
+      nodeLinkedRef.current = false;
+      return;
+    }
+
+    if (connection.status === "connected") {
+      if (nodeLinkedRef.current) return;
+      nodeLinkedRef.current = true;
+      void hostApi.node
+        .connect()
+        .then((result) => {
+          if (result.status === "disconnected") {
+            nodeLinkedRef.current = false;
+          }
+        })
+        .catch(() => {
+          nodeLinkedRef.current = false;
+        });
+      return;
+    }
+
+    if (connection.status === "disconnected" && !connection.recovering && nodeLinkedRef.current) {
+      nodeLinkedRef.current = false;
+      void hostApi.node.disconnect().catch(() => {
+        // Keep local node lifecycle best-effort and avoid surfacing background disconnect errors.
+      });
+    }
+  }, [connection.recovering, connection.status, hostApi, hostKind]);
+
+  useEffect(() => {
+    if (hostKind !== "desktop" || !hostApi) return;
+    return () => {
+      if (!nodeLinkedRef.current) return;
+      nodeLinkedRef.current = false;
+      void hostApi.node.disconnect().catch(() => {
+        // Ignore disconnect failures during teardown/rebootstrap.
+      });
+    };
+  }, [hostApi, hostKind]);
 }

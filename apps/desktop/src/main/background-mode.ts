@@ -370,10 +370,10 @@ export class BackgroundModeController {
       },
       startStopItem,
       {
-        label: "Open Connection",
+        label: "Open Node Configuration",
         click: () => {
           this.onShowMainWindow();
-          this.onRequestNavigate({ pageId: "connection" });
+          this.onRequestNavigate({ pageId: "node-configure" });
         },
       },
       { type: "separator" },
