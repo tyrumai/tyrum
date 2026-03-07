@@ -34,13 +34,14 @@ export class LifecycleHooksRuntime {
 
   async fire(input: LifecycleHookEvent): Promise<readonly string[]> {
     const tenantId = input.tenantId?.trim() || DEFAULT_TENANT_ID;
-    const localHooks = this.opts.hooks?.map((hook) => ({
-      ...hook,
+    const localHooks = (this.opts.hooks ?? []).map((hook) => ({
+      event: hook.event,
+      hook_key: hook.hook_key,
       lane: hook.lane ?? "cron",
       steps: [...hook.steps],
     }));
     const hooks =
-      localHooks && localHooks.length > 0
+      localHooks.length > 0
         ? localHooks
         : ((await this.opts.configStore?.getLifecycleHooks(tenantId)) ?? []);
     const matches = hooks.filter((h) => h.event === input.event);
