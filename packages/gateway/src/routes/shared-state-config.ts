@@ -13,6 +13,7 @@ import { DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
 import { AgentIdentityDal } from "../modules/agent/identity-dal.js";
 import { MarkdownMemoryDal, type MarkdownMemoryDoc } from "../modules/agent/markdown-memory-dal.js";
+import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
 import {
   RuntimePackageDal,
   type RuntimePackageKind,
@@ -110,6 +111,7 @@ function markdownDocResponse(doc: MarkdownMemoryDoc) {
 export interface SharedStateConfigRouteDeps {
   db: SqlDb;
   identityScopeDal: IdentityScopeDal;
+  pluginCatalogProvider?: PluginCatalogProvider;
 }
 
 export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps): Hono {
@@ -395,6 +397,9 @@ export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps):
       createdBy: { kind: "tenant.token", token_id: claims.token_id },
       reason: parsed.data.reason,
     });
+    if (parsedKind.data === "plugin") {
+      await deps.pluginCatalogProvider?.invalidateTenantRegistry(tenantId);
+    }
 
     return c.json(packageRevisionResponse(revision), 200);
   });
@@ -432,6 +437,9 @@ export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps):
       createdBy: { kind: "tenant.token", token_id: claims.token_id },
       reason: parsed.data.reason,
     });
+    if (parsedKind.data === "plugin") {
+      await deps.pluginCatalogProvider?.invalidateTenantRegistry(tenantId);
+    }
 
     return c.json(packageRevisionResponse(revision), 200);
   });

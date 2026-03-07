@@ -125,4 +125,23 @@ describe("gateway config routes", () => {
     expect(agentPayload.agent_key).toBe("default");
     expect(agentPayload.bundle.tools?.require_approval).toEqual(["tool.exec"]);
   });
+
+  it("does not create agents when reading a missing agent policy bundle", async () => {
+    const before = await container.db.get<{ count: number }>(
+      "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+      [tenantId],
+    );
+
+    const getRes = await app.request("/config/policy/agents/typo-agent");
+    expect(getRes.status).toBe(404);
+
+    const revisionsRes = await app.request("/config/policy/agents/typo-agent/revisions");
+    expect(revisionsRes.status).toBe(404);
+
+    const after = await container.db.get<{ count: number }>(
+      "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+      [tenantId],
+    );
+    expect(after?.count ?? 0).toBe(before?.count ?? 0);
+  });
 });

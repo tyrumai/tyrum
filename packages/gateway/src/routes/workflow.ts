@@ -92,7 +92,7 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
     }
 
     const policy = deps.agents ? deps.agents.getPolicyService(agentId) : deps.policyService;
-    const effectivePolicy = await policy.loadEffectiveBundle();
+    const effectivePolicy = await policy.loadEffectiveBundle({ tenantId });
     const snapshot = await policy.getOrCreateSnapshot(tenantId, effectivePolicy.bundle);
 
     const res = await deps.engine.enqueuePlan({

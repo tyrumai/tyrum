@@ -94,4 +94,81 @@ describe("plugin routes", () => {
     expect(await rpcRes.json()).toEqual({ ok: true, source: "tenant-router" });
     expect(loadTenantRegistry).toHaveBeenCalledWith(DEFAULT_TENANT_ID);
   });
+
+  it("falls back to the global plugin registry when auth is disabled", async () => {
+    const router = new Hono();
+    router.get("/ping", (c) => c.json({ ok: true, source: "global-router" }));
+
+    const loadGlobalRegistry = vi.fn(async () => ({
+      list: () => [
+        {
+          id: "echo",
+          name: "Echo",
+          version: "0.0.1",
+          loaded_at: new Date(0).toISOString(),
+          source_dir: "/tmp/echo",
+        },
+      ],
+      getManifest: (pluginId: string) =>
+        pluginId === "echo"
+          ? {
+              id: "echo",
+              name: "Echo",
+              version: "0.0.1",
+              entry: "index.mjs",
+              contributes: {
+                tools: [],
+                commands: [],
+                routes: ["/ping"],
+                mcp_servers: [],
+              },
+              permissions: {
+                tools: [],
+                network_egress: [],
+                secrets: [],
+                db: false,
+              },
+              config_schema: {
+                type: "object",
+                properties: {},
+                required: [],
+                additionalProperties: false,
+              },
+            }
+          : undefined,
+      getRouter: (pluginId: string) => (pluginId === "echo" ? router : undefined),
+    }));
+
+    const app = new Hono();
+    app.route(
+      "/",
+      createPluginRoutes({
+        pluginCatalogProvider: {
+          loadGlobalRegistry,
+          loadTenantRegistry: vi.fn(),
+          invalidateTenantRegistry: vi.fn(async () => undefined),
+        },
+      }),
+    );
+
+    const listRes = await app.request("/plugins");
+    expect(listRes.status).toBe(200);
+    expect(await listRes.json()).toEqual({
+      status: "ok",
+      plugins: [
+        {
+          id: "echo",
+          loaded_at: new Date(0).toISOString(),
+          name: "Echo",
+          source_dir: "/tmp/echo",
+          version: "0.0.1",
+        },
+      ],
+    });
+
+    const rpcRes = await app.request("/plugins/echo/rpc/ping");
+    expect(rpcRes.status).toBe(200);
+    expect(await rpcRes.json()).toEqual({ ok: true, source: "global-router" });
+    expect(loadGlobalRegistry).toHaveBeenCalledTimes(2);
+  });
 });

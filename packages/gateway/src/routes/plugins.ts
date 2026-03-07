@@ -4,7 +4,7 @@
 
 import type { Context } from "hono";
 import { Hono } from "hono";
-import { requireTenantId } from "../modules/auth/claims.js";
+import type { AuthTokenClaims } from "@tyrum/schemas";
 import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
 import type { PluginRegistry } from "../modules/plugins/registry.js";
 
@@ -15,12 +15,21 @@ export interface PluginRouteDeps {
 
 async function resolvePluginRegistry(
   deps: PluginRouteDeps,
-  tenantId: string,
+  tenantId?: string,
 ): Promise<PluginRegistry | undefined> {
   if (deps.pluginCatalogProvider) {
-    return await deps.pluginCatalogProvider.loadTenantRegistry(tenantId);
+    if (tenantId) {
+      return await deps.pluginCatalogProvider.loadTenantRegistry(tenantId);
+    }
+    return await deps.pluginCatalogProvider.loadGlobalRegistry();
   }
   return deps.plugins;
+}
+
+function resolveOptionalTenantId(c: { get: (key: string) => unknown }): string | undefined {
+  const claims = c.get("authClaims") as AuthTokenClaims | undefined;
+  const tenantId = claims?.tenant_id?.trim();
+  return tenantId ? tenantId : undefined;
 }
 
 function rewritePluginRpcRequest(
@@ -44,13 +53,13 @@ export function createPluginRoutes(deps: PluginRouteDeps): Hono {
   const app = new Hono();
 
   app.get("/plugins", async (c) => {
-    const tenantId = requireTenantId(c);
+    const tenantId = resolveOptionalTenantId(c);
     const registry = await resolvePluginRegistry(deps, tenantId);
     return c.json({ status: "ok", plugins: registry?.list() ?? [] });
   });
 
   app.get("/plugins/:id", async (c) => {
-    const tenantId = requireTenantId(c);
+    const tenantId = resolveOptionalTenantId(c);
     const registry = await resolvePluginRegistry(deps, tenantId);
     const id = c.req.param("id");
     if (!id) {
@@ -64,7 +73,7 @@ export function createPluginRoutes(deps: PluginRouteDeps): Hono {
   });
 
   const handleRpc = async (c: Context) => {
-    const tenantId = requireTenantId(c);
+    const tenantId = resolveOptionalTenantId(c);
     const registry = await resolvePluginRegistry(deps, tenantId);
     const pluginId = c.req.param("id");
     if (!pluginId) {

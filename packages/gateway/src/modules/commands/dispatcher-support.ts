@@ -468,7 +468,7 @@ export async function buildStatusPayload(deps: CommandDeps): Promise<{
   sandbox: unknown;
 }> {
   const tenantId = resolveTenantId(deps);
-  const policy = deps.policyService ? await deps.policyService.getStatus() : null;
+  const policy = deps.policyService ? await deps.policyService.getStatus({ tenantId }) : null;
   const details = await buildStatusDetails({
     tenantId,
     db: deps.db,

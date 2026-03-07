@@ -222,4 +222,124 @@ describe("PluginCatalogProvider", () => {
       await container.db.close();
     }
   });
+
+  it("skips invalid shared plugin manifests without blocking other tenant plugins", async () => {
+    const { home } = await createEchoPluginHome();
+    cleanupPaths.push(home);
+
+    const { logger, warnings } = createCapturingLogger();
+    const container = createContainer(
+      {
+        dbPath: ":memory:",
+        migrationsDir: SQLITE_MIGRATIONS_DIR,
+        tyrumHome: home,
+      },
+      {
+        deploymentConfig: {
+          state: { mode: "shared" },
+        },
+      },
+    );
+    try {
+      const artifact = await container.artifactStore.put({
+        kind: "file",
+        mime_type: "text/javascript",
+        body: Buffer.from(pluginEntryModule(), "utf-8"),
+      });
+      const dal = new RuntimePackageDal(container.db);
+      await dal.set({
+        tenantId: DEFAULT_TENANT_ID,
+        packageKind: "plugin",
+        packageKey: "broken",
+        packageData: { nope: true },
+        artifactId: artifact.artifact_id,
+        createdBy: { kind: "test" },
+      });
+      await dal.set({
+        tenantId: DEFAULT_TENANT_ID,
+        packageKind: "plugin",
+        packageKey: "echo",
+        packageData: sharedEchoManifest(),
+        artifactId: artifact.artifact_id,
+        createdBy: { kind: "test" },
+      });
+
+      const provider = createPluginCatalogProvider({
+        home,
+        userHome: home,
+        logger,
+        container,
+      });
+
+      const tenantPlugins = await provider.loadTenantRegistry(DEFAULT_TENANT_ID);
+      expect(tenantPlugins.list().map((plugin) => plugin.id)).toEqual(["echo"]);
+      expect(
+        warnings.some(
+          (entry) =>
+            entry.msg === "plugins.shared_materialize_failed" &&
+            entry.fields["package_key"] === "broken",
+        ),
+      ).toBe(true);
+    } finally {
+      await container.db.close();
+    }
+  });
+
+  it("reloads tenant registries after invalidation and drops removed plugins", async () => {
+    const { home } = await createEchoPluginHome();
+    cleanupPaths.push(home);
+
+    const container = createContainer(
+      {
+        dbPath: ":memory:",
+        migrationsDir: SQLITE_MIGRATIONS_DIR,
+        tyrumHome: home,
+      },
+      {
+        deploymentConfig: {
+          state: { mode: "shared" },
+        },
+      },
+    );
+    try {
+      const artifact = await container.artifactStore.put({
+        kind: "file",
+        mime_type: "text/javascript",
+        body: Buffer.from(pluginEntryModule(), "utf-8"),
+      });
+      const dal = new RuntimePackageDal(container.db);
+      await dal.set({
+        tenantId: DEFAULT_TENANT_ID,
+        packageKind: "plugin",
+        packageKey: "echo",
+        packageData: sharedEchoManifest(),
+        artifactId: artifact.artifact_id,
+        createdBy: { kind: "test" },
+      });
+
+      const provider = createPluginCatalogProvider({
+        home,
+        userHome: home,
+        logger: createSilentLogger(),
+        container,
+      });
+
+      expect((await provider.loadTenantRegistry(DEFAULT_TENANT_ID)).list()).toHaveLength(1);
+
+      await dal.set({
+        tenantId: DEFAULT_TENANT_ID,
+        packageKind: "plugin",
+        packageKey: "echo",
+        packageData: sharedEchoManifest(),
+        artifactId: artifact.artifact_id,
+        enabled: false,
+        createdBy: { kind: "test" },
+      });
+      await provider.invalidateTenantRegistry(DEFAULT_TENANT_ID);
+
+      expect((await provider.loadTenantRegistry(DEFAULT_TENANT_ID)).list()).toEqual([]);
+    } finally {
+      await container.db.close();
+    }
+  });
 });

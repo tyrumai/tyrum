@@ -115,14 +115,34 @@ export function extractToolApprovalResumeState(
 
 export async function deriveElevatedExecutionAvailable(
   policyService: PolicyService,
+  scope: { tenantId: string; agentId?: string },
 ): Promise<boolean | null> {
   try {
-    const effective = await policyService.loadEffectiveBundle();
+    const effective = await policyService.loadEffectiveBundle(scope);
     return deriveElevatedExecutionAvailableFromPolicyBundle(effective.bundle);
   } catch {
     // Intentional: policy bundle may be unavailable; treat elevated execution as unknown.
     return null;
   }
+}
+
+export async function buildSandboxPrompt(input: {
+  policyService: PolicyService;
+  hardeningProfile: string;
+  tenantId: string;
+  agentId?: string;
+}): Promise<string> {
+  const elevatedExecutionAvailable = await deriveElevatedExecutionAvailable(input.policyService, {
+    tenantId: input.tenantId,
+    agentId: input.agentId,
+  });
+  return [
+    "Sandbox:",
+    `Hardening profile: ${input.hardeningProfile}`,
+    `Elevated execution available: ${
+      elevatedExecutionAvailable === null ? "unknown" : String(elevatedExecutionAvailable)
+    }`,
+  ].join("\n");
 }
 
 export function resolveAgentId(): string {

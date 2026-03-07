@@ -32,9 +32,9 @@ import { createDefaultAgentContextStore, type AgentContextStore } from "../conte
 import { loadCurrentAgentContext } from "../load-context.js";
 import { ToolSetBuilder, type ToolCallPolicyState } from "./tool-set-builder.js";
 import {
+  buildSandboxPrompt,
   ToolExecutionApprovalRequiredError,
   createStaticLanguageModelV3,
-  deriveElevatedExecutionAvailable,
   deriveWorkItemTitle,
   extractToolApprovalResumeState,
   isStatusQuery,
@@ -1554,19 +1554,15 @@ export class AgentRuntime {
 
     const identityPrompt = formatIdentityPrompt(ctx.identity);
     const safetyPrompt = DATA_TAG_SAFETY_PROMPT;
-
     const hardeningProfile = resolveSandboxHardeningProfile(
       this.opts.container.deploymentConfig.toolrunner.hardeningProfile,
     );
-    const elevatedExecutionAvailable = await deriveElevatedExecutionAvailable(this.policyService);
-    const sandboxPrompt = [
-      "Sandbox:",
-      `Hardening profile: ${hardeningProfile}`,
-      `Elevated execution available: ${
-        elevatedExecutionAvailable === null ? "unknown" : String(elevatedExecutionAvailable)
-      }`,
-    ].join("\n");
-
+    const sandboxPrompt = await buildSandboxPrompt({
+      policyService: this.policyService,
+      hardeningProfile,
+      tenantId: this.tenantId,
+      agentId: session.agent_id,
+    });
     const systemPrompt = `${identityPrompt}\n\n${safetyPrompt}\n\n${sandboxPrompt}`;
     const skillsText = `Enabled skills:\n${formatSkillsPrompt(ctx.skills)}`;
     const toolsText = `Available tools:\n${formatToolPrompt(filteredTools)}`;

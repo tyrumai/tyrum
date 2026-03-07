@@ -170,7 +170,7 @@ async function handleWorkflowRunMessage(
     const keyParsed = parseTyrumKey(parsedReq.data.payload.key);
     const agentId = keyParsed.kind === "agent" ? keyParsed.agent_key : "default";
     const policy = deps.agents ? deps.agents.getPolicyService(agentId) : deps.policyService!;
-    const effectivePolicy = await policy.loadEffectiveBundle();
+    const effectivePolicy = await policy.loadEffectiveBundle({ tenantId });
     const snapshot = await policy.getOrCreateSnapshot(tenantId, effectivePolicy.bundle);
 
     const queued = await deps.engine.enqueuePlan({

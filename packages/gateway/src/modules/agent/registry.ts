@@ -72,7 +72,9 @@ export class AgentRegistry {
       snapshotDal: this.opts.container.policySnapshotDal,
       overrideDal: this.opts.container.policyOverrideDal,
       logger: this.opts.logger,
+      deploymentPolicy: this.opts.container.deploymentConfig.policy,
       includeAgentHomeBundle: !isSharedStateMode(this.opts.container.deploymentConfig),
+      configStore: this.opts.container.gatewayConfigStore,
     });
     this.policyServiceByAgentId.set(id, service);
     return service;

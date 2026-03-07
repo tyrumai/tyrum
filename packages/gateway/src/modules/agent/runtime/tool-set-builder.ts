@@ -19,11 +19,11 @@ import {
   suggestedOverridesForToolCall,
   type SuggestedOverride,
 } from "../../policy/suggested-overrides.js";
-import { wildcardMatch } from "../../policy/wildcard.js";
 import { hasToolResult } from "../../ai-sdk/message-utils.js";
 import { coerceRecord } from "../../util/coerce.js";
 import { LaneQueueInterruptError } from "../../lanes/queue-signal-dal.js";
 import type { GatewayStateMode } from "../../runtime-state/mode.js";
+import { resolvePolicyGatedPluginToolExposure } from "./plugin-tool-policy.js";
 
 interface ToolExecutionContext {
   tenantId: string;
@@ -70,11 +70,6 @@ function extractApprovalReason(
   const record = coerceRecord(approval?.resolution);
   const reason = typeof record?.["reason"] === "string" ? record["reason"].trim() : "";
   return reason.length > 0 ? reason : undefined;
-}
-
-function isSideEffectingPluginTool(tool: ToolDescriptor): boolean {
-  const id = tool.id.trim();
-  return id.startsWith("plugin.") && tool.requires_confirmation;
 }
 
 type ToolSetBuilderLogger = {
@@ -616,54 +611,12 @@ export class ToolSetBuilder {
     allowlist: readonly string[];
     pluginTools: readonly ToolDescriptor[];
   }): Promise<{ allowlist: string[]; pluginTools: ToolDescriptor[] }> {
-    const policy = this.deps.policyService;
-
-    const pluginTools = params.pluginTools
-      .map((tool) => {
-        const id = tool.id.trim();
-        if (!id) return undefined;
-        if (id === tool.id) return tool;
-        return { ...tool, id };
-      })
-      .filter((tool): tool is ToolDescriptor => Boolean(tool));
-
-    const sideEffecting = pluginTools.filter(isSideEffectingPluginTool);
-    if (sideEffecting.length === 0 || !policy.isEnabled() || policy.isObserveOnly())
-      return { allowlist: [...params.allowlist], pluginTools };
-
-    try {
-      const effective = await policy.loadEffectiveBundle();
-      const toolsDomain = effective.bundle.tools;
-      const deny = toolsDomain?.deny ?? [];
-      const allow = toolsDomain?.allow ?? [];
-      const requireApproval = toolsDomain?.require_approval ?? [];
-
-      const isOptedIn = (toolId: string): boolean => {
-        for (const pat of deny) {
-          if (wildcardMatch(pat, toolId)) return false;
-        }
-        for (const pat of requireApproval) {
-          if (wildcardMatch(pat, toolId)) return true;
-        }
-        for (const pat of allow) {
-          if (wildcardMatch(pat, toolId)) return true;
-        }
-        return false;
-      };
-
-      const gatedPluginTools = pluginTools.filter(
-        (tool) => !isSideEffectingPluginTool(tool) || isOptedIn(tool.id),
-      );
-
-      const allowlist = new Set<string>(params.allowlist);
-      for (const tool of gatedPluginTools)
-        if (isSideEffectingPluginTool(tool)) allowlist.add(tool.id);
-
-      return { allowlist: [...allowlist], pluginTools: gatedPluginTools };
-    } catch {
-      // Intentional: fail closed; side-effecting plugin tools are opt-in and require a readable policy bundle.
-      const gatedPluginTools = pluginTools.filter((tool) => !isSideEffectingPluginTool(tool));
-      return { allowlist: [...params.allowlist], pluginTools: gatedPluginTools };
-    }
+    return await resolvePolicyGatedPluginToolExposure({
+      policyService: this.deps.policyService,
+      tenantId: this.deps.tenantId,
+      agentId: this.deps.agentId,
+      allowlist: params.allowlist,
+      pluginTools: params.pluginTools,
+    });
   }
 }

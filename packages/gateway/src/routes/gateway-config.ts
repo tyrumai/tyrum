@@ -48,6 +48,19 @@ export interface GatewayConfigRouteDeps {
 
 export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
   const app = new Hono();
+  const resolveExistingAgentId = async (
+    tenantId: string,
+    agentKey: string,
+  ): Promise<string | null> => {
+    const row = await deps.db.get<{ agent_id: string }>(
+      `SELECT agent_id
+       FROM agents
+       WHERE tenant_id = ? AND agent_key = ?
+       LIMIT 1`,
+      [tenantId, agentKey],
+    );
+    return row?.agent_id ?? null;
+  };
 
   app.get("/config/hooks", async (c) => {
     const tenantId = requireTenantId(c);
@@ -157,10 +170,18 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
 
   const registerPolicyRoutes = (
     path: string,
-    resolveScope: (c: any) => Promise<{ tenantId: string; agentId?: string; agentKey?: string }>,
+    resolveReadScope: (
+      c: any,
+    ) => Promise<{ tenantId: string; agentId?: string; agentKey?: string } | null>,
+    resolveWriteScope: (
+      c: any,
+    ) => Promise<{ tenantId: string; agentId?: string; agentKey?: string }>,
   ) => {
     app.get(path, async (c) => {
-      const scope = await resolveScope(c);
+      const scope = await resolveReadScope(c);
+      if (!scope) {
+        return c.json({ error: "not_found", message: "agent not found" }, 404);
+      }
       const revision = await deps.policyBundleDal.getLatest(
         scope.agentId
           ? { tenantId: scope.tenantId, scopeKind: "agent", agentId: scope.agentId }
@@ -184,7 +205,10 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
     });
 
     app.get(`${path}/revisions`, async (c) => {
-      const scope = await resolveScope(c);
+      const scope = await resolveReadScope(c);
+      if (!scope) {
+        return c.json({ error: "not_found", message: "agent not found" }, 404);
+      }
       const revisions = await deps.policyBundleDal.listRevisions(
         scope.agentId
           ? { tenantId: scope.tenantId, scopeKind: "agent", agentId: scope.agentId }
@@ -206,7 +230,7 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
     });
 
     app.put(path, async (c) => {
-      const scope = await resolveScope(c);
+      const scope = await resolveWriteScope(c);
       const claims = requireAuthClaims(c);
       let body: unknown;
       try {
@@ -242,7 +266,7 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
     });
 
     app.post(`${path}/revert`, async (c) => {
-      const scope = await resolveScope(c);
+      const scope = await resolveWriteScope(c);
       const claims = requireAuthClaims(c);
       let body: unknown;
       try {
@@ -278,21 +302,32 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
     });
   };
 
-  registerPolicyRoutes("/config/policy/deployment", async (c) => ({
-    tenantId: requireTenantId(c),
-  }));
+  registerPolicyRoutes(
+    "/config/policy/deployment",
+    async (c) => ({ tenantId: requireTenantId(c) }),
+    async (c) => ({ tenantId: requireTenantId(c) }),
+  );
 
-  registerPolicyRoutes("/config/policy/agents/:key", async (c) => {
-    const tenantId = requireTenantId(c);
-    const agentKey = normalizeAgentKey(c.req.param("key"));
-    const agentId = await deps.identityScopeDal.ensureAgentId(tenantId, agentKey);
-    const workspaceId = await deps.identityScopeDal.ensureWorkspaceId(
-      tenantId,
-      DEFAULT_WORKSPACE_KEY,
-    );
-    await deps.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
-    return { tenantId, agentId, agentKey };
-  });
+  registerPolicyRoutes(
+    "/config/policy/agents/:key",
+    async (c) => {
+      const tenantId = requireTenantId(c);
+      const agentKey = normalizeAgentKey(c.req.param("key"));
+      const agentId = await resolveExistingAgentId(tenantId, agentKey);
+      return agentId ? { tenantId, agentId, agentKey } : null;
+    },
+    async (c) => {
+      const tenantId = requireTenantId(c);
+      const agentKey = normalizeAgentKey(c.req.param("key"));
+      const agentId = await deps.identityScopeDal.ensureAgentId(tenantId, agentKey);
+      const workspaceId = await deps.identityScopeDal.ensureWorkspaceId(
+        tenantId,
+        DEFAULT_WORKSPACE_KEY,
+      );
+      await deps.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+      return { tenantId, agentId, agentKey };
+    },
+  );
 
   return app;
 }

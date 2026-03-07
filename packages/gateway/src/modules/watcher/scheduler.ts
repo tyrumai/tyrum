@@ -14,6 +14,7 @@ import { recordMemoryV1SystemEpisode } from "../memory/v1-episode-recorder.js";
 import type { Logger } from "../observability/logger.js";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "../policy/service.js";
+import { loadScopedPolicySnapshot } from "../policy/scoped-snapshot.js";
 import type { PlaybookRunner } from "../playbook/runner.js";
 import { WatcherFiringDal, type WatcherFiringRow } from "./firing-dal.js";
 import {
@@ -464,11 +465,10 @@ export class WatcherScheduler {
       input;
     const automationPlanId = `automation-${firing.watcher_firing_id}`;
     const playbookBundle = playbook ? this.resolvePlaybookBundle(playbook) : undefined;
-    const effective = await this.policyService!.loadEffectiveBundle({ playbookBundle });
-    const snapshot = await this.policyService!.getOrCreateSnapshot(
-      firing.tenant_id,
-      effective.bundle,
-    );
+    const snapshot = await loadScopedPolicySnapshot(this.policyService!, {
+      tenantId: firing.tenant_id,
+      playbookBundle,
+    });
     try {
       const result = await this.db.transaction(async (tx) => {
         const current = await tx.get<{ status: string; lease_owner: string | null }>(

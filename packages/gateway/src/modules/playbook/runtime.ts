@@ -365,7 +365,10 @@ async function runPlaybookRuntimeAction(
   const lane = "main";
 
   const playbookBundle = resolvePlaybookPolicyBundle(playbook);
-  const effectivePolicy = await deps.policyService.loadEffectiveBundle({ playbookBundle });
+  const effectivePolicy = await deps.policyService.loadEffectiveBundle({
+    tenantId: DEFAULT_TENANT_ID,
+    playbookBundle,
+  });
   const snapshot = await deps.policyService.getOrCreateSnapshot(
     DEFAULT_TENANT_ID,
     effectivePolicy.bundle,

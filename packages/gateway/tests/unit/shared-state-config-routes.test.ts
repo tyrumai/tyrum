@@ -1,12 +1,21 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { join } from "node:path";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
+import type { PluginCatalogProvider } from "../../src/modules/plugins/catalog-provider.js";
 import { createSharedStateConfigRoutes } from "../../src/routes/shared-state-config.js";
 
 const migrationsDir = join(import.meta.dirname, "../../migrations/sqlite");
 
 function createApp(container: GatewayContainer, tenantId: string): Hono {
+  return createAppWithDeps(container, tenantId, {});
+}
+
+function createAppWithDeps(
+  container: GatewayContainer,
+  tenantId: string,
+  deps: { pluginCatalogProvider?: PluginCatalogProvider },
+): Hono {
   const app = new Hono();
   app.use("*", async (c, next) => {
     c.set("authClaims", {
@@ -23,6 +32,7 @@ function createApp(container: GatewayContainer, tenantId: string): Hono {
     createSharedStateConfigRoutes({
       db: container.db,
       identityScopeDal: container.identityScopeDal,
+      pluginCatalogProvider: deps.pluginCatalogProvider,
     }),
   );
   return app;
@@ -112,5 +122,51 @@ describe("shared state config routes", () => {
     expect(getRes.status).toBe(200);
     const payload = (await getRes.json()) as { content: string };
     expect(payload.content).toContain("likes tea");
+  });
+
+  it("invalidates shared plugin registries after plugin package writes and reverts", async () => {
+    const invalidateTenantRegistry = vi.fn(async () => undefined);
+    app = createAppWithDeps(container, tenantId, {
+      db: container.db,
+      identityScopeDal: container.identityScopeDal,
+      pluginCatalogProvider: {
+        loadGlobalRegistry: vi.fn(),
+        loadTenantRegistry: vi.fn(),
+        invalidateTenantRegistry,
+      } as never,
+    });
+
+    const putRes = await app.request("/config/runtime-packages/plugin/echo", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        package: {
+          id: "echo",
+          name: "Echo",
+          version: "0.0.1",
+          entry: "index.mjs",
+          contributes: { tools: [], commands: [], routes: [], mcp_servers: [] },
+          permissions: { tools: [], network_egress: [], secrets: [], db: false },
+          config_schema: {
+            type: "object",
+            properties: {},
+            required: [],
+            additionalProperties: false,
+          },
+        },
+        artifact_id: "artifact-1",
+      }),
+    });
+    expect(putRes.status).toBe(200);
+
+    const revertRes = await app.request("/config/runtime-packages/plugin/echo/revert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ revision: 1 }),
+    });
+    expect(revertRes.status).toBe(200);
+    expect(invalidateTenantRegistry).toHaveBeenCalledTimes(2);
+    expect(invalidateTenantRegistry).toHaveBeenNthCalledWith(1, tenantId);
+    expect(invalidateTenantRegistry).toHaveBeenNthCalledWith(2, tenantId);
   });
 });

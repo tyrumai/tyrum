@@ -31,6 +31,7 @@ type SharedPluginBundle = {
 export interface PluginCatalogProvider {
   loadGlobalRegistry(): Promise<PluginRegistry>;
   loadTenantRegistry(tenantId: string): Promise<PluginRegistry>;
+  invalidateTenantRegistry(tenantId: string): Promise<void>;
 }
 
 class LocalPluginCatalogProvider implements PluginCatalogProvider {
@@ -62,6 +63,10 @@ class LocalPluginCatalogProvider implements PluginCatalogProvider {
 
   async loadTenantRegistry(_tenantId: string): Promise<PluginRegistry> {
     return await this.loadGlobalRegistry();
+  }
+
+  async invalidateTenantRegistry(_tenantId: string): Promise<void> {
+    this.registryPromise = undefined;
   }
 }
 
@@ -115,6 +120,18 @@ class SharedPluginCatalogProvider implements PluginCatalogProvider {
     return await promise;
   }
 
+  async invalidateTenantRegistry(tenantId: string): Promise<void> {
+    const normalizedTenantId = tenantId.trim() || DEFAULT_TENANT_ID;
+    this.tenantRegistryPromises.delete(normalizedTenantId);
+
+    if (!this.cacheRootPromise) {
+      return;
+    }
+
+    const cacheRoot = await this.cacheRootPromise;
+    await rm(join(cacheRoot, normalizedTenantId), { recursive: true, force: true });
+  }
+
   private async loadTenantRegistryUncached(tenantId: string): Promise<PluginRegistry> {
     const sharedRoot = await this.materializeTenantPlugins(tenantId);
     const dirs: PluginDir[] = [
@@ -148,6 +165,7 @@ class SharedPluginCatalogProvider implements PluginCatalogProvider {
   private async materializeTenantPlugins(tenantId: string): Promise<string> {
     const cacheRoot = await this.getCacheRoot();
     const tenantRoot = join(cacheRoot, tenantId);
+    await rm(tenantRoot, { recursive: true, force: true });
     await mkdir(tenantRoot, { recursive: true, mode: 0o700 });
 
     const revisions = await this.runtimePackageDal.listLatest({
@@ -167,42 +185,42 @@ class SharedPluginCatalogProvider implements PluginCatalogProvider {
     tenantRoot: string,
     revision: RuntimePackageRevision,
   ): Promise<void> {
-    const plugin = PluginManifest.parse(revision.packageData) as PluginManifestT;
-    const entry = plugin.entry?.trim();
-    if (!entry) {
-      this.opts.logger.warn("plugins.shared_missing_entry", {
-        tenant_id: revision.tenantId,
-        package_key: revision.packageKey,
-        revision: revision.revision,
-      });
-      return;
-    }
-    if (!revision.artifactId) {
-      this.opts.logger.warn("plugins.shared_missing_artifact", {
-        tenant_id: revision.tenantId,
-        package_key: revision.packageKey,
-        revision: revision.revision,
-      });
-      return;
-    }
-
-    const artifact = await this.opts.container.artifactStore.get(revision.artifactId);
-    if (!artifact) {
-      this.opts.logger.warn("plugins.shared_artifact_not_found", {
-        tenant_id: revision.tenantId,
-        package_key: revision.packageKey,
-        revision: revision.revision,
-        artifact_id: revision.artifactId,
-      });
-      return;
-    }
-
-    const dirName = `${sanitizeDirSegment(plugin.id)}-${String(revision.revision)}`;
-    const pluginDir = join(tenantRoot, dirName);
-    await rm(pluginDir, { recursive: true, force: true });
-    await mkdir(pluginDir, { recursive: true, mode: 0o700 });
-
     try {
+      const plugin = PluginManifest.parse(revision.packageData) as PluginManifestT;
+      const entry = plugin.entry?.trim();
+      if (!entry) {
+        this.opts.logger.warn("plugins.shared_missing_entry", {
+          tenant_id: revision.tenantId,
+          package_key: revision.packageKey,
+          revision: revision.revision,
+        });
+        return;
+      }
+      if (!revision.artifactId) {
+        this.opts.logger.warn("plugins.shared_missing_artifact", {
+          tenant_id: revision.tenantId,
+          package_key: revision.packageKey,
+          revision: revision.revision,
+        });
+        return;
+      }
+
+      const artifact = await this.opts.container.artifactStore.get(revision.artifactId);
+      if (!artifact) {
+        this.opts.logger.warn("plugins.shared_artifact_not_found", {
+          tenant_id: revision.tenantId,
+          package_key: revision.packageKey,
+          revision: revision.revision,
+          artifact_id: revision.artifactId,
+        });
+        return;
+      }
+
+      const dirName = `${sanitizeDirSegment(plugin.id)}-${String(revision.revision)}`;
+      const pluginDir = join(tenantRoot, dirName);
+      await rm(pluginDir, { recursive: true, force: true });
+      await mkdir(pluginDir, { recursive: true, mode: 0o700 });
+
       await this.writePluginPayload({
         pluginDir,
         entryPath: entry,
@@ -235,7 +253,20 @@ class SharedPluginCatalogProvider implements PluginCatalogProvider {
         );
       }
     } catch (err) {
-      await rm(pluginDir, { recursive: true, force: true });
+      const candidateId =
+        revision.packageData &&
+        typeof revision.packageData === "object" &&
+        "id" in revision.packageData &&
+        typeof (revision.packageData as { id?: unknown }).id === "string"
+          ? (revision.packageData as { id: string }).id
+          : revision.packageKey;
+      await rm(
+        join(tenantRoot, `${sanitizeDirSegment(candidateId)}-${String(revision.revision)}`),
+        {
+          recursive: true,
+          force: true,
+        },
+      );
       this.opts.logger.warn("plugins.shared_materialize_failed", {
         tenant_id: revision.tenantId,
         package_key: revision.packageKey,

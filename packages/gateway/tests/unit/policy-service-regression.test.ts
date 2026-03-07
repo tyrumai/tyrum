@@ -85,6 +85,98 @@ describe("PolicyService regressions (precedence + overrides)", () => {
     }
   });
 
+  it("refreshes shared deployment bundles after config-store updates", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const configStore = createGatewayConfigStore({
+        db,
+        home: "/tmp/unused",
+        deploymentConfig: { state: { mode: "shared" } },
+      });
+      const policy = new PolicyService({
+        home: "/tmp/unused",
+        snapshotDal: new PolicySnapshotDal(db),
+        overrideDal: new PolicyOverrideDal(db),
+        includeAgentHomeBundle: false,
+        configStore,
+      });
+
+      await db.run(
+        `INSERT INTO policy_bundle_config_revisions (
+           tenant_id, scope_kind, agent_id, bundle_json, created_at, created_by_json, reason
+         ) VALUES (?, 'deployment', NULL, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
+          JSON.stringify({
+            v: 1,
+            tools: { default: "deny", allow: ["tool.exec"], require_approval: [], deny: [] },
+          }),
+          new Date().toISOString(),
+          JSON.stringify({ kind: "test" }),
+          "deployment-v1",
+        ],
+      );
+
+      expect(
+        (
+          await policy.evaluateToolCall({
+            tenantId: DEFAULT_TENANT_ID,
+            agentId: DEFAULT_AGENT_ID,
+            workspaceId: DEFAULT_WORKSPACE_ID,
+            toolId: "tool.exec",
+            toolMatchTarget: "echo ok",
+          })
+        ).decision,
+      ).toBe("allow");
+
+      await db.run(
+        `INSERT INTO policy_bundle_config_revisions (
+           tenant_id, scope_kind, agent_id, bundle_json, created_at, created_by_json, reason
+         ) VALUES (?, 'deployment', NULL, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
+          JSON.stringify({
+            v: 1,
+            tools: { default: "deny", allow: [], require_approval: ["tool.exec"], deny: [] },
+          }),
+          new Date().toISOString(),
+          JSON.stringify({ kind: "test" }),
+          "deployment-v2",
+        ],
+      );
+
+      expect(
+        (
+          await policy.evaluateToolCall({
+            tenantId: DEFAULT_TENANT_ID,
+            agentId: DEFAULT_AGENT_ID,
+            workspaceId: DEFAULT_WORKSPACE_ID,
+            toolId: "tool.exec",
+            toolMatchTarget: "echo ok",
+          })
+        ).decision,
+      ).toBe("require_approval");
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("fails closed when a tenant id is not provided", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const policy = new PolicyService({
+        home: "/tmp/unused",
+        snapshotDal: new PolicySnapshotDal(db),
+        overrideDal: new PolicyOverrideDal(db),
+      });
+
+      await expect(policy.loadEffectiveBundle()).rejects.toThrow("tenantId is required");
+      await expect(policy.getStatus()).rejects.toThrow("tenantId is required");
+    } finally {
+      await db.close();
+    }
+  });
+
   it("can disable per-agent home policy bundles for shared mode", async () => {
     await withTempDir(async (home) => {
       const db = openTestSqliteDb();

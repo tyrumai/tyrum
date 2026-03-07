@@ -4,7 +4,6 @@ import type {
   PolicyDecision as PolicyDecisionT,
   RuleDecision as RuleDecisionT,
 } from "@tyrum/schemas";
-import { access } from "node:fs/promises";
 import { wildcardMatch } from "./wildcard.js";
 import type { Logger } from "../observability/logger.js";
 import {
@@ -19,17 +18,7 @@ import type { PolicyOverrideDal } from "./override-dal.js";
 import { sha256HexFromString, stableJsonStringify } from "./canonical-json.js";
 import { mergePolicyBundles } from "./bundle-merge.js";
 import type { GatewayConfigStore } from "../runtime-state/gateway-config-store.js";
-import { DEFAULT_TENANT_ID } from "../identity/scope.js";
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    // Intentional: treat missing policy files as absent.
-    return false;
-  }
-}
+import { fileExists } from "./file-exists.js";
 
 export interface PolicyEvaluation {
   decision: Decision;
@@ -84,12 +73,12 @@ export class PolicyService {
     sha256: string;
     sources: { deployment: string; agent: string | null; playbook: "inline" | null };
   }> {
-    const tenantId = params?.tenantId?.trim() || DEFAULT_TENANT_ID;
+    const tenantId = params?.tenantId?.trim();
+    if (!tenantId) throw new Error("tenantId is required to load the effective policy bundle");
     const agentId = params?.agentId?.trim() || null;
     const deployment = await this.loadDeploymentBundle(tenantId);
     const agent = await this.loadAgentBundle({ tenantId, agentId });
     const playbookBundle = params?.playbookBundle;
-
     const merged = mergePolicyBundles([
       deployment.bundle,
       agent.bundle ?? undefined,
@@ -428,10 +417,9 @@ export class PolicyService {
     const enabled = this.isEnabled();
     const observeOnly = this.isObserveOnly();
 
-    const effective = await this.loadEffectiveBundle({
-      tenantId: scope?.tenantId,
-      agentId: scope?.agentId,
-    });
+    const tenantId = scope?.tenantId?.trim();
+    if (!tenantId) throw new Error("tenantId is required to read policy status");
+    const effective = await this.loadEffectiveBundle({ tenantId, agentId: scope?.agentId });
     return {
       enabled,
       observe_only: observeOnly,
@@ -449,13 +437,22 @@ export class PolicyService {
     sha256: string;
   }> {
     const cacheKey = tenantId;
-    const cached = this.deploymentBundleCache.get(cacheKey);
     const path = this.opts.deploymentPolicy?.bundlePath?.trim() || null;
+    const fromStore = await this.opts.configStore?.getDeploymentPolicyBundle(tenantId);
+    if (fromStore) {
+      const entry = {
+        path: "shared",
+        bundle: fromStore,
+        sha256: sha256HexFromString(stableJsonStringify(fromStore)),
+      };
+      this.deploymentBundleCache.set(cacheKey, entry);
+      return entry;
+    }
+    const cached = this.deploymentBundleCache.get(cacheKey);
     if (cached && cached.path === path) {
       return cached;
     }
-
-    let bundle = (await this.opts.configStore?.getDeploymentPolicyBundle(tenantId)) ?? null;
+    let bundle: PolicyBundleT | null = null;
     if (!bundle && path) {
       try {
         bundle = await loadPolicyBundleFromFile(path);

@@ -54,7 +54,7 @@ import { WsEventDal } from "./modules/ws-event/dal.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
 import { gatewayMetrics } from "./modules/observability/metrics.js";
 import { PolicyBundleConfigDal } from "./modules/policy/config-dal.js";
-import { isLocalStateMode } from "./modules/runtime-state/mode.js";
+import { isLocalStateMode, isSharedStateMode } from "./modules/runtime-state/mode.js";
 
 export interface AppRouteDependencies {
   authProfileDal: AuthProfileDal;
@@ -373,22 +373,25 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       identityScopeDal: context.container.identityScopeDal,
     }),
   );
-  context.app.route(
-    "/",
-    createGatewayConfigRoutes({
-      db: context.container.db,
-      identityScopeDal: context.container.identityScopeDal,
-      hooksDal: new LifecycleHookConfigDal(context.container.db),
-      policyBundleDal: new PolicyBundleConfigDal(context.container.db),
-    }),
-  );
-  context.app.route(
-    "/",
-    createSharedStateConfigRoutes({
-      db: context.container.db,
-      identityScopeDal: context.container.identityScopeDal,
-    }),
-  );
+  if (isSharedStateMode(context.container.deploymentConfig)) {
+    context.app.route(
+      "/",
+      createGatewayConfigRoutes({
+        db: context.container.db,
+        identityScopeDal: context.container.identityScopeDal,
+        hooksDal: new LifecycleHookConfigDal(context.container.db),
+        policyBundleDal: new PolicyBundleConfigDal(context.container.db),
+      }),
+    );
+    context.app.route(
+      "/",
+      createSharedStateConfigRoutes({
+        db: context.container.db,
+        identityScopeDal: context.container.identityScopeDal,
+        pluginCatalogProvider: context.opts.pluginCatalogProvider,
+      }),
+    );
+  }
 
   if (context.opts.connectionManager) {
     context.app.route("/", createConnectionsRoute(context.opts.connectionManager));
