@@ -108,6 +108,10 @@ function DesktopNodeConfigurePage({
           />
           <NodeConnectionCard
             connection={model.connection}
+            currentOperatorConnection={model.currentOperatorConnection}
+            currentTokenLoading={model.currentTokenLoading}
+            currentTokenError={model.currentTokenError}
+            connectionDirty={model.generalDirty}
             backgroundState={model.backgroundState}
             backgroundBusy={model.backgroundBusy}
             backgroundError={model.backgroundError}

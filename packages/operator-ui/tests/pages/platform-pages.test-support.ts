@@ -43,15 +43,61 @@ export function createNodeConfig(overrides: Record<string, unknown> = {}): Recor
   };
 }
 
-export function createDesktopApi(options: DesktopApiOptions = {}): DesktopApi {
+function createDefaultOperatorConnection(
+  rawConfig: unknown,
+): Awaited<ReturnType<NonNullable<DesktopApi["gateway"]["getOperatorConnection"]>>> {
+  const config = (rawConfig ?? createNodeConfig()) as Record<string, unknown>;
+  const mode = config["mode"] === "remote" ? "remote" : "embedded";
+
+  if (mode === "remote") {
+    const remote =
+      config["remote"] && typeof config["remote"] === "object"
+        ? (config["remote"] as Record<string, unknown>)
+        : {};
+    const wsUrl = typeof remote["wsUrl"] === "string" ? remote["wsUrl"] : "ws://127.0.0.1:8788/ws";
+    const httpBaseUrl = wsUrl.startsWith("wss://")
+      ? wsUrl.replace(/^wss:\/\//, "https://").replace(/\/ws$/, "/")
+      : wsUrl.replace(/^ws:\/\//, "http://").replace(/\/ws$/, "/");
+
+    return {
+      mode,
+      wsUrl,
+      httpBaseUrl,
+      token: "saved-remote-token",
+      tlsCertFingerprint256:
+        typeof remote["tlsCertFingerprint256"] === "string" ? remote["tlsCertFingerprint256"] : "",
+      tlsAllowSelfSigned: remote["tlsAllowSelfSigned"] === true,
+    };
+  }
+
+  const embedded =
+    config["embedded"] && typeof config["embedded"] === "object"
+      ? (config["embedded"] as Record<string, unknown>)
+      : {};
+  const port = typeof embedded["port"] === "number" ? embedded["port"] : 8788;
+
   return {
-    getConfig: vi.fn(async () => options.config ?? createNodeConfig()),
+    mode,
+    wsUrl: `ws://127.0.0.1:${port}/ws`,
+    httpBaseUrl: `http://127.0.0.1:${port}/`,
+    token: "tyrum-token.v1.embedded.token",
+    tlsCertFingerprint256: "",
+    tlsAllowSelfSigned: false,
+  };
+}
+
+export function createDesktopApi(options: DesktopApiOptions = {}): DesktopApi {
+  const config = options.config ?? createNodeConfig();
+
+  return {
+    getConfig: vi.fn(async () => config),
     setConfig: options.setConfig ?? vi.fn(async () => {}),
     ...(options.background ? { background: options.background } : {}),
     gateway: {
       getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
       start: vi.fn(async () => ({ status: "running", port: 8788 })),
       stop: vi.fn(async () => ({ status: "stopped" })),
+      getOperatorConnection: vi.fn(async () => createDefaultOperatorConnection(config)),
       ...options.gateway,
     },
     node: {

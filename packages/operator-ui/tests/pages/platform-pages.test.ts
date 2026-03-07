@@ -87,7 +87,7 @@ describe("Platform pages", () => {
         await clickButtonAndFlush(container, "Remote");
 
         const wsUrlInput = getInputByLabel(container, "Gateway WebSocket URL");
-        const tokenInput = getInputByLabel(container, "Token");
+        const tokenInput = getInputByLabel(container, "Replace token");
         const fingerprintInput = getInputByLabel(
           container,
           "TLS certificate fingerprint (SHA-256, optional)",
@@ -122,6 +122,107 @@ describe("Platform pages", () => {
       },
       { onReloadPage },
     );
+  });
+
+  it("shows and copies the current embedded gateway token", async () => {
+    const writeText = vi.fn(async () => {});
+    const getOperatorConnection = vi.fn(async () => ({
+      mode: "embedded" as const,
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788/",
+      token: "tyrum-token.v1.embedded.token",
+      tlsCertFingerprint256: "",
+      tlsAllowSelfSigned: false,
+    }));
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
+      gateway: { getOperatorConnection },
+    });
+
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
+      await flushEffects();
+      await flushEffects();
+
+      const currentTokenInput = getInputByLabel(container, "Current gateway token");
+      expect(currentTokenInput.value).toBe("tyrum-token.v1.embedded.token");
+      expect(currentTokenInput.readOnly).toBe(true);
+
+      await clickByTestIdAndFlush(container, "node-current-token-copy");
+
+      expect(getOperatorConnection).toHaveBeenCalledTimes(1);
+      expect(writeText).toHaveBeenCalledWith("tyrum-token.v1.embedded.token");
+    });
+  });
+
+  it("shows the current remote token separately from the replacement token input", async () => {
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig({
+        mode: "remote",
+        remote: {
+          wsUrl: "wss://saved.example/ws",
+          tokenRef: "saved-token",
+          tlsCertFingerprint256: "AA:BB",
+          tlsAllowSelfSigned: false,
+        },
+      }),
+      gateway: {
+        getOperatorConnection: vi.fn(async () => ({
+          mode: "remote" as const,
+          wsUrl: "wss://saved.example/ws",
+          httpBaseUrl: "https://saved.example/",
+          token: "saved-remote-token",
+          tlsCertFingerprint256: "AA:BB",
+          tlsAllowSelfSigned: false,
+        })),
+      },
+    });
+
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
+      await flushEffects();
+      await flushEffects();
+
+      await clickButtonAndFlush(container, "Remote");
+
+      const currentTokenInput = getInputByLabel(container, "Current gateway token");
+      const replacementTokenInput = getInputByLabel(container, "Replace token");
+
+      expect(currentTokenInput.value).toBe("saved-remote-token");
+      expect(currentTokenInput.readOnly).toBe(true);
+      expect(replacementTokenInput.type).toBe("password");
+      expect(container.textContent).toContain(
+        "Leave blank to keep the current saved token, or enter a new token to replace it.",
+      );
+    });
+  });
+
+  it("keeps the page usable when current token loading fails", async () => {
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
+      gateway: {
+        getOperatorConnection: vi.fn(async () => {
+          throw new Error("token load failed");
+        }),
+      },
+    });
+
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
+      await flushEffects();
+      await flushEffects();
+
+      expect(container.textContent).toContain("Gateway connection");
+      expect(container.textContent).toContain("Current token unavailable");
+      expect(container.textContent).toContain("token load failed");
+
+      const copyButton = container.querySelector<HTMLButtonElement>(
+        '[data-testid="node-current-token-copy"]',
+      );
+      expect(copyButton?.disabled).toBe(true);
+    });
   });
 
   it("clears general saved feedback after browser or shell edits", async () => {

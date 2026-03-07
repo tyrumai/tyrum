@@ -49,6 +49,12 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
     remoteTlsAllowSelfSigned: false,
     hasSavedRemoteToken: false,
   });
+  const [currentOperatorConnection, setCurrentOperatorConnection] = useState<{
+    mode: ConnectionState["mode"];
+    token: string;
+  } | null>(null);
+  const [currentTokenLoading, setCurrentTokenLoading] = useState(false);
+  const [currentTokenError, setCurrentTokenError] = useState<string | null>(null);
   const [backgroundState, setBackgroundState] = useState<DesktopBackgroundState | null>(null);
   const [backgroundBusy, setBackgroundBusy] = useState(false);
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
@@ -73,12 +79,15 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
     general: null,
     security: null,
   });
+  const mountedRef = useRef(true);
   const initialSecurityRef = useRef<SecurityState | null>(null);
   const initialConnectionRef = useRef<ConnectionState | null>(null);
+  const operatorConnectionRequestRef = useRef(0);
   const saveInFlightRef = useRef<"general" | "security" | null>(null);
 
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       for (const key of ["general", "security"] as const) {
         if (saveResetTimers.current[key]) {
           clearTimeout(saveResetTimers.current[key]);
@@ -88,8 +97,43 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
     };
   }, []);
 
+  const refreshCurrentOperatorConnection = async (): Promise<void> => {
+    const getOperatorConnection = api.gateway.getOperatorConnection;
+    if (typeof getOperatorConnection !== "function") {
+      setCurrentOperatorConnection(null);
+      setCurrentTokenError("Current gateway token is unavailable in this desktop build.");
+      setCurrentTokenLoading(false);
+      return;
+    }
+
+    const requestId = operatorConnectionRequestRef.current + 1;
+    operatorConnectionRequestRef.current = requestId;
+    setCurrentTokenLoading(true);
+    setCurrentTokenError(null);
+
+    try {
+      const operatorConnection = await getOperatorConnection();
+      if (!mountedRef.current || operatorConnectionRequestRef.current !== requestId) return;
+      setCurrentOperatorConnection({
+        mode: operatorConnection.mode,
+        token: operatorConnection.token,
+      });
+    } catch (error) {
+      if (!mountedRef.current || operatorConnectionRequestRef.current !== requestId) return;
+      setCurrentOperatorConnection(null);
+      setCurrentTokenError(formatErrorMessage(error));
+    } finally {
+      const isCurrentRequest =
+        mountedRef.current && operatorConnectionRequestRef.current === requestId;
+      if (isCurrentRequest) {
+        setCurrentTokenLoading(false);
+      }
+    }
+  };
+
   useEffect(() => {
     let disposed = false;
+    mountedRef.current = true;
 
     void api
       .getConfig()
@@ -103,6 +147,7 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
         initialSecurityRef.current = cloneSecurityState(nextSecurity);
         initialConnectionRef.current = cloneConnectionState(nextConnection);
         setLoadError(null);
+        void refreshCurrentOperatorConnection();
       })
       .catch((error: unknown) => {
         if (disposed) return;
@@ -253,6 +298,7 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
           return;
         }
 
+        await refreshCurrentOperatorConnection();
         saveSucceeded("general", setGeneralSaved, setGeneralError);
       })
       .catch((error: unknown) => setGeneralError(formatErrorMessage(error)))
@@ -306,6 +352,9 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
     loadError,
     security,
     connection,
+    currentOperatorConnection,
+    currentTokenLoading,
+    currentTokenError,
     displayProfile,
     backgroundState,
     backgroundBusy,
