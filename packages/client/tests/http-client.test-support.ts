@@ -52,6 +52,9 @@ const clientApiPaths = [
 ] as const;
 
 const adminApiPaths = [
+  "agentConfig.list",
+  "agentConfig.get",
+  "agentConfig.update",
   "agentList.get",
   "agentStatus.get",
   "routingConfig.get",

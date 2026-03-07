@@ -1,25 +1,10 @@
-import { AgentId, AgentKey } from "@tyrum/schemas";
+import { AgentListResponse } from "@tyrum/schemas";
 import { z } from "zod";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 
 const AgentListQuery = z
   .object({
     include_default: z.boolean().optional(),
-  })
-  .strict();
-
-const AgentListAgent = z
-  .object({
-    agent_key: AgentKey,
-    agent_id: AgentId.optional(),
-    home: z.string().trim().min(1).optional(),
-    has_config: z.boolean().optional(),
-  })
-  .strict();
-
-const AgentListResponse = z
-  .object({
-    agents: z.array(AgentListAgent),
   })
   .strict();
 

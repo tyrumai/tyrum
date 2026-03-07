@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AgentKey, TenantKey, WorkspaceKey, AgentSessionKey } from "./keys.js";
+import { AgentId, AgentKey, TenantKey, WorkspaceKey, AgentSessionKey } from "./keys.js";
 import { UuidSchema } from "./common.js";
 import { NormalizedContainerKind, NormalizedMessageEnvelope } from "./message.js";
 import { MemorySensitivity } from "./memory.js";
@@ -147,8 +147,20 @@ export const AgentMemoryConfig = z.object({
 });
 export type AgentMemoryConfig = z.infer<typeof AgentMemoryConfig>;
 
+export const AgentPersona = z
+  .object({
+    name: z.string().trim().min(1),
+    description: z.string().trim().min(1),
+    tone: z.string().trim().min(1),
+    palette: z.string().trim().min(1),
+    character: z.string().trim().min(1),
+  })
+  .strict();
+export type AgentPersona = z.infer<typeof AgentPersona>;
+
 export const AgentConfig = z.object({
   model: AgentModelConfig,
+  persona: AgentPersona.optional(),
   skills: AgentSkillConfig.prefault({}),
   mcp: AgentMcpConfig.prefault({}),
   tools: AgentToolConfig.prefault({}),
@@ -304,9 +316,75 @@ export const AgentTurnResponse = z.object({
 });
 export type AgentTurnResponse = z.infer<typeof AgentTurnResponse>;
 
+export const AgentListItem = z
+  .object({
+    agent_key: AgentKey,
+    agent_id: AgentId.optional(),
+    home: z.string().trim().min(1).optional(),
+    has_config: z.boolean().optional(),
+    persona: AgentPersona,
+  })
+  .strict();
+export type AgentListItem = z.infer<typeof AgentListItem>;
+
+export const AgentListResponse = z
+  .object({
+    agents: z.array(AgentListItem),
+  })
+  .strict();
+export type AgentListResponse = z.infer<typeof AgentListResponse>;
+
+export const AgentConfigListItem = z
+  .object({
+    agent_id: AgentId,
+    agent_key: AgentKey,
+    created_at: z.string().nullable(),
+    updated_at: z.string().nullable(),
+    has_config: z.boolean().optional(),
+    persona: AgentPersona,
+  })
+  .strict();
+export type AgentConfigListItem = z.infer<typeof AgentConfigListItem>;
+
+export const AgentConfigListResponse = z
+  .object({
+    agents: z.array(AgentConfigListItem),
+  })
+  .strict();
+export type AgentConfigListResponse = z.infer<typeof AgentConfigListResponse>;
+
+export const AgentConfigGetResponse = z
+  .object({
+    revision: z.number().int().positive(),
+    tenant_id: z.string().trim().min(1),
+    agent_id: AgentId,
+    agent_key: AgentKey,
+    config: AgentConfig,
+    persona: AgentPersona,
+    config_sha256: z.string().trim().min(1),
+    created_at: z.string().trim().min(1),
+    created_by: z.unknown(),
+    reason: z.string().trim().min(1).nullable(),
+    reverted_from_revision: z.number().int().positive().nullable(),
+  })
+  .strict();
+export type AgentConfigGetResponse = z.infer<typeof AgentConfigGetResponse>;
+
+export const AgentConfigUpdateRequest = z
+  .object({
+    config: AgentConfig,
+    reason: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type AgentConfigUpdateRequest = z.infer<typeof AgentConfigUpdateRequest>;
+
+export const AgentConfigUpdateResponse = AgentConfigGetResponse;
+export type AgentConfigUpdateResponse = z.infer<typeof AgentConfigUpdateResponse>;
+
 export const AgentStatusResponse = z.object({
   enabled: z.boolean(),
   home: z.string(),
+  persona: AgentPersona,
   identity: z.object({
     name: z.string(),
     description: z.string().optional(),

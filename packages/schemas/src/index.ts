@@ -39,7 +39,7 @@ export { DesktopDisplayTarget, DesktopElementRef, DesktopWindowRef, DesktopBacke
 // prettier-ignore
 export { BrowserGeolocationGetArgs, BrowserCameraFacingMode, BrowserCameraCapturePhotoFormat, BrowserCameraCapturePhotoArgs, BrowserMicrophoneRecordArgs, BrowserActionArgs, BrowserGeolocationCoords, BrowserGeolocationGetResult, BrowserCameraCapturePhotoResult, BrowserMicrophoneRecordResult, BrowserActionResult } from "./browser.js";
 // prettier-ignore
-export { AgentModelConfig, AgentSkillConfig, AgentMcpConfig, AgentToolConfig, AgentSessionConfig, AgentMemoryConfig, AgentConfig, IdentityStyle, IdentityFrontmatter, IdentityPack, SkillRequires, SkillFrontmatter, SkillManifest, SkillProvenanceSource, SkillStatus, McpServerSpec, AgentTurnRequest, AgentTurnResponse, AgentStatusResponse } from "./agent.js";
+export { AgentModelConfig, AgentSkillConfig, AgentMcpConfig, AgentToolConfig, AgentSessionConfig, AgentMemoryConfig, AgentPersona, AgentConfig, IdentityStyle, IdentityFrontmatter, IdentityPack, SkillRequires, SkillFrontmatter, SkillManifest, SkillProvenanceSource, SkillStatus, McpServerSpec, AgentTurnRequest, AgentTurnResponse, AgentListItem, AgentListResponse, AgentConfigListItem, AgentConfigListResponse, AgentConfigGetResponse, AgentConfigUpdateRequest, AgentConfigUpdateResponse, AgentStatusResponse } from "./agent.js";
 // prettier-ignore
 export { AuditEvent, ChainVerification, ReceiptBundle, AuditForgetDecision, AuditForgetRequest, AuditForgetResponse } from "./audit.js";
 // prettier-ignore

@@ -33,6 +33,13 @@ describe("Agent config routes integration", () => {
 
     const configV1 = AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
+      persona: {
+        name: "Hypatia",
+        description: "Calm systems thinker.",
+        tone: "direct",
+        palette: "graphite",
+        character: "architect",
+      },
       tools: { allow: ["tool.fs.read"] },
     });
 
@@ -56,12 +63,26 @@ describe("Agent config routes integration", () => {
       body: JSON.stringify({ config: configV1, reason: "seed v1" }),
     });
     expect(putV1.status).toBe(200);
-    const v1 = (await putV1.json()) as { revision: number; config_sha256: string };
+    const v1 = (await putV1.json()) as {
+      revision: number;
+      config_sha256: string;
+      config: { persona?: { name: string } };
+      persona?: { name: string };
+    };
     expect(v1.revision).toBeGreaterThan(0);
     expect(v1.config_sha256.length > 0).toBe(true);
+    expect(v1.config.persona?.name).toBe("Hypatia");
+    expect(v1.persona?.name).toBe("Hypatia");
 
     const configV2 = AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
+      persona: {
+        name: "Hypatia",
+        description: "Calm systems thinker.",
+        tone: "direct",
+        palette: "graphite",
+        character: "architect",
+      },
       tools: { allow: ["tool.fs.read", "tool.fs.write"] },
     });
     const putV2 = await app.request("/config/agents/default", {
@@ -75,6 +96,12 @@ describe("Agent config routes integration", () => {
 
     const get = await app.request("/config/agents/default");
     expect(get.status).toBe(200);
+    const getBody = (await get.json()) as {
+      config: { persona?: { name: string } };
+      persona?: { name: string; tone: string };
+    };
+    expect(getBody.config.persona?.name).toBe("Hypatia");
+    expect(getBody.persona).toEqual(expect.objectContaining({ name: "Hypatia", tone: "direct" }));
 
     const revisions = await app.request(`/config/agents/default/revisions?limit=5`);
     expect(revisions.status).toBe(200);
@@ -116,5 +143,17 @@ describe("Agent config routes integration", () => {
     const reverted = (await revert.json()) as { revision: number; reverted_from_revision: number };
     expect(reverted.revision).toBeGreaterThan(v2.revision);
     expect(reverted.reverted_from_revision).toBe(v1.revision);
+
+    const list = await app.request("/config/agents");
+    expect(list.status).toBe(200);
+    const listBody = (await list.json()) as {
+      agents: Array<{ agent_key: string; persona?: { name: string } }>;
+    };
+    expect(listBody.agents).toContainEqual(
+      expect.objectContaining({
+        agent_key: "default",
+        persona: expect.objectContaining({ name: "Hypatia" }),
+      }),
+    );
   });
 });

@@ -5,8 +5,8 @@ import { createAgentRoutes } from "../../src/routes/agent.js";
 describe("createAgentRoutes", () => {
   it("lists tenant-scoped agents from the db dependency", async () => {
     const all = vi.fn(async () => [
-      { agent_key: "default", agent_id: "agent-default" },
-      { agent_key: "helper", agent_id: "agent-helper" },
+      { agent_key: "default", agent_id: "11111111-1111-4111-8111-111111111111" },
+      { agent_key: "helper", agent_id: "22222222-2222-4222-8222-222222222222" },
     ]);
     const app = new Hono();
     app.use("*", async (c, next) => {
@@ -25,6 +25,7 @@ describe("createAgentRoutes", () => {
         agents: {
           getRuntime: vi.fn(),
           listDiscoveredAgentKeys: vi.fn(async () => ["default", "helper"]),
+          resolveAgentHome: vi.fn(() => "/tmp/agent-home"),
         } as never,
         db: { all } as never,
       }),
@@ -33,9 +34,22 @@ describe("createAgentRoutes", () => {
     const res = await app.request("/agent/list?include_default=false");
 
     expect(res.status).toBe(200);
-    expect(all).toHaveBeenCalledWith(expect.stringContaining("FROM agents"), ["tenant-1"]);
+    expect(all).toHaveBeenNthCalledWith(1, expect.stringContaining("FROM agents"), ["tenant-1"]);
     expect(await res.json()).toEqual({
-      agents: [{ agent_key: "helper", agent_id: "agent-helper" }],
+      agents: [
+        {
+          agent_key: "helper",
+          agent_id: "22222222-2222-4222-8222-222222222222",
+          has_config: false,
+          persona: {
+            name: "Helper",
+            description: "Autonomous architect with a direct tone.",
+            tone: "direct",
+            palette: "graphite",
+            character: "architect",
+          },
+        },
+      ],
     });
   });
 
@@ -57,6 +71,7 @@ describe("createAgentRoutes", () => {
         agents: {
           getRuntime: vi.fn(),
           listDiscoveredAgentKeys: vi.fn(async () => ["default", "helper"]),
+          resolveAgentHome: vi.fn(() => "/tmp/agent-home"),
         } as never,
         db: { all: vi.fn(async () => []) } as never,
       }),
@@ -66,7 +81,30 @@ describe("createAgentRoutes", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      agents: [{ agent_key: "default" }, { agent_key: "helper" }],
+      agents: [
+        {
+          agent_key: "default",
+          has_config: false,
+          persona: {
+            name: "Default",
+            description: "Autonomous architect with a direct tone.",
+            tone: "direct",
+            palette: "graphite",
+            character: "architect",
+          },
+        },
+        {
+          agent_key: "helper",
+          has_config: false,
+          persona: {
+            name: "Helper",
+            description: "Autonomous architect with a direct tone.",
+            tone: "direct",
+            palette: "graphite",
+            character: "architect",
+          },
+        },
+      ],
     });
   });
 });

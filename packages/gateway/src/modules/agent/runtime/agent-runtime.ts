@@ -12,7 +12,7 @@ import {
   type TurnEngineBridgeDeps,
   turnViaExecutionEngine as turnViaExecutionEngineBridge,
 } from "./turn-engine-bridge.js";
-import { buildDefaultAgentConfig } from "../default-config.js";
+import { ensureAgentConfigSeeded } from "../default-config.js";
 import { createDefaultAgentContextStore, type AgentContextStore } from "../context-store.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import {
@@ -26,7 +26,6 @@ import {
 import type { AgentContextReport, AgentRuntimeOptions } from "./types.js";
 import { resolveTyrumHome } from "../home.js";
 import { SessionDal } from "../session-dal.js";
-import { AgentConfigDal } from "../../config/agent-config-dal.js";
 import { McpManager } from "../mcp-manager.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal } from "../../approval/dal.js";
@@ -41,6 +40,7 @@ import { resolveExecutionProfile } from "./intake-delegation.js";
 import type { PrepareTurnDeps } from "./turn-preparation.js";
 import type { TurnExecutionContext } from "./turn-preparation.js";
 import { turnDirect, turnStreamDirect, type TurnDirectDeps } from "./turn-direct.js";
+import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -177,10 +177,12 @@ export class AgentRuntime {
 
   async status(enabled: boolean): Promise<AgentStatusResponseT> {
     if (!enabled) {
+      const persona = resolveAgentPersona({ agentKey: this.agentId });
       return AgentStatusResponse.parse({
         enabled: false,
         home: this.home,
-        identity: { name: "disabled" },
+        persona,
+        identity: { name: persona.name, description: persona.description },
         model: { model: "disabled/disabled" },
         skills: [],
         mcp: [],
@@ -203,26 +205,36 @@ export class AgentRuntime {
       workspaceId,
     );
     const config = await (
-      await new AgentConfigDal(this.opts.container.db).ensureSeeded({
+      await ensureAgentConfigSeeded({
+        db: this.opts.container.db,
+        stateMode: resolveGatewayStateMode(this.opts.container.deploymentConfig),
         tenantId: this.tenantId,
         agentId,
-        defaultConfig: buildDefaultAgentConfig(
-          resolveGatewayStateMode(this.opts.container.deploymentConfig),
-        ),
+        agentKey: this.agentId,
         createdBy: { kind: "agent-runtime" },
         reason: "seed",
       })
     ).config;
-    const ctx = await loadCurrentAgentContext({
+    const loaded = await loadCurrentAgentContext({
       contextStore: this.contextStore,
       tenantId: this.tenantId,
       agentId,
       workspaceId,
       config,
     });
+    const persona = resolveAgentPersona({
+      agentKey: this.agentId,
+      config: loaded.config,
+      identity: loaded.identity,
+    });
+    const ctx = {
+      ...loaded,
+      identity: applyPersonaToIdentity(loaded.identity, persona),
+    };
     const status = {
       enabled: true,
       home: this.home,
+      persona,
       identity: {
         name: ctx.identity.meta.name,
         description: ctx.identity.meta.description,

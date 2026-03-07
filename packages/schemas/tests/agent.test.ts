@@ -40,6 +40,30 @@ describe("AgentConfig", () => {
     expect(parsed.memory.v1.budgets.per_kind.note.max_items).toBeGreaterThan(0);
     expect(parsed.memory.v1.budgets.per_kind.procedure.max_items).toBeGreaterThan(0);
     expect(parsed.memory.v1.budgets.per_kind.episode.max_items).toBeGreaterThan(0);
+    expect(parsed.persona).toBeUndefined();
+  });
+
+  it("parses persisted persona fields", () => {
+    const parsed = AgentConfig.parse({
+      model: {
+        model: "openai/gpt-4.1",
+      },
+      persona: {
+        name: "Hypatia",
+        description: "Calm systems thinker.",
+        tone: "direct",
+        palette: "graphite",
+        character: "architect",
+      },
+    });
+
+    expect(parsed.persona).toEqual({
+      name: "Hypatia",
+      description: "Calm systems thinker.",
+      tone: "direct",
+      palette: "graphite",
+      character: "architect",
+    });
   });
 
   it("rejects non-object model config", () => {

@@ -218,6 +218,137 @@ export function registerHttpClientOpsTests(): void {
 
   // --- Operator/admin surfaces ---
 
+  it("agentStatus.get sends GET /agent/status with persona data", async () => {
+    const fetch = makeFetchMock(async () =>
+      jsonResponse({
+        enabled: true,
+        home: "/tmp/agent-1",
+        persona: {
+          name: "Hypatia",
+          description: "Calm systems thinker.",
+          tone: "direct",
+          palette: "graphite",
+          character: "architect",
+        },
+        identity: {
+          name: "Hypatia",
+          description: "Calm systems thinker.",
+        },
+        model: { model: "openai/gpt-4.1" },
+        skills: [],
+        mcp: [],
+        tools: [],
+        sessions: { ttl_days: 30, max_turns: 20 },
+      }),
+    );
+    const client = createTestClient({ fetch });
+
+    const result = await client.agentStatus.get({ agent_key: "agent-1" });
+    expect(result.persona.name).toBe("Hypatia");
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://gateway.example/agent/status?agent_key=agent-1");
+    expect(init.method).toBe("GET");
+  });
+
+  it("agentConfig reads and updates persona config through /config/agents/:key", async () => {
+    const fetch = makeFetchMock(async (input, init) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/config/agents/agent-1") && init?.method === "PUT") {
+        return jsonResponse({
+          revision: 2,
+          tenant_id: "tenant-1",
+          agent_id: "22222222-2222-4222-8222-222222222222",
+          agent_key: "agent-1",
+          config: {
+            model: { model: "openai/gpt-4.1" },
+            persona: {
+              name: "Ada",
+              description: "Methodical builder.",
+              tone: "direct",
+              palette: "moss",
+              character: "builder",
+            },
+            skills: { enabled: [], workspace_trusted: false },
+            mcp: { enabled: [] },
+            tools: { allow: [] },
+            sessions: { ttl_days: 30, max_turns: 20 },
+            memory: { markdown_enabled: true },
+          },
+          persona: {
+            name: "Ada",
+            description: "Methodical builder.",
+            tone: "direct",
+            palette: "moss",
+            character: "builder",
+          },
+          config_sha256: "a".repeat(64),
+          created_at: "2026-03-01T00:00:00.000Z",
+          created_by: { kind: "tenant.token", token_id: "token-1" },
+          reason: "update persona",
+          reverted_from_revision: null,
+        });
+      }
+
+      return jsonResponse({
+        revision: 1,
+        tenant_id: "tenant-1",
+        agent_id: "22222222-2222-4222-8222-222222222222",
+        agent_key: "agent-1",
+        config: {
+          model: { model: "openai/gpt-4.1" },
+          persona: {
+            name: "Hypatia",
+            description: "Calm systems thinker.",
+            tone: "direct",
+            palette: "graphite",
+            character: "architect",
+          },
+          skills: { enabled: [], workspace_trusted: false },
+          mcp: { enabled: [] },
+          tools: { allow: [] },
+          sessions: { ttl_days: 30, max_turns: 20 },
+          memory: { markdown_enabled: true },
+        },
+        persona: {
+          name: "Hypatia",
+          description: "Calm systems thinker.",
+          tone: "direct",
+          palette: "graphite",
+          character: "architect",
+        },
+        config_sha256: "a".repeat(64),
+        created_at: "2026-03-01T00:00:00.000Z",
+        created_by: { kind: "tenant.token", token_id: "token-1" },
+        reason: null,
+        reverted_from_revision: null,
+      });
+    });
+    const client = createTestClient({ fetch });
+
+    const admin = client as unknown as Record<string, any>;
+    const current = await admin.agentConfig.get("agent-1");
+    expect(current.persona.name).toBe("Hypatia");
+
+    const updated = await admin.agentConfig.update("agent-1", {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        persona: {
+          name: "Ada",
+          description: "Methodical builder.",
+          tone: "direct",
+          palette: "moss",
+          character: "builder",
+        },
+      },
+      reason: "update persona",
+    });
+    expect(updated.persona.name).toBe("Ada");
+  });
+
   it("health.get sends GET /healthz and validates response", async () => {
     const fetch = mockJsonFetch({ status: "ok", is_exposed: false });
     const client = createTestClient({ fetch });

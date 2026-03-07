@@ -28,11 +28,25 @@ export function registerHttpClientCoreTests(): void {
           {
             agent_key: "default",
             agent_id: "11111111-1111-4111-8111-111111111111",
+            persona: {
+              name: "Hypatia",
+              description: "Calm systems thinker.",
+              tone: "direct",
+              palette: "graphite",
+              character: "architect",
+            },
           },
           {
             agent_key: "agent-1",
             agent_id: "22222222-2222-4222-8222-222222222222",
             home: "/tmp/agent-1",
+            persona: {
+              name: "Ada",
+              description: "Methodical builder.",
+              tone: "direct",
+              palette: "moss",
+              character: "builder",
+            },
           },
         ],
       }),
@@ -43,6 +57,7 @@ export function registerHttpClientCoreTests(): void {
     const res = await client.agentList.get({ include_default: false });
 
     expect(res.agents.map((a) => a.agent_key)).toEqual(["default", "agent-1"]);
+    expect(res.agents[0]?.persona.name).toBe("Hypatia");
     expect(res.agents[1]?.agent_id).toBe("22222222-2222-4222-8222-222222222222");
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
