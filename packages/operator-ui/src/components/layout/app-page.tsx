@@ -40,8 +40,9 @@ export function AppPageContent({
     <div className={cn("min-h-0 flex-1 overflow-hidden", className)} {...props}>
       <ScrollArea className={cn("h-full", scrollAreaClassName)}>
         <div
+          data-layout-content=""
           className={cn(
-            "mx-auto grid w-full max-w-5xl gap-5 px-4 py-4 md:px-5 md:py-5",
+            "mx-auto grid box-border w-full max-w-5xl gap-5 px-4 py-4 md:px-5 md:py-5",
             contentClassName,
           )}
         >

@@ -273,7 +273,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
         }}
       />
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1">
         <div
           className="hidden h-full w-[180px] shrink-0 flex-col border-r border-border bg-bg-subtle/30 lg:flex"
           data-testid="agents-list-panel"
@@ -338,7 +338,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="agents-detail-pane">
           <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4">
             <div className="min-w-0 flex flex-wrap items-center gap-3">
               <div
@@ -359,7 +359,10 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
 
           <div className="min-h-0 flex-1 overflow-hidden">
             <ScrollArea className="h-full">
-              <div className="mx-auto grid w-full max-w-5xl gap-4 px-4 py-4 md:px-5 md:py-5">
+              <div
+                className="grid box-border min-w-0 w-full gap-4 px-4 py-4 md:px-5 md:py-5"
+                data-testid="agents-content-layout"
+              >
                 {!isConnected ? (
                   <Alert
                     variant="warning"
@@ -382,7 +385,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                   onValueChange={(nextTab) => {
                     setActiveTab(nextTab);
                   }}
-                  className="grid gap-4"
+                  className="grid min-w-0 gap-4"
                 >
                   <TabsList aria-label="Agent sections" className="flex-wrap">
                     <TabsTrigger value="identity" data-testid="agents-tab-identity">

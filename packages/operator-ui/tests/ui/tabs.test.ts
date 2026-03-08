@@ -49,6 +49,7 @@ describe("Tabs", () => {
 
     const activePanel = container.querySelector("[data-state='active'][role='tabpanel']");
     expect(activePanel?.textContent).toContain("Account content");
+    expect((activePanel as HTMLElement | null)?.className).toContain("min-w-0");
 
     const triggers = Array.from(container.querySelectorAll("[role='tab']")).map(
       (el) => el.textContent,
