@@ -331,73 +331,67 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       <AppPageToolbar title="Work" actions={toolbarActions} />
 
       {desktopBoard ? (
-        <div className="flex min-h-0 flex-1">
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
-                {!isConnected ? (
-                  <Alert
-                    variant="warning"
-                    title="Not connected"
-                    description="Connect to the gateway to use WorkBoard."
-                  />
-                ) : null}
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
+              {!isConnected ? (
+                <Alert
+                  variant="warning"
+                  title="Not connected"
+                  description="Connect to the gateway to use WorkBoard."
+                />
+              ) : null}
 
-                {workboard.error ? (
-                  <Alert variant="error" title="WorkBoard error" description={workboard.error} />
-                ) : null}
+              {workboard.error ? (
+                <Alert variant="error" title="WorkBoard error" description={workboard.error} />
+              ) : null}
 
+              <div
+                data-testid="workboard-board"
+                className="overflow-hidden rounded-lg border border-border bg-bg-card"
+              >
                 <div
-                  data-testid="workboard-board"
-                  className="overflow-hidden rounded-lg border border-border bg-bg-card"
+                  data-testid="workboard-board-header"
+                  className="grid border-b border-border bg-bg-subtle"
+                  style={DESKTOP_BOARD_GRID_STYLE}
                 >
-                  <div
-                    data-testid="workboard-board-header"
-                    className="grid border-b border-border bg-bg-subtle"
-                    style={DESKTOP_BOARD_GRID_STYLE}
-                  >
-                    {WORK_ITEM_STATUSES.map((status) => (
-                      <div
-                        key={status}
-                        className="border-r border-border px-2.5 py-2.5 last:border-r-0"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-semibold text-fg">
-                            {STATUS_LABELS[status]}
-                          </span>
-                          <span className="text-xs text-fg-muted">{grouped[status].length}</span>
-                        </div>
+                  {WORK_ITEM_STATUSES.map((status) => (
+                    <div
+                      key={status}
+                      className="border-r border-border px-2.5 py-2.5 last:border-r-0"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-fg">
+                          {STATUS_LABELS[status]}
+                        </span>
+                        <span className="text-xs text-fg-muted">{grouped[status].length}</span>
                       </div>
-                    ))}
-                  </div>
-                  <div className="min-w-[70rem] grid" style={DESKTOP_BOARD_GRID_STYLE}>
-                    {WORK_ITEM_STATUSES.map((status) => (
-                      <div
-                        key={status}
-                        data-testid={`workboard-column-${status}`}
-                        className="min-h-80 border-r border-border p-2.5 align-top last:border-r-0"
-                      >
-                        <WorkStatusList
-                          items={grouped[status]}
-                          selectedWorkItemId={selectedWorkItemId}
-                          onSelect={setSelectedWorkItemId}
-                        />
-                      </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="min-w-[70rem] grid" style={DESKTOP_BOARD_GRID_STYLE}>
+                  {WORK_ITEM_STATUSES.map((status) => (
+                    <div
+                      key={status}
+                      data-testid={`workboard-column-${status}`}
+                      className="min-h-80 border-r border-border p-2.5 align-top last:border-r-0"
+                    >
+                      <WorkStatusList
+                        items={grouped[status]}
+                        selectedWorkItemId={selectedWorkItemId}
+                        onSelect={setSelectedWorkItemId}
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
-            </ScrollArea>
-          </div>
 
-          <div className="hidden w-[24rem] shrink-0 flex-col border-l border-border bg-bg-subtle/20 lg:flex">
-            <div className="flex h-14 shrink-0 items-center border-b border-border px-4">
-              <div className="text-sm font-medium text-fg">
-                {selectedItem ? "Work item details" : "Select a work item"}
-              </div>
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <ScrollArea className="h-full">
+              <div className="rounded-lg border border-border bg-bg-subtle/20">
+                <div className="flex h-12 items-center border-b border-border px-4">
+                  <div className="text-sm font-medium text-fg">
+                    {selectedItem ? "Work item details" : "Select a work item"}
+                  </div>
+                </div>
                 <div className="p-4">
                   <WorkBoardDrilldown
                     selectedWorkItemId={selectedWorkItemId}
@@ -419,9 +413,9 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
                     workItemKvEntries={workItemKvEntries}
                   />
                 </div>
-              </ScrollArea>
+              </div>
             </div>
-          </div>
+          </ScrollArea>
         </div>
       ) : null}
       <div className="min-h-0 flex-1 overflow-hidden lg:hidden">
