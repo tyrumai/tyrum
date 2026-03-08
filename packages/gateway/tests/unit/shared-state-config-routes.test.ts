@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import type { PluginCatalogProvider } from "../../src/modules/plugins/catalog-provider.js";
 import { createSharedStateConfigRoutes } from "../../src/routes/shared-state-config.js";
@@ -58,7 +59,19 @@ describe("shared state config routes", () => {
 
   it("stores and returns shared agent identity revisions", async () => {
     await container.identityScopeDal.ensureAgentId(tenantId, "default");
+    const readAgentUpdatedAt = async (): Promise<string | null> => {
+      const row = await container.db.get<{ updated_at: string | null }>(
+        `SELECT updated_at
+         FROM agents
+         WHERE tenant_id = ? AND agent_key = 'default'
+         LIMIT 1`,
+        [tenantId],
+      );
+      return row?.updated_at ?? null;
+    };
+    const updatedAtBefore = await readAgentUpdatedAt();
 
+    await delay(1_100);
     const putRes = await app.request("/config/agents/default/identity", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -71,6 +84,7 @@ describe("shared state config routes", () => {
       }),
     });
     expect(putRes.status).toBe(200);
+    expect(await readAgentUpdatedAt()).not.toBe(updatedAtBefore);
 
     const getRes = await app.request("/config/agents/default/identity");
     expect(getRes.status).toBe(200);

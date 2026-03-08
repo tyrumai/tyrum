@@ -7,6 +7,7 @@ import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
 import { AgentConfigDal } from "../modules/config/agent-config-dal.js";
 import { AgentIdentityDal } from "../modules/agent/identity-dal.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "../modules/agent/persona.js";
+import { touchAgentUpdatedAt } from "../modules/agent/updated-at.js";
 import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
 import {
   RuntimePackageDal,
@@ -193,6 +194,7 @@ export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps):
       createdBy: { kind: "tenant.token", token_id: claims.token_id },
       reason: parsed.data.reason,
     });
+    await touchAgentUpdatedAt(deps.db, { tenantId, agentId });
 
     return c.json(
       {
@@ -240,6 +242,7 @@ export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps):
       createdBy: { kind: "tenant.token", token_id: claims.token_id },
       reason: parsed.data.reason,
     });
+    await touchAgentUpdatedAt(deps.db, { tenantId, agentId });
 
     return c.json(
       {

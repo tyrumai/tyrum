@@ -19,6 +19,7 @@ import { DEFAULT_AGENT_KEY, DEFAULT_WORKSPACE_KEY } from "../identity/scope.js";
 import { AgentConfigDal } from "../config/agent-config-dal.js";
 import { AgentIdentityDal } from "./identity-dal.js";
 import { buildDefaultAgentConfig } from "./default-config.js";
+import { touchAgentUpdatedAt } from "./updated-at.js";
 import {
   applyPersonaToIdentity,
   listLatestAgentConfigsByAgentId,
@@ -460,6 +461,10 @@ export class AgentAdminService {
           reason: params.reason,
         }),
       ]);
+      await touchAgentUpdatedAt(tx, {
+        tenantId: params.tenantId,
+        agentId: row.agent_id,
+      });
       const refreshedRow = await getAgentRow(tx, params.tenantId, params.agentKey);
 
       if (!refreshedRow) {

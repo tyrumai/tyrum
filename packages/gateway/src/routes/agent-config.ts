@@ -19,6 +19,7 @@ import type { SqlDb } from "../statestore/types.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
 import { AgentAdminService } from "../modules/agent/admin-service.js";
+import { touchAgentUpdatedAt } from "../modules/agent/updated-at.js";
 import { AgentConfigDal } from "../modules/config/agent-config-dal.js";
 import { resolveAgentPersona } from "../modules/agent/persona.js";
 import type { GatewayStateMode } from "../modules/runtime-state/mode.js";
@@ -183,6 +184,7 @@ export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
       createdBy: { kind: "tenant.token", token_id: claims.token_id },
       reason: parsed.data.reason,
     });
+    await touchAgentUpdatedAt(deps.db, { tenantId, agentId });
 
     return c.json(
       buildAgentConfigRevisionResponse(agentKey, {
@@ -230,6 +232,7 @@ export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
       createdBy: { kind: "tenant.token", token_id: claims.token_id },
       reason: parsed.data.reason,
     });
+    await touchAgentUpdatedAt(deps.db, { tenantId, agentId });
 
     return c.json(
       buildAgentConfigRevisionResponse(agentKey, {

@@ -2,6 +2,7 @@ import { AgentConfig } from "@tyrum/schemas";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { setTimeout as delay } from "node:timers/promises";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
@@ -119,6 +120,55 @@ describe("Managed agents routes integration", () => {
       }),
     });
     expect(res.status).toBe(404);
+  });
+
+  it("bumps updated_at when a managed agent is updated", async () => {
+    const { app } = await createTestApp({
+      isLocalOnly: false,
+      deploymentConfig: { modelsDev: { disableFetch: true } },
+    });
+
+    const create = await app.request("/agents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agent_key: "agent-updated-at",
+        config: sampleConfig("Updated At Agent"),
+      }),
+    });
+    expect(create.status).toBe(201);
+    const created = (await create.json()) as { updated_at: string };
+
+    await delay(1_100);
+
+    const update = await app.request("/agents/agent-updated-at", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        config: AgentConfig.parse({
+          model: { model: "openai/gpt-4.1" },
+          persona: {
+            name: "Updated At Agent",
+            description: "Managed agent after update.",
+            tone: "direct",
+            palette: "graphite",
+            character: "architect",
+          },
+        }),
+      }),
+    });
+    expect(update.status).toBe(200);
+    const updated = (await update.json()) as { updated_at: string };
+    expect(updated.updated_at).not.toBe(created.updated_at);
+
+    const list = await app.request("/agents");
+    expect(list.status).toBe(200);
+    const listBody = (await list.json()) as {
+      agents: Array<{ agent_key: string; updated_at: string }>;
+    };
+    expect(
+      listBody.agents.find((agent) => agent.agent_key === "agent-updated-at")?.updated_at,
+    ).toBe(updated.updated_at);
   });
 
   it("returns 400 for invalid managed agent keys in route params", async () => {

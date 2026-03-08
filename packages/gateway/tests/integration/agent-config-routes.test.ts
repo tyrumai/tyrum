@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { setTimeout as delay } from "node:timers/promises";
 import { AgentConfig, AgentConfigGetResponse } from "@tyrum/schemas";
 import { createTestApp } from "./helpers.js";
 
@@ -48,6 +49,16 @@ describe("Agent config routes integration", () => {
     };
 
     const identityCountBefore = await countIdentityRevisions();
+    const readAgentUpdatedAt = async (): Promise<string | null> => {
+      const row = await container.db.get<{ updated_at: string | null }>(
+        `SELECT updated_at
+         FROM agents
+         WHERE tenant_id = ? AND agent_key = 'default'
+         LIMIT 1`,
+        [auth.tenantId],
+      );
+      return row?.updated_at ?? null;
+    };
 
     const configV1 = AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
@@ -92,7 +103,9 @@ describe("Agent config routes integration", () => {
     expect(v1.config.persona?.name).toBe("Hypatia");
     expect(v1.persona?.name).toBe("Hypatia");
     expect(await countIdentityRevisions()).toBe(identityCountBefore);
+    const updatedAtAfterV1 = await readAgentUpdatedAt();
 
+    await delay(1_100);
     const configV2 = AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
       persona: {
@@ -113,6 +126,8 @@ describe("Agent config routes integration", () => {
     const v2 = (await putV2.json()) as { revision: number; config_sha256: string };
     expect(v2.revision).toBeGreaterThan(v1.revision);
     expect(await countIdentityRevisions()).toBe(identityCountBefore);
+    const updatedAtAfterV2 = await readAgentUpdatedAt();
+    expect(updatedAtAfterV2).not.toBe(updatedAtAfterV1);
 
     const get = await app.request("/config/agents/default");
     expect(get.status).toBe(200);
@@ -154,6 +169,7 @@ describe("Agent config routes integration", () => {
     });
     expect(revertInvalidBody.status).toBe(400);
 
+    await delay(1_100);
     const revert = await app.request("/config/agents/default/revert", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -164,6 +180,8 @@ describe("Agent config routes integration", () => {
     expect(reverted.revision).toBeGreaterThan(v2.revision);
     expect(reverted.reverted_from_revision).toBe(v1.revision);
     expect(reverted.persona).toEqual(expect.objectContaining({ name: "Hypatia", tone: "direct" }));
+    const updatedAtAfterRevert = await readAgentUpdatedAt();
+    expect(updatedAtAfterRevert).not.toBe(updatedAtAfterV2);
 
     const list = await app.request("/config/agents");
     expect(list.status).toBe(200);
