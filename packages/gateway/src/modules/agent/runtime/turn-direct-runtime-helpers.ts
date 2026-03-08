@@ -146,10 +146,6 @@ export async function maybeAutoCompactSession(input: {
   abortSignal?: AbortSignal;
   timeoutMs?: number;
 }): Promise<void> {
-  if (!input.usage) {
-    return;
-  }
-
   const persisted = await input.deps.sessionDal.getById({
     tenantId: input.tenantId,
     sessionId: input.sessionId,

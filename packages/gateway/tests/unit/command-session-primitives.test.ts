@@ -226,7 +226,7 @@ describe("session command primitives", () => {
       });
 
       const snapshot = await support.readSessionSnapshot(db, session.session_id);
-      expect(snapshot.summary).toBe("");
+      expect(snapshot.summary).toBe("stale-summary");
       expect(snapshot.turnContents).toEqual(["user-one", "assistant-one"]);
     });
   });
