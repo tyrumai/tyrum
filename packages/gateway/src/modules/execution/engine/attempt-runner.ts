@@ -24,6 +24,8 @@ import {
 
 export type { ExecuteAttemptOptions } from "./attempt-runner-types.js";
 
+const TERMINAL_POLICY_FAILURE_MAX_ATTEMPTS = 1;
+
 export class ExecutionAttemptRunner {
   constructor(private readonly opts: ExecutionAttemptRunnerOptions) {}
 
@@ -348,7 +350,7 @@ export class ExecutionAttemptRunner {
       tx,
       opts,
       nowIso,
-      prepared.result.failureKind === "policy" ? opts.attemptNum : undefined,
+      prepared.result.failureKind === "policy" ? TERMINAL_POLICY_FAILURE_MAX_ATTEMPTS : undefined,
     );
     return { kind: "failed", status, error: redactedError };
   }

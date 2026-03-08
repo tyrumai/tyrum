@@ -455,6 +455,48 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
     );
     expect(remainingLaneLease?.n).toBe(0);
   });
+
+  it("does not retry policy failures even when max_attempts is greater than one", async () => {
+    const db = fixture.db();
+    const engine = new ExecutionEngine({ db });
+    const { runId } = await enqueuePlan(engine, {
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-policy-no-retry-1",
+      requestId: "test-req-1",
+      steps: [action("CLI")],
+    });
+    await db.run("UPDATE execution_steps SET max_attempts = 5 WHERE run_id = ?", [runId]);
+
+    const policyFailureExecutor: StepExecutor = {
+      execute: vi.fn(
+        async (): Promise<StepResult> => ({
+          success: false,
+          error: "policy denied tool.exec",
+          failureKind: "policy",
+        }),
+      ),
+    };
+
+    await drain(engine, "w1", policyFailureExecutor);
+
+    expect(mockCallCount(policyFailureExecutor)).toBe(1);
+    const attempts = await db.all<{ attempt: number; status: string }>(
+      "SELECT attempt, status FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE run_id = ?) ORDER BY attempt ASC",
+      [runId],
+    );
+    expect(attempts).toEqual([{ attempt: 1, status: "failed" }]);
+    const step = await db.get<{ status: string }>(
+      "SELECT status FROM execution_steps WHERE run_id = ?",
+      [runId],
+    );
+    expect(step?.status).toBe("failed");
+    const run = await db.get<{ status: string }>(
+      "SELECT status FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    expect(run?.status).toBe("failed");
+  });
 }
 
 export function registerRetryCancelTests(fixture: { db: () => SqliteDb }): void {
