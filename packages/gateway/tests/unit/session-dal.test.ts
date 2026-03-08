@@ -158,6 +158,39 @@ describe("SessionDal", () => {
     expect(updated?.summary).not.toContain("u3");
   });
 
+  it("supports keeping zero recent messages during deterministic compaction", async () => {
+    const dal = createDal();
+    const session = await dal.getOrCreate({
+      connectorKey: "telegram",
+      providerThreadId: "thread-compact-zero",
+      containerKind: "group",
+    });
+
+    await dal.appendTurn({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      userMessage: "u1",
+      assistantMessage: "a1",
+      timestamp: "2026-02-17T00:00:00.000Z",
+    });
+
+    const compacted = await dal.compact({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      keepLastMessages: 0,
+    });
+
+    expect(compacted).toEqual({ droppedMessages: 2, keptMessages: 0 });
+
+    const updated = await dal.getById({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+    });
+    expect(updated?.turns).toEqual([]);
+    expect(updated?.summary).toContain("u1");
+    expect(updated?.summary).toContain("a1");
+  });
+
   it("flags malformed turns_json on direct reads while keeping the session usable", async () => {
     db = openTestSqliteDb();
     const logger = { warn: vi.fn() };
@@ -261,7 +294,7 @@ describe("SessionDal", () => {
         tenantId: session.tenant_id,
         sessionId: session.session_id,
       });
-      expect(updated?.summary).toBe("");
+      expect(updated?.summary).toBe("stale-summary");
       expect(updated?.turns).toEqual([
         { role: "user", content: "u1", timestamp: "2026-02-17T00:10:00.000Z" },
         { role: "assistant", content: "a1", timestamp: "2026-02-17T00:10:00.000Z" },

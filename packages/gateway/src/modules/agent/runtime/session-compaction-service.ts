@@ -184,8 +184,31 @@ function compactionTimeoutMs(timeoutMs: number | undefined): number | undefined 
     return DEFAULT_COMPACTION_TIMEOUT_MS;
   }
   const slice = Math.floor(timeoutMs * 0.25);
-  if (slice <= 0) return undefined;
+  if (slice <= 0) return 0;
   return Math.min(DEFAULT_COMPACTION_TIMEOUT_MS, slice);
+}
+
+async function runDeterministicFallbackCompaction(input: {
+  sessionDal: SessionDal;
+  session: SessionRow;
+  keepLastMessages: number;
+}): Promise<SessionCompactionResult> {
+  const fallback = await input.sessionDal.compact({
+    tenantId: input.session.tenant_id,
+    sessionId: input.session.session_id,
+    keepLastMessages: input.keepLastMessages,
+  });
+  const updated = await input.sessionDal.getById({
+    tenantId: input.session.tenant_id,
+    sessionId: input.session.session_id,
+  });
+  return {
+    compacted: true,
+    droppedMessages: fallback.droppedMessages,
+    keptMessages: fallback.keptMessages,
+    summary: updated?.summary ?? input.session.summary,
+    reason: "fallback",
+  };
 }
 
 export function shouldCompactSessionForUsage(input: {
@@ -263,6 +286,13 @@ export async function compactSessionWithResolvedModel(input: {
 
   const keptTurns = getKeptTurns(input.session, keepLastMessages);
   const timeout = compactionTimeoutMs(input.timeoutMs);
+  if (timeout === 0) {
+    return await runDeterministicFallbackCompaction({
+      sessionDal: input.sessionDal,
+      session: input.session,
+      keepLastMessages,
+    });
+  }
 
   try {
     const result = await generateText({
@@ -301,22 +331,11 @@ export async function compactSessionWithResolvedModel(input: {
       session_id: input.session.session_id,
       error: message,
     });
-    const fallback = await input.sessionDal.compact({
-      tenantId: input.session.tenant_id,
-      sessionId: input.session.session_id,
+    return await runDeterministicFallbackCompaction({
+      sessionDal: input.sessionDal,
+      session: input.session,
       keepLastMessages,
     });
-    const updated = await input.sessionDal.getById({
-      tenantId: input.session.tenant_id,
-      sessionId: input.session.session_id,
-    });
-    return {
-      compacted: true,
-      droppedMessages: fallback.droppedMessages,
-      keptMessages: fallback.keptMessages,
-      summary: updated?.summary ?? input.session.summary,
-      reason: "fallback",
-    };
   }
 }
 

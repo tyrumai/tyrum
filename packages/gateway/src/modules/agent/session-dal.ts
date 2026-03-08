@@ -329,7 +329,7 @@ export class SessionDal {
     });
     const stored = buildStoredTranscript({
       turns: session.turns,
-      keepLastMessages: Math.max(2, input.keepLastMessages),
+      keepLastMessages: Math.max(0, input.keepLastMessages),
       previousSummary: session.summary,
     });
     await this.writeSession({ tenantId: input.tenantId, sessionId: input.sessionId, stored });
@@ -381,7 +381,7 @@ export class SessionDal {
       tenantId: input.tenantId,
       sessionId: input.sessionId,
       turns: rebuiltTurns,
-      summary: "",
+      summary: session.summary,
       updatedAt: rebuiltTurns.at(-1)?.timestamp ?? session.updated_at,
     });
     return {

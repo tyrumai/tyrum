@@ -400,24 +400,15 @@ export async function turnStreamDirect(
     },
   );
 
-  let streamResult: ReturnType<typeof streamText>;
-  try {
-    streamResult = streamText({
-      model,
-      system: systemPrompt,
-      messages: [{ role: "user" as const, content: userContent }],
-      tools: toolSet,
-      stopWhen,
-      prepareStep: ({ messages: stepMessages }) =>
-        prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
-    });
-  } catch (err) {
-    if (!isContextOverflowError(err)) {
-      throw err;
-    }
-    await compactForOverflow({ deps, ctx, session, model });
-    throw err;
-  }
+  const streamResult = streamText({
+    model,
+    system: systemPrompt,
+    messages: [{ role: "user" as const, content: userContent }],
+    tools: toolSet,
+    stopWhen,
+    prepareStep: ({ messages: stepMessages }) =>
+      prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
+  });
 
   const finalize = async (): Promise<AgentTurnResponseT> => {
     let result: Awaited<typeof streamResult>;
