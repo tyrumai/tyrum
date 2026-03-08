@@ -12,6 +12,20 @@ import { requireTenantId } from "../modules/auth/claims.js";
 import { listLatestAgentConfigsByAgentId, resolveAgentPersona } from "../modules/agent/persona.js";
 import { loadOptionalIdentity } from "../modules/agent/optional-identity.js";
 
+async function resolveAgentRecord(
+  db: SqlDb,
+  tenantId: string,
+  agentKey: string,
+): Promise<{ agent_id: string; agent_key: string } | undefined> {
+  return await db.get<{ agent_id: string; agent_key: string }>(
+    `SELECT agent_id, agent_key
+     FROM agents
+     WHERE tenant_id = ? AND agent_key = ?
+     LIMIT 1`,
+    [tenantId, agentKey],
+  );
+}
+
 export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): Hono {
   const agent = new Hono();
 
@@ -31,55 +45,29 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
        ORDER BY CASE WHEN agent_key = 'default' THEN 0 ELSE 1 END, agent_key ASC`,
       [tenantId],
     );
-    const discoveredKeys = await opts.agents.listDiscoveredAgentKeys();
     const configsByAgentId = await listLatestAgentConfigsByAgentId(opts.db, tenantId);
-    const agentByKey = new Map<
-      string,
-      {
-        agent_key: string;
-        agent_id?: string;
-      }
-    >(discovered.map((record) => [record.agent_key, record]));
-    for (const agentKey of discoveredKeys) {
-      agentByKey.set(agentKey, agentByKey.get(agentKey) ?? { agent_key: agentKey });
-    }
 
     const agentRecords = await Promise.all(
-      Array.from(agentByKey.values())
+      discovered
         .filter((record) => includeDefault || record.agent_key !== "default")
-        .toSorted((left, right) => {
-          if (left.agent_key === right.agent_key) return 0;
-          if (left.agent_key === "default") return -1;
-          if (right.agent_key === "default") return 1;
-          return left.agent_key.localeCompare(right.agent_key);
-        })
         .map(async (record) => {
-          const config = record.agent_id ? configsByAgentId.get(record.agent_id) : undefined;
-          const identity =
-            !config?.persona && record.agent_id
-              ? await loadOptionalIdentity({
-                  db: opts.db,
-                  tenantId,
-                  agentId: record.agent_id,
-                })
-              : undefined;
+          const config = configsByAgentId.get(record.agent_id);
+          const identity = !config?.persona
+            ? await loadOptionalIdentity({
+                db: opts.db,
+                tenantId,
+                agentId: record.agent_id,
+              })
+            : undefined;
           const persona = resolveAgentPersona({
             agentKey: record.agent_key,
             config,
             identity,
           });
 
-          if (record.agent_id) {
-            return {
-              agent_key: record.agent_key,
-              agent_id: record.agent_id,
-              has_config: Boolean(config),
-              persona,
-            };
-          }
-
           return {
             agent_key: record.agent_key,
+            agent_id: record.agent_id,
             has_config: Boolean(config),
             persona,
           };
@@ -92,6 +80,10 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
   agent.get("/agent/status", async (c) => {
     const tenantId = requireTenantId(c);
     const agentKey = c.req.query("agent_key")?.trim() || "default";
+    const record = await resolveAgentRecord(opts.db, tenantId, agentKey);
+    if (!record) {
+      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
+    }
     let runtime;
     try {
       runtime = await opts.agents.getRuntime({ tenantId, agentKey });
@@ -113,6 +105,10 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
 
     try {
       const agentId = parsed.data.agent_key ?? "default";
+      const record = await resolveAgentRecord(opts.db, tenantId, agentId);
+      if (!record) {
+        return c.json({ error: "not_found", message: `agent '${agentId}' not found` }, 404);
+      }
       let runtime;
       try {
         runtime = await opts.agents.getRuntime({ tenantId, agentKey: agentId });

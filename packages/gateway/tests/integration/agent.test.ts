@@ -181,7 +181,7 @@ describe("agent routes", () => {
     await container.db.close();
   });
 
-  it("includes filesystem-defined agents before they are seeded in shared state", async () => {
+  it("does not include unmanaged filesystem agent directories in /agent/list", async () => {
     await mkdir(join(homeDir!, "agents/agent-2"), { recursive: true });
     await writeWorkspace(join(homeDir!, "agents/agent-2"));
 
@@ -192,8 +192,7 @@ describe("agent routes", () => {
     const payload = (await res.json()) as {
       agents: Array<{ agent_key: string; agent_id?: string }>;
     };
-    expect(payload.agents.map((agent) => agent.agent_key)).toEqual(["default", "agent-2"]);
-    expect(payload.agents.find((agent) => agent.agent_key === "agent-2")?.agent_id).toBeUndefined();
+    expect(payload.agents.map((agent) => agent.agent_key)).toEqual(["default"]);
 
     await agents?.shutdown();
     await container.db.close();

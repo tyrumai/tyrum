@@ -53,7 +53,7 @@ describe("createAgentRoutes", () => {
     });
   });
 
-  it("includes default and filesystem-discovered agents even before db rows exist", async () => {
+  it("returns only managed db-backed agents from /agent/list", async () => {
     const app = new Hono();
     app.use("*", async (c, next) => {
       c.set("authClaims", {
@@ -80,31 +80,6 @@ describe("createAgentRoutes", () => {
     const res = await app.request("/agent/list");
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
-      agents: [
-        {
-          agent_key: "default",
-          has_config: false,
-          persona: {
-            name: "Default",
-            description: "Autonomous architect with a direct tone.",
-            tone: "direct",
-            palette: "graphite",
-            character: "architect",
-          },
-        },
-        {
-          agent_key: "helper",
-          has_config: false,
-          persona: {
-            name: "Helper",
-            description: "Autonomous architect with a direct tone.",
-            tone: "direct",
-            palette: "graphite",
-            character: "architect",
-          },
-        },
-      ],
-    });
+    expect(await res.json()).toEqual({ agents: [] });
   });
 });

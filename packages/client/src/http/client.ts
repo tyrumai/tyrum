@@ -1,3 +1,4 @@
+import { createAgentsApi, type AgentsApi } from "./agents.js";
 import { createAgentConfigApi, type AgentConfigApi } from "./agent-config.js";
 import {
   createAuthPinsApi,
@@ -55,6 +56,7 @@ export interface TyrumHttpClient {
    * These are optional to preserve compatibility for consumers that mock or
    * dependency-inject a partial HTTP client.
    */
+  agents?: AgentsApi;
   agentConfig?: AgentConfigApi;
   agentList?: AgentListApi;
   agentStatus?: AgentStatusApi;
@@ -66,6 +68,7 @@ export interface TyrumHttpClient {
 }
 
 export type TyrumHttpClientOperator = TyrumHttpClient & {
+  agents: AgentsApi;
   agentConfig: AgentConfigApi;
   agentList: AgentListApi;
   agentStatus: AgentStatusApi;
@@ -95,6 +98,7 @@ export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHtt
     usage: createUsageApi(transport),
     presence: createPresenceApi(transport),
     pairings: createPairingsApi(transport),
+    agents: createAgentsApi(transport),
     agentConfig: createAgentConfigApi(transport),
     agentList: createAgentListApi(transport),
     agentStatus: createAgentStatusApi(transport),

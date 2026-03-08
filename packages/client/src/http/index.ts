@@ -53,6 +53,13 @@ export type { ContractCatalog, ContractJsonSchema } from "./contracts.js";
 export type { PolicyBundleResponse } from "./policy.js";
 
 export type {
+  ManagedAgentListResult,
+  ManagedAgentGetResult,
+  ManagedAgentCreateInput,
+  ManagedAgentUpdateInput,
+  ManagedAgentDeleteResult,
+} from "./agents.js";
+export type {
   AgentConfigListResult,
   AgentConfigGetResult,
   AgentConfigUpdateInput,
