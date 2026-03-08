@@ -109,9 +109,7 @@ function createWsStub(overrides?: Partial<Record<string, unknown>>) {
   };
 }
 
-export function makeWorkItem(
-  partial: Partial<Record<string, unknown>> & { work_item_id: string },
-) {
+export function makeWorkItem(partial: Partial<Record<string, unknown>> & { work_item_id: string }) {
   return {
     work_item_id: partial.work_item_id,
     title: "Ship regression tests",

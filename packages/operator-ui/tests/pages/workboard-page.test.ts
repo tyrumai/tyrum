@@ -202,14 +202,20 @@ describe("WorkBoardPage", () => {
       expect(backlogColumn.textContent).toContain("No items");
       expect(readyColumn.textContent).toContain("Ship regression tests");
 
-      vi.stubGlobal("confirm", vi.fn(() => false));
+      vi.stubGlobal(
+        "confirm",
+        vi.fn(() => false),
+      );
       await act(async () => {
         clickButton(testRoot.container, "Cancel");
         await Promise.resolve();
       });
       expect(ws.workTransition).toHaveBeenCalledTimes(1);
 
-      vi.stubGlobal("confirm", vi.fn(() => true));
+      vi.stubGlobal(
+        "confirm",
+        vi.fn(() => true),
+      );
       await act(async () => {
         clickButton(testRoot.container, "Cancel");
         await Promise.resolve();
@@ -308,7 +314,12 @@ describe("WorkBoardPage", () => {
       expect(ws.workSignalGet).toHaveBeenCalledTimes(1);
       expectDefaultScopeCall(ws.workSignalGet, { signal_id: "signal-fired-1" });
       expect(ws.workStateKvGet).toHaveBeenCalledTimes(2);
-      expectStateScopeGetCall(ws.workStateKvGet, 1, { kind: "agent", ...DEFAULT_SCOPE_KEYS }, "agent.from-event");
+      expectStateScopeGetCall(
+        ws.workStateKvGet,
+        1,
+        { kind: "agent", ...DEFAULT_SCOPE_KEYS },
+        "agent.from-event",
+      );
       expectStateScopeGetCall(
         ws.workStateKvGet,
         2,
