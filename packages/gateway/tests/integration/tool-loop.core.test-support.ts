@@ -44,7 +44,12 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
 
   it("prunes older tool results from the model prompt deterministically", async () => {
     const { homeDir, container } = await setupToolLoopTest(state, {
-      seedConfig: { config: { tools: { allow: ["tool.fs.read"] } } },
+      seedConfig: {
+        config: {
+          tools: { allow: ["tool.fs.read"] },
+          sessions: { context_pruning: { max_messages: 8, tool_prune_keep_last_messages: 4 } },
+        },
+      },
     });
     await writeFixtureFiles(homeDir, {
       "one.txt": "FIRST_TOOL_OUTPUT_123",

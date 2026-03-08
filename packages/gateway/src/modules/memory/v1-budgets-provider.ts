@@ -5,7 +5,7 @@ import { AgentConfigDal } from "../config/agent-config-dal.js";
 import { DEFAULT_AGENT_KEY } from "../identity/scope.js";
 
 const DEFAULT_BUDGETS: AgentConfigT["memory"]["v1"]["budgets"] = AgentConfig.parse({
-  model: { model: "openai/gpt-4.1" },
+  model: { model: "openai/gpt-5.4" },
   tools: { allow: ["tool.fs.read"] },
 }).memory.v1.budgets;
 

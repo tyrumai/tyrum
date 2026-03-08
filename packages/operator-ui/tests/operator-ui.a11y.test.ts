@@ -150,9 +150,9 @@ function sampleAgentStatusResponse() {
       description: "Primary operator agent",
     },
     model: {
-      model: "openai/gpt-4.1",
+      model: "openai/gpt-5.4",
       variant: "balanced",
-      fallback: ["openai/gpt-4.1-mini"],
+      fallback: ["openai/gpt-5.4"],
     },
     skills: ["review", "deploy"],
     workspace_skills_trusted: true,
@@ -166,10 +166,10 @@ function sampleAgentStatusResponse() {
     ],
     tools: ["shell", "http"],
     sessions: {
-      ttl_days: 30,
-      max_turns: 20,
+      ttl_days: 365,
+      max_turns: 0,
       context_pruning: {
-        max_messages: 32,
+        max_messages: 0,
         tool_prune_keep_last_messages: 4,
       },
       loop_detection: {

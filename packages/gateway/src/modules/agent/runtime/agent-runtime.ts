@@ -187,7 +187,7 @@ export class AgentRuntime {
         skills: [],
         mcp: [],
         tools: [],
-        sessions: { ttl_days: 30, max_turns: 20 },
+        sessions: { ttl_days: 365, max_turns: 0 },
       });
     }
 

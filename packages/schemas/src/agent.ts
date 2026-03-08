@@ -67,12 +67,12 @@ export const AgentSessionLoopDetectionConfig = z.object({
 export type AgentSessionLoopDetectionConfig = z.infer<typeof AgentSessionLoopDetectionConfig>;
 
 export const AgentSessionConfig = z.object({
-  ttl_days: z.number().int().min(1).max(365).default(30),
-  max_turns: z.number().int().min(1).max(500).default(20),
+  ttl_days: z.number().int().min(1).max(365).default(365),
+  max_turns: z.number().int().min(0).max(500).default(0),
   loop_detection: AgentSessionLoopDetectionConfig.prefault({}),
   context_pruning: z
     .object({
-      max_messages: z.number().int().min(8).max(2000).default(32),
+      max_messages: z.union([z.literal(0), z.number().int().min(8).max(2000)]).default(0),
       tool_prune_keep_last_messages: z.number().int().min(2).max(2000).default(4),
     })
     .prefault({}),
@@ -105,7 +105,7 @@ export const AgentMemoryConfig = z.object({
         .prefault({}),
       semantic: z
         .object({
-          enabled: z.boolean().default(false),
+          enabled: z.boolean().default(true),
           limit: z.number().int().min(1).max(200).default(20),
         })
         .prefault({}),

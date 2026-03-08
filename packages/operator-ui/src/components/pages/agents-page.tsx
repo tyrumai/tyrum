@@ -27,6 +27,7 @@ type AgentOption = {
   agentKey: string;
   agentId: string;
   canDelete: boolean;
+  displayName: string;
 };
 
 function trimAgentKey(value: string): string {
@@ -34,14 +35,37 @@ function trimAgentKey(value: string): string {
   return trimmed.length > 0 ? trimmed : "default";
 }
 
+function formatAgentOptionLabel(agent: AgentOption): string {
+  return agent.displayName === agent.agentKey
+    ? agent.agentKey
+    : `${agent.displayName} (${agent.agentKey})`;
+}
+
 function normalizeAgentOptions(
-  input: Array<{ agent_key: string; agent_id: string; can_delete: boolean }>,
+  input: Array<{
+    agent_key: string;
+    agent_id: string;
+    can_delete: boolean;
+    persona?: { name?: string };
+  }>,
 ): AgentOption[] {
-  return input.map((agent) => ({
-    agentKey: agent.agent_key,
-    agentId: agent.agent_id,
-    canDelete: agent.can_delete,
-  }));
+  const byKey = new Map<string, AgentOption>();
+  for (const agent of input) {
+    const trimmed = agent.agent_key.trim();
+    if (!trimmed) continue;
+    const normalizedAgentId = agent.agent_id.trim();
+    const displayName = agent.persona?.name?.trim() || trimmed;
+    const existing = byKey.get(trimmed);
+    if (!existing) {
+      byKey.set(trimmed, {
+        agentKey: trimmed,
+        agentId: normalizedAgentId,
+        canDelete: agent.can_delete,
+        displayName,
+      });
+    }
+  }
+  return [...byKey.values()].toSorted((a, b) => a.agentKey.localeCompare(b.agentKey));
 }
 
 function selectInitialAgentKey(input: {
@@ -160,7 +184,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
         ) : (
           agentOptions.map((agent) => (
             <option key={agent.agentKey} value={agent.agentKey}>
-              {agent.agentKey}
+              {formatAgentOptionLabel(agent)}
             </option>
           ))
         )}
@@ -295,7 +319,12 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                           setSelectedAgentKey(agent.agentKey);
                         }}
                       >
-                        <div className="break-all text-sm font-medium">{agent.agentKey}</div>
+                        <div className="break-all text-sm font-medium text-fg">
+                          {agent.displayName}
+                        </div>
+                        <div className="font-mono text-xs text-fg-muted break-all">
+                          {agent.agentKey}
+                        </div>
                         <div className="flex items-center gap-2 text-xs opacity-80">
                           <StatusDot variant={active ? "success" : "neutral"} pulse={active} />
                           {active ? "Active" : "Idle"}

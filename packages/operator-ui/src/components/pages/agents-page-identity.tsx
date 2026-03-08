@@ -137,10 +137,15 @@ function McpCard({ status }: { status: AgentStatusResponse }) {
 }
 
 function SessionsCard({ status }: { status: AgentStatusResponse }) {
+  const formatSessionLimit = (value: number, suffix: string): string =>
+    value <= 0 ? "Unlimited" : `${value} ${suffix}`;
   const sessionStats = [
     { label: "TTL", value: `${status.sessions.ttl_days} days` },
-    { label: "Max turns", value: status.sessions.max_turns },
-    { label: "Context window", value: `${status.sessions.context_pruning.max_messages} messages` },
+    { label: "Max turns", value: formatSessionLimit(status.sessions.max_turns, "turns") },
+    {
+      label: "Context window",
+      value: formatSessionLimit(status.sessions.context_pruning.max_messages, "messages"),
+    },
     {
       label: "Tool prune keep",
       value: `${status.sessions.context_pruning.tool_prune_keep_last_messages} messages`,

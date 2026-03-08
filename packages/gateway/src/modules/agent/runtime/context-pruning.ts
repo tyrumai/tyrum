@@ -7,17 +7,17 @@ export type ContextPruningConfig = {
 };
 
 const DEFAULT_CONTEXT_PRUNING: ContextPruningConfig = {
-  max_messages: 32,
+  max_messages: 0,
   tool_prune_keep_last_messages: 4,
 };
 
 function normalizeContextPruningConfig(
   cfg: ContextPruningConfig | undefined,
 ): ContextPruningConfig {
-  const maxMessages = Math.max(
-    8,
-    Math.floor(cfg?.max_messages ?? DEFAULT_CONTEXT_PRUNING.max_messages),
+  const requestedMaxMessages = Math.floor(
+    cfg?.max_messages ?? DEFAULT_CONTEXT_PRUNING.max_messages,
   );
+  const maxMessages = requestedMaxMessages <= 0 ? 0 : Math.max(8, requestedMaxMessages);
   const keepLastToolMessages = Math.max(
     2,
     Math.floor(
@@ -38,7 +38,7 @@ export function applyDeterministicContextCompactionAndToolPruning(
   const maxMessages = cfg.max_messages;
   const keepLastToolMessages = Math.min(
     cfg.tool_prune_keep_last_messages,
-    Math.max(2, maxMessages - 1),
+    maxMessages <= 0 ? cfg.tool_prune_keep_last_messages : Math.max(2, maxMessages - 1),
   );
 
   const toolCalls =
@@ -50,6 +50,7 @@ export function applyDeterministicContextCompactionAndToolPruning(
     emptyMessages: "remove",
   });
 
+  if (maxMessages <= 0) return next;
   if (next.length === 0) return next;
   if (next.length <= maxMessages) return next;
 
