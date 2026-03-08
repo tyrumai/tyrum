@@ -432,7 +432,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
 
   return (
     <div
-      className="flex h-full flex-1 w-full flex-col overflow-hidden bg-bg"
+      className="relative flex h-full flex-1 w-full flex-col overflow-hidden bg-bg"
       data-testid="chat-page"
     >
       {chat.agents.error ? (

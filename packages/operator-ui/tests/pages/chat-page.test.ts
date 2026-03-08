@@ -159,6 +159,49 @@ describe("ChatPage", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("keeps the agents error alert positioned within the chat page", async () => {
+    const ws = {
+      sessionList: vi.fn().mockResolvedValue({
+        sessions: [],
+        next_cursor: null,
+      }),
+    };
+    const http = {
+      agentList: {
+        get: vi.fn().mockRejectedValue(new Error("agent list failed")),
+      },
+    };
+
+    const chatStore = createChatStore(ws as never, http as never);
+    const { store: connectionStore } = createStore({
+      status: "connected",
+      clientId: "client-1",
+      lastDisconnect: null,
+      transportError: null,
+    });
+
+    const matchMedia = stubMatchMedia("(min-width: 1024px)", true);
+    const core = { connectionStore, chatStore } as unknown as OperatorCore;
+    const testRoot = renderIntoDocument(React.createElement(ChatPage, { core }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const page = testRoot.container.querySelector<HTMLElement>('[data-testid="chat-page"]');
+    const alerts = Array.from(testRoot.container.querySelectorAll<HTMLElement>('[role="alert"]'));
+    const agentErrorAlert = alerts.find((alert) =>
+      alert.textContent?.includes("Failed to load agents"),
+    );
+
+    expect(page?.className).toContain("relative");
+    expect(agentErrorAlert?.textContent).toContain("agent list failed");
+
+    matchMedia.cleanup();
+    cleanupTestRoot(testRoot);
+  });
+
   it("uses master-detail navigation on narrow screens", async () => {
     const ws = {
       sessionList: vi.fn().mockResolvedValue({
