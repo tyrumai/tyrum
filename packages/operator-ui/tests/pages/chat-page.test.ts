@@ -89,7 +89,7 @@ describe("ChatPage", () => {
     );
     expect(threadButton).not.toBeNull();
 
-    const preview = threadButton?.querySelector<HTMLDivElement>("div.mt-1.text-xs");
+    const preview = threadButton?.querySelector<HTMLDivElement>("div.mt-0\\.5.truncate.text-xs");
     expect(preview?.textContent?.trim()).toBe("Conversation summary");
 
     cleanupTestRoot(testRoot);
@@ -142,9 +142,9 @@ describe("ChatPage", () => {
     const threadsScrollArea = threadsPanel?.querySelector<HTMLElement>("[data-scroll-area-root]");
 
     expect(page?.className).toContain("h-full");
-    expect(page?.className).toContain("min-h-0");
-    expect(panels?.className).toContain("flex-1");
-    expect(panels?.className).toContain("lg:grid-cols-[19rem_minmax(0,1fr)]");
+    expect(page?.className).toContain("flex-1");
+    expect(panels?.className).toContain("h-full");
+    expect(panels?.className).toContain("flex");
     expect(threadsPanel?.className).toContain("h-full");
     expect(threadsPanel?.className).toContain("min-h-0");
     expect(conversationPanel?.className).toContain("h-full");

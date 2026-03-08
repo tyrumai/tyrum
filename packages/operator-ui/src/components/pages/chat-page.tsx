@@ -1,6 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { ChevronLeft, Plus, RefreshCw, Send, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMediaQuery } from "../../hooks/use-media-query.js";
 import { cn } from "../../lib/cn.js";
 import { useOperatorStore } from "../../use-operator-store.js";
@@ -237,7 +237,7 @@ function ChatConversationPanel({
     el.style.height = `${String(el.scrollHeight)}px`;
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     resizeComposer();
   }, [draft, resizeComposer]);
 
