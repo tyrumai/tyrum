@@ -274,12 +274,7 @@ function SidebarStatusControls({ collapsed, connectionStatus }: SidebarStatusCon
                   />
                 }
               >
-                <span
-                  data-testid="connection-status-label"
-                  className="min-w-0 break-words leading-5 [overflow-wrap:anywhere]"
-                >
-                  {connectionDisplay.label}
-                </span>
+                <span data-testid="connection-status-label">{connectionDisplay.label}</span>
               </SidebarFooterRowContent>
             </span>
           </TooltipTrigger>
