@@ -58,4 +58,40 @@ describe("NodeRuntime remote TLS pinning", () => {
       }),
     );
   });
+
+  it("connects the desktop runtime as a node even when legacy config has device.enabled=false", async () => {
+    vi.resetModules();
+
+    const { NodeRuntime } = await import("../src/main/node-runtime.js");
+    const { resolvePermissions } = await import("../src/main/config/permissions.js");
+    const { DEFAULT_CONFIG } = await import("../src/main/config/schema.js");
+
+    const runtime = new NodeRuntime(
+      {
+        ...DEFAULT_CONFIG,
+        device: {
+          ...DEFAULT_CONFIG.device,
+          enabled: false,
+        },
+      },
+      resolvePermissions("balanced", {}),
+      {
+        onStatusChange: vi.fn(),
+        onConsentRequest: vi.fn(),
+        onPlanUpdate: vi.fn(),
+        onLog: vi.fn(),
+      },
+    );
+
+    runtime.connect("ws://localhost:8788/ws", "test-token");
+
+    expect(ctorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: "node",
+        device: expect.objectContaining({
+          publicKey: expect.any(String),
+        }),
+      }),
+    );
+  });
 });

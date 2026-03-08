@@ -12,11 +12,6 @@ function computeDeviceId(pubkeyDer: Buffer): string {
   return deviceIdFromSha256Digest(digest);
 }
 
-function envForcesNodeRole(): boolean {
-  const raw = process.env["TYRUM_DESKTOP_NODE_ROLE"]?.trim().toLowerCase();
-  return Boolean(raw && ["1", "true", "yes", "on", "node"].includes(raw));
-}
-
 export interface NodeRuntimeCallbacks {
   onStatusChange: (status: { connected: boolean; code?: number; reason?: string }) => void;
   onConsentRequest: (msg: unknown) => void;
@@ -50,8 +45,6 @@ export class NodeRuntime {
   }
 
   private ensureDeviceIdentity(): DesktopNodeConfig["device"] | undefined {
-    if (!envForcesNodeRole() && !this.config.device.enabled) return undefined;
-
     const current = this.config.device;
     let publicKey = current.publicKey.trim();
     let privateKeyRef = current.privateKeyRef.trim();

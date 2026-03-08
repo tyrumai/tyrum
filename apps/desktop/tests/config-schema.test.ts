@@ -20,6 +20,7 @@ describe("DesktopNodeConfig schema", () => {
     const parsed = DesktopNodeConfig.parse({});
     expect(parsed.mode).toBe("embedded");
     expect(parsed.background.enabled).toBe(false);
+    expect(parsed.device.enabled).toBe(true);
     expect(parsed.permissions.profile).toBe("balanced");
   });
 
@@ -239,6 +240,39 @@ describe("Config store", () => {
 
     const migratedRaw = readFileSync(filePath, "utf-8");
     expect(migratedRaw).not.toContain("legacy-private-key");
+  });
+
+  it("normalizes legacy device.enabled=false to true on load", () => {
+    const filePath = join(tmpDir, "desktop-node.json");
+    const legacy = DesktopNodeConfig.parse({
+      device: {
+        enabled: false,
+        deviceId: "device-1",
+        publicKey: "pub",
+      },
+    });
+
+    writeFileSync(filePath, JSON.stringify(legacy, null, 2), { mode: 0o600 });
+
+    const loaded = loadConfig();
+    expect(loaded.device.enabled).toBe(true);
+
+    const migrated = DesktopNodeConfig.parse(JSON.parse(readFileSync(filePath, "utf-8")));
+    expect(migrated.device.enabled).toBe(true);
+  });
+
+  it("normalizes device.enabled=false to true on save", () => {
+    const config = DesktopNodeConfig.parse({
+      device: {
+        enabled: false,
+      },
+    });
+
+    saveConfig(config);
+
+    const filePath = join(tmpDir, "desktop-node.json");
+    const persisted = DesktopNodeConfig.parse(JSON.parse(readFileSync(filePath, "utf-8")));
+    expect(persisted.device.enabled).toBe(true);
   });
 
   it("saveConfig writes config file with owner-only permissions", () => {

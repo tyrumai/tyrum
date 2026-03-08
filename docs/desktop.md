@@ -24,6 +24,11 @@ Start an embedded gateway managed by the desktop app.
 1. Keep the default port (`8788`) or pick a free port.
 2. Click **Start Gateway**.
 
+When the desktop app is connected, it maintains two gateway connections on this machine:
+
+- an operator client connection for the UI
+- a separate local node connection for desktop-local capabilities
+
 #### Background mode
 
 Embedded mode can optionally keep Tyrum available in the background:
@@ -52,6 +57,9 @@ Connect the desktop app to an existing gateway.
 3. Optionally set **TLS certificate fingerprint (SHA-256)** when connecting over TLS with a
    self-signed certificate (see [Remote Gateway Guide](advanced/remote-gateway.md)).
 4. Click **Connect**.
+
+Remote mode still keeps the same split locally: the UI connects as an operator client, and the
+desktop runtime connects separately as a node for local capabilities.
 
 ## Troubleshooting
 
