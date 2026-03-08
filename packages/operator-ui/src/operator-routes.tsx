@@ -69,6 +69,7 @@ const BrowserCapabilitiesPage = lazyNamed<Record<string, never>>(
   () => import("./components/pages/platform/browser-capabilities-page.js"),
   "BrowserCapabilitiesPage",
 );
+const ACTIVE_RUN_STATUSES: ExecutionRun["status"][] = ["queued", "running", "paused"];
 
 export type OperatorUiRouteId =
   | "dashboard"
@@ -155,7 +156,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     shortcut: false,
     hostKinds: ["desktop", "web"],
     render: ({ core }) => (
-      <RunsPage core={core} title="Active runs" statuses={["queued", "running", "paused"]} />
+      <RunsPage core={core} title="Active runs" statuses={ACTIVE_RUN_STATUSES} />
     ),
   },
   {

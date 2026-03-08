@@ -41,7 +41,6 @@ export function createRunsStore(ws: OperatorWsClient): {
   let bufferedRuns = new Map<string, ExecutionRun>();
   let bufferedSteps = new Map<string, ExecutionStep>();
   let bufferedAttempts = new Map<string, ExecutionAttempt>();
-  let bufferedAgentKeys = new Map<string, string>();
 
   function handleRunUpdated(run: ExecutionRun): void {
     if (activeRefreshRecentRunId !== null) {
@@ -93,7 +92,6 @@ export function createRunsStore(ws: OperatorWsClient): {
     bufferedRuns = new Map<string, ExecutionRun>();
     bufferedSteps = new Map<string, ExecutionStep>();
     bufferedAttempts = new Map<string, ExecutionAttempt>();
-    bufferedAgentKeys = new Map<string, string>();
 
     try {
       const result = await ws.runList({
@@ -129,9 +127,6 @@ export function createRunsStore(ws: OperatorWsClient): {
       }
       for (const [id, attempt] of bufferedAttempts) {
         nextAttempts.set(id, attempt);
-      }
-      for (const [id, agentKey] of bufferedAgentKeys) {
-        nextAgentKeys.set(id, agentKey);
       }
 
       setState((prev) => {
@@ -176,7 +171,6 @@ export function createRunsStore(ws: OperatorWsClient): {
         bufferedRuns = new Map<string, ExecutionRun>();
         bufferedSteps = new Map<string, ExecutionStep>();
         bufferedAttempts = new Map<string, ExecutionAttempt>();
-        bufferedAgentKeys = new Map<string, string>();
       }
     }
   }
