@@ -204,6 +204,38 @@ describe("HTTP SDK conformance — stateful lifecycles", () => {
     });
   });
 
+  it("tenant auth token issue → list → revoke lifecycle", async () => {
+    gw = await startGateway();
+    const admin = authedClient(gw);
+
+    const issued = await admin.authTokens.issue({
+      role: "admin",
+      scopes: ["*"],
+    });
+
+    expect(issued.role).toBe("admin");
+    expect(typeof issued.token).toBe("string");
+    expect(issued.token.length).toBeGreaterThan(0);
+
+    const listed = await admin.authTokens.list();
+    expect(listed.tokens.some((token) => token.token_id === issued.token_id)).toBe(true);
+
+    const issuedClient = createTyrumHttpClient({
+      baseUrl: gw.baseUrl,
+      auth: { type: "bearer", token: issued.token },
+    });
+    const status = await issuedClient.status.get();
+    expect(status.status).toBe("ok");
+
+    const revoked = await admin.authTokens.revoke({ token_id: issued.token_id });
+    expect(revoked).toEqual({ revoked: true, token_id: issued.token_id });
+
+    await expect(issuedClient.status.get()).rejects.toMatchObject<TyrumHttpClientError>({
+      code: "http_error",
+      status: 401,
+    });
+  });
+
   it("policy override create → list → revoke lifecycle", async () => {
     gw = await startGateway();
     const client = authedClient(gw);

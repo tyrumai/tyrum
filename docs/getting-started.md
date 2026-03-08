@@ -34,6 +34,14 @@ On first visit, the UI prompts for your admin token and bootstraps a browser aut
 
 If you did not provision tokens ahead of time, capture the `default-tenant-admin` bootstrap token from the gateway startup logs. The gateway prints bootstrap tokens once on first run.
 
+If you lose that token later, issue a fresh recovery token against the same gateway home or DB:
+
+```bash
+tyrum tokens issue-default-tenant-admin
+```
+
+After you sign in, open `Configure -> Tokens` to manage tenant-scoped tokens in the UI. The list shows token metadata only; newly minted token secrets are shown once in the issue result and cannot be read back later.
+
 ## 4. Singleton agent routes (default on)
 
 ```bash

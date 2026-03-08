@@ -10,6 +10,7 @@ import { createArtifactRoutes } from "./routes/artifact.js";
 import { createAuditRoutes } from "./routes/audit.js";
 import { createAuthProfileRoutes } from "./routes/auth-profiles.js";
 import { createAuthSessionRoutes } from "./routes/auth-session.js";
+import { createAuthTokenRoutes } from "./routes/auth-token.js";
 import { createCanvasRoutes } from "./routes/canvas.js";
 import { createConnectionsRoute } from "./routes/connections.js";
 import { createContextRoutes } from "./routes/context.js";
@@ -182,6 +183,7 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
 export function registerAuthAndSecurityRoutes(context: AppRouteContext): void {
   if (context.opts.authTokens) {
     context.app.route("/", createAuthSessionRoutes({ authTokens: context.opts.authTokens }));
+    context.app.route("/", createAuthTokenRoutes({ authTokens: context.opts.authTokens }));
     context.app.route("/", createDeviceTokenRoutes({ authTokens: context.opts.authTokens }));
     context.app.route(
       "/",

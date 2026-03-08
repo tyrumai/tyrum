@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
@@ -108,7 +108,7 @@ function registerConfigurePanelsNavTests(): void {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
       await openConfigureTab(container, "admin-http-tab-gateway");
-      expect(container.querySelector("[data-testid='admin-http-device-tokens']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-http-tokens']")).not.toBeNull();
 
       await openConfigureTab(container, "admin-http-tab-plugins");
       expect(container.querySelector("[data-testid='admin-http-plugins']")).not.toBeNull();
@@ -126,7 +126,7 @@ function registerConfigurePanelsNavTests(): void {
     }
   });
 
-  it("requires confirmation before issuing a device token from Configure", async () => {
+  it("requires confirmation before issuing a tenant token from Configure", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -152,7 +152,7 @@ function registerConfigurePanelsNavTests(): void {
       });
       await openConfigureTab(container, "admin-http-tab-gateway");
       const issueButton = container.querySelector<HTMLButtonElement>(
-        '[data-testid="admin-http-device-tokens-issue"]',
+        '[data-testid="admin-http-tokens-issue"]',
       );
       expect(issueButton).not.toBeNull();
 
@@ -182,7 +182,7 @@ function registerConfigurePanelsNavTests(): void {
     }
   });
 
-  it("requires confirmation before revoking a device token from Configure", async () => {
+  it("requires confirmation before revoking a tenant token from Configure", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -197,6 +197,33 @@ function registerConfigurePanelsNavTests(): void {
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
 
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url === "http://example.test/auth/tokens" && (!init?.method || init.method === "GET")) {
+        return new Response(
+          JSON.stringify({
+            tokens: [
+              {
+                token_id: "token-1",
+                tenant_id: "11111111-1111-4111-8111-111111111111",
+                role: "client",
+                device_id: "operator-ui",
+                scopes: ["operator.read"],
+                issued_at: "2026-02-27T00:00:00.000Z",
+                expires_at: "2099-01-01T00:00:00.000Z",
+                revoked_at: null,
+                created_at: "2026-02-27T00:00:00.000Z",
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      throw new Error(`Unexpected fetch request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
     const container = document.createElement("div");
     document.body.appendChild(container);
 
@@ -207,21 +234,9 @@ function registerConfigurePanelsNavTests(): void {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
       await openConfigureTab(container, "admin-http-tab-gateway");
-      const deviceTokensCard = container.querySelector<HTMLElement>(
-        '[data-testid="admin-http-device-tokens"]',
-      );
-      expect(deviceTokensCard).not.toBeNull();
-
-      const tokenInput =
-        deviceTokensCard?.querySelector<HTMLInputElement>('input[type="password"]');
-      expect(tokenInput).not.toBeNull();
-
-      act(() => {
-        setControlledInputValue(tokenInput!, "dev_test_token");
-      });
-
-      const revokeButton = container.querySelector<HTMLButtonElement>(
-        '[data-testid="admin-http-device-tokens-revoke"]',
+      const revokeButton = await waitForSelector<HTMLButtonElement>(
+        container,
+        '[data-testid="admin-http-token-revoke-token-1"]',
       );
       expect(revokeButton).not.toBeNull();
 

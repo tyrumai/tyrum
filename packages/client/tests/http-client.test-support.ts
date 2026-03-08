@@ -3,6 +3,9 @@ import type { RequestInit } from "undici";
 import { createTyrumHttpClient, type TyrumHttpFetch } from "../src/index.js";
 
 const clientApiPaths = [
+  "authTokens.list",
+  "authTokens.issue",
+  "authTokens.revoke",
   "deviceTokens.issue",
   "deviceTokens.revoke",
   "secrets.store",

@@ -91,7 +91,7 @@ function registerElevatedModeBasicTests(): void {
     await openConfigureTab(container, "admin-http-tab-gateway");
 
     const issueButtonBeforeElevated = container.querySelector<HTMLButtonElement>(
-      '[data-testid="admin-http-device-tokens-issue"]',
+      '[data-testid="admin-http-tokens-issue"]',
     );
     expect(issueButtonBeforeElevated).not.toBeNull();
     expect(issueButtonBeforeElevated?.disabled).toBe(true);

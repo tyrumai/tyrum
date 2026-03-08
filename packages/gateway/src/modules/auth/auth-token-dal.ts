@@ -18,6 +18,19 @@ export interface AuthTokenRow {
   created_at: string;
 }
 
+export interface AuthTokenListRow {
+  token_id: string;
+  tenant_id: string | null;
+  role: AuthTokenRole;
+  device_id: string | null;
+  scopes_json: string;
+  issued_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_by_json: string;
+  created_at: string;
+}
+
 interface RawAuthTokenRow {
   token_id: string;
   tenant_id: string | null;
@@ -27,6 +40,19 @@ interface RawAuthTokenRow {
   secret_salt: string;
   secret_hash: string;
   kdf: string;
+  issued_at: string | Date;
+  expires_at: string | Date | null;
+  revoked_at: string | Date | null;
+  created_by_json: string;
+  created_at: string | Date;
+}
+
+interface RawAuthTokenListRow {
+  token_id: string;
+  tenant_id: string | null;
+  role: string;
+  device_id: string | null;
+  scopes_json: string;
   issued_at: string | Date;
   expires_at: string | Date | null;
   revoked_at: string | Date | null;
@@ -68,8 +94,47 @@ function toRow(raw: RawAuthTokenRow): AuthTokenRow {
   };
 }
 
+function toListRow(raw: RawAuthTokenListRow): AuthTokenListRow {
+  return {
+    token_id: raw.token_id,
+    tenant_id: raw.tenant_id,
+    role: normalizeRole(raw.role),
+    device_id: raw.device_id,
+    scopes_json: raw.scopes_json,
+    issued_at: normalizeTime(raw.issued_at) ?? new Date().toISOString(),
+    expires_at: normalizeTime(raw.expires_at),
+    revoked_at: normalizeTime(raw.revoked_at),
+    created_by_json: raw.created_by_json,
+    created_at: normalizeTime(raw.created_at) ?? new Date().toISOString(),
+  };
+}
+
 export class AuthTokenDal {
   constructor(private readonly db: SqlDb) {}
+
+  async listForTenant(tenantId: string): Promise<AuthTokenListRow[]> {
+    const rows = await this.db.all<RawAuthTokenListRow>(
+      `SELECT
+         token_id,
+         tenant_id,
+         role,
+         device_id,
+         scopes_json,
+         issued_at,
+         expires_at,
+         revoked_at,
+         created_by_json,
+         created_at
+       FROM auth_tokens
+       WHERE tenant_id = ?
+       ORDER BY
+         CASE WHEN revoked_at IS NULL THEN 0 ELSE 1 END ASC,
+         issued_at DESC,
+         created_at DESC`,
+      [tenantId],
+    );
+    return rows.map(toListRow);
+  }
 
   async getById(tokenId: string): Promise<AuthTokenRow | undefined> {
     const row = await this.db.get<RawAuthTokenRow>(

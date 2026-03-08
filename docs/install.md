@@ -70,6 +70,14 @@ On first startup, the gateway prints bootstrap tokens to stdout once:
 
 Capture the `default-tenant-admin` token and use it to sign in to `/ui` unless you already provisioned tokens through another flow.
 
+If you lose the token later, recover by issuing a fresh one against the same gateway home or DB:
+
+```bash
+tyrum tokens issue-default-tenant-admin
+```
+
+After login, open `Configure -> Tokens` to list tenant tokens, mint new ones, and revoke by token ID. Existing token secrets are not readable from the UI because the gateway stores token secrets hashed at rest; only freshly issued tokens are shown once in the issue result.
+
 Singleton agent routes are enabled by default.
 
 Disable singleton agent routes:
