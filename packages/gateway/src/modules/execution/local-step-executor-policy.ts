@@ -66,20 +66,21 @@ export async function maybeEnforceLocalExecutorPolicy(input: {
       };
     }
     if (secretsDecision.decision === "require_approval") {
-      if (approvedPolicyGate) return undefined;
-      return {
-        success: true,
-        pause: {
-          kind: "policy",
-          prompt: "Policy approval required — secret resolution",
-          detail: `Step requires resolving ${String(secretScopes.length)} secret scope(s): ${secretScopes.join(", ")}`,
-          context: {
-            action_type: input.action.type,
-            secret_scopes: secretScopes,
-            policy_snapshot_id: policySnapshotId,
+      if (!approvedPolicyGate) {
+        return {
+          success: true,
+          pause: {
+            kind: "policy",
+            prompt: "Policy approval required — secret resolution",
+            detail: `Step requires resolving ${String(secretScopes.length)} secret scope(s): ${secretScopes.join(", ")}`,
+            context: {
+              action_type: input.action.type,
+              secret_scopes: secretScopes,
+              policy_snapshot_id: policySnapshotId,
+            },
           },
-        },
-      };
+        };
+      }
     }
   }
 
