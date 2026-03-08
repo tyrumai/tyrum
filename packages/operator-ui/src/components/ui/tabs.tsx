@@ -49,7 +49,7 @@ export const TabsContent = React.forwardRef<
     <TabsPrimitive.Content
       ref={ref}
       className={cn(
-        "pt-2",
+        "pt-2 data-[state=inactive]:hidden!",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         className,
       )}
