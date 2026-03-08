@@ -269,7 +269,9 @@ export function createActivityStore(deps: ActivityStoreDeps): ActivityStoreBindi
       const summary =
         input.status === "failed"
           ? (trimText(input.errorMessage) ?? "Delivery failed")
-          : "Delivery sent";
+          : input.status === "sent"
+            ? "Delivery sent"
+            : "Delivery receipt";
       applyMessageActivity(key, lane, (prev) => ({
         key,
         lane,

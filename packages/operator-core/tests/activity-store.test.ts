@@ -437,4 +437,22 @@ describe("activityStore", () => {
     const workstream = activity.store.getSnapshot().workstreamsById["agent:alpha:main::main"];
     expect(workstream?.bubbleText).toBe("Drafting plan");
   });
+
+  it("uses a neutral delivery summary when the receipt status is unknown", () => {
+    const { activity } = createHarness();
+
+    activity.handleDeliveryReceipt({
+      sessionId: "agent:alpha:main",
+      lane: "main",
+      channel: "email",
+      threadId: "thread-1",
+      status: null,
+      occurredAt: "2026-01-01T00:00:02.000Z",
+    });
+
+    const workstream = activity.store.getSnapshot().workstreamsById["agent:alpha:main::main"];
+    expect(workstream?.currentRoom).toBe("mail-room");
+    expect(workstream?.recentEvents[0]?.type).toBe("delivery.receipt");
+    expect(workstream?.recentEvents[0]?.summary).toBe("Delivery receipt");
+  });
 });
