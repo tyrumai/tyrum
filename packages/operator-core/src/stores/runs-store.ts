@@ -135,7 +135,7 @@ export function createRunsStore(ws: OperatorWsClient): {
         const attemptsById = { ...prev.attemptsById };
         const stepIdsByRunId = { ...prev.stepIdsByRunId };
         const attemptIdsByStepId = { ...prev.attemptIdsByStepId };
-        const agentKeyByRunId = { ...(prev.agentKeyByRunId ?? {}) };
+        const agentKeyByRunId = { ...prev.agentKeyByRunId };
 
         for (const run of nextRuns.values()) {
           runsById[run.run_id] = run;
