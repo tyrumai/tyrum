@@ -24,7 +24,6 @@ function SummaryRow({
   value,
   description,
   loading = false,
-  status,
   onClick,
   testId,
 }: {
@@ -32,7 +31,6 @@ function SummaryRow({
   value: React.ReactNode;
   description?: React.ReactNode;
   loading?: boolean;
-  status?: React.ReactNode;
   onClick?: () => void;
   testId?: string;
 }) {
@@ -49,7 +47,6 @@ function SummaryRow({
         ) : (
           <div className="text-lg font-semibold text-fg">{value}</div>
         )}
-        {status ? <div className="mt-0.5 flex justify-end">{status}</div> : null}
       </div>
     </>
   );
