@@ -72,7 +72,7 @@ export const AgentSessionConfig = z.object({
   loop_detection: AgentSessionLoopDetectionConfig.prefault({}),
   context_pruning: z
     .object({
-      max_messages: z.number().int().min(0).max(2000).default(0),
+      max_messages: z.union([z.literal(0), z.number().int().min(8).max(2000)]).default(0),
       tool_prune_keep_last_messages: z.number().int().min(2).max(2000).default(4),
     })
     .prefault({}),

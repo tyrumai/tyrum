@@ -76,6 +76,27 @@ describe("AgentConfig", () => {
   it("rejects model.model with wrong type", () => {
     expectRejects(AgentConfig, { model: { model: 42 } });
   });
+
+  it("accepts unlimited and bounded context pruning limits", () => {
+    const unlimited = AgentConfig.parse({
+      model: { model: "openai/gpt-5.4" },
+      sessions: { context_pruning: { max_messages: 0 } },
+    });
+    const bounded = AgentConfig.parse({
+      model: { model: "openai/gpt-5.4" },
+      sessions: { context_pruning: { max_messages: 8 } },
+    });
+
+    expect(unlimited.sessions.context_pruning.max_messages).toBe(0);
+    expect(bounded.sessions.context_pruning.max_messages).toBe(8);
+  });
+
+  it("rejects too-small positive context pruning limits", () => {
+    expectRejects(AgentConfig, {
+      model: { model: "openai/gpt-5.4" },
+      sessions: { context_pruning: { max_messages: 4 } },
+    });
+  });
 });
 
 describe("IdentityPack", () => {
