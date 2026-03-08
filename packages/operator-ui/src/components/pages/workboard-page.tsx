@@ -36,6 +36,9 @@ const DEFAULT_SCOPE = {
   agent_id: "default",
   workspace_id: "default",
 } as const;
+const DESKTOP_BOARD_GRID_STYLE = {
+  gridTemplateColumns: `repeat(${WORK_ITEM_STATUSES.length}, minmax(0, 1fr))`,
+} as const;
 
 function makeAgentScope(): WorkStateKVScope {
   return { kind: "agent", ...DEFAULT_SCOPE };
@@ -344,7 +347,8 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         >
           <div
             data-testid="workboard-board-header"
-            className="grid grid-cols-7 border-b border-border bg-bg-subtle"
+            className="grid border-b border-border bg-bg-subtle"
+            style={DESKTOP_BOARD_GRID_STYLE}
           >
             {WORK_ITEM_STATUSES.map((status) => (
               <div key={status} className="border-r border-border px-3 py-3 last:border-r-0">
@@ -355,7 +359,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-7">
+          <div className="grid" style={DESKTOP_BOARD_GRID_STYLE}>
             {WORK_ITEM_STATUSES.map((status) => (
               <div
                 key={status}

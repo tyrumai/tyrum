@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { WorkBoardPage } from "../../src/components/pages/workboard-page.js";
+import { WORK_ITEM_STATUSES } from "../../src/components/workboard/workboard-store.js";
 import { cleanupTestRoot, renderIntoDocument, stubMatchMedia } from "../test-utils.js";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
@@ -231,7 +232,9 @@ describe("WorkBoardPage", () => {
       );
       expect(board).not.toBeNull();
       expect(boardHeader).not.toBeNull();
-      expect(boardHeader?.className).toContain("grid-cols-7");
+      expect(boardHeader?.style.gridTemplateColumns).toBe(
+        `repeat(${WORK_ITEM_STATUSES.length}, minmax(0, 1fr))`,
+      );
     } finally {
       matchMedia.cleanup();
       cleanupTestRoot(testRoot);
