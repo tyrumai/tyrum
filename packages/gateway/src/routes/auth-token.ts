@@ -20,7 +20,8 @@ function parseCreatedBy(raw: string): unknown {
     const parsed = JSON.parse(raw) as unknown;
     const result = AuthTokenCreatedBy.safeParse(parsed);
     return result.success ? result.data : undefined;
-  } catch {
+  } catch (err) {
+    void err;
     return undefined;
   }
 }
