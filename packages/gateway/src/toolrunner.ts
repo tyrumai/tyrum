@@ -75,6 +75,24 @@ function requireNonEmptyString(value: unknown, field: string): string {
   return trimmed;
 }
 
+function buildStepExecutionContext(request: ToolRunnerStdioRequest): StepExecutionContext {
+  const tenantId = requireTenantIdValue(request.tenant_id, "missing/invalid tenant_id");
+  return {
+    tenantId,
+    runId: requireNonEmptyString(request.run_id, "run_id"),
+    stepId: requireNonEmptyString(request.step_id, "step_id"),
+    attemptId: requireNonEmptyString(request.attempt_id, "attempt_id"),
+    approvalId:
+      request.approval_id === null || typeof request.approval_id === "undefined"
+        ? null
+        : requireNonEmptyString(request.approval_id, "approval_id"),
+    key: requireNonEmptyString(request.key, "key"),
+    lane: requireNonEmptyString(request.lane, "lane"),
+    workspaceId: requireNonEmptyString(request.workspace_id, "workspace_id"),
+    policySnapshotId: requireNonEmptyString(request.policy_snapshot_id, "policy_snapshot_id"),
+  };
+}
+
 export async function runToolRunnerFromStdio(params?: {
   home?: string;
   db?: string;
@@ -114,45 +132,11 @@ export async function runToolRunnerFromStdio(params?: {
   const planId = typeof request.plan_id === "string" ? request.plan_id : "";
   const stepIndex = typeof request.step_index === "number" ? Math.floor(request.step_index) : -1;
   try {
-    tenantId = requireTenantIdValue(request.tenant_id, "missing/invalid tenant_id");
-    context = {
-      tenantId,
-      runId: requireNonEmptyString(request.run_id, "run_id"),
-      stepId: requireNonEmptyString(request.step_id, "step_id"),
-      attemptId: requireNonEmptyString(request.attempt_id, "attempt_id"),
-      approvalId:
-        request.approval_id === null || typeof request.approval_id === "undefined"
-          ? null
-          : requireNonEmptyString(request.approval_id, "approval_id"),
-      key: requireNonEmptyString(request.key, "key"),
-      lane: requireNonEmptyString(request.lane, "lane"),
-      workspaceId: requireNonEmptyString(request.workspace_id, "workspace_id"),
-      policySnapshotId: requireNonEmptyString(request.policy_snapshot_id, "policy_snapshot_id"),
-    };
-  } catch {
-    const errors = [
-      ["tenant_id", request.tenant_id],
-      ["run_id", request.run_id],
-      ["step_id", request.step_id],
-      ["attempt_id", request.attempt_id],
-      ["key", request.key],
-      ["lane", request.lane],
-      ["workspace_id", request.workspace_id],
-      ["policy_snapshot_id", request.policy_snapshot_id],
-    ] as const;
-    const invalidField = errors.find(([field, value]) => {
-      if (field === "tenant_id") {
-        try {
-          requireTenantIdValue(value, `missing/invalid ${field}`);
-          return false;
-        } catch {
-          return true;
-        }
-      }
-      return typeof value !== "string" || value.trim().length === 0;
-    });
-    const field = invalidField?.[0] ?? "tenant_id";
-    process.stderr.write(`toolrunner input error: missing/invalid ${field}\n`);
+    context = buildStepExecutionContext(request);
+    tenantId = context.tenantId;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "missing/invalid toolrunner context";
+    process.stderr.write(`toolrunner input error: ${message}\n`);
     return 2;
   }
   if (!planId || stepIndex < 0) {
