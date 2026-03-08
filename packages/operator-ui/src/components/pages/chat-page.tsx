@@ -1,17 +1,14 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { ChevronLeft } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, Plus, RefreshCw, Send, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMediaQuery } from "../../hooks/use-media-query.js";
 import { cn } from "../../lib/cn.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
-import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { ScrollArea } from "../ui/scroll-area.js";
-import { Separator } from "../ui/separator.js";
-import { Textarea } from "../ui/textarea.js";
 
 function firstLine(text: string): string {
   return text.split(/\r?\n/)[0]?.trim() ?? "";
@@ -55,32 +52,50 @@ interface ChatThreadSummary {
   preview: string;
 }
 
-function ChatToolbar({
+function ChatThreadsPanel({
+  connected,
+  loading,
+  errorMessage,
+  threads,
+  activeSessionId,
+  onRefresh,
+  onLoadMore,
+  canLoadMore,
+  onOpenThread,
   agentId,
   agents,
-  disabled,
   onAgentChange,
   onNewChat,
 }: {
+  connected: boolean;
+  loading: boolean;
+  errorMessage: string | null;
+  threads: ChatThreadSummary[];
+  activeSessionId: string | null;
+  onRefresh: () => void;
+  onLoadMore: () => void;
+  canLoadMore: boolean;
+  onOpenThread: (sessionId: string) => void;
   agentId: string;
   agents: Array<{ agent_id: string }>;
-  disabled: boolean;
   onAgentChange: (value: string) => void;
   onNewChat: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2.5">
-      <h1 className="text-2xl font-semibold tracking-tight text-fg">Chat</h1>
-      <div className="flex flex-wrap items-center gap-2">
+    <div
+      className="flex h-full min-h-0 w-full shrink-0 flex-col border-r border-border bg-bg-subtle/30 lg:w-[260px]"
+      data-testid="chat-threads-panel"
+    >
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-3">
         <select
           data-testid="chat-agent-select"
           aria-label="Agent"
           value={agentId}
-          disabled={disabled}
+          disabled={!connected || loading}
           onChange={(event) => {
             onAgentChange(event.currentTarget.value);
           }}
-          className="flex h-9 min-w-56 rounded-lg border border-border bg-bg px-3 py-1 text-sm text-fg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0"
+          className="h-7 max-w-[140px] truncate rounded-md border-none bg-transparent px-1 py-0 text-sm font-medium text-fg focus-visible:outline-none focus-visible:ring-0"
         >
           {agents.length === 0 ? (
             <option value={agentId}>{agentId}</option>
@@ -92,64 +107,44 @@ function ChatToolbar({
             ))
           )}
         </select>
-        <Button size="sm" data-testid="chat-new" disabled={disabled} onClick={onNewChat}>
-          New chat
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function ChatThreadsPanel({
-  connected,
-  loading,
-  errorMessage,
-  threads,
-  activeSessionId,
-  onRefresh,
-  onLoadMore,
-  canLoadMore,
-  onOpenThread,
-}: {
-  connected: boolean;
-  loading: boolean;
-  errorMessage: string | null;
-  threads: ChatThreadSummary[];
-  activeSessionId: string | null;
-  onRefresh: () => void;
-  onLoadMore: () => void;
-  canLoadMore: boolean;
-  onOpenThread: (sessionId: string) => void;
-}) {
-  return (
-    <Card className="flex h-full min-h-0 flex-col" data-testid="chat-threads-panel">
-      <CardHeader className="pb-2.5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-fg">Threads</h2>
+        <div className="flex items-center gap-1">
           <Button
             size="sm"
-            variant="secondary"
-            data-testid="chat-refresh-sessions"
+            variant="ghost"
+            className="h-7 w-7 p-0 text-fg-muted hover:text-fg"
             disabled={!connected || loading}
             onClick={onRefresh}
+            title="Refresh"
           >
-            Refresh
+            <RefreshCw className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 text-fg-muted hover:text-fg"
+            disabled={!connected || loading}
+            onClick={onNewChat}
+            title="New Chat"
+          >
+            <Plus className="h-4 w-4" />
           </Button>
         </div>
-      </CardHeader>
-      <Separator />
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {errorMessage ? (
-          <Alert variant="error" title="Failed to load sessions" description={errorMessage} />
+          <div className="p-3">
+            <Alert variant="error" title="Failed to load sessions" description={errorMessage} />
+          </div>
         ) : null}
         <div className="min-h-0 flex-1 overflow-hidden">
           {loading && threads.length === 0 ? (
-            <div className="text-sm text-fg-muted">Loading…</div>
+            <div className="p-4 text-sm text-fg-muted">Loading…</div>
           ) : threads.length === 0 ? (
-            <div className="text-sm text-fg-muted">No chats yet.</div>
+            <div className="p-4 text-sm text-fg-muted">No chats yet.</div>
           ) : (
             <ScrollArea className="h-full">
-              <div className="grid gap-1.5 pr-2">
+              <div className="grid gap-0.5 p-2">
                 {threads.map((session) => {
                   const isActive = activeSessionId === session.session_id;
                   return (
@@ -159,26 +154,24 @@ function ChatThreadsPanel({
                       data-testid={`chat-thread-${session.session_id}`}
                       data-active={isActive ? "true" : undefined}
                       className={cn(
-                        "w-full rounded-lg border px-2.5 py-2.5 text-left transition-colors duration-150",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
+                        "w-full rounded-md px-2.5 py-2 text-left transition-colors duration-150",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
                         isActive
-                          ? "border-border bg-bg-subtle"
-                          : "border-border bg-bg hover:bg-bg-subtle",
+                          ? "bg-bg-subtle text-fg"
+                          : "bg-transparent text-fg-muted hover:bg-bg-subtle hover:text-fg",
                       )}
                       onClick={() => {
                         onOpenThread(session.session_id);
                       }}
                     >
-                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5">
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                         <div className="min-w-0">
-                          <div className="text-sm font-medium text-fg break-words [overflow-wrap:anywhere]">
-                            {session.title}
-                          </div>
-                          <div className="mt-1 text-xs text-fg-muted break-words [overflow-wrap:anywhere]">
+                          <div className="truncate text-sm font-medium">{session.title}</div>
+                          <div className="mt-0.5 truncate text-xs opacity-80">
                             {session.preview || "—"}
                           </div>
                         </div>
-                        <div className="shrink-0 text-xs text-fg-muted">
+                        <div className="shrink-0 text-[10px] opacity-60">
                           {formatRelativeTime(session.updated_at)}
                         </div>
                       </div>
@@ -189,20 +182,20 @@ function ChatThreadsPanel({
             </ScrollArea>
           )}
         </div>
-      </CardContent>
-      <CardFooter className="justify-between gap-2">
+      </div>
+      <div className="shrink-0 border-t border-border p-2">
         <Button
           size="sm"
-          variant="secondary"
+          variant="ghost"
+          className="w-full justify-center text-xs text-fg-muted hover:text-fg"
           data-testid="chat-load-more"
           disabled={!canLoadMore || loading}
           onClick={onLoadMore}
         >
-          Load more
+          {canLoadMore ? "Load more" : `${threads.length} threads`}
         </Button>
-        <div className="text-xs text-fg-muted">{threads.length} threads</div>
-      </CardFooter>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -233,47 +226,67 @@ function ChatConversationPanel({
   canSend: boolean;
   onBack?: () => void;
 }) {
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+
+  const resizeComposer = useCallback(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${String(el.scrollHeight)}px`;
+  }, []);
+
+  useEffect(() => {
+    resizeComposer();
+  }, [draft, resizeComposer]);
+
   return (
-    <Card className="flex h-full min-h-0 flex-col" data-testid="chat-conversation-panel">
-      <CardHeader className="pb-2.5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              {onBack ? (
-                <Button size="sm" variant="ghost" data-testid="chat-back" onClick={onBack}>
-                  <ChevronLeft className="h-4 w-4" />
-                  Back
-                </Button>
-              ) : null}
-              <h2 className="text-base font-semibold text-fg">Conversation</h2>
-            </div>
-            <div className="mt-2 text-xs text-fg-muted break-all">
-              {activeThreadId ?? "Select a thread to view transcript."}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+    <div
+      className="flex h-full min-h-0 flex-1 flex-col bg-bg"
+      data-testid="chat-conversation-panel"
+    >
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
+        <div className="flex items-center gap-2">
+          {onBack ? (
             <Button
               size="sm"
-              variant="danger"
-              data-testid="chat-delete"
-              disabled={deleteDisabled}
-              onClick={onDelete}
+              variant="ghost"
+              className="h-7 w-7 p-0 text-fg-muted hover:text-fg"
+              data-testid="chat-back"
+              onClick={onBack}
             >
-              Delete
+              <ChevronLeft className="h-4 w-4" />
             </Button>
-          </div>
+          ) : null}
+          <h2 className="text-sm font-medium text-fg">
+            {activeThreadId ? "Conversation" : "New Chat"}
+          </h2>
         </div>
-      </CardHeader>
-      <Separator />
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 text-fg-muted hover:text-error"
+            data-testid="chat-delete"
+            disabled={deleteDisabled}
+            onClick={onDelete}
+            title="Delete Chat"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {loadError ? (
-          <Alert variant="error" title="Failed to load transcript" description={loadError} />
+          <div className="p-4">
+            <Alert variant="error" title="Failed to load transcript" description={loadError} />
+          </div>
         ) : null}
         <div className="min-h-0 flex-1 overflow-hidden">
           <ScrollArea className="h-full" data-testid="chat-transcript">
-            <div className="grid gap-3 pr-2">
+            <div className="flex flex-col gap-4 p-4">
               {activeTurns.length === 0 ? (
-                <div className="text-sm text-fg-muted">
+                <div className="flex h-full items-center justify-center text-sm text-fg-muted mt-10">
                   {activeThreadId ? "No messages yet." : "Pick a thread or start a new chat."}
                 </div>
               ) : (
@@ -282,19 +295,14 @@ function ChatConversationPanel({
                   return (
                     <div
                       key={`${turn.role}-${index}`}
-                      className={cn("grid", isUser ? "justify-end" : "justify-start")}
+                      className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
                     >
                       <div
                         className={cn(
-                          "w-fit max-w-full rounded-lg border px-3 py-2.5 text-sm whitespace-pre-wrap md:max-w-[42rem]",
-                          isUser
-                            ? "border-border bg-bg-subtle text-fg"
-                            : "border-border bg-bg text-fg",
+                          "max-w-[85%] rounded-lg px-4 py-3 text-sm whitespace-pre-wrap md:max-w-[75%]",
+                          isUser ? "bg-fg text-bg" : "border border-border bg-bg-subtle text-fg",
                         )}
                       >
-                        <div className="mb-1 text-xs text-fg-muted">
-                          {isUser ? "You" : "Assistant"}
-                        </div>
                         <div className="break-words [overflow-wrap:anywhere]">{turn.content}</div>
                       </div>
                     </div>
@@ -304,43 +312,55 @@ function ChatConversationPanel({
             </div>
           </ScrollArea>
         </div>
-      </CardContent>
-      <Separator />
-      <CardFooter className="flex-col items-stretch gap-2.5">
-        {sendError ? (
-          <Alert variant="error" title="Failed to send" description={sendError} />
-        ) : null}
-        <Textarea
-          data-testid="chat-composer"
-          aria-label="Message"
-          placeholder={activeThreadId ? "Type a message…" : "Select a thread first."}
-          value={draft}
-          disabled={!activeThreadId || sendBusy}
-          onChange={(event) => {
-            setDraft(event.currentTarget.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter") return;
-            if (event.shiftKey) return;
-            event.preventDefault();
-            void send();
-          }}
-          className="min-h-20"
-        />
-        <div className="flex items-center justify-end">
-          <Button
-            data-testid="chat-send"
-            disabled={!canSend}
-            isLoading={sendBusy}
-            onClick={() => {
-              void send();
-            }}
-          >
-            Send
-          </Button>
+      </div>
+
+      <div className="shrink-0 border-t border-border bg-bg-subtle/30 px-4 py-3">
+        <div className="mx-auto max-w-4xl">
+          {sendError ? (
+            <div className="mb-3">
+              <Alert variant="error" title="Failed to send" description={sendError} />
+            </div>
+          ) : null}
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={composerRef}
+              data-testid="chat-composer"
+              aria-label="Message"
+              placeholder={activeThreadId ? "Type a message…" : "Select a thread first."}
+              value={draft}
+              disabled={!activeThreadId || sendBusy}
+              onChange={(event) => {
+                setDraft(event.currentTarget.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                if (event.shiftKey) return;
+                event.preventDefault();
+                void send();
+              }}
+              className="min-h-[36px] max-h-[120px] flex-1 resize-none border-0 bg-transparent text-sm text-fg placeholder:text-fg-muted focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              rows={1}
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              className={cn(
+                "mb-0.5 h-7 w-7 shrink-0 rounded-md p-0",
+                canSend ? "text-fg hover:text-primary" : "text-fg-muted/50",
+              )}
+              data-testid="chat-send"
+              disabled={!canSend}
+              isLoading={sendBusy}
+              onClick={() => {
+                void send();
+              }}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-      </CardFooter>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -409,36 +429,21 @@ export function ChatPage({ core }: { core: OperatorCore }) {
   const canSend = Boolean(active) && !chat.send.sending && draft.trim().length > 0;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-5" data-testid="chat-page">
-      {lgUp || mobileView === "threads" ? (
-        <ChatToolbar
-          agentId={chat.agentId}
-          agents={chat.agents.agents}
-          disabled={!isConnected || chat.agents.loading}
-          onAgentChange={(value) => {
-            core.chatStore.setAgentId(value);
-          }}
-          onNewChat={() => {
-            void startNewChat();
-          }}
-        />
-      ) : null}
-
+    <div
+      className="flex h-full flex-1 w-full flex-col overflow-hidden bg-bg"
+      data-testid="chat-page"
+    >
       {chat.agents.error ? (
-        <Alert
-          variant="error"
-          title="Failed to load agents"
-          description={chat.agents.error.message}
-        />
+        <div className="absolute inset-x-0 top-0 z-10 p-4">
+          <Alert
+            variant="error"
+            title="Failed to load agents"
+            description={chat.agents.error.message}
+          />
+        </div>
       ) : null}
 
-      <div
-        className={cn(
-          "flex min-h-0 flex-1 flex-col gap-3",
-          lgUp ? "lg:grid lg:grid-cols-[19rem_minmax(0,1fr)] lg:gap-5" : null,
-        )}
-        data-testid="chat-panels"
-      >
+      <div className="flex h-full flex-1 w-full min-h-0" data-testid="chat-panels">
         {showThreads ? (
           <ChatThreadsPanel
             connected={isConnected}
@@ -455,6 +460,14 @@ export function ChatPage({ core }: { core: OperatorCore }) {
             canLoadMore={Boolean(chat.sessions.nextCursor)}
             onOpenThread={(sessionId) => {
               void openThread(sessionId);
+            }}
+            agentId={chat.agentId}
+            agents={chat.agents.agents}
+            onAgentChange={(value) => {
+              core.chatStore.setAgentId(value);
+            }}
+            onNewChat={() => {
+              void startNewChat();
             }}
           />
         ) : null}
