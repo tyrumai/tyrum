@@ -28,15 +28,16 @@ export async function ensureAgentConfigSeeded(params: {
   return await new AgentConfigDal(params.db).ensureSeeded({
     tenantId: params.tenantId,
     agentId: params.agentId,
-    defaultConfig: buildDefaultAgentConfig(
-      params.stateMode,
-      await buildSeededAgentPersona({
-        db: params.db,
-        tenantId: params.tenantId,
-        agentId: params.agentId,
-        agentKey: params.agentKey,
-      }),
-    ),
+    defaultConfig: async () =>
+      buildDefaultAgentConfig(
+        params.stateMode,
+        await buildSeededAgentPersona({
+          db: params.db,
+          tenantId: params.tenantId,
+          agentId: params.agentId,
+          agentKey: params.agentKey,
+        }),
+      ),
     createdBy: params.createdBy,
     reason: params.reason,
   });

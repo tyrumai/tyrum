@@ -6,6 +6,7 @@ import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
 
 export type AgentConfig = AgentConfigT;
+type AgentConfigFactory = AgentConfig | (() => AgentConfig | Promise<AgentConfig>);
 
 export type AgentConfigRevision = {
   revision: number;
@@ -68,6 +69,13 @@ function rowToRevision(row: RawAgentConfigRow): AgentConfigRevision {
 
 export class AgentConfigDal {
   constructor(private readonly db: SqlDb) {}
+
+  private async resolveDefaultConfig(defaultConfig: AgentConfigFactory): Promise<AgentConfig> {
+    if (typeof defaultConfig === "function") {
+      return await defaultConfig();
+    }
+    return defaultConfig;
+  }
 
   async listRevisions(params: {
     tenantId: string;
@@ -192,7 +200,7 @@ export class AgentConfigDal {
   async ensureSeeded(params: {
     tenantId: string;
     agentId: string;
-    defaultConfig: AgentConfig;
+    defaultConfig: AgentConfigFactory;
     createdBy?: unknown;
     reason?: string;
   }): Promise<AgentConfigRevision> {
@@ -202,7 +210,7 @@ export class AgentConfigDal {
     return await this.set({
       tenantId: params.tenantId,
       agentId: params.agentId,
-      config: params.defaultConfig,
+      config: await this.resolveDefaultConfig(params.defaultConfig),
       createdBy: params.createdBy,
       reason: params.reason ?? "seed",
       occurredAtIso: new Date().toISOString(),
