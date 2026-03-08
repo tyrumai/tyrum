@@ -275,7 +275,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
 
       <div className="flex min-h-0 flex-1">
         <div
-          className="hidden h-full w-[260px] shrink-0 flex-col border-r border-border bg-bg-subtle/30 lg:flex"
+          className="hidden h-full w-[180px] shrink-0 flex-col border-r border-border bg-bg-subtle/30 lg:flex"
           data-testid="agents-list-panel"
         >
           <div className="flex h-14 shrink-0 items-center border-b border-border px-3">
