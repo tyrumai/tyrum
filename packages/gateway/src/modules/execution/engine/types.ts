@@ -31,6 +31,7 @@ export interface StepExecutionContext {
   stepId: string;
   attemptId: string;
   approvalId: string | null;
+  agentId?: string | null;
   key: string;
   lane: string;
   workspaceId: string;

@@ -25,6 +25,7 @@ interface ToolRunnerStdioRequest {
   step_id?: string;
   attempt_id?: string;
   approval_id?: string | null;
+  agent_id?: string | null;
   key?: string;
   lane?: string;
   workspace_id?: string;
@@ -86,6 +87,10 @@ function buildStepExecutionContext(request: ToolRunnerStdioRequest): StepExecuti
       request.approval_id === null || typeof request.approval_id === "undefined"
         ? null
         : requireNonEmptyString(request.approval_id, "approval_id"),
+    agentId:
+      request.agent_id === null || typeof request.agent_id === "undefined"
+        ? null
+        : requireNonEmptyString(request.agent_id, "agent_id"),
     key: requireNonEmptyString(request.key, "key"),
     lane: requireNonEmptyString(request.lane, "lane"),
     workspaceId: requireNonEmptyString(request.workspace_id, "workspace_id"),

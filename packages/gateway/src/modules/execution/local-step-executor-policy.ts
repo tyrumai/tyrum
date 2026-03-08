@@ -85,10 +85,11 @@ export async function maybeEnforceLocalExecutorPolicy(input: {
   }
 
   const tool = toolCallFromAction(input.action);
+  const agentId = input.context.agentId?.trim() || deriveAgentIdFromKey(input.context.key);
   const decision = await policy.evaluateToolCallFromSnapshot({
     tenantId,
     policySnapshotId,
-    agentId: deriveAgentIdFromKey(input.context.key),
+    agentId,
     workspaceId: input.context.workspaceId,
     toolId: tool.toolId,
     toolMatchTarget: tool.matchTarget,

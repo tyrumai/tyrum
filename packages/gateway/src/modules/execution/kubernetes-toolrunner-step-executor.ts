@@ -118,6 +118,7 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
       step_id: context.stepId,
       attempt_id: context.attemptId,
       approval_id: context.approvalId,
+      agent_id: context.agentId,
       key: context.key,
       lane: context.lane,
       workspace_id: context.workspaceId,

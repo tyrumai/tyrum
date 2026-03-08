@@ -78,6 +78,7 @@ export class ExecutionAttemptRunner {
       stepId: opts.stepId,
       attemptId: opts.attemptId,
       approvalId: approvalRow?.approval_id ?? null,
+      agentId: opts.agentId,
       key: opts.key,
       lane: opts.lane,
       workspaceId: opts.workspaceId,

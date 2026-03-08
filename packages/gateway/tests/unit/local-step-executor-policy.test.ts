@@ -68,6 +68,7 @@ describe("LocalStepExecutor policy enforcement", () => {
       stepId: "step-1",
       attemptId: "attempt-1",
       approvalId,
+      agentId: "00000000-0000-4000-8000-000000000002",
       key: "agent:test",
       lane: "main",
       workspaceId: "default",
@@ -114,6 +115,35 @@ describe("LocalStepExecutor policy enforcement", () => {
     );
     expect(evaluateToolCallFromSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ secretScopes: ["db:billing"] }),
+    );
+  });
+
+  it("uses the execution context agent id for executor-side tool policy evaluation", async () => {
+    const { executor, evaluateToolCallFromSnapshot } = await makeMockedPolicyExecutor({
+      secretsDecision: "allow",
+      toolDecision: "allow",
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response("ok", { status: 200, headers: { "content-type": "text/plain" } }),
+      ),
+    );
+
+    const res = await executor.execute(
+      secretBackedHttpAction(),
+      "plan-policy-agent-id",
+      0,
+      5_000,
+      policyContext(null),
+    );
+
+    expect(res.success).toBe(true);
+    expect(evaluateToolCallFromSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: "00000000-0000-4000-8000-000000000002",
+      }),
     );
   });
 
