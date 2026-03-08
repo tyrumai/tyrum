@@ -60,6 +60,14 @@ describe("operator-core wiring", () => {
     ).toBeDefined();
   });
 
+  it("exposes activityStore on the core", () => {
+    const { core } = createTestOperatorCore();
+
+    expect(
+      (core as unknown as { activityStore?: { getSnapshot: () => unknown } }).activityStore,
+    ).toBeDefined();
+  });
+
   it("exposes autoSyncStore and syncAllNow triggers tasks", async () => {
     const { core, http, ws } = createTestOperatorCore();
 
@@ -142,6 +150,36 @@ describe("operator-core wiring", () => {
     expect(Object.keys(runs.runsById)).toEqual(["run-1"]);
     expect(runs.stepIdsByRunId["run-1"]).toEqual(["step-1"]);
     expect(runs.attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
+  });
+
+  it("updates activityStore from message activity WS events", () => {
+    const { core, ws } = createTestOperatorCore();
+
+    ws.emit("typing.started", {
+      payload: {
+        session_id: "agent:alpha:main",
+        lane: "main",
+      },
+      occurred_at: "2026-01-01T00:00:01.000Z",
+    });
+    ws.emit("message.delta", {
+      payload: {
+        session_id: "agent:alpha:main",
+        lane: "main",
+        message_id: "message-1",
+        role: "assistant",
+        delta: "Drafting plan",
+      },
+      occurred_at: "2026-01-01T00:00:02.000Z",
+    });
+
+    const workstream = core.activityStore.getSnapshot().workstreamsById["agent:alpha:main::main"];
+    expect(workstream?.bubbleText).toBe("Drafting plan");
+    expect(workstream?.currentRoom).toBe("mail-room");
+    expect(workstream?.recentEvents.map((event) => event.type)).toEqual([
+      "message.delta",
+      "typing.started",
+    ]);
   });
 
   it("uses payload.occurred_at for work.task events when envelope occurred_at is missing", () => {

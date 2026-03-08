@@ -1,10 +1,12 @@
 import type { WsSessionGetSession, WsSessionListItem } from "@tyrum/client";
+import type { AgentPersona } from "@tyrum/schemas";
 import type { OperatorHttpClient, OperatorWsClient } from "../deps.js";
 import { toOperatorCoreError, type OperatorCoreError } from "../operator-error.js";
 import { createStore, type ExternalStore } from "../store.js";
 
 export type ChatAgent = {
   agent_id: string;
+  persona?: AgentPersona;
 };
 
 export interface ChatAgentsState {
@@ -103,7 +105,10 @@ async function refreshAgentsImpl(
     ctx.setState((prev) => ({
       ...prev,
       agents: {
-        agents: res.agents.map((agent) => ({ agent_id: agent.agent_key })),
+        agents: res.agents.map((agent) => ({
+          agent_id: agent.agent_key,
+          persona: agent.persona,
+        })),
         loading: false,
         error: null,
       },

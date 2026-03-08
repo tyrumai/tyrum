@@ -65,7 +65,20 @@ function createFakeWs() {
 function createFakeHttp() {
   return {
     agentList: {
-      get: vi.fn(async () => ({ agents: [{ agent_key: "default" }] })),
+      get: vi.fn(async () => ({
+        agents: [
+          {
+            agent_key: "default",
+            persona: {
+              name: "Default",
+              description: "Default agent",
+              tone: "direct",
+              palette: "graphite",
+              character: "operator",
+            },
+          },
+        ],
+      })),
     },
   };
 }
@@ -86,7 +99,18 @@ describe("chatStore", () => {
     await chat.refreshAgents();
 
     expect(http.agentList.get).toHaveBeenCalledWith({ include_default: true });
-    expect(chat.getSnapshot().agents.agents).toEqual([{ agent_id: "default" }]);
+    expect(chat.getSnapshot().agents.agents).toEqual([
+      {
+        agent_id: "default",
+        persona: {
+          name: "Default",
+          description: "Default agent",
+          tone: "direct",
+          palette: "graphite",
+          character: "operator",
+        },
+      },
+    ]);
     expect(chat.getSnapshot().agents.loading).toBe(false);
   });
 

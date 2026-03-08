@@ -77,6 +77,19 @@ const connection = useSyncExternalStore(
 
 **Actions:** none (event-driven upserts)
 
+### `activityStore`
+
+**State:** `ActivityState`
+
+- agent-grouped workstreams keyed by `key + lane`
+- deterministic workstream ordering and default selection for the Activity inspector
+- per-workstream persona, current room, run status, latest run id, queue count, lease state, attention level, bubble text, and recent events
+
+**Actions:**
+
+- `selectWorkstream(workstreamId)`
+- `clearSelection()`
+
 ### `pairingStore`
 
 **State:** `PairingState`

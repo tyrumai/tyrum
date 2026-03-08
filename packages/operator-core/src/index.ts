@@ -49,6 +49,16 @@ export {
 } from "./stores/elevated-mode-store.js";
 
 export type { ApprovalsState, ApprovalsStore } from "./stores/approvals-store.js";
+export type {
+  ActivityAgent,
+  ActivityAttentionLevel,
+  ActivityEvent,
+  ActivityLeaseState,
+  ActivityRoom,
+  ActivityState,
+  ActivityStore,
+  ActivityWorkstream,
+} from "./stores/activity-store.js";
 export type { AgentStatusState, AgentStatusStore } from "./stores/agent-status-store.js";
 export type { ConnectionState, ConnectionStore } from "./stores/connection-store.js";
 export type { Pairing, PairingState, PairingStore } from "./stores/pairing-store.js";
