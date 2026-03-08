@@ -26,10 +26,28 @@ describe("Agent config routes integration", () => {
   });
 
   it("creates revisions, lists them, and reverts", async () => {
-    const { app } = await createTestApp({
+    const { app, auth, container } = await createTestApp({
       isLocalOnly: false,
       deploymentConfig: { modelsDev: { disableFetch: true } },
     });
+
+    const countIdentityRevisions = async (): Promise<number> => {
+      const row = await container.db.get<{ count: number }>(
+        `SELECT COUNT(*) AS count
+         FROM agent_identity_revisions
+         WHERE tenant_id = ?
+           AND agent_id = (
+             SELECT agent_id
+             FROM agents
+             WHERE tenant_id = ? AND agent_key = 'default'
+             LIMIT 1
+           )`,
+        [auth.tenantId, auth.tenantId],
+      );
+      return row?.count ?? 0;
+    };
+
+    const identityCountBefore = await countIdentityRevisions();
 
     const configV1 = AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
@@ -73,6 +91,7 @@ describe("Agent config routes integration", () => {
     expect(v1.config_sha256.length > 0).toBe(true);
     expect(v1.config.persona?.name).toBe("Hypatia");
     expect(v1.persona?.name).toBe("Hypatia");
+    expect(await countIdentityRevisions()).toBe(identityCountBefore);
 
     const configV2 = AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
@@ -93,6 +112,7 @@ describe("Agent config routes integration", () => {
     expect(putV2.status).toBe(200);
     const v2 = (await putV2.json()) as { revision: number; config_sha256: string };
     expect(v2.revision).toBeGreaterThan(v1.revision);
+    expect(await countIdentityRevisions()).toBe(identityCountBefore);
 
     const get = await app.request("/config/agents/default");
     expect(get.status).toBe(200);

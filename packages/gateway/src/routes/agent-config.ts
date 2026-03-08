@@ -181,23 +181,18 @@ export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    const updated = await agentAdmin.update({
+    const agentId = await resolveAgentId(tenantId, agentKey);
+    if (!agentId) {
+      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
+    }
+
+    const revision = await new AgentConfigDal(deps.db).set({
       tenantId,
-      agentKey,
+      agentId,
       config: parsed.data.config,
       createdBy: { kind: "tenant.token", token_id: claims.token_id },
       reason: parsed.data.reason,
     });
-    if (!updated) {
-      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
-    }
-    const revision = await new AgentConfigDal(deps.db).getLatest({
-      tenantId,
-      agentId: updated.agent_id,
-    });
-    if (!revision) {
-      return c.json({ error: "not_found", message: "agent config not found" }, 404);
-    }
 
     return c.json(
       buildAgentConfigRevisionResponse(agentKey, {
