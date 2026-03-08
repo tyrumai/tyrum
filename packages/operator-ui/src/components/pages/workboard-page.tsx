@@ -31,21 +31,20 @@ export type WorkBoardPageProps = {
   core: OperatorCore;
 };
 
-const DEFAULT_SCOPE = {
-  tenant_id: "default",
-  agent_id: "default",
-  workspace_id: "default",
+const DEFAULT_SCOPE_KEYS = {
+  agent_key: "default",
+  workspace_key: "default",
 } as const;
 const DESKTOP_BOARD_GRID_STYLE = {
   gridTemplateColumns: `repeat(${WORK_ITEM_STATUSES.length}, minmax(0, 1fr))`,
 } as const;
 
 function makeAgentScope(): WorkStateKVScope {
-  return { kind: "agent", ...DEFAULT_SCOPE };
+  return { kind: "agent", ...DEFAULT_SCOPE_KEYS };
 }
 
 function makeWorkItemScope(workItemId: string): WorkStateKVScope {
-  return { kind: "work_item", ...DEFAULT_SCOPE, work_item_id: workItemId };
+  return { kind: "work_item", ...DEFAULT_SCOPE_KEYS, work_item_id: workItemId };
 }
 
 export function WorkBoardPage({ core }: WorkBoardPageProps) {
@@ -112,7 +111,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       setDrilldownError(null);
       try {
         const res = await core.ws.workTransition({
-          ...DEFAULT_SCOPE,
+          ...DEFAULT_SCOPE_KEYS,
           work_item_id: selectedWorkItemId,
           status,
           reason,
@@ -166,7 +165,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       const selectedId = selectedIdRef.current;
       if (!selectedId) return;
       void core.ws
-        .workSignalGet({ ...DEFAULT_SCOPE, signal_id: event.payload.signal_id })
+        .workSignalGet({ ...DEFAULT_SCOPE_KEYS, signal_id: event.payload.signal_id })
         .then((res) => {
           if (disposed) return;
           if (res.signal.work_item_id !== selectedIdRef.current) return;
@@ -235,19 +234,19 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       try {
         const [workItemRes, artifactsRes, decisionsRes, signalsRes, agentKvRes, workItemKvRes] =
           await Promise.all([
-            core.ws.workGet({ ...DEFAULT_SCOPE, work_item_id: selectedWorkItemId }),
+            core.ws.workGet({ ...DEFAULT_SCOPE_KEYS, work_item_id: selectedWorkItemId }),
             core.ws.workArtifactList({
-              ...DEFAULT_SCOPE,
+              ...DEFAULT_SCOPE_KEYS,
               work_item_id: selectedWorkItemId,
               limit: 200,
             }),
             core.ws.workDecisionList({
-              ...DEFAULT_SCOPE,
+              ...DEFAULT_SCOPE_KEYS,
               work_item_id: selectedWorkItemId,
               limit: 200,
             }),
             core.ws.workSignalList({
-              ...DEFAULT_SCOPE,
+              ...DEFAULT_SCOPE_KEYS,
               work_item_id: selectedWorkItemId,
               limit: 200,
             }),
