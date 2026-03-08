@@ -190,7 +190,7 @@ function ChatThreadsPanel({
           )}
         </div>
       </CardContent>
-      <CardFooter className="justify-between gap-2 pt-0">
+      <CardFooter className="justify-between gap-2">
         <Button
           size="sm"
           variant="secondary"
@@ -306,7 +306,7 @@ function ChatConversationPanel({
         </div>
       </CardContent>
       <Separator />
-      <CardFooter className="flex-col items-stretch gap-2.5 pt-0">
+      <CardFooter className="flex-col items-stretch gap-2.5">
         {sendError ? (
           <Alert variant="error" title="Failed to send" description={sendError} />
         ) : null}
