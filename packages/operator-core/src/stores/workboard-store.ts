@@ -24,10 +24,9 @@ export interface WorkboardStore extends ExternalStore<WorkboardState> {
   resetSupportProbe(): void;
 }
 
-const DEFAULT_SCOPE = {
-  tenant_id: "default",
-  agent_id: "default",
-  workspace_id: "default",
+const DEFAULT_SCOPE_KEYS = {
+  agent_key: "default",
+  workspace_key: "default",
 } as const;
 
 function isUnsupportedRequestForWorkList(errorMessage: string): boolean {
@@ -90,7 +89,7 @@ export function createWorkboardStore(ws: OperatorWsClient): {
     }));
 
     try {
-      const result = await ws.workList({ ...DEFAULT_SCOPE, limit: 200 });
+      const result = await ws.workList({ ...DEFAULT_SCOPE_KEYS, limit: 200 });
       if (activeRefreshRunId !== runId) return;
       const buffered = bufferedWorkItemUpserts;
 

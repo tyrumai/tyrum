@@ -2,181 +2,20 @@
 
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { WorkBoardPage } from "../../src/components/pages/workboard-page.js";
 import { WORK_ITEM_STATUSES } from "../../src/components/workboard/workboard-store.js";
+import {
+  DEFAULT_SCOPE_KEYS,
+  clickButton,
+  createCore,
+  expectDefaultScopeCall,
+  expectStateScopeGetCall,
+  expectStateScopeListCall,
+  flushEffects,
+  getStatusColumn,
+  makeWorkItem,
+} from "./workboard-page.test-support.js";
 import { cleanupTestRoot, renderIntoDocument, stubMatchMedia } from "../test-utils.js";
-
-type ConnectionStatus = "disconnected" | "connecting" | "connected";
-
-function createConnectionStore(status: ConnectionStatus) {
-  const snapshot = { status, recovering: false };
-  return {
-    subscribe: (_listener: () => void) => () => {},
-    getSnapshot: () => snapshot,
-  };
-}
-
-function createWorkboardStore(snapshot?: Partial<Record<string, unknown>>) {
-  let state = {
-    items: [],
-    tasksByWorkItemId: {},
-    supported: null,
-    loading: false,
-    error: null,
-    lastSyncedAt: null,
-    ...snapshot,
-  } as any;
-
-  const listeners = new Set<() => void>();
-  const notify = () => {
-    for (const listener of listeners) {
-      listener();
-    }
-  };
-
-  const store = {
-    subscribe: (listener: () => void) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-    getSnapshot: () => state,
-    refreshList: vi.fn(async () => {}),
-    resetSupportProbe: vi.fn(() => {}),
-    upsertWorkItem: (item: any) => {
-      state = {
-        ...state,
-        items: (() => {
-          const existingIndex = state.items.findIndex(
-            (entry: any) => entry.work_item_id === item.work_item_id,
-          );
-          if (existingIndex === -1) return [...state.items, item];
-          const next = state.items.slice();
-          next[existingIndex] = item;
-          return next;
-        })(),
-      };
-      notify();
-    },
-  };
-
-  return {
-    store,
-    setState: (updater: (prev: any) => any) => {
-      state = updater(state);
-      notify();
-    },
-  };
-}
-
-function createWsStub(overrides?: Partial<Record<string, unknown>>) {
-  const handlers = new Map<string, Set<(event: any) => void>>();
-
-  const ws = {
-    on: vi.fn((event: string, handler: (payload: any) => void) => {
-      const existing = handlers.get(event) ?? new Set();
-      existing.add(handler);
-      handlers.set(event, existing);
-    }),
-    off: vi.fn((event: string, handler: (payload: any) => void) => {
-      const existing = handlers.get(event);
-      if (!existing) return;
-      existing.delete(handler);
-      if (existing.size === 0) handlers.delete(event);
-    }),
-    emit(event: string, payload: any) {
-      for (const handler of handlers.get(event) ?? []) {
-        handler(payload);
-      }
-    },
-    workList: vi.fn(async () => ({ items: [] })),
-    workTransition: vi.fn(async ({ work_item_id, status }: any) => ({
-      item: makeWorkItem({ work_item_id, status }),
-    })),
-    workGet: vi.fn(async ({ work_item_id }: any) => ({ item: makeWorkItem({ work_item_id }) })),
-    workArtifactList: vi.fn(async () => ({ artifacts: [] })),
-    workDecisionList: vi.fn(async () => ({ decisions: [] })),
-    workSignalList: vi.fn(async () => ({ signals: [] })),
-    workStateKvList: vi.fn(async () => ({ entries: [] })),
-    workSignalGet: vi.fn(async ({ signal_id }: any) => ({
-      signal: {
-        signal_id,
-        work_item_id: "wi-1",
-        trigger_kind: "manual",
-        status: "fired",
-        created_at: "2026-01-01T00:00:00.000Z",
-        last_fired_at: "2026-01-01T00:00:01.000Z",
-        trigger_spec_json: { source: "event" },
-      },
-    })),
-    workStateKvGet: vi.fn(async ({ key, scope }: any) => ({
-      entry: {
-        scope,
-        key,
-        value_json: { value: key },
-      },
-    })),
-    ...overrides,
-  };
-
-  return ws;
-}
-
-function makeWorkItem(partial: Partial<Record<string, unknown>> & { work_item_id: string }) {
-  return {
-    work_item_id: partial.work_item_id,
-    title: "Ship regression tests",
-    kind: "task",
-    priority: 2,
-    status: "backlog",
-    acceptance: { done: true },
-    created_at: "2026-01-01T00:00:00.000Z",
-    updated_at: "2026-01-01T00:05:00.000Z",
-    last_active_at: "2026-01-01T00:10:00.000Z",
-    ...partial,
-  } as any;
-}
-
-function createCore(
-  status: ConnectionStatus,
-  wsOverrides?: Partial<Record<string, unknown>>,
-  workboardSnapshot?: Partial<Record<string, unknown>>,
-) {
-  const ws = createWsStub(wsOverrides);
-  const workboard = createWorkboardStore(workboardSnapshot);
-  const core = {
-    connectionStore: createConnectionStore(status),
-    workboardStore: workboard.store,
-    ws,
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-  } as unknown as OperatorCore;
-  return { core, ws, workboard };
-}
-
-async function flushEffects(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-  });
-}
-
-function clickButton(container: HTMLElement, label: string): void {
-  const button = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((el) =>
-    el.textContent?.includes(label),
-  );
-  expect(button).not.toBeUndefined();
-  button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-}
-
-function getStatusColumn(container: HTMLElement, label: string): HTMLElement {
-  const column = container.querySelector<HTMLElement>(
-    `[data-testid="workboard-column-${label.toLowerCase()}"]`,
-  );
-  expect(column).not.toBeNull();
-  return column as HTMLElement;
-}
 
 describe("WorkBoardPage", () => {
   it("shows disconnected state and reconnects", () => {
@@ -335,6 +174,16 @@ describe("WorkBoardPage", () => {
       });
 
       expect(ws.workGet).toHaveBeenCalledTimes(1);
+      expectDefaultScopeCall(ws.workGet, { work_item_id: "wi-1" });
+      expectDefaultScopeCall(ws.workArtifactList, { work_item_id: "wi-1", limit: 200 });
+      expectDefaultScopeCall(ws.workDecisionList, { work_item_id: "wi-1", limit: 200 });
+      expectDefaultScopeCall(ws.workSignalList, { work_item_id: "wi-1", limit: 200 });
+      expectStateScopeListCall(ws.workStateKvList, 1, { kind: "agent", ...DEFAULT_SCOPE_KEYS });
+      expectStateScopeListCall(ws.workStateKvList, 2, {
+        kind: "work_item",
+        ...DEFAULT_SCOPE_KEYS,
+        work_item_id: "wi-1",
+      });
       expect(testRoot.container.textContent).toContain("Artifact title");
       expect(testRoot.container.textContent).toContain("Looks good");
 
@@ -342,33 +191,25 @@ describe("WorkBoardPage", () => {
         clickButton(testRoot.container, "Mark Ready");
         await Promise.resolve();
       });
-      expect(ws.workTransition).toHaveBeenCalledWith(
-        expect.objectContaining({
-          work_item_id: "wi-1",
-          status: "ready",
-          reason: "operator triaged",
-        }),
-      );
+      expectDefaultScopeCall(ws.workTransition, {
+        work_item_id: "wi-1",
+        status: "ready",
+        reason: "operator triaged",
+      });
       await flushEffects();
       const backlogColumn = getStatusColumn(testRoot.container, "Backlog");
       const readyColumn = getStatusColumn(testRoot.container, "Ready");
       expect(backlogColumn.textContent).toContain("No items");
       expect(readyColumn.textContent).toContain("Ship regression tests");
 
-      vi.stubGlobal(
-        "confirm",
-        vi.fn(() => false),
-      );
+      vi.stubGlobal("confirm", vi.fn(() => false));
       await act(async () => {
         clickButton(testRoot.container, "Cancel");
         await Promise.resolve();
       });
       expect(ws.workTransition).toHaveBeenCalledTimes(1);
 
-      vi.stubGlobal(
-        "confirm",
-        vi.fn(() => true),
-      );
+      vi.stubGlobal("confirm", vi.fn(() => true));
       await act(async () => {
         clickButton(testRoot.container, "Cancel");
         await Promise.resolve();
@@ -445,9 +286,8 @@ describe("WorkBoardPage", () => {
           payload: {
             scope: {
               kind: "agent",
-              tenant_id: "default",
-              agent_id: "default",
-              workspace_id: "default",
+              agent_key: "default",
+              workspace_key: "default",
             },
             key: "agent.from-event",
           },
@@ -456,9 +296,8 @@ describe("WorkBoardPage", () => {
           payload: {
             scope: {
               kind: "work_item",
-              tenant_id: "default",
-              agent_id: "default",
-              workspace_id: "default",
+              agent_key: "default",
+              workspace_key: "default",
               work_item_id: "wi-1",
             },
             key: "work.from-event",
@@ -467,7 +306,15 @@ describe("WorkBoardPage", () => {
       });
       await flushEffects();
       expect(ws.workSignalGet).toHaveBeenCalledTimes(1);
+      expectDefaultScopeCall(ws.workSignalGet, { signal_id: "signal-fired-1" });
       expect(ws.workStateKvGet).toHaveBeenCalledTimes(2);
+      expectStateScopeGetCall(ws.workStateKvGet, 1, { kind: "agent", ...DEFAULT_SCOPE_KEYS }, "agent.from-event");
+      expectStateScopeGetCall(
+        ws.workStateKvGet,
+        2,
+        { kind: "work_item", ...DEFAULT_SCOPE_KEYS, work_item_id: "wi-1" },
+        "work.from-event",
+      );
       expect(testRoot.container.textContent).toContain("agent.from-event");
       expect(testRoot.container.textContent).toContain("work.from-event");
 

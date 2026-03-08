@@ -36,6 +36,11 @@ describe("workboard-store", () => {
     await refreshPromise;
 
     const snapshot = store.getSnapshot();
+    expect(ws.workList).toHaveBeenCalledWith({
+      agent_key: "default",
+      workspace_key: "default",
+      limit: 200,
+    });
     expect(snapshot.supported).toBe(true);
     expect(snapshot.loading).toBe(false);
     expect(snapshot.error).toBe(null);
