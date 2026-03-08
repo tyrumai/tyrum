@@ -10,18 +10,6 @@ import type { SqlDb } from "../../../statestore/types.js";
 const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
 const PRE_COMPACTION_FLUSH_TRUNCATION_MARKER = "...(truncated)";
 const MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS = 2_000;
-
-function computeTurnsDroppedByNextAppend(
-  turns: readonly SessionMessage[],
-  maxTurns: number,
-): SessionMessage[] {
-  if (maxTurns <= 0) return [];
-  const maxMessages = maxTurns * 2;
-  const overflow = turns.length + 2 - maxMessages;
-  if (overflow <= 0) return [];
-  return turns.slice(0, overflow);
-}
-
 function formatPreCompactionFlushPrompt(droppedTurns: readonly SessionMessage[]): string {
   const lines = droppedTurns.map((turn) => {
     const role = turn.role === "assistant" ? "Assistant" : "User";
@@ -42,7 +30,7 @@ function formatPreCompactionFlushPrompt(droppedTurns: readonly SessionMessage[])
 
   return [
     "This is a silent internal pre-compaction memory flush.",
-    "The following messages are about to be compacted from the session context due to the session max_turns limit.",
+    "The following messages are about to be compacted from the session context due to session compaction.",
     "Extract any durable, non-secret memory worth keeping (preferences, constraints, decisions, procedures).",
     "If there is nothing worth storing, respond with NOOP.",
     "",
@@ -61,7 +49,7 @@ export async function maybeRunPreCompactionMemoryFlush(
     ctx: { config: AgentConfigT };
     session: SessionRow;
     model: LanguageModel;
-    systemPrompt: string;
+    droppedTurns: readonly SessionMessage[];
     abortSignal?: AbortSignal;
     timeoutMs?: number;
   },
@@ -71,15 +59,11 @@ export async function maybeRunPreCompactionMemoryFlush(
     return;
   }
 
-  const droppedTurns = computeTurnsDroppedByNextAppend(
-    input.session.turns,
-    input.ctx.config.sessions.max_turns,
-  );
-  if (droppedTurns.length === 0) {
+  if (input.droppedTurns.length === 0) {
     return;
   }
 
-  const flushPromptText = formatPreCompactionFlushPrompt(droppedTurns);
+  const flushPromptText = formatPreCompactionFlushPrompt(input.droppedTurns);
   const flushKey = sha256HexFromString(`${input.session.session_id}\n${flushPromptText}`);
   const flushTag = `preflush:${flushKey}`;
 
@@ -127,7 +111,6 @@ export async function maybeRunPreCompactionMemoryFlush(
   try {
     const flushResult = await generateText({
       model: input.model,
-      system: input.systemPrompt,
       messages: [
         {
           role: "user" as const,
@@ -178,7 +161,7 @@ export async function maybeRunPreCompactionMemoryFlush(
               metadata: {
                 kind: "pre_compaction_memory_flush",
                 flush_key: flushKey,
-                dropped_messages: droppedTurns.length,
+                dropped_messages: input.droppedTurns.length,
               },
             },
           },

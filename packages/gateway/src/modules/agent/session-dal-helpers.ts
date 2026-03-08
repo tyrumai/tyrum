@@ -217,10 +217,10 @@ export function buildStoredTranscript(input: {
   keepLastMessages: number;
   previousSummary?: string;
 }): StoredTranscript {
-  const keepLastMessages = Math.max(1, input.keepLastMessages);
+  const keepLastMessages = Math.max(0, input.keepLastMessages);
   const overflow = input.turns.length - keepLastMessages;
   const dropped = overflow > 0 ? input.turns.slice(0, overflow) : [];
-  const turns = input.turns.slice(-keepLastMessages);
+  const turns = keepLastMessages > 0 ? input.turns.slice(-keepLastMessages) : [];
   const previousSummary = input.previousSummary ?? "";
   return {
     turns: turns.slice(),

@@ -12,6 +12,51 @@ describe("session command primitives", () => {
     db = undefined;
   });
 
+  function createCompactAgentsStub() {
+    return {
+      getRuntime: async () => ({
+        compactSession: async (input: { sessionId: string }) => {
+          if (!db) {
+            throw new Error("missing db");
+          }
+          const snapshot = await support.readSessionSnapshot(db, input.sessionId);
+          const turns = JSON.parse(snapshot.turnsJson) as Array<{
+            role: "user" | "assistant";
+            content: string;
+            timestamp: string;
+          }>;
+          const keepLastMessages = 8;
+          const dropped = Math.max(0, turns.length - keepLastMessages);
+          const keptTurns = keepLastMessages > 0 ? turns.slice(-keepLastMessages) : [];
+          const summaryLines = turns
+            .slice(0, dropped)
+            .map((turn) => `${turn.role} ${turn.timestamp}: ${turn.content}`);
+          const summary = [snapshot.summary, ...summaryLines]
+            .filter((value) => value.length > 0)
+            .join("\n");
+          await support.writeSessionState(
+            db,
+            {
+              session_id: input.sessionId,
+              tenant_id: DEFAULT_TENANT_ID,
+            },
+            {
+              summary,
+              turns: keptTurns,
+            },
+          );
+          return {
+            compacted: dropped > 0,
+            droppedMessages: dropped,
+            keptMessages: keptTurns.length,
+            summary,
+            reason: "model" as const,
+          };
+        },
+      }),
+    };
+  }
+
   it("supports /new", async () => {
     db = openTestSqliteDb();
 
@@ -70,6 +115,7 @@ describe("session command primitives", () => {
 
     const result = await executeCommand("/compact", {
       db,
+      agents: createCompactAgentsStub() as never,
       commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
     });
 
@@ -116,6 +162,7 @@ describe("session command primitives", () => {
 
     const result = await executeCommand("/compact", {
       db,
+      agents: createCompactAgentsStub() as never,
       commandContext: { agentId: "default", channel: "telegram:work", threadId: "thread-1" },
     });
 

@@ -21,8 +21,6 @@ type UsageTotals = {
   usd_micros: number;
 };
 
-export const DEFAULT_REPAIR_MAX_TURNS = 20;
-
 export function tokensFromCommand(raw: string): string[] {
   const line = raw.trim();
   if (line.length === 0) return [];
@@ -44,7 +42,7 @@ export function helpText(): string {
     "- /reset",
     "- /stop",
     "- /compact",
-    "- /repair [max_turns]",
+    "- /repair",
     "- /status",
     "- /presence",
     "- /approvals [pending|approved|denied|expired]",

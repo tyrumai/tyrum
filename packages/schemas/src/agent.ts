@@ -69,6 +69,13 @@ export type AgentSessionLoopDetectionConfig = z.infer<typeof AgentSessionLoopDet
 export const AgentSessionConfig = z.object({
   ttl_days: z.number().int().min(1).max(365).default(365),
   max_turns: z.number().int().min(0).max(500).default(0),
+  compaction: z
+    .object({
+      auto: z.boolean().default(true),
+      reserved_input_tokens: z.number().int().min(0).max(400_000).default(20_000),
+      keep_last_messages_after_compaction: z.number().int().min(0).max(200).default(2),
+    })
+    .prefault({}),
   loop_detection: AgentSessionLoopDetectionConfig.prefault({}),
   context_pruning: z
     .object({

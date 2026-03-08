@@ -92,7 +92,12 @@ describe("Pre-compaction memory flush", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     const { agentId } = await seedAgentConfig(container, { maxTurns: 1 });
 
-    const languageModel = createSequencedTextLanguageModel(["a1", "FLUSH_OK", "a2"]);
+    const languageModel = createSequencedTextLanguageModel([
+      "a1",
+      "a2",
+      "FLUSH_OK",
+      "summary: first / a1",
+    ]);
 
     const mcpManager = {
       listToolDescriptors: vi.fn(async () => []),
@@ -123,9 +128,9 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(second.reply).toBe("a2");
 
-    expect(languageModel.doGenerateCalls).toHaveLength(3);
+    expect(languageModel.doGenerateCalls).toHaveLength(4);
 
-    const flushCall = languageModel.doGenerateCalls[1];
+    const flushCall = languageModel.doGenerateCalls[2];
     const flushPromptText = flushCall
       ? flushCall.prompt
           .filter((msg) => msg.role === "user")
@@ -144,8 +149,7 @@ describe("Pre-compaction memory flush", () => {
       providerThreadId: "thread-flush",
       containerKind: "channel",
     });
-    expect(session.summary).toContain("first");
-    expect(session.summary).toContain("a1");
+    expect(session.summary).toContain("summary: first / a1");
     expect(session.summary).not.toContain("FLUSH_OK");
 
     const memory = new MemoryV1Dal(container.db);
@@ -170,7 +174,12 @@ describe("Pre-compaction memory flush", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     await seedAgentConfig(container, { maxTurns: 1 });
 
-    const languageModel = createSequencedTextLanguageModel(["a1", "FLUSH_OK", "a2"]);
+    const languageModel = createSequencedTextLanguageModel([
+      "a1",
+      "a2",
+      "FLUSH_OK",
+      "summary: secret redaction",
+    ]);
 
     const mcpManager = {
       listToolDescriptors: vi.fn(async () => []),
@@ -201,8 +210,8 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(second.reply).toBe("a2");
 
-    expect(languageModel.doGenerateCalls).toHaveLength(3);
-    const flushCall = languageModel.doGenerateCalls[1];
+    expect(languageModel.doGenerateCalls).toHaveLength(4);
+    const flushCall = languageModel.doGenerateCalls[2];
     const flushPromptText = flushCall
       ? flushCall.prompt
           .filter((msg) => msg.role === "user")
@@ -225,8 +234,9 @@ describe("Pre-compaction memory flush", () => {
 
     const languageModel = createSequencedTextLanguageModel([
       "a1",
-      `Remember this: ${secret}`,
       "a2",
+      `Remember this: ${secret}`,
+      "summary: secret output redaction",
     ]);
 
     const mcpManager = {
@@ -277,7 +287,12 @@ describe("Pre-compaction memory flush", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     await seedAgentConfig(container, { maxTurns: 1 });
 
-    const languageModel = createSequencedTextLanguageModel(["a1", "NOOP", "a2"]);
+    const languageModel = createSequencedTextLanguageModel([
+      "a1",
+      "a2",
+      "NOOP",
+      "summary: truncate",
+    ]);
 
     const mcpManager = {
       listToolDescriptors: vi.fn(async () => []),
@@ -308,8 +323,8 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(second.reply).toBe("a2");
 
-    expect(languageModel.doGenerateCalls).toHaveLength(3);
-    const flushCall = languageModel.doGenerateCalls[1];
+    expect(languageModel.doGenerateCalls).toHaveLength(4);
+    const flushCall = languageModel.doGenerateCalls[2];
     const flushPromptText = flushCall
       ? flushCall.prompt
           .filter((msg) => msg.role === "user")
@@ -327,9 +342,15 @@ describe("Pre-compaction memory flush", () => {
   it("only triggers the flush when the next append would compact (threshold behavior)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-threshold-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const { agentId } = await seedAgentConfig(container, { maxTurns: 2 });
+    const { agentId } = await seedAgentConfig(container, { maxTurns: 3 });
 
-    const languageModel = createSequencedTextLanguageModel(["a1", "a2", "FLUSH_OK", "a3"]);
+    const languageModel = createSequencedTextLanguageModel([
+      "a1",
+      "a2",
+      "a3",
+      "FLUSH_OK",
+      "summary: threshold",
+    ]);
 
     const mcpManager = {
       listToolDescriptors: vi.fn(async () => []),
@@ -368,7 +389,7 @@ describe("Pre-compaction memory flush", () => {
       message: "third",
     });
     expect(third.reply).toBe("a3");
-    expect(languageModel.doGenerateCalls).toHaveLength(4);
+    expect(languageModel.doGenerateCalls).toHaveLength(5);
 
     const memory = new MemoryV1Dal(container.db);
     const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, agentId);
@@ -407,7 +428,6 @@ describe("Pre-compaction memory flush", () => {
       sessionId: session.session_id,
       userMessage: "first",
       assistantMessage: "a1",
-      maxTurns: 1,
       timestamp: new Date().toISOString(),
     });
 
@@ -421,7 +441,7 @@ describe("Pre-compaction memory flush", () => {
       ctx: typeof prepared.ctx;
       session: typeof prepared.session;
       model: typeof prepared.model;
-      systemPrompt: typeof prepared.systemPrompt;
+      droppedTurns: typeof prepared.session.turns;
     }) =>
       maybeRunPreCompactionMemoryFlush(
         { db: container.db, logger: container.logger, agentId },
@@ -432,7 +452,7 @@ describe("Pre-compaction memory flush", () => {
       ctx: prepared.ctx,
       session: prepared.session,
       model: prepared.model,
-      systemPrompt: prepared.systemPrompt,
+      droppedTurns: prepared.session.turns,
     });
     expect(languageModel.doGenerateCalls).toHaveLength(1);
 
@@ -444,7 +464,7 @@ describe("Pre-compaction memory flush", () => {
       ctx: prepared.ctx,
       session: prepared.session,
       model: prepared.model,
-      systemPrompt: prepared.systemPrompt,
+      droppedTurns: prepared.session.turns,
     });
     expect(languageModel.doGenerateCalls).toHaveLength(1);
 
@@ -472,6 +492,15 @@ describe("Pre-compaction memory flush", () => {
         }
 
         if (callCount === 2) {
+          return {
+            content: [{ type: "text" as const, text: "a2" }],
+            finishReason: { unified: "stop" as const, raw: undefined },
+            usage: usage(),
+            warnings: [],
+          };
+        }
+
+        if (callCount === 3) {
           const signal = options.abortSignal;
           if (!signal) {
             throw new Error("expected abortSignal for pre-compaction flush call");
@@ -487,7 +516,7 @@ describe("Pre-compaction memory flush", () => {
         }
 
         return {
-          content: [{ type: "text" as const, text: "a2" }],
+          content: [{ type: "text" as const, text: "summary: timeout" }],
           finishReason: { unified: "stop" as const, raw: undefined },
           usage: usage(),
           warnings: [],
