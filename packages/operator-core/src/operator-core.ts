@@ -30,6 +30,8 @@ import { createChatStore, type ChatStore } from "./stores/chat-store.js";
 import { createAutoSyncManager, type AutoSyncState, type AutoSyncTask } from "./auto-sync.js";
 import { createWorkboardStore, type WorkboardStore } from "./stores/workboard-store.js";
 import { createAgentStatusStore, type AgentStatusStore } from "./stores/agent-status-store.js";
+import { createActivityStore, type ActivityStore } from "./stores/activity-store.js";
+import { registerActivityWsHandlers } from "./operator-core.activity-events.js";
 import type { WorkItem } from "@tyrum/schemas";
 import type { WorkTaskEvent } from "./workboard/workboard-utils.js";
 
@@ -63,6 +65,7 @@ export interface OperatorCore {
   workboardStore: WorkboardStore;
   agentStatusStore: AgentStatusStore;
   chatStore: ChatStore;
+  activityStore: ActivityStore;
   syncAllNow(): Promise<void>;
   connect(): void;
   disconnect(): void;
@@ -150,6 +153,13 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const chat = createChatStore(ws, http);
   const workboard = createWorkboardStore(ws);
   const agentStatus = createAgentStatusStore(http);
+  const activity = createActivityStore({
+    runsStore: runs.store,
+    approvalsStore: approvals.store,
+    statusStore: status.store,
+    memoryStore: memory.store,
+    chatStore: chat,
+  });
 
   const warmStores = {
     approvalsStore: approvals.store,
@@ -452,9 +462,11 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   on("work.task.started", handleWorkTaskEvent("work.task.started"));
   on("work.task.paused", handleWorkTaskEvent("work.task.paused"));
   on("work.task.completed", handleWorkTaskEvent("work.task.completed"));
+  registerActivityWsHandlers(ws, activity, unsubscribes);
 
   const dispose = (): void => {
     autoSync.dispose();
+    activity.dispose();
     connection.store.disconnect();
     if (elevatedModeStoreOwned) {
       elevatedModeStore.dispose();
@@ -482,6 +494,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     workboardStore: workboard.store,
     agentStatusStore: agentStatus.store,
     chatStore: chat,
+    activityStore: activity.store,
     syncAllNow: async () => {
       workboard.store.resetSupportProbe();
       await autoSync.syncAllNow();
