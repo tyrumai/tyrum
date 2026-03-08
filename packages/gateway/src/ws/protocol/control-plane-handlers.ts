@@ -225,24 +225,23 @@ async function handleRunListMessage(
 
   const result = WsRunListResult.parse({
     runs: runRows.map((row) => {
-      const runItem = {
-        run: {
-          run_id: row.run_id,
-          job_id: row.job_id,
-          key: row.key,
-          lane: row.lane,
-          status: row.status,
-          attempt: row.attempt,
-          created_at: normalizeDbDateTime(row.created_at) ?? new Date().toISOString(),
-          started_at: normalizeDbDateTime(row.started_at),
-          finished_at: normalizeDbDateTime(row.finished_at),
-          paused_reason: row.paused_reason ?? undefined,
-          paused_detail: row.paused_detail ?? undefined,
-          policy_snapshot_id: row.policy_snapshot_id ?? undefined,
-          budgets: safeJsonParse(row.budgets_json, undefined as unknown),
-          budget_overridden_at: normalizeDbDateTime(row.budget_overridden_at),
-        },
+      const run = {
+        run_id: row.run_id,
+        job_id: row.job_id,
+        key: row.key,
+        lane: row.lane,
+        status: row.status,
+        attempt: row.attempt,
+        created_at: normalizeDbDateTime(row.created_at) ?? new Date().toISOString(),
+        started_at: normalizeDbDateTime(row.started_at),
+        finished_at: normalizeDbDateTime(row.finished_at),
+        paused_reason: row.paused_reason ?? undefined,
+        paused_detail: row.paused_detail ?? undefined,
+        policy_snapshot_id: row.policy_snapshot_id ?? undefined,
+        budgets: safeJsonParse(row.budgets_json, undefined as unknown),
+        budget_overridden_at: normalizeDbDateTime(row.budget_overridden_at),
       };
+      const runItem: { run: typeof run; agent_key?: string } = { run };
       if (row.agent_key) {
         runItem.agent_key = row.agent_key;
       }
