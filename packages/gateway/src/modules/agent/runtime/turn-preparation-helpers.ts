@@ -1,8 +1,7 @@
 import type { AgentConfig as AgentConfigT } from "@tyrum/schemas";
 import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 import type { AgentRuntimeOptions } from "./types.js";
-import { buildDefaultAgentConfig } from "../default-config.js";
-import { AgentConfigDal } from "../../config/agent-config-dal.js";
+import { ensureAgentConfigSeeded } from "../default-config.js";
 import {
   MemoryV1SemanticIndex,
   type MemoryV1SemanticSearchHit,
@@ -101,15 +100,15 @@ export function maybeCleanupSessions(
 
 export async function loadAgentConfigFromDb(
   deps: PrepareTurnHelperDeps,
-  scope: { tenantId: string; agentId: string },
+  scope: { tenantId: string; agentId: string; agentKey: string },
 ): Promise<AgentConfigT> {
   return (
-    await new AgentConfigDal(deps.opts.container.db).ensureSeeded({
+    await ensureAgentConfigSeeded({
+      db: deps.opts.container.db,
+      stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
       tenantId: scope.tenantId,
       agentId: scope.agentId,
-      defaultConfig: buildDefaultAgentConfig(
-        resolveGatewayStateMode(deps.opts.container.deploymentConfig),
-      ),
+      agentKey: scope.agentKey,
       createdBy: { kind: "agent-runtime" },
       reason: "seed",
     })

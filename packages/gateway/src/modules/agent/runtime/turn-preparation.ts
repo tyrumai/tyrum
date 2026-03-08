@@ -56,6 +56,7 @@ import type { PolicyService } from "../../policy/service.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import { buildContextReport } from "./turn-context-report.js";
+import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
 
 export type TurnExecutionContext = {
   planId: string;
@@ -124,14 +125,24 @@ async function resolveIdentityAndContext(
   const config = await loadAgentConfigFromDb(deps, {
     tenantId: deps.tenantId,
     agentId,
+    agentKey,
   });
-  const ctx = await loadCurrentAgentContext({
+  const loaded = await loadCurrentAgentContext({
     contextStore: deps.contextStore,
     tenantId: deps.tenantId,
     agentId,
     workspaceId,
     config,
   });
+  const persona = resolveAgentPersona({
+    agentKey,
+    config: loaded.config,
+    identity: loaded.identity,
+  });
+  const ctx = {
+    ...loaded,
+    identity: applyPersonaToIdentity(loaded.identity, persona),
+  };
   maybeCleanupSessions(deps, ctx.config.sessions.ttl_days, agentKey);
 
   const containerKind: NormalizedContainerKind =

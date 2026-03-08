@@ -6,12 +6,22 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { AgentConfig, AgentKey } from "@tyrum/schemas";
+import {
+  AgentConfigGetResponse,
+  AgentConfigListResponse,
+  AgentConfigUpdateRequest,
+  AgentKey,
+} from "@tyrum/schemas";
+import type {
+  AgentConfig,
+  AgentConfigGetResponse as AgentConfigGetResponseT,
+} from "@tyrum/schemas";
 import type { SqlDb } from "../statestore/types.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
 import { AgentConfigDal } from "../modules/config/agent-config-dal.js";
+import { listLatestAgentConfigsByAgentId, resolveAgentPersona } from "../modules/agent/persona.js";
 
 function normalizeTime(value: string | Date | null | undefined): string | null {
   if (value == null) return null;
@@ -28,12 +38,36 @@ function normalizeAgentKey(raw: string): string {
   return parsed.data;
 }
 
-const AgentConfigUpdateRequest = z
-  .object({
-    config: AgentConfig,
-    reason: z.string().trim().min(1).optional(),
-  })
-  .strict();
+interface AgentConfigRevisionResponseInput {
+  revision: number;
+  tenantId: string;
+  agentId: string;
+  config: AgentConfig;
+  configSha256: string;
+  createdAt: string;
+  createdBy: unknown;
+  reason: string | null;
+  revertedFromRevision: number | null;
+}
+
+function buildAgentConfigRevisionResponse(
+  agentKey: string,
+  revision: AgentConfigRevisionResponseInput,
+): AgentConfigGetResponseT {
+  return AgentConfigGetResponse.parse({
+    revision: revision.revision,
+    tenant_id: revision.tenantId,
+    agent_id: revision.agentId,
+    agent_key: agentKey,
+    config: revision.config,
+    persona: resolveAgentPersona({ agentKey, config: revision.config }),
+    config_sha256: revision.configSha256,
+    created_at: revision.createdAt,
+    created_by: revision.createdBy,
+    reason: revision.reason,
+    reverted_from_revision: revision.revertedFromRevision,
+  });
+}
 
 const AgentConfigRevertRequest = z
   .object({
@@ -52,6 +86,7 @@ export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
 
   app.get("/config/agents", async (c) => {
     const tenantId = requireTenantId(c);
+    const configsByAgentId = await listLatestAgentConfigsByAgentId(deps.db, tenantId);
     const rows = await deps.db.all<{
       agent_id: string;
       agent_key: string;
@@ -70,9 +105,14 @@ export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
       agent_key: row.agent_key,
       created_at: normalizeTime(row.created_at),
       updated_at: normalizeTime(row.updated_at),
+      has_config: configsByAgentId.has(row.agent_id),
+      persona: resolveAgentPersona({
+        agentKey: row.agent_key,
+        config: configsByAgentId.get(row.agent_id),
+      }),
     }));
 
-    return c.json({ agents }, 200);
+    return c.json(AgentConfigListResponse.parse({ agents }), 200);
   });
 
   const resolveAgentId = async (tenantId: string, agentKey: string): Promise<string | null> => {
@@ -100,18 +140,17 @@ export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
     }
 
     return c.json(
-      {
+      buildAgentConfigRevisionResponse(agentKey, {
         revision: revision.revision,
-        tenant_id: revision.tenantId,
-        agent_id: revision.agentId,
-        agent_key: agentKey,
+        tenantId: revision.tenantId,
+        agentId: revision.agentId,
         config: revision.config,
-        config_sha256: revision.configSha256,
-        created_at: revision.createdAt,
-        created_by: revision.createdBy,
+        configSha256: revision.configSha256,
+        createdAt: revision.createdAt,
+        createdBy: revision.createdBy,
         reason: revision.reason ?? null,
-        reverted_from_revision: revision.revertedFromRevision ?? null,
-      },
+        revertedFromRevision: revision.revertedFromRevision ?? null,
+      }),
       200,
     );
   });
@@ -177,18 +216,17 @@ export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
     });
 
     return c.json(
-      {
+      buildAgentConfigRevisionResponse(agentKey, {
         revision: revision.revision,
-        tenant_id: revision.tenantId,
-        agent_id: revision.agentId,
-        agent_key: agentKey,
+        tenantId: revision.tenantId,
+        agentId: revision.agentId,
         config: revision.config,
-        config_sha256: revision.configSha256,
-        created_at: revision.createdAt,
-        created_by: revision.createdBy,
+        configSha256: revision.configSha256,
+        createdAt: revision.createdAt,
+        createdBy: revision.createdBy,
         reason: revision.reason ?? null,
-        reverted_from_revision: revision.revertedFromRevision ?? null,
-      },
+        revertedFromRevision: revision.revertedFromRevision ?? null,
+      }),
       200,
     );
   });
@@ -225,18 +263,17 @@ export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
     });
 
     return c.json(
-      {
+      buildAgentConfigRevisionResponse(agentKey, {
         revision: revision.revision,
-        tenant_id: revision.tenantId,
-        agent_id: revision.agentId,
-        agent_key: agentKey,
+        tenantId: revision.tenantId,
+        agentId: revision.agentId,
         config: revision.config,
-        config_sha256: revision.configSha256,
-        created_at: revision.createdAt,
-        created_by: revision.createdBy,
+        configSha256: revision.configSha256,
+        createdAt: revision.createdAt,
+        createdBy: revision.createdBy,
         reason: revision.reason ?? null,
-        reverted_from_revision: revision.revertedFromRevision ?? null,
-      },
+        revertedFromRevision: revision.revertedFromRevision ?? null,
+      }),
       200,
     );
   });

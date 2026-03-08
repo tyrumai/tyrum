@@ -96,6 +96,13 @@ describe("agent routes", () => {
       agentId,
       config: AgentConfig.parse({
         model: { model: "openai/gpt-4.1" },
+        persona: {
+          name: "Hypatia",
+          description: "Calm systems thinker.",
+          tone: "direct",
+          palette: "graphite",
+          character: "architect",
+        },
         skills: { enabled: ["file-reader"], workspace_trusted: true },
         mcp: { enabled: ["calendar"] },
         tools: { allow: ["tool.fs.read", "mcp.*"] },
@@ -110,6 +117,7 @@ describe("agent routes", () => {
     expect(res.status).toBe(200);
     const payload = (await res.json()) as {
       enabled: boolean;
+      persona?: { name: string; tone: string };
       identity: { name: string };
       skills: string[];
       skills_detailed?: Array<{ id: string; source: string }>;
@@ -119,7 +127,8 @@ describe("agent routes", () => {
     };
 
     expect(payload.enabled).toBe(true);
-    expect(payload.identity.name).toBe("Tyrum Local");
+    expect(payload.identity.name).toBe("Hypatia");
+    expect(payload.persona).toEqual(expect.objectContaining({ name: "Hypatia", tone: "direct" }));
     expect(payload.skills).toEqual(["file-reader"]);
     expect(payload.workspace_skills_trusted).toBe(true);
     expect(payload.skills_detailed).toEqual([
@@ -134,15 +143,34 @@ describe("agent routes", () => {
 
   it("lists available agents via /agent/list", async () => {
     const { app, agents, container } = await createTestApp({ tyrumHome: homeDir });
-    await container.identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "agent-1");
+    const agentId = await container.identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "agent-1");
+    await new AgentConfigDal(container.db).set({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId,
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        persona: {
+          name: "Ada",
+          description: "Methodical builder.",
+          tone: "direct",
+          palette: "moss",
+          character: "builder",
+        },
+      }),
+      createdBy: { kind: "test" },
+      reason: "agent list persona",
+    });
 
     const res = await app.request("/agent/list");
     expect(res.status).toBe(200);
     const payload = (await res.json()) as {
-      agents: Array<{ agent_key: string; agent_id: string }>;
+      agents: Array<{ agent_key: string; agent_id: string; persona?: { name: string } }>;
     };
     expect(payload.agents.map((a) => a.agent_key)).toEqual(["default", "agent-1"]);
     expect(payload.agents.every((agent) => typeof agent.agent_id === "string")).toBe(true);
+    expect(payload.agents.find((agent) => agent.agent_key === "agent-1")?.persona?.name).toBe(
+      "Ada",
+    );
 
     const resNoDefault = await app.request("/agent/list?include_default=false");
     expect(resNoDefault.status).toBe(200);

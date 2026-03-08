@@ -5,10 +5,12 @@
  */
 
 import { Hono } from "hono";
-import { AgentTurnRequest } from "@tyrum/schemas";
+import { AgentListResponse, AgentTurnRequest } from "@tyrum/schemas";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { SqlDb } from "../statestore/types.js";
 import { requireTenantId } from "../modules/auth/claims.js";
+import { listLatestAgentConfigsByAgentId, resolveAgentPersona } from "../modules/agent/persona.js";
+import { loadOptionalIdentity } from "../modules/agent/optional-identity.js";
 
 export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): Hono {
   const agent = new Hono();
@@ -30,6 +32,7 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
       [tenantId],
     );
     const discoveredKeys = await opts.agents.listDiscoveredAgentKeys();
+    const configsByAgentId = await listLatestAgentConfigsByAgentId(opts.db, tenantId);
     const agentByKey = new Map<
       string,
       {
@@ -41,16 +44,44 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
       agentByKey.set(agentKey, agentByKey.get(agentKey) ?? { agent_key: agentKey });
     }
 
-    const agentRecords = Array.from(agentByKey.values())
-      .filter((record) => includeDefault || record.agent_key !== "default")
-      .toSorted((left, right) => {
-        if (left.agent_key === right.agent_key) return 0;
-        if (left.agent_key === "default") return -1;
-        if (right.agent_key === "default") return 1;
-        return left.agent_key.localeCompare(right.agent_key);
-      });
+    const agentRecords = await Promise.all(
+      Array.from(agentByKey.values())
+        .filter((record) => includeDefault || record.agent_key !== "default")
+        .toSorted((left, right) => {
+          if (left.agent_key === right.agent_key) return 0;
+          if (left.agent_key === "default") return -1;
+          if (right.agent_key === "default") return 1;
+          return left.agent_key.localeCompare(right.agent_key);
+        })
+        .map(async (record) => {
+          const config = record.agent_id ? configsByAgentId.get(record.agent_id) : undefined;
+          const identity = !config?.persona
+            ? await loadOptionalIdentity(opts.agents.resolveAgentHome(record.agent_key))
+            : undefined;
+          const persona = resolveAgentPersona({
+            agentKey: record.agent_key,
+            config,
+            identity,
+          });
 
-    return c.json({ agents: agentRecords }, 200);
+          if (record.agent_id) {
+            return {
+              agent_key: record.agent_key,
+              agent_id: record.agent_id,
+              has_config: Boolean(config),
+              persona,
+            };
+          }
+
+          return {
+            agent_key: record.agent_key,
+            has_config: Boolean(config),
+            persona,
+          };
+        }),
+    );
+
+    return c.json(AgentListResponse.parse({ agents: agentRecords }), 200);
   });
 
   agent.get("/agent/status", async (c) => {

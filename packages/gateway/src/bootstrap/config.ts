@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { DeploymentConfig } from "@tyrum/schemas";
 import type { GatewayContainer } from "../container.js";
 import type { SqlDb } from "../statestore/types.js";
-import { AgentConfigDal } from "../modules/config/agent-config-dal.js";
-import { buildDefaultAgentConfig } from "../modules/agent/default-config.js";
+import { ensureAgentConfigSeeded } from "../modules/agent/default-config.js";
+import { DEFAULT_AGENT_KEY } from "../modules/identity/scope.js";
 import { resolveGatewayStateMode } from "../modules/runtime-state/mode.js";
 import { isPostgresDbUri } from "../statestore/db-uri.js";
 import { SqliteDb } from "../statestore/sqlite.js";
@@ -189,10 +189,12 @@ export async function openGatewayDb(params: {
 
 export async function seedDefaultAgentConfig(container: GatewayContainer): Promise<void> {
   const defaultScope = await container.identityScopeDal.resolveScopeIds();
-  await new AgentConfigDal(container.db).ensureSeeded({
+  await ensureAgentConfigSeeded({
+    db: container.db,
+    stateMode: resolveGatewayStateMode(container.deploymentConfig),
     tenantId: defaultScope.tenantId,
     agentId: defaultScope.agentId,
-    defaultConfig: buildDefaultAgentConfig(resolveGatewayStateMode(container.deploymentConfig)),
+    agentKey: DEFAULT_AGENT_KEY,
     createdBy: { kind: "bootstrap" },
     reason: "seed",
   });
