@@ -93,18 +93,6 @@ function normalizeTags(tags: readonly string[]): string[] {
   return Array.from(next);
 }
 
-function lowSignalTurn(message: string, reply: string): boolean {
-  const msg = message.toLowerCase();
-  const res = reply.toLowerCase();
-  if (msg.length <= 24 && /^(ok|okay|thanks?|thank you|hi|hello|yes|no)$/u.test(msg)) return true;
-  return (
-    res.length <= 48 &&
-    /^(ok|okay|done|thanks?|thank you|sounds good|hello|hi|no assistant response returned\.)$/u.test(
-      res,
-    )
-  );
-}
-
 function noteCandidateKind(message: string): CandidateKind | undefined {
   const normalized = message.toLowerCase();
   if (normalized.includes("i prefer")) return "note";
@@ -145,7 +133,7 @@ function deterministicNote(message: string): TurnMemoryDecision {
     reasonCode: normalized.includes("i prefer") ? "explicit_preference" : "explicit_remember",
     title,
     bodyMd: truncate(message, 600),
-    tags: normalizeTags(["agent-turn", "durable-memory"]),
+    tags: normalizeTags(["durable-memory"]),
   };
 }
 
@@ -159,11 +147,7 @@ function deterministicEpisode(
     action: "episode",
     reasonCode: usedTools.size > 0 ? "tool_outcome" : "task_outcome",
     summaryMd: truncate(`${prefix}: ${reply} (${channel})`, 280),
-    tags: normalizeTags([
-      "agent-turn",
-      "episode",
-      usedTools.size > 0 ? "tool-outcome" : "task-outcome",
-    ]),
+    tags: normalizeTags(["episode", usedTools.size > 0 ? "tool-outcome" : "task-outcome"]),
   };
 }
 
@@ -228,9 +212,6 @@ export async function classifyTurnMemory(
   const episodeCandidate = noteCandidate
     ? undefined
     : episodeCandidateKind(message, reply, input.usedTools);
-  if (!noteCandidate && !episodeCandidate && lowSignalTurn(message, reply)) {
-    return { action: "none", reasonCode: "none" };
-  }
   if (!noteCandidate && !episodeCandidate) {
     return { action: "none", reasonCode: "none" };
   }

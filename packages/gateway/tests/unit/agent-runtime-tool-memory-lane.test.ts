@@ -107,6 +107,51 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     );
   }, 10_000);
 
+  it("persists canonical note tags without duplicates", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+    await seedAgentConfig(container, {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: { enabled: [] },
+        tools: { allow: [] },
+        sessions: { ttl_days: 30, max_turns: 20 },
+        memory: {
+          v1: {
+            enabled: true,
+            auto_write: { classifier: "rule_based" },
+          },
+        },
+      },
+    });
+
+    const createSpy = vi.spyOn(container.memoryV1Dal, "create");
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("ok"),
+      fetchImpl: fetch404,
+    });
+
+    await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "remember that I prefer tea",
+    });
+
+    const noteCall = createSpy.mock.calls.find(([input]) => input?.kind === "note");
+    expect(noteCall?.[0]).toEqual(
+      expect.objectContaining({
+        tags: ["agent-turn", "durable-memory"],
+      }),
+    );
+  }, 10_000);
+
   it("logs when subagent execution profile resolution fails", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
