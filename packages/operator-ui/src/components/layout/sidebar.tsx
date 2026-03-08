@@ -26,7 +26,6 @@ export interface SidebarProps extends React.HTMLAttributes<HTMLElement> {
   secondaryCollapsible?: boolean;
   secondaryDefaultCollapsed?: boolean;
   collapsible?: boolean;
-  showHeader?: boolean;
   connectionStatus?: SidebarConnectionStatus;
   onSyncNow?: () => void;
   syncNowDisabled?: boolean;
@@ -111,17 +110,6 @@ function SidebarNavButton({ item, activeItemId, collapsed, onNavigate }: Sidebar
       ) : null}
     </button>
   );
-}
-
-interface SidebarHeaderProps {
-  collapsed: boolean;
-  showHeader: boolean;
-}
-
-function SidebarHeader({ collapsed, showHeader }: SidebarHeaderProps) {
-  void collapsed;
-  void showHeader;
-  return null;
 }
 
 interface SidebarNavProps {
@@ -361,7 +349,6 @@ export function Sidebar({
   secondaryCollapsible = false,
   secondaryDefaultCollapsed = true,
   collapsible = false,
-  showHeader = true,
   connectionStatus = "disconnected",
   onSyncNow,
   syncNowDisabled = false,
@@ -413,8 +400,6 @@ export function Sidebar({
       )}
       {...props}
     >
-      <SidebarHeader collapsed={collapsed} showHeader={showHeader} />
-
       <SidebarNav
         items={items}
         activeItemId={activeItemId}

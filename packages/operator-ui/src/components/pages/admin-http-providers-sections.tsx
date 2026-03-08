@@ -176,7 +176,7 @@ function ProviderGroupCard({
 }): React.ReactElement {
   return (
     <Card>
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="grid gap-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -288,7 +288,7 @@ export function ProvidersCard({
 }): React.ReactElement {
   return (
     <Card>
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="grid gap-1">
             <div className="text-sm font-medium text-fg">Providers</div>

@@ -82,7 +82,7 @@ export function ExecutionProfilesCard({
 }): React.ReactElement {
   return (
     <Card>
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="grid gap-1">
             <div className="text-sm font-medium text-fg">Execution profiles</div>
@@ -181,7 +181,7 @@ export function ConfiguredModelsCard({
 }): React.ReactElement {
   return (
     <Card>
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="grid gap-1">
             <div className="text-sm font-medium text-fg">Configured models</div>
