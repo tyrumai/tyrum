@@ -41,6 +41,37 @@ function registerLoginFormTests(): void {
     container.remove();
   });
 
+  it("wraps the connect screen in a scroll area", () => {
+    const ws = new FakeWsClient(false);
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBrowserCookieAuth(),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
+    });
+
+    const scrollArea = container.querySelector<HTMLElement>("[data-scroll-area-root]");
+    expect(scrollArea).not.toBeNull();
+    expect(scrollArea?.className).toContain("h-full");
+    expect(scrollArea?.className).toContain("w-full");
+    expect(container.querySelector('[data-testid="login-button"]')).not.toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
   it("sets aria-busy on the login button while logging in", async () => {
     let resolveFetch: ((response: Response) => void) | null = null;
     const fetchPromise = new Promise<Response>((resolve) => {
