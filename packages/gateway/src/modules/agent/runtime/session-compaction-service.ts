@@ -26,7 +26,7 @@ const CONTEXT_OVERFLOW_PATTERNS = [
   /token limit/i,
   /too many tokens/i,
   /(?:input|prompt|message).{0,40}too large/i,
-  /input too long/i,
+  /(?:input|prompt|message).{0,40}too long/i,
   /exceeds?.*context/i,
 ];
 const COMPACTION_SYSTEM_PROMPT = [

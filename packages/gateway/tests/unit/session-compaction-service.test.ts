@@ -11,6 +11,8 @@ describe("isContextOverflowError", () => {
       isContextOverflowError(new Error("This model's maximum context length is 128000 tokens.")),
     ).toBe(true);
     expect(isContextOverflowError(new Error("Prompt is too large for this model."))).toBe(true);
+    expect(isContextOverflowError(new Error("Prompt is too long for this model."))).toBe(true);
+    expect(isContextOverflowError(new Error("Message is too long for this model."))).toBe(true);
   });
 
   it("does not treat unrelated too-large errors as context overflow", () => {
