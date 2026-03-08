@@ -1,7 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import type * as React from "react";
 import { AppPage } from "../layout/app-page.js";
-import { Badge } from "../ui/badge.js";
 import { LiveRegion } from "../ui/live-region.js";
 import { Skeleton } from "../ui/skeleton.js";
 import { StatusDot } from "../ui/status-dot.js";
