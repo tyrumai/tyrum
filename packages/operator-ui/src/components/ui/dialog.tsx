@@ -39,7 +39,7 @@ export const DialogContent = React.forwardRef<
         ref={ref}
         className={cn(
           "fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2",
-          "rounded-lg border border-border bg-bg-card p-5 text-fg shadow-md",
+          "rounded-lg border border-border bg-bg-card p-4 text-fg shadow-md",
           "data-[state=open]:tyrum-animate-dialog-in data-[state=closed]:tyrum-animate-dialog-out",
           className,
         )}
@@ -64,14 +64,14 @@ DialogContent.displayName = "DialogContent";
 
 export interface DialogHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
 export function DialogHeader({ className, ...props }: DialogHeaderProps): React.ReactElement {
-  return <div className={cn("flex flex-col gap-1.5", className)} {...props} />;
+  return <div className={cn("flex flex-col gap-1", className)} {...props} />;
 }
 
 export interface DialogFooterProps extends React.HTMLAttributes<HTMLDivElement> {}
 export function DialogFooter({ className, ...props }: DialogFooterProps): React.ReactElement {
   return (
     <div
-      className={cn("mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)}
+      className={cn("mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)}
       {...props}
     />
   );

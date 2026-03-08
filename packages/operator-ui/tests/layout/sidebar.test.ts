@@ -33,7 +33,7 @@ describe("Sidebar", () => {
     }
   });
 
-  it("renders brand, nav items, and connection indicator", () => {
+  it("renders nav items and connection indicator without a brand row", () => {
     const ThemeProvider = (operatorUi as Record<string, unknown>)["ThemeProvider"];
     const Sidebar = (operatorUi as Record<string, unknown>)["Sidebar"];
 
@@ -58,7 +58,7 @@ describe("Sidebar", () => {
       ),
     );
 
-    expect(container.textContent).toContain("Tyrum");
+    expect(container.textContent).not.toContain("Tyrum");
     expect(container.textContent).toContain("Dashboard");
     expect(container.textContent).toContain("Approvals");
 

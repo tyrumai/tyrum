@@ -77,7 +77,9 @@ function SidebarNavButton({ item, activeItemId, collapsed, onNavigate }: Sidebar
       title={collapsed ? item.label : undefined}
       className={cn(
         "relative flex w-full rounded-md border text-sm transition-colors duration-150",
-        collapsed ? "justify-center border-transparent px-2 py-2" : "items-start gap-2 px-3 py-2",
+        collapsed
+          ? "justify-center border-transparent px-1.5 py-1.5"
+          : "items-start gap-2 px-2.5 py-1.5",
         active
           ? "border-border bg-bg text-fg font-medium"
           : "border-transparent text-fg-muted hover:border-border hover:bg-bg hover:text-fg",
@@ -117,13 +119,9 @@ interface SidebarHeaderProps {
 }
 
 function SidebarHeader({ collapsed, showHeader }: SidebarHeaderProps) {
-  if (!showHeader || collapsed) return null;
-
-  return (
-    <div className="flex items-center border-b border-border px-4 py-3">
-      <div className="text-sm font-semibold tracking-tight">Tyrum</div>
-    </div>
-  );
+  void collapsed;
+  void showHeader;
+  return null;
 }
 
 interface SidebarNavProps {
@@ -163,7 +161,7 @@ function SidebarNav({
   );
 
   return (
-    <nav className={cn("flex flex-1 flex-col gap-1 py-3", collapsed ? "px-1" : "px-2")}>
+    <nav className={cn("flex flex-1 flex-col gap-1 py-2", collapsed ? "px-1" : "px-2")}>
       {items.map(renderNavItem)}
       {showSecondaryItems ? (
         <>
@@ -172,7 +170,7 @@ function SidebarNav({
             <button
               type="button"
               data-testid="sidebar-secondary-toggle"
-              className="mt-3 flex w-full items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium text-fg-muted hover:text-fg"
+              className="mt-2 flex w-full items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-fg-muted hover:text-fg"
               onClick={onToggleSecondary}
             >
               <ChevronDown
@@ -184,7 +182,7 @@ function SidebarNav({
               <span>{secondaryLabel}</span>
             </button>
           ) : !collapsed ? (
-            <div className="mt-3 px-3 text-xs font-medium text-fg-muted">{secondaryLabel}</div>
+            <div className="mt-2 px-2.5 text-xs font-medium text-fg-muted">{secondaryLabel}</div>
           ) : null}
           {collapsed || secondaryVisible ? secondaryItems.map(renderNavItem) : null}
         </>
@@ -215,7 +213,7 @@ function SidebarSyncNowButton({
       disabled={syncNowDisabled || syncNowLoading}
       className={cn(
         "flex items-center rounded-md text-sm transition-colors",
-        collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
+        collapsed ? "justify-center px-1.5 py-1.5" : "gap-2 px-2.5 py-1.5",
         syncNowDisabled || syncNowLoading
           ? "cursor-not-allowed opacity-50"
           : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
@@ -250,7 +248,7 @@ function SidebarStatusControls({ collapsed, connectionStatus }: SidebarStatusCon
             <span
               className={cn(
                 "inline-flex items-center rounded-md text-sm text-fg-muted",
-                collapsed ? "justify-center px-2 py-2" : "w-full gap-2 px-3 py-2",
+                collapsed ? "justify-center px-1.5 py-1.5" : "w-full gap-2 px-2.5 py-1.5",
               )}
             >
               <StatusDot
@@ -292,7 +290,7 @@ function SidebarCollapseToggle({ collapsed, onToggleCollapsed }: SidebarCollapse
       title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       className={cn(
         "flex items-center rounded-md text-sm transition-colors",
-        collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
+        collapsed ? "justify-center px-1.5 py-1.5" : "gap-2 px-2.5 py-1.5",
         "text-fg-muted hover:bg-bg-subtle hover:text-fg",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
       )}
@@ -332,8 +330,8 @@ function SidebarFooter({
   return (
     <div
       className={cn(
-        "mt-auto flex flex-col gap-2 border-t border-border",
-        collapsed ? "p-2" : "p-4",
+        "mt-auto flex flex-col gap-1.5 border-t border-border",
+        collapsed ? "p-2" : "p-3",
       )}
     >
       {onSyncNow ? (
@@ -410,7 +408,7 @@ export function Sidebar({
     <aside
       className={cn(
         "flex h-screen shrink-0 flex-col border-r border-border bg-bg-subtle transition-[width] duration-200",
-        collapsed ? "w-14" : "w-60",
+        collapsed ? "w-14" : "w-56",
         className,
       )}
       {...props}

@@ -43,7 +43,7 @@ export function MobileNav({
         data-active={active ? "true" : undefined}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-xs transition-colors",
+          "flex flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs transition-colors",
           "text-fg-muted hover:text-fg",
           "rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           active ? "text-fg" : null,
@@ -66,7 +66,7 @@ export function MobileNav({
       )}
       {...props}
     >
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-stretch">
+      <div className="mx-auto flex h-14 w-full max-w-6xl items-stretch">
         {items.map(renderTab)}
 
         <DropdownMenu>
@@ -77,7 +77,7 @@ export function MobileNav({
               data-active={overflowActive ? "true" : undefined}
               aria-current={overflowActive ? "page" : undefined}
               className={cn(
-                "flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-xs transition-colors",
+                "flex flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs transition-colors",
                 "text-fg-muted hover:text-fg",
                 "rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                 overflowActive ? "text-fg" : null,

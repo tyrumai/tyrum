@@ -61,7 +61,7 @@ export function KvSection({
       {entries.length === 0 ? (
         <EmptyState>No entries.</EmptyState>
       ) : (
-        <pre className="whitespace-pre-wrap break-words rounded-md border border-border bg-bg-subtle p-3 font-mono text-xs text-fg [overflow-wrap:anywhere]">
+        <pre className="whitespace-pre-wrap break-words rounded-md border border-border bg-bg-subtle p-2.5 font-mono text-xs text-fg [overflow-wrap:anywhere]">
           {entries.map((entry) => `${entry.key} = ${JSON.stringify(entry.value_json)}`).join("\n")}
         </pre>
       )}
@@ -87,7 +87,7 @@ function WorkItemCard({
       data-testid={`work-item-${item.work_item_id}`}
       data-active={active ? "true" : undefined}
       className={[
-        "grid gap-2 rounded-md border px-3 py-3 text-left transition-colors",
+        "grid gap-1.5 rounded-md border px-2.5 py-2.5 text-left transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
         active ? "border-primary bg-bg text-fg" : "border-border bg-bg hover:bg-bg-subtle",
       ].join(" ")}
@@ -152,7 +152,7 @@ export function WorkStatusPanel({
 }) {
   return (
     <Card>
-      <CardContent className="grid gap-3 pt-5">
+      <CardContent className="grid gap-2.5 pt-4">
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-semibold text-fg">{STATUS_LABELS[status]}</span>
           <Badge variant="outline">{items.length}</Badge>

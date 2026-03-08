@@ -149,7 +149,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
   }, [core.agentStatusStore, isConnected, selectedAgentKey, selectionReady]);
 
   return (
-    <div className="grid gap-6" data-testid="agents-page">
+    <div className="grid gap-5" data-testid="agents-page">
       <PageHeader
         title="Agents"
         actions={
@@ -180,7 +180,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
 
       {agentsError ? (
         <Card data-testid="agents-list-error">
-          <CardHeader className="pb-4">
+          <CardHeader className="pb-2.5">
             <div className="text-sm font-medium text-fg">Agent list unavailable</div>
             <div className="text-sm text-fg-muted">{agentsError}</div>
           </CardHeader>
@@ -236,9 +236,9 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
         </label>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+      <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
         <Card className="hidden lg:flex lg:min-h-[40rem] lg:flex-col">
-          <CardHeader className="pb-4">
+          <CardHeader className="pb-2.5">
             <div className="text-sm font-medium text-fg">Agents</div>
             <div className="text-sm text-fg-muted">
               Pick an agent to inspect identity, memory, and runs.

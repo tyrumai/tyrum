@@ -44,9 +44,9 @@ export function ConfigureGeneralPanel() {
   const desktopApi = host?.kind === "desktop" ? host.api : null;
 
   return (
-    <div className="grid gap-6" data-testid="configure-general-panel">
+    <div className="grid gap-5" data-testid="configure-general-panel">
       <Card data-testid="configure-theme">
-        <CardHeader className="pb-4">
+        <CardHeader className="pb-2.5">
           <div className="text-sm font-medium text-fg">Theme</div>
           <div className="text-sm text-fg-muted">
             Choose system, light, or dark mode. Changes apply immediately.
@@ -94,7 +94,7 @@ export function ConfigureGeneralPanel() {
         />
       ) : (
         <Card data-testid="configure-update" id="configure-update">
-          <CardHeader className="pb-4">
+          <CardHeader className="pb-2.5">
             <div className="text-sm font-medium text-fg">Update</div>
             <div className="text-sm text-fg-muted">Desktop updates are not available here.</div>
           </CardHeader>

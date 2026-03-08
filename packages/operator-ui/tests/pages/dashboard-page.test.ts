@@ -19,6 +19,27 @@ describe("DashboardPage", () => {
     expect(source).not.toContain('value={typeof tokensUsed === "number" ? tokensUsedText : "-"}');
   });
 
+  it("uses stacked sections instead of a two-column dashboard card grid", () => {
+    const source = readFileSync(
+      join(process.cwd(), "packages/operator-ui/src/components/pages/dashboard-page.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("function DashboardSection(");
+    expect(source).toContain('className="grid min-w-0 gap-3"');
+    expect(source).not.toContain("lg:grid-cols-2");
+  });
+
+  it("keeps summary values shrinkable so connection text stays inside the row", () => {
+    const source = readFileSync(
+      join(process.cwd(), "packages/operator-ui/src/components/pages/dashboard-page.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain('className="min-w-0 shrink text-right"');
+    expect(source).toContain('className="inline-flex max-w-full items-center gap-2"');
+  });
+
   it("pulses the connection dot only while connecting", () => {
     const { store: connectionStore, setState: setConnectionState } = createStore({
       status: "disconnected",

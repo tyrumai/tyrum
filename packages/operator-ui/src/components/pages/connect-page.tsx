@@ -118,13 +118,13 @@ export function ConnectPage({
   };
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-5">
       {hideHeader ? null : (
         <h1 className="text-2xl font-semibold tracking-tight text-fg">{title}</h1>
       )}
 
       <Card>
-        <CardHeader className="pb-4">
+        <CardHeader className="pb-2.5">
           <div className="text-sm text-fg-muted">
             {isWeb
               ? "Enter your gateway token to start a session."

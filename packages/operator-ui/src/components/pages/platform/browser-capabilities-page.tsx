@@ -45,7 +45,7 @@ export function BrowserCapabilitiesPage() {
   })();
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4">
       <h1 className="text-2xl font-semibold tracking-tight text-fg">Browser Capabilities</h1>
 
       {!globalThis.isSecureContext ? (

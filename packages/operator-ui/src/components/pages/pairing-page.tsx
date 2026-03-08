@@ -95,7 +95,7 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
 
   return (
     <Card>
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="grid gap-1">
           <div className="text-sm font-medium text-fg">Pairing request</div>
           <div className="text-sm text-fg-muted">
@@ -252,7 +252,7 @@ function ApprovedPairingCard({ core, pairing }: { core: OperatorCore; pairing: P
 
   return (
     <Card>
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="grid gap-1">
           <div className="text-sm font-medium text-fg">Trusted device</div>
           <div className="text-sm text-fg-muted">
@@ -298,8 +298,8 @@ export function PairingPage({ core }: { core: OperatorCore }) {
   );
 
   return (
-    <div className="grid gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="grid gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
         <h1 className="text-2xl font-semibold tracking-tight text-fg">Pairings</h1>
       </div>
 

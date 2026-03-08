@@ -41,7 +41,7 @@ export function RunsPage({ core, agentId, hideHeader = false, title = "Runs" }: 
   };
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-5">
       {hideHeader ? null : <PageHeader title={title} className="mb-0" />}
 
       {runs.length === 0 ? (

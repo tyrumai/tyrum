@@ -82,7 +82,7 @@ describe("Button", () => {
     expect(el).not.toBeNull();
     expect(el?.disabled).toBe(true);
     expect(el?.className).toContain("border-border");
-    expect(el?.className).toContain("h-10");
+    expect(el?.className).toContain("h-9");
 
     cleanupTestRoot({ container, root });
   });

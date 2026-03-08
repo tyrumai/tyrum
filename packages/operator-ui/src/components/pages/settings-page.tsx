@@ -12,7 +12,7 @@ function SettingsPageContent({
   mode: OperatorUiMode;
 }) {
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-5">
       <PageHeader title="Settings" />
       <ConfigureGeneralPanel />
     </div>

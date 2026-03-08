@@ -44,7 +44,7 @@ export function AppShell({
             className={cn(
               "flex-1 min-h-0 overflow-x-hidden",
               fullBleed || viewportLocked ? "overflow-y-hidden" : "overflow-y-auto",
-              showMobileNav ? "pb-[calc(4rem+env(safe-area-inset-bottom))]" : null,
+              showMobileNav ? "pb-[calc(3.5rem+env(safe-area-inset-bottom))]" : null,
             )}
           >
             {fullBleed ? (
@@ -52,7 +52,7 @@ export function AppShell({
             ) : (
               <div
                 className={cn(
-                  "min-w-0 px-5 py-6",
+                  "min-w-0 px-4 py-4 md:px-5 md:py-5",
                   mode === "web" ? "mx-auto max-w-7xl" : null,
                   viewportLocked ? "flex h-full min-h-0 flex-col overflow-hidden" : null,
                 )}
