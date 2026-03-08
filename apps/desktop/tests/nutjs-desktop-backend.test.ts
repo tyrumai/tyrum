@@ -15,9 +15,13 @@ describe("NutJsDesktopBackend", () => {
     );
   });
 
-  // Integration tests that require a display server. Skipped in headless CI.
+  // Integration tests that require a usable display/capture environment.
+  // GitHub-hosted macOS runners do not provide one for nut.js screen capture.
+  const macOsCiLacksCapture =
+    process.platform === "darwin" && process.env["GITHUB_ACTIONS"] === "true";
   const hasDisplay =
-    !!process.env["DISPLAY"] || process.platform === "darwin" || process.platform === "win32";
+    !macOsCiLacksCapture &&
+    (!!process.env["DISPLAY"] || process.platform === "darwin" || process.platform === "win32");
 
   it.skipIf(!hasDisplay)("captureScreen returns a PNG buffer", async () => {
     const { NutJsDesktopBackend } = await import("@tyrum/desktop-node");
