@@ -77,13 +77,7 @@ function registerDashboardTests(): void {
     expect(container.textContent).toContain("Active runs");
     expect(container.textContent).toContain("Pending pairings");
 
-    const approvalsBadge = container.querySelector<HTMLSpanElement>(
-      '[data-testid="dashboard-approvals-badge"]',
-    );
-    expect(approvalsBadge).not.toBeNull();
-    expect(approvalsBadge?.textContent).toContain("1");
-    expect(approvalsBadge?.getAttribute("aria-live")).toBeNull();
-    expect(approvalsBadge?.getAttribute("aria-atomic")).toBeNull();
+    expect(container.querySelector('[data-testid="dashboard-approvals-badge"]')).toBeNull();
 
     const approvalsLiveRegionAfter = container.querySelector<HTMLDivElement>(
       '[data-testid="dashboard-approvals-live"]',

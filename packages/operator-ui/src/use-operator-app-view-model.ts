@@ -69,12 +69,7 @@ export function useOperatorAppViewModel(opts: {
             : routeId === "agents" && activeAgentsCount > 0
               ? activeAgentsCount
               : undefined,
-      badgeVariant:
-        routeId === "approvals" && approvals.pendingIds.length > 0
-          ? "danger"
-          : routeId === "pairing" && pairing.pendingIds.length > 0
-            ? "danger"
-            : undefined,
+      badgeVariant: undefined,
     };
   };
 
