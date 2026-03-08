@@ -32,6 +32,9 @@ describe("AgentConfig", () => {
     expect(parsed.sessions.loop_detection.cross_turn.min_chars).toBe(120);
     expect(parsed.sessions.loop_detection.cross_turn.cooldown_assistant_messages).toBe(6);
     expect(parsed.memory.v1.enabled).toBe(true);
+    expect(parsed.memory.v1.auto_write.enabled).toBe(true);
+    expect(parsed.memory.v1.auto_write.mode).toBe("sparse");
+    expect(parsed.memory.v1.auto_write.classifier).toBe("model_assisted");
     expect(parsed.memory.v1.allow_sensitivities).toEqual(["public", "private"]);
     expect(parsed.memory.v1.budgets.max_total_items).toBeGreaterThan(0);
     expect(parsed.memory.v1.budgets.max_total_chars).toBeGreaterThan(0);

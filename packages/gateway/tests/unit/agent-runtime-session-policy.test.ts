@@ -176,7 +176,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     expect(mcpManager.shutdown).toHaveBeenCalledTimes(1);
   });
 
-  it("writes memory when assistant mentions secret handles", async () => {
+  it("does not write memory for routine secret-handle guidance", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
       dbPath: ":memory:",
@@ -197,7 +197,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     });
 
     expect(result.reply).toContain("secret:my-key");
-    expect(result.memory_written).toBe(true);
+    expect(result.memory_written).toBe(false);
   });
 
   it("preserves legacy tool confirmation in policy observe-only mode", async () => {
