@@ -15,7 +15,7 @@ export const DropdownMenuContent = React.forwardRef<
         ref={ref}
         sideOffset={sideOffset}
         className={cn(
-          "z-50 min-w-[8rem] overflow-hidden rounded-md border border-border bg-bg-card backdrop-blur-2xl p-1 text-fg shadow-md",
+          "z-50 min-w-[8rem] overflow-hidden rounded-md border border-border bg-bg-card p-1 text-fg shadow-sm",
           "data-[state=open]:tyrum-animate-fade-in data-[state=closed]:tyrum-animate-fade-out",
           className,
         )}

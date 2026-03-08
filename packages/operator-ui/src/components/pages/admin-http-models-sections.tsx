@@ -230,7 +230,7 @@ export function ConfiguredModelsCard({
             return (
               <div
                 key={preset.preset_key}
-                className="grid gap-3 rounded-xl border border-border/60 bg-bg-card/40 p-4"
+                className="grid gap-3 rounded-lg border border-border bg-bg p-4"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="grid gap-2">
@@ -239,7 +239,7 @@ export function ConfiguredModelsCard({
                       <Badge variant="outline">{preset.preset_key}</Badge>
                       {warning ? <Badge variant="warning">Provider unavailable</Badge> : null}
                     </div>
-                    <div className="text-sm text-fg-muted">
+                    <div className="break-words text-sm text-fg-muted [overflow-wrap:anywhere]">
                       {preset.provider_key}/{preset.model_id}
                     </div>
                     <div className="text-sm text-fg-muted">

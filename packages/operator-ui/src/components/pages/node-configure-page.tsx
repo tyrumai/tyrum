@@ -93,7 +93,7 @@ function DesktopNodeConfigurePage({
       </div>
 
       <Tabs value={tab} onValueChange={(value) => setTab(value as ConfigureTab)}>
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="desktop">Desktop</TabsTrigger>
           <TabsTrigger value="browser">Browser</TabsTrigger>
@@ -185,14 +185,15 @@ function DesktopNodeConfigurePage({
           />
           <Card>
             <CardContent className="grid gap-4 pt-6">
-              <div className="flex items-center justify-between gap-4 border-b border-border py-2">
-                <div>
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border py-2">
+                <div className="min-w-0">
                   <div className="text-sm font-semibold text-fg">Headless mode</div>
                   <div className="text-sm text-fg-muted">
                     Launch the local browser without opening a visible window.
                   </div>
                 </div>
                 <Switch
+                  className="shrink-0"
                   checked={model.security.web.headless}
                   onCheckedChange={model.setBrowserHeadless}
                 />

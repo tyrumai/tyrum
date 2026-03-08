@@ -7,6 +7,7 @@ import type {
   OperatorCore,
 } from "@tyrum/operator-core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMediaQuery } from "../../hooks/use-media-query.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Alert } from "../ui/alert.js";
@@ -24,7 +25,7 @@ import {
   type WorkStateKvEntry,
 } from "../workboard/workboard-store.js";
 import { WorkBoardDrilldown } from "./workboard-page-drilldown.js";
-import { WorkItemColumn } from "./workboard-page.shared.js";
+import { STATUS_LABELS, WorkStatusList, WorkStatusPanel } from "./workboard-page.shared.js";
 
 export type WorkBoardPageProps = {
   core: OperatorCore;
@@ -34,6 +35,9 @@ const DEFAULT_SCOPE = {
   tenant_id: "default",
   agent_id: "default",
   workspace_id: "default",
+} as const;
+const DESKTOP_BOARD_GRID_STYLE = {
+  gridTemplateColumns: `repeat(${WORK_ITEM_STATUSES.length}, minmax(0, 1fr))`,
 } as const;
 
 function makeAgentScope(): WorkStateKVScope {
@@ -48,10 +52,14 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   const connection = useOperatorStore(core.connectionStore);
   const isConnected = connection.status === "connected";
   const workboard = useOperatorStore(core.workboardStore);
+  const desktopBoard = useMediaQuery("(min-width: 1024px)");
 
   const selectedIdRef = useRef<string | null>(null);
 
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<(typeof WORK_ITEM_STATUSES)[number]>(
+    WORK_ITEM_STATUSES[0],
+  );
   const [drilldownBusy, setDrilldownBusy] = useState(false);
   const [drilldownError, setDrilldownError] = useState<string | null>(null);
   const [transitionTarget, setTransitionTarget] = useState<WorkItem["status"] | null>(null);
@@ -67,6 +75,18 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   }, [selectedWorkItemId]);
 
   const grouped = useMemo(() => groupWorkItemsByStatus(workboard.items), [workboard.items]);
+
+  useEffect(() => {
+    if (selectedItem) {
+      setSelectedStatus(selectedItem.status);
+      return;
+    }
+    if (grouped[selectedStatus].length > 0) return;
+    const nextStatus = WORK_ITEM_STATUSES.find((status) => grouped[status].length > 0);
+    if (nextStatus && nextStatus !== selectedStatus) {
+      setSelectedStatus(nextStatus);
+    }
+  }, [grouped, selectedItem, selectedStatus]);
 
   useEffect(() => {
     if (!selectedWorkItemId) return;
@@ -320,17 +340,84 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         <Alert variant="error" title="WorkBoard error" description={workboard.error} />
       ) : null}
 
-      <div className="flex gap-3 overflow-x-auto pb-2">
-        {WORK_ITEM_STATUSES.map((status) => (
-          <WorkItemColumn
-            key={status}
-            status={status}
-            items={grouped[status]}
+      {desktopBoard ? (
+        <div
+          data-testid="workboard-board"
+          className="overflow-hidden rounded-lg border border-border bg-bg-card shadow-sm"
+        >
+          <div
+            data-testid="workboard-board-header"
+            className="grid border-b border-border bg-bg-subtle"
+            style={DESKTOP_BOARD_GRID_STYLE}
+          >
+            {WORK_ITEM_STATUSES.map((status) => (
+              <div key={status} className="border-r border-border px-3 py-3 last:border-r-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-fg">{STATUS_LABELS[status]}</span>
+                  <span className="text-xs text-fg-muted">{grouped[status].length}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="grid" style={DESKTOP_BOARD_GRID_STYLE}>
+            {WORK_ITEM_STATUSES.map((status) => (
+              <div
+                key={status}
+                data-testid={`workboard-column-${status}`}
+                className="min-h-80 border-r border-border p-3 align-top last:border-r-0"
+              >
+                <WorkStatusList
+                  items={grouped[status]}
+                  selectedWorkItemId={selectedWorkItemId}
+                  onSelect={setSelectedWorkItemId}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          <div
+            className="grid gap-2 sm:grid-cols-2"
+            data-testid="workboard-status-selector"
+            role="tablist"
+            aria-label="Work statuses"
+          >
+            {WORK_ITEM_STATUSES.map((status) => {
+              const active = status === selectedStatus;
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  data-testid={`workboard-status-${status}`}
+                  className={[
+                    "flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
+                    active
+                      ? "border-primary bg-bg text-fg"
+                      : "border-border bg-bg hover:bg-bg-subtle",
+                  ].join(" ")}
+                  onClick={() => {
+                    setSelectedStatus(status);
+                  }}
+                >
+                  <span>{STATUS_LABELS[status]}</span>
+                  <span className="text-xs text-fg-muted">{grouped[status].length}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <WorkStatusPanel
+            status={selectedStatus}
+            items={grouped[selectedStatus]}
             selectedWorkItemId={selectedWorkItemId}
             onSelect={setSelectedWorkItemId}
           />
-        ))}
-      </div>
+        </div>
+      )}
 
       <WorkBoardDrilldown
         selectedWorkItemId={selectedWorkItemId}

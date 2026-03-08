@@ -1,6 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import type * as React from "react";
-import { Activity, Bot, BriefcaseBusiness, Link2, PlayCircle, ShieldCheck } from "lucide-react";
 import { PageHeader } from "../layout/page-header.js";
 import { Badge } from "../ui/badge.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -22,64 +21,68 @@ export interface DashboardPageProps {
   hideHeader?: boolean;
 }
 
-function StatCard({
+function SummaryRow({
   label,
-  icon: Icon,
   value,
+  description,
   loading = false,
-  badge,
+  status,
   onClick,
   testId,
 }: {
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
   value: React.ReactNode;
+  description?: React.ReactNode;
   loading?: boolean;
-  badge?: React.ReactNode;
+  status?: React.ReactNode;
   onClick?: () => void;
   testId?: string;
 }) {
-  const interactive = Boolean(onClick);
+  const interactive = onClick !== undefined;
+  const content = (
+    <>
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-fg">{label}</div>
+        {description ? <div className="mt-1 text-sm text-fg-muted">{description}</div> : null}
+      </div>
+      <div className="shrink-0 text-right">
+        {loading ? (
+          <Skeleton className="ml-auto h-6 w-20" />
+        ) : (
+          <div className="text-lg font-semibold text-fg">{value}</div>
+        )}
+        {status ? <div className="mt-1 flex justify-end">{status}</div> : null}
+      </div>
+    </>
+  );
+
+  const sharedClassName = cn(
+    "flex w-full items-start justify-between gap-4 px-5 py-4 text-left",
+    interactive ? "cursor-pointer transition-colors hover:bg-bg-subtle" : null,
+    interactive
+      ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+      : null,
+  );
+
+  if (!onClick) {
+    return (
+      <div data-testid={testId} className={sharedClassName}>
+        {content}
+      </div>
+    );
+  }
 
   return (
-    <Card
+    <button
+      type="button"
       data-testid={testId}
-      role={interactive ? "button" : undefined}
-      tabIndex={interactive ? 0 : undefined}
-      className={cn(
-        interactive
-          ? "cursor-pointer transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
-          : null,
-        interactive
-          ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-          : null,
-      )}
+      className={sharedClassName}
       onClick={() => {
-        onClick?.();
-      }}
-      onKeyDown={(event) => {
-        if (!interactive) return;
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onClick?.();
-        }
+        onClick();
       }}
     >
-      <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
-        <div className="flex items-center gap-2 text-sm font-medium text-fg-muted">
-          <Icon className="h-4 w-4" aria-hidden="true" />
-          <span>{label}</span>
-        </div>
-        {badge ? <div className="shrink-0">{badge}</div> : null}
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <Skeleton className="h-7 w-24" />
-        ) : (
-          <div className="text-2xl font-semibold tracking-tight text-fg">{value}</div>
-        )}
-      </CardContent>
-    </Card>
+      {content}
+    </button>
   );
 }
 
@@ -135,115 +138,133 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
         {approvals.pendingIds.length} pending approvals
       </LiveRegion>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <StatCard
-          label="Connection"
-          icon={Activity}
-          testId="dashboard-card-connection"
-          value={
-            <div className="flex items-center gap-2">
-              <StatusDot
-                variant={connectionDisplay.variant}
-                pulse={connectionDisplay.pulse}
-                aria-hidden="true"
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold">System</h2>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-border">
+              <SummaryRow
+                label="Connection"
+                testId="dashboard-card-connection"
+                value={
+                  <div className="flex items-center gap-2">
+                    <StatusDot
+                      variant={connectionDisplay.variant}
+                      pulse={connectionDisplay.pulse}
+                      aria-hidden="true"
+                    />
+                    <span>{connectionDisplay.label}</span>
+                  </div>
+                }
+                description="Current gateway session state."
               />
-              <span>{connectionDisplay.label}</span>
+
+              <SummaryRow
+                label="Pending approvals"
+                loading={approvals.loading && approvals.lastSyncedAt === null}
+                value={String(approvals.pendingIds.length)}
+                status={
+                  approvals.pendingIds.length > 0 ? (
+                    <Badge data-testid="dashboard-approvals-badge" variant="danger">
+                      {approvals.pendingIds.length}
+                    </Badge>
+                  ) : null
+                }
+                onClick={() => {
+                  onNavigate?.("approvals");
+                }}
+                testId="dashboard-card-approvals"
+                description="Actions waiting for operator review."
+              />
+
+              <SummaryRow
+                label="Pending pairings"
+                loading={pairing.loading && pairing.lastSyncedAt === null}
+                value={String(pairing.pendingIds.length)}
+                status={
+                  pairing.pendingIds.length > 0 ? (
+                    <Badge data-testid="dashboard-pairing-badge" variant="danger">
+                      {pairing.pendingIds.length}
+                    </Badge>
+                  ) : null
+                }
+                onClick={() => {
+                  onNavigate?.("pairing");
+                }}
+                testId="dashboard-card-pairing"
+                description="Devices waiting for approval."
+              />
+
+              <SummaryRow
+                label="Active runs"
+                loading={status.loading.status && status.status === null}
+                value={activeRunsCount === null ? "-" : String(activeRunsCount)}
+                status={
+                  activeRunsCount !== null && activeRunsCount > 0 ? (
+                    <Badge data-testid="dashboard-runs-badge" variant="default">
+                      {activeRunsCount}
+                    </Badge>
+                  ) : null
+                }
+                onClick={() => {
+                  onNavigate?.("agents");
+                }}
+                testId="dashboard-card-runs"
+                description="Queued or running execution work."
+              />
             </div>
-          }
-        />
+          </CardContent>
+        </Card>
 
-        <StatCard
-          label="Pending Approvals"
-          icon={ShieldCheck}
-          loading={approvals.loading && approvals.lastSyncedAt === null}
-          value={String(approvals.pendingIds.length)}
-          badge={
-            approvals.pendingIds.length > 0 ? (
-              <Badge data-testid="dashboard-approvals-badge" variant="danger">
-                {approvals.pendingIds.length}
-              </Badge>
-            ) : null
-          }
-          onClick={() => {
-            onNavigate?.("approvals");
-          }}
-          testId="dashboard-card-approvals"
-        />
+        <Card>
+          <CardHeader className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold">Work</h2>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-border">
+              <SummaryRow
+                label="Open work"
+                loading={workboard.loading && workboard.items.length === 0}
+                value={String(openWorkCount)}
+                onClick={() => {
+                  onNavigate?.("workboard");
+                }}
+                testId="dashboard-card-open-work"
+                description="Items that are not complete yet."
+              />
 
-        <StatCard
-          label="Open Work"
-          icon={BriefcaseBusiness}
-          loading={workboard.loading && workboard.items.length === 0}
-          value={String(openWorkCount)}
-          onClick={() => {
-            onNavigate?.("workboard");
-          }}
-          testId="dashboard-card-open-work"
-        />
+              <SummaryRow
+                label="Active work"
+                loading={workboard.loading && workboard.items.length === 0}
+                value={String(activeWorkCount)}
+                onClick={() => {
+                  onNavigate?.("workboard");
+                }}
+                testId="dashboard-card-active-work"
+                description="Items currently doing or blocked."
+              />
 
-        <StatCard
-          label="Active Work"
-          icon={PlayCircle}
-          loading={workboard.loading && workboard.items.length === 0}
-          value={String(activeWorkCount)}
-          onClick={() => {
-            onNavigate?.("workboard");
-          }}
-          testId="dashboard-card-active-work"
-        />
-
-        <StatCard
-          label="Active Agents"
-          icon={Bot}
-          value={activeAgentsText}
-          badge={
-            activeAgentsCount > 0 ? (
-              <Badge variant="default" data-testid="dashboard-agents-badge">
-                {activeAgentsCount}
-              </Badge>
-            ) : null
-          }
-          onClick={() => {
-            onNavigate?.("agents");
-          }}
-          testId="dashboard-card-agents"
-        />
-
-        <StatCard
-          label="Active Runs"
-          icon={PlayCircle}
-          loading={status.loading.status && status.status === null}
-          value={activeRunsCount === null ? "-" : String(activeRunsCount)}
-          badge={
-            activeRunsCount !== null && activeRunsCount > 0 ? (
-              <Badge data-testid="dashboard-runs-badge" variant="default">
-                {activeRunsCount}
-              </Badge>
-            ) : null
-          }
-          onClick={() => {
-            onNavigate?.("agents");
-          }}
-          testId="dashboard-card-runs"
-        />
-
-        <StatCard
-          label="Pending Pairings"
-          icon={Link2}
-          loading={pairing.loading && pairing.lastSyncedAt === null}
-          value={String(pairing.pendingIds.length)}
-          badge={
-            pairing.pendingIds.length > 0 ? (
-              <Badge data-testid="dashboard-pairing-badge" variant="danger">
-                {pairing.pendingIds.length}
-              </Badge>
-            ) : null
-          }
-          onClick={() => {
-            onNavigate?.("pairing");
-          }}
-          testId="dashboard-card-pairing"
-        />
+              <SummaryRow
+                label="Active agents"
+                value={activeAgentsText}
+                status={
+                  activeAgentsCount > 0 ? (
+                    <Badge variant="default" data-testid="dashboard-agents-badge">
+                      {activeAgentsCount}
+                    </Badge>
+                  ) : null
+                }
+                onClick={() => {
+                  onNavigate?.("agents");
+                }}
+                testId="dashboard-card-agents"
+                description="Running agents compared with known agents."
+              />
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

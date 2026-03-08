@@ -17,9 +17,11 @@ function IdentityField({
   valueClassName?: string;
 }) {
   return (
-    <div>
-      <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">{label}</div>
-      <div className={cn("text-sm text-fg", valueClassName)}>{value}</div>
+    <div className="grid gap-1">
+      <div className="text-sm font-medium text-fg-muted">{label}</div>
+      <div className={cn("break-words text-sm text-fg [overflow-wrap:anywhere]", valueClassName)}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -35,8 +37,15 @@ function SessionStat({
 }) {
   return (
     <div className="rounded-lg border border-border/70 px-3 py-2">
-      <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">{label}</div>
-      <div className={cn("text-base font-medium text-fg", valueClassName)}>{value}</div>
+      <div className="text-sm font-medium text-fg-muted">{label}</div>
+      <div
+        className={cn(
+          "break-words text-base font-medium text-fg [overflow-wrap:anywhere]",
+          valueClassName,
+        )}
+      >
+        {value}
+      </div>
     </div>
   );
 }
@@ -47,7 +56,11 @@ function OutlineBadgeList({ emptyText, items }: { emptyText: string; items: stri
   ) : (
     <div className="flex flex-wrap gap-2">
       {items.map((item) => (
-        <Badge key={item} variant="outline">
+        <Badge
+          key={item}
+          variant="outline"
+          className="max-w-full break-words [overflow-wrap:anywhere]"
+        >
           {item}
         </Badge>
       ))}
@@ -69,13 +82,13 @@ function SkillsCard({ status }: { status: AgentStatusResponse }) {
             {detailedSkills.map((skill) => (
               <div
                 key={skill.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
+                className="flex items-start justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
               >
                 <div className="min-w-0">
-                  <div className="truncate font-medium text-fg">
+                  <div className="break-words font-medium text-fg [overflow-wrap:anywhere]">
                     {skill.name} <span className="text-fg-muted">({skill.id})</span>
                   </div>
-                  <div className="text-xs text-fg-muted">
+                  <div className="break-words text-xs text-fg-muted [overflow-wrap:anywhere]">
                     {skill.source} • v{skill.version}
                   </div>
                 </div>
@@ -102,11 +115,13 @@ function McpCard({ status }: { status: AgentStatusResponse }) {
           status.mcp.map((server) => (
             <div
               key={server.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
+              className="flex items-start justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
             >
               <div className="min-w-0">
-                <div className="truncate font-medium text-fg">{server.name}</div>
-                <div className="text-xs text-fg-muted">
+                <div className="break-words font-medium text-fg [overflow-wrap:anywhere]">
+                  {server.name}
+                </div>
+                <div className="break-words text-xs text-fg-muted [overflow-wrap:anywhere]">
                   {server.id} • {server.transport}
                 </div>
               </div>
@@ -283,12 +298,14 @@ export function AgentIdentityPanel({
             ))}
             {status.model.fallback && status.model.fallback.length > 0 ? (
               <div className="grid gap-2">
-                <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
-                  Fallbacks
-                </div>
+                <div className="text-sm font-medium text-fg-muted">Fallbacks</div>
                 <div className="flex flex-wrap gap-2">
                   {status.model.fallback.map((model) => (
-                    <Badge key={model} variant="outline">
+                    <Badge
+                      key={model}
+                      variant="outline"
+                      className="max-w-full break-words [overflow-wrap:anywhere]"
+                    >
                       {model}
                     </Badge>
                   ))}

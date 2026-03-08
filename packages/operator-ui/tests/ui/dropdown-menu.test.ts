@@ -48,7 +48,7 @@ describe("DropdownMenu", () => {
     cleanupTestRoot({ root, container });
   });
 
-  it("applies backdrop blur to dropdown content for translucent card backgrounds", () => {
+  it("keeps dropdown content plain and unblurred", () => {
     const DropdownMenu = (operatorUi as Record<string, unknown>)["DropdownMenu"];
     const DropdownMenuTrigger = (operatorUi as Record<string, unknown>)["DropdownMenuTrigger"];
     const DropdownMenuContent = (operatorUi as Record<string, unknown>)["DropdownMenuContent"];
@@ -76,7 +76,7 @@ describe("DropdownMenu", () => {
 
     const content = document.body.querySelector<HTMLElement>(".test-menu-blur");
     expect(content).not.toBeNull();
-    expect(content?.className).toContain("backdrop-blur-2xl");
+    expect(content?.className).not.toContain("backdrop-blur");
 
     cleanupTestRoot({ root, container });
   });

@@ -216,7 +216,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                   </div>
                 </CardHeader>
                 <CardContent className="grid gap-4">
-                  <blockquote className="rounded-md border-l-4 border-primary/30 bg-primary-dim/20 px-4 py-3 text-sm text-fg">
+                  <blockquote className="rounded-md border border-border bg-bg-subtle px-4 py-3 text-sm text-fg break-words [overflow-wrap:anywhere]">
                     {approval.prompt}
                   </blockquote>
 

@@ -67,7 +67,7 @@ export function ConfigureGeneralPanel() {
                   className={cn(
                     "flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors",
                     "hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-                    active ? "border-primary bg-primary-dim/20 text-fg" : "border-border text-fg",
+                    active ? "border-primary bg-bg text-fg" : "border-border bg-bg text-fg",
                   )}
                   onClick={() => {
                     theme.setMode(option.mode);

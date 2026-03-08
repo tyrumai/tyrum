@@ -4,7 +4,6 @@ import { Bot, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MemoryInspector } from "../memory/memory-inspector.js";
 import { PageHeader } from "../layout/page-header.js";
-import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
@@ -58,7 +57,6 @@ function selectInitialAgentKey(input: {
   if (input.availableAgentKeys.includes("default")) return "default";
   return input.availableAgentKeys[0] ?? current;
 }
-
 export function AgentsPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);
   const agentStatus = useOperatorStore(core.agentStatusStore);
@@ -194,7 +192,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                 onChange={(event) => {
                   setManualAgentKey(event.currentTarget.value);
                 }}
-                className="flex h-10 w-full rounded-md border border-border bg-bg-card/40 px-3 py-2 text-sm text-fg shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                className="flex h-10 w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0"
               />
             </label>
             <Button
@@ -223,7 +221,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
               setSelectionReady(true);
               setSelectedAgentKey(event.currentTarget.value);
             }}
-            className="flex h-10 w-full rounded-md border border-border bg-bg-card/40 px-3 py-2 text-sm text-fg shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+            className="flex h-10 w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0"
           >
             {agentOptions.length === 0 ? (
               <option value={selectedAgentKey}>{selectedAgentKey}</option>
@@ -268,18 +266,18 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                     data-testid={`agents-select-${agent.agentKey}`}
                     data-active={selected ? "true" : undefined}
                     className={cn(
-                      "grid gap-2 rounded-xl border px-3 py-3 text-left transition-colors",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+                      "grid gap-2 rounded-md border px-3 py-3 text-left transition-colors",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
                       selected
-                        ? "border-primary bg-primary-dim/20"
-                        : "border-border/70 bg-bg-card/40 hover:bg-bg-card/60",
+                        ? "border-primary bg-bg text-fg"
+                        : "border-border bg-bg hover:bg-bg-subtle",
                     )}
                     onClick={() => {
                       setSelectionReady(true);
                       setSelectedAgentKey(agent.agentKey);
                     }}
                   >
-                    <div className="font-medium text-fg">{agent.agentKey}</div>
+                    <div className="break-all font-medium text-fg">{agent.agentKey}</div>
                     <div className="flex items-center gap-2 text-xs text-fg-muted">
                       <StatusDot variant={active ? "success" : "neutral"} pulse={active} />
                       {active ? "Active" : "Idle"}
@@ -293,9 +291,12 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
 
         <div className="grid gap-4">
           <div className="flex flex-wrap items-center gap-3">
-            <Badge variant="outline" data-testid="agents-selected-key">
+            <div
+              data-testid="agents-selected-key"
+              className="max-w-full rounded-md border border-border bg-bg-subtle px-2 py-1 font-mono text-xs text-fg break-all"
+            >
               {selectedAgentKey}
-            </Badge>
+            </div>
             <div className="flex items-center gap-2 text-sm text-fg-muted">
               <StatusDot
                 variant={selectedAgentActive ? "success" : "neutral"}
@@ -306,7 +307,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="grid gap-4">
-            <TabsList aria-label="Agent sections">
+            <TabsList aria-label="Agent sections" className="flex-wrap">
               <TabsTrigger value="identity" data-testid="agents-tab-identity">
                 Identity
               </TabsTrigger>

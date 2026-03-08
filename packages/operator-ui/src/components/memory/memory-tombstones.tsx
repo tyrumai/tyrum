@@ -9,16 +9,14 @@ export function MemoryTombstones({ tombstones }: MemoryTombstonesProps) {
 
   return (
     <div data-testid="memory-tombstones">
-      <div className="mb-2 text-xs font-medium uppercase tracking-wide text-fg-muted">
-        Tombstones
-      </div>
+      <div className="mb-2 text-sm font-medium text-fg-muted">Tombstones</div>
       <div className="grid gap-1">
         {tombstones.map((tombstone) => (
           <div
             key={tombstone.memory_item_id}
             className="rounded-md bg-bg-subtle px-3 py-2 text-xs text-fg-muted"
           >
-            <span className="font-mono">{tombstone.memory_item_id}</span>
+            <span className="font-mono break-all">{tombstone.memory_item_id}</span>
             {tombstone.deleted_by ? (
               <span className="ml-2">deleted by {tombstone.deleted_by}</span>
             ) : null}

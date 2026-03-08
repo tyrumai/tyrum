@@ -82,7 +82,7 @@ function ProviderAccountCard({
   const nextStatus = account.status === "active" ? "disabled" : "active";
 
   return (
-    <div className="grid gap-3 rounded-xl border border-border/60 bg-bg-card/40 p-4">
+    <div className="grid gap-3 rounded-lg border border-border bg-bg p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="grid gap-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -95,7 +95,7 @@ function ProviderAccountCard({
               )}
             </Badge>
           </div>
-          <div className="text-sm text-fg-muted">
+          <div className="break-words text-sm text-fg-muted [overflow-wrap:anywhere]">
             Secrets configured:{" "}
             {account.configured_secret_keys.length > 0
               ? account.configured_secret_keys.join(", ")
@@ -175,7 +175,7 @@ function ProviderGroupCard({
   requestEnter: () => void;
 }): React.ReactElement {
   return (
-    <Card className="border-border/50 bg-bg/30">
+    <Card>
       <CardHeader className="pb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="grid gap-2">

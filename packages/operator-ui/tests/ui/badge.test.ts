@@ -22,6 +22,7 @@ describe("Badge", () => {
     expect(el).not.toBeNull();
     expect(el?.textContent).toBe("OK");
     expect(el?.className).toContain("bg-success");
+    expect(el?.className).not.toContain("rounded-full");
 
     cleanupTestRoot({ container, root });
   });

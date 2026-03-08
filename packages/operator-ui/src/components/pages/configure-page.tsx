@@ -64,7 +64,7 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
       ) : null}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="grid gap-3">
-        <TabsList aria-label="Configure sections">
+        <TabsList aria-label="Configure sections" className="flex-wrap">
           <TabsTrigger value="general" data-testid="configure-tab-general">
             General
           </TabsTrigger>

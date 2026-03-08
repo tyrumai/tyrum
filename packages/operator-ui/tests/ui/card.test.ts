@@ -61,4 +61,20 @@ describe("Card", () => {
 
     cleanupTestRoot({ container, root });
   });
+
+  it("keeps card chrome plain", () => {
+    const Card = (operatorUi as Record<string, unknown>)["Card"];
+    expect(Card).toBeDefined();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(Card as React.ComponentType, { className: "test-card" }, "Body"),
+    );
+
+    const className = container.querySelector(".test-card")?.className ?? "";
+    expect(className).not.toContain("rounded-2xl");
+    expect(className).not.toContain("backdrop-blur");
+    expect(className).not.toContain("shadow-xl");
+
+    cleanupTestRoot({ container, root });
+  });
 });

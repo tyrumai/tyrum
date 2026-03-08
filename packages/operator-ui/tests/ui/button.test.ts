@@ -86,4 +86,25 @@ describe("Button", () => {
 
     cleanupTestRoot({ container, root });
   });
+
+  it("avoids motion-heavy button affordances", () => {
+    const Button = (operatorUi as Record<string, unknown>)["Button"];
+    expect(Button).toBeDefined();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        Button as React.ComponentType,
+        { variant: "primary", className: "test-button" },
+        "Plain",
+      ),
+    );
+
+    const el = container.querySelector("button.test-button");
+    const className = el?.className ?? "";
+    expect(className).not.toContain("active:scale");
+    expect(className).not.toContain("translate-y");
+    expect(className).not.toContain("shadow-primary");
+
+    cleanupTestRoot({ container, root });
+  });
 });
