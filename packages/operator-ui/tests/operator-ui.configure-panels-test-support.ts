@@ -108,7 +108,7 @@ function registerConfigurePanelsNavTests(): void {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
       await openConfigureTab(container, "admin-http-tab-gateway");
-      expect(container.querySelector("[data-testid='admin-http-device-tokens']")).not.toBeNull();
+      expect(container.querySelector("[data-testid='admin-http-tokens']")).not.toBeNull();
 
       await openConfigureTab(container, "admin-http-tab-plugins");
       expect(container.querySelector("[data-testid='admin-http-plugins']")).not.toBeNull();
@@ -152,7 +152,7 @@ function registerConfigurePanelsNavTests(): void {
       });
       await openConfigureTab(container, "admin-http-tab-gateway");
       const issueButton = container.querySelector<HTMLButtonElement>(
-        '[data-testid="admin-http-device-tokens-issue"]',
+        '[data-testid="admin-http-tokens-issue"]',
       );
       expect(issueButton).not.toBeNull();
 
@@ -207,21 +207,8 @@ function registerConfigurePanelsNavTests(): void {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
       await openConfigureTab(container, "admin-http-tab-gateway");
-      const deviceTokensCard = container.querySelector<HTMLElement>(
-        '[data-testid="admin-http-device-tokens"]',
-      );
-      expect(deviceTokensCard).not.toBeNull();
-
-      const tokenInput =
-        deviceTokensCard?.querySelector<HTMLInputElement>('input[type="password"]');
-      expect(tokenInput).not.toBeNull();
-
-      act(() => {
-        setControlledInputValue(tokenInput!, "dev_test_token");
-      });
-
       const revokeButton = container.querySelector<HTMLButtonElement>(
-        '[data-testid="admin-http-device-tokens-revoke"]',
+        '[data-testid="admin-http-token-revoke-token-1"]',
       );
       expect(revokeButton).not.toBeNull();
 

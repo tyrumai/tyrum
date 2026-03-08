@@ -152,6 +152,26 @@ describe("gateway CLI argument parsing", () => {
     expect(parseCliArgs(["check"])).toEqual({ kind: "check" });
   });
 
+  it("parses default tenant admin token recovery command", () => {
+    expect(
+      parseCliArgs([
+        "tokens",
+        "issue-default-tenant-admin",
+        "--home",
+        "/tmp/home",
+        "--db",
+        "/tmp/gateway.db",
+        "--migrations-dir",
+        "/tmp/migs",
+      ]),
+    ).toEqual({
+      kind: "issue_default_tenant_admin_token",
+      home: "/tmp/home",
+      db: "/tmp/gateway.db",
+      migrationsDir: "/tmp/migs",
+    });
+  });
+
   it("parses TLS fingerprint command", () => {
     expect(parseCliArgs(["tls", "fingerprint"])).toEqual({ kind: "tls_fingerprint" });
   });
@@ -287,6 +307,25 @@ describe("gateway CLI runCli", () => {
       if (prevDbPath === undefined) delete process.env["GATEWAY_DB_PATH"];
       else process.env["GATEWAY_DB_PATH"] = prevDbPath;
 
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+    }
+  });
+
+  it("issues a fresh default tenant admin token", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      const code = await runCli(["tokens", "issue-default-tenant-admin", "--db", ":memory:"]);
+      expect(code).toBe(0);
+      expect(errSpy).not.toHaveBeenCalled();
+
+      const output = logSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+      expect(output).toContain("tokens.issue-default-tenant-admin: ok");
+      expect(output).toContain("default-tenant-admin: tyrum-token.v1.");
+      expect(output).toContain("Keep this token secure.");
+    } finally {
       logSpy.mockRestore();
       errSpy.mockRestore();
     }

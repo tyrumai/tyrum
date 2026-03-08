@@ -71,6 +71,33 @@ function toRow(raw: RawAuthTokenRow): AuthTokenRow {
 export class AuthTokenDal {
   constructor(private readonly db: SqlDb) {}
 
+  async listForTenant(tenantId: string): Promise<AuthTokenRow[]> {
+    const rows = await this.db.all<RawAuthTokenRow>(
+      `SELECT
+         token_id,
+         tenant_id,
+         role,
+         device_id,
+         scopes_json,
+         secret_salt,
+         secret_hash,
+         kdf,
+         issued_at,
+         expires_at,
+         revoked_at,
+         created_by_json,
+         created_at
+       FROM auth_tokens
+       WHERE tenant_id = ?
+       ORDER BY
+         CASE WHEN revoked_at IS NULL THEN 0 ELSE 1 END ASC,
+         issued_at DESC,
+         created_at DESC`,
+      [tenantId],
+    );
+    return rows.map(toRow);
+  }
+
   async getById(tokenId: string): Promise<AuthTokenRow | undefined> {
     const row = await this.db.get<RawAuthTokenRow>(
       `SELECT

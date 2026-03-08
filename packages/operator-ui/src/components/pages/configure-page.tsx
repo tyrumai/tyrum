@@ -5,10 +5,10 @@ import { PageHeader } from "../layout/page-header.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
+import { AuthTokensCard } from "./admin-http-tokens.js";
 import { AdminHttpModelsPanel } from "./admin-http-models.js";
 import { AdminHttpProvidersPanel } from "./admin-http-providers.js";
 import { useAdminMutationAccess } from "./admin-http-shared.js";
-import { DeviceTokensCard } from "./admin-http-device-tokens.js";
 import { PluginsCard } from "./admin-http-plugins.js";
 import { AdminHttpPolicyAuthPanels } from "./admin-http-policy-auth-panels.js";
 import { AdminHttpRoutingConfigPanel } from "./admin-http-routing-config.js";
@@ -90,7 +90,7 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
             Plugins
           </TabsTrigger>
           <TabsTrigger value="device-tokens" data-testid="admin-http-tab-gateway">
-            Device tokens
+            Tokens
           </TabsTrigger>
           <TabsTrigger value="commands" data-testid="admin-ws-tab-commands">
             Commands
@@ -130,7 +130,7 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
         </TabsContent>
 
         <TabsContent value="device-tokens">
-          <DeviceTokensCard core={core} />
+          <AuthTokensCard core={core} />
         </TabsContent>
 
         <TabsContent value="commands">

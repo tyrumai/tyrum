@@ -61,6 +61,19 @@ function createCore(activeAdminMode: boolean): {
         createOverride: vi.fn(async () => ({ status: "ok" })),
         revokeOverride: vi.fn(async () => ({ status: "ok" })),
       },
+      authTokens: {
+        list: vi.fn(async () => ({ tokens: [] })),
+        issue: vi.fn(async () => ({
+          token: "tyrum-token.v1.token-id.secret",
+          token_id: "token-1",
+          tenant_id: "11111111-1111-4111-8111-111111111111",
+          role: "client",
+          device_id: "operator-ui",
+          scopes: [],
+          issued_at: "2026-03-01T00:00:00.000Z",
+        })),
+        revoke: vi.fn(async () => ({ revoked: true, token_id: "token-1" })),
+      },
       authProfiles: {
         list: vi.fn(async () => ({ status: "ok", profiles: [] })),
         create: vi.fn(async () => ({ status: "ok" })),
@@ -263,7 +276,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
 
       await switchAdminTab(testRoot.container, "admin-http-tab-gateway");
       const issueButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-http-device-tokens-issue']",
+        "[data-testid='admin-http-tokens-issue']",
       );
       expect(issueButton).not.toBeNull();
       expect(issueButton?.disabled).toBe(true);
@@ -311,7 +324,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
     try {
       await switchAdminTab(testRoot.container, "admin-http-tab-gateway");
       const issueButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-http-device-tokens-issue']",
+        "[data-testid='admin-http-tokens-issue']",
       );
       expect(issueButton).not.toBeNull();
       expect(issueButton?.disabled).toBe(false);
@@ -334,23 +347,30 @@ describe("ConfigurePage (strict admin tabs)", () => {
     }
   });
 
-  it("uses the elevated admin token for device token issuance", async () => {
+  it("uses the elevated admin token for tenant token issuance", async () => {
     const { core } = createCore(true);
 
-    const fetchMock = vi.fn(async () => {
-      return new Response(
-        JSON.stringify({
-          token_kind: "device",
-          token: "dev_test",
-          token_id: "dev_test_id",
-          device_id: "operator-ui",
-          role: "client",
-          scopes: [],
-          issued_at: "2026-03-01T00:00:00.000Z",
-          expires_at: "2026-03-01T00:10:00.000Z",
-        }),
-        { status: 201 },
-      );
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url === "http://example.test/auth/tokens" && (!init?.method || init.method === "GET")) {
+        return new Response(JSON.stringify({ tokens: [] }), { status: 200 });
+      }
+      if (url === "http://example.test/auth/tokens/issue" && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            token: "tyrum-token.v1.token-id.secret",
+            token_id: "dev_test_id",
+            tenant_id: "11111111-1111-4111-8111-111111111111",
+            device_id: "operator-ui",
+            role: "client",
+            scopes: [],
+            issued_at: "2026-03-01T00:00:00.000Z",
+          }),
+          { status: 201 },
+        );
+      }
+      throw new Error(`Unexpected fetch request: ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -370,7 +390,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
       await switchAdminTab(testRoot.container, "admin-http-tab-gateway");
 
       const issueButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-http-device-tokens-issue']",
+        "[data-testid='admin-http-tokens-issue']",
       );
       expect(issueButton).not.toBeNull();
 
@@ -397,11 +417,12 @@ describe("ConfigurePage (strict admin tabs)", () => {
         await Promise.resolve();
       });
 
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      const [input, init] = fetchMock.mock.calls[0] ?? [];
+      const issueCall = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+      expect(issueCall).toBeDefined();
+      const [input, init] = issueCall ?? [];
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
 
-      expect(url).toBe("http://example.test/auth/device-tokens/issue");
+      expect(url).toBe("http://example.test/auth/tokens/issue");
       expect(init?.method).toBe("POST");
 
       const headers = new Headers(init?.headers);
@@ -409,9 +430,9 @@ describe("ConfigurePage (strict admin tabs)", () => {
 
       const bodyRaw = String(init?.body ?? "");
       expect(JSON.parse(bodyRaw)).toEqual({
-        device_id: "operator-ui",
         role: "client",
         scopes: [],
+        device_id: "operator-ui",
         ttl_seconds: 600,
       });
     } finally {

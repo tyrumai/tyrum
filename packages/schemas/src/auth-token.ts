@@ -29,6 +29,13 @@ export type AuthTokenClaims = z.infer<typeof AuthTokenClaims>;
 
 export const MAX_AUTH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 365;
 
+export const AuthTokenCreatedBy = z
+  .object({
+    kind: z.string().trim().min(1),
+  })
+  .catchall(z.unknown());
+export type AuthTokenCreatedBy = z.infer<typeof AuthTokenCreatedBy>;
+
 export const AuthTokenIssueRequest = z
   .object({
     /**
@@ -45,6 +52,11 @@ export const AuthTokenIssueRequest = z
   .strict();
 export type AuthTokenIssueRequest = z.infer<typeof AuthTokenIssueRequest>;
 
+export const TenantAuthTokenIssueRequest = AuthTokenIssueRequest.omit({
+  tenant_id: true,
+});
+export type TenantAuthTokenIssueRequest = z.infer<typeof TenantAuthTokenIssueRequest>;
+
 export const AuthTokenIssueResponse = z
   .object({
     token: z.string().trim().min(1),
@@ -58,6 +70,29 @@ export const AuthTokenIssueResponse = z
   })
   .strict();
 export type AuthTokenIssueResponse = z.infer<typeof AuthTokenIssueResponse>;
+
+export const AuthTokenListItem = z
+  .object({
+    token_id: z.string().trim().min(1),
+    tenant_id: UuidSchema.nullable(),
+    role: AuthTokenRole,
+    device_id: z.string().trim().min(1).nullable(),
+    scopes: z.array(Scope),
+    issued_at: DateTimeSchema,
+    expires_at: DateTimeSchema.nullable(),
+    revoked_at: DateTimeSchema.nullable(),
+    created_at: DateTimeSchema,
+    created_by: AuthTokenCreatedBy.optional(),
+  })
+  .strict();
+export type AuthTokenListItem = z.infer<typeof AuthTokenListItem>;
+
+export const AuthTokenListResponse = z
+  .object({
+    tokens: z.array(AuthTokenListItem),
+  })
+  .strict();
+export type AuthTokenListResponse = z.infer<typeof AuthTokenListResponse>;
 
 export const AuthTokenRevokeRequest = z
   .object({

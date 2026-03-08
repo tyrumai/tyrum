@@ -5,6 +5,7 @@ import {
   type AuthPinsApi,
   type AuthProfilesApi,
 } from "./auth.js";
+import { createAuthTokensApi, type AuthTokensApi } from "./auth-tokens.js";
 import { createAgentListApi, type AgentListApi } from "./agent-list.js";
 import { createAgentStatusApi, type AgentStatusApi } from "./agent-status.js";
 import { createArtifactsApi, type ArtifactsApi } from "./artifacts.js";
@@ -33,6 +34,7 @@ import { createSecretsApi, type SecretsApi } from "./secrets.js";
 import { HttpTransport, type TyrumHttpClientOptions } from "./shared.js";
 
 export interface TyrumHttpClient {
+  authTokens: AuthTokensApi;
   deviceTokens: DeviceTokensApi;
   secrets: SecretsApi;
   policy: PolicyApi;
@@ -78,6 +80,7 @@ export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHtt
   const transport = new HttpTransport(options);
 
   return {
+    authTokens: createAuthTokensApi(transport),
     deviceTokens: createDeviceTokensApi(transport),
     secrets: createSecretsApi(transport),
     policy: createPolicyApi(transport),

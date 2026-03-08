@@ -41,6 +41,14 @@ export type {
 } from "./model-config.js";
 export type { SecretStoreResponse } from "./secrets.js";
 export type { AuthPinSetResult } from "./auth.js";
+export type {
+  AuthTokenListEntry,
+  AuthTokenListResult,
+  AuthTokenIssueInput,
+  AuthTokenIssueResult,
+  AuthTokenRevokeInput,
+  AuthTokenRevokeResult,
+} from "./auth-tokens.js";
 export type { ContractCatalog, ContractJsonSchema } from "./contracts.js";
 export type { PolicyBundleResponse } from "./policy.js";
 

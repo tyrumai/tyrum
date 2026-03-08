@@ -5,9 +5,11 @@ import {
   type SampleExecutionStepStatus,
   type SampleExecutionAttemptStatus,
   EXECUTION_PROFILE_IDS,
-  TEST_DEVICE_IDENTITY,
 } from "./operator-ui.test-support.js";
-
+import {
+  createAuthTokenHttpFixtures,
+  createDeviceTokenHttpFixtures,
+} from "./operator-ui.token-http-fixtures.js";
 export class FakeWsClient implements OperatorWsClient {
   connected: boolean;
   constructor(initiallyConnected = true) {
@@ -59,9 +61,7 @@ export class FakeWsClient implements OperatorWsClient {
   sessionDelete = vi.fn(async () => ({ session_id: "session-1" }));
   sessionSend = vi.fn(async () => ({ session_id: "session-1", assistant_message: "" }));
   commandExecute = vi.fn(async () => ({}));
-
   private readonly handlers = new Map<string, Set<Handler>>();
-
   on(event: string, handler: Handler): void {
     const existing = this.handlers.get(event);
     if (existing) {
@@ -316,6 +316,9 @@ export function sampleExecutionAttempt({
 
 export function createFakeHttpClient(): {
   http: OperatorHttpClient;
+  authTokensList: ReturnType<typeof vi.fn>;
+  authTokensIssue: ReturnType<typeof vi.fn>;
+  authTokensRevoke: ReturnType<typeof vi.fn>;
   deviceTokensIssue: ReturnType<typeof vi.fn>;
   deviceTokensRevoke: ReturnType<typeof vi.fn>;
   statusGet: ReturnType<typeof vi.fn>;
@@ -329,22 +332,8 @@ export function createFakeHttpClient(): {
   agentStatusGet: ReturnType<typeof vi.fn>;
   modelAssignmentsUpdate: ReturnType<typeof vi.fn>;
 } {
-  const deviceTokensIssue = vi.fn(async () => ({
-    token_kind: "device" as const,
-    token: "elevated-device-token",
-    token_id: "token-1",
-    device_id: TEST_DEVICE_IDENTITY.deviceId,
-    role: "client" as const,
-    scopes: [
-      "operator.read",
-      "operator.write",
-      "operator.approvals",
-      "operator.pairing",
-      "operator.admin",
-    ],
-    issued_at: "2026-02-27T00:00:00.000Z",
-    expires_at: "2099-01-01T00:00:00.000Z",
-  }));
+  const { authTokensList, authTokensIssue, authTokensRevoke } = createAuthTokenHttpFixtures();
+  const { deviceTokensIssue, deviceTokensRevoke } = createDeviceTokenHttpFixtures();
   const statusGet = vi.fn(async () => sampleStatusResponse());
   const usageGet = vi.fn(async () => sampleUsageResponse());
   const presenceList = vi.fn(async () => samplePresenceResponse());
@@ -372,9 +361,12 @@ export function createFakeHttpClient(): {
       model_id: "gpt-4.1",
     })),
   }));
-  const deviceTokensRevoke = vi.fn(async () => ({ revoked: true }));
-
   const http: OperatorHttpClient = {
+    authTokens: {
+      list: authTokensList,
+      issue: authTokensIssue,
+      revoke: authTokensRevoke,
+    },
     deviceTokens: {
       issue: deviceTokensIssue,
       revoke: deviceTokensRevoke,
@@ -495,9 +487,11 @@ export function createFakeHttpClient(): {
       updateAssignments: modelAssignmentsUpdate,
     },
   };
-
   return {
     http,
+    authTokensList,
+    authTokensIssue,
+    authTokensRevoke,
     deviceTokensIssue,
     deviceTokensRevoke,
     statusGet,

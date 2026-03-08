@@ -45,6 +45,11 @@ function createCore(): {
         createOverride: vi.fn(async () => ({ status: "ok" })),
         revokeOverride: vi.fn(async () => ({ status: "ok" })),
       },
+      authTokens: {
+        list: vi.fn(async () => ({ tokens: [] })),
+        issue: vi.fn(async () => ({ status: "ok" })),
+        revoke: vi.fn(async () => ({ revoked: true })),
+      },
       authProfiles: {
         list: vi.fn(async () => ({ status: "ok", profiles: [] })),
         create: vi.fn(async () => ({ status: "ok" })),

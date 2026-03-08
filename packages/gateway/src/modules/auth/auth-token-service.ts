@@ -213,6 +213,18 @@ export class AuthTokenService {
     return await this.dal.revoke(id, new Date().toISOString());
   }
 
+  async getTokenById(tokenId: string): Promise<AuthTokenRow | undefined> {
+    const id = tokenId.trim();
+    if (!id) return undefined;
+    return await this.dal.getById(id);
+  }
+
+  async listTenantTokens(tenantId: string): Promise<AuthTokenRow[]> {
+    const id = tenantId.trim();
+    if (!id) return [];
+    return await this.dal.listForTenant(id);
+  }
+
   async countActiveTenantTokens(tenantId: string): Promise<number> {
     return (
       (await this.dal.countActiveTenantTokens(tenantId)) +

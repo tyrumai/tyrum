@@ -471,12 +471,10 @@ function registerConfigureActionsModelTests(): void {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
       await openConfigureTab(container, "admin-http-tab-gateway");
-      const deviceTokensCard = container.querySelector<HTMLElement>(
-        '[data-testid="admin-http-device-tokens"]',
-      );
-      expect(deviceTokensCard).not.toBeNull();
+      const tokensCard = container.querySelector<HTMLElement>('[data-testid="admin-http-tokens"]');
+      expect(tokensCard).not.toBeNull();
 
-      const ttlInput = deviceTokensCard?.querySelector<HTMLInputElement>('input[type="number"]');
+      const ttlInput = tokensCard?.querySelector<HTMLInputElement>('input[type="number"]');
       expect(ttlInput).not.toBeNull();
 
       act(() => {
@@ -484,7 +482,7 @@ function registerConfigureActionsModelTests(): void {
       });
 
       const issueButton = container.querySelector<HTMLButtonElement>(
-        '[data-testid="admin-http-device-tokens-issue"]',
+        '[data-testid="admin-http-tokens-issue"]',
       );
       expect(issueButton).not.toBeNull();
 

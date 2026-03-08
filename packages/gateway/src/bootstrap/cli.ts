@@ -1,22 +1,11 @@
 import { X509Certificate } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { DeploymentConfig } from "@tyrum/schemas";
-import type { SqlDb } from "../statestore/types.js";
-import { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import { installPluginFromDir } from "../modules/plugins/installer.js";
-import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";
-import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { runToolRunnerFromStdio } from "../toolrunner.js";
 import { VERSION } from "../version.js";
-import {
-  ensureDatabaseDirectory,
-  openGatewayDb,
-  resolveGatewayDbPath,
-  resolveGatewayHome,
-  resolveGatewayMigrationsDir,
-  type GatewayStartOptions,
-} from "./config.js";
+import { resolveGatewayHome, type GatewayStartOptions } from "./config.js";
+import { runGatewayCheck, runIssueDefaultTenantAdminToken } from "./cli-db-commands.js";
 import { CLI_HELP_TEXT } from "./cli-help.js";
 import { runImportHome } from "./cli-import-home.js";
 import {
@@ -34,6 +23,7 @@ type CliCommand =
       kind: "start";
     } & GatewayStartOptions)
   | { kind: "check"; home?: string; db?: string; migrationsDir?: string }
+  | { kind: "issue_default_tenant_admin_token"; home?: string; db?: string; migrationsDir?: string }
   | { kind: "tls_fingerprint"; home?: string }
   | { kind: "toolrunner"; home?: string; db?: string; migrationsDir?: string; payloadB64?: string }
   | { kind: "help" }
@@ -275,6 +265,19 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     return { kind: "check", ...flags };
   }
 
+  if (first === "tokens") {
+    const [subcommand, ...args] = rest;
+    if (!subcommand) throw new Error("tokens requires a subcommand (issue-default-tenant-admin)");
+    if (subcommand === "-h" || subcommand === "--help") return { kind: "help" };
+    if (subcommand !== "issue-default-tenant-admin") {
+      throw new Error(`unknown tokens command '${subcommand}'`);
+    }
+
+    const flags = parseDbFlags(args);
+    if ("kind" in flags) return flags;
+    return { kind: "issue_default_tenant_admin_token", ...flags };
+  }
+
   if (first === "toolrunner") {
     const flags = parseToolrunnerFlags(rest);
     if ("kind" in flags) return flags;
@@ -434,48 +437,6 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   return { kind: "update", channel, version };
 }
 
-async function runGatewayCheck(cmd: Extract<CliCommand, { kind: "check" }>): Promise<number> {
-  const tyrumHome = resolveGatewayHome(cmd.home);
-  const dbPath = resolveGatewayDbPath(tyrumHome, cmd.db);
-  const migrationsDir = resolveGatewayMigrationsDir(dbPath, cmd.migrationsDir);
-
-  let db: SqlDb | undefined;
-  try {
-    ensureDatabaseDirectory(dbPath);
-    db = await openGatewayDb({ dbPath, migrationsDir });
-
-    const deploymentConfigDal = new DeploymentConfigDal(db);
-    const deployment = await deploymentConfigDal.ensureSeeded({
-      defaultConfig: DeploymentConfig.parse({}),
-      createdBy: { kind: "bootstrap.check" },
-      reason: "seed",
-    });
-
-    const authTokens = new AuthTokenService(db);
-    const systemTokens = await authTokens.countActiveSystemTokens();
-    const defaultTenantTokens = await authTokens.countActiveTenantTokens(DEFAULT_TENANT_ID);
-
-    console.log("check: ok");
-    console.log(`db: kind=${db.kind} path=${dbPath}`);
-    console.log(
-      `deployment_config: revision=${deployment.revision} sha256=${deployment.configSha256.slice(0, 12)}`,
-    );
-    console.log(
-      `auth_tokens: system=${String(systemTokens)} default_tenant=${String(defaultTenantTokens)}`,
-    );
-    return 0;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`check: failed: ${message}`);
-    return 1;
-  } finally {
-    await db?.close().catch((closeErr) => {
-      const message = closeErr instanceof Error ? closeErr.message : String(closeErr);
-      console.error(`check: warning: failed to close db: ${message}`);
-    });
-  }
-}
-
 async function runTlsFingerprint(
   cmd: Extract<CliCommand, { kind: "tls_fingerprint" }>,
 ): Promise<number> {
@@ -522,6 +483,10 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
 
   if (command.kind === "check") {
     return await runGatewayCheck(command);
+  }
+
+  if (command.kind === "issue_default_tenant_admin_token") {
+    return await runIssueDefaultTenantAdminToken(command);
   }
 
   if (command.kind === "tls_fingerprint") {

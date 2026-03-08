@@ -19,7 +19,7 @@ pnpm install
 pnpm --filter @tyrum/gateway start
 ```
 
-On first start, the gateway prints bootstrap tokens. Keep them. The default local UI is:
+On first start, the gateway prints bootstrap tokens. Keep them. If you lose the `default-tenant-admin` token later, recover by issuing a fresh one with `tyrum tokens issue-default-tenant-admin`. After login, `Configure -> Tokens` lets you manage tenant-scoped tokens in the UI. The default local UI is:
 
 ```text
 http://127.0.0.1:8788/ui
