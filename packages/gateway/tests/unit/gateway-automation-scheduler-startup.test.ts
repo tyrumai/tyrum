@@ -73,7 +73,8 @@ describe("gateway automation scheduler startup", () => {
       StateStoreLifecycleScheduler,
     }));
 
-    const { startBackgroundSchedulers } = await import("../../src/bootstrap/runtime-builders.js");
+    const { startBackgroundSchedulers } =
+      await import("../../src/bootstrap/runtime-builders-background.js");
 
     const logger = {
       info: vi.fn(),
@@ -198,7 +199,8 @@ describe("gateway automation scheduler startup", () => {
       StateStoreLifecycleScheduler,
     }));
 
-    const { startBackgroundSchedulers } = await import("../../src/bootstrap/runtime-builders.js");
+    const { startBackgroundSchedulers } =
+      await import("../../src/bootstrap/runtime-builders-background.js");
 
     await startBackgroundSchedulers({
       role: "scheduler",
@@ -272,7 +274,8 @@ describe("gateway automation scheduler startup", () => {
       StateStoreLifecycleScheduler,
     }));
 
-    const { startBackgroundSchedulers } = await import("../../src/bootstrap/runtime-builders.js");
+    const { startBackgroundSchedulers } =
+      await import("../../src/bootstrap/runtime-builders-background.js");
 
     await startBackgroundSchedulers({
       role: "worker",

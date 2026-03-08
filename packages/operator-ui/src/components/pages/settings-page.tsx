@@ -1,7 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import type { OperatorUiMode } from "../../app.js";
 import { ThemeProvider, useThemeOptional } from "../../hooks/use-theme.js";
-import { PageHeader } from "../layout/page-header.js";
+import { AppPage } from "../layout/app-page.js";
 import { ConfigureGeneralPanel } from "./configure-general-panel.js";
 
 function SettingsPageContent({
@@ -12,10 +12,9 @@ function SettingsPageContent({
   mode: OperatorUiMode;
 }) {
   return (
-    <div className="grid gap-5">
-      <PageHeader title="Settings" />
+    <AppPage title="Settings" contentClassName="max-w-4xl gap-5">
       <ConfigureGeneralPanel />
-    </div>
+    </AppPage>
   );
 }
 

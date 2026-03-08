@@ -44,7 +44,7 @@ function registerDashboardTests(): void {
 
     const pageHeader = container.querySelector<HTMLElement>("header");
     expect(pageHeader).not.toBeNull();
-    expect(pageHeader?.className).toContain("mb-0");
+    expect(pageHeader?.className).toContain("h-14");
 
     expect(container.querySelector('[data-testid="dashboard-refresh-status"]')).toBeNull();
 

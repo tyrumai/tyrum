@@ -16,7 +16,7 @@ export function AppShell({
   mode,
   sidebar,
   mobileNav,
-  fullBleed = false,
+  fullBleed = true,
   viewportLocked = false,
   children,
   className,

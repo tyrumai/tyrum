@@ -10,8 +10,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMediaQuery } from "../../hooks/use-media-query.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
+import { AppPageToolbar } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
+import { ScrollArea } from "../ui/scroll-area.js";
 import { StatusDot, type StatusDotVariant } from "../ui/status-dot.js";
 import {
   WORK_ITEM_STATUSES,
@@ -312,131 +314,195 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     selectedItem?.status === "doing" ||
     selectedItem?.status === "blocked";
 
-  return (
-    <div className="grid gap-5">
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Work</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 text-sm text-fg-muted">
-            <StatusDot variant={connectionDotVariant} pulse={connection.status === "connecting"} />
-            {connection.status}
-          </div>
-          <Button variant="secondary" size="sm" onClick={reconnect}>
-            Reconnect
-          </Button>
-        </div>
+  const toolbarActions = (
+    <>
+      <div className="flex items-center gap-2 text-sm text-fg-muted">
+        <StatusDot variant={connectionDotVariant} pulse={connection.status === "connecting"} />
+        {connection.status}
       </div>
+      <Button variant="secondary" size="sm" onClick={reconnect}>
+        Reconnect
+      </Button>
+    </>
+  );
 
-      {!isConnected ? (
-        <Alert
-          variant="warning"
-          title="Not connected"
-          description="Connect to the gateway to use WorkBoard."
-        />
-      ) : null}
-
-      {workboard.error ? (
-        <Alert variant="error" title="WorkBoard error" description={workboard.error} />
-      ) : null}
+  return (
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-bg">
+      <AppPageToolbar title="Work" actions={toolbarActions} />
 
       {desktopBoard ? (
-        <div
-          data-testid="workboard-board"
-          className="overflow-hidden rounded-lg border border-border bg-bg-card shadow-sm"
-        >
-          <div
-            data-testid="workboard-board-header"
-            className="grid border-b border-border bg-bg-subtle"
-            style={DESKTOP_BOARD_GRID_STYLE}
-          >
-            {WORK_ITEM_STATUSES.map((status) => (
-              <div key={status} className="border-r border-border px-2.5 py-2.5 last:border-r-0">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold text-fg">{STATUS_LABELS[status]}</span>
-                  <span className="text-xs text-fg-muted">{grouped[status].length}</span>
+        <div className="flex min-h-0 flex-1">
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
+                {!isConnected ? (
+                  <Alert
+                    variant="warning"
+                    title="Not connected"
+                    description="Connect to the gateway to use WorkBoard."
+                  />
+                ) : null}
+
+                {workboard.error ? (
+                  <Alert variant="error" title="WorkBoard error" description={workboard.error} />
+                ) : null}
+
+                <div
+                  data-testid="workboard-board"
+                  className="overflow-hidden rounded-lg border border-border bg-bg-card"
+                >
+                  <div
+                    data-testid="workboard-board-header"
+                    className="grid border-b border-border bg-bg-subtle"
+                    style={DESKTOP_BOARD_GRID_STYLE}
+                  >
+                    {WORK_ITEM_STATUSES.map((status) => (
+                      <div
+                        key={status}
+                        className="border-r border-border px-2.5 py-2.5 last:border-r-0"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-fg">
+                            {STATUS_LABELS[status]}
+                          </span>
+                          <span className="text-xs text-fg-muted">{grouped[status].length}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="min-w-[70rem] grid" style={DESKTOP_BOARD_GRID_STYLE}>
+                    {WORK_ITEM_STATUSES.map((status) => (
+                      <div
+                        key={status}
+                        data-testid={`workboard-column-${status}`}
+                        className="min-h-80 border-r border-border p-2.5 align-top last:border-r-0"
+                      >
+                        <WorkStatusList
+                          items={grouped[status]}
+                          selectedWorkItemId={selectedWorkItemId}
+                          onSelect={setSelectedWorkItemId}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            ))}
+            </ScrollArea>
           </div>
-          <div className="grid" style={DESKTOP_BOARD_GRID_STYLE}>
-            {WORK_ITEM_STATUSES.map((status) => (
-              <div
-                key={status}
-                data-testid={`workboard-column-${status}`}
-                className="min-h-80 border-r border-border p-2.5 align-top last:border-r-0"
-              >
-                <WorkStatusList
-                  items={grouped[status]}
-                  selectedWorkItemId={selectedWorkItemId}
-                  onSelect={setSelectedWorkItemId}
-                />
+
+          <div className="hidden w-[24rem] shrink-0 flex-col border-l border-border bg-bg-subtle/20 lg:flex">
+            <div className="flex h-14 shrink-0 items-center border-b border-border px-4">
+              <div className="text-sm font-medium text-fg">
+                {selectedItem ? "Work item details" : "Select a work item"}
               </div>
-            ))}
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <ScrollArea className="h-full">
+                <div className="p-4">
+                  <WorkBoardDrilldown
+                    selectedWorkItemId={selectedWorkItemId}
+                    drilldownBusy={drilldownBusy}
+                    drilldownError={drilldownError}
+                    selectedItem={selectedItem}
+                    transitionTarget={transitionTarget}
+                    canMarkReadySelected={canMarkReadySelected}
+                    canResumeSelected={canResumeSelected}
+                    canCancelSelected={canCancelSelected}
+                    onTransition={transitionSelected}
+                    taskCounts={taskCounts}
+                    taskList={taskList}
+                    approvalBlockers={approvalBlockers}
+                    decisions={decisions}
+                    artifacts={artifacts}
+                    signals={signals}
+                    agentKvEntries={agentKvEntries}
+                    workItemKvEntries={workItemKvEntries}
+                  />
+                </div>
+              </ScrollArea>
+            </div>
           </div>
         </div>
-      ) : (
-        <div className="grid gap-3">
-          <div
-            className="grid gap-2 sm:grid-cols-2"
-            data-testid="workboard-status-selector"
-            role="tablist"
-            aria-label="Work statuses"
-          >
-            {WORK_ITEM_STATUSES.map((status) => {
-              const active = status === selectedStatus;
-              return (
-                <button
-                  key={status}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  data-testid={`workboard-status-${status}`}
-                  className={[
-                    "flex items-center justify-between rounded-md border px-2.5 py-1.5 text-sm transition-colors",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
-                    active
-                      ? "border-primary bg-bg text-fg"
-                      : "border-border bg-bg hover:bg-bg-subtle",
-                  ].join(" ")}
-                  onClick={() => {
-                    setSelectedStatus(status);
-                  }}
-                >
-                  <span>{STATUS_LABELS[status]}</span>
-                  <span className="text-xs text-fg-muted">{grouped[status].length}</span>
-                </button>
-              );
-            })}
+      ) : null}
+      <div className="min-h-0 flex-1 overflow-hidden lg:hidden">
+        <ScrollArea className="h-full">
+          <div className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
+            {!isConnected ? (
+              <Alert
+                variant="warning"
+                title="Not connected"
+                description="Connect to the gateway to use WorkBoard."
+              />
+            ) : null}
+
+            {workboard.error ? (
+              <Alert variant="error" title="WorkBoard error" description={workboard.error} />
+            ) : null}
+
+            <div className="grid gap-3">
+              <div
+                className="grid gap-2 sm:grid-cols-2"
+                data-testid="workboard-status-selector"
+                role="tablist"
+                aria-label="Work statuses"
+              >
+                {WORK_ITEM_STATUSES.map((status) => {
+                  const active = status === selectedStatus;
+                  return (
+                    <button
+                      key={status}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      data-testid={`workboard-status-${status}`}
+                      className={[
+                        "flex items-center justify-between rounded-md border px-2.5 py-1.5 text-sm transition-colors",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
+                        active
+                          ? "border-primary bg-bg text-fg"
+                          : "border-border bg-bg hover:bg-bg-subtle",
+                      ].join(" ")}
+                      onClick={() => {
+                        setSelectedStatus(status);
+                      }}
+                    >
+                      <span>{STATUS_LABELS[status]}</span>
+                      <span className="text-xs text-fg-muted">{grouped[status].length}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <WorkStatusPanel
+                status={selectedStatus}
+                items={grouped[selectedStatus]}
+                selectedWorkItemId={selectedWorkItemId}
+                onSelect={setSelectedWorkItemId}
+              />
+            </div>
+
+            <WorkBoardDrilldown
+              selectedWorkItemId={selectedWorkItemId}
+              drilldownBusy={drilldownBusy}
+              drilldownError={drilldownError}
+              selectedItem={selectedItem}
+              transitionTarget={transitionTarget}
+              canMarkReadySelected={canMarkReadySelected}
+              canResumeSelected={canResumeSelected}
+              canCancelSelected={canCancelSelected}
+              onTransition={transitionSelected}
+              taskCounts={taskCounts}
+              taskList={taskList}
+              approvalBlockers={approvalBlockers}
+              decisions={decisions}
+              artifacts={artifacts}
+              signals={signals}
+              agentKvEntries={agentKvEntries}
+              workItemKvEntries={workItemKvEntries}
+            />
           </div>
-
-          <WorkStatusPanel
-            status={selectedStatus}
-            items={grouped[selectedStatus]}
-            selectedWorkItemId={selectedWorkItemId}
-            onSelect={setSelectedWorkItemId}
-          />
-        </div>
-      )}
-
-      <WorkBoardDrilldown
-        selectedWorkItemId={selectedWorkItemId}
-        drilldownBusy={drilldownBusy}
-        drilldownError={drilldownError}
-        selectedItem={selectedItem}
-        transitionTarget={transitionTarget}
-        canMarkReadySelected={canMarkReadySelected}
-        canResumeSelected={canResumeSelected}
-        canCancelSelected={canCancelSelected}
-        onTransition={transitionSelected}
-        taskCounts={taskCounts}
-        taskList={taskList}
-        approvalBlockers={approvalBlockers}
-        decisions={decisions}
-        artifacts={artifacts}
-        signals={signals}
-        agentKvEntries={agentKvEntries}
-        workItemKvEntries={workItemKvEntries}
-      />
+        </ScrollArea>
+      </div>
     </div>
   );
 }

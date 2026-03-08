@@ -4,7 +4,7 @@ import { CircleCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AttemptArtifactsDialog } from "../artifacts/attempt-artifacts-dialog.js";
-import { PageHeader } from "../layout/page-header.js";
+import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -171,9 +171,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   };
 
   return (
-    <div className="grid gap-5">
-      <PageHeader title="Approvals" />
-
+    <AppPage title="Approvals" contentClassName="max-w-4xl gap-5">
       <LiveRegion data-testid="approvals-pending-live">
         {approvals.pendingIds.length} pending approvals
       </LiveRegion>
@@ -328,6 +326,6 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
           })}
         </div>
       )}
-    </div>
+    </AppPage>
   );
 }

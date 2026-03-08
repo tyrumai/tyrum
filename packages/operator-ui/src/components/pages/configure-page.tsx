@@ -1,7 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useState } from "react";
 import { AuditPanel } from "../admin-http/audit-panel.js";
-import { PageHeader } from "../layout/page-header.js";
+import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
@@ -52,9 +52,7 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
   const showReadOnlyNotice = !canMutate && activeTab !== "general";
 
   return (
-    <div className="grid gap-5" data-testid="configure-page">
-      <PageHeader title="Configure" />
-
+    <AppPage title="Configure" contentClassName="max-w-6xl gap-4" data-testid="configure-page">
       {showReadOnlyNotice ? (
         <ReadOnlyNotice
           onEnterElevatedMode={() => {
@@ -137,7 +135,7 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
           <AdminWsCommandPanel core={core} />
         </TabsContent>
       </Tabs>
-    </div>
+    </AppPage>
   );
 }
 

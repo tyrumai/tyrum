@@ -5,6 +5,7 @@ import { ErrorBoundary } from "./components/error/error-boundary.js";
 import { AppShell } from "./components/layout/app-shell.js";
 import { MobileNav } from "./components/layout/mobile-nav.js";
 import { Sidebar } from "./components/layout/sidebar.js";
+import { ScrollArea } from "./components/ui/scroll-area.js";
 import { Spinner } from "./components/ui/spinner.js";
 import { ToastProvider } from "./components/toast/toast-provider.js";
 import { ThemeProvider, useThemeOptional } from "./hooks/use-theme.js";
@@ -95,8 +96,8 @@ function OperatorUiAppRoot({
   const shell = (
     <AppShell
       mode={mode}
-      fullBleed={viewModel.route === "chat"}
-      viewportLocked={viewModel.route === "chat"}
+      fullBleed={true}
+      viewportLocked={true}
       sidebar={
         viewModel.showShell ? (
           <Sidebar
@@ -128,17 +129,21 @@ function OperatorUiAppRoot({
     >
       <ElevatedModeProvider core={core} mode={mode} elevatedModeController={elevatedModeController}>
         {viewModel.showConnectPage ? (
-          <div className="mx-auto mt-20 max-w-md w-full px-4">
-            <Suspense fallback={<OperatorRouteFallback />}>
-              {CONNECT_PAGE_RENDER({
-                core,
-                mode,
-                hostKind,
-                navigate: viewModel.navigate,
-                onReloadPage,
-                onReconfigureGateway,
-              })}
-            </Suspense>
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <ScrollArea className="h-full w-full">
+              <div className="mx-auto flex min-h-full w-full max-w-md items-start px-4 py-6 md:items-center md:py-10">
+                <Suspense fallback={<OperatorRouteFallback />}>
+                  {CONNECT_PAGE_RENDER({
+                    core,
+                    mode,
+                    hostKind,
+                    navigate: viewModel.navigate,
+                    onReloadPage,
+                    onReconfigureGateway,
+                  })}
+                </Suspense>
+              </div>
+            </ScrollArea>
           </div>
         ) : (
           <Suspense fallback={<OperatorRouteFallback />}>

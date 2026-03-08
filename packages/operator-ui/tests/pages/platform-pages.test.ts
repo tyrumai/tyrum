@@ -32,8 +32,8 @@ describe("Platform pages", () => {
     }
 
     await withBrowserCapabilitiesPage(({ container }) => {
-      expect(container.textContent).toContain("Browser Capabilities");
       expect(container.textContent).toContain("Browser node executor");
+      expect(container.textContent).toContain("Status");
     });
   });
 

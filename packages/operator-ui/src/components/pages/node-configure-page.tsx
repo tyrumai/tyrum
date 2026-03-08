@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { DesktopApi } from "../../desktop-api.js";
 import { useHostApi } from "../../host/host-api.js";
+import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
 import { Card, CardContent } from "../ui/card.js";
 import { Switch } from "../ui/switch.js";
@@ -26,24 +27,22 @@ export function NodeConfigurePage({ onReloadPage }: { onReloadPage?: () => void 
   const host = useHostApi();
   if (host.kind !== "desktop") {
     return (
-      <div className="grid gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Node Configuration</h1>
+      <AppPage title="Node Configuration" contentClassName="max-w-5xl gap-4">
         <Alert
           variant="warning"
           title="Not available"
           description="Node configuration is only available in the desktop app."
         />
-      </div>
+      </AppPage>
     );
   }
 
   const api = host.api;
   if (!api) {
     return (
-      <div className="grid gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Node Configuration</h1>
+      <AppPage title="Node Configuration" contentClassName="max-w-5xl gap-4">
         <Alert variant="error" title="Desktop API not available." />
-      </div>
+      </AppPage>
     );
   }
 
@@ -63,36 +62,35 @@ function DesktopNodeConfigurePage({
 
   if (model.loading) {
     return (
-      <div className="grid gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Node Configuration</h1>
+      <AppPage title="Node Configuration" contentClassName="max-w-5xl gap-4">
         <Card>
           <CardContent className="grid gap-2 pt-6 text-sm text-fg-muted">
             <div>Loading node settings…</div>
           </CardContent>
         </Card>
-      </div>
+      </AppPage>
     );
   }
 
   if (model.loadError) {
     return (
-      <div className="grid gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Node Configuration</h1>
+      <AppPage title="Node Configuration" contentClassName="max-w-5xl gap-4">
         <Alert variant="error" title="Failed to load node settings" description={model.loadError} />
-      </div>
+      </AppPage>
     );
   }
 
   return (
-    <div className="grid gap-5">
-      <div className="grid gap-0.5">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Node Configuration</h1>
-        <div className="text-sm text-fg-muted">
-          Configure the local node runtime used by Tyrum Desktop.
-        </div>
+    <AppPage title="Node Configuration" contentClassName="max-w-6xl gap-4">
+      <div className="text-sm text-fg-muted">
+        Configure the local node runtime used by Tyrum Desktop.
       </div>
 
-      <Tabs value={tab} onValueChange={(value) => setTab(value as ConfigureTab)}>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as ConfigureTab)}
+        className="grid gap-4"
+      >
         <TabsList className="flex-wrap">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="desktop">Desktop</TabsTrigger>
@@ -275,6 +273,6 @@ function DesktopNodeConfigurePage({
           />
         </TabsContent>
       </Tabs>
-    </div>
+    </AppPage>
   );
 }

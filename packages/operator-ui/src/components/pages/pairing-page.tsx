@@ -6,6 +6,7 @@ import {
 import { Link2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { AppPage } from "../layout/app-page.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { Checkbox } from "../ui/checkbox.js";
@@ -298,11 +299,7 @@ export function PairingPage({ core }: { core: OperatorCore }) {
   );
 
   return (
-    <div className="grid gap-5">
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Pairings</h1>
-      </div>
-
+    <AppPage title="Pairings" contentClassName="max-w-5xl gap-5">
       <div className="grid gap-3">
         <h2 className="text-lg font-medium text-fg">Pairing requests</h2>
         {pending.length === 0 ? (
@@ -342,6 +339,6 @@ export function PairingPage({ core }: { core: OperatorCore }) {
           </div>
         )}
       </div>
-    </div>
+    </AppPage>
   );
 }

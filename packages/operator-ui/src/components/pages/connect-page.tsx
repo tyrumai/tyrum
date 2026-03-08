@@ -20,12 +20,10 @@ function trimTrailingSlashes(value: string): string {
 export function ConnectPage({
   core,
   mode,
-  hideHeader,
   onReconfigureGateway,
 }: {
   core: OperatorCore;
   mode: OperatorUiMode;
-  hideHeader?: boolean;
   onReconfigureGateway?: (httpUrl: string, wsUrl: string) => void;
 }) {
   const connection = useOperatorStore(core.connectionStore);
@@ -119,9 +117,7 @@ export function ConnectPage({
 
   return (
     <div className="grid gap-5">
-      {hideHeader ? null : (
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">{title}</h1>
-      )}
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">{title}</h1>
 
       <Card>
         <CardHeader className="pb-2.5">
