@@ -49,7 +49,7 @@ export function AdminHttpAuthProfilesCard({
 
   return (
     <Card data-testid="admin-http-auth-profiles">
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="text-sm font-medium text-fg">Auth profiles</div>
         <div className="text-sm text-fg-muted">Manage provider profiles (schema-driven JSON).</div>
       </CardHeader>

@@ -24,7 +24,7 @@ export interface AdminHttpPolicyCardProps {
 export function AdminHttpPolicyCard({ http, openMutation, canMutate }: AdminHttpPolicyCardProps) {
   return (
     <Card data-testid="admin-http-policy">
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="text-sm font-medium text-fg">Policy</div>
         <div className="text-sm text-fg-muted">
           View the effective policy bundle and manage overrides.

@@ -104,6 +104,7 @@ function OperatorUiAppRoot({
             secondaryLabel="Platform"
             activeItemId={viewModel.route}
             onNavigate={viewModel.navigate}
+            collapsible
             connectionStatus={viewModel.connection.status}
             onSyncNow={() => {
               void core.syncAllNow();

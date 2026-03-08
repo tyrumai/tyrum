@@ -314,8 +314,8 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     selectedItem?.status === "blocked";
 
   return (
-    <div className="grid gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="grid gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
         <h1 className="text-2xl font-semibold tracking-tight text-fg">Work</h1>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-2 text-sm text-fg-muted">
@@ -351,7 +351,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
             style={DESKTOP_BOARD_GRID_STYLE}
           >
             {WORK_ITEM_STATUSES.map((status) => (
-              <div key={status} className="border-r border-border px-3 py-3 last:border-r-0">
+              <div key={status} className="border-r border-border px-2.5 py-2.5 last:border-r-0">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold text-fg">{STATUS_LABELS[status]}</span>
                   <span className="text-xs text-fg-muted">{grouped[status].length}</span>
@@ -364,7 +364,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
               <div
                 key={status}
                 data-testid={`workboard-column-${status}`}
-                className="min-h-80 border-r border-border p-3 align-top last:border-r-0"
+                className="min-h-80 border-r border-border p-2.5 align-top last:border-r-0"
               >
                 <WorkStatusList
                   items={grouped[status]}
@@ -376,7 +376,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
           </div>
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-3">
           <div
             className="grid gap-2 sm:grid-cols-2"
             data-testid="workboard-status-selector"
@@ -393,7 +393,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
                   aria-selected={active}
                   data-testid={`workboard-status-${status}`}
                   className={[
-                    "flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors",
+                    "flex items-center justify-between rounded-md border px-2.5 py-1.5 text-sm transition-colors",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
                     active
                       ? "border-primary bg-bg text-fg"

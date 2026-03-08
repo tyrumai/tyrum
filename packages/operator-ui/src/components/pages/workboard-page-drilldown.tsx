@@ -64,7 +64,7 @@ export function WorkBoardDrilldown({
         ) : !selectedItem ? (
           <EmptyState>WorkItem not loaded.</EmptyState>
         ) : (
-          <div className="grid gap-6">
+          <div className="grid gap-5">
             <Section title="WorkItem">
               <div className="break-words text-sm font-semibold text-fg [overflow-wrap:anywhere]">
                 {selectedItem.title}

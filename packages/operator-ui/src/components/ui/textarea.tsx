@@ -16,7 +16,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
     const describedById = message ? `${id}-help` : undefined;
 
     return (
-      <div className="grid gap-2">
+      <div className="grid gap-1.5">
         {label ? (
           <Label htmlFor={id} required={required}>
             {label}
@@ -29,7 +29,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           aria-invalid={error ? "true" : undefined}
           aria-describedby={describedById}
           className={cn(
-            "flex min-h-20 w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg transition-colors duration-150",
+            "flex min-h-18 w-full rounded-lg border border-border bg-bg px-2.5 py-1.5 text-sm text-fg transition-colors duration-150",
             "placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
             "disabled:cursor-not-allowed disabled:opacity-50",
             error ? "border-error focus-visible:ring-error" : null,

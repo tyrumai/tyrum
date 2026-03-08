@@ -52,7 +52,7 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
   const showReadOnlyNotice = !canMutate && activeTab !== "general";
 
   return (
-    <div className="grid gap-6" data-testid="configure-page">
+    <div className="grid gap-5" data-testid="configure-page">
       <PageHeader title="Configure" />
 
       {showReadOnlyNotice ? (

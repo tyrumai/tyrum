@@ -72,7 +72,7 @@ function SkillsCard({ status }: { status: AgentStatusResponse }) {
   const detailedSkills = status.skills_detailed ?? [];
   return (
     <Card data-testid="agents-identity-skills">
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="text-sm font-medium text-fg">Skills</div>
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
@@ -105,7 +105,7 @@ function SkillsCard({ status }: { status: AgentStatusResponse }) {
 function McpCard({ status }: { status: AgentStatusResponse }) {
   return (
     <Card data-testid="agents-identity-mcp">
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="text-sm font-medium text-fg">MCP</div>
       </CardHeader>
       <CardContent className="grid gap-2 text-sm">
@@ -161,7 +161,7 @@ function SessionsCard({ status }: { status: AgentStatusResponse }) {
 
   return (
     <Card data-testid="agents-identity-sessions">
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="text-sm font-medium text-fg">Sessions</div>
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
@@ -260,7 +260,7 @@ export function AgentIdentityPanel({
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card data-testid="agents-identity-overview">
-          <CardHeader className="pb-4">
+          <CardHeader className="pb-2.5">
             <div className="text-sm font-medium text-fg">Overview</div>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm">
@@ -284,7 +284,7 @@ export function AgentIdentityPanel({
         </Card>
 
         <Card data-testid="agents-identity-model">
-          <CardHeader className="pb-4">
+          <CardHeader className="pb-2.5">
             <div className="text-sm font-medium text-fg">Model</div>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm">
@@ -318,7 +318,7 @@ export function AgentIdentityPanel({
         <SkillsCard status={status} />
 
         <Card data-testid="agents-identity-tools">
-          <CardHeader className="pb-4">
+          <CardHeader className="pb-2.5">
             <div className="text-sm font-medium text-fg">Tools</div>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm">

@@ -152,6 +152,7 @@ function registerShellLayoutRenderTests(): void {
     });
 
     expect(container.textContent).toContain("Dashboard");
+    expect(container.querySelector('[data-testid="sidebar-collapse-toggle"]')).not.toBeNull();
 
     act(() => {
       root?.unmount();

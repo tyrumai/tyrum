@@ -69,7 +69,7 @@ function ChatToolbar({
   onNewChat: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="flex flex-wrap items-center justify-between gap-2.5">
       <h1 className="text-2xl font-semibold tracking-tight text-fg">Chat</h1>
       <div className="flex flex-wrap items-center gap-2">
         <select
@@ -123,7 +123,7 @@ function ChatThreadsPanel({
 }) {
   return (
     <Card className="flex h-full min-h-0 flex-col" data-testid="chat-threads-panel">
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-fg">Threads</h2>
           <Button
@@ -138,7 +138,7 @@ function ChatThreadsPanel({
         </div>
       </CardHeader>
       <Separator />
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
         {errorMessage ? (
           <Alert variant="error" title="Failed to load sessions" description={errorMessage} />
         ) : null}
@@ -149,7 +149,7 @@ function ChatThreadsPanel({
             <div className="text-sm text-fg-muted">No chats yet.</div>
           ) : (
             <ScrollArea className="h-full">
-              <div className="grid gap-2 pr-3">
+              <div className="grid gap-1.5 pr-2">
                 {threads.map((session) => {
                   const isActive = activeSessionId === session.session_id;
                   return (
@@ -159,7 +159,7 @@ function ChatThreadsPanel({
                       data-testid={`chat-thread-${session.session_id}`}
                       data-active={isActive ? "true" : undefined}
                       className={cn(
-                        "w-full rounded-lg border px-3 py-3 text-left transition-colors duration-150",
+                        "w-full rounded-lg border px-2.5 py-2.5 text-left transition-colors duration-150",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
                         isActive
                           ? "border-border bg-bg-subtle"
@@ -169,7 +169,7 @@ function ChatThreadsPanel({
                         onOpenThread(session.session_id);
                       }}
                     >
-                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5">
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-fg break-words [overflow-wrap:anywhere]">
                             {session.title}
@@ -235,7 +235,7 @@ function ChatConversationPanel({
 }) {
   return (
     <Card className="flex h-full min-h-0 flex-col" data-testid="chat-conversation-panel">
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -265,13 +265,13 @@ function ChatConversationPanel({
         </div>
       </CardHeader>
       <Separator />
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
         {loadError ? (
           <Alert variant="error" title="Failed to load transcript" description={loadError} />
         ) : null}
         <div className="min-h-0 flex-1 overflow-hidden">
           <ScrollArea className="h-full" data-testid="chat-transcript">
-            <div className="grid gap-4 pr-3">
+            <div className="grid gap-3 pr-2">
               {activeTurns.length === 0 ? (
                 <div className="text-sm text-fg-muted">
                   {activeThreadId ? "No messages yet." : "Pick a thread or start a new chat."}
@@ -286,7 +286,7 @@ function ChatConversationPanel({
                     >
                       <div
                         className={cn(
-                          "w-fit max-w-full rounded-lg border px-4 py-3 text-sm whitespace-pre-wrap md:max-w-[42rem]",
+                          "w-fit max-w-full rounded-lg border px-3 py-2.5 text-sm whitespace-pre-wrap md:max-w-[42rem]",
                           isUser
                             ? "border-border bg-bg-subtle text-fg"
                             : "border-border bg-bg text-fg",
@@ -306,7 +306,7 @@ function ChatConversationPanel({
         </div>
       </CardContent>
       <Separator />
-      <CardFooter className="flex-col items-stretch gap-3">
+      <CardFooter className="flex-col items-stretch gap-2.5">
         {sendError ? (
           <Alert variant="error" title="Failed to send" description={sendError} />
         ) : null}
@@ -325,7 +325,7 @@ function ChatConversationPanel({
             event.preventDefault();
             void send();
           }}
-          className="min-h-24"
+          className="min-h-20"
         />
         <div className="flex items-center justify-end">
           <Button
@@ -409,7 +409,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
   const canSend = Boolean(active) && !chat.send.sending && draft.trim().length > 0;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-6" data-testid="chat-page">
+    <div className="flex h-full min-h-0 flex-col gap-5" data-testid="chat-page">
       {lgUp || mobileView === "threads" ? (
         <ChatToolbar
           agentId={chat.agentId}
@@ -434,8 +434,8 @@ export function ChatPage({ core }: { core: OperatorCore }) {
 
       <div
         className={cn(
-          "flex min-h-0 flex-1 flex-col gap-4",
-          lgUp ? "lg:grid lg:grid-cols-[19rem_minmax(0,1fr)] lg:gap-6" : null,
+          "flex min-h-0 flex-1 flex-col gap-3",
+          lgUp ? "lg:grid lg:grid-cols-[19rem_minmax(0,1fr)] lg:gap-5" : null,
         )}
         data-testid="chat-panels"
       >

@@ -42,7 +42,7 @@ export function AdminHttpAuthPinsCard({
 
   return (
     <Card data-testid="admin-http-auth-pins">
-      <CardHeader className="pb-4">
+      <CardHeader className="pb-2.5">
         <div className="text-sm font-medium text-fg">Auth pins</div>
         <div className="text-sm text-fg-muted">
           Pin sessions/providers to a specific auth profile.

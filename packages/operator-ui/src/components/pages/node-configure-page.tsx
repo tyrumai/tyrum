@@ -26,7 +26,7 @@ export function NodeConfigurePage({ onReloadPage }: { onReloadPage?: () => void 
   const host = useHostApi();
   if (host.kind !== "desktop") {
     return (
-      <div className="grid gap-6">
+      <div className="grid gap-4">
         <h1 className="text-2xl font-semibold tracking-tight text-fg">Node Configuration</h1>
         <Alert
           variant="warning"
@@ -40,7 +40,7 @@ export function NodeConfigurePage({ onReloadPage }: { onReloadPage?: () => void 
   const api = host.api;
   if (!api) {
     return (
-      <div className="grid gap-6">
+      <div className="grid gap-4">
         <h1 className="text-2xl font-semibold tracking-tight text-fg">Node Configuration</h1>
         <Alert variant="error" title="Desktop API not available." />
       </div>
@@ -63,7 +63,7 @@ function DesktopNodeConfigurePage({
 
   if (model.loading) {
     return (
-      <div className="grid gap-6">
+      <div className="grid gap-4">
         <h1 className="text-2xl font-semibold tracking-tight text-fg">Node Configuration</h1>
         <Card>
           <CardContent className="grid gap-2 pt-6 text-sm text-fg-muted">
@@ -76,7 +76,7 @@ function DesktopNodeConfigurePage({
 
   if (model.loadError) {
     return (
-      <div className="grid gap-6">
+      <div className="grid gap-4">
         <h1 className="text-2xl font-semibold tracking-tight text-fg">Node Configuration</h1>
         <Alert variant="error" title="Failed to load node settings" description={model.loadError} />
       </div>
@@ -84,8 +84,8 @@ function DesktopNodeConfigurePage({
   }
 
   return (
-    <div className="grid gap-6">
-      <div className="grid gap-1">
+    <div className="grid gap-5">
+      <div className="grid gap-0.5">
         <h1 className="text-2xl font-semibold tracking-tight text-fg">Node Configuration</h1>
         <div className="text-sm text-fg-muted">
           Configure the local node runtime used by Tyrum Desktop.
@@ -101,7 +101,7 @@ function DesktopNodeConfigurePage({
           <TabsTrigger value="web">Web</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="grid gap-6">
+        <TabsContent value="general" className="grid gap-5">
           <SecurityProfileCard
             profile={model.displayProfile}
             onProfileChange={model.applyProfile}
@@ -134,7 +134,7 @@ function DesktopNodeConfigurePage({
           />
         </TabsContent>
 
-        <TabsContent value="desktop" className="grid gap-6">
+        <TabsContent value="desktop" className="grid gap-5">
           <CapabilityCard
             title="Desktop"
             capabilityTestId="node-capability-desktop"
@@ -162,7 +162,7 @@ function DesktopNodeConfigurePage({
           />
         </TabsContent>
 
-        <TabsContent value="browser" className="grid gap-6">
+        <TabsContent value="browser" className="grid gap-5">
           <CapabilityCard
             title="Browser"
             capabilityTestId="node-capability-browser"
@@ -211,7 +211,7 @@ function DesktopNodeConfigurePage({
           />
         </TabsContent>
 
-        <TabsContent value="shell" className="grid gap-6">
+        <TabsContent value="shell" className="grid gap-5">
           <CapabilityCard
             title="Shell"
             capabilityTestId="node-capability-shell"
@@ -251,7 +251,7 @@ function DesktopNodeConfigurePage({
           />
         </TabsContent>
 
-        <TabsContent value="web" className="grid gap-6">
+        <TabsContent value="web" className="grid gap-5">
           <CapabilityCard
             title="Web"
             capabilityTestId="node-capability-web"
