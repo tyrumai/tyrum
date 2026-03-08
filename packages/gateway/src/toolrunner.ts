@@ -10,6 +10,9 @@ import { requireTenantIdValue } from "./modules/identity/scope.js";
 import { RedactionEngine } from "./modules/redaction/engine.js";
 import { createArtifactStore } from "./modules/artifact/create-artifact-store.js";
 import { Logger } from "./modules/observability/logger.js";
+import { PolicyService } from "./modules/policy/service.js";
+import { PolicyOverrideDal } from "./modules/policy/override-dal.js";
+import { PolicySnapshotDal } from "./modules/policy/snapshot-dal.js";
 import { SqliteDb } from "./statestore/sqlite.js";
 import { PostgresDb } from "./statestore/postgres.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
@@ -18,6 +21,15 @@ import { DeploymentConfigDal } from "./modules/config/deployment-config-dal.js";
 
 interface ToolRunnerStdioRequest {
   tenant_id?: string;
+  run_id?: string;
+  step_id?: string;
+  attempt_id?: string;
+  approval_id?: string | null;
+  agent_id?: string | null;
+  key?: string;
+  lane?: string;
+  workspace_id?: string;
+  policy_snapshot_id?: string | null;
   plan_id: string;
   step_index: number;
   timeout_ms?: number;
@@ -51,6 +63,50 @@ function resolveDefaultMigrationsDir(__dirname: string, dbPath: string): string 
   return isPostgresDbUri(dbPath)
     ? join(__dirname, "../migrations/postgres")
     : join(__dirname, "../migrations/sqlite");
+}
+
+function requireNonEmptyString(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`missing/invalid ${field}`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error(`missing/invalid ${field}`);
+  }
+  return trimmed;
+}
+
+function readOptionalPolicySnapshotId(value: unknown): string | null {
+  if (value === null || typeof value === "undefined") {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw new Error("missing/invalid policy_snapshot_id");
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function buildStepExecutionContext(request: ToolRunnerStdioRequest): StepExecutionContext {
+  const tenantId = requireTenantIdValue(request.tenant_id, "missing/invalid tenant_id");
+  return {
+    tenantId,
+    runId: requireNonEmptyString(request.run_id, "run_id"),
+    stepId: requireNonEmptyString(request.step_id, "step_id"),
+    attemptId: requireNonEmptyString(request.attempt_id, "attempt_id"),
+    approvalId:
+      request.approval_id === null || typeof request.approval_id === "undefined"
+        ? null
+        : requireNonEmptyString(request.approval_id, "approval_id"),
+    agentId:
+      request.agent_id === null || typeof request.agent_id === "undefined"
+        ? null
+        : requireNonEmptyString(request.agent_id, "agent_id"),
+    key: requireNonEmptyString(request.key, "key"),
+    lane: requireNonEmptyString(request.lane, "lane"),
+    workspaceId: requireNonEmptyString(request.workspace_id, "workspace_id"),
+    policySnapshotId: readOptionalPolicySnapshotId(request.policy_snapshot_id),
+  };
 }
 
 export async function runToolRunnerFromStdio(params?: {
@@ -88,12 +144,15 @@ export async function runToolRunnerFromStdio(params?: {
   }
 
   let tenantId: string;
+  let context: StepExecutionContext;
   const planId = typeof request.plan_id === "string" ? request.plan_id : "";
   const stepIndex = typeof request.step_index === "number" ? Math.floor(request.step_index) : -1;
   try {
-    tenantId = requireTenantIdValue(request.tenant_id, "missing/invalid tenant_id");
-  } catch {
-    process.stderr.write("toolrunner input error: missing/invalid tenant_id\n");
+    context = buildStepExecutionContext(request);
+    tenantId = context.tenantId;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "missing/invalid toolrunner context";
+    process.stderr.write(`toolrunner input error: ${message}\n`);
     return 2;
   }
   if (!planId || stepIndex < 0) {
@@ -135,6 +194,13 @@ export async function runToolRunnerFromStdio(params?: {
       createdBy: { kind: "bootstrap.toolrunner" },
       reason: "seed",
     });
+    const policyService = new PolicyService({
+      home: tyrumHome,
+      snapshotDal: new PolicySnapshotDal(db),
+      overrideDal: new PolicyOverrideDal(db),
+      logger,
+      deploymentPolicy: deployment.config.policy,
+    });
 
     const secretProvider = await createDbSecretProvider({
       db,
@@ -161,22 +227,18 @@ export async function runToolRunnerFromStdio(params?: {
     const executor = createLocalStepExecutor({
       tyrumHome,
       secretProvider,
+      policyService,
+      isPolicyApprovalApproved: async (inputTenantId, approvalId) => {
+        const approval = await db!.get<{ kind: string; status: string }>(
+          "SELECT kind, status FROM approvals WHERE tenant_id = ? AND approval_id = ? LIMIT 1",
+          [inputTenantId, approvalId],
+        );
+        return approval?.kind === "policy" && approval?.status === "approved";
+      },
       redactionEngine,
       artifactStore,
       logger,
     });
-
-    const context: StepExecutionContext = {
-      tenantId,
-      runId: "toolrunner",
-      stepId: `toolrunner:${planId}:${String(stepIndex)}`,
-      attemptId: "toolrunner",
-      approvalId: null,
-      key: "toolrunner",
-      lane: "toolrunner",
-      workspaceId: "default",
-      policySnapshotId: null,
-    };
 
     const result = await executor.execute(action, planId, stepIndex, timeoutMs, context);
     process.stdout.write(JSON.stringify(result) + "\n");

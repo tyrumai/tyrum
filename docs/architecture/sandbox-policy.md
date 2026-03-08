@@ -74,6 +74,17 @@ The snapshot hash MUST be computed over a deterministic canonical representation
 
 Store (or be able to re-derive) the canonical bytes used to compute the hash for verification during export/import.
 
+### Executor fail-closed contract
+
+Executors must enforce policy from the run snapshot, not assume a caller already did it:
+
+- execution entry points must receive valid tenant scope plus the run `policy_snapshot_id` before running policy-governed actions
+- executor-side secret resolution must happen only after snapshot-based policy allows it
+- executor-side tool and egress denials must fail closed even if an alternate path bypasses queue-time checks
+- executor-generated policy approvals and denials must stay auditable through the normal run/step/attempt records
+
+This keeps standalone toolrunner execution, local execution, and queued workflow execution aligned on the same policy boundary.
+
 ## Minimum policy domains
 
 A `PolicyBundle` covers at minimum:

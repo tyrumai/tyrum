@@ -128,7 +128,9 @@ function createPolicyStateResolver(input: BuildToolSetInput) {
           container: input.container,
           tenantId: input.executionContext.tenantId,
           policySnapshotId,
-          agentId: deriveAgentIdFromKey(input.executionContext.key),
+          agentId:
+            input.executionContext.agentId?.trim() ||
+            deriveAgentIdFromKey(input.executionContext.key),
           workspaceId: input.executionContext.workspaceId,
           toolId: input2.toolId,
           toolMatchTarget: matchTarget,

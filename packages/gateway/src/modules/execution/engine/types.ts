@@ -12,6 +12,7 @@ export interface StepResult {
   success: boolean;
   result?: unknown;
   error?: string;
+  failureKind?: "policy";
   evidence?: EvaluationContext;
   artifacts?: ArtifactRefT[];
   cost?: AttemptCostT;
@@ -30,6 +31,7 @@ export interface StepExecutionContext {
   stepId: string;
   attemptId: string;
   approvalId: string | null;
+  agentId?: string | null;
   key: string;
   lane: string;
   workspaceId: string;

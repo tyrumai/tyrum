@@ -1,17 +1,28 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { ActionPrimitive } from "@tyrum/schemas";
 import { Ajv2019 } from "ajv/dist/2019.js";
+import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { createLocalStepExecutor } from "../../src/modules/execution/local-step-executor.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import type { SecretHandle } from "@tyrum/schemas";
+import type { SecretProvider } from "../../src/modules/secret/provider.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 describe("LocalStepExecutor playbook output contracts", () => {
   let homeDir: string | undefined;
+  let container: GatewayContainer | undefined;
 
   afterEach(async () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    await container?.db.close();
+    container = undefined;
     if (homeDir) {
       await rm(homeDir, { recursive: true, force: true });
       homeDir = undefined;
@@ -21,6 +32,37 @@ describe("LocalStepExecutor playbook output contracts", () => {
   async function makeExecutor() {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-local-step-executor-"));
     return createLocalStepExecutor({ tyrumHome: homeDir });
+  }
+
+  async function makePolicyExecutor(input: {
+    bundle: Record<string, unknown>;
+    secretProvider?: SecretProvider;
+  }) {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-local-step-executor-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const snapshot = await container.policyService.getOrCreateSnapshot(
+      DEFAULT_TENANT_ID,
+      input.bundle,
+    );
+    const executor = createLocalStepExecutor({
+      tyrumHome: homeDir,
+      secretProvider: input.secretProvider,
+      policyService: container.policyService,
+    });
+    return {
+      executor,
+      context: {
+        tenantId: DEFAULT_TENANT_ID,
+        runId: "run-1",
+        stepId: "step-1",
+        attemptId: "attempt-1",
+        approvalId: null,
+        key: "agent:test",
+        lane: "main",
+        workspaceId: "default",
+        policySnapshotId: snapshot.policy_snapshot_id,
+      },
+    };
   }
 
   it("applies max_output_bytes cap for CLI output", async () => {
@@ -271,5 +313,123 @@ describe("LocalStepExecutor playbook output contracts", () => {
     expect(res.success).toBe(true);
     const evidence = res.evidence as { json?: unknown } | undefined;
     expect(evidence?.json).toBeNull();
+  });
+
+  it("fails closed when policy-governed execution is missing a policy snapshot id", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-local-step-executor-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const executor = createLocalStepExecutor({
+      tyrumHome: homeDir,
+      policyService: container.policyService,
+    });
+
+    const action = ActionPrimitive.parse({
+      type: "CLI",
+      args: {
+        cmd: process.execPath,
+        args: ["-e", "process.stdout.write('ok')"],
+      },
+    });
+
+    const res = await executor.execute(action, "plan-policy-missing", 0, 5_000, {
+      tenantId: DEFAULT_TENANT_ID,
+      runId: "run-1",
+      stepId: "step-1",
+      attemptId: "attempt-1",
+      approvalId: null,
+      key: "agent:test",
+      lane: "main",
+      workspaceId: "default",
+      policySnapshotId: null,
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toContain("policy snapshot");
+  });
+
+  it("denies HTTP execution when executor-side policy rejects egress", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response("ok", { status: 200, headers: { "content-type": "text/plain" } }),
+      ),
+    );
+
+    const { executor, context } = await makePolicyExecutor({
+      bundle: {
+        v: 1,
+        tools: { default: "deny", allow: ["tool.http.fetch"], require_approval: [], deny: [] },
+        network_egress: { default: "deny", allow: [], require_approval: [], deny: [] },
+        secrets: { default: "allow", allow: [], require_approval: [], deny: [] },
+      },
+    });
+
+    const action = ActionPrimitive.parse({
+      type: "Http",
+      args: {
+        url: "https://93.184.216.34/data",
+        method: "GET",
+      },
+    });
+
+    const res = await executor.execute(action, "plan-policy-egress", 0, 5_000, context);
+
+    expect(res.success).toBe(false);
+    expect(res.error).toContain("policy denied");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("denies secret resolution before resolving secret values", async () => {
+    const handle: SecretHandle = {
+      handle_id: "handle-abc",
+      provider: "db",
+      scope: "billing",
+      created_at: new Date().toISOString(),
+    };
+    const secretProvider: SecretProvider = {
+      resolve: vi.fn(async () => "SECRET_VALUE"),
+      store: vi.fn(async () => handle),
+      revoke: vi.fn(async () => true),
+      list: vi.fn(async () => [handle]),
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response("ok", { status: 200, headers: { "content-type": "text/plain" } }),
+      ),
+    );
+
+    const { executor, context } = await makePolicyExecutor({
+      bundle: {
+        v: 1,
+        tools: { default: "deny", allow: ["tool.http.fetch"], require_approval: [], deny: [] },
+        network_egress: {
+          default: "deny",
+          allow: ["https://93.184.216.34/*"],
+          require_approval: [],
+          deny: [],
+        },
+        secrets: { default: "deny", allow: [], require_approval: [], deny: [] },
+      },
+      secretProvider,
+    });
+
+    const action = ActionPrimitive.parse({
+      type: "Http",
+      args: {
+        url: "https://93.184.216.34/data",
+        method: "GET",
+        headers: { Authorization: "secret:handle-abc" },
+      },
+    });
+
+    const res = await executor.execute(action, "plan-policy-secret", 0, 5_000, context);
+
+    expect(res.success).toBe(false);
+    expect(res.error).toContain("policy denied secret resolution");
+    expect(secretProvider.list).toHaveBeenCalled();
+    expect(secretProvider.resolve).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
