@@ -36,12 +36,9 @@ export function applyDeterministicContextCompactionAndToolPruning(
 ): ModelMessage[] {
   const cfg = normalizeContextPruningConfig(contextPruning);
   const maxMessages = cfg.max_messages;
-  if (maxMessages <= 0) {
-    return messages.slice();
-  }
   const keepLastToolMessages = Math.min(
     cfg.tool_prune_keep_last_messages,
-    Math.max(2, maxMessages - 1),
+    maxMessages <= 0 ? cfg.tool_prune_keep_last_messages : Math.max(2, maxMessages - 1),
   );
 
   const toolCalls =
@@ -53,6 +50,7 @@ export function applyDeterministicContextCompactionAndToolPruning(
     emptyMessages: "remove",
   });
 
+  if (maxMessages <= 0) return next;
   if (next.length === 0) return next;
   if (next.length <= maxMessages) return next;
 
