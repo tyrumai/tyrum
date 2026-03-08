@@ -432,4 +432,71 @@ describe("LocalStepExecutor playbook output contracts", () => {
     expect(secretProvider.resolve).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it("passes resolved secret scopes into executor-side tool-call policy evaluation", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-local-step-executor-"));
+    const handle: SecretHandle = {
+      handle_id: "handle-abc",
+      provider: "db",
+      scope: "billing",
+      created_at: new Date().toISOString(),
+    };
+    const secretProvider: SecretProvider = {
+      resolve: vi.fn(async () => "SECRET_VALUE"),
+      store: vi.fn(async () => handle),
+      revoke: vi.fn(async () => true),
+      list: vi.fn(async () => [handle]),
+    };
+    const evaluateSecretsFromSnapshot = vi.fn(async () => ({ decision: "allow" as const }));
+    const evaluateToolCallFromSnapshot = vi.fn(async () => ({
+      decision: "allow" as const,
+      applied_override_ids: [],
+    }));
+    const executor = createLocalStepExecutor({
+      tyrumHome: homeDir,
+      secretProvider,
+      policyService: {
+        isEnabled: () => true,
+        isObserveOnly: () => false,
+        evaluateSecretsFromSnapshot,
+        evaluateToolCallFromSnapshot,
+      } as unknown as GatewayContainer["policyService"],
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response("ok", { status: 200, headers: { "content-type": "text/plain" } }),
+      ),
+    );
+
+    const action = ActionPrimitive.parse({
+      type: "Http",
+      args: {
+        url: "https://93.184.216.34/data",
+        method: "GET",
+        headers: { Authorization: "secret:handle-abc" },
+      },
+    });
+
+    const res = await executor.execute(action, "plan-policy-secret-scopes", 0, 5_000, {
+      tenantId: DEFAULT_TENANT_ID,
+      runId: "run-1",
+      stepId: "step-1",
+      attemptId: "attempt-1",
+      approvalId: null,
+      key: "agent:test",
+      lane: "main",
+      workspaceId: "default",
+      policySnapshotId: "policy-1",
+    });
+
+    expect(res.success).toBe(true);
+    expect(evaluateSecretsFromSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ secretScopes: ["db:billing"] }),
+    );
+    expect(evaluateToolCallFromSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ secretScopes: ["db:billing"] }),
+    );
+  });
 });

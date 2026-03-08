@@ -28,6 +28,7 @@ export interface LocalStepExecutorOptions {
   tyrumHome: string;
   secretProvider?: SecretProvider;
   policyService?: PolicyService;
+  isPolicyApprovalApproved?: (tenantId: string, approvalId: string) => Promise<boolean>;
   redactionEngine?: RedactionEngine;
   artifactStore?: ArtifactStore;
   logger?: Logger;
@@ -41,6 +42,10 @@ class LocalStepExecutor implements StepExecutor {
   private readonly tyrumHome: string;
   private readonly secretProvider?: SecretProvider;
   private readonly policyService?: PolicyService;
+  private readonly isPolicyApprovalApproved?: (
+    tenantId: string,
+    approvalId: string,
+  ) => Promise<boolean>;
   private readonly redactionEngine?: RedactionEngine;
   private readonly artifactStore?: ArtifactStore;
   private readonly logger?: Logger;
@@ -49,6 +54,7 @@ class LocalStepExecutor implements StepExecutor {
     this.tyrumHome = opts.tyrumHome;
     this.secretProvider = opts.secretProvider;
     this.policyService = opts.policyService;
+    this.isPolicyApprovalApproved = opts.isPolicyApprovalApproved;
     this.redactionEngine = opts.redactionEngine;
     this.artifactStore = opts.artifactStore;
     this.logger = opts.logger;
@@ -66,6 +72,7 @@ class LocalStepExecutor implements StepExecutor {
       context,
       policyService: this.policyService,
       secretProvider: this.secretProvider,
+      isPolicyApprovalApproved: this.isPolicyApprovalApproved,
     });
     if (policyResult) {
       return policyResult;

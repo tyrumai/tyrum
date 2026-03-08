@@ -12,6 +12,7 @@ export async function maybeEnforceLocalExecutorPolicy(input: {
   context: StepExecutionContext;
   policyService?: PolicyService;
   secretProvider?: SecretProvider;
+  isPolicyApprovalApproved?: (tenantId: string, approvalId: string) => Promise<boolean>;
 }): Promise<StepResult | undefined> {
   const policy = input.policyService;
   if (!policy || !policy.isEnabled() || policy.isObserveOnly()) {
@@ -42,6 +43,11 @@ export async function maybeEnforceLocalExecutorPolicy(input: {
     };
   }
 
+  const approvedPolicyGate =
+    typeof input.context.approvalId === "string" && input.context.approvalId.trim().length > 0
+      ? await input.isPolicyApprovalApproved?.(tenantId, input.context.approvalId.trim())
+      : false;
+
   const secretScopes = await resolveSecretScopesFromArgs(
     input.action.args ?? {},
     input.secretProvider,
@@ -60,6 +66,7 @@ export async function maybeEnforceLocalExecutorPolicy(input: {
       };
     }
     if (secretsDecision.decision === "require_approval") {
+      if (approvedPolicyGate) return undefined;
       return {
         success: true,
         pause: {
@@ -85,6 +92,7 @@ export async function maybeEnforceLocalExecutorPolicy(input: {
     toolId: tool.toolId,
     toolMatchTarget: tool.matchTarget,
     url: tool.url,
+    secretScopes: secretScopes.length > 0 ? secretScopes : undefined,
     inputProvenance: { source: "workflow", trusted: true },
   });
   if (decision.decision === "deny") {
@@ -95,6 +103,7 @@ export async function maybeEnforceLocalExecutorPolicy(input: {
     };
   }
   if (decision.decision === "require_approval") {
+    if (approvedPolicyGate) return undefined;
     return {
       success: true,
       pause: {

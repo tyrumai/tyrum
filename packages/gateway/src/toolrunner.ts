@@ -212,6 +212,13 @@ export async function runToolRunnerFromStdio(params?: {
       tyrumHome,
       secretProvider,
       policyService,
+      isPolicyApprovalApproved: async (inputTenantId, approvalId) => {
+        const approval = await db!.get<{ kind: string; status: string }>(
+          "SELECT kind, status FROM approvals WHERE tenant_id = ? AND approval_id = ? LIMIT 1",
+          [inputTenantId, approvalId],
+        );
+        return approval?.kind === "policy" && approval?.status === "approved";
+      },
       redactionEngine,
       artifactStore,
       logger,

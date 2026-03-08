@@ -217,4 +217,72 @@ describe("executor policy regressions", () => {
     expect(secretProvider.resolve).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it("does not re-pause executor-side policy gates after the same policy approval is approved", async () => {
+    const { engine, homeDir: harnessHome } = await createHarness();
+    const snapshot = await container!.policyService.getOrCreateSnapshot(
+      DEFAULT_TENANT_ID,
+      PolicyBundle.parse({
+        v: 1,
+        tools: { default: "require_approval", allow: [], require_approval: [], deny: [] },
+        network_egress: { default: "allow", allow: [], require_approval: [], deny: [] },
+        secrets: { default: "allow", allow: [], require_approval: [], deny: [] },
+      }),
+    );
+    const executor = createLocalStepExecutor({
+      tyrumHome: harnessHome,
+      policyService: container!.policyService,
+      isPolicyApprovalApproved: async (tenantId, approvalId) => {
+        const row = await container!.db.get<{ kind: string; status: string }>(
+          "SELECT kind, status FROM approvals WHERE tenant_id = ? AND approval_id = ? LIMIT 1",
+          [tenantId, approvalId],
+        );
+        return row?.kind === "policy" && row?.status === "approved";
+      },
+    });
+
+    const action = ActionPrimitive.parse({
+      type: "CLI",
+      args: {
+        cmd: process.execPath,
+        args: ["-e", "process.stdout.write('ok')"],
+      },
+      idempotency_key: "policy-approval-loop",
+    });
+
+    const enqueued = await engine.enqueuePlan({
+      tenantId: DEFAULT_TENANT_ID,
+      key: "agent:test",
+      lane: "main",
+      planId: "plan-policy-approved-resume",
+      requestId: "req-policy-approved-resume",
+      steps: [action],
+      policySnapshotId: snapshot.policy_snapshot_id,
+    });
+
+    await engine.workerTick({ workerId: "w1", executor, runId: enqueued.runId });
+
+    const approval = await container!.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
+    expect(approval).toHaveLength(1);
+    expect(approval[0]?.kind).toBe("policy");
+    expect(approval[0]?.resume_token).toBeTruthy();
+    if (!approval[0]?.resume_token) return;
+
+    await container!.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval[0].approval_id,
+      decision: "approved",
+    });
+    await engine.resumeRun(approval[0].resume_token);
+
+    await engine.workerTick({ workerId: "w1", executor, runId: enqueued.runId });
+    await engine.workerTick({ workerId: "w1", executor, runId: enqueued.runId });
+
+    const state = await loadRunState(enqueued.runId);
+    expect(state.run?.status).toBe("succeeded");
+    expect(state.step?.status).toBe("succeeded");
+
+    const pendingAfter = await container!.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
+    expect(pendingAfter).toHaveLength(0);
+  });
 });
