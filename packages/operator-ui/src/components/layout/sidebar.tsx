@@ -186,6 +186,25 @@ interface SidebarSyncNowButtonProps {
   syncNowLoading: boolean;
 }
 
+interface SidebarFooterRowContentProps {
+  collapsed: boolean;
+  icon: React.ReactNode;
+  children?: React.ReactNode;
+}
+
+function SidebarFooterRowContent({ collapsed, icon, children }: SidebarFooterRowContentProps) {
+  return (
+    <>
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center">{icon}</span>
+      {!collapsed ? (
+        <span className="min-w-0 flex-1 break-words leading-5 [overflow-wrap:anywhere]">
+          {children}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 function SidebarSyncNowButton({
   collapsed,
   onSyncNow,
@@ -200,8 +219,8 @@ function SidebarSyncNowButton({
       aria-label={syncNowLoading ? "Syncing" : "Sync now"}
       disabled={syncNowDisabled || syncNowLoading}
       className={cn(
-        "flex items-center rounded-md text-sm transition-colors",
-        collapsed ? "justify-center px-1.5 py-1.5" : "gap-2 px-2.5 py-1.5",
+        "flex w-full items-center rounded-md text-sm transition-colors",
+        collapsed ? "justify-center px-1.5 py-1.5" : "justify-start gap-2 px-2.5 py-1.5",
         syncNowDisabled || syncNowLoading
           ? "cursor-not-allowed opacity-50"
           : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
@@ -211,8 +230,12 @@ function SidebarSyncNowButton({
         onSyncNow();
       }}
     >
-      <RefreshCw className={cn("h-4 w-4", syncNowLoading ? "animate-spin" : null)} />
-      {!collapsed ? <span>{syncNowLoading ? "Syncing…" : "Sync now"}</span> : null}
+      <SidebarFooterRowContent
+        collapsed={collapsed}
+        icon={<RefreshCw className={cn("h-4 w-4", syncNowLoading ? "animate-spin" : null)} />}
+      >
+        {syncNowLoading ? "Syncing…" : "Sync now"}
+      </SidebarFooterRowContent>
     </button>
   );
 }
@@ -235,25 +258,29 @@ function SidebarStatusControls({ collapsed, connectionStatus }: SidebarStatusCon
           <TooltipTrigger asChild>
             <span
               className={cn(
-                "inline-flex items-center rounded-md text-sm text-fg-muted",
-                collapsed ? "justify-center px-1.5 py-1.5" : "w-full gap-2 px-2.5 py-1.5",
+                "inline-flex w-full items-center rounded-md text-sm text-fg-muted",
+                collapsed ? "justify-center px-1.5 py-1.5" : "justify-start gap-2 px-2.5 py-1.5",
               )}
             >
-              <StatusDot
-                data-testid="connection-status-dot"
-                variant={connectionDisplay.variant}
-                pulse={connectionDisplay.pulse}
-                role="img"
-                aria-label={`Connection ${connectionDisplay.label}`}
-              />
-              {!collapsed ? (
+              <SidebarFooterRowContent
+                collapsed={collapsed}
+                icon={
+                  <StatusDot
+                    data-testid="connection-status-dot"
+                    variant={connectionDisplay.variant}
+                    pulse={connectionDisplay.pulse}
+                    role="img"
+                    aria-label={`Connection ${connectionDisplay.label}`}
+                  />
+                }
+              >
                 <span
                   data-testid="connection-status-label"
                   className="min-w-0 break-words leading-5 [overflow-wrap:anywhere]"
                 >
                   {connectionDisplay.label}
                 </span>
-              ) : null}
+              </SidebarFooterRowContent>
             </span>
           </TooltipTrigger>
           <TooltipContent side={collapsed ? "right" : "top"}>
@@ -277,21 +304,21 @@ function SidebarCollapseToggle({ collapsed, onToggleCollapsed }: SidebarCollapse
       data-testid="sidebar-collapse-toggle"
       title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       className={cn(
-        "flex items-center rounded-md text-sm transition-colors",
-        collapsed ? "justify-center px-1.5 py-1.5" : "gap-2 px-2.5 py-1.5",
+        "flex w-full items-center rounded-md text-sm transition-colors",
+        collapsed ? "justify-center px-1.5 py-1.5" : "justify-start gap-2 px-2.5 py-1.5",
         "text-fg-muted hover:bg-bg-subtle hover:text-fg",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
       )}
       onClick={onToggleCollapsed}
     >
-      {collapsed ? (
-        <ChevronsRight className="h-4 w-4" />
-      ) : (
-        <>
-          <ChevronsLeft className="h-4 w-4" />
-          <span>Collapse</span>
-        </>
-      )}
+      <SidebarFooterRowContent
+        collapsed={collapsed}
+        icon={
+          collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />
+        }
+      >
+        Collapse
+      </SidebarFooterRowContent>
     </button>
   );
 }
