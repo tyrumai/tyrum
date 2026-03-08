@@ -180,6 +180,36 @@ describe("activityStore", () => {
     expect(workstream?.runStatus).toBe("queued");
   });
 
+  it("uses the full run comparator when selecting the latest run for a workstream", () => {
+    const { runs, activity } = createHarness();
+
+    runs.handleRunUpdated(
+      sampleRun({
+        run_id: "run-attempt-1",
+        key: "agent:alpha:main",
+        lane: "main",
+        status: "paused",
+        attempt: 1,
+        created_at: "2026-01-01T00:00:04.000Z",
+        paused_reason: "manual",
+      }),
+    );
+    runs.handleRunUpdated(
+      sampleRun({
+        run_id: "run-attempt-2",
+        key: "agent:alpha:main",
+        lane: "main",
+        status: "running",
+        attempt: 2,
+        created_at: "2026-01-01T00:00:04.000Z",
+      }),
+    );
+
+    const workstream = activity.store.getSnapshot().workstreamsById["agent:alpha:main::main"];
+    expect(workstream?.latestRunId).toBe("run-attempt-2");
+    expect(workstream?.runStatus).toBe("running");
+  });
+
   it("uses approval, failure, then paused precedence for attention and default selection", () => {
     const { runs, approvals, activity } = createHarness();
 
@@ -321,7 +351,7 @@ describe("activityStore", () => {
       latestRunId: "run-status-only",
       runStatus: "paused",
       queuedRunCount: 3,
-      currentRoom: "lounge",
+      currentRoom: "strategy-desk",
       persona: samplePersona("Hypatia"),
     });
     expect(workstream?.lease).toEqual({

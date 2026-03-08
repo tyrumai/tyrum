@@ -3,6 +3,7 @@ import type { ActivityState, ActivityWorkstream } from "./activity-store.js";
 import type { ActivityStoreDeps } from "./activity-store.js";
 import type { RunsState } from "./runs-store.js";
 import {
+  compareRuns,
   compareEvents,
   compareWorkstreamIds,
   createPersonaMap,
@@ -73,9 +74,7 @@ function buildWorkstreams(
   for (const run of Object.values(runsState.runsById)) {
     const draft = addDraft(drafts, run.key, normalizeLane(run.lane), sessionAgents);
     draft.latestRun = draft.latestRun
-      ? ([draft.latestRun, run].toSorted((left, right) =>
-          right.created_at.localeCompare(left.created_at),
-        )[0] ?? run)
+      ? ([draft.latestRun, run].toSorted(compareRuns)[0] ?? run)
       : run;
     const existingRuns = runsByWorkstreamId.get(draft.id) ?? [];
     existingRuns.push(run);

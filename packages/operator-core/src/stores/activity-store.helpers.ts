@@ -124,7 +124,7 @@ export function compareEvents(left: ActivityEvent, right: ActivityEvent): number
   return left.id.localeCompare(right.id);
 }
 
-function compareRuns(left: ExecutionRun, right: ExecutionRun): number {
+export function compareRuns(left: ExecutionRun, right: ExecutionRun): number {
   const timeCmp = right.created_at.localeCompare(left.created_at);
   if (timeCmp !== 0) return timeCmp;
   if (left.attempt !== right.attempt) return right.attempt - left.attempt;
@@ -307,7 +307,7 @@ export function determineRoom(
     return "archive";
   }
   if (runStatus === "running") return "terminal-lab";
-  if (runStatus === "queued") return "strategy-desk";
+  if (runStatus === "paused" || runStatus === "queued") return "strategy-desk";
   return "lounge";
 }
 
