@@ -272,6 +272,7 @@ export async function handleSessionCompactMessage(
     const runtime = await deps.agents.getRuntime({ tenantId, agentKey });
     const compacted = await runtime.compactSession({
       sessionId: existing.session.session_id,
+      keepLastMessages: parsedReq.data.payload.keep_last_messages,
     });
     const result = WsSessionCompactResult.parse({
       session_id: sessionKey,

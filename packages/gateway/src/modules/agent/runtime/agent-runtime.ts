@@ -293,6 +293,7 @@ export class AgentRuntime {
 
   async compactSession(input: {
     sessionId: string;
+    keepLastMessages?: number;
     abortSignal?: AbortSignal;
     timeoutMs?: number;
   }): Promise<SessionCompactionResult> {
@@ -319,6 +320,7 @@ export class AgentRuntime {
       ctx,
       session,
       model: modelResolution.model,
+      keepLastMessages: input.keepLastMessages,
       abortSignal: input.abortSignal,
       timeoutMs: input.timeoutMs,
       logger: this.opts.container.logger,

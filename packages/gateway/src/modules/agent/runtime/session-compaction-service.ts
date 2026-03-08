@@ -25,7 +25,7 @@ const CONTEXT_OVERFLOW_PATTERNS = [
   /maximum context/i,
   /token limit/i,
   /too many tokens/i,
-  /too large/i,
+  /(?:input|prompt|message).{0,40}too large/i,
   /input too long/i,
   /exceeds?.*context/i,
 ];
