@@ -76,6 +76,17 @@ function requireNonEmptyString(value: unknown, field: string): string {
   return trimmed;
 }
 
+function readOptionalPolicySnapshotId(value: unknown): string | null {
+  if (value === null || typeof value === "undefined") {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw new Error("missing/invalid policy_snapshot_id");
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function buildStepExecutionContext(request: ToolRunnerStdioRequest): StepExecutionContext {
   const tenantId = requireTenantIdValue(request.tenant_id, "missing/invalid tenant_id");
   return {
@@ -94,7 +105,7 @@ function buildStepExecutionContext(request: ToolRunnerStdioRequest): StepExecuti
     key: requireNonEmptyString(request.key, "key"),
     lane: requireNonEmptyString(request.lane, "lane"),
     workspaceId: requireNonEmptyString(request.workspace_id, "workspace_id"),
-    policySnapshotId: requireNonEmptyString(request.policy_snapshot_id, "policy_snapshot_id"),
+    policySnapshotId: readOptionalPolicySnapshotId(request.policy_snapshot_id),
   };
 }
 
