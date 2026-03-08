@@ -1,4 +1,5 @@
 import type { OperatorCore, Pairing } from "@tyrum/operator-core";
+import type { NodeIdentity } from "@tyrum/schemas";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
@@ -15,10 +16,61 @@ import { Label } from "../ui/label.js";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
 import { Textarea } from "../ui/textarea.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
+import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { extractTakeoverUrlFromNodeIdentity } from "../../utils/takeover-url.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 
 type PairingTrustLevel = "local" | "remote";
+
+const PLATFORM_LABELS: Record<string, string> = {
+  darwin: "macOS",
+  linux: "Linux",
+  win32: "Windows",
+};
+
+interface NodeMeta {
+  platform: string | null;
+  version: string | null;
+  mode: string | null;
+  ip: string | null;
+}
+
+function extractNodeMeta(metadata: unknown): NodeMeta {
+  const empty: NodeMeta = { platform: null, version: null, mode: null, ip: null };
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return empty;
+  const m = metadata as Record<string, unknown>;
+  const str = (key: string) => (typeof m[key] === "string" && m[key] ? (m[key] as string) : null);
+  return {
+    platform: str("platform"),
+    version: str("version"),
+    mode: str("mode"),
+    ip: str("ip"),
+  };
+}
+
+function NodeDetails({ node, requestedAt }: { node: NodeIdentity; requestedAt?: string }) {
+  const meta = extractNodeMeta(node.metadata);
+  const platformLabel = meta.platform ? (PLATFORM_LABELS[meta.platform] ?? meta.platform) : null;
+
+  const details: { label: string; value: string }[] = [];
+  if (platformLabel) details.push({ label: "Platform", value: platformLabel });
+  if (meta.mode) details.push({ label: "Mode", value: meta.mode });
+  if (meta.version) details.push({ label: "Version", value: meta.version });
+  if (meta.ip) details.push({ label: "IP", value: meta.ip });
+  if (requestedAt) details.push({ label: "Requested", value: formatRelativeTime(requestedAt) });
+
+  if (details.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-fg-muted">
+      {details.map((d) => (
+        <span key={d.label}>
+          {d.label} <span className="font-medium text-fg">{d.value}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function useMountedRef() {
   const mountedRef = useRef(true);
@@ -105,6 +157,7 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
           {pairing.node.label ? (
             <div className="text-xs text-fg-muted">{pairing.node.label}</div>
           ) : null}
+          <NodeDetails node={pairing.node} requestedAt={pairing.requested_at} />
           {takeoverUrl ? (
             <Button asChild size="sm" variant="outline" className="w-fit">
               <a
@@ -259,6 +312,10 @@ function ApprovedPairingCard({ core, pairing }: { core: OperatorCore; pairing: P
           <div className="text-sm text-fg-muted">
             Node <span className="break-all font-medium text-fg">{pairing.node.node_id}</span>
           </div>
+          {pairing.node.label ? (
+            <div className="text-xs text-fg-muted">{pairing.node.label}</div>
+          ) : null}
+          <NodeDetails node={pairing.node} />
           {pairing.trust_level ? (
             <div className="text-sm text-fg-muted">
               Trust level <span className="font-medium text-fg">{pairing.trust_level}</span>
