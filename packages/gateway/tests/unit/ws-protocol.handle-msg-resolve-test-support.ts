@@ -105,6 +105,103 @@ function registerApprovalListAndResolveTests(): void {
     expect((result as unknown as { error: { code: string } }).error.code).toBe("unauthorized");
   });
 
+  it("handles run.list requests when a DB is configured", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+    const runId = "00000000-0000-4000-8000-000000000101";
+    const stepId = "00000000-0000-4000-8000-000000000102";
+    const attemptId = "00000000-0000-4000-8000-000000000103";
+    const db = {
+      all: vi.fn(async (sql: string) => {
+        if (sql.includes("FROM execution_runs r")) {
+          return [
+            {
+              run_id: runId,
+              job_id: "00000000-0000-4000-8000-000000000104",
+              key: "cron:watcher-1",
+              lane: "heartbeat",
+              status: "running",
+              attempt: 1,
+              created_at: "2026-02-20 22:00:00",
+              started_at: "2026-02-20 22:00:01",
+              finished_at: null,
+              paused_reason: null,
+              paused_detail: null,
+              policy_snapshot_id: null,
+              budgets_json: null,
+              budget_overridden_at: null,
+              agent_key: "default",
+            },
+          ];
+        }
+        if (sql.includes("FROM execution_steps")) {
+          return [
+            {
+              step_id: stepId,
+              run_id: runId,
+              step_index: 0,
+              status: "running",
+              action_json: JSON.stringify({ type: "Decide", args: {} }),
+              created_at: "2026-02-20 22:00:02",
+              idempotency_key: null,
+              postcondition_json: null,
+              approval_id: null,
+            },
+          ];
+        }
+        if (sql.includes("FROM execution_attempts")) {
+          return [
+            {
+              attempt_id: attemptId,
+              step_id: stepId,
+              attempt: 1,
+              status: "running",
+              started_at: "2026-02-20 22:00:03",
+              finished_at: null,
+              result_json: null,
+              error: null,
+              postcondition_report_json: null,
+              artifacts_json: "[]",
+              cost_json: null,
+              metadata_json: null,
+              policy_snapshot_id: null,
+              policy_decision_json: null,
+              policy_applied_override_ids_json: null,
+            },
+          ];
+        }
+        return [];
+      }),
+    };
+
+    const deps = makeDeps(cm, { db: db as never });
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-run-list",
+        type: "run.list",
+        payload: { limit: 25, statuses: ["queued", "running", "paused"] },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+    const res = result as unknown as {
+      result: {
+        runs: Array<{ run: { run_id: string; lane: string }; agent_key?: string }>;
+        steps: Array<{ step_id: string }>;
+        attempts: Array<{ attempt_id: string }>;
+      };
+    };
+    expect(res.result.runs[0]?.run.run_id).toBe(runId);
+    expect(res.result.runs[0]?.run.lane).toBe("heartbeat");
+    expect(res.result.runs[0]?.agent_key).toBe("default");
+    expect(res.result.steps[0]?.step_id).toBe(stepId);
+    expect(res.result.attempts[0]?.attempt_id).toBe(attemptId);
+  });
+
   it("handles approval.resolve requests when approvalDal is configured", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);

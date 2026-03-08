@@ -4,6 +4,8 @@ import {
   type WsApprovalResolvePayload,
   type WsApprovalResolveResult as WsApprovalResolveResultT,
   type WsAttemptEvidencePayload,
+  type WsRunListPayload,
+  type WsRunListResult as WsRunListResultT,
   type WsCapabilityReadyPayload,
   type WsCommandExecutePayload as WsCommandExecutePayloadT,
   type WsCommandExecuteResult as WsCommandExecuteResultT,
@@ -110,6 +112,7 @@ import {
   WsMemoryUpdateResult,
   WsPairingResolveResult,
   WsPresenceBeaconResult,
+  WsRunListResult,
   WsSessionCompactResult,
   WsSessionCreateResult,
   WsSessionDeleteResult,
@@ -162,6 +165,9 @@ export type {
 export class TyrumClient extends TyrumClientTransportCore {
   approvalList(payload: WsApprovalListPayload = { limit: 100 }): Promise<WsApprovalListResultT> {
     return this.request("approval.list", payload, WsApprovalListResult);
+  }
+  runList(payload: WsRunListPayload = {}): Promise<WsRunListResultT> {
+    return this.request("run.list", payload, WsRunListResult);
   }
   approvalResolve(payload: WsApprovalResolvePayload): Promise<WsApprovalResolveResultT> {
     return this.request("approval.resolve", payload, WsApprovalResolveResult);

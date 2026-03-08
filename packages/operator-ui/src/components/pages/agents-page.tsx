@@ -6,7 +6,7 @@ import { useApiAction } from "../../hooks/use-api-action.js";
 import { cn } from "../../lib/cn.js";
 import {
   getActiveAgentIdsFromSessionLanes,
-  parseAgentIdFromKey,
+  resolveAgentIdForRun,
 } from "../../lib/status-session-lanes.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { MemoryInspector } from "../memory/memory-inspector.js";
@@ -82,7 +82,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     const ids = new Set<string>();
     for (const run of Object.values(runs.runsById)) {
       if (run.status !== "queued" && run.status !== "running" && run.status !== "paused") continue;
-      const agentId = parseAgentIdFromKey(run.key);
+      const agentId = resolveAgentIdForRun(run, runs.agentKeyByRunId);
       if (!agentId) continue;
       ids.add(agentId);
     }
@@ -90,7 +90,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
       ids.add(agentId);
     }
     return ids;
-  }, [runs.runsById, status.status?.session_lanes]);
+  }, [runs.agentKeyByRunId, runs.runsById, status.status?.session_lanes]);
   const selectedAgentActive = selectedAgentOption
     ? activeAgentIds.has(selectedAgentOption.agentId) || activeAgentIds.has(selectedAgentKey)
     : false;

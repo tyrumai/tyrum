@@ -11,6 +11,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
   it("renders Desktop op summary and takeover link when available", () => {
     const approval = {
       approval_id: 1,
+      approval_key: "approval:1",
       kind: "workflow_step",
       status: "pending",
       prompt: "Approve execution of 'tool.node.dispatch' (risk=high)",
@@ -95,6 +96,10 @@ describe("ApprovalsPage (desktop approvals)", () => {
       expect(summary?.textContent).toContain("click");
       expect(summary?.textContent).toContain("Submit");
 
+      const details = container.querySelector<HTMLDivElement>('[data-testid="approval-details-1"]');
+      expect(details).not.toBeNull();
+      expect(details?.textContent).toContain("approval:1");
+
       const takeoverLink = container.querySelector<HTMLAnchorElement>(
         '[data-testid="approval-takeover-1"]',
       );
@@ -110,6 +115,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
   it("renders takeover link from node metadata when present", () => {
     const approval = {
       approval_id: 1,
+      approval_key: "approval:1",
       kind: "workflow_step",
       status: "pending",
       prompt: "Approve execution of 'tool.node.dispatch' (risk=high)",
@@ -209,6 +215,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
     const approval = {
       approval_id: 1,
+      approval_key: "approval:1",
       kind: "workflow_step",
       status: "pending",
       prompt: "Approve execution of 'tool.node.dispatch' (risk=high)",
@@ -227,7 +234,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
           },
         },
       },
-      scope: { run_id: runId, step_index: 0 },
+      scope: { run_id: runId, step_id: stepId },
       created_at: "2026-01-01T00:00:00.000Z",
       expires_at: null,
       resolution: null,
@@ -339,6 +346,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
 
     const approval = {
       approval_id: 1,
+      approval_key: "approval:1",
       kind: "workflow_step",
       status: "pending",
       prompt: "Approve execution of 'tool.node.dispatch' (risk=high)",
@@ -357,7 +365,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
           },
         },
       },
-      scope: { run_id: runId, step_index: 0 },
+      scope: { run_id: runId, step_id: stepId },
       created_at: "2026-01-01T00:00:00.000Z",
       expires_at: null,
       resolution: null,

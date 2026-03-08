@@ -6,6 +6,7 @@ import {
   ExecutionRun,
   ExecutionRunId,
   ExecutionRunPausedPayload,
+  ExecutionRunStatus,
   ExecutionStep,
   ExecutionStepId,
 } from "../execution.js";
@@ -32,6 +33,7 @@ const wsResponseOk = <T extends string>(type: T) =>
   WsResponseOkEnvelope.extend({ type: z.literal(type) });
 const wsResponseErr = <T extends string>(type: T) =>
   WsResponseErrEnvelope.extend({ type: z.literal(type) });
+const strictObject = <Shape extends z.ZodRawShape>(shape: Shape) => z.object(shape).strict();
 const WsRunIdEventPayload = z.object({ run_id: ExecutionRunId }).strict();
 
 export const WsAttemptEvidencePayload = z
@@ -102,6 +104,43 @@ export const WsTaskExecuteResponseEnvelope = z.union([
   WsTaskExecuteResponseErrEnvelope,
 ]);
 export type WsTaskExecuteResponseEnvelope = z.infer<typeof WsTaskExecuteResponseEnvelope>;
+
+export const WsRunListPayload = strictObject({
+  statuses: z.array(ExecutionRunStatus).optional(),
+  limit: z.number().int().positive().max(200).optional(),
+});
+export type WsRunListPayload = z.infer<typeof WsRunListPayload>;
+
+export const WsRunListRequest = wsRequest("run.list", WsRunListPayload);
+export type WsRunListRequest = z.infer<typeof WsRunListRequest>;
+
+export const WsRunListItem = strictObject({
+  run: ExecutionRun,
+  agent_key: z.string().trim().min(1).optional(),
+});
+export type WsRunListItem = z.infer<typeof WsRunListItem>;
+
+export const WsRunListResult = strictObject({
+  runs: z.array(WsRunListItem),
+  steps: z.array(ExecutionStep),
+  attempts: z.array(ExecutionAttempt),
+});
+export type WsRunListResult = z.infer<typeof WsRunListResult>;
+
+export const WsRunListResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("run.list"),
+  result: WsRunListResult,
+});
+export type WsRunListResponseOkEnvelope = z.infer<typeof WsRunListResponseOkEnvelope>;
+
+export const WsRunListResponseErrEnvelope = wsResponseErr("run.list");
+export type WsRunListResponseErrEnvelope = z.infer<typeof WsRunListResponseErrEnvelope>;
+
+export const WsRunListResponseEnvelope = z.union([
+  WsRunListResponseOkEnvelope,
+  WsRunListResponseErrEnvelope,
+]);
+export type WsRunListResponseEnvelope = z.infer<typeof WsRunListResponseEnvelope>;
 
 // ---------------------------------------------------------------------------
 // Events (typed) — execution core

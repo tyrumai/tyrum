@@ -84,6 +84,7 @@ describe("operator-core wiring", () => {
     const presenceListBefore = http.__calls.presenceList;
     const pairingsListBefore = http.__calls.pairingsList;
     const approvalsListBefore = ws.approvalList.mock.calls.length;
+    const runsListBefore = ws.runList.mock.calls.length;
 
     await core.syncAllNow();
     await tick();
@@ -93,6 +94,7 @@ describe("operator-core wiring", () => {
     expect(http.__calls.presenceList).toBe(presenceListBefore + 1);
     expect(http.__calls.pairingsList).toBe(pairingsListBefore + 1);
     expect(ws.approvalList).toHaveBeenCalledTimes(approvalsListBefore + 1);
+    expect(ws.runList).toHaveBeenCalledTimes(runsListBefore + 1);
   });
 
   it("exposes elevatedModeStore as a single source of truth", () => {
@@ -123,6 +125,7 @@ describe("operator-core wiring", () => {
     expect(http.__calls.presenceList).toBe(1);
     expect(http.__calls.pairingsList).toBe(1);
     expect(ws.approvalList).toHaveBeenCalledTimes(1);
+    expect(ws.runList).toHaveBeenCalledTimes(1);
 
     ws.emit("approval.requested", {
       payload: { approval: sampleApprovalPending() },
@@ -150,6 +153,41 @@ describe("operator-core wiring", () => {
     expect(Object.keys(runs.runsById)).toEqual(["run-1"]);
     expect(runs.stepIdsByRunId["run-1"]).toEqual(["step-1"]);
     expect(runs.attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
+  });
+
+  it("hydrates recent runs from run.list on connect", async () => {
+    const { core, ws } = createTestOperatorCore();
+    const run = {
+      ...sampleRun(),
+      run_id: "11111111-1111-1111-1111-111111111111",
+      job_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      key: "cron:watcher-1",
+      lane: "heartbeat",
+    };
+    const step = {
+      ...sampleStep(),
+      step_id: "22222222-2222-2222-2222-222222222222",
+      run_id: run.run_id,
+    };
+    const attempt = {
+      ...sampleAttempt(),
+      attempt_id: "33333333-3333-3333-3333-333333333333",
+      step_id: step.step_id,
+    };
+    ws.runList.mockResolvedValueOnce({
+      runs: [{ run, agent_key: "default" }],
+      steps: [step],
+      attempts: [attempt],
+    });
+
+    ws.emit("connected", { clientId: "client-123" });
+    await tick();
+
+    const runs = core.runsStore.getSnapshot();
+    expect(runs.runsById[run.run_id]).toMatchObject({ lane: "heartbeat", key: "cron:watcher-1" });
+    expect(runs.stepIdsByRunId[run.run_id]).toEqual([step.step_id]);
+    expect(runs.attemptIdsByStepId[step.step_id]).toEqual([attempt.attempt_id]);
+    expect(runs.agentKeyByRunId?.[run.run_id]).toBe("default");
   });
 
   it("updates activityStore from message activity WS events", () => {
@@ -238,6 +276,7 @@ describe("operator-core wiring", () => {
     expect(http.__calls.presenceList).toBe(1);
     expect(http.__calls.pairingsList).toBe(1);
     expect(ws.approvalList).toHaveBeenCalledTimes(1);
+    expect(ws.runList).toHaveBeenCalledTimes(1);
   });
 
   it("clears clientId when reconnecting", async () => {
@@ -460,6 +499,7 @@ describe("operator-core wiring", () => {
     await tick();
     expect(http.__calls.statusGet).toBe(1);
     expect(ws.approvalList).toHaveBeenCalledTimes(1);
+    expect(ws.runList).toHaveBeenCalledTimes(1);
 
     ws.emit("disconnected", { code: 1006, reason: "net down" });
     ws.emit("connected", { clientId: "client-123" });
@@ -467,5 +507,6 @@ describe("operator-core wiring", () => {
 
     expect(http.__calls.statusGet).toBe(2);
     expect(ws.approvalList).toHaveBeenCalledTimes(2);
+    expect(ws.runList).toHaveBeenCalledTimes(2);
   });
 });

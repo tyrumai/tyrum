@@ -10,6 +10,7 @@ export type OperatorWsClient = Pick<
   | "respondTaskExecute"
   | "respondApprovalRequest"
   | "approvalList"
+  | "runList"
   | "approvalResolve"
   | "commandExecute"
   | "ping"

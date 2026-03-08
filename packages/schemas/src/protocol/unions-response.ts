@@ -24,6 +24,8 @@ import {
 import {
   WsAttemptEvidenceResponseErrEnvelope,
   WsAttemptEvidenceResponseOkEnvelope,
+  WsRunListResponseErrEnvelope,
+  WsRunListResponseOkEnvelope,
   WsTaskExecuteResponseErrEnvelope,
   WsTaskExecuteResponseOkEnvelope,
 } from "./execution.js";
@@ -173,6 +175,8 @@ export const WsResponse = z.union([
   WsCapabilityReadyResponseErrEnvelope,
   WsAttemptEvidenceResponseOkEnvelope,
   WsAttemptEvidenceResponseErrEnvelope,
+  WsRunListResponseOkEnvelope,
+  WsRunListResponseErrEnvelope,
   WsTaskExecuteResponseOkEnvelope,
   WsTaskExecuteResponseErrEnvelope,
   WsApprovalRequestResponseOkEnvelope,

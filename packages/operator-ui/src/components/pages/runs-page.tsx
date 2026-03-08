@@ -1,32 +1,44 @@
 import type { OperatorCore } from "@tyrum/operator-core";
+import type { ExecutionRun } from "@tyrum/client";
 import { Play } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyState } from "../ui/empty-state.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { buildRunTimeline, sortRunsByCreatedAt } from "./runs-page.lib.js";
 import { RunsPageCard } from "./runs-page-card.js";
-import { parseAgentIdFromKey } from "../../lib/status-session-lanes.js";
+import { resolveAgentIdForRun } from "../../lib/status-session-lanes.js";
 import { PageHeader } from "../layout/page-header.js";
 
 export interface RunsPageProps {
   core: OperatorCore;
   agentId?: string;
+  statuses?: ExecutionRun["status"][];
   hideHeader?: boolean;
   title?: string;
 }
 
-export function RunsPage({ core, agentId, hideHeader = false, title = "Runs" }: RunsPageProps) {
+export function RunsPage({
+  core,
+  agentId,
+  statuses,
+  hideHeader = false,
+  title = "Runs",
+}: RunsPageProps) {
   const runsState = useOperatorStore(core.runsStore);
   const [expandedRunIds, setExpandedRunIds] = useState<Set<string>>(() => new Set());
 
   const runs = useMemo(() => {
     const allRuns = Object.values(runsState.runsById);
-    const filteredRuns =
-      typeof agentId === "string" && agentId.trim().length > 0
-        ? allRuns.filter((run) => parseAgentIdFromKey(run.key) === agentId)
-        : allRuns;
+    const statusSet = statuses && statuses.length > 0 ? new Set(statuses) : null;
+    const filteredRuns = allRuns.filter((run) => {
+      if (statusSet && !statusSet.has(run.status)) return false;
+      if (typeof agentId === "string" && agentId.trim().length > 0) {
+        return resolveAgentIdForRun(run, runsState.agentKeyByRunId) === agentId;
+      }
+      return true;
+    });
     return sortRunsByCreatedAt(filteredRuns);
-  }, [agentId, runsState.runsById]);
+  }, [agentId, runsState.agentKeyByRunId, runsState.runsById, statuses]);
 
   const toggleRun = (runId: string): void => {
     setExpandedRunIds((prev) => {

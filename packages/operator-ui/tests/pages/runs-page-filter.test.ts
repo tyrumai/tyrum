@@ -57,4 +57,42 @@ describe("RunsPage", () => {
 
     cleanupTestRoot(testRoot);
   });
+
+  it("uses hydrated agent ownership for heartbeat runs without an agent-shaped key", () => {
+    const heartbeatRun = {
+      run_id: "33333333-3333-3333-3333-333333333333",
+      job_id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      key: "cron:watcher-1",
+      lane: "heartbeat",
+      status: "running",
+      attempt: 1,
+      created_at: "2026-01-03T00:00:00.000Z",
+      started_at: "2026-01-03T00:00:01.000Z",
+      finished_at: null,
+    } as const;
+
+    const { store: runsStore } = createStore({
+      runsById: {
+        [heartbeatRun.run_id]: heartbeatRun,
+      },
+      stepsById: {},
+      attemptsById: {},
+      stepIdsByRunId: {},
+      attemptIdsByStepId: {},
+      agentKeyByRunId: {
+        [heartbeatRun.run_id]: "default",
+      },
+    });
+
+    const core = { runsStore } as unknown as OperatorCore;
+    const testRoot = renderIntoDocument(
+      React.createElement(RunsPage, { core, agentId: "default", hideHeader: true }),
+    );
+
+    expect(
+      testRoot.container.querySelector(`[data-testid="run-status-${heartbeatRun.run_id}"]`),
+    ).not.toBeNull();
+
+    cleanupTestRoot(testRoot);
+  });
 });

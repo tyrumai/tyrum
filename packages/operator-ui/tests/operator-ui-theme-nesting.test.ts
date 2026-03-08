@@ -42,6 +42,7 @@ class StubWsClient implements OperatorWsClient {
   on(_event: string, _handler: (data: unknown) => void): void {}
   off(_event: string, _handler: (data: unknown) => void): void {}
   approvalList = async () => ({ approvals: [], next_cursor: undefined });
+  runList = async () => ({ runs: [], steps: [], attempts: [] });
   approvalResolve = async () => ({ approval: {} as never });
   memorySearch = async () => ({ v: 1, hits: [], next_cursor: undefined }) as never;
   memoryList = async () => ({ v: 1, items: [], next_cursor: undefined }) as never;

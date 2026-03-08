@@ -4,7 +4,9 @@ import { createRunsStore } from "../src/stores/runs-store.js";
 
 describe("createRunsStore", () => {
   it("indexes runs/steps/attempts and keeps id lists unique", () => {
-    const { store, handleRunUpdated, handleStepUpdated, handleAttemptUpdated } = createRunsStore();
+    const { store, handleRunUpdated, handleStepUpdated, handleAttemptUpdated } = createRunsStore({
+      runList: async () => ({ runs: [], steps: [], attempts: [] }),
+    } as never);
 
     const run = { run_id: "run-1" } as unknown as ExecutionRun;
     handleRunUpdated(run);

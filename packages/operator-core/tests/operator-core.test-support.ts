@@ -51,6 +51,7 @@ export class FakeWsClient {
   connect = vi.fn(() => {});
   disconnect = vi.fn(() => {});
   approvalList = vi.fn(async () => ({ approvals: [], next_cursor: undefined }));
+  runList = vi.fn(async () => ({ runs: [], steps: [], attempts: [] }));
   approvalResolve = vi.fn(async () => ({ approval: sampleApprovalApproved() }));
   memorySearch = vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined }) as unknown);
   memoryList = vi.fn(async () => ({ v: 1, items: [], next_cursor: undefined }) as unknown);
@@ -210,6 +211,7 @@ export function createFakeHttpClient(): FakeHttpClient {
 export function sampleApprovalPending(): Approval {
   return {
     approval_id: 1,
+    approval_key: "approval:1",
     kind: "other",
     status: "pending",
     prompt: "Approve?",
@@ -221,6 +223,7 @@ export function sampleApprovalPending(): Approval {
 export function sampleApprovalApproved(): Approval {
   return {
     approval_id: 1,
+    approval_key: "approval:1",
     kind: "other",
     status: "approved",
     prompt: "Approve?",

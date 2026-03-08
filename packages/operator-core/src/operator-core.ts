@@ -136,7 +136,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const approvals = createApprovalsStore(ws);
   const pairing = createPairingStore(http);
   const status = createStatusStore(http);
-  const runs = createRunsStore();
+  const runs = createRunsStore(ws);
   const memory = createMemoryStore(ws);
   const chat = createChatStore(ws, http);
   const workboard = createWorkboardStore(ws);
@@ -152,6 +152,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const warmStores = {
     approvalsStore: approvals.store,
     pairingStore: pairing.store,
+    runsStore: runs.store,
     statusStore: status.store,
     memoryStore: memory.store,
     workboardStore: workboard.store,
@@ -176,6 +177,14 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
           await pairing.store.refresh();
           const error = pairing.store.getSnapshot().error;
           if (error) throw new Error(error);
+        },
+      },
+    ],
+    runsStore: [
+      {
+        id: "runs.refreshRecent",
+        run: async () => {
+          await runs.store.refreshRecent({ limit: 100 });
         },
       },
     ],
