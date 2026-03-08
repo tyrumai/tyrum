@@ -314,7 +314,7 @@ export function ElevatedModeProvider({
         },
       }}
     >
-      <div className="relative isolate">
+      <div className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden">
         <ElevatedModeChrome />
         {children}
       </div>

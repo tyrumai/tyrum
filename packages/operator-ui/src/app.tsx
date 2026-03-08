@@ -95,6 +95,7 @@ function OperatorUiAppRoot({
   const shell = (
     <AppShell
       mode={mode}
+      fullBleed={viewModel.route === "chat"}
       viewportLocked={viewModel.route === "chat"}
       sidebar={
         viewModel.showShell ? (
