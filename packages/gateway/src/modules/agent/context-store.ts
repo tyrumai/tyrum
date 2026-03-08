@@ -89,11 +89,13 @@ class LocalAgentContextStore implements AgentContextStore {
        VALUES (?, ?, ?)
        ON CONFLICT (tenant_id, agent_id) DO NOTHING`,
       [resolved.tenantId, resolved.agentId, resolved.agentId],
+      [resolved.tenantId, resolved.agentId, resolved.agentId],
     );
     await this.db.run(
       `INSERT INTO workspaces (tenant_id, workspace_id, workspace_key)
        VALUES (?, ?, ?)
        ON CONFLICT (tenant_id, workspace_id) DO NOTHING`,
+      [resolved.tenantId, resolved.workspaceId, resolved.workspaceId],
       [resolved.tenantId, resolved.workspaceId, resolved.workspaceId],
     );
     await this.db.run(

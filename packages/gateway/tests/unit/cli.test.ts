@@ -171,7 +171,6 @@ describe("gateway CLI argument parsing", () => {
       migrationsDir: "/tmp/migs",
     });
   });
-
   it("parses TLS fingerprint command", () => {
     expect(parseCliArgs(["tls", "fingerprint"])).toEqual({ kind: "tls_fingerprint" });
   });
