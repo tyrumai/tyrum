@@ -1,6 +1,11 @@
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import type { AuthTokenClaims } from "@tyrum/schemas";
-import { AuthTokenDal, type AuthTokenRole, type AuthTokenRow } from "./auth-token-dal.js";
+import {
+  AuthTokenDal,
+  type AuthTokenListRow,
+  type AuthTokenRole,
+  type AuthTokenRow,
+} from "./auth-token-dal.js";
 import type { SqlDb } from "../../statestore/types.js";
 
 const TOKEN_PREFIX = "tyrum-token";
@@ -219,7 +224,7 @@ export class AuthTokenService {
     return await this.dal.getById(id);
   }
 
-  async listTenantTokens(tenantId: string): Promise<AuthTokenRow[]> {
+  async listTenantTokens(tenantId: string): Promise<AuthTokenListRow[]> {
     const id = tenantId.trim();
     if (!id) return [];
     return await this.dal.listForTenant(id);
