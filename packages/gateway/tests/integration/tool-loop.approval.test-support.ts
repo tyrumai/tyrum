@@ -24,6 +24,7 @@ import {
   waitForPendingApproval,
   writeToolCall,
 } from "./tool-loop.test-support.js";
+import { seedDeploymentPolicyBundle } from "../helpers/runtime-config.js";
 
 export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
   it("queues high-risk tool calls and resumes after approval", async () => {
@@ -172,35 +173,28 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
   it("requires approval for tool.exec when driven by untrusted tool output", async () => {
     const { homeDir } = await setupToolLoopTest(state);
     const fetchUrl = "https://93.184.216.34";
-    const bundlePath = join(homeDir, "policy.yml");
-    await writeFile(
-      bundlePath,
-      [
-        "v: 1",
-        "tools:",
-        "  default: deny",
-        "  allow:",
-        "    - tool.http.fetch",
-        "    - tool.exec",
-        "  require_approval: []",
-        "  deny: []",
-        "network_egress:",
-        "  default: deny",
-        "  allow:",
-        `    - "${fetchUrl}/*"`,
-        "  require_approval: []",
-        "  deny: []",
-        "provenance:",
-        "  untrusted_shell_requires_approval: true",
-        "",
-      ].join("\n"),
-      "utf-8",
-    );
 
     const container = await resetToolLoopContainer(state, {
-      containerOptions: { deploymentConfig: { policy: { bundlePath } } },
       seedConfig: {
         config: { tools: { allow: ["tool.http.fetch", "tool.exec"] } },
+      },
+    });
+    await seedDeploymentPolicyBundle(container.db, {
+      v: 1,
+      tools: {
+        default: "deny",
+        allow: ["tool.http.fetch", "tool.exec"],
+        require_approval: [],
+        deny: [],
+      },
+      network_egress: {
+        default: "deny",
+        allow: [`${fetchUrl}/*`],
+        require_approval: [],
+        deny: [],
+      },
+      provenance: {
+        untrusted_shell_requires_approval: true,
       },
     });
 

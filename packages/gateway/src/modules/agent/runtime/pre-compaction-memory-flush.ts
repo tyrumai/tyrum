@@ -5,7 +5,6 @@ import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { redactSecretLikeText } from "./secrets.js";
 import { MemoryV1Dal } from "../../memory/v1-dal.js";
 import type { SessionMessage, SessionRow } from "../session-dal.js";
-import type { AgentMemoryStore } from "../context-store.js";
 import type { SqlDb } from "../../../statestore/types.js";
 
 const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
@@ -58,7 +57,7 @@ type LoggerLike = {
 export async function maybeRunPreCompactionMemoryFlush(
   deps: { db: SqlDb; logger: LoggerLike; agentId: string },
   input: {
-    ctx: { config: AgentConfigT; memoryStore: AgentMemoryStore };
+    ctx: { config: AgentConfigT };
     session: SessionRow;
     model: LanguageModel;
     systemPrompt: string;
@@ -67,8 +66,7 @@ export async function maybeRunPreCompactionMemoryFlush(
   },
 ): Promise<void> {
   const v1Enabled = input.ctx.config.memory.v1.enabled;
-  const markdownEnabled = input.ctx.config.memory.markdown_enabled;
-  if (!v1Enabled && !markdownEnabled) {
+  if (!v1Enabled) {
     return;
   }
 
@@ -162,8 +160,6 @@ export async function maybeRunPreCompactionMemoryFlush(
       });
     }
 
-    const entry = ["Pre-compaction memory flush", "", flushText].join("\n").trim();
-
     if (v1Enabled) {
       try {
         const memory = new MemoryV1Dal(deps.db);
@@ -195,10 +191,6 @@ export async function maybeRunPreCompactionMemoryFlush(
           error: message,
         });
       }
-    }
-
-    if (markdownEnabled) {
-      await input.ctx.memoryStore.appendDaily(entry);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

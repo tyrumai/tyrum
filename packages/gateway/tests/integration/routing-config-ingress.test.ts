@@ -1,6 +1,3 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { Hono } from "hono";
 import { createIngressRoutes } from "../../src/routes/ingress.js";
@@ -107,84 +104,64 @@ describe("routing config (durable) + ingress", () => {
     expect(capturedAgentId).toBe("agent-b");
   });
 
-  it("falls back to TYRUM_HOME routing file when durable routing config state is invalid", async () => {
-    const home = await mkdtemp(join(tmpdir(), "tyrum-home-"));
-    try {
-      await writeFile(
-        join(home, "routing.json"),
-        JSON.stringify({
-          v: 1,
-          telegram: {
-            default_agent_key: "default",
-            threads: {
-              "123": "agent-b",
-            },
+  it("falls back to the default agent when durable routing config state is invalid", async () => {
+    await db.run(
+      "INSERT INTO routing_configs (tenant_id, config_json, created_by_json, reason) VALUES (?, ?, ?, ?)",
+      [DEFAULT_TENANT_ID, JSON.stringify({ v: "invalid" }), "{}", "corrupt"],
+    );
+
+    let capturedAgentId: string | undefined;
+
+    const app = new Hono();
+    app.route(
+      "/",
+      createIngressRoutes({
+        telegramBot: {} as never,
+        telegramWebhookSecret: "test-secret",
+        agents: {} as never,
+        telegramQueue: {
+          enqueue: async (_normalized, opts) => {
+            capturedAgentId = opts?.agentId;
+            return {
+              inbox: { inbox_id: 1, status: "queued" },
+              deduped: false,
+              message_text: "Hello bot",
+            };
           },
-        }),
-        "utf-8",
-      );
+        } as never,
+        routingConfigDal: new RoutingConfigDal(db),
+      } as never),
+    );
 
-      await db.run(
-        "INSERT INTO routing_configs (tenant_id, config_json, created_by_json, reason) VALUES (?, ?, ?, ?)",
-        [DEFAULT_TENANT_ID, JSON.stringify({ v: "invalid" }), "{}", "corrupt"],
-      );
-
-      let capturedAgentId: string | undefined;
-
-      const app = new Hono();
-      app.route(
-        "/",
-        createIngressRoutes({
-          telegramBot: {} as never,
-          telegramWebhookSecret: "test-secret",
-          agents: {} as never,
-          telegramQueue: {
-            enqueue: async (_normalized, opts) => {
-              capturedAgentId = opts?.agentId;
-              return {
-                inbox: { inbox_id: 1, status: "queued" },
-                deduped: false,
-                message_text: "Hello bot",
-              };
-            },
-          } as never,
-          routingConfigDal: new RoutingConfigDal(db),
-          home,
-        } as never),
-      );
-
-      const update = {
-        update_id: 100,
-        message: {
-          message_id: 42,
-          date: 1700000000,
-          from: {
-            id: 999,
-            is_bot: false,
-            first_name: "Alice",
-            username: "alice",
-          },
-          chat: {
-            id: 123,
-            type: "private",
-          },
-          text: "Hello bot",
+    const update = {
+      update_id: 100,
+      message: {
+        message_id: 42,
+        date: 1700000000,
+        from: {
+          id: 999,
+          is_bot: false,
+          first_name: "Alice",
+          username: "alice",
         },
-      };
-
-      const res = await app.request("/ingress/telegram", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-telegram-bot-api-secret-token": "test-secret",
+        chat: {
+          id: 123,
+          type: "private",
         },
-        body: JSON.stringify(update),
-      });
+        text: "Hello bot",
+      },
+    };
 
-      expect(res.status).toBe(200);
-      expect(capturedAgentId).toBe("agent-b");
-    } finally {
-      await rm(home, { recursive: true, force: true });
-    }
+    const res = await app.request("/ingress/telegram", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "test-secret",
+      },
+      body: JSON.stringify(update),
+    });
+
+    expect(res.status).toBe(200);
+    expect(capturedAgentId).toBe("default");
   });
 });

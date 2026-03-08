@@ -12,7 +12,7 @@ import type { OutboxPoller } from "../modules/backplane/outbox-poller.js";
 import type { TelegramChannelProcessor } from "../modules/channels/telegram.js";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import type { ExecutionWorkerLoop } from "../modules/execution/worker-loop.js";
-import type { loadLifecycleHooksFromHome } from "../modules/hooks/config.js";
+import type { LifecycleHookDefinition as LifecycleHookDefinitionT } from "@tyrum/schemas";
 import type { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import type { OtelRuntime } from "../modules/observability/otel.js";
 import type { PluginRegistry } from "../modules/plugins/registry.js";
@@ -33,7 +33,7 @@ export type GatewayServer = HttpServer | HttpsServer;
 export type SecretProviderForTenant = Awaited<
   ReturnType<typeof createDbSecretProviderFactory>
 >["secretProviderForTenant"];
-export type LifecycleHooks = Awaited<ReturnType<typeof loadLifecycleHooksFromHome>>;
+export type LifecycleHooks = readonly LifecycleHookDefinitionT[];
 
 export interface GatewayBootContext {
   instanceId: string;

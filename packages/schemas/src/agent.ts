@@ -80,7 +80,6 @@ export const AgentSessionConfig = z.object({
 export type AgentSessionConfig = z.infer<typeof AgentSessionConfig>;
 
 export const AgentMemoryConfig = z.object({
-  markdown_enabled: z.boolean().default(true),
   v1: z
     .object({
       enabled: z.boolean().default(true),

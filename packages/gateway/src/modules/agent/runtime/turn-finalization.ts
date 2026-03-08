@@ -77,14 +77,14 @@ async function persistContextReport(input: {
   }
 }
 
-async function appendMarkdownMemory(input: {
+async function writeMemoryV1TurnNote(input: {
   container: FinalizeContainer;
   ctx: AgentLoadedContext;
   session: SessionRow;
   resolved: ResolvedAgentTurnInput;
   reply: string;
 }): Promise<boolean> {
-  if (!input.ctx.config.memory.markdown_enabled) return false;
+  if (!input.ctx.config.memory.v1.enabled) return false;
 
   const entry = [
     `Channel: ${input.resolved.channel}`,
@@ -101,22 +101,40 @@ async function appendMarkdownMemory(input: {
     return false;
   }
 
-  await input.ctx.memoryStore.appendDaily(entry);
-  if (shouldPromoteToCoreMemory(input.resolved.message)) {
-    await input.ctx.memoryStore.appendToCoreSection(
-      "Learned Preferences",
-      `- ${input.resolved.message.trim()}`,
-    );
+  if (!shouldPromoteToCoreMemory(input.resolved.message)) {
+    return false;
   }
+
+  await input.container.memoryV1Dal.create(
+    {
+      kind: "note",
+      title: "Learned preference",
+      body_md: entry,
+      tags: ["agent-turn", "learned-preference"],
+      sensitivity: "private",
+      provenance: {
+        source_kind: "user",
+        channel: input.resolved.channel,
+        thread_id: input.resolved.thread_id,
+        session_id: input.session.session_id,
+        refs: [],
+      },
+    },
+    { tenantId: input.session.tenant_id, agentId: input.session.agent_id },
+  );
   return true;
 }
 
 async function recordAgentTurnEpisode(input: {
   container: FinalizeContainer;
+  ctx: AgentLoadedContext;
   session: SessionRow;
   resolved: ResolvedAgentTurnInput;
   nowIso: string;
-}): Promise<void> {
+}): Promise<boolean> {
+  if (!input.ctx.config.memory.v1.enabled) {
+    return false;
+  }
   try {
     await recordMemoryV1SystemEpisode(
       input.container.memoryV1Dal,
@@ -134,6 +152,7 @@ async function recordAgentTurnEpisode(input: {
       },
       input.session.agent_id,
     );
+    return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     input.container.logger.warn("memory.v1.system_episode_record_failed", {
@@ -142,6 +161,7 @@ async function recordAgentTurnEpisode(input: {
       thread_id: input.resolved.thread_id,
       error: message,
     });
+    return false;
   }
 }
 
@@ -167,19 +187,21 @@ export async function finalizeTurn(input: {
     maxTurns: input.ctx.config.sessions.max_turns,
     timestamp: nowIso,
   });
-  const memoryWritten = await appendMarkdownMemory({
+  const noteWritten = await writeMemoryV1TurnNote({
     container: input.container,
     ctx: input.ctx,
     session: input.session,
     resolved: input.resolved,
     reply: finalizedReply,
   });
-  await recordAgentTurnEpisode({
+  const episodeWritten = await recordAgentTurnEpisode({
     container: input.container,
+    ctx: input.ctx,
     session: input.session,
     resolved: input.resolved,
     nowIso,
   });
+  const memoryWritten = noteWritten || episodeWritten;
 
   return AgentTurnResponse.parse({
     reply: finalizedReply,

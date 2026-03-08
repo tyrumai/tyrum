@@ -13,6 +13,7 @@ import { MockLanguageModelV3 } from "ai/test";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
+import { seedDeploymentPolicyBundle } from "../helpers/runtime-config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -140,7 +141,7 @@ async function seedAgentConfig(
       mcp: { enabled: [] },
       tools: { allow: params.toolsAllow },
       sessions: { ttl_days: 30, max_turns: 20 },
-      memory: { markdown_enabled: false },
+      memory: { v1: { enabled: false } },
     }),
     createdBy: { kind: "test" },
     reason: "permission scenarios test seed",
@@ -322,20 +323,15 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     await seedAgentConfig(container, { toolsAllow: ["tool.fs.write"] });
 
-    await writeFile(
-      join(homeDir, "policy.yml"),
-      [
-        "v: 1",
-        "tools:",
-        "  default: allow",
-        "  allow: []",
-        "  require_approval: []",
-        "  deny:",
-        "    - tool.fs.write",
-        "",
-      ].join("\n"),
-      "utf-8",
-    );
+    await seedDeploymentPolicyBundle(container.db, {
+      v: 1,
+      tools: {
+        default: "allow",
+        allow: [],
+        require_approval: [],
+        deny: ["tool.fs.write"],
+      },
+    });
 
     const languageModel = createSequencedToolLoopLanguageModel([
       {
@@ -437,32 +433,27 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     const fetchUrl = "https://93.184.216.34";
     await seedAgentConfig(container, { toolsAllow: ["tool.http.fetch"] });
 
-    await writeFile(
-      join(homeDir, "policy.yml"),
-      [
-        "v: 1",
-        "tools:",
-        "  default: deny",
-        "  allow:",
-        "    - tool.http.fetch",
-        "  require_approval: []",
-        "  deny: []",
-        "network_egress:",
-        "  default: deny",
-        "  allow:",
-        `    - "${fetchUrl}/*"`,
-        "  require_approval: []",
-        "  deny: []",
-        "secrets:",
-        "  default: allow",
-        "  allow: []",
-        "  require_approval:",
-        '    - "db:billing"',
-        "  deny: []",
-        "",
-      ].join("\n"),
-      "utf-8",
-    );
+    await seedDeploymentPolicyBundle(container.db, {
+      v: 1,
+      tools: {
+        default: "deny",
+        allow: ["tool.http.fetch"],
+        require_approval: [],
+        deny: [],
+      },
+      network_egress: {
+        default: "deny",
+        allow: [`${fetchUrl}/*`],
+        require_approval: [],
+        deny: [],
+      },
+      secrets: {
+        default: "allow",
+        allow: [],
+        require_approval: ["db:billing"],
+        deny: [],
+      },
+    });
 
     const handles: SecretHandle[] = [
       {

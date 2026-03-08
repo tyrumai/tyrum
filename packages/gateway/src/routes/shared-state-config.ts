@@ -12,7 +12,6 @@ import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
 import { AgentIdentityDal } from "../modules/agent/identity-dal.js";
-import { MarkdownMemoryDal, type MarkdownMemoryDoc } from "../modules/agent/markdown-memory-dal.js";
 import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
 import {
   RuntimePackageDal,
@@ -32,7 +31,6 @@ function normalizeAgentKey(raw: string): string {
 }
 
 const runtimePackageKindSchema = z.enum(["skill", "mcp", "plugin"]);
-const markdownDocKindSchema = z.enum(["core", "daily"]);
 
 const AgentIdentityUpdateRequest = z
   .object({
@@ -54,12 +52,6 @@ const RuntimePackageUpdateRequest = z
     artifact_id: z.string().trim().min(1).optional(),
     enabled: z.boolean().optional(),
     reason: z.string().trim().min(1).optional(),
-  })
-  .strict();
-
-const MarkdownMemoryUpdateRequest = z
-  .object({
-    content: z.string(),
   })
   .strict();
 
@@ -96,18 +88,6 @@ function packageRevisionResponse(revision: RuntimePackageRevision) {
   };
 }
 
-function markdownDocResponse(doc: MarkdownMemoryDoc) {
-  return {
-    tenant_id: doc.tenantId,
-    agent_id: doc.agentId,
-    doc_kind: doc.docKind,
-    doc_key: doc.docKey,
-    content: doc.content,
-    created_at: doc.createdAt,
-    updated_at: doc.updatedAt,
-  };
-}
-
 export interface SharedStateConfigRouteDeps {
   db: SqlDb;
   identityScopeDal: IdentityScopeDal;
@@ -118,7 +98,6 @@ export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps):
   const app = new Hono();
   const identityDal = new AgentIdentityDal(deps.db);
   const runtimePackageDal = new RuntimePackageDal(deps.db);
-  const markdownMemoryDal = new MarkdownMemoryDal(deps.db);
 
   const resolveAgentId = async (tenantId: string, agentKey: string): Promise<string | null> => {
     const row = await deps.db.get<{ agent_id: string }>(
@@ -442,89 +421,6 @@ export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps):
     }
 
     return c.json(packageRevisionResponse(revision), 200);
-  });
-
-  app.get("/config/agents/:key/markdown-memory", async (c) => {
-    const tenantId = requireTenantId(c);
-    const agentKey = normalizeAgentKey(c.req.param("key"));
-    const agentId = await resolveAgentId(tenantId, agentKey);
-    if (!agentId) {
-      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
-    }
-
-    const parsedDocKind = markdownDocKindSchema.safeParse(c.req.query("doc_kind"));
-    if (c.req.query("doc_kind") && !parsedDocKind.success) {
-      return c.json({ error: "invalid_request", message: parsedDocKind.error.message }, 400);
-    }
-
-    const docs = await markdownMemoryDal.listDocs({
-      tenantId,
-      agentId,
-      docKind: parsedDocKind.success ? parsedDocKind.data : undefined,
-    });
-    return c.json({ docs: docs.map(markdownDocResponse) }, 200);
-  });
-
-  app.get("/config/agents/:key/markdown-memory/:docKind/:docKey", async (c) => {
-    const tenantId = requireTenantId(c);
-    const agentKey = normalizeAgentKey(c.req.param("key"));
-    const agentId = await resolveAgentId(tenantId, agentKey);
-    if (!agentId) {
-      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
-    }
-    const parsedDocKind = markdownDocKindSchema.safeParse(c.req.param("docKind"));
-    if (!parsedDocKind.success) {
-      return c.json({ error: "invalid_request", message: parsedDocKind.error.message }, 400);
-    }
-
-    const doc = await markdownMemoryDal.getDoc({
-      tenantId,
-      agentId,
-      docKind: parsedDocKind.data,
-      docKey: c.req.param("docKey"),
-    });
-    if (!doc) {
-      return c.json({ error: "not_found", message: "markdown memory doc not found" }, 404);
-    }
-    return c.json(markdownDocResponse(doc), 200);
-  });
-
-  app.put("/config/agents/:key/markdown-memory/:docKind/:docKey", async (c) => {
-    const tenantId = requireTenantId(c);
-    const agentKey = normalizeAgentKey(c.req.param("key"));
-    const agentId = await deps.identityScopeDal.ensureAgentId(tenantId, agentKey);
-    const workspaceId = await deps.identityScopeDal.ensureWorkspaceId(
-      tenantId,
-      DEFAULT_WORKSPACE_KEY,
-    );
-    await deps.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
-
-    const parsedDocKind = markdownDocKindSchema.safeParse(c.req.param("docKind"));
-    if (!parsedDocKind.success) {
-      return c.json({ error: "invalid_request", message: parsedDocKind.error.message }, 400);
-    }
-
-    let body: unknown;
-    try {
-      body = (await c.req.json()) as unknown;
-    } catch (err) {
-      void err;
-      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
-    }
-
-    const parsed = MarkdownMemoryUpdateRequest.safeParse(body);
-    if (!parsed.success) {
-      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
-    }
-
-    const doc = await markdownMemoryDal.putDoc({
-      tenantId,
-      agentId,
-      docKind: parsedDocKind.data,
-      docKey: c.req.param("docKey"),
-      content: parsed.data.content,
-    });
-    return c.json(markdownDocResponse(doc), 200);
   });
 
   return app;

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestApp } from "./helpers.js";
@@ -7,36 +7,7 @@ import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 
 async function writeWorkspace(home: string): Promise<void> {
-  await writeFile(
-    join(home, "agent.yml"),
-    `model:
-  model: openai/gpt-4.1
-skills:
-  enabled: []
-mcp:
-  enabled: []
-tools:
-  allow:
-    - tool.fs.read
-sessions:
-  ttl_days: 30
-  max_turns: 20
-memory:
-  markdown_enabled: false
-`,
-    "utf-8",
-  );
-
-  await writeFile(
-    join(home, "IDENTITY.md"),
-    `---
-name: Tyrum Test
-description: test identity
----
-You are a concise test assistant.
-`,
-    "utf-8",
-  );
+  await mkdir(join(home, "agents/default"), { recursive: true });
 }
 
 function usage() {
@@ -111,7 +82,7 @@ describe("/context", () => {
   beforeEach(async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-context-"));
     await writeWorkspace(homeDir);
-    await writeFile(join(homeDir, "big.txt"), "a".repeat(40_000), "utf-8");
+    await writeFile(join(homeDir, "agents/default/big.txt"), "a".repeat(40_000), "utf-8");
     process.env["TYRUM_HOME"] = homeDir;
   });
 

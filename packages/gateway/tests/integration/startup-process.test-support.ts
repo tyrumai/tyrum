@@ -1,10 +1,18 @@
 import Database from "better-sqlite3";
+import type {
+  LifecycleHookDefinition as LifecycleHookDefinitionT,
+  PolicyBundle as PolicyBundleT,
+} from "@tyrum/schemas";
+import { join } from "node:path";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import { migrate } from "../../src/migrate.js";
 import type { ApprovalRunSeed } from "./startup-process.fixtures.js";
+
+const SQLITE_MIGRATIONS_DIR = join(import.meta.dirname, "../../migrations/sqlite");
 
 type ExecutionRunState = {
   pausedReason?: string | null;
@@ -26,10 +34,52 @@ function delay(ms: number): Promise<void> {
 
 export function openTestDatabase(dbPath: string): Database.Database {
   const db = new Database(dbPath);
+  migrate(db, SQLITE_MIGRATIONS_DIR);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.pragma("busy_timeout = 5000");
   return db;
+}
+
+export function seedLifecycleHooksConfig(
+  db: Database.Database,
+  hooks: readonly LifecycleHookDefinitionT[],
+): void {
+  db.prepare(
+    `INSERT INTO lifecycle_hook_configs (
+       tenant_id,
+       hooks_json,
+       created_at,
+       created_by_json,
+       reason
+     ) VALUES (?, ?, ?, ?, ?)`,
+  ).run(
+    DEFAULT_TENANT_ID,
+    JSON.stringify(hooks),
+    new Date().toISOString(),
+    JSON.stringify({ kind: "test" }),
+    "seed",
+  );
+}
+
+export function seedDeploymentPolicyBundle(db: Database.Database, bundle: PolicyBundleT): void {
+  db.prepare(
+    `INSERT INTO policy_bundle_config_revisions (
+       tenant_id,
+       scope_kind,
+       agent_id,
+       bundle_json,
+       created_at,
+       created_by_json,
+       reason
+     ) VALUES (?, 'deployment', NULL, ?, ?, ?, ?)`,
+  ).run(
+    DEFAULT_TENANT_ID,
+    JSON.stringify(bundle),
+    new Date().toISOString(),
+    JSON.stringify({ kind: "test" }),
+    "seed",
+  );
 }
 
 export function seedPausedApprovalRun(db: Database.Database, fixture: ApprovalRunSeed): void {

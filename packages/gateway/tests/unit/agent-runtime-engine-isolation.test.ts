@@ -219,7 +219,7 @@ describe("AgentRuntime - engine isolation and backoff", () => {
         mcp: { enabled: [] },
         tools: { allow: ["tool.exec"] },
         sessions: { ttl_days: 30, max_turns: 20 },
-        memory: { markdown_enabled: false },
+        memory: { v1: { enabled: false } },
       },
     });
 

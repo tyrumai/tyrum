@@ -53,7 +53,7 @@ describe("AgentRuntime within-turn loop stop reply", () => {
         "    cross_turn:",
         "      enabled: false",
         "memory:",
-        "  markdown_enabled: false",
+        "  v1: { enabled: false }",
       ].join("\n"),
       "utf-8",
     );

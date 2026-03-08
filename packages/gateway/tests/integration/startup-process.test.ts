@@ -5,6 +5,8 @@ import {
   openTestDatabase,
   readLatestHookRun,
   readLatestHookRunWithPause,
+  seedDeploymentPolicyBundle,
+  seedLifecycleHooksConfig,
   seedPausedApprovalRun,
   waitForExecutionRunKeyStatus,
   waitForExecutionRunStatus,
@@ -15,16 +17,15 @@ import {
   startGatewayFixture,
   waitForOpen,
   withGatewayBuild,
-  writeGatewayHomeFiles,
 } from "./startup-process.gateway-support.js";
 import {
   busyShutdownHookKey,
-  busyShutdownHooksConfig,
-  busyShutdownPolicyConfig,
+  busyShutdownHookDefinitions,
+  busyShutdownPolicyBundle,
   busyStartHookKey,
   deniedApprovalFixture,
   missingResumeTokenApprovalFixture,
-  shutdownHookConfig,
+  shutdownHookDefinition,
   shutdownHookKey,
 } from "./startup-process.fixtures.js";
 
@@ -179,10 +180,13 @@ describe("gateway startup process", () => {
         async () => {
           const gateway = await startGatewayFixture({
             tempPrefix: "tyrum-gateway-shutdown-hooks-",
-            configureHome: ({ tyrumHome }) => {
-              writeGatewayHomeFiles(tyrumHome, {
-                "hooks.yml": shutdownHookConfig(shutdownHookKey),
-              });
+            configureHome: ({ dbPath }) => {
+              const db = openTestDatabase(dbPath);
+              try {
+                seedLifecycleHooksConfig(db, [shutdownHookDefinition(shutdownHookKey)]);
+              } finally {
+                db.close();
+              }
             },
           });
           try {
@@ -224,15 +228,21 @@ describe("gateway startup process", () => {
         async () => {
           const gateway = await startGatewayFixture({
             tempPrefix: "tyrum-gateway-shutdown-hooks-busy-",
-            configureHome: ({ tyrumHome }) => {
-              writeGatewayHomeFiles(tyrumHome, {
-                "hooks.yml": busyShutdownHooksConfig(
-                  process.execPath,
-                  busyStartHookKey,
-                  busyShutdownHookKey,
-                ),
-                "policy.yml": busyShutdownPolicyConfig,
-              });
+            configureHome: ({ dbPath }) => {
+              const db = openTestDatabase(dbPath);
+              try {
+                seedLifecycleHooksConfig(
+                  db,
+                  busyShutdownHookDefinitions(
+                    process.execPath,
+                    busyStartHookKey,
+                    busyShutdownHookKey,
+                  ),
+                );
+                seedDeploymentPolicyBundle(db, busyShutdownPolicyBundle);
+              } finally {
+                db.close();
+              }
             },
           });
           try {

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
-  resolveAgentConfigPath,
+  resolveAgentHome,
   resolveTyrumHome,
   resolveUserSkillsDir,
   resolveUserTyrumHome,
@@ -23,7 +23,7 @@ describe("agent home resolution", () => {
     process.env["TYRUM_HOME"] = "/tmp/custom-tyrum-home";
 
     expect(resolveTyrumHome()).toBe("/tmp/custom-tyrum-home");
-    expect(resolveAgentConfigPath()).toBe("/tmp/custom-tyrum-home/agent.yml");
+    expect(resolveAgentHome()).toBe("/tmp/custom-tyrum-home/agents/default");
   });
 
   it("keeps default user-scoped paths aligned with TYRUM_HOME", () => {

@@ -44,7 +44,7 @@ describe("AgentRuntime cross-turn loop warning", () => {
         "  ttl_days: 30",
         "  max_turns: 20",
         "memory:",
-        "  markdown_enabled: false",
+        "  v1: { enabled: false }",
       ].join("\n"),
       "utf-8",
     );

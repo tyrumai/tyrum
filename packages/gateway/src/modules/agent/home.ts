@@ -1,17 +1,11 @@
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { mkdir, access, writeFile } from "node:fs/promises";
-import { constants, statSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
+import { statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Logger } from "../observability/logger.js";
 
 const logger = new Logger({ base: { module: "agent.home" } });
-
-function fileExists(path: string): Promise<boolean> {
-  return access(path, constants.F_OK)
-    .then(() => true)
-    .catch(() => false);
-}
 
 export function resolveTyrumHome(): string {
   const fromEnv = process.env["TYRUM_HOME"]?.trim();
@@ -25,12 +19,12 @@ export function resolveUserTyrumHome(): string {
   return resolveTyrumHome();
 }
 
-export function resolveAgentConfigPath(home = resolveTyrumHome()): string {
-  return join(home, "agent.yml");
+export function resolveAgentHome(baseHome = resolveTyrumHome(), agentKey = "default"): string {
+  return join(baseHome, "agents", agentKey);
 }
 
-export function resolveIdentityPath(home = resolveTyrumHome()): string {
-  return join(home, "IDENTITY.md");
+export function resolveAgentConfigPath(home = resolveTyrumHome()): string {
+  return join(home, "agent.yml");
 }
 
 export function resolveSkillsDir(home = resolveTyrumHome()): string {
@@ -87,10 +81,6 @@ export function resolveMcpDir(home = resolveTyrumHome()): string {
   return join(home, "mcp");
 }
 
-export function resolveMemoryDir(home = resolveTyrumHome()): string {
-  return join(home, "memory");
-}
-
 export const DEFAULT_IDENTITY_MD = `---
 name: Tyrum
 description: Local single-user assistant identity.
@@ -103,29 +93,11 @@ You are Tyrum.
 Respond directly, be explicit about assumptions, and preserve safety guardrails.
 `;
 
-export const DEFAULT_CORE_MEMORY_MD = `# MEMORY
-
-## Learned Preferences
-
-`;
-
 export async function ensureWorkspaceInitialized(home = resolveTyrumHome()): Promise<void> {
   const skillsDir = resolveSkillsDir(home);
   const mcpDir = resolveMcpDir(home);
-  const memoryDir = resolveMemoryDir(home);
 
   await mkdir(home, { recursive: true });
   await mkdir(skillsDir, { recursive: true });
   await mkdir(mcpDir, { recursive: true });
-  await mkdir(memoryDir, { recursive: true });
-
-  const identityPath = resolveIdentityPath(home);
-  if (!(await fileExists(identityPath))) {
-    await writeFile(identityPath, DEFAULT_IDENTITY_MD, "utf-8");
-  }
-
-  const coreMemoryPath = join(memoryDir, "MEMORY.md");
-  if (!(await fileExists(coreMemoryPath))) {
-    await writeFile(coreMemoryPath, DEFAULT_CORE_MEMORY_MD, "utf-8");
-  }
 }

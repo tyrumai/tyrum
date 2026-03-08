@@ -62,8 +62,4 @@ GATEWAY_PORT=8789 tyrum
 
 - `single-host` / desktop-style installs use local filesystem state under `TYRUM_HOME`.
 - HA/shared deployments use `state.mode=shared` plus shared Postgres, shared artifact storage, and a shared secret key source.
-- To migrate an existing local home into shared stores before cutover:
-
-```bash
-tyrum import-home ~/.tyrum --db <shared-db-uri> --tenant-id 00000000-0000-4000-8000-000000000001
-```
+- Shared deployments do not provide a filesystem import path; configure durable state through the DB-backed operator/config surfaces before cutover.

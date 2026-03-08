@@ -1,3 +1,8 @@
+import type {
+  LifecycleHookDefinition as LifecycleHookDefinitionT,
+  PolicyBundle as PolicyBundleT,
+} from "@tyrum/schemas";
+
 export type ApprovalRunSeed = {
   jobId: string;
   runId: string;
@@ -41,6 +46,48 @@ export const busyShutdownPolicyConfig =
   `  allow: ["tool.exec"]\n` +
   `  require_approval: []\n` +
   `  deny: []\n`;
+
+export const busyShutdownPolicyBundle: PolicyBundleT = {
+  v: 1,
+  tools: {
+    default: "require_approval",
+    allow: ["tool.exec"],
+    require_approval: [],
+    deny: [],
+  },
+};
+
+export function shutdownHookDefinition(hookKey: string): LifecycleHookDefinitionT {
+  return {
+    hook_key: hookKey,
+    event: "gateway.shutdown",
+    lane: "cron",
+    steps: [{ type: "CLI", args: { cmd: "echo", args: ["shutdown hook"] } }],
+  };
+}
+
+export function busyShutdownHookDefinitions(
+  nodeExecPath: string,
+  startHookKey: string,
+  shutdownHookKeyValue: string,
+): LifecycleHookDefinitionT[] {
+  return [
+    {
+      hook_key: startHookKey,
+      event: "gateway.start",
+      lane: "cron",
+      steps: [
+        { type: "CLI", args: { cmd: nodeExecPath, args: ["-e", "setTimeout(() => {}, 3000)"] } },
+      ],
+    },
+    {
+      hook_key: shutdownHookKeyValue,
+      event: "gateway.shutdown",
+      lane: "cron",
+      steps: [{ type: "CLI", args: { cmd: nodeExecPath, args: ["-e", "process.exit(0)"] } }],
+    },
+  ];
+}
 
 export function shutdownHookConfig(hookKey: string): string {
   return (

@@ -6,7 +6,6 @@ Usage:
   tyrum tls fingerprint
   tyrum toolrunner
   tyrum plugin install <dir> [--home <path>]
-  tyrum import-home <source-home> [--tenant-id <id>] [--home <path>] [--db <path|postgres-uri>] [--migrations-dir <path>]
   tyrum update [--channel stable|beta|dev] [--version <version>]
   tyrum --version
   tyrum --help

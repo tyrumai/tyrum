@@ -146,7 +146,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
         "  ttl_days: 30",
         "  max_turns: 20",
         "memory:",
-        "  markdown_enabled: false",
+        "  v1: { enabled: false }",
       ].join("\n"),
       "utf-8",
     );
@@ -296,7 +296,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
         "  ttl_days: 30",
         "  max_turns: 20",
         "memory:",
-        "  markdown_enabled: false",
+        "  v1: { enabled: false }",
       ].join("\n"),
       "utf-8",
     );

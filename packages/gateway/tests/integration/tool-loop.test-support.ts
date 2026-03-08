@@ -51,7 +51,7 @@ type SeedAgentConfigParams = {
       };
       context_pruning?: { max_messages?: number; tool_prune_keep_last_messages?: number };
     };
-    memory?: { markdown_enabled?: boolean };
+    memory?: { v1?: { enabled?: boolean } };
   };
 };
 
@@ -276,7 +276,7 @@ export async function seedAgentConfig(
           cross_turn: { enabled: true, ...params.config.sessions?.loop_detection?.cross_turn },
         },
       },
-      memory: { markdown_enabled: false, ...params.config.memory },
+      memory: { v1: { enabled: false }, ...params.config.memory },
     },
     createdBy: { kind: "test" },
     reason: "test seed",

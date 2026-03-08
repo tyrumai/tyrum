@@ -48,9 +48,8 @@ These files (or equivalents) can be injected as "project context" so the model h
 - `AGENTS.md`
 - `SOUL.md`
 - `TOOLS.md`
-- `IDENTITY.md`
 - `USER.md`
 - `HEARTBEAT.md`
 - `BOOTSTRAP.md` (only for brand-new workspaces)
 
-Long-term memory and work state are not represented as workspace files. They live in the StateStore and are injected as **budgeted digests** (agent-scoped memory recall and workspace-scoped WorkBoard focus) during context assembly.
+Agent identity, long-term memory, and work state are not represented as workspace files. They live in the StateStore and are injected as stored config or **budgeted digests** (agent-scoped memory recall and workspace-scoped WorkBoard focus) during context assembly.

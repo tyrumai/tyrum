@@ -18,7 +18,6 @@ import {
   type GatewayStartOptions,
 } from "./config.js";
 import { CLI_HELP_TEXT } from "./cli-help.js";
-import { runImportHome } from "./cli-import-home.js";
 import {
   normalizeVersionSpecifier,
   parseUpdateChannel,
@@ -39,15 +38,7 @@ type CliCommand =
   | { kind: "help" }
   | { kind: "version" }
   | { kind: "update"; channel: UpdateChannel; version?: string }
-  | { kind: "plugin_install"; source_dir: string; home?: string }
-  | {
-      kind: "import_home";
-      source_home: string;
-      tenantId?: string;
-      home?: string;
-      db?: string;
-      migrationsDir?: string;
-    };
+  | { kind: "plugin_install"; source_dir: string; home?: string };
 function printCliHelp(): void {
   console.log(CLI_HELP_TEXT);
 }
@@ -342,59 +333,6 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     return { kind: "plugin_install", source_dir: sourceDir, home };
   }
 
-  if (first === "import-home") {
-    const common: CommonDbFlags = {};
-    let sourceHome: string | undefined;
-    let tenantId: string | undefined;
-
-    for (let index = 0; index < rest.length; index += 1) {
-      const arg = rest[index];
-      if (!arg) continue;
-
-      if (arg === "-h" || arg === "--help") {
-        return { kind: "help" };
-      }
-
-      const commonFlag = parseCommonDbFlag(rest, index, common);
-      if (commonFlag.handled) {
-        index = commonFlag.nextIndex;
-        continue;
-      }
-
-      if (arg === "--tenant-id") {
-        const value = rest[index + 1];
-        if (!value) throw new Error("--tenant-id requires a value");
-        tenantId = value.trim();
-        index += 1;
-        continue;
-      }
-
-      if (arg.startsWith("-")) {
-        throw new Error(`unsupported import-home argument '${arg}'`);
-      }
-
-      if (!sourceHome) {
-        sourceHome = arg;
-        continue;
-      }
-
-      throw new Error(`unexpected import-home argument '${arg}'`);
-    }
-
-    if (!sourceHome) {
-      throw new Error("import-home requires a source home directory");
-    }
-
-    return {
-      kind: "import_home",
-      source_home: sourceHome,
-      tenantId,
-      home: common.home,
-      db: common.db,
-      migrationsDir: common.migrationsDir,
-    };
-  }
-
   if (first !== "update") throw new Error(`unknown command '${first}'`);
 
   let channel: UpdateChannel = "stable";
@@ -551,10 +489,6 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
       console.error(`plugin.install: failed: ${message}`);
       return 1;
     }
-  }
-
-  if (command.kind === "import_home") {
-    return await runImportHome(command);
   }
 
   if (command.kind === "update") {

@@ -8,7 +8,7 @@ import type { GatewayContainer } from "../../../container.js";
 import type { McpManager } from "../mcp-manager.js";
 import type { SessionDal } from "../session-dal.js";
 import type { LoadedSkillManifest } from "../workspace.js";
-import type { AgentContextStore, AgentMemoryStore } from "../context-store.js";
+import type { AgentContextStore } from "../context-store.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
@@ -56,7 +56,6 @@ export interface AgentLoadedContext {
   identity: IdentityPackT;
   skills: LoadedSkillManifest[];
   mcpServers: McpServerSpecT[];
-  memoryStore: AgentMemoryStore;
 }
 
 export interface AgentContextPartReport {

@@ -54,7 +54,7 @@ import { WsEventDal } from "./modules/ws-event/dal.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
 import { gatewayMetrics } from "./modules/observability/metrics.js";
 import { PolicyBundleConfigDal } from "./modules/policy/config-dal.js";
-import { isLocalStateMode, isSharedStateMode } from "./modules/runtime-state/mode.js";
+import { isSharedStateMode } from "./modules/runtime-state/mode.js";
 
 export interface AppRouteDependencies {
   authProfileDal: AuthProfileDal;
@@ -361,9 +361,6 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       memoryV1Dal: context.container.memoryV1Dal,
       routingConfigDal: context.routeDeps.routingConfigDal,
       logger: context.container.logger,
-      home: isLocalStateMode(context.container.deploymentConfig)
-        ? context.container.config?.tyrumHome
-        : undefined,
     }),
   );
 
