@@ -298,20 +298,37 @@ export function getForcePushEvents(owner, repo, number) {
   ]).data.repository.pullRequest.timelineItems.nodes;
 }
 
+function branchRefCandidates(refName) {
+  if (refName.startsWith("refs/") || refName.startsWith("origin/")) return [refName];
+  return [refName, `origin/${refName}`, `refs/remotes/origin/${refName}`];
+}
+
+function resolveLocalRefOid(refName) {
+  for (const candidate of branchRefCandidates(refName)) {
+    const local = runResult("git", ["rev-parse", candidate]);
+    if (local.status === 0) return local.stdout.trim();
+  }
+  return null;
+}
+
 export function getRefOid(owner, repo, refName) {
-  const local = runResult("git", ["rev-parse", refName]);
-  if (local.status === 0) return local.stdout.trim();
+  const local = resolveLocalRefOid(refName);
+  if (local) return local;
+
+  const branchName = refName.replace(/^origin\//, "").replace(/^refs\/remotes\/origin\//, "");
 
   return run(
     "gh",
-    ["api", `repos/${owner}/${repo}/git/ref/heads/${refName}`, "--jq", ".object.sha"],
+    ["api", `repos/${owner}/${repo}/git/ref/heads/${branchName}`, "--jq", ".object.sha"],
     {},
   ).trim();
 }
 
 export function getMergeBase(owner, repo, baseBranch, oid) {
-  const local = runResult("git", ["merge-base", baseBranch, oid]);
-  if (local.status === 0) return local.stdout.trim();
+  for (const candidate of branchRefCandidates(baseBranch)) {
+    const local = runResult("git", ["merge-base", candidate, oid]);
+    if (local.status === 0) return local.stdout.trim();
+  }
 
   return run(
     "gh",
