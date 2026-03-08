@@ -1,6 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import type * as React from "react";
-import { PageHeader } from "../layout/page-header.js";
+import { AppPage } from "../layout/app-page.js";
+import { Badge } from "../ui/badge.js";
 import { LiveRegion } from "../ui/live-region.js";
 import { Skeleton } from "../ui/skeleton.js";
 import { StatusDot } from "../ui/status-dot.js";
@@ -16,7 +17,6 @@ import { useOperatorStore } from "../../use-operator-store.js";
 export interface DashboardPageProps {
   core: OperatorCore;
   onNavigate?: (id: string) => void;
-  hideHeader?: boolean;
 }
 
 function SummaryRow({
@@ -92,7 +92,7 @@ function DashboardSection({ title, children }: { title: string; children: React.
   );
 }
 
-export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPageProps) {
+export function DashboardPage({ core, onNavigate }: DashboardPageProps) {
   const status = useOperatorStore(core.statusStore);
   const connection = useOperatorStore(core.connectionStore);
   const approvals = useOperatorStore(core.approvalsStore);
@@ -137,9 +137,7 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
   const connectionDisplay = getConnectionDisplay(connection.status);
 
   return (
-    <div className="grid min-w-0 gap-4">
-      {hideHeader ? null : <PageHeader title="Dashboard" className="mb-0" />}
-
+    <AppPage title="Dashboard" contentClassName="max-w-4xl gap-4">
       <LiveRegion data-testid="dashboard-approvals-live">
         {approvals.pendingIds.length} pending approvals
       </LiveRegion>
@@ -232,6 +230,6 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
           />
         </DashboardSection>
       </div>
-    </div>
+    </AppPage>
   );
 }

@@ -1,0 +1,88 @@
+import * as React from "react";
+import { cn } from "../../lib/cn.js";
+import { ScrollArea } from "../ui/scroll-area.js";
+
+export interface AppPageToolbarProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
+  title?: React.ReactNode;
+  actions?: React.ReactNode;
+}
+
+export function AppPageToolbar({ title, actions, className, ...props }: AppPageToolbarProps) {
+  return (
+    <header
+      className={cn(
+        "flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4",
+        className,
+      )}
+      {...props}
+    >
+      <div className="min-w-0">
+        {title ? <h1 className="truncate text-sm font-medium text-fg">{title}</h1> : null}
+      </div>
+      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+    </header>
+  );
+}
+
+export interface AppPageContentProps extends React.HTMLAttributes<HTMLDivElement> {
+  contentClassName?: string;
+  scrollAreaClassName?: string;
+}
+
+export function AppPageContent({
+  children,
+  className,
+  contentClassName,
+  scrollAreaClassName,
+  ...props
+}: AppPageContentProps) {
+  return (
+    <div className={cn("min-h-0 flex-1 overflow-hidden", className)} {...props}>
+      <ScrollArea className={cn("h-full", scrollAreaClassName)}>
+        <div
+          className={cn(
+            "mx-auto grid w-full max-w-5xl gap-5 px-4 py-4 md:px-5 md:py-5",
+            contentClassName,
+          )}
+        >
+          {children}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+export interface AppPageProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
+  title?: React.ReactNode;
+  actions?: React.ReactNode;
+  contentClassName?: string;
+  scrollAreaClassName?: string;
+  bodyClassName?: string;
+}
+
+export function AppPage({
+  title,
+  actions,
+  children,
+  className,
+  contentClassName,
+  scrollAreaClassName,
+  bodyClassName,
+  ...props
+}: AppPageProps) {
+  return (
+    <div
+      className={cn("flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-bg", className)}
+      {...props}
+    >
+      {title || actions ? <AppPageToolbar title={title} actions={actions} /> : null}
+      <AppPageContent
+        className={bodyClassName}
+        contentClassName={contentClassName}
+        scrollAreaClassName={scrollAreaClassName}
+      >
+        {children}
+      </AppPageContent>
+    </div>
+  );
+}

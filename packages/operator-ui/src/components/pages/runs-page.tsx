@@ -2,12 +2,12 @@ import type { OperatorCore } from "@tyrum/operator-core";
 import type { ExecutionRun } from "@tyrum/client";
 import { Play } from "lucide-react";
 import { useMemo, useState } from "react";
+import { AppPage } from "../layout/app-page.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { buildRunTimeline, sortRunsByCreatedAt } from "./runs-page.lib.js";
 import { RunsPageCard } from "./runs-page-card.js";
 import { resolveAgentIdForRun } from "../../lib/status-session-lanes.js";
-import { PageHeader } from "../layout/page-header.js";
 
 export interface RunsPageProps {
   core: OperatorCore;
@@ -52,38 +52,43 @@ export function RunsPage({
     });
   };
 
+  const content =
+    runs.length === 0 ? (
+      <EmptyState
+        icon={Play}
+        title="No runs yet"
+        description={
+          agentId
+            ? "Runs for this agent appear here when it starts executing."
+            : "Runs appear here when agents start executing."
+        }
+      />
+    ) : (
+      <div className="grid gap-4">
+        {runs.map((run) => {
+          const isExpanded = expandedRunIds.has(run.run_id);
+
+          return (
+            <RunsPageCard
+              key={run.run_id}
+              core={core}
+              run={run}
+              isExpanded={isExpanded}
+              onToggleRun={toggleRun}
+              timeline={isExpanded ? buildRunTimeline(run, runsState) : []}
+            />
+          );
+        })}
+      </div>
+    );
+
+  if (hideHeader) {
+    return <div className="grid gap-4">{content}</div>;
+  }
+
   return (
-    <div className="grid gap-5">
-      {hideHeader ? null : <PageHeader title={title} className="mb-0" />}
-
-      {runs.length === 0 ? (
-        <EmptyState
-          icon={Play}
-          title="No runs yet"
-          description={
-            agentId
-              ? "Runs for this agent appear here when it starts executing."
-              : "Runs appear here when agents start executing."
-          }
-        />
-      ) : (
-        <div className="grid gap-4">
-          {runs.map((run) => {
-            const isExpanded = expandedRunIds.has(run.run_id);
-
-            return (
-              <RunsPageCard
-                key={run.run_id}
-                core={core}
-                run={run}
-                isExpanded={isExpanded}
-                onToggleRun={toggleRun}
-                timeline={isExpanded ? buildRunTimeline(run, runsState) : []}
-              />
-            );
-          })}
-        </div>
-      )}
-    </div>
+    <AppPage title={title} contentClassName="max-w-5xl gap-4">
+      {content}
+    </AppPage>
   );
 }

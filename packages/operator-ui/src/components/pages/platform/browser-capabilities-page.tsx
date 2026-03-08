@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { TaskResult } from "@tyrum/client";
 import { toast } from "sonner";
 import { useBrowserNode } from "../../../browser-node/browser-node-provider.js";
+import { AppPage } from "../../layout/app-page.js";
 import { Alert } from "../../ui/alert.js";
 import { Button } from "../../ui/button.js";
 import { Card, CardContent } from "../../ui/card.js";
@@ -45,9 +46,7 @@ export function BrowserCapabilitiesPage() {
   })();
 
   return (
-    <div className="grid gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight text-fg">Browser Capabilities</h1>
-
+    <AppPage title="Browser" contentClassName="max-w-5xl gap-4">
       {!globalThis.isSecureContext ? (
         <Alert
           variant="warning"
@@ -164,6 +163,6 @@ export function BrowserCapabilitiesPage() {
           {summarized ? <JsonViewer value={summarized} defaultExpandedDepth={3} /> : null}
         </CardContent>
       </Card>
-    </div>
+    </AppPage>
   );
 }

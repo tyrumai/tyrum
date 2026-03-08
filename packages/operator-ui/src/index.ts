@@ -36,9 +36,6 @@ export { Sidebar } from "./components/layout/sidebar.js";
 export type { MobileNavItem, MobileNavProps } from "./components/layout/mobile-nav.js";
 export { MobileNav } from "./components/layout/mobile-nav.js";
 
-export type { PageHeaderProps } from "./components/layout/page-header.js";
-export { PageHeader } from "./components/layout/page-header.js";
-
 export type { ButtonProps, ButtonSize, ButtonVariant } from "./components/ui/button.js";
 export { Button } from "./components/ui/button.js";
 
