@@ -24,7 +24,7 @@ import {
   type StepPauseRequest,
 } from "./turn-helpers.js";
 import type { AgentContextReport, AgentRuntimeOptions } from "./types.js";
-import { resolveTyrumHome } from "../home.js";
+import { resolveAgentHome, resolveTyrumHome } from "../home.js";
 import { SessionDal } from "../session-dal.js";
 import { McpManager } from "../mcp-manager.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
@@ -79,7 +79,14 @@ export class AgentRuntime {
   private readonly defaultHeartbeatSeededScopes = new Set<string>();
 
   constructor(private readonly opts: AgentRuntimeOptions) {
-    this.home = opts.home ?? resolveTyrumHome();
+    const agentIdCandidate = opts.agentId?.trim() || resolveAgentId();
+    const parsedAgentId = AgentKey.safeParse(agentIdCandidate);
+    if (!parsedAgentId.success) {
+      throw new Error(`invalid agent_id '${agentIdCandidate}' (${parsedAgentId.error.message})`);
+    }
+    this.agentId = parsedAgentId.data;
+
+    this.home = opts.home ?? resolveAgentHome(resolveTyrumHome(), this.agentId);
     this.contextStore =
       opts.contextStore ??
       createDefaultAgentContextStore({
@@ -89,13 +96,6 @@ export class AgentRuntime {
     this.sessionDal = opts.sessionDal ?? opts.container.sessionDal;
     this.fetchImpl = opts.fetchImpl ?? fetch;
     this.tenantId = opts.tenantId?.trim() || DEFAULT_TENANT_ID;
-
-    const agentIdCandidate = opts.agentId?.trim() || resolveAgentId();
-    const parsedAgentId = AgentKey.safeParse(agentIdCandidate);
-    if (!parsedAgentId.success) {
-      throw new Error(`invalid agent_id '${agentIdCandidate}' (${parsedAgentId.error.message})`);
-    }
-    this.agentId = parsedAgentId.data;
 
     const workspaceIdCandidate = opts.workspaceId?.trim() || resolveWorkspaceKey();
     const parsedWorkspaceId = WorkspaceKey.safeParse(workspaceIdCandidate);

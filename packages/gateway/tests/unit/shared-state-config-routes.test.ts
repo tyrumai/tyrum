@@ -108,22 +108,6 @@ describe("shared state config routes", () => {
     expect(payload.packages).toEqual([expect.objectContaining({ key: "db-skill", enabled: true })]);
   });
 
-  it("stores and returns markdown memory docs", async () => {
-    const putRes = await app.request("/config/agents/default/markdown-memory/core/MEMORY", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content: "# MEMORY\n\n## Learned Preferences\n\n- likes tea\n",
-      }),
-    });
-    expect(putRes.status).toBe(200);
-
-    const getRes = await app.request("/config/agents/default/markdown-memory/core/MEMORY");
-    expect(getRes.status).toBe(200);
-    const payload = (await getRes.json()) as { content: string };
-    expect(payload.content).toContain("likes tea");
-  });
-
   it("invalidates shared plugin registries after plugin package writes and reverts", async () => {
     const invalidateTenantRegistry = vi.fn(async () => undefined);
     app = createAppWithDeps(container, tenantId, {

@@ -61,7 +61,7 @@ describe("AgentRuntime (Memory v1 digest injection)", () => {
         "  ttl_days: 30",
         "  max_turns: 20",
         "memory:",
-        "  markdown_enabled: false",
+        "  v1: { enabled: false }",
         "  v1:",
         "    enabled: true",
         "    keyword:",

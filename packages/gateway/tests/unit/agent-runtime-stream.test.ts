@@ -54,7 +54,7 @@ describe("AgentRuntime.turnStream", () => {
         "      min_chars: 120",
         "      cooldown_assistant_messages: 6",
         "memory:",
-        "  markdown_enabled: false",
+        "  v1: { enabled: false }",
       ].join("\n"),
       "utf-8",
     );

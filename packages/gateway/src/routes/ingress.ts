@@ -12,7 +12,7 @@ import {
   renderMarkdownForTelegram,
   type TelegramFormattingFallbackEvent,
 } from "../modules/markdown/telegram.js";
-import { loadRoutingConfig, resolveTelegramAgentId } from "../modules/channels/routing.js";
+import { resolveTelegramAgentId } from "../modules/channels/routing.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import type { MemoryV1Dal } from "../modules/memory/v1-dal.js";
 import { recordMemoryV1SystemEpisode } from "../modules/memory/v1-episode-recorder.js";
@@ -28,7 +28,6 @@ export interface IngressDeps {
   routingConfigDal?: RoutingConfigDal;
   memoryV1Dal?: MemoryV1Dal;
   logger?: Logger;
-  home?: string;
 }
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
@@ -84,7 +83,6 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       return c.json({ ok: true });
     }
 
-    const home = deps.home?.trim() || undefined;
     let durable;
     if (deps.routingConfigDal) {
       try {
@@ -96,7 +94,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         durable = undefined;
       }
     }
-    const routing = durable?.config ?? (home ? await loadRoutingConfig(home) : { v: 1 });
+    const routing = durable?.config ?? { v: 1 };
     const routedAgentId =
       c.req.query("agent_key")?.trim() || resolveTelegramAgentId(routing, chatId);
 

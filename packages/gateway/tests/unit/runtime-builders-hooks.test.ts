@@ -18,7 +18,7 @@ describe("createProtocolRuntime hooks gating", () => {
     }
   });
 
-  it("does not create a hooks runtime in local mode when no hooks are configured", async () => {
+  it("creates a hooks runtime in local mode and resolves an empty DB hook set", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-hooks-runtime-"));
     const container = createContainer(
       {
@@ -64,7 +64,8 @@ describe("createProtocolRuntime hooks gating", () => {
         shutdown: async () => undefined,
       });
 
-      expect(protocol.hooksRuntime).toBeUndefined();
+      expect(protocol.hooksRuntime).toBeDefined();
+      await expect(protocol.hooksRuntime?.fire({ event: "gateway.start" })).resolves.toEqual([]);
       protocol.approvalEngineActionProcessor?.stop();
     } finally {
       await container.db.close();

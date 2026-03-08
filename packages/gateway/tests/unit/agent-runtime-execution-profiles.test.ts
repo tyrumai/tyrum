@@ -50,7 +50,7 @@ describe("AgentRuntime (execution profiles)", () => {
         mcp: { enabled: [] },
         tools: { allow: ["tool.fs.read", "tool.fs.write", "tool.exec"] },
         sessions: { ttl_days: 30, max_turns: 20 },
-        memory: { markdown_enabled: false },
+        memory: { v1: { enabled: false } },
       }),
       createdBy: { kind: "test" },
       reason: "test",

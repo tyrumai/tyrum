@@ -82,6 +82,16 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     });
 
     expect(agentTurnEpisode).toBeDefined();
+    expect(agentTurnEpisode?.[0]).toEqual(
+      expect.objectContaining({
+        summary_md: expect.stringContaining("User: hi"),
+      }),
+    );
+    expect(agentTurnEpisode?.[0]).toEqual(
+      expect.objectContaining({
+        summary_md: expect.stringContaining("Assistant: hello"),
+      }),
+    );
   }, 10_000);
 
   it("logs when subagent execution profile resolution fails", async () => {
@@ -146,7 +156,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
         "  ttl_days: 30",
         "  max_turns: 20",
         "memory:",
-        "  markdown_enabled: false",
+        "  v1: { enabled: false }",
       ].join("\n"),
       "utf-8",
     );
@@ -296,7 +306,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
         "  ttl_days: 30",
         "  max_turns: 20",
         "memory:",
-        "  markdown_enabled: false",
+        "  v1: { enabled: false }",
       ].join("\n"),
       "utf-8",
     );

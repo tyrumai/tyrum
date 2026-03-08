@@ -43,7 +43,6 @@ import type {
   GatewayServer,
   ProtocolRuntime,
 } from "./runtime-shared.js";
-import { isSharedStateMode } from "../modules/runtime-state/mode.js";
 export { startBackgroundSchedulers } from "./runtime-builders-background.js";
 export { createShutdownHandler, runShutdownCleanup } from "./runtime-builders-shutdown.js";
 
@@ -96,19 +95,14 @@ export async function createProtocolRuntime(
       : undefined;
   const shouldEnableHooksRuntime =
     context.shouldRunEdge || context.shouldRunWorker
-      ? isSharedStateMode(context.deploymentConfig)
-        ? Boolean(context.container.gatewayConfigStore)
-        : context.lifecycleHooks.length > 0
+      ? Boolean(context.container.gatewayConfigStore)
       : false;
   const hooksRuntime = shouldEnableHooksRuntime
     ? new LifecycleHooksRuntime({
         db: context.container.db,
         engine: approvalEngine!,
         policyService: context.container.policyService,
-        configStore: isSharedStateMode(context.deploymentConfig)
-          ? context.container.gatewayConfigStore
-          : undefined,
-        hooks: isSharedStateMode(context.deploymentConfig) ? undefined : context.lifecycleHooks,
+        configStore: context.container.gatewayConfigStore,
       })
     : undefined;
 

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { AgentConfig } from "@tyrum/schemas";
 import { createContainer } from "../../src/container.js";
+import { AgentIdentityDal } from "../../src/modules/agent/identity-dal.js";
 import {
   createLocalAgentContextStore,
   createSharedAgentContextStore,
@@ -15,31 +16,25 @@ const migrationsDir = join(import.meta.dirname, "../../migrations/sqlite");
 
 describe("LocalAgentContextStore", () => {
   let homeDir: string;
+  let container: ReturnType<typeof createContainer>;
 
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), "tyrum-agent-context-store-"));
+    container = createContainer(
+      { dbPath: ":memory:", migrationsDir },
+      { deploymentConfig: { state: { mode: "local" } } },
+    );
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     rmSync(homeDir, { recursive: true, force: true });
+    await container.db.close();
   });
 
-  it("loads identity, skills, mcp, and markdown memory from the local workspace", async () => {
+  it("loads identity from DB and skills/mcp from the local workspace", async () => {
     await mkdir(join(homeDir, "skills/file-reader"), { recursive: true });
     await mkdir(join(homeDir, "mcp/calendar"), { recursive: true });
 
-    writeFileSync(
-      join(homeDir, "IDENTITY.md"),
-      `---
-name: Tyrum Local
-description: local identity
-style:
-  tone: direct
----
-You are a precise local assistant.
-`,
-      "utf-8",
-    );
     writeFileSync(
       join(homeDir, "skills/file-reader/SKILL.md"),
       `---
@@ -65,13 +60,24 @@ args:
       "utf-8",
     );
 
-    const store = createLocalAgentContextStore({ home: homeDir });
-    const scope = { tenantId: "tenant-1", agentId: "agent-1", workspaceId: "workspace-1" };
+    const store = createLocalAgentContextStore({
+      db: container.db,
+      home: homeDir,
+      identityScopeDal: container.identityScopeDal,
+    });
+    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-local");
+    const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
+    const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+    await container.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+    const scope = { tenantId, agentId, workspaceId };
     const config = AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
       skills: { enabled: ["file-reader"], workspace_trusted: true },
       mcp: { enabled: ["calendar"] },
-      memory: { markdown_enabled: true },
+      memory: { v1: { enabled: true } },
     });
 
     await store.ensureAgentContext(scope);
@@ -79,20 +85,48 @@ args:
     const identity = await store.getIdentity(scope);
     const skills = await store.getEnabledSkills(scope, config);
     const mcpServers = await store.getEnabledMcpServers(scope, config);
-    const memoryStore = store.createMemoryStore(scope);
-    await memoryStore.ensureInitialized();
-    await memoryStore.appendToCoreSection("Learned Preferences", "- prefers tea");
-    const hits = await memoryStore.search("tea", 5);
 
-    expect(identity.meta.name).toBe("Tyrum Local");
+    expect(identity.meta.name).toBe("Tyrum");
     expect(skills.map((skill) => skill.meta.id)).toEqual(["file-reader"]);
     expect(mcpServers.map((server) => server.id)).toEqual(["calendar"]);
-    expect(hits.some((hit) => hit.snippet.includes("tea"))).toBe(true);
+  });
+
+  it("resolves runtime scope keys to durable ids before seeding local identity", async () => {
+    const store = createLocalAgentContextStore({
+      db: container.db,
+      home: homeDir,
+      identityScopeDal: container.identityScopeDal,
+    });
+    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-local");
+    const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
+    const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+    await container.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+
+    await store.ensureAgentContext({
+      tenantId,
+      agentId: "default",
+      workspaceId: DEFAULT_WORKSPACE_KEY,
+    });
+
+    const agents = await container.db.all<{ agent_id: string; agent_key: string }>(
+      `SELECT agent_id, agent_key
+       FROM agents
+       WHERE tenant_id = ?
+       ORDER BY agent_key ASC`,
+      [tenantId],
+    );
+    expect(agents).toEqual([{ agent_id: agentId, agent_key: "default" }]);
+
+    const identity = await new AgentIdentityDal(container.db).getLatest({ tenantId, agentId });
+    expect(identity?.identity.meta.name).toBe("Tyrum");
   });
 });
 
 describe("SharedAgentContextStore", () => {
-  it("loads identity, skills, mcp, and markdown memory from shared state", async () => {
+  it("loads identity, skills, and mcp from shared state", async () => {
     const container = createContainer(
       { dbPath: ":memory:", migrationsDir },
       { deploymentConfig: { state: { mode: "shared" } } },
@@ -115,7 +149,7 @@ describe("SharedAgentContextStore", () => {
       model: { model: "openai/gpt-4.1" },
       skills: { enabled: ["db-skill"], workspace_trusted: false },
       mcp: { enabled: ["calendar"] },
-      memory: { markdown_enabled: true },
+      memory: { v1: { enabled: true } },
     });
 
     await container.db.run(
@@ -186,17 +220,12 @@ describe("SharedAgentContextStore", () => {
     const identity = await store.getIdentity(scope);
     const skills = await store.getEnabledSkills(scope, config);
     const mcpServers = await store.getEnabledMcpServers(scope, config);
-    const memoryStore = store.createMemoryStore(scope);
-    await memoryStore.ensureInitialized();
-    await memoryStore.appendToCoreSection("Learned Preferences", "- prefers coffee");
-    const hits = await memoryStore.search("coffee", 5);
 
     expect(identity.meta.name).toBe("Tyrum Shared");
     expect(skills.map((skill) => [skill.meta.id, skill.provenance.source])).toEqual([
       ["db-skill", "shared"],
     ]);
     expect(mcpServers.map((server) => server.id)).toEqual(["calendar"]);
-    expect(hits.some((hit) => hit.snippet.includes("coffee"))).toBe(true);
 
     await container.db.close();
   });

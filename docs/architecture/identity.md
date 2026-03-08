@@ -32,3 +32,5 @@ Where `base32_lower_nopad` uses the RFC 4648 alphabet (`a-z2-7`), rendered lower
 - Pairing and revocation (nodes and clients)
 - Audit trails (who/what performed an action)
 - Scoping (which tenant, agents, and workspaces an action can touch)
+
+Agent identity is durable runtime configuration stored in the StateStore, not a workspace file. Operator/config surfaces are the source of truth for reading and updating it.

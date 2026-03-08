@@ -175,30 +175,6 @@ describe("gateway CLI argument parsing", () => {
   it("parses TLS fingerprint command", () => {
     expect(parseCliArgs(["tls", "fingerprint"])).toEqual({ kind: "tls_fingerprint" });
   });
-
-  it("parses import-home command", () => {
-    expect(
-      parseCliArgs([
-        "import-home",
-        "/tmp/source-home",
-        "--tenant-id",
-        "tenant-1",
-        "--home",
-        "/tmp/target-home",
-        "--db",
-        "/tmp/gateway.db",
-        "--migrations-dir",
-        "/tmp/migrations",
-      ]),
-    ).toEqual({
-      kind: "import_home",
-      source_home: "/tmp/source-home",
-      tenantId: "tenant-1",
-      home: "/tmp/target-home",
-      db: "/tmp/gateway.db",
-      migrationsDir: "/tmp/migrations",
-    });
-  });
 });
 
 describe("snapshot import enablement", () => {

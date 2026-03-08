@@ -7,6 +7,7 @@ import { recordMemoryV1SystemEpisode } from "../../memory/v1-episode-recorder.js
 import { looksLikeSecretText } from "./secrets.js";
 import { shouldPromoteToCoreMemory, type ResolvedAgentTurnInput } from "./turn-helpers.js";
 import type { AgentContextReport, AgentLoadedContext } from "./types.js";
+import { redactSecretLikeText } from "./secrets.js";
 
 type FinalizeContainer = Pick<GatewayContainer, "contextReportDal" | "logger" | "memoryV1Dal">;
 
@@ -77,14 +78,14 @@ async function persistContextReport(input: {
   }
 }
 
-async function appendMarkdownMemory(input: {
+async function writeMemoryV1TurnNote(input: {
   container: FinalizeContainer;
   ctx: AgentLoadedContext;
   session: SessionRow;
   resolved: ResolvedAgentTurnInput;
   reply: string;
 }): Promise<boolean> {
-  if (!input.ctx.config.memory.markdown_enabled) return false;
+  if (!input.ctx.config.memory.v1.enabled) return false;
 
   const entry = [
     `Channel: ${input.resolved.channel}`,
@@ -101,22 +102,76 @@ async function appendMarkdownMemory(input: {
     return false;
   }
 
-  await input.ctx.memoryStore.appendDaily(entry);
-  if (shouldPromoteToCoreMemory(input.resolved.message)) {
-    await input.ctx.memoryStore.appendToCoreSection(
-      "Learned Preferences",
-      `- ${input.resolved.message.trim()}`,
-    );
+  if (!shouldPromoteToCoreMemory(input.resolved.message)) {
+    return false;
   }
+
+  await input.container.memoryV1Dal.create(
+    {
+      kind: "note",
+      title: "Learned preference",
+      body_md: entry,
+      tags: ["agent-turn", "learned-preference"],
+      sensitivity: "private",
+      provenance: {
+        source_kind: "user",
+        channel: input.resolved.channel,
+        thread_id: input.resolved.thread_id,
+        session_id: input.session.session_id,
+        refs: [],
+      },
+    },
+    { tenantId: input.session.tenant_id, agentId: input.session.agent_id },
+  );
   return true;
+}
+
+function normalizeSummaryText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function truncateSummaryText(value: string, maxChars: number): string {
+  if (maxChars <= 0) return "";
+  if (value.length <= maxChars) return value;
+  if (maxChars <= 3) return value.slice(0, maxChars);
+  return `${value.slice(0, maxChars - 3)}...`;
+}
+
+function buildTurnEpisodeSummary(input: {
+  resolved: ResolvedAgentTurnInput;
+  reply: string;
+}): string {
+  const user = truncateSummaryText(
+    normalizeSummaryText(redactSecretLikeText(input.resolved.message)),
+    160,
+  );
+  const assistant = truncateSummaryText(
+    normalizeSummaryText(redactSecretLikeText(input.reply)),
+    220,
+  );
+  const details = [
+    user.length > 0 ? `User: ${user}` : undefined,
+    assistant.length > 0 ? `Assistant: ${assistant}` : undefined,
+  ].filter((part): part is string => part !== undefined);
+
+  if (details.length === 0) {
+    return `Agent turn: ${input.resolved.channel}`;
+  }
+
+  return `${details.join(" | ")} (${input.resolved.channel})`;
 }
 
 async function recordAgentTurnEpisode(input: {
   container: FinalizeContainer;
+  ctx: AgentLoadedContext;
   session: SessionRow;
   resolved: ResolvedAgentTurnInput;
+  reply: string;
   nowIso: string;
-}): Promise<void> {
+}): Promise<boolean> {
+  if (!input.ctx.config.memory.v1.enabled) {
+    return false;
+  }
   try {
     await recordMemoryV1SystemEpisode(
       input.container.memoryV1Dal,
@@ -124,7 +179,7 @@ async function recordAgentTurnEpisode(input: {
         occurred_at: input.nowIso,
         channel: input.resolved.channel,
         event_type: "agent_turn",
-        summary_md: `Agent turn: ${input.resolved.channel}`,
+        summary_md: buildTurnEpisodeSummary(input),
         tags: ["agent", "turn"],
         metadata: {
           channel: input.resolved.channel,
@@ -134,6 +189,7 @@ async function recordAgentTurnEpisode(input: {
       },
       input.session.agent_id,
     );
+    return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     input.container.logger.warn("memory.v1.system_episode_record_failed", {
@@ -142,6 +198,7 @@ async function recordAgentTurnEpisode(input: {
       thread_id: input.resolved.thread_id,
       error: message,
     });
+    return false;
   }
 }
 
@@ -167,19 +224,22 @@ export async function finalizeTurn(input: {
     maxTurns: input.ctx.config.sessions.max_turns,
     timestamp: nowIso,
   });
-  const memoryWritten = await appendMarkdownMemory({
+  const noteWritten = await writeMemoryV1TurnNote({
     container: input.container,
     ctx: input.ctx,
     session: input.session,
     resolved: input.resolved,
     reply: finalizedReply,
   });
-  await recordAgentTurnEpisode({
+  const episodeWritten = await recordAgentTurnEpisode({
     container: input.container,
+    ctx: input.ctx,
     session: input.session,
     resolved: input.resolved,
+    reply: finalizedReply,
     nowIso,
   });
+  const memoryWritten = noteWritten || episodeWritten;
 
   return AgentTurnResponse.parse({
     reply: finalizedReply,

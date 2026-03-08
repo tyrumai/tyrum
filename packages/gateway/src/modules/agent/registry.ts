@@ -8,6 +8,7 @@ import type { SecretProvider } from "../secret/provider.js";
 import { join } from "node:path";
 import type { Logger } from "../observability/logger.js";
 import { AgentRuntime } from "./runtime.js";
+import { resolveAgentHome } from "./home.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { PluginCatalogProvider } from "../plugins/catalog-provider.js";
 import type { LanguageModel } from "ai";
@@ -57,8 +58,7 @@ export class AgentRegistry {
 
   resolveAgentHome(agentId: string): string {
     const id = normalizeAgentId(agentId);
-    if (id === "default") return this.opts.baseHome;
-    return join(this.opts.baseHome, "agents", id);
+    return resolveAgentHome(this.opts.baseHome, id);
   }
 
   async listDiscoveredAgentKeys(): Promise<string[]> {

@@ -8,7 +8,7 @@ import { AgentConfig } from "@tyrum/schemas";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
-import type { AgentContextScope, AgentMemoryStore } from "../../src/modules/agent/context-store.js";
+import type { AgentContextScope } from "../../src/modules/agent/context-store.js";
 import { DEFAULT_WORKSPACE_KEY } from "../../src/modules/identity/scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -18,16 +18,6 @@ function usage() {
   return {
     inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
     outputTokens: { total: 1, text: 1, reasoning: undefined },
-  };
-}
-
-function createMemoryStore(): AgentMemoryStore {
-  return {
-    ensureInitialized: async () => {},
-    appendDaily: async () => "",
-    upsertCoreSection: async () => {},
-    appendToCoreSection: async () => {},
-    search: async () => [],
   };
 }
 
@@ -73,7 +63,7 @@ describe("AgentRuntime shared context scopes", () => {
         mcp: { enabled: [] },
         tools: { allow: [] },
         sessions: { ttl_days: 30, max_turns: 20 },
-        memory: { markdown_enabled: false },
+        memory: { v1: { enabled: false } },
       }),
       createdBy: { kind: "test" },
       reason: "shared-context-scope regression",
@@ -90,7 +80,6 @@ describe("AgentRuntime shared context scopes", () => {
       }),
       getEnabledSkills: async () => [],
       getEnabledMcpServers: async () => [],
-      createMemoryStore: () => createMemoryStore(),
     };
 
     const languageModel = new MockLanguageModelV3({

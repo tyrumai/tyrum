@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createApp } from "../../src/app.js";
@@ -9,25 +9,12 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
 import { AgentConfig } from "@tyrum/schemas";
 import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
+import { AgentIdentityDal } from "../../src/modules/agent/identity-dal.js";
 
 async function writeWorkspace(home: string): Promise<void> {
   await mkdir(home, { recursive: true });
   await mkdir(join(home, "skills/file-reader"), { recursive: true });
   await mkdir(join(home, "mcp/calendar"), { recursive: true });
-  await mkdir(join(home, "memory"), { recursive: true });
-
-  await writeFile(
-    join(home, "IDENTITY.md"),
-    `---
-name: Tyrum Local
-description: local identity
-style:
-  tone: direct
----
-You are a precise local assistant.
-`,
-    "utf-8",
-  );
 
   await writeFile(
     join(home, "skills/file-reader/SKILL.md"),
@@ -63,7 +50,7 @@ describe("agent routes", () => {
 
   beforeEach(async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-"));
-    await writeWorkspace(homeDir);
+    await writeWorkspace(join(homeDir, "agents/default"));
     process.env["TYRUM_HOME"] = homeDir;
     process.env["TYRUM_AGENT_ENABLED"] = "1";
   });
@@ -91,6 +78,16 @@ describe("agent routes", () => {
   it("returns singleton status from local workspace", async () => {
     const { app, agents, container, auth } = await createTestApp({ tyrumHome: homeDir });
     const agentId = await container.identityScopeDal.ensureAgentId(auth.tenantId, "default");
+    await new AgentIdentityDal(container.db).set({
+      tenantId: auth.tenantId,
+      agentId,
+      identity: {
+        meta: { name: "Tyrum Local", description: "local identity", style: { tone: "direct" } },
+        body: "You are a precise local assistant.",
+      },
+      createdBy: { kind: "test" },
+      reason: "agent status identity test",
+    });
     await new AgentConfigDal(container.db).set({
       tenantId: auth.tenantId,
       agentId,
@@ -107,7 +104,7 @@ describe("agent routes", () => {
         mcp: { enabled: ["calendar"] },
         tools: { allow: ["tool.fs.read", "mcp.*"] },
         sessions: { ttl_days: 30, max_turns: 20 },
-        memory: { markdown_enabled: true },
+        memory: { v1: { enabled: true } },
       }),
       createdBy: { kind: "test" },
       reason: "agent status test",
@@ -248,7 +245,7 @@ describe("agent routes", () => {
     await container.db.close();
   });
 
-  it("separates short-term session context per channel/thread and writes memory files", async () => {
+  it("separates short-term session context per channel/thread and writes Memory v1 records", async () => {
     const { app, container, agents } = await createTestApp({
       tyrumHome: homeDir,
       languageModel: createStubLanguageModel("ok"),
@@ -320,9 +317,13 @@ describe("agent routes", () => {
     expect(discordUserTurns.join("\n").toLowerCase()).not.toContain("prefer tea");
     expect(telegramUserTurns.join("\n").toLowerCase()).toContain("prefer tea");
 
-    const memoryFiles = await readdir(join(homeDir!, "memory"));
-    expect(memoryFiles).toContain("MEMORY.md");
-    expect(memoryFiles.some((name) => /^\d{4}-\d{2}-\d{2}\.md$/.test(name))).toBe(true);
+    const agentId = await container.identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "default");
+    const memoryItems = await container.memoryV1Dal.list({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId,
+      limit: 20,
+    });
+    expect(memoryItems.items.some((item) => item.kind === "episode")).toBe(true);
 
     await agents?.shutdown();
     await container.db.close();

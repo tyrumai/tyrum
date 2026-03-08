@@ -55,9 +55,14 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
         })
         .map(async (record) => {
           const config = record.agent_id ? configsByAgentId.get(record.agent_id) : undefined;
-          const identity = !config?.persona
-            ? await loadOptionalIdentity(opts.agents.resolveAgentHome(record.agent_key))
-            : undefined;
+          const identity =
+            !config?.persona && record.agent_id
+              ? await loadOptionalIdentity({
+                  db: opts.db,
+                  tenantId,
+                  agentId: record.agent_id,
+                })
+              : undefined;
           const persona = resolveAgentPersona({
             agentKey: record.agent_key,
             config,

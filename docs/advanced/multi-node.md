@@ -38,11 +38,7 @@ For HA, use:
 - one shared secret key source across all instances
 - no mutable runtime fallbacks from `TYRUM_HOME`
 
-If you are migrating from a local node:
-
-```bash
-tyrum import-home ~/.tyrum --db <shared-db-uri> --tenant-id 00000000-0000-4000-8000-000000000001
-```
+If you are moving from a local node, recreate mutable runtime config in the shared DB-backed surfaces before cutover. There is no filesystem import command.
 
 ## Recommended structure
 

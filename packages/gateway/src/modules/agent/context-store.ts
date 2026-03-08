@@ -9,21 +9,18 @@ import {
   DEFAULT_IDENTITY_MD,
   resolveBundledSkillsDir,
 } from "./home.js";
-import { MarkdownMemoryStore, type MemorySearchHit } from "./markdown-memory.js";
 import { AgentIdentityDal } from "./identity-dal.js";
-import { MarkdownMemoryDal } from "./markdown-memory-dal.js";
 import { RuntimePackageDal } from "./runtime-package-dal.js";
-import { SharedMarkdownMemoryStore } from "./shared-markdown-memory-store.js";
 import {
   loadSkillFromDir,
   loadEnabledMcpServers,
   loadEnabledSkills,
-  loadIdentity,
   type LoadedSkillManifest,
 } from "./workspace.js";
 import { parseFrontmatterDocument } from "./frontmatter.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
+import type { IdentityScopeDal } from "../identity/scope.js";
 import { resolveGatewayStateMode } from "../runtime-state/mode.js";
 import type { GatewayContainer } from "../../container.js";
 
@@ -33,34 +30,100 @@ export interface AgentContextScope {
   workspaceId: string;
 }
 
-export interface AgentMemoryStore {
-  ensureInitialized(): Promise<void>;
-  appendDaily(entry: string, date?: Date): Promise<string>;
-  upsertCoreSection(sectionKey: string, content: string): Promise<void>;
-  appendToCoreSection(sectionKey: string, line: string): Promise<void>;
-  search(query: string, limit: number): Promise<MemorySearchHit[]>;
-}
-
 export interface AgentContextStore {
   ensureAgentContext(scope: AgentContextScope): Promise<void>;
   getIdentity(scope: AgentContextScope): Promise<IdentityPackT>;
   getEnabledSkills(scope: AgentContextScope, config: AgentConfigT): Promise<LoadedSkillManifest[]>;
   getEnabledMcpServers(scope: AgentContextScope, config: AgentConfigT): Promise<McpServerSpecT[]>;
-  createMemoryStore(scope: AgentContextScope): AgentMemoryStore;
 }
 
 class LocalAgentContextStore implements AgentContextStore {
-  constructor(
-    private readonly home: string,
-    private readonly logger?: Logger,
-  ) {}
+  private readonly identityDal: AgentIdentityDal;
 
-  async ensureAgentContext(_scope: AgentContextScope): Promise<void> {
-    await ensureWorkspaceInitialized(this.home);
+  constructor(
+    private readonly db: SqlDb,
+    private readonly home: string,
+    private readonly identityScopeDal: IdentityScopeDal,
+    private readonly logger?: Logger,
+  ) {
+    this.identityDal = new AgentIdentityDal(db);
   }
 
-  async getIdentity(_scope: AgentContextScope): Promise<IdentityPackT> {
-    return await loadIdentity(this.home);
+  private async resolveScopeIds(scope: AgentContextScope): Promise<AgentContextScope> {
+    const resolvedAgentRow = await this.db.get<{ agent_id: string }>(
+      `SELECT agent_id
+       FROM agents
+       WHERE tenant_id = ? AND agent_id = ?
+       LIMIT 1`,
+      [scope.tenantId, scope.agentId],
+    );
+    const resolvedWorkspaceRow = await this.db.get<{ workspace_id: string }>(
+      `SELECT workspace_id
+       FROM workspaces
+       WHERE tenant_id = ? AND workspace_id = ?
+       LIMIT 1`,
+      [scope.tenantId, scope.workspaceId],
+    );
+
+    return {
+      tenantId: scope.tenantId,
+      agentId:
+        resolvedAgentRow?.agent_id ??
+        (await this.identityScopeDal.ensureAgentId(scope.tenantId, scope.agentId)),
+      workspaceId:
+        resolvedWorkspaceRow?.workspace_id ??
+        (await this.identityScopeDal.ensureWorkspaceId(scope.tenantId, scope.workspaceId)),
+    };
+  }
+
+  private async ensureScopeRows(scope: AgentContextScope): Promise<AgentContextScope> {
+    await this.db.run(
+      `INSERT INTO tenants (tenant_id, tenant_key)
+       VALUES (?, ?)
+       ON CONFLICT (tenant_id) DO NOTHING`,
+      [scope.tenantId, scope.tenantId],
+    );
+    const resolved = await this.resolveScopeIds(scope);
+    await this.db.run(
+      `INSERT INTO agents (tenant_id, agent_id, agent_key)
+       VALUES (?, ?, ?)
+       ON CONFLICT (tenant_id, agent_id) DO NOTHING`,
+      [resolved.tenantId, resolved.agentId, resolved.agentId],
+    );
+    await this.db.run(
+      `INSERT INTO workspaces (tenant_id, workspace_id, workspace_key)
+       VALUES (?, ?, ?)
+       ON CONFLICT (tenant_id, workspace_id) DO NOTHING`,
+      [resolved.tenantId, resolved.workspaceId, resolved.workspaceId],
+    );
+    await this.db.run(
+      `INSERT INTO agent_workspaces (tenant_id, agent_id, workspace_id)
+       VALUES (?, ?, ?)
+       ON CONFLICT (tenant_id, agent_id, workspace_id) DO NOTHING`,
+      [resolved.tenantId, resolved.agentId, resolved.workspaceId],
+    );
+    return resolved;
+  }
+
+  private async ensureIdentity(scope: AgentContextScope): Promise<IdentityPackT> {
+    const resolved = await this.ensureScopeRows(scope);
+    const revision = await this.identityDal.ensureSeeded({
+      tenantId: resolved.tenantId,
+      agentId: resolved.agentId,
+      defaultIdentity: parseDefaultIdentity(),
+      createdBy: { kind: "agent-runtime" },
+      reason: "seed",
+    });
+    return revision.identity;
+  }
+
+  async ensureAgentContext(scope: AgentContextScope): Promise<void> {
+    await ensureWorkspaceInitialized(this.home);
+    await this.ensureIdentity(scope);
+  }
+
+  async getIdentity(scope: AgentContextScope): Promise<IdentityPackT> {
+    return await this.ensureIdentity(scope);
   }
 
   async getEnabledSkills(
@@ -80,17 +143,15 @@ class LocalAgentContextStore implements AgentContextStore {
       logger: this.logger,
     });
   }
-
-  createMemoryStore(_scope: AgentContextScope): AgentMemoryStore {
-    return new MarkdownMemoryStore(this.home);
-  }
 }
 
 export function createLocalAgentContextStore(params: {
+  db: SqlDb;
   home: string;
+  identityScopeDal: IdentityScopeDal;
   logger?: Logger;
 }): AgentContextStore {
-  return new LocalAgentContextStore(params.home, params.logger);
+  return new LocalAgentContextStore(params.db, params.home, params.identityScopeDal, params.logger);
 }
 
 function parseDefaultIdentity(): IdentityPackT {
@@ -104,7 +165,6 @@ function parseDefaultIdentity(): IdentityPackT {
 class SharedAgentContextStore implements AgentContextStore {
   private readonly identityDal: AgentIdentityDal;
   private readonly runtimePackageDal: RuntimePackageDal;
-  private readonly markdownMemoryDal: MarkdownMemoryDal;
   private readonly bundledSkillsDir: string;
 
   constructor(
@@ -114,7 +174,6 @@ class SharedAgentContextStore implements AgentContextStore {
   ) {
     this.identityDal = new AgentIdentityDal(db);
     this.runtimePackageDal = new RuntimePackageDal(db);
-    this.markdownMemoryDal = new MarkdownMemoryDal(db);
     this.bundledSkillsDir = bundledSkillsDir ?? resolveBundledSkillsDir();
   }
 
@@ -125,10 +184,6 @@ class SharedAgentContextStore implements AgentContextStore {
       defaultIdentity: parseDefaultIdentity(),
       createdBy: { kind: "shared-state.seed" },
       reason: "seed",
-    });
-    await this.markdownMemoryDal.ensureCoreDoc({
-      tenantId: scope.tenantId,
-      agentId: scope.agentId,
     });
   }
 
@@ -226,13 +281,6 @@ class SharedAgentContextStore implements AgentContextStore {
 
     return loaded;
   }
-
-  createMemoryStore(scope: AgentContextScope): AgentMemoryStore {
-    return new SharedMarkdownMemoryStore(this.markdownMemoryDal, {
-      tenantId: scope.tenantId,
-      agentId: scope.agentId,
-    });
-  }
 }
 
 export function createSharedAgentContextStore(params: {
@@ -245,7 +293,7 @@ export function createSharedAgentContextStore(params: {
 
 export function createDefaultAgentContextStore(params: {
   home: string;
-  container: Pick<GatewayContainer, "db" | "deploymentConfig" | "logger">;
+  container: Pick<GatewayContainer, "db" | "deploymentConfig" | "identityScopeDal" | "logger">;
 }): AgentContextStore {
   return resolveGatewayStateMode(params.container.deploymentConfig) === "shared"
     ? createSharedAgentContextStore({
@@ -253,7 +301,9 @@ export function createDefaultAgentContextStore(params: {
         logger: params.container.logger,
       })
     : createLocalAgentContextStore({
+        db: params.container.db,
         home: params.home,
+        identityScopeDal: params.container.identityScopeDal,
         logger: params.container.logger,
       });
 }

@@ -65,7 +65,7 @@ async function seedAgentConfig(
       mcp: { enabled: [] },
       tools: { allow: [] },
       sessions: { ttl_days: 30, max_turns: opts?.maxTurns ?? 1 },
-      memory: { markdown_enabled: false, v1: { enabled: true } },
+      memory: { v1: { enabled: true } },
     }),
     createdBy: { kind: "test" },
     reason: "pre-compaction flush test",

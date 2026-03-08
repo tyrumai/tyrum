@@ -8,6 +8,7 @@ import { PolicyService } from "../../src/modules/policy/service.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { createGatewayConfigStore } from "../../src/modules/runtime-state/gateway-config-store.js";
+import { seedAgentPolicyBundle } from "../helpers/runtime-config.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -307,22 +308,18 @@ describe("PolicyService regressions (precedence + overrides)", () => {
     await withTempDir(async (home) => {
       const db = openTestSqliteDb();
       try {
-        const agentPath = join(home, "policy.yml");
-
-        await writeFile(
-          agentPath,
-          [
-            "v: 1",
-            "tools:",
-            "  default: deny",
-            "  allow: []",
-            "  require_approval:",
-            "    - tool.exec",
-            "  deny: []",
-            "",
-          ].join("\n"),
-          "utf-8",
-        );
+        await seedAgentPolicyBundle(db, {
+          agentId: DEFAULT_AGENT_ID,
+          bundle: {
+            v: 1,
+            tools: {
+              default: "deny",
+              allow: [],
+              require_approval: ["tool.exec"],
+              deny: [],
+            },
+          },
+        });
 
         const playbookBundle = PolicyBundle.parse({
           v: 1,
@@ -338,6 +335,11 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           home,
           snapshotDal: new PolicySnapshotDal(db),
           overrideDal: new PolicyOverrideDal(db),
+          configStore: createGatewayConfigStore({
+            db,
+            home,
+            deploymentConfig: {},
+          }),
         });
 
         const res = await policy.evaluateToolCall({

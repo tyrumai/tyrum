@@ -57,11 +57,7 @@ For HA/shared cutover from an existing local home:
 2. Use shared Postgres instead of SQLite.
 3. Configure shared artifact storage instead of local fs artifacts.
 4. Provide one shared secret key source for all instances (for example `TYRUM_SHARED_MASTER_KEY_B64` or an equivalent external secret source).
-5. Import local home state before switching traffic:
-
-```bash
-tyrum import-home ~/.tyrum --db <shared-db-uri> --tenant-id 00000000-0000-4000-8000-000000000001
-```
+5. Recreate mutable runtime config in the shared DB-backed operator/config surfaces before switching traffic. There is no filesystem import command.
 
 In shared mode, mutable runtime state must not depend on `TYRUM_HOME`. Bundled read-only assets remain valid.
 

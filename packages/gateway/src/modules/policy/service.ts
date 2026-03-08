@@ -12,13 +12,12 @@ import {
   normalizeDomain,
   normalizeUrlForPolicy,
 } from "./domain.js";
-import { defaultPolicyBundle, loadPolicyBundleFromFile } from "./bundle-loader.js";
+import { defaultPolicyBundle } from "./bundle-loader.js";
 import type { PolicySnapshotDal, PolicySnapshotRow } from "./snapshot-dal.js";
 import type { PolicyOverrideDal } from "./override-dal.js";
 import { sha256HexFromString, stableJsonStringify } from "./canonical-json.js";
 import { mergePolicyBundles } from "./bundle-merge.js";
 import type { GatewayConfigStore } from "../runtime-state/gateway-config-store.js";
-import { fileExists } from "./file-exists.js";
 
 export interface PolicyEvaluation {
   decision: Decision;
@@ -437,7 +436,6 @@ export class PolicyService {
     sha256: string;
   }> {
     const cacheKey = tenantId;
-    const path = this.opts.deploymentPolicy?.bundlePath?.trim() || null;
     const fromStore = await this.opts.configStore?.getDeploymentPolicyBundle(tenantId);
     if (fromStore) {
       const entry = {
@@ -449,23 +447,14 @@ export class PolicyService {
       return entry;
     }
     const cached = this.deploymentBundleCache.get(cacheKey);
-    if (cached && cached.path === path) {
+    if (cached && cached.path === null) {
       return cached;
     }
-    let bundle: PolicyBundleT | null = null;
-    if (!bundle && path) {
-      try {
-        bundle = await loadPolicyBundleFromFile(path);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        this.opts.logger?.warn("policy.bundle.deployment_load_failed", { path, error: message });
-      }
-    }
-    bundle ??= defaultPolicyBundle();
+    const bundle = defaultPolicyBundle();
 
     const canonicalJson = stableJsonStringify(bundle);
     const sha256 = sha256HexFromString(canonicalJson);
-    const entry = { path, bundle, sha256 };
+    const entry = { path: null, bundle, sha256 };
     this.deploymentBundleCache.set(cacheKey, entry);
     return entry;
   }
@@ -490,48 +479,13 @@ export class PolicyService {
       }
     }
 
-    if (this.opts.includeAgentHomeBundle === false) {
-      const empty = { path: null, bundle: null, sha256: null };
-      this.agentBundleCache.set(cacheKey, empty);
-      return empty;
-    }
-
-    let path: string | null = null;
-    for (const candidate of [
-      `${this.opts.home}/policy.yml`,
-      `${this.opts.home}/policy.yaml`,
-      `${this.opts.home}/policy.json`,
-    ]) {
-      if (await fileExists(candidate)) {
-        path = candidate;
-        break;
-      }
-    }
-
     const cached = this.agentBundleCache.get(cacheKey);
-    if (cached && cached.path === path) {
+    if (cached && cached.path === null) {
       return cached;
     }
 
-    if (!path) {
-      const empty = { path: null, bundle: null, sha256: null };
-      this.agentBundleCache.set(cacheKey, empty);
-      return empty;
-    }
-
-    try {
-      const bundle = await loadPolicyBundleFromFile(path);
-      const canonicalJson = stableJsonStringify(bundle);
-      const sha256 = sha256HexFromString(canonicalJson);
-      const loaded = { path, bundle, sha256 };
-      this.agentBundleCache.set(cacheKey, loaded);
-      return loaded;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.opts.logger?.warn("policy.bundle.agent_load_failed", { path, error: message });
-      const empty = { path, bundle: null, sha256: null };
-      this.agentBundleCache.set(cacheKey, empty);
-      return empty;
-    }
+    const empty = { path: null, bundle: null, sha256: null };
+    this.agentBundleCache.set(cacheKey, empty);
+    return empty;
   }
 }

@@ -11,15 +11,12 @@ export async function loadAgentContext(params: {
   const identity = await params.contextStore.getIdentity(params.scope);
   const skills = await params.contextStore.getEnabledSkills(params.scope, params.config);
   const mcpServers = await params.contextStore.getEnabledMcpServers(params.scope, params.config);
-  const memoryStore = params.contextStore.createMemoryStore(params.scope);
-  await memoryStore.ensureInitialized();
 
   return {
     config: params.config,
     identity,
     skills,
     mcpServers,
-    memoryStore,
   };
 }
 

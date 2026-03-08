@@ -47,6 +47,8 @@ Memory is stored in the **StateStore** (SQLite/Postgres) as durable records. Con
 - **Derived indexes:** embeddings/vectors and other indexes used for retrieval. Derived data is never the source of truth.
 - **Tombstones:** minimal “deleted” records that preserve auditability without retaining content.
 
+Long-term memory is not loaded from workspace markdown files. `memory/MEMORY.md` and dated markdown memory files are legacy concepts and are not runtime inputs.
+
 ### Memory item kinds
 
 The architecture supports multiple kinds of memory items, all scoped to `agent_id`:

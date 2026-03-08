@@ -1,16 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { IdentityPack, SkillManifest, McpServerSpec } from "@tyrum/schemas";
+import { SkillManifest, McpServerSpec } from "@tyrum/schemas";
 import type {
   AgentConfig as AgentConfigT,
-  IdentityPack as IdentityPackT,
   SkillProvenanceSource as SkillProvenanceSourceT,
   SkillManifest as SkillManifestT,
   McpServerSpec as McpServerSpecT,
 } from "@tyrum/schemas";
 import {
-  resolveIdentityPath,
   resolveSkillsDir,
   resolveUserSkillsDir,
   resolveBundledSkillsDir,
@@ -29,16 +27,6 @@ function readYamlObject(contents: string): Record<string, unknown> {
     return {};
   }
   return parsed as Record<string, unknown>;
-}
-
-export async function loadIdentity(home: string): Promise<IdentityPackT> {
-  const path = resolveIdentityPath(home);
-  const contents = await readFile(path, "utf-8");
-  const parsed = parseFrontmatterDocument(contents);
-  return IdentityPack.parse({
-    meta: parsed.frontmatter,
-    body: parsed.body.trim(),
-  });
 }
 
 export async function loadSkillFromDir(

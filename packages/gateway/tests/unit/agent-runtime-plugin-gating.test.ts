@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { createContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
+import { seedDeploymentPolicyBundle } from "../helpers/runtime-config.js";
 
 describe("AgentRuntime - plugin tool gating", () => {
   let homeDir: string | undefined;
@@ -108,7 +109,7 @@ describe("AgentRuntime - plugin tool gating", () => {
 
     await writeFile(
       join(homeDir, "agent.yml"),
-      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\n    - plugin.echo.danger\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
+      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\n    - plugin.echo.danger\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  v1: { enabled: false }\n`,
       "utf-8",
     );
 
@@ -159,15 +160,19 @@ describe("AgentRuntime - plugin tool gating", () => {
 
     await writeFile(
       join(homeDir, "agent.yml"),
-      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
+      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  v1: { enabled: false }\n`,
       "utf-8",
     );
 
-    await writeFile(
-      join(homeDir, "policy.yml"),
-      `v: 1\ntools:\n  default: require_approval\n  allow:\n    - tool.fs.read\n  require_approval:\n    - plugin.echo.danger\n  deny: []\n`,
-      "utf-8",
-    );
+    await seedDeploymentPolicyBundle(container.db, {
+      v: 1,
+      tools: {
+        default: "require_approval",
+        allow: ["tool.fs.read"],
+        require_approval: ["plugin.echo.danger"],
+        deny: [],
+      },
+    });
 
     const plugins = {
       getToolDescriptors: vi.fn(() => [
@@ -216,15 +221,19 @@ describe("AgentRuntime - plugin tool gating", () => {
 
     await writeFile(
       join(homeDir, "agent.yml"),
-      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
+      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  v1: { enabled: false }\n`,
       "utf-8",
     );
 
-    await writeFile(
-      join(homeDir, "policy.yml"),
-      `v: 1\ntools:\n  default: require_approval\n  allow:\n    - tool.fs.read\n  require_approval:\n    - plugin.echo.danger\n  deny: []\n`,
-      "utf-8",
-    );
+    await seedDeploymentPolicyBundle(container.db, {
+      v: 1,
+      tools: {
+        default: "require_approval",
+        allow: ["tool.fs.read"],
+        require_approval: ["plugin.echo.danger"],
+        deny: [],
+      },
+    });
 
     const plugins = {
       getToolDescriptors: vi.fn(() => [
