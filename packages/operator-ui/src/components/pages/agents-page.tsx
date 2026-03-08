@@ -13,7 +13,7 @@ import { AppPageToolbar } from "../layout/app-page.js";
 import { MemoryInspector } from "../memory/memory-inspector.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
-import { Card, CardContent, CardHeader } from "../ui/card.js";
+import { Card, CardContent } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { ScrollArea } from "../ui/scroll-area.js";
