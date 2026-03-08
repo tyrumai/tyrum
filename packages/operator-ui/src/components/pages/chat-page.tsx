@@ -55,6 +55,7 @@ interface ChatThreadSummary {
 function ChatThreadsPanel({
   connected,
   loading,
+  agentsLoading,
   errorMessage,
   threads,
   activeSessionId,
@@ -69,6 +70,7 @@ function ChatThreadsPanel({
 }: {
   connected: boolean;
   loading: boolean;
+  agentsLoading: boolean;
   errorMessage: string | null;
   threads: ChatThreadSummary[];
   activeSessionId: string | null;
@@ -91,7 +93,7 @@ function ChatThreadsPanel({
           data-testid="chat-agent-select"
           aria-label="Agent"
           value={agentId}
-          disabled={!connected || loading}
+          disabled={!connected || agentsLoading}
           onChange={(event) => {
             onAgentChange(event.currentTarget.value);
           }}
@@ -122,7 +124,7 @@ function ChatThreadsPanel({
             size="sm"
             variant="ghost"
             className="h-7 w-7 p-0 text-fg-muted hover:text-fg"
-            disabled={!connected || loading}
+            disabled={!connected || agentsLoading}
             onClick={onNewChat}
             title="New Chat"
           >
@@ -448,6 +450,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
           <ChatThreadsPanel
             connected={isConnected}
             loading={chat.sessions.loading}
+            agentsLoading={chat.agents.loading}
             errorMessage={chat.sessions.error?.message ?? null}
             threads={threads}
             activeSessionId={chat.active.sessionId}
