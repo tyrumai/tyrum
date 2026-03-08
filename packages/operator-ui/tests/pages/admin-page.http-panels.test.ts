@@ -439,4 +439,63 @@ describe("ConfigurePage (strict admin tabs)", () => {
       cleanupTestRoot(testRoot);
     }
   });
+
+  it("shows expired tenant tokens as expired and disables revoke", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T00:00:00.000Z"));
+
+    const { core } = createCore(true);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url === "http://example.test/auth/tokens" && (!init?.method || init.method === "GET")) {
+        return new Response(
+          JSON.stringify({
+            tokens: [
+              {
+                token_id: "expired-token",
+                tenant_id: "11111111-1111-4111-8111-111111111111",
+                role: "client",
+                device_id: "operator-ui",
+                scopes: ["operator.read"],
+                issued_at: "2026-02-01T00:00:00.000Z",
+                expires_at: "2026-02-28T23:59:59.000Z",
+                revoked_at: null,
+                created_at: "2026-02-01T00:00:00.000Z",
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      throw new Error(`Unexpected fetch request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        ThemeProvider,
+        null,
+        React.createElement(
+          ElevatedModeProvider,
+          { core, mode: "web" },
+          React.createElement(ConfigurePage, { core }),
+        ),
+      ),
+    );
+
+    try {
+      await switchAdminTab(testRoot.container, "admin-http-tab-gateway");
+      expect(testRoot.container.textContent).toContain("Expired");
+
+      const revokeButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-http-token-revoke-expired-token']",
+      );
+      expect(revokeButton).not.toBeNull();
+      expect(revokeButton?.disabled).toBe(true);
+    } finally {
+      cleanupTestRoot(testRoot);
+      vi.useRealTimers();
+    }
+  });
 });

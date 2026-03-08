@@ -24,12 +24,24 @@ function parseScopesInput(value: string): string[] {
   return Array.from(new Set(scopes));
 }
 
+function isExpiredToken(token: AuthTokenListEntry): boolean {
+  if (!token.expires_at || token.revoked_at) return false;
+  const expiresAtMs = Date.parse(token.expires_at);
+  return Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now();
+}
+
+function isInactiveToken(token: AuthTokenListEntry): boolean {
+  return Boolean(token.revoked_at) || isExpiredToken(token);
+}
+
 function statusVariant(token: AuthTokenListEntry): "success" | "warning" {
-  return token.revoked_at ? "warning" : "success";
+  return isInactiveToken(token) ? "warning" : "success";
 }
 
 function statusLabel(token: AuthTokenListEntry): string {
-  return token.revoked_at ? "Revoked" : "Active";
+  if (token.revoked_at) return "Revoked";
+  if (isExpiredToken(token)) return "Expired";
+  return "Active";
 }
 
 function formatTimestamp(value: string | null | undefined): string {
@@ -122,7 +134,7 @@ function TokenListCard({
                 variant="danger"
                 size="sm"
                 data-testid={`admin-http-token-revoke-${token.token_id}`}
-                disabled={!canMutate || Boolean(token.revoked_at)}
+                disabled={!canMutate || isInactiveToken(token)}
                 onClick={() => {
                   onRevoke(token);
                 }}
