@@ -64,7 +64,12 @@ export function createAgentsRoutes(deps: AgentsRouteDeps): Hono {
 
   app.get("/agents/:key", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = normalizeAgentKey(c.req.param("key"));
+    let agentKey: string;
+    try {
+      agentKey = normalizeAgentKey(c.req.param("key"));
+    } catch (error) {
+      return c.json({ error: "invalid_request", message: toErrorMessage(error) }, 400);
+    }
     const detail = await service.get(tenantId, agentKey);
     if (!detail) {
       return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
@@ -75,7 +80,12 @@ export function createAgentsRoutes(deps: AgentsRouteDeps): Hono {
   app.put("/agents/:key", async (c) => {
     const tenantId = requireTenantId(c);
     const claims = requireAuthClaims(c);
-    const agentKey = normalizeAgentKey(c.req.param("key"));
+    let agentKey: string;
+    try {
+      agentKey = normalizeAgentKey(c.req.param("key"));
+    } catch (error) {
+      return c.json({ error: "invalid_request", message: toErrorMessage(error) }, 400);
+    }
 
     let body: unknown;
     try {
@@ -106,7 +116,12 @@ export function createAgentsRoutes(deps: AgentsRouteDeps): Hono {
 
   app.delete("/agents/:key", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = normalizeAgentKey(c.req.param("key"));
+    let agentKey: string;
+    try {
+      agentKey = normalizeAgentKey(c.req.param("key"));
+    } catch (error) {
+      return c.json({ error: "invalid_request", message: toErrorMessage(error) }, 400);
+    }
 
     try {
       const deleted = await service.delete({ tenantId, agentKey });
@@ -123,4 +138,11 @@ export function createAgentsRoutes(deps: AgentsRouteDeps): Hono {
   });
 
   return app;
+}
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "invalid request";
 }

@@ -146,13 +146,27 @@ describe("AgentEditorSections", () => {
     expect(calls).toContainEqual(["memoryTags", "ops\nui"]);
     expect(calls).toContainEqual(["semanticLimit", "11"]);
     expect(calls).toContainEqual(["episodeTokens", "213"]);
-    expect(calls.some(([key, value]) => key === "workspaceSkillsTrusted" && typeof value === "boolean")).toBe(true);
-    expect(calls.some(([key, value]) => key === "withinTurnEnabled" && typeof value === "boolean")).toBe(true);
-    expect(calls.some(([key, value]) => key === "crossTurnEnabled" && typeof value === "boolean")).toBe(true);
-    expect(calls.some(([key, value]) => key === "memoryEnabled" && typeof value === "boolean")).toBe(true);
-    expect(calls.some(([key, value]) => key === "allowSensitive" && typeof value === "boolean")).toBe(true);
-    expect(calls.some(([key, value]) => key === "keywordEnabled" && typeof value === "boolean")).toBe(true);
-    expect(calls.some(([key, value]) => key === "semanticEnabled" && typeof value === "boolean")).toBe(true);
+    expect(
+      calls.some(([key, value]) => key === "workspaceSkillsTrusted" && typeof value === "boolean"),
+    ).toBe(true);
+    expect(
+      calls.some(([key, value]) => key === "withinTurnEnabled" && typeof value === "boolean"),
+    ).toBe(true);
+    expect(
+      calls.some(([key, value]) => key === "crossTurnEnabled" && typeof value === "boolean"),
+    ).toBe(true);
+    expect(
+      calls.some(([key, value]) => key === "memoryEnabled" && typeof value === "boolean"),
+    ).toBe(true);
+    expect(
+      calls.some(([key, value]) => key === "allowSensitive" && typeof value === "boolean"),
+    ).toBe(true);
+    expect(
+      calls.some(([key, value]) => key === "keywordEnabled" && typeof value === "boolean"),
+    ).toBe(true);
+    expect(
+      calls.some(([key, value]) => key === "semanticEnabled" && typeof value === "boolean"),
+    ).toBe(true);
 
     const unsupportedOptions = findLabeledControl(container, "Existing model options");
     expect(unsupportedOptions.hasAttribute("readonly")).toBe(true);

@@ -444,7 +444,7 @@ export class AgentAdminService {
         identity: requestedIdentity,
       });
 
-      const [configRevision, identityRevision, refreshedRow] = await Promise.all([
+      const [configRevision, identityRevision] = await Promise.all([
         new AgentConfigDal(tx).set({
           tenantId: params.tenantId,
           agentId: row.agent_id,
@@ -459,8 +459,8 @@ export class AgentAdminService {
           createdBy: params.createdBy,
           reason: params.reason,
         }),
-        getAgentRow(tx, params.tenantId, params.agentKey),
       ]);
+      const refreshedRow = await getAgentRow(tx, params.tenantId, params.agentKey);
 
       if (!refreshedRow) {
         throw new Error("agent update failed");

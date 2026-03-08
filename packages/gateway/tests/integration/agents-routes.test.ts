@@ -121,6 +121,32 @@ describe("Managed agents routes integration", () => {
     expect(res.status).toBe(404);
   });
 
+  it("returns 400 for invalid managed agent keys in route params", async () => {
+    const { app } = await createTestApp({
+      isLocalOnly: false,
+      deploymentConfig: { modelsDev: { disableFetch: true } },
+    });
+
+    const invalidPath = "/agents/invalid:key";
+
+    const get = await app.request(invalidPath);
+    expect(get.status).toBe(400);
+
+    const update = await app.request(invalidPath, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        config: sampleConfig("Invalid Agent"),
+      }),
+    });
+    expect(update.status).toBe(400);
+
+    const remove = await app.request(invalidPath, {
+      method: "DELETE",
+    });
+    expect(remove.status).toBe(400);
+  });
+
   it("blocks deletion of the default managed agent", async () => {
     const { app } = await createTestApp({
       isLocalOnly: false,
