@@ -35,6 +35,12 @@ function trimAgentKey(value: string): string {
   return trimmed.length > 0 ? trimmed : "default";
 }
 
+function formatAgentOptionLabel(agent: AgentOption): string {
+  return agent.displayName === agent.agentKey
+    ? agent.agentKey
+    : `${agent.displayName} (${agent.agentKey})`;
+}
+
 function normalizeAgentOptions(
   input: Array<{
     agent_key: string;
@@ -178,7 +184,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
         ) : (
           agentOptions.map((agent) => (
             <option key={agent.agentKey} value={agent.agentKey}>
-              {agent.agentKey}
+              {formatAgentOptionLabel(agent)}
             </option>
           ))
         )}

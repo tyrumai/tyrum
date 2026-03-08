@@ -234,6 +234,12 @@ describe("AgentsPage", () => {
     expect(agentButton).not.toBeNull();
     expect(agentButton?.textContent).toContain("Ada");
     expect(agentButton?.textContent).toContain("agent-1");
+    const mobileSelect = testRoot.container.querySelector<HTMLSelectElement>(
+      '[data-testid="agents-select"]',
+    );
+    expect(mobileSelect?.querySelector('option[value="agent-1"]')?.textContent).toBe(
+      "Ada (agent-1)",
+    );
 
     await act(async () => {
       agentButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
