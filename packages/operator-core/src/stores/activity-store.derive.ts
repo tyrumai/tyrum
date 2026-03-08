@@ -192,6 +192,7 @@ function buildWorkstreams(
       queuedRunCount,
       lease,
       attentionLevel: priority.level,
+      attentionScore: priority.score,
       currentRoom: determineRoom(priority, draft.message, draft.memoryEvents, runStatus),
       bubbleText: determineBubbleText(
         draft.approvals,

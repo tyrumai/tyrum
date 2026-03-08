@@ -347,6 +347,9 @@ export function compareWorkstreamIds(
   const levelCmp = levelOrder[right.attentionLevel] - levelOrder[left.attentionLevel];
   if (levelCmp !== 0) return levelCmp;
 
+  const scoreCmp = right.attentionScore - left.attentionScore;
+  if (scoreCmp !== 0) return scoreCmp;
+
   const leftTime = left.recentEvents[0]?.occurredAt ?? "";
   const rightTime = right.recentEvents[0]?.occurredAt ?? "";
   const timeCmp = rightTime.localeCompare(leftTime);

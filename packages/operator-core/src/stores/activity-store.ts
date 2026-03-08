@@ -61,6 +61,7 @@ export interface ActivityWorkstream {
   queuedRunCount: number;
   lease: ActivityLeaseState;
   attentionLevel: ActivityAttentionLevel;
+  attentionScore: number;
   currentRoom: ActivityRoom;
   bubbleText: string | null;
   recentEvents: ActivityEvent[];

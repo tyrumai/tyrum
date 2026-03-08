@@ -231,6 +231,49 @@ describe("activityStore", () => {
     expect(snapshot.workstreamsById["agent:gamma:main::main"]?.attentionLevel).toBe("medium");
   });
 
+  it("uses fine-grained priority scores to order workstreams within the same attention level", () => {
+    const { runs, activity } = createHarness();
+
+    runs.handleRunUpdated(
+      sampleRun({
+        run_id: "run-paused",
+        key: "agent:alpha:main",
+        lane: "main",
+        status: "paused",
+        paused_reason: "manual",
+        created_at: "2026-01-01T00:00:01.000Z",
+      }),
+    );
+    runs.handleRunUpdated(
+      sampleRun({
+        run_id: "run-running",
+        key: "agent:gamma:main",
+        lane: "main",
+        status: "running",
+        created_at: "2026-01-01T00:00:06.000Z",
+        started_at: "2026-01-01T00:00:06.000Z",
+      }),
+    );
+    activity.handleMessageDelta({
+      sessionId: "agent:beta:main",
+      lane: "main",
+      messageId: "message-1",
+      role: "assistant",
+      delta: "Latest message wins on time only",
+      occurredAt: "2026-01-01T00:00:07.000Z",
+    });
+
+    const snapshot = activity.store.getSnapshot();
+    expect(snapshot.workstreamIds.slice(0, 3)).toEqual([
+      "agent:alpha:main::main",
+      "agent:beta:main::main",
+      "agent:gamma:main::main",
+    ]);
+    expect(snapshot.workstreamsById["agent:alpha:main::main"]?.attentionScore).toBe(700);
+    expect(snapshot.workstreamsById["agent:beta:main::main"]?.attentionScore).toBe(650);
+    expect(snapshot.workstreamsById["agent:gamma:main::main"]?.attentionScore).toBe(600);
+  });
+
   it("falls back to session_lanes data when no run events have arrived", () => {
     const { status, chat, activity } = createHarness();
 
