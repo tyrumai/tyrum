@@ -380,6 +380,68 @@ export type AgentConfigUpdateRequest = z.infer<typeof AgentConfigUpdateRequest>;
 export const AgentConfigUpdateResponse = AgentConfigGetResponse;
 export type AgentConfigUpdateResponse = z.infer<typeof AgentConfigUpdateResponse>;
 
+export const ManagedAgentSummary = z
+  .object({
+    agent_id: AgentId,
+    agent_key: AgentKey,
+    created_at: z.string().nullable(),
+    updated_at: z.string().nullable(),
+    has_config: z.boolean(),
+    has_identity: z.boolean(),
+    can_delete: z.boolean(),
+    persona: AgentPersona,
+  })
+  .strict();
+export type ManagedAgentSummary = z.infer<typeof ManagedAgentSummary>;
+
+export const ManagedAgentListResponse = z
+  .object({
+    agents: z.array(ManagedAgentSummary),
+  })
+  .strict();
+export type ManagedAgentListResponse = z.infer<typeof ManagedAgentListResponse>;
+
+export const ManagedAgentDetail = ManagedAgentSummary.extend({
+  config: AgentConfig,
+  identity: IdentityPack,
+  config_revision: z.number().int().positive().nullable(),
+  identity_revision: z.number().int().positive().nullable(),
+  config_sha256: z.string().trim().min(1).nullable(),
+  identity_sha256: z.string().trim().min(1).nullable(),
+});
+export type ManagedAgentDetail = z.infer<typeof ManagedAgentDetail>;
+
+export const ManagedAgentGetResponse = ManagedAgentDetail;
+export type ManagedAgentGetResponse = z.infer<typeof ManagedAgentGetResponse>;
+
+export const ManagedAgentCreateRequest = z
+  .object({
+    agent_key: AgentKey,
+    config: AgentConfig,
+    identity: IdentityPack.optional(),
+    reason: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type ManagedAgentCreateRequest = z.infer<typeof ManagedAgentCreateRequest>;
+
+export const ManagedAgentUpdateRequest = z
+  .object({
+    config: AgentConfig,
+    identity: IdentityPack.optional(),
+    reason: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type ManagedAgentUpdateRequest = z.infer<typeof ManagedAgentUpdateRequest>;
+
+export const ManagedAgentDeleteResponse = z
+  .object({
+    agent_id: AgentId,
+    agent_key: AgentKey,
+    deleted: z.literal(true),
+  })
+  .strict();
+export type ManagedAgentDeleteResponse = z.infer<typeof ManagedAgentDeleteResponse>;
+
 export const AgentStatusResponse = z.object({
   enabled: z.boolean(),
   home: z.string(),

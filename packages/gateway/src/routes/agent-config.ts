@@ -18,15 +18,11 @@ import type {
 } from "@tyrum/schemas";
 import type { SqlDb } from "../statestore/types.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
-import { DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
+import { AgentAdminService } from "../modules/agent/admin-service.js";
 import { AgentConfigDal } from "../modules/config/agent-config-dal.js";
-import { listLatestAgentConfigsByAgentId, resolveAgentPersona } from "../modules/agent/persona.js";
-
-function normalizeTime(value: string | Date | null | undefined): string | null {
-  if (value == null) return null;
-  return value instanceof Date ? value.toISOString() : value;
-}
+import { resolveAgentPersona } from "../modules/agent/persona.js";
+import type { GatewayStateMode } from "../modules/runtime-state/mode.js";
 
 function normalizeAgentKey(raw: string): string {
   const trimmed = raw.trim();
@@ -79,37 +75,22 @@ const AgentConfigRevertRequest = z
 export interface AgentConfigRouteDeps {
   db: SqlDb;
   identityScopeDal: IdentityScopeDal;
+  stateMode: GatewayStateMode;
 }
 
 export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
   const app = new Hono();
+  const agentAdmin = new AgentAdminService(deps);
 
   app.get("/config/agents", async (c) => {
     const tenantId = requireTenantId(c);
-    const configsByAgentId = await listLatestAgentConfigsByAgentId(deps.db, tenantId);
-    const rows = await deps.db.all<{
-      agent_id: string;
-      agent_key: string;
-      created_at: string | Date;
-      updated_at: string | Date;
-    }>(
-      `SELECT agent_id, agent_key, created_at, updated_at
-       FROM agents
-       WHERE tenant_id = ?
-       ORDER BY agent_key ASC`,
-      [tenantId],
-    );
-
-    const agents = rows.map((row) => ({
-      agent_id: row.agent_id,
-      agent_key: row.agent_key,
-      created_at: normalizeTime(row.created_at),
-      updated_at: normalizeTime(row.updated_at),
-      has_config: configsByAgentId.has(row.agent_id),
-      persona: resolveAgentPersona({
-        agentKey: row.agent_key,
-        config: configsByAgentId.get(row.agent_id),
-      }),
+    const agents = (await agentAdmin.list(tenantId)).map((agent) => ({
+      agent_id: agent.agent_id,
+      agent_key: agent.agent_key,
+      created_at: agent.created_at,
+      updated_at: agent.updated_at,
+      has_config: agent.has_config,
+      persona: agent.persona,
     }));
 
     return c.json(AgentConfigListResponse.parse({ agents }), 200);
@@ -200,20 +181,23 @@ export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    const agentId = await deps.identityScopeDal.ensureAgentId(tenantId, agentKey);
-    const workspaceId = await deps.identityScopeDal.ensureWorkspaceId(
+    const updated = await agentAdmin.update({
       tenantId,
-      DEFAULT_WORKSPACE_KEY,
-    );
-    await deps.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
-
-    const revision = await new AgentConfigDal(deps.db).set({
-      tenantId,
-      agentId,
+      agentKey,
       config: parsed.data.config,
       createdBy: { kind: "tenant.token", token_id: claims.token_id },
       reason: parsed.data.reason,
     });
+    if (!updated) {
+      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
+    }
+    const revision = await new AgentConfigDal(deps.db).getLatest({
+      tenantId,
+      agentId: updated.agent_id,
+    });
+    if (!revision) {
+      return c.json({ error: "not_found", message: "agent config not found" }, 404);
+    }
 
     return c.json(
       buildAgentConfigRevisionResponse(agentKey, {

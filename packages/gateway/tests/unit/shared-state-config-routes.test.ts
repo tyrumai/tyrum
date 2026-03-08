@@ -57,6 +57,8 @@ describe("shared state config routes", () => {
   });
 
   it("stores and returns shared agent identity revisions", async () => {
+    await container.identityScopeDal.ensureAgentId(tenantId, "default");
+
     const putRes = await app.request("/config/agents/default/identity", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },

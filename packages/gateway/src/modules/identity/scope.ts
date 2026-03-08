@@ -76,6 +76,10 @@ export class IdentityScopeDal {
     map.set(key, { value, expiresAtMs: Date.now() + this.cacheTtlMs() });
   }
 
+  private deleteCached(map: Map<string, Cached<string>>, key: string): void {
+    map.delete(key);
+  }
+
   async ensureTenantId(tenantKey: string): Promise<string> {
     const key = tenantKey.trim() || "default";
     const cached = this.getCached(this.tenantCache, key);
@@ -208,5 +212,15 @@ export class IdentityScopeDal {
     const workspaceId = await this.ensureWorkspaceId(tenantId, keys.workspaceKey);
     await this.ensureMembership(tenantId, agentId, workspaceId);
     return { tenantId, agentId, workspaceId };
+  }
+
+  rememberAgentId(tenantId: string, agentKey: string, agentId: string): void {
+    const key = agentKey.trim() || DEFAULT_AGENT_KEY;
+    this.setCached(this.agentCache, `${tenantId}:${key}`, agentId);
+  }
+
+  forgetAgentId(tenantId: string, agentKey: string): void {
+    const key = agentKey.trim() || DEFAULT_AGENT_KEY;
+    this.deleteCached(this.agentCache, `${tenantId}:${key}`);
   }
 }

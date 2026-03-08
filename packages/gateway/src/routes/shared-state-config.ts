@@ -9,9 +9,10 @@ import {
 } from "@tyrum/schemas";
 import type { SqlDb } from "../statestore/types.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
-import { DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
+import { AgentConfigDal } from "../modules/config/agent-config-dal.js";
 import { AgentIdentityDal } from "../modules/agent/identity-dal.js";
+import { applyPersonaToIdentity, resolveAgentPersona } from "../modules/agent/persona.js";
 import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
 import {
   RuntimePackageDal,
@@ -188,17 +189,22 @@ export function createSharedStateConfigRoutes(deps: SharedStateConfigRouteDeps):
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    const agentId = await deps.identityScopeDal.ensureAgentId(tenantId, agentKey);
-    const workspaceId = await deps.identityScopeDal.ensureWorkspaceId(
-      tenantId,
-      DEFAULT_WORKSPACE_KEY,
-    );
-    await deps.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+    const agentId = await resolveAgentId(tenantId, agentKey);
+    if (!agentId) {
+      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
+    }
+    const configRevision = await new AgentConfigDal(deps.db).getLatest({ tenantId, agentId });
+    const persona = resolveAgentPersona({
+      agentKey,
+      config: configRevision?.config,
+      identity: parsed.data.identity,
+    });
+    const effectiveIdentity = applyPersonaToIdentity(parsed.data.identity, persona);
 
     const revision = await identityDal.set({
       tenantId,
       agentId,
-      identity: parsed.data.identity,
+      identity: effectiveIdentity,
       createdBy: { kind: "tenant.token", token_id: claims.token_id },
       reason: parsed.data.reason,
     });

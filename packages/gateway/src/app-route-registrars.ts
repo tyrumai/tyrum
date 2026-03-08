@@ -2,6 +2,7 @@ import type { Playbook } from "@tyrum/schemas";
 import { Hono } from "hono";
 import type { AppOptions } from "./app.js";
 import type { GatewayContainer } from "./container.js";
+import { createAgentsRoutes } from "./routes/agents.js";
 import { createAgentConfigRoutes } from "./routes/agent-config.js";
 import { createAgentRoutes } from "./routes/agent.js";
 import { createApprovalRoutes } from "./routes/approval.js";
@@ -55,7 +56,7 @@ import { WsEventDal } from "./modules/ws-event/dal.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
 import { gatewayMetrics } from "./modules/observability/metrics.js";
 import { PolicyBundleConfigDal } from "./modules/policy/config-dal.js";
-import { isSharedStateMode } from "./modules/runtime-state/mode.js";
+import { isSharedStateMode, resolveGatewayStateMode } from "./modules/runtime-state/mode.js";
 
 export interface AppRouteDependencies {
   authProfileDal: AuthProfileDal;
@@ -368,9 +369,18 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
 
   context.app.route(
     "/",
+    createAgentsRoutes({
+      db: context.container.db,
+      identityScopeDal: context.container.identityScopeDal,
+      stateMode: resolveGatewayStateMode(context.container.deploymentConfig),
+    }),
+  );
+  context.app.route(
+    "/",
     createAgentConfigRoutes({
       db: context.container.db,
       identityScopeDal: context.container.identityScopeDal,
+      stateMode: resolveGatewayStateMode(context.container.deploymentConfig),
     }),
   );
   if (isSharedStateMode(context.container.deploymentConfig)) {

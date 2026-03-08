@@ -1,27 +1,31 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import type { AgentStatusResponse } from "@tyrum/schemas";
-import { Bot, RefreshCw } from "lucide-react";
+import { Bot, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { MemoryInspector } from "../memory/memory-inspector.js";
-import { PageHeader } from "../layout/page-header.js";
-import { Button } from "../ui/button.js";
-import { Card, CardContent, CardHeader } from "../ui/card.js";
-import { EmptyState } from "../ui/empty-state.js";
-import { Alert } from "../ui/alert.js";
-import { StatusDot } from "../ui/status-dot.js";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
-import { RunsPage } from "./runs-page.js";
-import { AgentIdentityPanel } from "./agents-page-identity.js";
+import { useApiAction } from "../../hooks/use-api-action.js";
 import { cn } from "../../lib/cn.js";
 import {
   getActiveAgentIdsFromSessionLanes,
   parseAgentIdFromKey,
 } from "../../lib/status-session-lanes.js";
 import { useOperatorStore } from "../../use-operator-store.js";
+import { MemoryInspector } from "../memory/memory-inspector.js";
+import { PageHeader } from "../layout/page-header.js";
+import { Alert } from "../ui/alert.js";
+import { Button } from "../ui/button.js";
+import { Card, CardContent, CardHeader } from "../ui/card.js";
+import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
+import { EmptyState } from "../ui/empty-state.js";
+import { StatusDot } from "../ui/status-dot.js";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
+import { AgentIdentityPanel } from "./agents-page-identity.js";
+import { AgentsPageEditor } from "./agents-page-editor.js";
+import { RunsPage } from "./runs-page.js";
 
 type AgentOption = {
   agentKey: string;
-  agentId?: string;
+  agentId: string;
+  canDelete: boolean;
 };
 
 function trimAgentKey(value: string): string {
@@ -30,22 +34,13 @@ function trimAgentKey(value: string): string {
 }
 
 function normalizeAgentOptions(
-  input: Array<{ agent_key: string; agent_id?: string }>,
+  input: Array<{ agent_key: string; agent_id: string; can_delete: boolean }>,
 ): AgentOption[] {
-  const byKey = new Map<string, AgentOption>();
-  for (const agent of input) {
-    const trimmed = agent.agent_key.trim();
-    if (!trimmed) continue;
-    const normalizedAgentId = agent.agent_id?.trim() || undefined;
-    const existing = byKey.get(trimmed);
-    if (!existing || (!existing.agentId && normalizedAgentId)) {
-      byKey.set(trimmed, {
-        agentKey: trimmed,
-        ...(normalizedAgentId ? { agentId: normalizedAgentId } : {}),
-      });
-    }
-  }
-  return [...byKey.values()].toSorted((a, b) => a.agentKey.localeCompare(b.agentKey));
+  return input.map((agent) => ({
+    agentKey: agent.agent_key,
+    agentId: agent.agent_id,
+    canDelete: agent.can_delete,
+  }));
 }
 
 function selectInitialAgentKey(input: {
@@ -57,6 +52,7 @@ function selectInitialAgentKey(input: {
   if (input.availableAgentKeys.includes("default")) return "default";
   return input.availableAgentKeys[0] ?? current;
 }
+
 export function AgentsPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);
   const agentStatus = useOperatorStore(core.agentStatusStore);
@@ -67,22 +63,20 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [agentsError, setAgentsError] = useState<string | null>(null);
   const [selectedAgentKey, setSelectedAgentKey] = useState(trimAgentKey(agentStatus.agentKey));
-  const [manualAgentKey, setManualAgentKey] = useState(trimAgentKey(agentStatus.agentKey));
   const [selectionReady, setSelectionReady] = useState(false);
   const [activeTab, setActiveTab] = useState("identity");
+  const [editorMode, setEditorMode] = useState<"create" | "edit" | null>(null);
+  const [createNonce, setCreateNonce] = useState(0);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
+  const deleteAction = useApiAction<void>();
   const isConnected = connection.status === "connected";
   const agentKeys = useMemo(() => agentOptions.map((agent) => agent.agentKey), [agentOptions]);
   const selectedAgentOption = useMemo(
     () => agentOptions.find((agent) => agent.agentKey === selectedAgentKey) ?? null,
     [agentOptions, selectedAgentKey],
   );
-  const selectedAgentScopeId = useMemo(
-    () =>
-      selectedAgentOption?.agentId ??
-      (selectedAgentOption || agentsError ? selectedAgentKey : undefined),
-    [agentsError, selectedAgentKey, selectedAgentOption],
-  );
+  const selectedAgentScopeId = selectedAgentOption?.agentId;
 
   const activeAgentIds = useMemo(() => {
     const ids = new Set<string>();
@@ -97,19 +91,21 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     }
     return ids;
   }, [runs.runsById, status.status?.session_lanes]);
-  const selectedAgentActive = activeAgentIds.has(selectedAgentKey);
+  const selectedAgentActive = selectedAgentOption
+    ? activeAgentIds.has(selectedAgentOption.agentId) || activeAgentIds.has(selectedAgentKey)
+    : false;
 
-  const refreshAgentList = async (): Promise<void> => {
+  const refreshAgentList = async (preferredAgentKey?: string): Promise<void> => {
     if (!isConnected) return;
     setAgentsLoading(true);
     setAgentsError(null);
     try {
-      const response = await core.http.agentList.get({ include_default: true });
+      const response = await core.http.agents.list();
       const nextAgents = normalizeAgentOptions(response.agents);
       const nextKeys = nextAgents.map((agent) => agent.agentKey);
       setAgentOptions(nextAgents);
       const nextSelectedAgentKey = selectInitialAgentKey({
-        currentAgentKey: selectedAgentKey,
+        currentAgentKey: preferredAgentKey ?? selectedAgentKey,
         availableAgentKeys: nextKeys,
       });
       setSelectedAgentKey(nextSelectedAgentKey);
@@ -138,36 +134,96 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
   }, [agentKeys]);
 
   useEffect(() => {
-    setManualAgentKey(selectedAgentKey);
-  }, [selectedAgentKey]);
-
-  useEffect(() => {
     if (!isConnected || !selectionReady) return;
     const normalized = trimAgentKey(selectedAgentKey);
     core.agentStatusStore.setAgentKey(normalized);
     void core.agentStatusStore.refresh();
   }, [core.agentStatusStore, isConnected, selectedAgentKey, selectionReady]);
 
+  const renderEditor = activeTab === "editor";
+
   return (
     <div className="grid gap-5" data-testid="agents-page">
       <PageHeader
         title="Agents"
         actions={
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            data-testid="agents-refresh"
-            disabled={!isConnected || agentsLoading}
-            isLoading={agentsLoading}
-            onClick={() => {
-              void refreshAgentList();
-            }}
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Refresh list
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              data-testid="agents-new"
+              disabled={!isConnected}
+              onClick={() => {
+                setEditorMode("create");
+                setCreateNonce((current) => current + 1);
+                setActiveTab("editor");
+              }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New agent
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              data-testid="agents-edit"
+              disabled={!isConnected || !selectedAgentOption}
+              onClick={() => {
+                setEditorMode("edit");
+                setActiveTab("editor");
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="danger"
+              data-testid="agents-delete"
+              disabled={!isConnected || !selectedAgentOption?.canDelete}
+              onClick={() => {
+                setDeleteOpen(true);
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              data-testid="agents-refresh"
+              disabled={!isConnected || agentsLoading}
+              isLoading={agentsLoading}
+              onClick={() => {
+                void refreshAgentList();
+              }}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Refresh list
+            </Button>
+          </div>
         }
+      />
+
+      <ConfirmDangerDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={`Delete agent ${selectedAgentKey}`}
+        description="This permanently removes the managed agent configuration and identity history."
+        confirmLabel="Delete agent"
+        isLoading={deleteAction.isLoading}
+        onConfirm={async () => {
+          if (!selectedAgentOption) return;
+          await deleteAction.runAndThrow(async () => {
+            await core.http.agents.delete(selectedAgentOption.agentKey);
+          });
+          setEditorMode(null);
+          setActiveTab("identity");
+          await refreshAgentList();
+        }}
       />
 
       {!isConnected ? (
@@ -179,35 +235,12 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
       ) : null}
 
       {agentsError ? (
-        <Card data-testid="agents-list-error">
-          <CardHeader className="pb-2.5">
-            <div className="text-sm font-medium text-fg">Agent list unavailable</div>
-            <div className="text-sm text-fg-muted">{agentsError}</div>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-            <label className="grid gap-2 text-sm">
-              <span className="font-medium text-fg">Agent key</span>
-              <input
-                value={manualAgentKey}
-                onChange={(event) => {
-                  setManualAgentKey(event.currentTarget.value);
-                }}
-                className="flex h-10 w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-fg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0"
-              />
-            </label>
-            <Button
-              type="button"
-              variant="secondary"
-              data-testid="agents-select-apply"
-              onClick={() => {
-                setSelectionReady(true);
-                setSelectedAgentKey(trimAgentKey(manualAgentKey));
-              }}
-            >
-              Open agent
-            </Button>
-          </CardContent>
-        </Card>
+        <Alert
+          variant="error"
+          title="Agent list unavailable"
+          description={agentsError}
+          data-testid="agents-list-error"
+        />
       ) : null}
 
       <div className="lg:hidden">
@@ -240,9 +273,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
         <Card className="hidden lg:flex lg:min-h-[40rem] lg:flex-col">
           <CardHeader className="pb-2.5">
             <div className="text-sm font-medium text-fg">Agents</div>
-            <div className="text-sm text-fg-muted">
-              Pick an agent to inspect identity, memory, and runs.
-            </div>
+            <div className="text-sm text-fg-muted">Pick a managed agent to inspect or edit.</div>
           </CardHeader>
           <CardContent className="grid gap-2">
             {agentsLoading && agentKeys.length === 0 ? (
@@ -252,12 +283,13 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
             ) : agentOptions.length === 0 ? (
               <EmptyState
                 icon={Bot}
-                title="No agents found"
-                description="Agents appear here once the gateway can enumerate them."
+                title="No managed agents"
+                description="Create an agent to persist configuration and identity."
               />
             ) : (
               agentOptions.map((agent) => {
-                const active = activeAgentIds.has(agent.agentKey);
+                const active =
+                  activeAgentIds.has(agent.agentId) || activeAgentIds.has(agent.agentKey);
                 const selected = agent.agentKey === selectedAgentKey;
                 return (
                   <button
@@ -295,7 +327,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
               data-testid="agents-selected-key"
               className="max-w-full rounded-md border border-border bg-bg-subtle px-2 py-1 font-mono text-xs text-fg break-all"
             >
-              {selectedAgentKey}
+              {selectedAgentOption?.agentKey ?? "No agent selected"}
             </div>
             <div className="flex items-center gap-2 text-sm text-fg-muted">
               <StatusDot
@@ -306,10 +338,19 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
             </div>
           </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="grid gap-4">
+          <Tabs
+            value={activeTab}
+            onValueChange={(nextTab) => {
+              setActiveTab(nextTab);
+            }}
+            className="grid gap-4"
+          >
             <TabsList aria-label="Agent sections" className="flex-wrap">
               <TabsTrigger value="identity" data-testid="agents-tab-identity">
                 Identity
+              </TabsTrigger>
+              <TabsTrigger value="editor" data-testid="agents-tab-editor">
+                Editor
               </TabsTrigger>
               <TabsTrigger value="memory" data-testid="agents-tab-memory">
                 Memory
@@ -328,6 +369,32 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                   void core.agentStatusStore.refresh();
                 }}
               />
+            </TabsContent>
+
+            <TabsContent value="editor">
+              {renderEditor && editorMode ? (
+                <AgentsPageEditor
+                  core={core}
+                  mode={editorMode}
+                  createNonce={createNonce}
+                  agentKey={editorMode === "edit" ? selectedAgentOption?.agentKey : undefined}
+                  onSaved={(savedAgentKey) => {
+                    setEditorMode(null);
+                    setActiveTab("identity");
+                    void refreshAgentList(savedAgentKey);
+                  }}
+                  onCancelCreate={() => {
+                    setEditorMode(null);
+                    setActiveTab("identity");
+                  }}
+                />
+              ) : (
+                <Card data-testid="agents-editor-placeholder">
+                  <CardContent className="py-10 text-sm text-fg-muted">
+                    Choose Edit for the selected agent or New agent to create a managed agent.
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
 
             <TabsContent value="memory">
