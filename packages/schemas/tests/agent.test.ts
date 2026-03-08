@@ -12,17 +12,17 @@ describe("AgentConfig", () => {
   it("parses and applies defaults", () => {
     const parsed = AgentConfig.parse({
       model: {
-        model: "openai/gpt-4.1",
+        model: "openai/gpt-5.4",
       },
     });
 
-    expect(parsed.model.model).toBe("openai/gpt-4.1");
+    expect(parsed.model.model).toBe("openai/gpt-5.4");
     expect(parsed.skills.enabled).toEqual([]);
     expect(parsed.skills.workspace_trusted).toBe(false);
     expect(parsed.mcp.enabled).toEqual([]);
     expect(parsed.tools.allow).toEqual([]);
-    expect(parsed.sessions.ttl_days).toBe(30);
-    expect(parsed.sessions.max_turns).toBe(20);
+    expect(parsed.sessions.ttl_days).toBe(365);
+    expect(parsed.sessions.max_turns).toBe(0);
     expect(parsed.sessions.loop_detection.within_turn.enabled).toBe(true);
     expect(parsed.sessions.loop_detection.within_turn.consecutive_repeat_limit).toBe(3);
     expect(parsed.sessions.loop_detection.within_turn.cycle_repeat_limit).toBe(3);
@@ -36,6 +36,7 @@ describe("AgentConfig", () => {
     expect(parsed.memory.v1.auto_write.mode).toBe("sparse");
     expect(parsed.memory.v1.auto_write.classifier).toBe("model_assisted");
     expect(parsed.memory.v1.allow_sensitivities).toEqual(["public", "private"]);
+    expect(parsed.memory.v1.semantic.enabled).toBe(true);
     expect(parsed.memory.v1.budgets.max_total_items).toBeGreaterThan(0);
     expect(parsed.memory.v1.budgets.max_total_chars).toBeGreaterThan(0);
     expect(parsed.memory.v1.budgets.per_kind.fact.max_items).toBeGreaterThan(0);

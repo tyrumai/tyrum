@@ -14,6 +14,17 @@ export const snapshot: ModelsDevCatalog = {
     api: "https://api.openai.com/v1",
     npm: "@ai-sdk/openai",
     models: {
+      "gpt-5.4": {
+        id: "gpt-5.4",
+        name: "GPT-5.4",
+        release_date: "2026-01-01",
+        attachment: true,
+        reasoning: true,
+        temperature: true,
+        tool_call: true,
+        limit: { context: 128000, output: 8192 },
+        options: {},
+      },
       "gpt-4.1": {
         id: "gpt-4.1",
         name: "GPT-4.1",

@@ -285,13 +285,14 @@ export class SessionDal {
       tenantId: input.tenantId,
       sessionId: input.sessionId,
     });
+    const nextTurns = [
+      ...session.turns,
+      { role: "user" as const, content: input.userMessage, timestamp: input.timestamp },
+      { role: "assistant" as const, content: input.assistantMessage, timestamp: input.timestamp },
+    ];
     const stored = buildStoredTranscript({
-      turns: [
-        ...session.turns,
-        { role: "user", content: input.userMessage, timestamp: input.timestamp },
-        { role: "assistant", content: input.assistantMessage, timestamp: input.timestamp },
-      ],
-      keepLastMessages: Math.max(1, input.maxTurns) * 2,
+      turns: nextTurns,
+      keepLastMessages: input.maxTurns <= 0 ? nextTurns.length : input.maxTurns * 2,
       previousSummary: session.summary,
     });
     await this.writeSession({ tenantId: input.tenantId, sessionId: input.sessionId, stored });
@@ -361,7 +362,7 @@ export class SessionDal {
 
     const stored = buildStoredTranscript({
       turns: rebuiltTurns,
-      keepLastMessages: Math.max(1, input.maxTurns) * 2,
+      keepLastMessages: input.maxTurns <= 0 ? rebuiltTurns.length : input.maxTurns * 2,
       previousSummary: session.summary,
     });
     await this.writeSession({

@@ -15,7 +15,8 @@ function computeTurnsDroppedByNextAppend(
   turns: readonly SessionMessage[],
   maxTurns: number,
 ): SessionMessage[] {
-  const maxMessages = Math.max(1, maxTurns) * 2;
+  if (maxTurns <= 0) return [];
+  const maxMessages = maxTurns * 2;
   const overflow = turns.length + 2 - maxMessages;
   if (overflow <= 0) return [];
   return turns.slice(0, overflow);

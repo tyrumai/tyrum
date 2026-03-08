@@ -30,7 +30,7 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
     allowed_lanes: ["main"],
     tool_allowlist: ["*"],
     capabilities: ["subagent.spawn", "work.write"],
-    model_id: "openai/gpt-4.1",
+    model_id: "openai/gpt-5.4",
     reasoning_effort: "medium",
     budgets: {
       max_duration_ms: 30_000,
@@ -45,7 +45,7 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
     allowed_lanes: ["subagent"],
     tool_allowlist: ["tool.fs.read", "tool.http.fetch"],
     capabilities: [],
-    model_id: "openai/gpt-4.1-mini",
+    model_id: "openai/gpt-5.4",
     reasoning_effort: "low",
     budgets: {
       max_duration_ms: 60_000,
@@ -57,7 +57,7 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
     allowed_lanes: ["subagent"],
     tool_allowlist: ["tool.fs.read", "tool.http.fetch"],
     capabilities: [],
-    model_id: "openai/gpt-4.1-mini",
+    model_id: "openai/gpt-5.4",
     reasoning_effort: "low",
     budgets: {
       max_duration_ms: 60_000,
@@ -69,7 +69,7 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
     allowed_lanes: ["subagent"],
     tool_allowlist: ["tool.fs.read", "tool.http.fetch"],
     capabilities: ["subagent.spawn", "work.write"],
-    model_id: "openai/gpt-4.1-mini",
+    model_id: "openai/gpt-5.4",
     reasoning_effort: "high",
     budgets: {
       max_duration_ms: 5 * 60_000,
@@ -84,7 +84,7 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
     allowed_lanes: ["subagent"],
     tool_allowlist: ["tool.fs.read", "tool.http.fetch"],
     capabilities: [],
-    model_id: "openai/gpt-4.1-mini",
+    model_id: "openai/gpt-5.4",
     reasoning_effort: "medium",
     budgets: {
       max_duration_ms: 60_000,
@@ -96,7 +96,7 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
     allowed_lanes: ["subagent"],
     tool_allowlist: ["tool.fs.read", "tool.fs.write", "tool.exec", "tool.http.fetch", "plugin.*"],
     capabilities: ["work.write"],
-    model_id: "openai/gpt-4.1",
+    model_id: "openai/gpt-5.4",
     reasoning_effort: "high",
     budgets: {
       max_duration_ms: 10 * 60_000,
@@ -108,7 +108,7 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
     allowed_lanes: ["subagent"],
     tool_allowlist: ["tool.fs.read", "tool.fs.write", "tool.exec", "tool.http.fetch", "plugin.*"],
     capabilities: ["work.write"],
-    model_id: "openai/gpt-4.1",
+    model_id: "openai/gpt-5.4",
     reasoning_effort: "high",
     budgets: {
       max_duration_ms: 10 * 60_000,

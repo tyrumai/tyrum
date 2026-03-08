@@ -17,9 +17,9 @@ function sampleAgentStatus() {
       description: "Primary operator agent",
     },
     model: {
-      model: "openai/gpt-4.1",
+      model: "openai/gpt-5.4",
       variant: "balanced",
-      fallback: ["openai/gpt-4.1-mini"],
+      fallback: ["openai/gpt-5.4"],
     },
     skills: ["review"],
     skills_detailed: [
@@ -34,8 +34,8 @@ function sampleAgentStatus() {
     mcp: [],
     tools: ["shell"],
     sessions: {
-      ttl_days: 30,
-      max_turns: 20,
+      ttl_days: 365,
+      max_turns: 0,
       loop_detection: {
         within_turn: {
           enabled: true,
@@ -51,7 +51,7 @@ function sampleAgentStatus() {
         },
       },
       context_pruning: {
-        max_messages: 32,
+        max_messages: 0,
         tool_prune_keep_last_messages: 4,
       },
     },
@@ -78,7 +78,7 @@ function sampleManagedAgentDetail(agentKey: string) {
       character: "architect",
     },
     config: AgentConfig.parse({
-      model: { model: "openai/gpt-4.1" },
+      model: { model: "openai/gpt-5.4" },
       persona: {
         name: agentKey === "default" ? "Default Agent" : "Agent One",
         description: "Managed agent",
@@ -208,11 +208,13 @@ describe("AgentsPage", () => {
           agent_key: "default",
           agent_id: "11111111-1111-4111-8111-111111111111",
           can_delete: false,
+          persona: { name: "Feynman" },
         },
         {
           agent_key: "agent-1",
           agent_id: "22222222-2222-4222-8222-222222222222",
           can_delete: true,
+          persona: { name: "Ada" },
         },
       ],
     }));
@@ -230,6 +232,8 @@ describe("AgentsPage", () => {
       '[data-testid="agents-select-agent-1"]',
     );
     expect(agentButton).not.toBeNull();
+    expect(agentButton?.textContent).toContain("Ada");
+    expect(agentButton?.textContent).toContain("agent-1");
 
     await act(async () => {
       agentButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -245,13 +249,23 @@ describe("AgentsPage", () => {
   it("waits for a managed agent scope before loading memory", async () => {
     let resolveAgentList:
       | ((value: {
-          agents: Array<{ agent_key: string; agent_id: string; can_delete: boolean }>;
+          agents: Array<{
+            agent_key: string;
+            agent_id: string;
+            can_delete: boolean;
+            persona?: { name?: string };
+          }>;
         }) => void)
       | null = null;
     const list = vi.fn(
       () =>
         new Promise<{
-          agents: Array<{ agent_key: string; agent_id: string; can_delete: boolean }>;
+          agents: Array<{
+            agent_key: string;
+            agent_id: string;
+            can_delete: boolean;
+            persona?: { name?: string };
+          }>;
         }>((resolve) => {
           resolveAgentList = resolve;
         }),
@@ -279,6 +293,7 @@ describe("AgentsPage", () => {
             agent_key: "default",
             agent_id: "11111111-1111-4111-8111-111111111111",
             can_delete: false,
+            persona: { name: "Feynman" },
           },
         ],
       });
@@ -304,6 +319,7 @@ describe("AgentsPage", () => {
             agent_key: "default",
             agent_id: "11111111-1111-4111-8111-111111111111",
             can_delete: false,
+            persona: { name: "Feynman" },
           },
         ],
       })
@@ -313,11 +329,13 @@ describe("AgentsPage", () => {
             agent_key: "default",
             agent_id: "11111111-1111-4111-8111-111111111111",
             can_delete: false,
+            persona: { name: "Feynman" },
           },
           {
             agent_key: "agent-2",
             agent_id: "33333333-3333-4333-8333-333333333333",
             can_delete: true,
+            persona: { name: "Agent Two" },
           },
         ],
       });
@@ -373,11 +391,13 @@ describe("AgentsPage", () => {
           agent_key: "default",
           agent_id: "11111111-1111-4111-8111-111111111111",
           can_delete: false,
+          persona: { name: "Feynman" },
         },
         {
           agent_key: "agent-1",
           agent_id: "22222222-2222-4222-8222-222222222222",
           can_delete: true,
+          persona: { name: "Ada" },
         },
       ],
     }));
@@ -444,11 +464,13 @@ describe("AgentsPage", () => {
             agent_key: "default",
             agent_id: "11111111-1111-4111-8111-111111111111",
             can_delete: false,
+            persona: { name: "Feynman" },
           },
           {
             agent_key: "agent-1",
             agent_id: "22222222-2222-4222-8222-222222222222",
             can_delete: true,
+            persona: { name: "Ada" },
           },
         ],
       })
@@ -458,6 +480,7 @@ describe("AgentsPage", () => {
             agent_key: "default",
             agent_id: "11111111-1111-4111-8111-111111111111",
             can_delete: false,
+            persona: { name: "Feynman" },
           },
         ],
       });
