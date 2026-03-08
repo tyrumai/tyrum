@@ -136,19 +136,26 @@ export function RunsPageCard({ core, run, isExpanded, onToggleRun, timeline }: R
   return (
     <Card>
       <div className="flex items-center justify-between gap-4 p-4">
-        <div className="flex min-w-0 flex-wrap items-center gap-3">
-          <Badge
-            data-testid={`run-status-${run.run_id}`}
-            variant={badgeVariant}
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            {statusLabel}
-          </Badge>
-          <CopyableId id={run.run_id} />
-          <span className="break-words text-xs text-fg-muted [overflow-wrap:anywhere]">
-            {relativeTime}
-          </span>
+        <div className="grid min-w-0 gap-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <Badge
+              data-testid={`run-status-${run.run_id}`}
+              variant={badgeVariant}
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {statusLabel}
+            </Badge>
+            <CopyableId id={run.run_id} />
+            <span className="break-words text-xs text-fg-muted [overflow-wrap:anywhere]">
+              {relativeTime}
+            </span>
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-fg-muted">
+            <span>{run.lane}</span>
+            <span aria-hidden={true}>•</span>
+            <span className="font-mono break-all">{run.key}</span>
+          </div>
         </div>
         <Button
           variant="ghost"

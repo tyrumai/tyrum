@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useKeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
 import {
   getActiveAgentIdsFromSessionLanes,
-  parseAgentIdFromKey,
+  resolveAgentIdForRun,
 } from "./lib/status-session-lanes.js";
 import {
   getOperatorRouteDefinition,
@@ -42,7 +42,7 @@ export function useOperatorAppViewModel(opts: {
   const activeAgentIds = new Set<string>();
   for (const run of Object.values(runs.runsById)) {
     if (run.status !== "queued" && run.status !== "running" && run.status !== "paused") continue;
-    const agentId = parseAgentIdFromKey(run.key);
+    const agentId = resolveAgentIdForRun(run, runs.agentKeyByRunId);
     if (!agentId) continue;
     activeAgentIds.add(agentId);
   }

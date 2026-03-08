@@ -93,7 +93,9 @@ function sampleMemoryItem(
 }
 
 function createHarness() {
-  const runs = createRunsStore();
+  const runs = createRunsStore({
+    runList: async () => ({ runs: [], steps: [], attempts: [] }),
+  } as never);
   const approvals = createStore(createApprovalsState());
   const status = createStore(createStatusState());
   const memory = createStore(createMemoryState());

@@ -136,6 +136,76 @@ function registerDashboardTests(): void {
     container.remove();
   });
 
+  it("navigates to active runs when clicking the active runs card", async () => {
+    const ws = new FakeWsClient();
+    ws.runList.mockResolvedValueOnce({
+      runs: [
+        {
+          run: {
+            run_id: "11111111-1111-1111-1111-111111111111",
+            job_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            key: "agent:default:main",
+            lane: "main",
+            status: "running",
+            attempt: 1,
+            created_at: "2026-01-01T00:00:00.000Z",
+            started_at: "2026-01-01T00:00:00.000Z",
+            finished_at: null,
+          },
+          agent_key: "default",
+        },
+      ],
+      steps: [],
+      attempts: [],
+    });
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    const dashboardLink = container.querySelector<HTMLButtonElement>(
+      '[data-testid="nav-dashboard"]',
+    );
+    expect(dashboardLink).not.toBeNull();
+
+    act(() => {
+      dashboardLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const runsCard = container.querySelector<HTMLButtonElement>(
+      '[data-testid="dashboard-card-runs"]',
+    );
+    expect(runsCard).not.toBeNull();
+
+    await act(async () => {
+      runsCard?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await vi.dynamicImportSettled();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Active runs");
+    expect(
+      container.querySelector('[data-testid="run-status-11111111-1111-1111-1111-111111111111"]'),
+    ).not.toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
   it("wraps navigation in the View Transitions API when available", () => {
     const startViewTransition = vi.fn(function (this: unknown, callback: () => void) {
       callback();

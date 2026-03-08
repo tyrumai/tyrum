@@ -8,6 +8,15 @@ export function parseAgentIdFromKey(key: string): string | null {
   return rest.slice(0, sep);
 }
 
+export function resolveAgentIdForRun(
+  run: { run_id: string; key: string },
+  agentKeyByRunId?: Record<string, string>,
+): string | null {
+  const mappedAgentKey = agentKeyByRunId?.[run.run_id]?.trim();
+  if (mappedAgentKey) return mappedAgentKey;
+  return parseAgentIdFromKey(run.key);
+}
+
 function parseFiniteNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {

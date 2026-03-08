@@ -31,6 +31,7 @@ export class FakeWsClient implements OperatorWsClient {
   disconnect = vi.fn(() => {});
 
   approvalList = vi.fn(async () => ({ approvals: [], next_cursor: undefined }));
+  runList = vi.fn(async () => ({ runs: [], steps: [], attempts: [] }));
   approvalResolve = vi.fn(async () => ({ approval: { approval_id: 1 } as unknown }));
 
   memorySearch = vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined }) as unknown);

@@ -61,6 +61,8 @@ export { EventScope } from "./scope.js";
 // prettier-ignore
 export { PresenceRole, PresenceMode, PresenceReason, PresenceEntry, PresenceBeacon } from "./presence.js";
 // prettier-ignore
+export { WsRunListResponseOkEnvelope, WsRunListResponseErrEnvelope, WsRunListResponseEnvelope, WsRunListPayload, WsRunListRequest, WsRunListItem, WsRunListResult } from "./protocol.js";
+// prettier-ignore
 export { NodeIdentity, NodePairingStatus, NodePairingDecision, NodePairingTrustLevel, NodePairingResolution, NodePairingRequest } from "./node.js";
 // prettier-ignore
 export { PlaybookOutputKind, PlaybookOutputSpec, PlaybookStep, PlaybookManifest, Playbook } from "./playbook.js";

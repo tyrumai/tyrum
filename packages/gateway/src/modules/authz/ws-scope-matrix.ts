@@ -29,6 +29,9 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     case "session.get": {
       return ["operator.read"];
     }
+    case "run.list": {
+      return ["operator.read"];
+    }
     case "session.create":
     case "session.compact":
     case "session.delete": {

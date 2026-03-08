@@ -1,4 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
+import type { ExecutionRun } from "@tyrum/client";
 import type { LucideIcon } from "lucide-react";
 import {
   Bot,
@@ -7,6 +8,7 @@ import {
   Link2,
   MessageSquare,
   Monitor,
+  Play,
   Shield,
   ShieldCheck,
   SquareKanban,
@@ -46,6 +48,11 @@ const AgentsPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/agents-page.js"),
   "AgentsPage",
 );
+const RunsPage = lazyNamed<{
+  core: OperatorCore;
+  title?: string;
+  statuses?: ExecutionRun["status"][];
+}>(() => import("./components/pages/runs-page.js"), "RunsPage");
 const PairingPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/pairing-page.js"),
   "PairingPage",
@@ -62,6 +69,7 @@ const BrowserCapabilitiesPage = lazyNamed<Record<string, never>>(
   () => import("./components/pages/platform/browser-capabilities-page.js"),
   "BrowserCapabilitiesPage",
 );
+const ACTIVE_RUN_STATUSES: ExecutionRun["status"][] = ["queued", "running", "paused"];
 
 export type OperatorUiRouteId =
   | "dashboard"
@@ -69,6 +77,7 @@ export type OperatorUiRouteId =
   | "approvals"
   | "workboard"
   | "agents"
+  | "runs"
   | "pairing"
   | "configure"
   | "node-configure"
@@ -138,6 +147,17 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     shortcut: true,
     hostKinds: ["desktop", "web"],
     render: ({ core }) => <AgentsPage core={core} />,
+  },
+  {
+    id: "runs",
+    label: "Runs",
+    icon: Play,
+    navGroup: "none",
+    shortcut: false,
+    hostKinds: ["desktop", "web"],
+    render: ({ core }) => (
+      <RunsPage core={core} title="Active runs" statuses={ACTIVE_RUN_STATUSES} />
+    ),
   },
   {
     id: "pairing",

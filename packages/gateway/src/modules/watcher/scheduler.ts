@@ -368,6 +368,24 @@ export class WatcherScheduler {
       });
     }
   }
+  private async findActiveRunIdForKeyLane(input: {
+    tenantId: string;
+    key: string;
+    lane: LaneT;
+  }): Promise<string | undefined> {
+    const row = await this.db.get<{ run_id: string }>(
+      `SELECT run_id
+       FROM execution_runs
+       WHERE tenant_id = ?
+         AND key = ?
+         AND lane = ?
+         AND status IN ('queued', 'running', 'paused')
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [input.tenantId, input.key, input.lane],
+    );
+    return row?.run_id;
+  }
   private async processFiring(firing: WatcherFiringRow): Promise<void> {
     const watcher = await this.db.get<RawPeriodicWatcherRow>(
       `SELECT * FROM watchers WHERE tenant_id = ? AND watcher_id = ? LIMIT 1`,
@@ -407,14 +425,44 @@ export class WatcherScheduler {
     }
     const resolved = await this.resolveExecution({ firing, watcher, cfg, scopeKeys });
     if (!resolved) return;
+    const lane = cfg.lane ?? "cron";
+    const key =
+      cfg.key ??
+      (lane === "heartbeat"
+        ? `agent:${scopeKeys.agent_key}:main`
+        : `cron:watcher-${String(firing.watcher_id)}`);
+
+    if (lane === "heartbeat") {
+      const activeRunId = await this.findActiveRunIdForKeyLane({
+        tenantId: firing.tenant_id,
+        key,
+        lane,
+      });
+      if (activeRunId) {
+        await this.firingDal.markEnqueued({
+          tenantId: firing.tenant_id,
+          watcherFiringId: firing.watcher_firing_id,
+          owner: this.owner,
+          runId: activeRunId,
+        });
+        this.logger?.info("watcher.firing_suppressed_active_heartbeat", {
+          firing_id: firing.watcher_firing_id,
+          watcher_id: firing.watcher_id,
+          run_id: activeRunId,
+          key,
+          lane,
+        });
+        return;
+      }
+    }
 
     await this.enqueueAutomationPlan({
       firing,
       watcher,
       cfg,
       triggerType,
-      key: cfg.key ?? `cron:watcher-${String(firing.watcher_id)}`,
-      lane: cfg.lane ?? "cron",
+      key,
+      lane,
       planId,
       steps: resolved.steps,
       playbook: resolved.playbook,

@@ -30,6 +30,7 @@ describe("WS scope authorization matrix", () => {
   it("maps session list/get operations to operator.read", () => {
     expect(resolveWsRequestRequiredScopes("session.list")).toEqual(["operator.read"]);
     expect(resolveWsRequestRequiredScopes("session.get")).toEqual(["operator.read"]);
+    expect(resolveWsRequestRequiredScopes("run.list")).toEqual(["operator.read"]);
   });
 
   it("maps memory v1 operations to operator.read/operator.write", () => {

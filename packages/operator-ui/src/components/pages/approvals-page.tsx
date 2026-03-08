@@ -12,6 +12,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { LiveRegion } from "../ui/live-region.js";
 import { Spinner } from "../ui/spinner.js";
+import { parseAgentIdFromKey } from "../../lib/status-session-lanes.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { extractTakeoverUrlFromNodeIdentity } from "../../utils/takeover-url.js";
 import { isRecord } from "../../utils/is-record.js";
@@ -87,16 +88,21 @@ type ApprovalArtifactsSummary = {
 
 function resolveArtifactsForApprovalStep(
   runsState: RunsState,
-  scope: { run_id?: string; step_index?: number } | undefined,
+  scope: { run_id?: string; step_id?: string; step_index?: number } | undefined,
 ): ApprovalArtifactsSummary | null {
   const runId = typeof scope?.run_id === "string" ? scope.run_id : "";
+  const scopeStepId = typeof scope?.step_id === "string" ? scope.step_id : "";
   const stepIndex = typeof scope?.step_index === "number" ? scope.step_index : null;
-  if (!runId || stepIndex === null) return null;
+  if (!runId) return null;
 
-  const stepId = (runsState.stepIdsByRunId[runId] ?? []).find((candidateId) => {
-    const step = runsState.stepsById[candidateId];
-    return step?.step_index === stepIndex;
-  });
+  const stepId =
+    scopeStepId ||
+    (stepIndex === null
+      ? null
+      : ((runsState.stepIdsByRunId[runId] ?? []).find((candidateId) => {
+          const step = runsState.stepsById[candidateId];
+          return step?.step_index === stepIndex;
+        }) ?? null));
   if (!stepId) return null;
 
   let latestAttemptWithArtifacts: ExecutionAttempt | undefined;
@@ -200,6 +206,18 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
 
             const resolvingDecision = resolvingById[approvalId];
             const isResolving = resolvingDecision !== undefined;
+            const scope = approval.scope;
+            const approvalAgentKey =
+              typeof scope?.key === "string" ? parseAgentIdFromKey(scope.key) : null;
+            const detailEntries = [
+              ["Approval key", approval.approval_key],
+              ["Agent", approvalAgentKey ?? undefined],
+              ["Scope key", scope?.key],
+              ["Lane", scope?.lane],
+              ["Run", scope?.run_id],
+              ["Step", scope?.step_id],
+              ["Attempt", scope?.attempt_id],
+            ].filter((entry): entry is [string, string] => typeof entry[1] === "string");
 
             return (
               <Card key={approvalId}>
@@ -219,6 +237,20 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                   <blockquote className="rounded-md border border-border bg-bg-subtle px-3 py-2.5 text-sm text-fg break-words [overflow-wrap:anywhere]">
                     {approval.prompt}
                   </blockquote>
+
+                  {detailEntries.length > 0 ? (
+                    <div
+                      data-testid={`approval-details-${approvalId}`}
+                      className="grid gap-2 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+                    >
+                      {detailEntries.map(([label, value]) => (
+                        <div key={label} className="grid gap-0.5">
+                          <div className="text-xs font-medium text-fg-muted">{label}</div>
+                          <div className="font-mono text-xs text-fg break-all">{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
 
                   {(() => {
                     const desktop = describeDesktopApprovalContext(approval.context);

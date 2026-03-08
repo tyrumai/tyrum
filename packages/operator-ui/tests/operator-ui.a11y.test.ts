@@ -30,6 +30,7 @@ class FakeWsClient implements OperatorWsClient {
     this.emit("disconnected", { code: 1000, reason: "client disconnect" });
   });
   approvalList = vi.fn(async () => ({ approvals: [], next_cursor: undefined }));
+  runList = vi.fn(async () => ({ runs: [], steps: [], attempts: [] }));
   approvalResolve = vi.fn(async () => {
     throw new Error("not implemented");
   });

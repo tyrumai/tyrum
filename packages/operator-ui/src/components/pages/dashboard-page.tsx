@@ -9,7 +9,7 @@ import { getConnectionDisplay } from "../../lib/connection-display.js";
 import {
   getActiveAgentIdsFromSessionLanes,
   getActiveExecutionRunsCountFromQueueDepth,
-  parseAgentIdFromKey,
+  resolveAgentIdForRun,
 } from "../../lib/status-session-lanes.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 
@@ -103,7 +103,7 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
   const agentIds = new Set<string>();
   const activeAgentIds = new Set<string>();
   for (const run of Object.values(runs.runsById)) {
-    const agentId = parseAgentIdFromKey(run.key);
+    const agentId = resolveAgentIdForRun(run, runs.agentKeyByRunId);
     if (!agentId) continue;
     agentIds.add(agentId);
     if (run.status === "queued" || run.status === "running" || run.status === "paused") {
@@ -191,7 +191,7 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
             loading={status.loading.status && status.status === null}
             value={activeRunsCount === null ? "-" : String(activeRunsCount)}
             onClick={() => {
-              onNavigate?.("agents");
+              onNavigate?.("runs");
             }}
             testId="dashboard-card-runs"
             description="Queued or running execution work."
