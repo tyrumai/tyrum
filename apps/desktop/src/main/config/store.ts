@@ -21,7 +21,7 @@ export function loadConfig(): DesktopNodeConfig {
   if (!existsSync(path)) return structuredClone(DEFAULT_CONFIG);
   const raw = readFileSync(path, "utf-8");
   const parsed = DesktopNodeConfig.parse(JSON.parse(raw));
-  const normalized = normalizeDevicePrivateKey(parsed);
+  const normalized = normalizeNodeDeviceConfig(parsed);
   if (normalized !== parsed) {
     saveConfig(normalized);
   }
@@ -31,23 +31,33 @@ export function loadConfig(): DesktopNodeConfig {
 export function saveConfig(config: DesktopNodeConfig): void {
   const path = getConfigPath();
   mkdirSync(dirname(path), { recursive: true });
-  const normalized = normalizeDevicePrivateKey(config);
+  const normalized = normalizeNodeDeviceConfig(config);
   writeFileSync(path, JSON.stringify(normalized, null, 2), { mode: 0o600 });
   chmodSync(path, 0o600);
 }
 
-function normalizeDevicePrivateKey(config: DesktopNodeConfig): DesktopNodeConfig {
-  const privateKey = config.device.privateKey.trim();
+function normalizeNodeDeviceConfig(config: DesktopNodeConfig): DesktopNodeConfig {
+  const nextConfig =
+    config.device.enabled === true
+      ? config
+      : {
+          ...config,
+          device: {
+            ...config.device,
+            enabled: true,
+          },
+        };
+  const privateKey = nextConfig.device.privateKey.trim();
 
   if (privateKey.length === 0) {
-    return config;
+    return nextConfig;
   }
 
   const nextRef = encryptToken(privateKey);
   return {
-    ...config,
+    ...nextConfig,
     device: {
-      ...config.device,
+      ...nextConfig.device,
       privateKeyRef: nextRef,
       privateKey: "",
     },

@@ -42,7 +42,7 @@ export const DesktopNodeConfig = z.object({
     .default({ port: 8788, tokenRef: "", dbPath: "" }),
   device: z
     .object({
-      enabled: z.boolean().default(false),
+      enabled: z.boolean().default(true),
       deviceId: z.string().default(""),
       publicKey: z.string().default(""),
       privateKeyRef: z.string().default(""),
@@ -53,7 +53,7 @@ export const DesktopNodeConfig = z.object({
       mode: z.string().default("desktop"),
     })
     .default({
-      enabled: false,
+      enabled: true,
       deviceId: "",
       publicKey: "",
       privateKeyRef: "",
