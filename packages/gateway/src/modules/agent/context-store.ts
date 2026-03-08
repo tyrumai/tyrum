@@ -20,6 +20,7 @@ import {
 import { parseFrontmatterDocument } from "./frontmatter.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
+import type { IdentityScopeDal } from "../identity/scope.js";
 import { resolveGatewayStateMode } from "../runtime-state/mode.js";
 import type { GatewayContainer } from "../../container.js";
 
@@ -42,43 +43,73 @@ class LocalAgentContextStore implements AgentContextStore {
   constructor(
     private readonly db: SqlDb,
     private readonly home: string,
+    private readonly identityScopeDal: IdentityScopeDal,
     private readonly logger?: Logger,
   ) {
     this.identityDal = new AgentIdentityDal(db);
   }
 
-  private async ensureScopeRows(scope: AgentContextScope): Promise<void> {
+  private async resolveScopeIds(scope: AgentContextScope): Promise<AgentContextScope> {
+    const resolvedAgentRow = await this.db.get<{ agent_id: string }>(
+      `SELECT agent_id
+       FROM agents
+       WHERE tenant_id = ? AND agent_id = ?
+       LIMIT 1`,
+      [scope.tenantId, scope.agentId],
+    );
+    const resolvedWorkspaceRow = await this.db.get<{ workspace_id: string }>(
+      `SELECT workspace_id
+       FROM workspaces
+       WHERE tenant_id = ? AND workspace_id = ?
+       LIMIT 1`,
+      [scope.tenantId, scope.workspaceId],
+    );
+
+    return {
+      tenantId: scope.tenantId,
+      agentId:
+        resolvedAgentRow?.agent_id ??
+        (await this.identityScopeDal.ensureAgentId(scope.tenantId, scope.agentId)),
+      workspaceId:
+        resolvedWorkspaceRow?.workspace_id ??
+        (await this.identityScopeDal.ensureWorkspaceId(scope.tenantId, scope.workspaceId)),
+    };
+  }
+
+  private async ensureScopeRows(scope: AgentContextScope): Promise<AgentContextScope> {
     await this.db.run(
       `INSERT INTO tenants (tenant_id, tenant_key)
        VALUES (?, ?)
        ON CONFLICT (tenant_id) DO NOTHING`,
       [scope.tenantId, scope.tenantId],
     );
+    const resolved = await this.resolveScopeIds(scope);
     await this.db.run(
       `INSERT INTO agents (tenant_id, agent_id, agent_key)
        VALUES (?, ?, ?)
        ON CONFLICT (tenant_id, agent_id) DO NOTHING`,
-      [scope.tenantId, scope.agentId, scope.agentId],
+      [resolved.tenantId, resolved.agentId, resolved.agentId],
     );
     await this.db.run(
       `INSERT INTO workspaces (tenant_id, workspace_id, workspace_key)
        VALUES (?, ?, ?)
        ON CONFLICT (tenant_id, workspace_id) DO NOTHING`,
-      [scope.tenantId, scope.workspaceId, scope.workspaceId],
+      [resolved.tenantId, resolved.workspaceId, resolved.workspaceId],
     );
     await this.db.run(
       `INSERT INTO agent_workspaces (tenant_id, agent_id, workspace_id)
        VALUES (?, ?, ?)
        ON CONFLICT (tenant_id, agent_id, workspace_id) DO NOTHING`,
-      [scope.tenantId, scope.agentId, scope.workspaceId],
+      [resolved.tenantId, resolved.agentId, resolved.workspaceId],
     );
+    return resolved;
   }
 
   private async ensureIdentity(scope: AgentContextScope): Promise<IdentityPackT> {
-    await this.ensureScopeRows(scope);
+    const resolved = await this.ensureScopeRows(scope);
     const revision = await this.identityDal.ensureSeeded({
-      tenantId: scope.tenantId,
-      agentId: scope.agentId,
+      tenantId: resolved.tenantId,
+      agentId: resolved.agentId,
       defaultIdentity: parseDefaultIdentity(),
       createdBy: { kind: "agent-runtime" },
       reason: "seed",
@@ -117,9 +148,10 @@ class LocalAgentContextStore implements AgentContextStore {
 export function createLocalAgentContextStore(params: {
   db: SqlDb;
   home: string;
+  identityScopeDal: IdentityScopeDal;
   logger?: Logger;
 }): AgentContextStore {
-  return new LocalAgentContextStore(params.db, params.home, params.logger);
+  return new LocalAgentContextStore(params.db, params.home, params.identityScopeDal, params.logger);
 }
 
 function parseDefaultIdentity(): IdentityPackT {
@@ -261,7 +293,7 @@ export function createSharedAgentContextStore(params: {
 
 export function createDefaultAgentContextStore(params: {
   home: string;
-  container: Pick<GatewayContainer, "db" | "deploymentConfig" | "logger">;
+  container: Pick<GatewayContainer, "db" | "deploymentConfig" | "identityScopeDal" | "logger">;
 }): AgentContextStore {
   return resolveGatewayStateMode(params.container.deploymentConfig) === "shared"
     ? createSharedAgentContextStore({
@@ -271,6 +303,7 @@ export function createDefaultAgentContextStore(params: {
     : createLocalAgentContextStore({
         db: params.container.db,
         home: params.home,
+        identityScopeDal: params.container.identityScopeDal,
         logger: params.container.logger,
       });
 }

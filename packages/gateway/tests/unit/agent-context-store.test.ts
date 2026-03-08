@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { AgentConfig } from "@tyrum/schemas";
 import { createContainer } from "../../src/container.js";
+import { AgentIdentityDal } from "../../src/modules/agent/identity-dal.js";
 import {
   createLocalAgentContextStore,
   createSharedAgentContextStore,
@@ -59,7 +60,11 @@ args:
       "utf-8",
     );
 
-    const store = createLocalAgentContextStore({ db: container.db, home: homeDir });
+    const store = createLocalAgentContextStore({
+      db: container.db,
+      home: homeDir,
+      identityScopeDal: container.identityScopeDal,
+    });
     const tenantId = await container.identityScopeDal.ensureTenantId("tenant-local");
     const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
     const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
@@ -84,6 +89,39 @@ args:
     expect(identity.meta.name).toBe("Tyrum");
     expect(skills.map((skill) => skill.meta.id)).toEqual(["file-reader"]);
     expect(mcpServers.map((server) => server.id)).toEqual(["calendar"]);
+  });
+
+  it("resolves runtime scope keys to durable ids before seeding local identity", async () => {
+    const store = createLocalAgentContextStore({
+      db: container.db,
+      home: homeDir,
+      identityScopeDal: container.identityScopeDal,
+    });
+    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-local");
+    const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
+    const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+    await container.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+
+    await store.ensureAgentContext({
+      tenantId,
+      agentId: "default",
+      workspaceId: DEFAULT_WORKSPACE_KEY,
+    });
+
+    const agents = await container.db.all<{ agent_id: string; agent_key: string }>(
+      `SELECT agent_id, agent_key
+       FROM agents
+       WHERE tenant_id = ?
+       ORDER BY agent_key ASC`,
+      [tenantId],
+    );
+    expect(agents).toEqual([{ agent_id: agentId, agent_key: "default" }]);
+
+    const identity = await new AgentIdentityDal(container.db).getLatest({ tenantId, agentId });
+    expect(identity?.identity.meta.name).toBe("Tyrum");
   });
 });
 

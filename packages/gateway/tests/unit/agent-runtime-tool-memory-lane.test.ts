@@ -82,6 +82,16 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     });
 
     expect(agentTurnEpisode).toBeDefined();
+    expect(agentTurnEpisode?.[0]).toEqual(
+      expect.objectContaining({
+        summary_md: expect.stringContaining("User: hi"),
+      }),
+    );
+    expect(agentTurnEpisode?.[0]).toEqual(
+      expect.objectContaining({
+        summary_md: expect.stringContaining("Assistant: hello"),
+      }),
+    );
   }, 10_000);
 
   it("logs when subagent execution profile resolution fails", async () => {

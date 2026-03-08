@@ -7,6 +7,7 @@ import { recordMemoryV1SystemEpisode } from "../../memory/v1-episode-recorder.js
 import { looksLikeSecretText } from "./secrets.js";
 import { shouldPromoteToCoreMemory, type ResolvedAgentTurnInput } from "./turn-helpers.js";
 import type { AgentContextReport, AgentLoadedContext } from "./types.js";
+import { redactSecretLikeText } from "./secrets.js";
 
 type FinalizeContainer = Pick<GatewayContainer, "contextReportDal" | "logger" | "memoryV1Dal">;
 
@@ -125,11 +126,47 @@ async function writeMemoryV1TurnNote(input: {
   return true;
 }
 
+function normalizeSummaryText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function truncateSummaryText(value: string, maxChars: number): string {
+  if (maxChars <= 0) return "";
+  if (value.length <= maxChars) return value;
+  if (maxChars <= 3) return value.slice(0, maxChars);
+  return `${value.slice(0, maxChars - 3)}...`;
+}
+
+function buildTurnEpisodeSummary(input: {
+  resolved: ResolvedAgentTurnInput;
+  reply: string;
+}): string {
+  const user = truncateSummaryText(
+    normalizeSummaryText(redactSecretLikeText(input.resolved.message)),
+    160,
+  );
+  const assistant = truncateSummaryText(
+    normalizeSummaryText(redactSecretLikeText(input.reply)),
+    220,
+  );
+  const details = [
+    user.length > 0 ? `User: ${user}` : undefined,
+    assistant.length > 0 ? `Assistant: ${assistant}` : undefined,
+  ].filter((part): part is string => part !== undefined);
+
+  if (details.length === 0) {
+    return `Agent turn: ${input.resolved.channel}`;
+  }
+
+  return `${details.join(" | ")} (${input.resolved.channel})`;
+}
+
 async function recordAgentTurnEpisode(input: {
   container: FinalizeContainer;
   ctx: AgentLoadedContext;
   session: SessionRow;
   resolved: ResolvedAgentTurnInput;
+  reply: string;
   nowIso: string;
 }): Promise<boolean> {
   if (!input.ctx.config.memory.v1.enabled) {
@@ -142,7 +179,7 @@ async function recordAgentTurnEpisode(input: {
         occurred_at: input.nowIso,
         channel: input.resolved.channel,
         event_type: "agent_turn",
-        summary_md: `Agent turn: ${input.resolved.channel}`,
+        summary_md: buildTurnEpisodeSummary(input),
         tags: ["agent", "turn"],
         metadata: {
           channel: input.resolved.channel,
@@ -199,6 +236,7 @@ export async function finalizeTurn(input: {
     ctx: input.ctx,
     session: input.session,
     resolved: input.resolved,
+    reply: finalizedReply,
     nowIso,
   });
   const memoryWritten = noteWritten || episodeWritten;
