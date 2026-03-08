@@ -323,7 +323,7 @@ describe("agent routes", () => {
       agentId,
       limit: 20,
     });
-    expect(memoryItems.items.some((item) => item.kind === "episode")).toBe(true);
+    expect(memoryItems.items.some((item) => item.kind === "note")).toBe(true);
 
     await agents?.shutdown();
     await container.db.close();

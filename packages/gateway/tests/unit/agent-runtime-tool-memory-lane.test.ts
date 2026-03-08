@@ -5,6 +5,7 @@ import {
   fetch404,
   DEFAULT_TENANT_ID,
   migrationsDir,
+  seedAgentConfig,
 } from "./agent-runtime.test-helpers.js";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -52,11 +53,26 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     expect(result.used_tools).toEqual([]);
   }, 10_000);
 
-  it("records agent_turn episodes using the container memoryV1Dal instance", async () => {
+  it("records an episode for a meaningful turn outcome", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
       dbPath: ":memory:",
       migrationsDir,
+    });
+    await seedAgentConfig(container, {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: { enabled: [] },
+        tools: { allow: [] },
+        sessions: { ttl_days: 30, max_turns: 20 },
+        memory: {
+          v1: {
+            enabled: true,
+            auto_write: { classifier: "rule_based" },
+          },
+        },
+      },
     });
 
     const createSpy = vi.spyOn(container.memoryV1Dal, "create");
@@ -64,14 +80,16 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      languageModel: createStubLanguageModel("hello"),
+      languageModel: createStubLanguageModel(
+        "Fixed the failing workflow by updating the agent config.",
+      ),
       fetchImpl: fetch404,
     });
 
     await runtime.turn({
       channel: "test",
       thread_id: "thread-1",
-      message: "hi",
+      message: "please fix the failing workflow",
     });
 
     expect(createSpy).toHaveBeenCalled();
@@ -84,12 +102,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     expect(agentTurnEpisode).toBeDefined();
     expect(agentTurnEpisode?.[0]).toEqual(
       expect.objectContaining({
-        summary_md: expect.stringContaining("User: hi"),
-      }),
-    );
-    expect(agentTurnEpisode?.[0]).toEqual(
-      expect.objectContaining({
-        summary_md: expect.stringContaining("Assistant: hello"),
+        summary_md: expect.stringContaining("Fixed the failing workflow"),
       }),
     );
   }, 10_000);

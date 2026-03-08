@@ -83,6 +83,13 @@ export const AgentMemoryConfig = z.object({
   v1: z
     .object({
       enabled: z.boolean().default(true),
+      auto_write: z
+        .object({
+          enabled: z.boolean().default(true),
+          mode: z.literal("sparse").default("sparse"),
+          classifier: z.enum(["model_assisted", "rule_based"]).default("model_assisted"),
+        })
+        .prefault({}),
       allow_sensitivities: z.array(MemorySensitivity).default(["public", "private"]),
       structured: z
         .object({

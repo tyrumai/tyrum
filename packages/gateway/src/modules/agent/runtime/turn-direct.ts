@@ -185,8 +185,10 @@ export async function turnDirect(
       session,
       resolved,
       reply,
+      model,
       usedTools,
       contextReport,
+      turnKind: "skip",
     });
     return { response, contextReport };
   }
@@ -203,8 +205,10 @@ export async function turnDirect(
       session,
       resolved,
       reply: intakeResult.reply,
+      model,
       usedTools,
       contextReport,
+      turnKind: "skip",
     });
     return { response, contextReport };
   }
@@ -232,8 +236,10 @@ export async function turnDirect(
       session,
       resolved,
       reply: delegation.reply,
+      model,
       usedTools,
       contextReport,
+      turnKind: "skip",
     });
     return { response, contextReport };
   }
@@ -289,8 +295,10 @@ export async function turnDirect(
       session,
       resolved,
       reply,
+      model,
       usedTools,
       contextReport,
+      turnKind: "skip",
     });
     return { response, contextReport };
   }
@@ -355,6 +363,7 @@ export async function turnDirect(
     session,
     resolved,
     reply,
+    model,
     usedTools,
     contextReport,
   });
@@ -415,8 +424,10 @@ export async function turnStreamDirect(
       session,
       resolved,
       reply: delegation.reply,
+      model,
       usedTools,
       contextReport,
+      turnKind: "skip",
     });
 
     const streamResult = streamText({
@@ -475,6 +486,7 @@ export async function turnStreamDirect(
       session,
       resolved,
       reply,
+      model,
       usedTools,
       contextReport,
     });

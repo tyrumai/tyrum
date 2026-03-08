@@ -1,13 +1,13 @@
+import type { LanguageModel } from "ai";
 import type { AgentTurnResponse as AgentTurnResponseT } from "@tyrum/schemas";
 import { AgentTurnResponse } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../../container.js";
 import { decideCrossTurnLoopWarning, LOOP_WARNING_PREFIX } from "../loop-detection.js";
 import type { SessionDal, SessionRow } from "../session-dal.js";
 import { recordMemoryV1SystemEpisode } from "../../memory/v1-episode-recorder.js";
-import { looksLikeSecretText } from "./secrets.js";
-import { shouldPromoteToCoreMemory, type ResolvedAgentTurnInput } from "./turn-helpers.js";
+import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
 import type { AgentContextReport, AgentLoadedContext } from "./types.js";
-import { redactSecretLikeText } from "./secrets.js";
+import { classifyTurnMemory } from "./turn-memory-policy.js";
 
 type FinalizeContainer = Pick<GatewayContainer, "contextReportDal" | "logger" | "memoryV1Dal">;
 
@@ -80,38 +80,18 @@ async function persistContextReport(input: {
 
 async function writeMemoryV1TurnNote(input: {
   container: FinalizeContainer;
-  ctx: AgentLoadedContext;
   session: SessionRow;
+  title: string;
+  bodyMd: string;
+  tags: string[];
   resolved: ResolvedAgentTurnInput;
-  reply: string;
 }): Promise<boolean> {
-  if (!input.ctx.config.memory.v1.enabled) return false;
-
-  const entry = [
-    `Channel: ${input.resolved.channel}`,
-    `Thread: ${input.resolved.thread_id}`,
-    `User: ${input.resolved.message}`,
-    `Assistant: ${input.reply}`,
-  ].join("\n");
-  if (looksLikeSecretText(entry)) {
-    input.container.logger.warn("memory.write_skipped_secret_like", {
-      session_id: input.session.session_id,
-      channel: input.resolved.channel,
-      thread_id: input.resolved.thread_id,
-    });
-    return false;
-  }
-
-  if (!shouldPromoteToCoreMemory(input.resolved.message)) {
-    return false;
-  }
-
   await input.container.memoryV1Dal.create(
     {
       kind: "note",
-      title: "Learned preference",
-      body_md: entry,
-      tags: ["agent-turn", "learned-preference"],
+      title: input.title,
+      body_md: input.bodyMd,
+      tags: input.tags,
       sensitivity: "private",
       provenance: {
         source_kind: "user",
@@ -126,52 +106,14 @@ async function writeMemoryV1TurnNote(input: {
   return true;
 }
 
-function normalizeSummaryText(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function truncateSummaryText(value: string, maxChars: number): string {
-  if (maxChars <= 0) return "";
-  if (value.length <= maxChars) return value;
-  if (maxChars <= 3) return value.slice(0, maxChars);
-  return `${value.slice(0, maxChars - 3)}...`;
-}
-
-function buildTurnEpisodeSummary(input: {
-  resolved: ResolvedAgentTurnInput;
-  reply: string;
-}): string {
-  const user = truncateSummaryText(
-    normalizeSummaryText(redactSecretLikeText(input.resolved.message)),
-    160,
-  );
-  const assistant = truncateSummaryText(
-    normalizeSummaryText(redactSecretLikeText(input.reply)),
-    220,
-  );
-  const details = [
-    user.length > 0 ? `User: ${user}` : undefined,
-    assistant.length > 0 ? `Assistant: ${assistant}` : undefined,
-  ].filter((part): part is string => part !== undefined);
-
-  if (details.length === 0) {
-    return `Agent turn: ${input.resolved.channel}`;
-  }
-
-  return `${details.join(" | ")} (${input.resolved.channel})`;
-}
-
 async function recordAgentTurnEpisode(input: {
   container: FinalizeContainer;
-  ctx: AgentLoadedContext;
   session: SessionRow;
+  summaryMd: string;
+  tags: string[];
   resolved: ResolvedAgentTurnInput;
-  reply: string;
   nowIso: string;
 }): Promise<boolean> {
-  if (!input.ctx.config.memory.v1.enabled) {
-    return false;
-  }
   try {
     await recordMemoryV1SystemEpisode(
       input.container.memoryV1Dal,
@@ -179,8 +121,8 @@ async function recordAgentTurnEpisode(input: {
         occurred_at: input.nowIso,
         channel: input.resolved.channel,
         event_type: "agent_turn",
-        summary_md: buildTurnEpisodeSummary(input),
-        tags: ["agent", "turn"],
+        summary_md: input.summaryMd,
+        tags: input.tags,
         metadata: {
           channel: input.resolved.channel,
           thread_id: input.resolved.thread_id,
@@ -209,8 +151,10 @@ export async function finalizeTurn(input: {
   session: SessionRow;
   resolved: ResolvedAgentTurnInput;
   reply: string;
+  model: LanguageModel;
   usedTools: ReadonlySet<string>;
   contextReport: AgentContextReport;
+  turnKind?: "normal" | "skip";
 }): Promise<AgentTurnResponseT> {
   const nowIso = new Date().toISOString();
   const finalizedReply = applyCrossTurnLoopWarning(input);
@@ -224,21 +168,42 @@ export async function finalizeTurn(input: {
     maxTurns: input.ctx.config.sessions.max_turns,
     timestamp: nowIso,
   });
-  const noteWritten = await writeMemoryV1TurnNote({
-    container: input.container,
-    ctx: input.ctx,
-    session: input.session,
-    resolved: input.resolved,
-    reply: finalizedReply,
-  });
-  const episodeWritten = await recordAgentTurnEpisode({
-    container: input.container,
-    ctx: input.ctx,
-    session: input.session,
-    resolved: input.resolved,
-    reply: finalizedReply,
-    nowIso,
-  });
+  let noteWritten = false;
+  let episodeWritten = false;
+
+  if (input.ctx.config.memory.v1.enabled) {
+    const decision = await classifyTurnMemory({
+      model: input.model,
+      config: input.ctx.config.memory.v1.auto_write,
+      resolved: input.resolved,
+      reply: finalizedReply,
+      usedTools: input.usedTools,
+      turnKind: input.turnKind ?? "normal",
+      logger: input.container.logger,
+    });
+
+    if (decision.action === "note" || decision.action === "note_and_episode") {
+      noteWritten = await writeMemoryV1TurnNote({
+        container: input.container,
+        session: input.session,
+        title: decision.title,
+        bodyMd: decision.bodyMd,
+        tags: ["agent-turn", ...decision.tags],
+        resolved: input.resolved,
+      });
+    }
+
+    if (decision.action === "episode" || decision.action === "note_and_episode") {
+      episodeWritten = await recordAgentTurnEpisode({
+        container: input.container,
+        session: input.session,
+        summaryMd: decision.summaryMd,
+        tags: ["agent", "turn", ...decision.tags],
+        resolved: input.resolved,
+        nowIso,
+      });
+    }
+  }
   const memoryWritten = noteWritten || episodeWritten;
 
   return AgentTurnResponse.parse({
