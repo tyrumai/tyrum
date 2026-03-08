@@ -143,8 +143,9 @@ describe("ChatPage", () => {
 
     expect(page?.className).toContain("h-full");
     expect(page?.className).toContain("flex-1");
-    expect(panels?.className).toContain("h-full");
-    expect(panels?.className).toContain("flex");
+    expect(panels?.className).toContain("flex-1");
+    expect(panels?.className).toContain("min-h-0");
+    expect(panels?.className).toContain("w-full");
     expect(threadsPanel?.className).toContain("h-full");
     expect(threadsPanel?.className).toContain("min-h-0");
     expect(conversationPanel?.className).toContain("h-full");
