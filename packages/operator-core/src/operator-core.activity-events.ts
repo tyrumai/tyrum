@@ -1,5 +1,6 @@
 import type { TyrumClientEvents } from "@tyrum/client/browser";
 import type { OperatorWsClient } from "./deps.js";
+import { readOccurredAt, readPayload } from "./operator-core.event-helpers.js";
 import type { Unsubscribe } from "./store.js";
 
 type ActivityWsBindings = {
@@ -39,19 +40,6 @@ type ActivityWsBindings = {
     occurredAt?: string | null;
   }): void;
 };
-
-function readPayload(data: unknown): Record<string, unknown> | null {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-  const payload = (data as Record<string, unknown>)["payload"];
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  return payload as Record<string, unknown>;
-}
-
-function readOccurredAt(data: unknown): string | null {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-  const raw = (data as Record<string, unknown>)["occurred_at"];
-  return typeof raw === "string" ? raw : null;
-}
 
 function readMessageRole(value: unknown): "assistant" | "system" | "user" | null {
   return value === "assistant" || value === "system" || value === "user" ? value : null;

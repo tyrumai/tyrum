@@ -322,7 +322,8 @@ export function determineBubbleText(
   if (pendingApproval) return pendingApproval.prompt;
   if (latestAttempt?.error) return latestAttempt.error;
   if (latestRun?.status === "paused") {
-    return trimText(latestRun.paused_detail) ?? trimText(latestRun.paused_reason);
+    const pausedBubble = trimText(latestRun.paused_detail) ?? trimText(latestRun.paused_reason);
+    if (pausedBubble) return pausedBubble;
   }
   if (message?.bubbleText) return message.bubbleText;
   return memoryEvents[0]?.summary ?? null;

@@ -32,6 +32,7 @@ import { createWorkboardStore, type WorkboardStore } from "./stores/workboard-st
 import { createAgentStatusStore, type AgentStatusStore } from "./stores/agent-status-store.js";
 import { createActivityStore, type ActivityStore } from "./stores/activity-store.js";
 import { registerActivityWsHandlers } from "./operator-core.activity-events.js";
+import { readOccurredAt, readPayload } from "./operator-core.event-helpers.js";
 import type { WorkItem } from "@tyrum/schemas";
 import type { WorkTaskEvent } from "./workboard/workboard-utils.js";
 
@@ -96,25 +97,12 @@ function readTransportMessage(data: unknown): string | null {
   return typeof raw === "string" ? raw : null;
 }
 
-function readOccurredAt(data: unknown): string | null {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-  const raw = (data as Record<string, unknown>)["occurred_at"];
-  return typeof raw === "string" ? raw : null;
-}
-
 function readReconnectSchedule(data: unknown): number | null {
   if (!data || typeof data !== "object" || Array.isArray(data)) return null;
   const raw = (data as Record<string, unknown>)["nextRetryAtMs"];
   if (typeof raw !== "number") return null;
   if (!Number.isFinite(raw)) return null;
   return raw;
-}
-
-function readPayload(data: unknown): Record<string, unknown> | null {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-  const payload = (data as Record<string, unknown>)["payload"];
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  return payload as Record<string, unknown>;
 }
 
 export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {

@@ -411,4 +411,30 @@ describe("activityStore", () => {
       "typing.started",
     ]);
   });
+
+  it("falls through to message bubble text when a paused run has no pause detail", () => {
+    const { runs, activity } = createHarness();
+
+    runs.handleRunUpdated(
+      sampleRun({
+        run_id: "run-paused",
+        key: "agent:alpha:main",
+        lane: "main",
+        status: "paused",
+        paused_reason: "   ",
+        paused_detail: null,
+      }),
+    );
+    activity.handleMessageDelta({
+      sessionId: "agent:alpha:main",
+      lane: "main",
+      messageId: "message-1",
+      role: "assistant",
+      delta: "Drafting plan",
+      occurredAt: "2026-01-01T00:00:02.000Z",
+    });
+
+    const workstream = activity.store.getSnapshot().workstreamsById["agent:alpha:main::main"];
+    expect(workstream?.bubbleText).toBe("Drafting plan");
+  });
 });
