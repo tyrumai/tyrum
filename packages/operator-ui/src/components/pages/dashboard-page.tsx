@@ -1,7 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import type * as React from "react";
 import { PageHeader } from "../layout/page-header.js";
-import { Badge } from "../ui/badge.js";
 import { LiveRegion } from "../ui/live-region.js";
 import { Skeleton } from "../ui/skeleton.js";
 import { StatusDot } from "../ui/status-dot.js";
@@ -25,7 +24,6 @@ function SummaryRow({
   value,
   description,
   loading = false,
-  status,
   onClick,
   testId,
 }: {
@@ -33,7 +31,6 @@ function SummaryRow({
   value: React.ReactNode;
   description?: React.ReactNode;
   loading?: boolean;
-  status?: React.ReactNode;
   onClick?: () => void;
   testId?: string;
 }) {
@@ -44,13 +41,12 @@ function SummaryRow({
         <div className="text-sm font-medium text-fg">{label}</div>
         {description ? <div className="mt-0.5 text-sm text-fg-muted">{description}</div> : null}
       </div>
-      <div className="min-w-0 shrink text-right">
+      <div className="shrink-0 text-right">
         {loading ? (
           <Skeleton className="ml-auto h-6 w-20" />
         ) : (
           <div className="text-lg font-semibold text-fg">{value}</div>
         )}
-        {status ? <div className="mt-0.5 flex justify-end">{status}</div> : null}
       </div>
     </>
   );
@@ -172,13 +168,6 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
             label="Pending approvals"
             loading={approvals.loading && approvals.lastSyncedAt === null}
             value={String(approvals.pendingIds.length)}
-            status={
-              approvals.pendingIds.length > 0 ? (
-                <Badge data-testid="dashboard-approvals-badge" variant="danger">
-                  {approvals.pendingIds.length}
-                </Badge>
-              ) : null
-            }
             onClick={() => {
               onNavigate?.("approvals");
             }}
@@ -190,13 +179,6 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
             label="Pending pairings"
             loading={pairing.loading && pairing.lastSyncedAt === null}
             value={String(pairing.pendingIds.length)}
-            status={
-              pairing.pendingIds.length > 0 ? (
-                <Badge data-testid="dashboard-pairing-badge" variant="danger">
-                  {pairing.pendingIds.length}
-                </Badge>
-              ) : null
-            }
             onClick={() => {
               onNavigate?.("pairing");
             }}
@@ -208,13 +190,6 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
             label="Active runs"
             loading={status.loading.status && status.status === null}
             value={activeRunsCount === null ? "-" : String(activeRunsCount)}
-            status={
-              activeRunsCount !== null && activeRunsCount > 0 ? (
-                <Badge data-testid="dashboard-runs-badge" variant="default">
-                  {activeRunsCount}
-                </Badge>
-              ) : null
-            }
             onClick={() => {
               onNavigate?.("agents");
             }}
@@ -249,13 +224,6 @@ export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPagePro
           <SummaryRow
             label="Active agents"
             value={activeAgentsText}
-            status={
-              activeAgentsCount > 0 ? (
-                <Badge variant="default" data-testid="dashboard-agents-badge">
-                  {activeAgentsCount}
-                </Badge>
-              ) : null
-            }
             onClick={() => {
               onNavigate?.("agents");
             }}

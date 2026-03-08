@@ -30,13 +30,13 @@ describe("DashboardPage", () => {
     expect(source).not.toContain("lg:grid-cols-2");
   });
 
-  it("keeps summary values shrinkable so connection text stays inside the row", () => {
+  it("prevents the value column from shrinking so connection text stays inside the row", () => {
     const source = readFileSync(
       join(process.cwd(), "packages/operator-ui/src/components/pages/dashboard-page.tsx"),
       "utf8",
     );
 
-    expect(source).toContain('className="min-w-0 shrink text-right"');
+    expect(source).toContain('className="shrink-0 text-right"');
     expect(source).toContain('className="inline-flex max-w-full items-center gap-2"');
   });
 
@@ -129,94 +129,15 @@ describe("DashboardPage", () => {
     cleanupTestRoot({ container, root });
   });
 
-  it("shows the active-runs badge only when the computed count is positive", () => {
-    const { store: connectionStore } = createStore({
-      status: "connected",
-      clientId: null,
-      lastDisconnect: null,
-      transportError: null,
-    });
+  it("does not render badges in dashboard summary rows", () => {
+    const source = readFileSync(
+      join(process.cwd(), "packages/operator-ui/src/components/pages/dashboard-page.tsx"),
+      "utf8",
+    );
 
-    const { store: statusStore, setState: setStatusState } = createStore({
-      status: {
-        queue_depth: {
-          execution_runs: {
-            queued: 0,
-            running: 0,
-            paused: 0,
-          },
-        },
-      },
-      usage: null,
-      presenceByInstanceId: {},
-      loading: { status: false, usage: false, presence: false },
-      error: { status: null, usage: null, presence: null },
-      lastSyncedAt: null,
-    });
-
-    const { store: approvalsStore } = createStore({
-      byId: {},
-      pendingIds: [],
-      loading: false,
-      error: null,
-      lastSyncedAt: null,
-    });
-
-    const { store: pairingStore } = createStore({
-      byId: {},
-      pendingIds: [],
-      loading: false,
-      error: null,
-      lastSyncedAt: null,
-    });
-
-    const { store: runsStore } = createStore({
-      runsById: {},
-      stepsById: {},
-      attemptsById: {},
-      stepIdsByRunId: {},
-      attemptIdsByStepId: {},
-    });
-
-    const { store: workboardStore } = createStore({
-      items: [],
-      loading: false,
-      error: null,
-      lastSyncedAt: null,
-    });
-
-    const core = {
-      connectionStore,
-      statusStore,
-      approvalsStore,
-      pairingStore,
-      runsStore,
-      workboardStore,
-    } as unknown as OperatorCore;
-
-    const testRoot = renderIntoDocument(React.createElement(DashboardPage, { core }));
-
-    expect(testRoot.container.querySelector('[data-testid="dashboard-runs-badge"]')).toBeNull();
-
-    act(() => {
-      setStatusState((prev) => ({
-        ...prev,
-        status: {
-          queue_depth: {
-            execution_runs: {
-              queued: 1,
-              running: 1,
-              paused: 0,
-            },
-          },
-        },
-      }));
-    });
-
-    const badge = testRoot.container.querySelector('[data-testid="dashboard-runs-badge"]');
-    expect(badge).not.toBeNull();
-    expect(badge?.textContent).toBe("2");
-
-    cleanupTestRoot(testRoot);
+    expect(source).not.toContain("dashboard-approvals-badge");
+    expect(source).not.toContain("dashboard-runs-badge");
+    expect(source).not.toContain("dashboard-pairing-badge");
+    expect(source).not.toContain("dashboard-agents-badge");
   });
 });
