@@ -211,7 +211,12 @@ export function AgentEditorSections({
           }}
         />
         {unsupportedModelOptions ? (
-          <Textarea label="Existing model options" value={unsupportedModelOptions} readOnly rows={6} />
+          <Textarea
+            label="Existing model options"
+            value={unsupportedModelOptions}
+            readOnly
+            rows={6}
+          />
         ) : null}
       </FieldGroup>
 
