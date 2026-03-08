@@ -216,7 +216,10 @@ export function shouldCompactSessionForUsage(input: {
     return observedTokens >= usableFromContext;
   }
 
-  const maxTurns = Math.max(1, input.config.sessions.max_turns);
+  const maxTurns = Math.floor(input.config.sessions.max_turns);
+  if (!Number.isFinite(maxTurns) || maxTurns <= 0) {
+    return false;
+  }
   return input.session.turns.length >= maxTurns * 2;
 }
 
