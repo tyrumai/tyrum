@@ -67,9 +67,10 @@ describe("AppShell", () => {
       expect(outer?.className).toContain(expectedHeightClass);
       expect(main?.className).toContain("min-h-0");
       expect(main?.className).toContain("overflow-y-hidden");
-      expect(contentWrapper?.className).toContain("flex-1");
+      expect(contentWrapper?.className).toContain("h-full");
       expect(contentWrapper?.className).toContain("min-h-0");
       expect(contentWrapper?.className).toContain("flex");
+      expect(contentWrapper?.className).toContain("flex-col");
       expect(contentWrapper?.className).toContain("overflow-hidden");
 
       cleanupTestRoot({ container, root });
