@@ -256,14 +256,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
     );
 
     try {
-      expect(
-        testRoot.container.querySelector("[data-testid='configure-read-only-notice']"),
-      ).toBeNull();
-
       await switchAdminTab(testRoot.container, "admin-http-tab-plugins");
-      expect(
-        testRoot.container.querySelector("[data-testid='configure-read-only-notice']"),
-      ).not.toBeNull();
       const listPluginsButton = testRoot.container.querySelector<HTMLButtonElement>(
         "[data-testid='admin-http-plugins-list']",
       );
@@ -279,28 +272,28 @@ describe("ConfigurePage (strict admin tabs)", () => {
         "[data-testid='admin-http-tokens-issue']",
       );
       expect(issueButton).not.toBeNull();
-      expect(issueButton?.disabled).toBe(true);
+      expect(issueButton?.closest("[data-elevated-mode-guard]")).not.toBeNull();
 
       await switchAdminTab(testRoot.container, "admin-http-tab-providers");
       const addProviderButton = testRoot.container.querySelector<HTMLButtonElement>(
         "[data-testid='providers-add-open']",
       );
       expect(addProviderButton).not.toBeNull();
-      expect(addProviderButton?.disabled).toBe(true);
+      expect(addProviderButton?.closest("[data-elevated-mode-guard]")).not.toBeNull();
 
       await switchAdminTab(testRoot.container, "admin-http-tab-models");
       const addModelButton = testRoot.container.querySelector<HTMLButtonElement>(
         "[data-testid='models-add-open']",
       );
       expect(addModelButton).not.toBeNull();
-      expect(addModelButton?.disabled).toBe(true);
+      expect(addModelButton?.closest("[data-elevated-mode-guard]")).not.toBeNull();
 
       await switchAdminTab(testRoot.container, "admin-http-tab-policy");
       const createOverrideButton = testRoot.container.querySelector<HTMLButtonElement>(
         "[data-testid='admin-policy-override-create']",
       );
       expect(createOverrideButton).not.toBeNull();
-      expect(createOverrideButton?.disabled).toBe(true);
+      expect(createOverrideButton?.closest("[data-elevated-mode-guard]")).not.toBeNull();
     } finally {
       cleanupTestRoot(testRoot);
     }

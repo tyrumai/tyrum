@@ -74,7 +74,7 @@ function registerConfigurePanelsNavTests(): void {
       expect(
         await waitForSelector(container, "[data-testid='admin-ws-tab-commands']"),
       ).not.toBeNull();
-      expect(container.querySelector("[data-testid='configure-read-only-notice']")).toBeNull();
+      expect(container.querySelector("[data-elevated-mode-guard]")).toBeNull();
     } finally {
       act(() => {
         root?.unmount();

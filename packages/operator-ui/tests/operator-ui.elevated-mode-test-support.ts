@@ -90,20 +90,11 @@ function registerElevatedModeBasicTests(): void {
 
     await openConfigureTab(container, "admin-http-tab-gateway");
 
-    const issueButtonBeforeElevated = container.querySelector<HTMLButtonElement>(
-      '[data-testid="admin-http-tokens-issue"]',
-    );
-    expect(issueButtonBeforeElevated).not.toBeNull();
-    expect(issueButtonBeforeElevated?.disabled).toBe(true);
-    expect(container.textContent).toContain("Enter Elevated Mode to enable mutation actions.");
-
-    const enterButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="configure-read-only-enter"]',
-    );
-    expect(enterButton).not.toBeNull();
+    const elevatedModeGuard = container.querySelector<HTMLElement>("[data-elevated-mode-guard]");
+    expect(elevatedModeGuard).not.toBeNull();
 
     act(() => {
-      enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      elevatedModeGuard?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const confirmCheckbox = document.querySelector<HTMLInputElement>(

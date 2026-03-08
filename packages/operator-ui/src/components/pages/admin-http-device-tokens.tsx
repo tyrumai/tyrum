@@ -5,6 +5,7 @@ import {
   useAdminHttpClient,
   useAdminMutationAccess,
 } from "./admin-http-shared.js";
+import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
@@ -244,8 +245,8 @@ export function DeviceTokensCard({ core }: { core: OperatorCore }) {
   const issue = useDeviceTokensIssueState();
   const revoke = useDeviceTokensRevokeState();
 
-  const canIssue = canMutate && issue.deviceId.trim().length > 0;
-  const canRevoke = canMutate && revoke.token.trim().length > 0;
+  const canIssue = issue.deviceId.trim().length > 0;
+  const canRevoke = revoke.token.trim().length > 0;
 
   return (
     <Card data-testid="admin-http-device-tokens">
@@ -259,40 +260,32 @@ export function DeviceTokensCard({ core }: { core: OperatorCore }) {
         <ApiResultCard heading="Revoke result" value={revoke.result} error={revoke.error} />
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="danger"
-          data-testid="admin-http-device-tokens-issue"
-          disabled={!canIssue}
-          onClick={() => {
-            issue.setOpen(true);
-          }}
-        >
-          Issue token
-        </Button>
-        <Button
-          type="button"
-          variant="danger"
-          data-testid="admin-http-device-tokens-revoke"
-          disabled={!canRevoke}
-          onClick={() => {
-            revoke.setOpen(true);
-          }}
-        >
-          Revoke token
-        </Button>
-        {!canMutate ? (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              requestEnter();
-            }}
-          >
-            Enter Elevated Mode
-          </Button>
-        ) : null}
+        <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="danger"
+              data-testid="admin-http-device-tokens-issue"
+              disabled={!canIssue}
+              onClick={() => {
+                issue.setOpen(true);
+              }}
+            >
+              Issue token
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              data-testid="admin-http-device-tokens-revoke"
+              disabled={!canRevoke}
+              onClick={() => {
+                revoke.setOpen(true);
+              }}
+            >
+              Revoke token
+            </Button>
+          </div>
+        </ElevatedModeTooltip>
       </CardFooter>
       <DeviceTokenIssueDialog
         http={http}

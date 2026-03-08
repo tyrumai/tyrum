@@ -1,5 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
+import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -256,25 +257,17 @@ function AuditForgetTab({
       <AuditForgetDecisionFieldset decision={decision} onDecisionChange={setDecision} />
 
       <div className="flex flex-wrap gap-2">
-        <Button
-          variant="danger"
-          disabled={!canMutate || !resolvedEntityType || !resolvedEntityId}
-          onClick={() => {
-            setDialogOpen(true);
-          }}
-        >
-          Forget…
-        </Button>
-        {!canMutate ? (
+        <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
           <Button
-            variant="secondary"
+            variant="danger"
+            disabled={!resolvedEntityType || !resolvedEntityId}
             onClick={() => {
-              requestEnter();
+              setDialogOpen(true);
             }}
           >
-            Enter Elevated Mode
+            Forget…
           </Button>
-        ) : null}
+        </ElevatedModeTooltip>
         <Button
           variant="secondary"
           disabled={action.isLoading}

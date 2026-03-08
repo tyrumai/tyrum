@@ -1,8 +1,9 @@
 import * as React from "react";
+import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
-import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
+import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Select } from "../ui/select.js";
 import {
   EXECUTION_PROFILE_IDS,
@@ -94,15 +95,17 @@ export function ExecutionProfilesCard({
             <Button type="button" variant="secondary" isLoading={refreshing} onClick={onRefresh}>
               Refresh
             </Button>
-            <Button
-              type="button"
-              data-testid="models-assignments-save"
-              isLoading={savingAssignments}
-              disabled={!canMutate || !assignmentChanged || presets.length === 0}
-              onClick={onSaveAssignments}
-            >
-              Save assignments
-            </Button>
+            <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+              <Button
+                type="button"
+                data-testid="models-assignments-save"
+                isLoading={savingAssignments}
+                disabled={!assignmentChanged || presets.length === 0}
+                onClick={onSaveAssignments}
+              >
+                Save assignments
+              </Button>
+            </ElevatedModeTooltip>
           </div>
         </div>
       </CardHeader>
@@ -143,19 +146,6 @@ export function ExecutionProfilesCard({
           </div>
         )}
       </CardContent>
-      {!canMutate ? (
-        <CardFooter>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => {
-              requestEnter();
-            }}
-          >
-            Enter Elevated Mode
-          </Button>
-        </CardFooter>
-      ) : null}
     </Card>
   );
 }
@@ -189,20 +179,18 @@ export function ConfiguredModelsCard({
               Save reusable model presets with curated options like reasoning effort.
             </div>
           </div>
-          <Button
-            type="button"
-            data-testid="models-add-open"
-            disabled={!canMutate || availableModels.length === 0}
-            onClick={() => {
-              if (!canMutate) {
-                requestEnter();
-                return;
-              }
-              onAdd();
-            }}
-          >
-            Add model
-          </Button>
+          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+            <Button
+              type="button"
+              data-testid="models-add-open"
+              disabled={availableModels.length === 0}
+              onClick={() => {
+                onAdd();
+              }}
+            >
+              Add model
+            </Button>
+          </ElevatedModeTooltip>
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -249,36 +237,28 @@ export function ConfiguredModelsCard({
                       <Alert variant="warning" title="Provider warning" description={warning} />
                     ) : null}
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={!canMutate}
-                      onClick={() => {
-                        if (!canMutate) {
-                          requestEnter();
-                          return;
-                        }
-                        onEdit(preset);
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="danger"
-                      disabled={!canMutate}
-                      onClick={() => {
-                        if (!canMutate) {
-                          requestEnter();
-                          return;
-                        }
-                        onRemove(preset);
-                      }}
-                    >
-                      Remove
-                    </Button>
-                  </div>
+                  <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          onEdit(preset);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        onClick={() => {
+                          onRemove(preset);
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </ElevatedModeTooltip>
                 </div>
               </div>
             );

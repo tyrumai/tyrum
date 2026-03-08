@@ -1,3 +1,4 @@
+import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
@@ -19,9 +20,15 @@ export interface AdminHttpPolicyCardProps {
   http: AdminHttpClient;
   openMutation: OpenMutation;
   canMutate: boolean;
+  requestEnter: () => void;
 }
 
-export function AdminHttpPolicyCard({ http, openMutation, canMutate }: AdminHttpPolicyCardProps) {
+export function AdminHttpPolicyCard({
+  http,
+  openMutation,
+  canMutate,
+  requestEnter,
+}: AdminHttpPolicyCardProps) {
   return (
     <Card data-testid="admin-http-policy">
       <CardHeader className="pb-2.5">
@@ -33,7 +40,12 @@ export function AdminHttpPolicyCard({ http, openMutation, canMutate }: AdminHttp
       <CardContent className="grid gap-6">
         <PolicyBundleSection http={http} />
         <Separator />
-        <PolicyOverridesSection http={http} openMutation={openMutation} canMutate={canMutate} />
+        <PolicyOverridesSection
+          http={http}
+          openMutation={openMutation}
+          canMutate={canMutate}
+          requestEnter={requestEnter}
+        />
       </CardContent>
     </Card>
   );
@@ -76,10 +88,12 @@ function PolicyOverridesSection({
   http,
   openMutation,
   canMutate,
+  requestEnter,
 }: {
   http: AdminHttpClient;
   openMutation: OpenMutation;
   canMutate: boolean;
+  requestEnter: () => void;
 }) {
   const overrides = useApiResultState("Policy overrides");
   const listOverridesQuery = useJsonInputState("{}");
@@ -130,6 +144,7 @@ function PolicyOverridesSection({
         body={createOverrideBody}
         openMutation={openMutation}
         canMutate={canMutate}
+        requestEnter={requestEnter}
       />
 
       <PolicyOverrideRevokeRow
@@ -138,6 +153,7 @@ function PolicyOverridesSection({
         body={revokeOverrideBody}
         openMutation={openMutation}
         canMutate={canMutate}
+        requestEnter={requestEnter}
       />
 
       <ApiResultCard
@@ -196,12 +212,14 @@ function PolicyOverrideCreateRow({
   body,
   openMutation,
   canMutate,
+  requestEnter,
 }: {
   http: AdminHttpClient;
   run: ApiRunner;
   body: JsonInputState;
   openMutation: OpenMutation;
   canMutate: boolean;
+  requestEnter: () => void;
 }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
@@ -212,28 +230,30 @@ function PolicyOverrideCreateRow({
       />
 
       <div className="flex items-end gap-2">
-        <Button
-          data-testid="admin-policy-override-create"
-          variant="danger"
-          disabled={!canMutate || body.errorMessage !== null || typeof body.value === "undefined"}
-          onClick={() => {
-            const input = resolveJsonValue(body, undefined);
-            openMutation({
-              title: "Create policy override",
-              description: "This affects policy globally for the gateway instance.",
-              confirmLabel: "Create override",
-              content: <JsonViewer value={input} />,
-              onConfirm: async () => {
-                const outcome = await run("Policy override created", async () => {
-                  return await http.policy.createOverride(input as never);
-                });
-                if (!outcome.ok) throw outcome.error;
-              },
-            });
-          }}
-        >
-          Create override
-        </Button>
+        <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+          <Button
+            data-testid="admin-policy-override-create"
+            variant="danger"
+            disabled={body.errorMessage !== null || typeof body.value === "undefined"}
+            onClick={() => {
+              const input = resolveJsonValue(body, undefined);
+              openMutation({
+                title: "Create policy override",
+                description: "This affects policy globally for the gateway instance.",
+                confirmLabel: "Create override",
+                content: <JsonViewer value={input} />,
+                onConfirm: async () => {
+                  const outcome = await run("Policy override created", async () => {
+                    return await http.policy.createOverride(input as never);
+                  });
+                  if (!outcome.ok) throw outcome.error;
+                },
+              });
+            }}
+          >
+            Create override
+          </Button>
+        </ElevatedModeTooltip>
       </div>
     </div>
   );
@@ -245,12 +265,14 @@ function PolicyOverrideRevokeRow({
   body,
   openMutation,
   canMutate,
+  requestEnter,
 }: {
   http: AdminHttpClient;
   run: ApiRunner;
   body: JsonInputState;
   openMutation: OpenMutation;
   canMutate: boolean;
+  requestEnter: () => void;
 }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
@@ -261,28 +283,30 @@ function PolicyOverrideRevokeRow({
       />
 
       <div className="flex items-end gap-2">
-        <Button
-          data-testid="admin-policy-override-revoke"
-          variant="danger"
-          disabled={!canMutate || body.errorMessage !== null || typeof body.value === "undefined"}
-          onClick={() => {
-            const input = resolveJsonValue(body, undefined);
-            openMutation({
-              title: "Revoke policy override",
-              description: "This affects policy globally for the gateway instance.",
-              confirmLabel: "Revoke override",
-              content: <JsonViewer value={input} />,
-              onConfirm: async () => {
-                const outcome = await run("Policy override revoked", async () => {
-                  return await http.policy.revokeOverride(input as never);
-                });
-                if (!outcome.ok) throw outcome.error;
-              },
-            });
-          }}
-        >
-          Revoke override
-        </Button>
+        <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+          <Button
+            data-testid="admin-policy-override-revoke"
+            variant="danger"
+            disabled={body.errorMessage !== null || typeof body.value === "undefined"}
+            onClick={() => {
+              const input = resolveJsonValue(body, undefined);
+              openMutation({
+                title: "Revoke policy override",
+                description: "This affects policy globally for the gateway instance.",
+                confirmLabel: "Revoke override",
+                content: <JsonViewer value={input} />,
+                onConfirm: async () => {
+                  const outcome = await run("Policy override revoked", async () => {
+                    return await http.policy.revokeOverride(input as never);
+                  });
+                  if (!outcome.ok) throw outcome.error;
+                },
+              });
+            }}
+          >
+            Revoke override
+          </Button>
+        </ElevatedModeTooltip>
       </div>
     </div>
   );

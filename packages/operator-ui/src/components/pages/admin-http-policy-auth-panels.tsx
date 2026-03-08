@@ -1,7 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
-import { Alert } from "../ui/alert.js";
-import { Button } from "../ui/button.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { AdminHttpPolicyCard } from "./admin-http-policy-card.js";
 import type { PendingMutation } from "./admin-http-panels.shared.js";
@@ -29,28 +27,12 @@ export function AdminHttpPolicyAuthPanels({ core }: { core: OperatorCore }) {
 
   return (
     <div className="grid gap-4" data-testid="admin-http-policy-panel">
-      {!canMutate ? (
-        <div className="grid gap-3">
-          <Alert
-            variant="info"
-            title="Read-only mode"
-            description="Mutation actions are disabled until Elevated Mode is active."
-          />
-          <div>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                requestEnter();
-              }}
-            >
-              Enter Elevated Mode
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      <AdminHttpPolicyCard http={http} openMutation={openMutation} canMutate={canMutate} />
+      <AdminHttpPolicyCard
+        http={http}
+        openMutation={openMutation}
+        canMutate={canMutate}
+        requestEnter={requestEnter}
+      />
 
       <ConfirmDangerDialog
         open={pendingMutation !== null}
