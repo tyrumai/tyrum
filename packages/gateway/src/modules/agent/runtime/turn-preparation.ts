@@ -24,7 +24,7 @@ import {
   formatToolPrompt,
 } from "./prompts.js";
 import {
-  resolveSessionModel as resolveSessionModelImpl,
+  resolveSessionModelDetailed as resolveSessionModelImpl,
   type ResolvedSessionModel,
 } from "./session-model-resolution.js";
 import {

@@ -38,7 +38,7 @@ export type ResolvedSessionModel = {
   candidates: ResolvedCandidate[];
 };
 
-export async function resolveSessionModel(
+async function resolveSessionModelWithMetadata(
   deps: ResolveSessionModelDeps,
   input: {
     config: AgentConfigT;
@@ -425,4 +425,32 @@ export async function resolveSessionModel(
     },
     candidates: resolvedCandidates,
   };
+}
+
+export async function resolveSessionModel(
+  deps: ResolveSessionModelDeps,
+  input: {
+    config: AgentConfigT;
+    tenantId: string;
+    sessionId: string;
+    executionProfileId?: string;
+    profileModelId?: string;
+    fetchImpl?: typeof fetch;
+  },
+): Promise<LanguageModel> {
+  return (await resolveSessionModelWithMetadata(deps, input)).model;
+}
+
+export async function resolveSessionModelDetailed(
+  deps: ResolveSessionModelDeps,
+  input: {
+    config: AgentConfigT;
+    tenantId: string;
+    sessionId: string;
+    executionProfileId?: string;
+    profileModelId?: string;
+    fetchImpl?: typeof fetch;
+  },
+): Promise<ResolvedSessionModel> {
+  return await resolveSessionModelWithMetadata(deps, input);
 }

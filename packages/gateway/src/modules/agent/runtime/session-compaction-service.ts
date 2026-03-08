@@ -8,7 +8,10 @@ import type { AgentContextStore } from "../context-store.js";
 import type { SessionDal } from "../session-dal.js";
 import type { SessionMessage, SessionRow } from "../session-dal.js";
 import { maybeRunPreCompactionMemoryFlush } from "./pre-compaction-memory-flush.js";
-import { resolveSessionModel, type ResolvedSessionModel } from "./session-model-resolution.js";
+import {
+  resolveSessionModelDetailed,
+  type ResolvedSessionModel,
+} from "./session-model-resolution.js";
 import type { ResolveSessionModelDeps } from "./session-model-resolution.js";
 import type { AgentLoadedContext } from "./types.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
@@ -350,7 +353,7 @@ export async function resolveRuntimeCompactionContext(input: {
     workspaceId: input.workspaceId,
     config: revision.config,
   });
-  const modelResolution = await resolveSessionModel(input.resolveModelDeps, {
+  const modelResolution = await resolveSessionModelDetailed(input.resolveModelDeps, {
     config: ctx.config,
     tenantId: input.tenantId,
     sessionId: input.sessionId,

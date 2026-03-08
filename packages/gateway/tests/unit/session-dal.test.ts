@@ -87,7 +87,6 @@ describe("SessionDal", () => {
       sessionId: session.session_id,
       userMessage: "u1",
       assistantMessage: "a1",
-      maxTurns: 2,
       timestamp: "2026-02-17T00:00:00.000Z",
     });
     await dal.appendTurn({
@@ -95,7 +94,6 @@ describe("SessionDal", () => {
       sessionId: session.session_id,
       userMessage: "u2",
       assistantMessage: "a2",
-      maxTurns: 2,
       timestamp: "2026-02-17T00:01:00.000Z",
     });
     const updated = await dal.appendTurn({
@@ -103,7 +101,6 @@ describe("SessionDal", () => {
       sessionId: session.session_id,
       userMessage: "u3",
       assistantMessage: "a3",
-      maxTurns: 2,
       timestamp: "2026-02-17T00:02:00.000Z",
     });
 
@@ -251,7 +248,6 @@ describe("SessionDal", () => {
       const repaired = await dal.repairFromChannelLogs({
         tenantId: session.tenant_id,
         sessionId: session.session_id,
-        maxTurns: 1,
       });
 
       expect(repaired).toEqual({
@@ -424,7 +420,6 @@ describe("SessionDal", () => {
       sessionId: s3.session_id,
       userMessage: "hello",
       assistantMessage: "world",
-      maxTurns: 20,
       timestamp: "2026-02-17T00:00:30.000Z",
     });
 

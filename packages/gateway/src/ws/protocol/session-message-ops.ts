@@ -44,14 +44,6 @@ export async function handleSessionListMessage(
       "sessions are not available on this gateway instance",
     );
   }
-  if (!deps.agents) {
-    return errorResponse(
-      msg.request_id,
-      msg.type,
-      "unsupported_request",
-      "session compaction is not available on this gateway instance",
-    );
-  }
 
   const parsedReq = WsSessionListRequest.safeParse(msg);
   if (!parsedReq.success) {

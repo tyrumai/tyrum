@@ -5,7 +5,6 @@ import { resolveWorkspaceKey } from "../workspace/id.js";
 import { randomUUID } from "node:crypto";
 import type { CommandDeps, CommandExecuteResult } from "./dispatcher.js";
 import {
-  DEFAULT_REPAIR_MAX_TURNS,
   buildStatusPayload,
   buildDefaultCommandKey,
   cancelRunsAndClearQueuedInbox,
@@ -34,7 +33,7 @@ export async function tryExecuteSystemCommand(
   }
   if (input.cmd === "new") return executeNewCommand(input.deps);
   if (input.cmd === "compact") return executeCompactCommand(input.deps);
-  if (input.cmd === "repair") return executeRepairCommand(input.deps, input.toks);
+  if (input.cmd === "repair") return executeRepairCommand(input.deps);
   if (input.cmd === "stop") return executeStopCommand(input.deps);
   if (input.cmd === "reset") return executeResetCommand(input.deps);
   if (input.cmd === "status") return executeStatusCommand(input.deps);
@@ -120,10 +119,7 @@ async function executeCompactCommand(deps: CommandDeps): Promise<CommandExecuteR
   return { output: jsonBlock(payload), data: payload };
 }
 
-async function executeRepairCommand(
-  deps: CommandDeps,
-  toks: string[],
-): Promise<CommandExecuteResult> {
+async function executeRepairCommand(deps: CommandDeps): Promise<CommandExecuteResult> {
   if (!deps.db)
     return { output: "Sessions are not available on this gateway instance.", data: null };
 
@@ -132,21 +128,9 @@ async function executeRepairCommand(
   const resolved = await resolveChannelThread(deps.db, ctx);
   if (!resolved) {
     return {
-      output: "Usage: /repair [max_turns] (requires key or channel/thread context)",
+      output: "Usage: /repair (requires key or channel/thread context)",
       data: null,
     };
-  }
-
-  const maxTurnsRaw = toks[1]?.trim();
-  let maxTurns = DEFAULT_REPAIR_MAX_TURNS;
-  if (maxTurnsRaw) {
-    if (!/^[0-9]+$/.test(maxTurnsRaw)) {
-      return {
-        output: "Usage: /repair [max_turns] (max_turns must be a positive integer)",
-        data: null,
-      };
-    }
-    maxTurns = Math.min(500, Math.max(1, Number(maxTurnsRaw)));
   }
 
   const keyLane =
@@ -161,7 +145,6 @@ async function executeRepairCommand(
   const repaired = await createSessionDal(deps.db).repairFromChannelLogs({
     tenantId: session.tenant_id,
     sessionId: session.session_id,
-    maxTurns,
   });
   if (!repaired) {
     return {

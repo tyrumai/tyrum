@@ -428,7 +428,6 @@ describe("Pre-compaction memory flush", () => {
       sessionId: session.session_id,
       userMessage: "first",
       assistantMessage: "a1",
-      maxTurns: 1,
       timestamp: new Date().toISOString(),
     });
 
