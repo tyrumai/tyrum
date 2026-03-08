@@ -12,6 +12,7 @@ export interface StepResult {
   success: boolean;
   result?: unknown;
   error?: string;
+  failureKind?: "policy";
   evidence?: EvaluationContext;
   artifacts?: ArtifactRefT[];
   cost?: AttemptCostT;

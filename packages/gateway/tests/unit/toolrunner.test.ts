@@ -58,6 +58,13 @@ describe("toolrunner", () => {
       payloadB64: b64url(
         JSON.stringify({
           tenant_id: "tenant-1",
+          run_id: "run-1",
+          step_id: "step-1",
+          attempt_id: "attempt-1",
+          key: "agent:test",
+          lane: "main",
+          workspace_id: "default",
+          policy_snapshot_id: "policy-1",
           plan_id: "plan-1",
           step_index: 0,
           action: {},
@@ -103,5 +110,29 @@ describe("toolrunner", () => {
 
     expect(code).toBe(2);
     expect(stderr.writes.join("")).toContain("missing/invalid tenant_id");
+  });
+
+  it("returns 2 when policy_snapshot_id is missing", async () => {
+    const stderr = suppressStderr();
+    const code = await runToolRunnerFromStdio({
+      payloadB64: b64url(
+        JSON.stringify({
+          tenant_id: "tenant-1",
+          run_id: "run-1",
+          step_id: "step-1",
+          attempt_id: "attempt-1",
+          key: "agent:test",
+          lane: "main",
+          workspace_id: "default",
+          plan_id: "plan-1",
+          step_index: 0,
+          action: { type: "CLI", args: { cmd: "echo", args: ["hi"] } },
+        }),
+      ),
+    });
+    stderr.restore();
+
+    expect(code).toBe(2);
+    expect(stderr.writes.join("")).toContain("missing/invalid policy_snapshot_id");
   });
 });

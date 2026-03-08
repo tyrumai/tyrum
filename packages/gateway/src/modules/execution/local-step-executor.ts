@@ -3,9 +3,11 @@ import { spawn } from "node:child_process";
 import { isBlockedUrl, resolvesToBlockedAddress, sanitizeEnv } from "../agent/tool-executor.js";
 import type { ArtifactStore } from "../artifact/store.js";
 import type { Logger } from "../observability/logger.js";
+import type { PolicyService } from "../policy/service.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
+import { maybeEnforceLocalExecutorPolicy } from "./local-step-executor-policy.js";
 import { parsePlaybookOutputContract, resolveMaxOutputBytes } from "./playbook-output-contract.js";
 import {
   enforceJsonOutputContract,
@@ -25,6 +27,7 @@ const MAX_EXEC_TIMEOUT_MS = 300_000;
 export interface LocalStepExecutorOptions {
   tyrumHome: string;
   secretProvider?: SecretProvider;
+  policyService?: PolicyService;
   redactionEngine?: RedactionEngine;
   artifactStore?: ArtifactStore;
   logger?: Logger;
@@ -37,6 +40,7 @@ export function createLocalStepExecutor(opts: LocalStepExecutorOptions): StepExe
 class LocalStepExecutor implements StepExecutor {
   private readonly tyrumHome: string;
   private readonly secretProvider?: SecretProvider;
+  private readonly policyService?: PolicyService;
   private readonly redactionEngine?: RedactionEngine;
   private readonly artifactStore?: ArtifactStore;
   private readonly logger?: Logger;
@@ -44,6 +48,7 @@ class LocalStepExecutor implements StepExecutor {
   constructor(opts: LocalStepExecutorOptions) {
     this.tyrumHome = opts.tyrumHome;
     this.secretProvider = opts.secretProvider;
+    this.policyService = opts.policyService;
     this.redactionEngine = opts.redactionEngine;
     this.artifactStore = opts.artifactStore;
     this.logger = opts.logger;
@@ -54,8 +59,18 @@ class LocalStepExecutor implements StepExecutor {
     planId: string,
     stepIndex: number,
     timeoutMs: number,
-    _context: StepExecutionContext,
+    context: StepExecutionContext,
   ): Promise<StepResult> {
+    const policyResult = await maybeEnforceLocalExecutorPolicy({
+      action,
+      context,
+      policyService: this.policyService,
+      secretProvider: this.secretProvider,
+    });
+    if (policyResult) {
+      return policyResult;
+    }
+
     const { resolved, secrets } = await resolveSecrets(action.args ?? {}, this.secretProvider);
     if (secrets.length > 0) {
       this.redactionEngine?.registerSecrets(secrets);

@@ -114,6 +114,14 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
 
     const payload = JSON.stringify({
       tenant_id: context.tenantId,
+      run_id: context.runId,
+      step_id: context.stepId,
+      attempt_id: context.attemptId,
+      approval_id: context.approvalId,
+      key: context.key,
+      lane: context.lane,
+      workspace_id: context.workspaceId,
+      policy_snapshot_id: context.policySnapshotId,
       plan_id: planId,
       step_index: stepIndex,
       timeout_ms: timeoutMs,

@@ -42,7 +42,7 @@ describe("ToolRunnerStepExecutor", () => {
     expect(result.stdout?.length).toBe(300000);
   });
 
-  it("includes tenant execution context in the toolrunner payload", async () => {
+  it("includes the full execution context in the toolrunner payload", async () => {
     const executor = createToolRunnerStepExecutor({
       entrypoint: payloadEchoEntrypoint,
       env: process.env,
@@ -71,6 +71,14 @@ describe("ToolRunnerStepExecutor", () => {
     expect(res.success).toBe(true);
     expect(res.result).toMatchObject({
       tenant_id: "tenant-123",
+      run_id: "run-123",
+      step_id: "step-123",
+      attempt_id: "attempt-123",
+      approval_id: null,
+      key: "agent:test",
+      lane: "default",
+      workspace_id: "workspace-123",
+      policy_snapshot_id: "policy-123",
       plan_id: "plan-tenant",
       step_index: 3,
     });

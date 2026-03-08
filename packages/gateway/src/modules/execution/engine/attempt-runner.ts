@@ -343,7 +343,12 @@ export class ExecutionAttemptRunner {
     );
     await this.emitAndReleaseAttemptTx(tx, opts, nowIso);
     await this.recordAttemptArtifactsTx(tx, opts, prepared.artifacts);
-    await this.retryStepTx(tx, opts, nowIso);
+    await this.retryStepTx(
+      tx,
+      opts,
+      nowIso,
+      prepared.result.failureKind === "policy" ? opts.attemptNum : undefined,
+    );
     return { kind: "failed", status, error: redactedError };
   }
 
@@ -384,14 +389,19 @@ export class ExecutionAttemptRunner {
     );
   }
 
-  private async retryStepTx(tx: SqlDb, opts: ExecuteAttemptOptions, nowIso: string): Promise<void> {
+  private async retryStepTx(
+    tx: SqlDb,
+    opts: ExecuteAttemptOptions,
+    nowIso: string,
+    maxAttemptsOverride?: number,
+  ): Promise<void> {
     await this.opts.retryOrFailStep({
       tx,
       nowIso,
       tenantId: opts.tenantId,
       agentId: opts.agentId,
       attemptNum: opts.attemptNum,
-      maxAttempts: opts.maxAttempts,
+      maxAttempts: maxAttemptsOverride ?? opts.maxAttempts,
       stepId: opts.stepId,
       attemptId: opts.attemptId,
       runId: opts.runId,
