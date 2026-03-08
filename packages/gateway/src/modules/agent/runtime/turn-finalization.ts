@@ -165,7 +165,6 @@ export async function finalizeTurn(input: {
     sessionId: input.session.session_id,
     userMessage: input.resolved.message,
     assistantMessage: finalizedReply,
-    maxTurns: input.ctx.config.sessions.max_turns,
     timestamp: nowIso,
   });
   let noteWritten = false;

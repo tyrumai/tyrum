@@ -137,6 +137,25 @@ export class SessionDal {
     ]);
   }
 
+  async replaceTranscript(
+    input: SessionIdentity & {
+      turns: SessionMessage[];
+      summary: string;
+      updatedAt?: string;
+    },
+  ): Promise<void> {
+    await this.writeSession({
+      tenantId: input.tenantId,
+      sessionId: input.sessionId,
+      updatedAt: input.updatedAt,
+      stored: {
+        turns: input.turns,
+        summary: input.summary,
+        droppedMessages: 0,
+      },
+    });
+  }
+
   async getById(input: { tenantId: string; sessionId: string }): Promise<SessionRow | undefined> {
     const row = await this.getRawSession("session_id", input.tenantId, input.sessionId);
     return row ? toSessionRow(row, this.jsonObserver) : undefined;
@@ -278,24 +297,23 @@ export class SessionDal {
     sessionId: string;
     userMessage: string;
     assistantMessage: string;
-    maxTurns: number;
     timestamp: string;
   }): Promise<SessionRow> {
     const session = await this.requireSession({
       tenantId: input.tenantId,
       sessionId: input.sessionId,
     });
-    const nextTurns = [
-      ...session.turns,
-      { role: "user" as const, content: input.userMessage, timestamp: input.timestamp },
-      { role: "assistant" as const, content: input.assistantMessage, timestamp: input.timestamp },
-    ];
-    const stored = buildStoredTranscript({
-      turns: nextTurns,
-      keepLastMessages: input.maxTurns <= 0 ? nextTurns.length : input.maxTurns * 2,
-      previousSummary: session.summary,
+    await this.replaceTranscript({
+      tenantId: input.tenantId,
+      sessionId: input.sessionId,
+      turns: [
+        ...session.turns,
+        { role: "user", content: input.userMessage, timestamp: input.timestamp },
+        { role: "assistant", content: input.assistantMessage, timestamp: input.timestamp },
+      ],
+      summary: session.summary,
+      updatedAt: input.timestamp,
     });
-    await this.writeSession({ tenantId: input.tenantId, sessionId: input.sessionId, stored });
 
     const updated = await this.getById({ tenantId: input.tenantId, sessionId: input.sessionId });
     if (!updated) throw new Error(`session '${input.sessionId}' missing after update`);
@@ -321,7 +339,6 @@ export class SessionDal {
   async repairFromChannelLogs(input: {
     tenantId: string;
     sessionId: string;
-    maxTurns: number;
   }): Promise<SessionRepairResult | null> {
     const session = await this.requireSession({
       tenantId: input.tenantId,
@@ -360,22 +377,18 @@ export class SessionDal {
 
     if (sourceRows === 0) return null;
 
-    const stored = buildStoredTranscript({
-      turns: rebuiltTurns,
-      keepLastMessages: input.maxTurns <= 0 ? rebuiltTurns.length : input.maxTurns * 2,
-      previousSummary: session.summary,
-    });
-    await this.writeSession({
+    await this.replaceTranscript({
       tenantId: input.tenantId,
       sessionId: input.sessionId,
-      stored,
-      updatedAt: stored.turns.at(-1)?.timestamp ?? session.updated_at,
+      turns: rebuiltTurns,
+      summary: "",
+      updatedAt: rebuiltTurns.at(-1)?.timestamp ?? session.updated_at,
     });
     return {
       source_rows: sourceRows,
       rebuilt_messages: rebuiltTurns.length,
-      kept_messages: stored.turns.length,
-      dropped_messages: stored.droppedMessages,
+      kept_messages: rebuiltTurns.length,
+      dropped_messages: 0,
     };
   }
 

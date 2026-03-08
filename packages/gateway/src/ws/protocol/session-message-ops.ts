@@ -44,6 +44,14 @@ export async function handleSessionListMessage(
       "sessions are not available on this gateway instance",
     );
   }
+  if (!deps.agents) {
+    return errorResponse(
+      msg.request_id,
+      msg.type,
+      "unsupported_request",
+      "session compaction is not available on this gateway instance",
+    );
+  }
 
   const parsedReq = WsSessionListRequest.safeParse(msg);
   if (!parsedReq.success) {
@@ -244,6 +252,14 @@ export async function handleSessionCompactMessage(
       "sessions are not available on this gateway instance",
     );
   }
+  if (!deps.agents) {
+    return errorResponse(
+      msg.request_id,
+      msg.type,
+      "unsupported_request",
+      "session compaction is not available on this gateway instance",
+    );
+  }
 
   const parsedReq = WsSessionCompactRequest.safeParse(msg);
   if (!parsedReq.success) {
@@ -261,10 +277,9 @@ export async function handleSessionCompactMessage(
       return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
     }
 
-    const compacted = await sessionDal.compact({
-      tenantId,
+    const runtime = await deps.agents.getRuntime({ tenantId, agentKey });
+    const compacted = await runtime.compactSession({
       sessionId: existing.session.session_id,
-      keepLastMessages: parsedReq.data.payload.keep_last_messages ?? 8,
     });
     const result = WsSessionCompactResult.parse({
       session_id: sessionKey,

@@ -87,6 +87,9 @@ async function executeNewCommand(deps: CommandDeps): Promise<CommandExecuteResul
 async function executeCompactCommand(deps: CommandDeps): Promise<CommandExecuteResult> {
   if (!deps.db)
     return { output: "Sessions are not available on this gateway instance.", data: null };
+  if (!deps.agents) {
+    return { output: "Compaction is not available on this gateway instance.", data: null };
+  }
 
   const ctx = deps.commandContext;
   const agentId = resolveAgentId(ctx);
@@ -101,10 +104,12 @@ async function executeCompactCommand(deps: CommandDeps): Promise<CommandExecuteR
     providerThreadId: resolved.threadId,
     containerKind: "channel",
   });
-  const compacted = await createSessionDal(deps.db).compact({
-    tenantId: session.tenant_id,
+  const runtime = await deps.agents.getRuntime({
+    tenantId: resolveTenantId(deps),
+    agentKey: agentId,
+  });
+  const compacted = await runtime.compactSession({
     sessionId: session.session_id,
-    keepLastMessages: 8,
   });
   const payload = {
     agent_id: agentId,

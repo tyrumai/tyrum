@@ -23,7 +23,10 @@ import {
   formatSkillsPrompt,
   formatToolPrompt,
 } from "./prompts.js";
-import { resolveSessionModel as resolveSessionModelImpl } from "./session-model-resolution.js";
+import {
+  resolveSessionModel as resolveSessionModelImpl,
+  type ResolvedSessionModel,
+} from "./session-model-resolution.js";
 import {
   semanticSearch,
   ensureDefaultHeartbeatSchedule,
@@ -72,6 +75,7 @@ export type PreparedTurn = {
   session: SessionRow;
   mainLaneSessionKey: string;
   model: LanguageModel;
+  modelResolution: ResolvedSessionModel;
   toolSet: ToolSet;
   toolCallPolicyStates: Map<string, ToolCallPolicyState>;
   laneQueue?: LaneQueueState;
@@ -481,7 +485,7 @@ export async function prepareTurn(
     { type: "text", text: resolved.message },
   ];
 
-  const model = await resolveSessionModelImpl(
+  const modelResolution = await resolveSessionModelImpl(
     {
       container: deps.opts.container,
       languageModelOverride: deps.languageModelOverride,
@@ -498,6 +502,7 @@ export async function prepareTurn(
       fetchImpl: deps.fetchImpl,
     },
   );
+  const model = modelResolution.model;
 
   return {
     ctx,
@@ -505,6 +510,7 @@ export async function prepareTurn(
     session,
     mainLaneSessionKey,
     model,
+    modelResolution,
     toolSet,
     toolCallPolicyStates,
     laneQueue,

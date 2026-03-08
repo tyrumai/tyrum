@@ -74,7 +74,7 @@ describe("SessionDal", () => {
     expect(def.session_id).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
-  it("stores bounded turn history", async () => {
+  it("stores appended turn history without implicit compaction", async () => {
     const dal = createDal();
     const session = await dal.getOrCreate({
       connectorKey: "telegram",
@@ -107,12 +107,12 @@ describe("SessionDal", () => {
       timestamp: "2026-02-17T00:02:00.000Z",
     });
 
-    expect(updated.turns).toHaveLength(4);
-    expect(updated.turns[0]?.content).toBe("u2");
-    expect(updated.turns[3]?.content).toBe("a3");
+    expect(updated.turns).toHaveLength(6);
+    expect(updated.turns[0]?.content).toBe("u1");
+    expect(updated.turns[5]?.content).toBe("a3");
   });
 
-  it("compacts overflow into session summary deterministically", async () => {
+  it("compacts overflow into session summary deterministically when requested", async () => {
     const dal = createDal();
     const session = await dal.getOrCreate({
       connectorKey: "telegram",
@@ -120,46 +120,45 @@ describe("SessionDal", () => {
       containerKind: "group",
     });
 
-    const first = await dal.appendTurn({
+    await dal.appendTurn({
       tenantId: session.tenant_id,
       sessionId: session.session_id,
       userMessage: "u1",
       assistantMessage: "a1",
-      maxTurns: 1,
       timestamp: "2026-02-17T00:00:00.000Z",
     });
-    expect(first.turns).toHaveLength(2);
-    expect(first.summary).toBe("");
-
-    const second = await dal.appendTurn({
+    await dal.appendTurn({
       tenantId: session.tenant_id,
       sessionId: session.session_id,
       userMessage: "u2",
       assistantMessage: "a2",
-      maxTurns: 1,
       timestamp: "2026-02-17T00:01:00.000Z",
     });
-    expect(second.turns).toHaveLength(2);
-    expect(second.turns[0]?.content).toBe("u2");
-    expect(second.turns[1]?.content).toBe("a2");
-    expect(second.summary).toContain("u1");
-    expect(second.summary).toContain("a1");
-    expect(second.summary).not.toContain("u2");
-
-    const third = await dal.appendTurn({
+    await dal.appendTurn({
       tenantId: session.tenant_id,
       sessionId: session.session_id,
       userMessage: "u3",
       assistantMessage: "a3",
-      maxTurns: 1,
       timestamp: "2026-02-17T00:02:00.000Z",
     });
-    expect(third.turns).toHaveLength(2);
-    expect(third.turns[0]?.content).toBe("u3");
-    expect(third.turns[1]?.content).toBe("a3");
-    expect(third.summary).toContain("u1");
-    expect(third.summary).toContain("u2");
-    expect(third.summary).not.toContain("u3");
+
+    const compacted = await dal.compact({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      keepLastMessages: 2,
+    });
+    expect(compacted).toEqual({ droppedMessages: 4, keptMessages: 2 });
+
+    const updated = await dal.getById({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+    });
+    expect(updated?.turns).toHaveLength(2);
+    expect(updated?.turns[0]?.content).toBe("u3");
+    expect(updated?.turns[1]?.content).toBe("a3");
+    expect(updated?.summary).toContain("u1");
+    expect(updated?.summary).toContain("u2");
+    expect(updated?.summary).not.toContain("u3");
   });
 
   it("flags malformed turns_json on direct reads while keeping the session usable", async () => {
@@ -258,19 +257,18 @@ describe("SessionDal", () => {
       expect(repaired).toEqual({
         source_rows: 2,
         rebuilt_messages: 4,
-        kept_messages: 2,
-        dropped_messages: 2,
+        kept_messages: 4,
+        dropped_messages: 0,
       });
 
       const updated = await dal.getById({
         tenantId: session.tenant_id,
         sessionId: session.session_id,
       });
-      expect(updated?.summary).toContain("stale-summary");
-      expect(updated?.summary).toContain("u1");
-      expect(updated?.summary).toContain("a1");
-      expect(updated?.summary).not.toContain("u2");
+      expect(updated?.summary).toBe("");
       expect(updated?.turns).toEqual([
+        { role: "user", content: "u1", timestamp: "2026-02-17T00:10:00.000Z" },
+        { role: "assistant", content: "a1", timestamp: "2026-02-17T00:10:00.000Z" },
         { role: "user", content: "u2", timestamp: "2026-02-17T00:10:00.000Z" },
         { role: "assistant", content: "a2", timestamp: "2026-02-17T00:10:00.000Z" },
       ]);

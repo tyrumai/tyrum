@@ -39,7 +39,13 @@ import { resolveAutomationMetadata, maybeDeliverAutomationReply } from "./automa
 import { resolveExecutionProfile } from "./intake-delegation.js";
 import type { PrepareTurnDeps } from "./turn-preparation.js";
 import type { TurnExecutionContext } from "./turn-preparation.js";
-import { turnDirect, turnStreamDirect, type TurnDirectDeps } from "./turn-direct.js";
+import { turnDirect, turnStreamDirect } from "./turn-direct.js";
+import type { TurnDirectDeps } from "./turn-direct-runtime-helpers.js";
+import {
+  compactSessionWithResolvedModel,
+  resolveRuntimeCompactionContext,
+  type SessionCompactionResult,
+} from "./session-compaction-service.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
 
 const DEFAULT_MAX_STEPS = 20;
@@ -283,6 +289,40 @@ export class AgentRuntime {
 
   async turn(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
     return await this.turnViaExecutionEngine(input);
+  }
+
+  async compactSession(input: {
+    sessionId: string;
+    abortSignal?: AbortSignal;
+    timeoutMs?: number;
+  }): Promise<SessionCompactionResult> {
+    const { ctx, session, modelResolution } = await resolveRuntimeCompactionContext({
+      container: this.opts.container,
+      contextStore: this.contextStore,
+      sessionDal: this.sessionDal,
+      resolveModelDeps: {
+        container: this.opts.container,
+        languageModelOverride: this.languageModelOverride,
+        secretProvider: this.opts.secretProvider,
+        oauthLeaseOwner: this.instanceOwner,
+        fetchImpl: this.fetchImpl,
+      },
+      tenantId: this.tenantId,
+      agentId: this.agentId,
+      workspaceId: this.workspaceId,
+      sessionId: input.sessionId,
+    });
+
+    return await compactSessionWithResolvedModel({
+      container: this.opts.container,
+      sessionDal: this.sessionDal,
+      ctx,
+      session,
+      model: modelResolution.model,
+      abortSignal: input.abortSignal,
+      timeoutMs: input.timeoutMs,
+      logger: this.opts.container.logger,
+    });
   }
 
   async executeDecideAction(

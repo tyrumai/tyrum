@@ -26,11 +26,17 @@ import {
 } from "./provider-resolution.js";
 import {
   expectedSpecificationVersionForNpm,
+  type ResolvedCandidate,
   resolveCandidates,
 } from "./session-model-resolution-helpers.js";
 import type { ResolveSessionModelDeps } from "./session-model-resolution-helpers.js";
 
 export type { ResolveSessionModelDeps } from "./session-model-resolution-helpers.js";
+
+export type ResolvedSessionModel = {
+  model: LanguageModel;
+  candidates: ResolvedCandidate[];
+};
 
 export async function resolveSessionModel(
   deps: ResolveSessionModelDeps,
@@ -42,13 +48,13 @@ export async function resolveSessionModel(
     profileModelId?: string;
     fetchImpl?: typeof fetch;
   },
-): Promise<LanguageModel> {
+): Promise<ResolvedSessionModel> {
   if (deps.languageModelOverride) {
     const override = deps.languageModelOverride;
     if (typeof override === "string") {
       throw new Error("languageModel override must be a LanguageModel instance, not a string id");
     }
-    return override;
+    return { model: override, candidates: [] };
   }
 
   const { resolvedCandidates } = await resolveCandidates(deps, input);
@@ -343,14 +349,16 @@ export async function resolveSessionModel(
   const rotatingModels = await Promise.all(
     resolvedCandidates.map((entry) => buildRotatingModel(entry)),
   );
-  if (rotatingModels.length === 1) return rotatingModels[0]!;
+  if (rotatingModels.length === 1) {
+    return { model: rotatingModels[0]!, candidates: resolvedCandidates };
+  }
 
   const primarySpec = rotatingModels[0]!.specificationVersion;
   const compatibleRotatingModels = rotatingModels.filter(
     (model): model is ResolvedLanguageModel => model.specificationVersion === primarySpec,
   );
   if (compatibleRotatingModels.length === 1) {
-    return compatibleRotatingModels[0]!;
+    return { model: compatibleRotatingModels[0]!, candidates: resolvedCandidates };
   }
 
   const attempted = resolvedCandidates
@@ -376,37 +384,45 @@ export async function resolveSessionModel(
 
   if (primarySpec === "v2") {
     return {
-      specificationVersion: "v2",
-      provider: primary.provider,
-      modelId: primary.modelId,
-      supportedUrls: primary.supportedUrls,
-      async doGenerate(options: LanguageModelV2CallOptions) {
-        return await callCompatibleModels(options, (model, currentOptions) =>
-          (model as LanguageModelV2).doGenerate(currentOptions as LanguageModelV2CallOptions),
-        );
+      model: {
+        specificationVersion: "v2",
+        provider: primary.provider,
+        modelId: primary.modelId,
+        supportedUrls: primary.supportedUrls,
+        async doGenerate(options: LanguageModelV2CallOptions) {
+          return await callCompatibleModels(options, (model, currentOptions) =>
+            (model as LanguageModelV2).doGenerate(currentOptions as LanguageModelV2CallOptions),
+          );
+        },
+        async doStream(options: LanguageModelV2CallOptions) {
+          return await callCompatibleModels(options, (model, currentOptions) =>
+            (model as LanguageModelV2).doStream(currentOptions as LanguageModelV2CallOptions),
+          );
+        },
       },
-      async doStream(options: LanguageModelV2CallOptions) {
-        return await callCompatibleModels(options, (model, currentOptions) =>
-          (model as LanguageModelV2).doStream(currentOptions as LanguageModelV2CallOptions),
-        );
-      },
+      candidates: resolvedCandidates,
     };
   }
 
   return {
-    specificationVersion: "v3",
-    provider: primary.provider,
-    modelId: primary.modelId,
-    supportedUrls: primary.supportedUrls,
-    async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
-      return await callCompatibleModels(options, (model, currentOptions) =>
-        (model as LanguageModelV3).doGenerate(currentOptions as LanguageModelV3CallOptions),
-      );
+    model: {
+      specificationVersion: "v3",
+      provider: primary.provider,
+      modelId: primary.modelId,
+      supportedUrls: primary.supportedUrls,
+      async doGenerate(
+        options: LanguageModelV3CallOptions,
+      ): Promise<LanguageModelV3GenerateResult> {
+        return await callCompatibleModels(options, (model, currentOptions) =>
+          (model as LanguageModelV3).doGenerate(currentOptions as LanguageModelV3CallOptions),
+        );
+      },
+      async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
+        return await callCompatibleModels(options, (model, currentOptions) =>
+          (model as LanguageModelV3).doStream(currentOptions as LanguageModelV3CallOptions),
+        );
+      },
     },
-    async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
-      return await callCompatibleModels(options, (model, currentOptions) =>
-        (model as LanguageModelV3).doStream(currentOptions as LanguageModelV3CallOptions),
-      );
-    },
+    candidates: resolvedCandidates,
   };
 }
