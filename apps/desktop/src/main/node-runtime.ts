@@ -44,7 +44,7 @@ export class NodeRuntime {
     this.providers.push(provider);
   }
 
-  private ensureDeviceIdentity(): DesktopNodeConfig["device"] | undefined {
+  private ensureDeviceIdentity(): DesktopNodeConfig["device"] {
     const current = this.config.device;
     let publicKey = current.publicKey.trim();
     let privateKeyRef = current.privateKeyRef.trim();
@@ -137,25 +137,23 @@ export class NodeRuntime {
       tlsCertFingerprint256,
       tlsAllowSelfSigned,
       capabilities,
-      role: device ? "node" : "client",
-      device: device
-        ? {
-            publicKey: device.publicKey,
-            privateKey: device.privateKey,
-            deviceId: device.deviceId.trim().length > 0 ? device.deviceId : undefined,
-            label: device.label.trim().length > 0 ? device.label : undefined,
-            platform: device.platform.trim().length > 0 ? device.platform : undefined,
-            version: device.version.trim().length > 0 ? device.version : undefined,
-            mode: device.mode.trim().length > 0 ? device.mode : undefined,
-          }
-        : undefined,
+      role: "node",
+      device: {
+        publicKey: device.publicKey,
+        privateKey: device.privateKey,
+        deviceId: device.deviceId.trim().length > 0 ? device.deviceId : undefined,
+        label: device.label.trim().length > 0 ? device.label : undefined,
+        platform: device.platform.trim().length > 0 ? device.platform : undefined,
+        version: device.version.trim().length > 0 ? device.version : undefined,
+        mode: device.mode.trim().length > 0 ? device.mode : undefined,
+      },
     });
 
     this.client.on("connected", () => {
       this.callbacks.onStatusChange({ connected: true });
       this.callbacks.onLog({
         level: "info",
-        message: `Connected to gateway at ${wsUrl}${device ? ` as ${device.deviceId}` : ""}`,
+        message: `Connected to gateway at ${wsUrl} as ${device.deviceId}`,
         timestamp: new Date().toISOString(),
       });
     });
