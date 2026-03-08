@@ -1,22 +1,13 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { AgentKey, LifecycleHookDefinition, PolicyBundle } from "@tyrum/schemas";
+import { LifecycleHookDefinition, PolicyBundle } from "@tyrum/schemas";
 import type { SqlDb } from "../statestore/types.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
 import { LifecycleHookConfigDal } from "../modules/hooks/config-dal.js";
 import { PolicyBundleConfigDal } from "../modules/policy/config-dal.js";
-
-function normalizeAgentKey(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) return "default";
-  const parsed = AgentKey.safeParse(trimmed);
-  if (!parsed.success) {
-    throw new Error(`invalid agent_key '${trimmed}' (${parsed.error.message})`);
-  }
-  return parsed.data;
-}
+import { normalizeAgentKey } from "./config-key-utils.js";
 
 const HooksUpdateRequest = z
   .object({

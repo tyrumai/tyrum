@@ -98,23 +98,24 @@ export function AgentsPageEditor({
   );
 
   const save = async (): Promise<void> => {
-    const payload = buildPayload(form, preservedModelOptions);
-    const targetKey = agentKey ?? payload.agent_key;
-
     if (mode === "create") {
-      await saveAction.runAndThrow(async () => await core.http.agents.create(payload));
-      onSaved(payload.agent_key);
+      const created = await saveAction.runAndThrow(async () => {
+        const payload = buildPayload(form, preservedModelOptions);
+        return await core.http.agents.create(payload);
+      });
+      onSaved(created.agent_key);
       return;
     }
 
-    await saveAction.runAndThrow(
-      async () =>
-        await core.http.agents.update(targetKey, {
-          config: payload.config,
-          identity: payload.identity,
-        }),
-    );
-    onSaved(targetKey);
+    const updated = await saveAction.runAndThrow(async () => {
+      const payload = buildPayload(form, preservedModelOptions);
+      const targetKey = agentKey ?? payload.agent_key;
+      return await core.http.agents.update(targetKey, {
+        config: payload.config,
+        identity: payload.identity,
+      });
+    });
+    onSaved(updated.agent_key);
   };
 
   if (loadError) {

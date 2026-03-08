@@ -311,7 +311,7 @@ export function buildPayload(
     }),
   };
 
-  if (!payload.agent_key && form.agentKey !== "") {
+  if (!payload.agent_key) {
     throw new Error("Agent key is required.");
   }
 

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { AgentKey, ManagedAgentCreateRequest, ManagedAgentUpdateRequest } from "@tyrum/schemas";
+import { ManagedAgentCreateRequest, ManagedAgentUpdateRequest } from "@tyrum/schemas";
 import type { SqlDb } from "../statestore/types.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
@@ -9,16 +9,7 @@ import {
   AgentDeleteConflictError,
 } from "../modules/agent/admin-service.js";
 import type { GatewayStateMode } from "../modules/runtime-state/mode.js";
-
-function normalizeAgentKey(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) return "default";
-  const parsed = AgentKey.safeParse(trimmed);
-  if (!parsed.success) {
-    throw new Error(`invalid agent_key '${trimmed}' (${parsed.error.message})`);
-  }
-  return parsed.data;
-}
+import { normalizeAgentKey } from "./config-key-utils.js";
 
 export interface AgentsRouteDeps {
   db: SqlDb;
@@ -43,7 +34,8 @@ export function createAgentsRoutes(deps: AgentsRouteDeps): Hono {
     let body: unknown;
     try {
       body = (await c.req.json()) as unknown;
-    } catch {
+    } catch (error) {
+      void error;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
 
@@ -88,7 +80,8 @@ export function createAgentsRoutes(deps: AgentsRouteDeps): Hono {
     let body: unknown;
     try {
       body = (await c.req.json()) as unknown;
-    } catch {
+    } catch (error) {
+      void error;
       return c.json({ error: "invalid_request", message: "invalid json" }, 400);
     }
 

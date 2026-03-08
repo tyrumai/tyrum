@@ -1,6 +1,12 @@
 import { AgentConfig } from "@tyrum/schemas";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
+import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_KEY } from "../../src/modules/identity/scope.js";
+import { createAgentsRoutes } from "../../src/routes/agents.js";
 import { seedPausedExecutionRun } from "../helpers/execution-fixtures.js";
 import { createTestApp } from "./helpers.js";
 
@@ -15,6 +21,29 @@ function sampleConfig(name: string) {
       character: "architect",
     },
   });
+}
+
+function createAgentsApp(container: GatewayContainer): Hono {
+  const app = new Hono();
+  app.use("*", async (c, next) => {
+    c.set("authClaims", {
+      token_kind: "tenant",
+      token_id: "tenant-token-1",
+      tenant_id: DEFAULT_TENANT_ID,
+      role: "admin",
+      scopes: ["*"],
+    });
+    await next();
+  });
+  app.route(
+    "/",
+    createAgentsRoutes({
+      db: container.db,
+      identityScopeDal: container.identityScopeDal,
+      stateMode: "local",
+    }),
+  );
+  return app;
 }
 
 describe("Managed agents routes integration", () => {
@@ -169,5 +198,61 @@ describe("Managed agents routes integration", () => {
 
     const get = await app.request("/agents/agent-delete");
     expect(get.status).toBe(404);
+  });
+
+  it("returns 409 for one of two concurrent creates with the same agent key", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tyrum-agents-route-test-"));
+    const dbPath = join(tempDir, "gateway.db");
+    const tyrumHome = join(tempDir, "home");
+
+    const firstContainer = createContainer(
+      { dbPath, migrationsDir: join(import.meta.dirname, "../../migrations/sqlite"), tyrumHome },
+      { deploymentConfig: { modelsDev: { disableFetch: true } } },
+    );
+    const secondContainer = createContainer(
+      { dbPath, migrationsDir: join(import.meta.dirname, "../../migrations/sqlite"), tyrumHome },
+      { deploymentConfig: { modelsDev: { disableFetch: true } } },
+    );
+
+    try {
+      await firstContainer.db.exec("PRAGMA busy_timeout = 25");
+      await secondContainer.db.exec("PRAGMA busy_timeout = 25");
+
+      const firstApp = createAgentsApp(firstContainer);
+      const secondApp = createAgentsApp(secondContainer);
+
+      const [first, second] = await Promise.all([
+        firstApp.request("/agents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agent_key: "agent-race",
+            config: sampleConfig("Race Agent"),
+          }),
+        }),
+        secondApp.request("/agents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agent_key: "agent-race",
+            config: sampleConfig("Race Agent"),
+          }),
+        }),
+      ]);
+
+      const statuses = [first.status, second.status].toSorted((a, b) => a - b);
+      expect(statuses).toEqual([201, 409]);
+
+      const row = await firstContainer.db.get<{ count: number }>(
+        `SELECT COUNT(*) AS count
+         FROM agents
+         WHERE tenant_id = ? AND agent_key = ?`,
+        [DEFAULT_TENANT_ID, "agent-race"],
+      );
+      expect(row?.count).toBe(1);
+    } finally {
+      await Promise.all([firstContainer.db.close(), secondContainer.db.close()]);
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });

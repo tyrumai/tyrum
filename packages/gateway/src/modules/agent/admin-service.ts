@@ -25,6 +25,7 @@ import {
   resolveAgentPersona,
 } from "./persona.js";
 import { escapeLikePattern } from "../../utils/sql-like.js";
+import { isUniqueViolation } from "../../utils/sql-errors.js";
 
 type AgentRow = {
   agent_id: string;
@@ -44,6 +45,37 @@ type ActiveRunRow = {
 
 export class AgentAlreadyExistsError extends Error {}
 export class AgentDeleteConflictError extends Error {}
+
+function isSqliteBusyError(error: unknown): boolean {
+  if (error && typeof error === "object") {
+    const code = (error as { code?: unknown }).code;
+    return typeof code === "string" && code.toUpperCase().startsWith("SQLITE_BUSY");
+  }
+  return false;
+}
+
+async function waitForAgentRow(params: {
+  db: SqlDb;
+  tenantId: string;
+  agentKey: string;
+  attempts?: number;
+  delayMs?: number;
+}): Promise<AgentRow | undefined> {
+  const attempts = params.attempts ?? 5;
+  const delayMs = params.delayMs ?? 20;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const row = await getAgentRow(params.db, params.tenantId, params.agentKey);
+    if (row) return row;
+    if (attempt + 1 < attempts) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, delayMs);
+      });
+    }
+  }
+
+  return undefined;
+}
 
 function normalizeTime(value: string | Date | null | undefined): string | null {
   if (value == null) return null;
@@ -70,6 +102,8 @@ function parseIdentityJson(row: LatestIdentityRow): IdentityPackT | undefined {
     const identity = IdentityPack.safeParse(parsed);
     return identity.success ? identity.data : undefined;
   } catch {
+    // Intentional: ignore malformed historical identity rows so list/detail reads
+    // can continue using synthesized or config-derived identity data.
     return undefined;
   }
 }
@@ -298,74 +332,87 @@ export class AgentAdminService {
     createdBy?: unknown;
     reason?: string;
   }): Promise<ManagedAgentDetailT> {
-    const existing = await getAgentRow(this.deps.db, params.tenantId, params.agentKey);
-    if (existing) {
-      throw new AgentAlreadyExistsError(`agent '${params.agentKey}' already exists`);
-    }
-
     const workspaceId = await this.deps.identityScopeDal.ensureWorkspaceId(
       params.tenantId,
       DEFAULT_WORKSPACE_KEY,
     );
     const agentId = randomUUID();
-    const created = await this.deps.db.transaction(async (tx) => {
-      await tx.run(
-        `INSERT INTO agents (tenant_id, agent_id, agent_key)
-         VALUES (?, ?, ?)`,
-        [params.tenantId, agentId, params.agentKey],
-      );
-      await tx.run(
-        `INSERT INTO agent_workspaces (tenant_id, agent_id, workspace_id)
-         VALUES (?, ?, ?)
-         ON CONFLICT (tenant_id, agent_id, workspace_id) DO NOTHING`,
-        [params.tenantId, agentId, workspaceId],
-      );
+    let created: ManagedAgentDetailT;
+    try {
+      created = await this.deps.db.transaction(async (tx) => {
+        await tx.run(
+          `INSERT INTO agents (tenant_id, agent_id, agent_key)
+           VALUES (?, ?, ?)`,
+          [params.tenantId, agentId, params.agentKey],
+        );
+        await tx.run(
+          `INSERT INTO agent_workspaces (tenant_id, agent_id, workspace_id)
+           VALUES (?, ?, ?)
+           ON CONFLICT (tenant_id, agent_id, workspace_id) DO NOTHING`,
+          [params.tenantId, agentId, workspaceId],
+        );
 
-      const requestedIdentity =
-        params.identity ?? synthesizeIdentity(params.agentKey, params.config);
-      const effectiveIdentity = buildEffectiveIdentity({
-        agentKey: params.agentKey,
-        config: params.config,
-        identity: requestedIdentity,
-      });
-
-      const [configRevision, identityRevision] = await Promise.all([
-        new AgentConfigDal(tx).set({
-          tenantId: params.tenantId,
-          agentId,
+        const requestedIdentity =
+          params.identity ?? synthesizeIdentity(params.agentKey, params.config);
+        const effectiveIdentity = buildEffectiveIdentity({
+          agentKey: params.agentKey,
           config: params.config,
-          createdBy: params.createdBy,
-          reason: params.reason,
-        }),
-        new AgentIdentityDal(tx).set({
-          tenantId: params.tenantId,
-          agentId,
-          identity: effectiveIdentity,
-          createdBy: params.createdBy,
-          reason: params.reason,
-        }),
-      ]);
+          identity: requestedIdentity,
+        });
 
-      const row = await getAgentRow(tx, params.tenantId, params.agentKey);
-      if (!row) {
-        throw new Error("agent create failed");
-      }
+        const [configRevision, identityRevision] = await Promise.all([
+          new AgentConfigDal(tx).set({
+            tenantId: params.tenantId,
+            agentId,
+            config: params.config,
+            createdBy: params.createdBy,
+            reason: params.reason,
+          }),
+          new AgentIdentityDal(tx).set({
+            tenantId: params.tenantId,
+            agentId,
+            identity: effectiveIdentity,
+            createdBy: params.createdBy,
+            reason: params.reason,
+          }),
+        ]);
 
-      return toDetail({
-        stateMode: this.deps.stateMode,
-        row,
-        config: {
-          revision: configRevision.revision,
-          config: configRevision.config,
-          configSha256: configRevision.configSha256,
-        },
-        identity: {
-          revision: identityRevision.revision,
-          identity: identityRevision.identity,
-          identitySha256: identityRevision.identitySha256,
-        },
+        const row = await getAgentRow(tx, params.tenantId, params.agentKey);
+        if (!row) {
+          throw new Error("agent create failed");
+        }
+
+        return toDetail({
+          stateMode: this.deps.stateMode,
+          row,
+          config: {
+            revision: configRevision.revision,
+            config: configRevision.config,
+            configSha256: configRevision.configSha256,
+          },
+          identity: {
+            revision: identityRevision.revision,
+            identity: identityRevision.identity,
+            identitySha256: identityRevision.identitySha256,
+          },
+        });
       });
-    });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new AgentAlreadyExistsError(`agent '${params.agentKey}' already exists`);
+      }
+      if (isSqliteBusyError(error)) {
+        const existing = await waitForAgentRow({
+          db: this.deps.db,
+          tenantId: params.tenantId,
+          agentKey: params.agentKey,
+        });
+        if (existing) {
+          throw new AgentAlreadyExistsError(`agent '${params.agentKey}' already exists`);
+        }
+      }
+      throw error;
+    }
 
     this.deps.identityScopeDal.rememberAgentId(params.tenantId, params.agentKey, agentId);
     return created;

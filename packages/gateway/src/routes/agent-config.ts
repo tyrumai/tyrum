@@ -10,7 +10,6 @@ import {
   AgentConfigGetResponse,
   AgentConfigListResponse,
   AgentConfigUpdateRequest,
-  AgentKey,
 } from "@tyrum/schemas";
 import type {
   AgentConfig,
@@ -23,16 +22,7 @@ import { AgentAdminService } from "../modules/agent/admin-service.js";
 import { AgentConfigDal } from "../modules/config/agent-config-dal.js";
 import { resolveAgentPersona } from "../modules/agent/persona.js";
 import type { GatewayStateMode } from "../modules/runtime-state/mode.js";
-
-function normalizeAgentKey(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) return "default";
-  const parsed = AgentKey.safeParse(trimmed);
-  if (!parsed.success) {
-    throw new Error(`invalid agent_key '${trimmed}' (${parsed.error.message})`);
-  }
-  return parsed.data;
-}
+import { normalizeAgentKey } from "./config-key-utils.js";
 
 interface AgentConfigRevisionResponseInput {
   revision: number;

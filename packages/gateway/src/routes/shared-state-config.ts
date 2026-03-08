@@ -1,12 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import {
-  AgentKey,
-  IdentityPack,
-  McpServerSpec,
-  PluginManifest,
-  SkillManifest,
-} from "@tyrum/schemas";
+import { IdentityPack, McpServerSpec, PluginManifest, SkillManifest } from "@tyrum/schemas";
 import type { SqlDb } from "../statestore/types.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
@@ -20,16 +14,7 @@ import {
   type RuntimePackageRevision,
 } from "../modules/agent/runtime-package-dal.js";
 import { missingRequiredManifestFields } from "../modules/plugins/validation.js";
-
-function normalizeAgentKey(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) return "default";
-  const parsed = AgentKey.safeParse(trimmed);
-  if (!parsed.success) {
-    throw new Error(`invalid agent_key '${trimmed}' (${parsed.error.message})`);
-  }
-  return parsed.data;
-}
+import { normalizeAgentKey } from "./config-key-utils.js";
 
 const runtimePackageKindSchema = z.enum(["skill", "mcp", "plugin"]);
 
