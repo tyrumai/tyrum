@@ -3,18 +3,19 @@ import type {
   IdentityPack as IdentityPackT,
   McpServerSpec as McpServerSpecT,
 } from "@tyrum/schemas";
-import { IdentityPack, McpServerSpec, SkillManifest } from "@tyrum/schemas";
+import { IdentityPack } from "@tyrum/schemas";
 import {
   ensureWorkspaceInitialized,
   DEFAULT_IDENTITY_MD,
   resolveBundledSkillsDir,
+  resolveSkillsDir,
+  resolveUserSkillsDir,
 } from "./home.js";
 import { AgentIdentityDal } from "./identity-dal.js";
 import { RuntimePackageDal } from "./runtime-package-dal.js";
 import {
   loadSkillFromDir,
   loadEnabledMcpServers,
-  loadEnabledSkills,
   type LoadedSkillManifest,
 } from "./workspace.js";
 import { parseFrontmatterDocument } from "./frontmatter.js";
@@ -23,6 +24,11 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { IdentityScopeDal } from "../identity/scope.js";
 import { resolveGatewayStateMode } from "../runtime-state/mode.js";
 import type { GatewayContainer } from "../../container.js";
+import {
+  ensureManagedExtensionMaterialized,
+  parseManagedMcpPackage,
+  parseManagedSkillPackage,
+} from "../extensions/managed.js";
 
 export interface AgentContextScope {
   tenantId: string;
@@ -39,6 +45,7 @@ export interface AgentContextStore {
 
 class LocalAgentContextStore implements AgentContextStore {
   private readonly identityDal: AgentIdentityDal;
+  private readonly runtimePackageDal: RuntimePackageDal;
 
   constructor(
     private readonly db: SqlDb,
@@ -47,6 +54,7 @@ class LocalAgentContextStore implements AgentContextStore {
     private readonly logger?: Logger,
   ) {
     this.identityDal = new AgentIdentityDal(db);
+    this.runtimePackageDal = new RuntimePackageDal(db);
   }
 
   private async resolveScopeIds(scope: AgentContextScope): Promise<AgentContextScope> {
@@ -127,21 +135,120 @@ class LocalAgentContextStore implements AgentContextStore {
   }
 
   async getEnabledSkills(
-    _scope: AgentContextScope,
+    scope: AgentContextScope,
     config: AgentConfigT,
   ): Promise<LoadedSkillManifest[]> {
-    return await loadEnabledSkills(this.home, config, {
-      logger: this.logger,
+    const managedSkills = await this.runtimePackageDal.listLatest({
+      tenantId: scope.tenantId,
+      packageKind: "skill",
+      packageKeys: config.skills.enabled,
+      enabledOnly: true,
     });
+    const managedById = new Map(managedSkills.map((item) => [item.packageKey, item]));
+    const loaded: LoadedSkillManifest[] = [];
+    const workspaceSkillsDir = resolveSkillsDir(this.home);
+    const userSkillsDir = resolveUserSkillsDir();
+    const bundledSkillsDir = resolveBundledSkillsDir();
+    const workspaceTrusted = config.skills.workspace_trusted === true;
+
+    for (const skillId of config.skills.enabled) {
+      const workspaceSkill = workspaceTrusted
+        ? await loadSkillFromDir(workspaceSkillsDir, skillId, "workspace", this.logger)
+        : undefined;
+      if (workspaceSkill) {
+        loaded.push(workspaceSkill);
+        continue;
+      }
+
+      const managed = managedById.get(skillId);
+      if (managed) {
+        try {
+          const pkg = parseManagedSkillPackage(managed.packageData, skillId);
+          const materializedPath = await ensureManagedExtensionMaterialized({
+            home: this.home,
+            tenantId: scope.tenantId,
+            stateMode: "local",
+            kind: "skill",
+            revision: managed,
+          });
+          loaded.push({
+            ...pkg.manifest,
+            provenance: {
+              source: "managed",
+              path: materializedPath ?? `db://runtime-packages/skill/${skillId}@${managed.revision}`,
+            },
+          });
+          continue;
+        } catch (error) {
+          this.logger?.warn("agent.managed_skill_invalid", {
+            tenant_id: scope.tenantId,
+            agent_id: scope.agentId,
+            skill_id: skillId,
+            revision: managed.revision,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      const fallback =
+        (await loadSkillFromDir(userSkillsDir, skillId, "user", this.logger)) ??
+        (await loadSkillFromDir(bundledSkillsDir, skillId, "bundled", this.logger));
+      if (fallback) loaded.push(fallback);
+    }
+
+    return loaded;
   }
 
   async getEnabledMcpServers(
-    _scope: AgentContextScope,
+    scope: AgentContextScope,
     config: AgentConfigT,
   ): Promise<McpServerSpecT[]> {
-    return await loadEnabledMcpServers(this.home, config, {
+    const managedServers = await this.runtimePackageDal.listLatest({
+      tenantId: scope.tenantId,
+      packageKind: "mcp",
+      packageKeys: config.mcp.enabled,
+      enabledOnly: true,
+    });
+    const managedById = new Map(managedServers.map((item) => [item.packageKey, item]));
+    const localServers = await loadEnabledMcpServers(this.home, config, {
       logger: this.logger,
     });
+    const localById = new Map(localServers.map((item) => [item.id, item]));
+    const loaded: McpServerSpecT[] = [];
+
+    for (const serverId of config.mcp.enabled) {
+      const local = localById.get(serverId);
+      if (local) {
+        loaded.push(local);
+        continue;
+      }
+      const managed = managedById.get(serverId);
+      if (!managed) continue;
+      try {
+        const pkg = parseManagedMcpPackage(managed.packageData, serverId);
+        const materializedPath = await ensureManagedExtensionMaterialized({
+          home: this.home,
+          tenantId: scope.tenantId,
+          stateMode: "local",
+          kind: "mcp",
+          revision: managed,
+        });
+        const spec = pkg.spec.transport === "stdio" && !pkg.spec.cwd && materializedPath
+          ? { ...pkg.spec, cwd: materializedPath.replace(/\/server\.yml$/u, "") }
+          : pkg.spec;
+        loaded.push(spec.id === serverId ? spec : { ...spec, id: serverId });
+      } catch (error) {
+        this.logger?.warn("agent.managed_mcp_invalid", {
+          tenant_id: scope.tenantId,
+          agent_id: scope.agentId,
+          server_id: serverId,
+          revision: managed.revision,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return loaded;
   }
 }
 
@@ -169,6 +276,7 @@ class SharedAgentContextStore implements AgentContextStore {
 
   constructor(
     db: SqlDb,
+    private readonly home: string,
     private readonly logger?: Logger,
     bundledSkillsDir?: string,
   ) {
@@ -214,24 +322,31 @@ class SharedAgentContextStore implements AgentContextStore {
     for (const skillId of config.skills.enabled) {
       const shared = sharedById.get(skillId);
       if (shared) {
-        const parsed = SkillManifest.safeParse(shared.packageData);
-        if (!parsed.success) {
+        try {
+          const pkg = parseManagedSkillPackage(shared.packageData, skillId);
+          const path = await ensureManagedExtensionMaterialized({
+            home: this.home,
+            tenantId: scope.tenantId,
+            stateMode: "shared",
+            kind: "skill",
+            revision: shared,
+          });
+          loaded.push({
+            ...pkg.manifest,
+            provenance: {
+              source: "shared",
+              path: path ?? `db://runtime-packages/skill/${skillId}@${shared.revision}`,
+            },
+          });
+          continue;
+        } catch (error) {
           this.logger?.warn("agent.shared_skill_invalid", {
             tenant_id: scope.tenantId,
             agent_id: scope.agentId,
             skill_id: skillId,
             revision: shared.revision,
-            error: parsed.error.message,
+            error: error instanceof Error ? error.message : String(error),
           });
-        } else {
-          loaded.push({
-            ...parsed.data,
-            provenance: {
-              source: "shared",
-              path: `db://runtime-packages/skill/${skillId}@${shared.revision}`,
-            },
-          });
-          continue;
         }
       }
 
@@ -265,18 +380,29 @@ class SharedAgentContextStore implements AgentContextStore {
     for (const serverId of config.mcp.enabled) {
       const shared = sharedById.get(serverId);
       if (!shared) continue;
-      const parsed = McpServerSpec.safeParse(shared.packageData);
-      if (!parsed.success) {
+      try {
+        const pkg = parseManagedMcpPackage(shared.packageData, serverId);
+        const materializedPath = await ensureManagedExtensionMaterialized({
+          home: this.home,
+          tenantId: scope.tenantId,
+          stateMode: "shared",
+          kind: "mcp",
+          revision: shared,
+        });
+        const spec =
+          pkg.spec.transport === "stdio" && !pkg.spec.cwd && materializedPath
+            ? { ...pkg.spec, cwd: materializedPath.replace(/\/server\.yml$/u, "") }
+            : pkg.spec;
+        loaded.push(spec.id === serverId ? spec : { ...spec, id: serverId });
+      } catch (error) {
         this.logger?.warn("agent.shared_mcp_invalid", {
           tenant_id: scope.tenantId,
           agent_id: scope.agentId,
           server_id: serverId,
           revision: shared.revision,
-          error: parsed.error.message,
+          error: error instanceof Error ? error.message : String(error),
         });
-        continue;
       }
-      loaded.push(parsed.data.id === serverId ? parsed.data : { ...parsed.data, id: serverId });
     }
 
     return loaded;
@@ -285,10 +411,11 @@ class SharedAgentContextStore implements AgentContextStore {
 
 export function createSharedAgentContextStore(params: {
   db: SqlDb;
+  home: string;
   logger?: Logger;
   bundledSkillsDir?: string;
 }): AgentContextStore {
-  return new SharedAgentContextStore(params.db, params.logger, params.bundledSkillsDir);
+  return new SharedAgentContextStore(params.db, params.home, params.logger, params.bundledSkillsDir);
 }
 
 export function createDefaultAgentContextStore(params: {
@@ -298,6 +425,7 @@ export function createDefaultAgentContextStore(params: {
   return resolveGatewayStateMode(params.container.deploymentConfig) === "shared"
     ? createSharedAgentContextStore({
         db: params.container.db,
+        home: params.home,
         logger: params.container.logger,
       })
     : createLocalAgentContextStore({

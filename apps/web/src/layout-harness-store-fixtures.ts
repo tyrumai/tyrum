@@ -161,9 +161,21 @@ export function createChatStore() {
     thread_id: "ui-thread-1",
     title: "Layout regression coverage",
     summary: "Layout regression coverage thread",
-    turns: [
-      { role: "user", content: "Can we prevent page overflow regressions?" },
-      { role: "assistant", content: "Yes. We can add browser geometry checks." },
+    transcript: [
+      {
+        kind: "text" as const,
+        id: "turn-1",
+        role: "user" as const,
+        content: "Can we prevent page overflow regressions?",
+        created_at: "2026-03-08T00:00:00.000Z",
+      },
+      {
+        kind: "text" as const,
+        id: "turn-2",
+        role: "assistant" as const,
+        content: "Yes. We can add browser geometry checks.",
+        created_at: "2026-03-08T00:00:01.000Z",
+      },
     ],
     updated_at: "2026-03-08T00:00:00.000Z",
     created_at: "2026-03-08T00:00:00.000Z",
@@ -185,7 +197,11 @@ export function createChatStore() {
           thread_id: "ui-thread-1",
           title: "Layout regression coverage",
           summary: "Layout regression coverage thread",
-          last_turn: { role: "assistant", content: "Yes. We can add browser geometry checks." },
+          transcript_count: 2,
+          last_text: {
+            role: "assistant",
+            content: "Yes. We can add browser geometry checks.",
+          },
           created_at: "2026-03-08T00:00:00.000Z",
           updated_at: "2026-03-08T00:00:00.000Z",
         },
@@ -198,6 +214,8 @@ export function createChatStore() {
       sessionId: "session-1",
       session: activeSession,
       loading: false,
+      typing: false,
+      activeToolCallIds: [],
       error: null,
     },
     send: {

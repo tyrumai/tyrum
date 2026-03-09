@@ -1,18 +1,19 @@
 import type { LanguageModel } from "ai";
 import { generateText, stepCountIs } from "ai";
-import type { AgentConfig as AgentConfigT } from "@tyrum/schemas";
+import type { AgentConfig as AgentConfigT, SessionTranscriptTextItem } from "@tyrum/schemas";
 import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { redactSecretLikeText } from "./secrets.js";
 import { MemoryV1Dal } from "../../memory/v1-dal.js";
-import type { SessionMessage, SessionRow } from "../session-dal.js";
+import type { SessionRow } from "../session-dal.js";
 import type { SqlDb } from "../../../statestore/types.js";
 
 const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
 const PRE_COMPACTION_FLUSH_TRUNCATION_MARKER = "...(truncated)";
 const MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS = 2_000;
-function formatPreCompactionFlushPrompt(droppedTurns: readonly SessionMessage[]): string {
+function formatPreCompactionFlushPrompt(droppedTurns: readonly SessionTranscriptTextItem[]): string {
   const lines = droppedTurns.map((turn) => {
-    const role = turn.role === "assistant" ? "Assistant" : "User";
+    const role =
+      turn.role === "assistant" ? "Assistant" : turn.role === "system" ? "System" : "User";
     const redacted = redactSecretLikeText(turn.content.trim());
     const content =
       redacted.length <= MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS
@@ -25,7 +26,7 @@ function formatPreCompactionFlushPrompt(droppedTurns: readonly SessionMessage[])
                 PRE_COMPACTION_FLUSH_TRUNCATION_MARKER.length,
             ),
           )}${PRE_COMPACTION_FLUSH_TRUNCATION_MARKER}`;
-    return `${role} (${turn.timestamp}): ${content}`;
+    return `${role} (${turn.created_at}): ${content}`;
   });
 
   return [
@@ -49,7 +50,7 @@ export async function maybeRunPreCompactionMemoryFlush(
     ctx: { config: AgentConfigT };
     session: SessionRow;
     model: LanguageModel;
-    droppedTurns: readonly SessionMessage[];
+    droppedTurns: readonly SessionTranscriptTextItem[];
     abortSignal?: AbortSignal;
     timeoutMs?: number;
   },

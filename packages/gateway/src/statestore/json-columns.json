@@ -484,7 +484,7 @@
   },
   {
     "table": "sessions",
-    "column": "turns_json",
+    "column": "transcript_json",
     "shape": "array",
     "nullable": false,
     "default": "[]"

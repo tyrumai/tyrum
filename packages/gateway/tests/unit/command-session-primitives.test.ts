@@ -83,7 +83,7 @@ describe("session command primitives", () => {
     expect(stored?.session_key).toMatch(/^agent:default:ui:/);
     expect(stored?.session_key).toContain(`:channel:${payload.thread_id}`);
     expect(stored?.summary).toBe("");
-    expect(stored?.turns_json).toBe("[]");
+    expect(stored?.transcript_json).toBe("[]");
   });
 
   it("supports /new for non-default channel accounts", async () => {

@@ -1,12 +1,16 @@
 import { generateText, stepCountIs } from "ai";
 import type { LanguageModel, ModelMessage } from "ai";
-import type { AgentConfig as AgentConfigT } from "@tyrum/schemas";
+import type {
+  AgentConfig as AgentConfigT,
+  SessionTranscriptItem,
+  SessionTranscriptTextItem,
+} from "@tyrum/schemas";
 import type { GatewayContainer } from "../../../container.js";
 import { ensureAgentConfigSeeded } from "../default-config.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import type { AgentContextStore } from "../context-store.js";
 import type { SessionDal } from "../session-dal.js";
-import type { SessionMessage, SessionRow } from "../session-dal.js";
+import type { SessionRow } from "../session-dal.js";
 import { maybeRunPreCompactionMemoryFlush } from "./pre-compaction-memory-flush.js";
 import {
   resolveSessionModelDetailed,
@@ -149,7 +153,7 @@ function getReservedInputTokens(config: AgentConfigT): number {
 
 function buildSummaryHistoryMessages(
   previousSummary: string,
-  droppedTurns: readonly SessionMessage[],
+  droppedTurns: readonly SessionTranscriptTextItem[],
 ): ModelMessage[] {
   const messages: ModelMessage[] = [];
   const trimmedSummary = previousSummary.trim();
@@ -160,23 +164,38 @@ function buildSummaryHistoryMessages(
     });
   }
   for (const turn of droppedTurns) {
-    messages.push({
-      role: turn.role,
-      content: [{ type: "text", text: `[${turn.timestamp}] ${turn.content}` }],
-    });
+    const text = `[${turn.created_at}] ${turn.content}`;
+    const content = [{ type: "text" as const, text }];
+    switch (turn.role) {
+      case "assistant":
+        messages.push({ role: "assistant", content });
+        break;
+      case "system":
+        messages.push({ role: "system", content: text });
+        break;
+      case "user":
+      default:
+        messages.push({ role: "user", content });
+        break;
+    }
   }
   return messages;
 }
 
-function getDroppedTurns(session: SessionRow, keepLastMessages: number): SessionMessage[] {
-  const overflow = session.turns.length - keepLastMessages;
-  if (overflow <= 0) return [];
-  return session.turns.slice(0, overflow);
+function textTranscript(session: SessionRow): SessionTranscriptTextItem[] {
+  return session.transcript.filter((item): item is SessionTranscriptTextItem => item.kind === "text");
 }
 
-function getKeptTurns(session: SessionRow, keepLastMessages: number): SessionMessage[] {
+function getDroppedTurns(session: SessionRow, keepLastMessages: number): SessionTranscriptTextItem[] {
+  const transcript = textTranscript(session);
+  const overflow = transcript.length - keepLastMessages;
+  if (overflow <= 0) return [];
+  return transcript.slice(0, overflow);
+}
+
+function getKeptTurns(session: SessionRow, keepLastMessages: number): SessionTranscriptTextItem[] {
   if (keepLastMessages <= 0) return [];
-  return session.turns.slice(-keepLastMessages);
+  return textTranscript(session).slice(-keepLastMessages);
 }
 
 function compactionTimeoutMs(timeoutMs: number | undefined): number | undefined {
@@ -243,7 +262,7 @@ export function shouldCompactSessionForUsage(input: {
   if (!Number.isFinite(maxTurns) || maxTurns <= 0) {
     return false;
   }
-  return input.session.turns.length >= maxTurns * 2;
+  return textTranscript(input.session).length >= maxTurns * 2;
 }
 
 export async function compactSessionWithResolvedModel(input: {
@@ -266,7 +285,7 @@ export async function compactSessionWithResolvedModel(input: {
     return {
       compacted: false,
       droppedMessages: 0,
-      keptMessages: input.session.turns.length,
+      keptMessages: textTranscript(input.session).length,
       summary: input.session.summary,
       reason: "noop",
     };
@@ -314,7 +333,7 @@ export async function compactSessionWithResolvedModel(input: {
     await input.sessionDal.replaceTranscript({
       tenantId: input.session.tenant_id,
       sessionId: input.session.session_id,
-      turns: keptTurns,
+      transcript: keptTurns as SessionTranscriptItem[],
       summary,
     });
 

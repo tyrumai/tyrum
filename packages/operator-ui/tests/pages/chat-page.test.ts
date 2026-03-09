@@ -11,6 +11,8 @@ import { cleanupTestRoot, renderIntoDocument, stubMatchMedia } from "../test-uti
 describe("ChatPage", () => {
   it("uses the persisted session title instead of deriving it from the last turn", async () => {
     const ws = {
+      on: vi.fn(),
+      off: vi.fn(),
       sessionList: vi.fn().mockResolvedValue({
         sessions: [
           {
@@ -20,7 +22,8 @@ describe("ChatPage", () => {
             thread_id: "ui-550e8400-e29b-41d4-a716-446655440000",
             title: "Persisted title",
             summary: "",
-            last_turn: { role: "assistant", content: "Assistant title\nMore details" },
+            transcript_count: 1,
+            last_text: { role: "assistant", content: "Assistant title\nMore details" },
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           },
@@ -55,6 +58,8 @@ describe("ChatPage", () => {
 
   it("uses the session summary as preview when available", async () => {
     const ws = {
+      on: vi.fn(),
+      off: vi.fn(),
       sessionList: vi.fn().mockResolvedValue({
         sessions: [
           {
@@ -64,7 +69,8 @@ describe("ChatPage", () => {
             thread_id: "ui-550e8400-e29b-41d4-a716-446655440000",
             title: "Persisted title",
             summary: "Conversation summary",
-            last_turn: { role: "assistant", content: "Assistant title\nMore details" },
+            transcript_count: 1,
+            last_text: { role: "assistant", content: "Assistant title\nMore details" },
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           },
@@ -99,6 +105,8 @@ describe("ChatPage", () => {
 
   it("uses a desktop split pane at large breakpoints", async () => {
     const ws = {
+      on: vi.fn(),
+      off: vi.fn(),
       sessionList: vi.fn().mockResolvedValue({
         sessions: [
           {
@@ -108,7 +116,8 @@ describe("ChatPage", () => {
             thread_id: "ui-550e8400-e29b-41d4-a716-446655440000",
             title: "Persisted title",
             summary: "Conversation summary",
-            last_turn: { role: "assistant", content: "Assistant title\nMore details" },
+            transcript_count: 1,
+            last_text: { role: "assistant", content: "Assistant title\nMore details" },
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           },
@@ -165,6 +174,8 @@ describe("ChatPage", () => {
 
   it("keeps the agents error alert positioned within the chat page", async () => {
     const ws = {
+      on: vi.fn(),
+      off: vi.fn(),
       sessionList: vi.fn().mockResolvedValue({
         sessions: [],
         next_cursor: null,
@@ -208,6 +219,8 @@ describe("ChatPage", () => {
 
   it("uses master-detail navigation on narrow screens", async () => {
     const ws = {
+      on: vi.fn(),
+      off: vi.fn(),
       sessionList: vi.fn().mockResolvedValue({
         sessions: [
           {
@@ -217,7 +230,8 @@ describe("ChatPage", () => {
             thread_id: "ui-550e8400-e29b-41d4-a716-446655440000",
             title: "Persisted title",
             summary: "Conversation summary",
-            last_turn: { role: "assistant", content: "Assistant title\nMore details" },
+            transcript_count: 1,
+            last_text: { role: "assistant", content: "Assistant title\nMore details" },
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           },
@@ -234,7 +248,15 @@ describe("ChatPage", () => {
           summary: "Conversation summary",
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          turns: [{ role: "assistant", content: "Loaded transcript" }],
+          transcript: [
+            {
+              kind: "text",
+              id: "turn-1",
+              role: "assistant",
+              content: "Loaded transcript",
+              created_at: new Date().toISOString(),
+            },
+          ],
         },
       }),
     };
@@ -263,6 +285,7 @@ describe("ChatPage", () => {
 
     await act(async () => {
       threadButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
       await Promise.resolve();
     });
 

@@ -14,6 +14,7 @@ import { createAuditApi, type AuditApi } from "./audit.js";
 import { createContractsApi, type ContractsApi } from "./contracts.js";
 import { createContextApi, type ContextApi } from "./context.js";
 import { createDeviceTokensApi, type DeviceTokensApi } from "./device-tokens.js";
+import { createExtensionsApi, type ExtensionsApi } from "./extensions.js";
 import { createHealthApi, type HealthApi } from "./health.js";
 import { createModelsApi, type ModelsApi } from "./models.js";
 import { createModelConfigApi, type ModelConfigApi } from "./model-config.js";
@@ -70,6 +71,7 @@ export interface TyrumHttpClient {
   artifacts?: ArtifactsApi;
   health?: HealthApi;
   toolRegistry?: ToolRegistryApi;
+  extensions?: ExtensionsApi;
 }
 
 export type TyrumHttpClientOperator = TyrumHttpClient & {
@@ -83,6 +85,7 @@ export type TyrumHttpClientOperator = TyrumHttpClient & {
   artifacts: ArtifactsApi;
   health: HealthApi;
   toolRegistry: ToolRegistryApi;
+  extensions: ExtensionsApi;
 };
 
 export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHttpClientOperator {
@@ -115,6 +118,7 @@ export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHtt
     artifacts: createArtifactsApi(transport),
     health: createHealthApi(transport),
     toolRegistry: createToolRegistryApi(transport),
+    extensions: createExtensionsApi(transport),
   };
 }
 

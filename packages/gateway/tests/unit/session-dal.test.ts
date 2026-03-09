@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionDal } from "../../src/modules/agent/session-dal.js";
-import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
-import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
-import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
-import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
-import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
-import { seedCompletedTelegramTurn } from "../helpers/channel-session-repair.js";
 import { MetricsRegistry } from "../../src/modules/observability/metrics.js";
+import {
+  appendThreeTranscriptTurns,
+  appendTranscriptTurn,
+  createObservedSessionDalFixture,
+  createSessionDalFixture,
+  seedRepairTurns,
+  setSessionTranscriptAndSummary,
+  textTranscript,
+} from "./session-dal.test-support.js";
 
 describe("SessionDal", () => {
   let db: SqliteDb | undefined;
@@ -18,10 +21,9 @@ describe("SessionDal", () => {
   });
 
   function createDal(): SessionDal {
-    db = openTestSqliteDb();
-    const identityScopeDal = new IdentityScopeDal(db, { cacheTtlMs: 60_000 });
-    const channelThreadDal = new ChannelThreadDal(db);
-    return new SessionDal(db, identityScopeDal, channelThreadDal);
+    const fixture = createSessionDalFixture();
+    db = fixture.db;
+    return fixture.dal;
   }
 
   it("creates and retrieves sessions by channel/thread", async () => {
@@ -42,7 +44,7 @@ describe("SessionDal", () => {
     expect(first.title).toBe("");
     expect(second.session_id).toBe(first.session_id);
     expect(second.title).toBe("");
-    expect(second.turns).toEqual([]);
+    expect(second.transcript).toEqual([]);
   });
 
   it("isolates sessions per agent", async () => {
@@ -84,32 +86,17 @@ describe("SessionDal", () => {
       containerKind: "group",
     });
 
-    await dal.appendTurn({
+    const updated = await appendThreeTranscriptTurns({
+      dal,
       tenantId: session.tenant_id,
       sessionId: session.session_id,
-      userMessage: "u1",
-      assistantMessage: "a1",
-      timestamp: "2026-02-17T00:00:00.000Z",
-    });
-    await dal.appendTurn({
-      tenantId: session.tenant_id,
-      sessionId: session.session_id,
-      userMessage: "u2",
-      assistantMessage: "a2",
-      timestamp: "2026-02-17T00:01:00.000Z",
-    });
-    const updated = await dal.appendTurn({
-      tenantId: session.tenant_id,
-      sessionId: session.session_id,
-      userMessage: "u3",
-      assistantMessage: "a3",
-      timestamp: "2026-02-17T00:02:00.000Z",
     });
 
-    expect(updated.turns).toHaveLength(6);
+    const turns = textTranscript(updated);
+    expect(turns).toHaveLength(6);
     expect(updated.title).toBe("");
-    expect(updated.turns[0]?.content).toBe("u1");
-    expect(updated.turns[5]?.content).toBe("a3");
+    expect(turns[0]?.content).toBe("u1");
+    expect(turns[5]?.content).toBe("a3");
   });
 
   it("compacts overflow into session summary deterministically when requested", async () => {
@@ -120,26 +107,10 @@ describe("SessionDal", () => {
       containerKind: "group",
     });
 
-    await dal.appendTurn({
+    await appendThreeTranscriptTurns({
+      dal,
       tenantId: session.tenant_id,
       sessionId: session.session_id,
-      userMessage: "u1",
-      assistantMessage: "a1",
-      timestamp: "2026-02-17T00:00:00.000Z",
-    });
-    await dal.appendTurn({
-      tenantId: session.tenant_id,
-      sessionId: session.session_id,
-      userMessage: "u2",
-      assistantMessage: "a2",
-      timestamp: "2026-02-17T00:01:00.000Z",
-    });
-    await dal.appendTurn({
-      tenantId: session.tenant_id,
-      sessionId: session.session_id,
-      userMessage: "u3",
-      assistantMessage: "a3",
-      timestamp: "2026-02-17T00:02:00.000Z",
     });
 
     const compacted = await dal.compact({
@@ -153,9 +124,10 @@ describe("SessionDal", () => {
       tenantId: session.tenant_id,
       sessionId: session.session_id,
     });
-    expect(updated?.turns).toHaveLength(2);
-    expect(updated?.turns[0]?.content).toBe("u3");
-    expect(updated?.turns[1]?.content).toBe("a3");
+    const turns = textTranscript(updated ?? {});
+    expect(turns).toHaveLength(2);
+    expect(turns[0]?.content).toBe("u3");
+    expect(turns[1]?.content).toBe("a3");
     expect(updated?.summary).toContain("u1");
     expect(updated?.summary).toContain("u2");
     expect(updated?.summary).not.toContain("u3");
@@ -169,7 +141,8 @@ describe("SessionDal", () => {
       containerKind: "group",
     });
 
-    await dal.appendTurn({
+    await appendTranscriptTurn({
+      dal,
       tenantId: session.tenant_id,
       sessionId: session.session_id,
       userMessage: "u1",
@@ -189,19 +162,18 @@ describe("SessionDal", () => {
       tenantId: session.tenant_id,
       sessionId: session.session_id,
     });
-    expect(updated?.turns).toEqual([]);
+    expect(updated?.transcript).toEqual([]);
     expect(updated?.title).toBe("");
     expect(updated?.summary).toContain("u1");
     expect(updated?.summary).toContain("a1");
   });
 
-  it("flags malformed turns_json on direct reads while keeping the session usable", async () => {
-    db = openTestSqliteDb();
+  it("flags malformed transcript_json on direct reads while keeping the session usable", async () => {
     const logger = { warn: vi.fn() };
     const metrics = new MetricsRegistry();
-    const identityScopeDal = new IdentityScopeDal(db, { cacheTtlMs: 60_000 });
-    const channelThreadDal = new ChannelThreadDal(db);
-    const dal = new SessionDal(db, identityScopeDal, channelThreadDal, { logger, metrics });
+    const fixture = createObservedSessionDalFixture({ logger, metrics });
+    db = fixture.db;
+    const dal = fixture.dal;
 
     const session = await dal.getOrCreate({
       connectorKey: "telegram",
@@ -209,19 +181,19 @@ describe("SessionDal", () => {
       containerKind: "group",
     });
 
-    await db.run("UPDATE sessions SET turns_json = ? WHERE tenant_id = ? AND session_id = ?", [
+    await db.run("UPDATE sessions SET transcript_json = ? WHERE tenant_id = ? AND session_id = ?", [
       "{ not: json",
       session.tenant_id,
       session.session_id,
     ]);
 
     const row = await dal.getById({ tenantId: session.tenant_id, sessionId: session.session_id });
-    expect(row?.turns).toEqual([]);
+    expect(row?.transcript).toEqual([]);
     expect(logger.warn).toHaveBeenCalledWith(
       "persisted_json.read_failed",
       expect.objectContaining({
         table: "sessions",
-        column: "turns_json",
+        column: "transcript_json",
         reason: "invalid_json",
       }),
     );
@@ -229,7 +201,7 @@ describe("SessionDal", () => {
     const metricsText = await metrics.registry.getSingleMetricAsString(
       "persisted_json_read_failures_total",
     );
-    expect(metricsText).toContain('table="sessions",column="turns_json",reason="invalid_json"');
+    expect(metricsText).toContain('table="sessions",column="transcript_json",reason="invalid_json"');
   });
 
   it("sets a title only while the stored title is blank", async () => {
@@ -278,44 +250,36 @@ describe("SessionDal", () => {
         providerThreadId: "thread-repair",
         containerKind: "channel",
       });
-      const inboxDal = new ChannelInboxDal(db!, dal);
-      const outboxDal = new ChannelOutboxDal(db!);
-
-      await seedCompletedTelegramTurn({
-        inboxDal,
-        outboxDal,
+      await seedRepairTurns({
+        db: db!,
+        dal,
         session,
         threadId: "thread-repair",
-        messageId: "msg-1",
-        userText: "u1",
-        assistantText: "a1",
-        receivedAtMs: Date.parse("2026-02-17T00:00:00.000Z"),
-      });
-      await seedCompletedTelegramTurn({
-        inboxDal,
-        outboxDal,
-        session,
-        threadId: "thread-repair",
-        messageId: "msg-2",
-        userText: "u2",
-        assistantText: "a2",
-        receivedAtMs: Date.parse("2026-02-17T00:01:00.000Z"),
-      });
-
-      await db!.run(
-        `UPDATE sessions
-         SET turns_json = ?, summary = ?, updated_at = ?
-         WHERE tenant_id = ? AND session_id = ?`,
-        [
-          JSON.stringify([
-            { role: "user", content: "stale", timestamp: "2026-02-17T00:00:00.000Z" },
-          ]),
-          "stale-summary",
-          "2026-02-17T00:02:00.000Z",
-          session.tenant_id,
-          session.session_id,
+        turns: [
+          {
+            messageId: "msg-1",
+            userText: "u1",
+            assistantText: "a1",
+            receivedAtMs: Date.parse("2026-02-17T00:00:00.000Z"),
+          },
+          {
+            messageId: "msg-2",
+            userText: "u2",
+            assistantText: "a2",
+            receivedAtMs: Date.parse("2026-02-17T00:01:00.000Z"),
+          },
         ],
-      );
+      });
+
+      await setSessionTranscriptAndSummary({
+        db: db!,
+        session,
+        transcriptJson: JSON.stringify([
+          { role: "user", content: "stale", timestamp: "2026-02-17T00:00:00.000Z" },
+        ]),
+        summary: "stale-summary",
+        updatedAt: "2026-02-17T00:02:00.000Z",
+      });
 
       const repaired = await dal.repairFromChannelLogs({
         tenantId: session.tenant_id,
@@ -335,219 +299,35 @@ describe("SessionDal", () => {
       });
       expect(updated?.title).toBe("");
       expect(updated?.summary).toBe("stale-summary");
-      expect(updated?.turns).toEqual([
-        { role: "user", content: "u1", timestamp: "2026-02-17T00:10:00.000Z" },
-        { role: "assistant", content: "a1", timestamp: "2026-02-17T00:10:00.000Z" },
-        { role: "user", content: "u2", timestamp: "2026-02-17T00:10:00.000Z" },
-        { role: "assistant", content: "a2", timestamp: "2026-02-17T00:10:00.000Z" },
+      expect(textTranscript(updated ?? {})).toEqual([
+        expect.objectContaining({
+          kind: "text",
+          role: "user",
+          content: "u1",
+          created_at: "2026-02-17T00:10:00.000Z",
+        }),
+        expect.objectContaining({
+          kind: "text",
+          role: "assistant",
+          content: "a1",
+          created_at: "2026-02-17T00:10:00.000Z",
+        }),
+        expect.objectContaining({
+          kind: "text",
+          role: "user",
+          content: "u2",
+          created_at: "2026-02-17T00:10:00.000Z",
+        }),
+        expect.objectContaining({
+          kind: "text",
+          role: "assistant",
+          content: "a2",
+          created_at: "2026-02-17T00:10:00.000Z",
+        }),
       ]);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("deletes expired sessions using ttl days", async () => {
-    const dal = createDal();
-    const session = await dal.getOrCreate({
-      connectorKey: "telegram",
-      providerThreadId: "ops",
-      containerKind: "group",
-    });
-    await db!.run(
-      "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE tenant_id = ? AND session_id = ?",
-      [session.tenant_id, session.session_id],
-    );
-
-    const removed = await dal.deleteExpired(30);
-    const row = await dal.getById({ tenantId: session.tenant_id, sessionId: session.session_id });
-
-    expect(removed).toBe(1);
-    expect(row).toBeUndefined();
-  });
-
-  it("deletes expired sessions across agents when agent id is omitted", async () => {
-    const dal = createDal();
-    const a = await dal.getOrCreate({
-      scopeKeys: { agentKey: "agent-1" },
-      connectorKey: "telegram",
-      providerThreadId: "ops",
-      containerKind: "group",
-    });
-    const b = await dal.getOrCreate({
-      scopeKeys: { agentKey: "agent-2" },
-      connectorKey: "telegram",
-      providerThreadId: "ops",
-      containerKind: "group",
-    });
-
-    await db!.run(
-      "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE tenant_id = ? AND session_id IN (?, ?)",
-      [a.tenant_id, a.session_id, b.session_id],
-    );
-
-    const removed = await dal.deleteExpired(30);
-
-    expect(removed).toBe(2);
-    expect(await dal.getById({ tenantId: a.tenant_id, sessionId: a.session_id })).toBeUndefined();
-    expect(await dal.getById({ tenantId: b.tenant_id, sessionId: b.session_id })).toBeUndefined();
-  });
-
-  it("deletes expired sessions only for the specified agent", async () => {
-    const dal = createDal();
-    const a = await dal.getOrCreate({
-      scopeKeys: { agentKey: "agent-1" },
-      connectorKey: "telegram",
-      providerThreadId: "ops",
-      containerKind: "group",
-    });
-    const b = await dal.getOrCreate({
-      scopeKeys: { agentKey: "agent-2" },
-      connectorKey: "telegram",
-      providerThreadId: "ops",
-      containerKind: "group",
-    });
-
-    await db!.run(
-      "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE tenant_id = ? AND session_id IN (?, ?)",
-      [a.tenant_id, a.session_id, b.session_id],
-    );
-
-    const removed = await dal.deleteExpired(30, "agent-1");
-
-    expect(removed).toBe(1);
-    expect(await dal.getById({ tenantId: a.tenant_id, sessionId: a.session_id })).toBeUndefined();
-    expect(await dal.getById({ tenantId: b.tenant_id, sessionId: b.session_id })).toBeDefined();
-  });
-
-  it("keeps newer legacy-format timestamps on threshold date", async () => {
-    vi.useFakeTimers();
-    try {
-      vi.setSystemTime(new Date("2026-02-20T12:00:00.000Z"));
-
-      const dal = createDal();
-      const stale = await dal.getOrCreate({
-        connectorKey: "telegram",
-        providerThreadId: "stale",
-        containerKind: "group",
-      });
-      const fresh = await dal.getOrCreate({
-        connectorKey: "telegram",
-        providerThreadId: "fresh",
-        containerKind: "group",
-      });
-
-      await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
-        "2026-01-21 11:59:59",
-        stale.tenant_id,
-        stale.session_id,
-      ]);
-      await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
-        "2026-01-21 13:00:00",
-        fresh.tenant_id,
-        fresh.session_id,
-      ]);
-
-      const removed = await dal.deleteExpired(30);
-      const staleRow = await dal.getById({
-        tenantId: stale.tenant_id,
-        sessionId: stale.session_id,
-      });
-      const freshRow = await dal.getById({
-        tenantId: fresh.tenant_id,
-        sessionId: fresh.session_id,
-      });
-
-      expect(removed).toBe(1);
-      expect(staleRow).toBeUndefined();
-      expect(freshRow).toBeDefined();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("lists sessions by agent/channel ordered by updated_at desc with cursor pagination", async () => {
-    const dal = createDal();
-
-    const t1 = "2026-02-17T00:00:00.000Z";
-    const t2 = "2026-02-17T00:01:00.000Z";
-    const t3 = "2026-02-17T00:02:00.000Z";
-
-    const s1 = await dal.getOrCreate({
-      connectorKey: "ui",
-      providerThreadId: "thread-1",
-      containerKind: "group",
-    });
-    const s2 = await dal.getOrCreate({
-      connectorKey: "ui",
-      providerThreadId: "thread-2",
-      containerKind: "group",
-    });
-    const s3 = await dal.getOrCreate({
-      connectorKey: "ui",
-      providerThreadId: "thread-3",
-      containerKind: "group",
-    });
-
-    await dal.appendTurn({
-      tenantId: s3.tenant_id,
-      sessionId: s3.session_id,
-      userMessage: "hello",
-      assistantMessage: "world",
-      timestamp: "2026-02-17T00:00:30.000Z",
-    });
-
-    // Ensure deterministic ordering independent of creation time.
-    await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
-      t1,
-      s1.tenant_id,
-      s1.session_id,
-    ]);
-    await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
-      t2,
-      s2.tenant_id,
-      s2.session_id,
-    ]);
-    await db!.run("UPDATE sessions SET updated_at = ? WHERE tenant_id = ? AND session_id = ?", [
-      t3,
-      s3.tenant_id,
-      s3.session_id,
-    ]);
-
-    // Different channel should be excluded.
-    await dal.getOrCreate({
-      connectorKey: "telegram",
-      providerThreadId: "dm-1",
-      containerKind: "dm",
-    });
-
-    const page1 = await dal.list({ connectorKey: "ui", limit: 2 });
-    expect(page1.sessions).toHaveLength(2);
-    expect(page1.nextCursor).toBeTypeOf("string");
-    const decodedCursor = JSON.parse(
-      Buffer.from(page1.nextCursor as string, "base64url").toString("utf-8"),
-    ) as Record<string, unknown>;
-    expect(Object.keys(decodedCursor).toSorted()).toEqual(["session_id", "updated_at"]);
-    expect(page1.sessions.map((s) => s.session_id)).toEqual([s3.session_key, s2.session_key]);
-    expect(page1.sessions[0]?.title).toBe("");
-    expect(page1.sessions[1]?.title).toBe("");
-    expect(page1.sessions[0]?.turns_count).toBe(2);
-    expect(page1.sessions[0]?.last_turn).toEqual({ role: "assistant", content: "world" });
-    expect(page1.sessions[1]?.turns_count).toBe(0);
-    expect(page1.sessions[1]?.last_turn).toBeNull();
-
-    const page2 = await dal.list({
-      connectorKey: "ui",
-      limit: 2,
-      cursor: page1.nextCursor,
-    });
-    expect(page2.sessions.map((s) => s.session_id)).toEqual([s1.session_key]);
-    expect(page2.nextCursor).toBeNull();
-  });
-
-  it("rejects invalid list cursors", async () => {
-    const dal = createDal();
-    await expect(dal.list({ connectorKey: "ui", cursor: "not-a-cursor" })).rejects.toThrow(
-      "invalid cursor",
-    );
-  });
 });

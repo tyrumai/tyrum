@@ -112,7 +112,7 @@ export async function writeSessionState(
 ): Promise<void> {
   await db.run(
     `UPDATE sessions
-     SET summary = ?, turns_json = ?, updated_at = ?
+     SET summary = ?, transcript_json = ?, updated_at = ?
      WHERE tenant_id = ? AND session_id = ?`,
     [
       input.summary,
@@ -129,8 +129,8 @@ export async function readSessionRecord(
   sessionId: string,
   tenantId = DEFAULT_TENANT_ID,
 ) {
-  return await db.get<{ session_key: string; summary: string; turns_json: string }>(
-    `SELECT session_key, summary, turns_json
+  return await db.get<{ session_key: string; summary: string; transcript_json: string }>(
+    `SELECT session_key, summary, transcript_json
      FROM sessions
      WHERE tenant_id = ? AND session_id = ?`,
     [tenantId, sessionId],
@@ -142,16 +142,16 @@ export async function readSessionSnapshot(
   sessionId: string,
   tenantId = DEFAULT_TENANT_ID,
 ) {
-  const row = await db.get<{ summary: string; turns_json: string }>(
-    `SELECT summary, turns_json
+  const row = await db.get<{ summary: string; transcript_json: string }>(
+    `SELECT summary, transcript_json
      FROM sessions
      WHERE tenant_id = ? AND session_id = ?`,
     [tenantId, sessionId],
   );
-  const turnContents = row?.turns_json
-    ? (JSON.parse(row.turns_json) as Array<{ content: string }>).map((turn) => turn.content)
+  const turnContents = row?.transcript_json
+    ? (JSON.parse(row.transcript_json) as Array<{ content: string }>).map((turn) => turn.content)
     : [];
-  return { summary: row?.summary ?? "", turnsJson: row?.turns_json ?? "[]", turnContents };
+  return { summary: row?.summary ?? "", turnsJson: row?.transcript_json ?? "[]", turnContents };
 }
 
 export async function readSessionAccountKey(

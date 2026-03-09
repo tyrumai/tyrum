@@ -35,7 +35,6 @@ async function switchAdminTab(container: HTMLElement, testId: string): Promise<v
 
 function createCore(activeAdminMode: boolean): {
   core: OperatorCore;
-  pluginsList: ReturnType<typeof vi.fn>;
 } {
   const nowMs = Date.parse("2026-03-01T00:00:00.000Z");
   const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0, now: () => nowMs });
@@ -45,8 +44,6 @@ function createCore(activeAdminMode: boolean): {
       expiresAt: "2026-03-01T00:10:00.000Z",
     });
   }
-
-  const pluginsList = vi.fn(async () => ({ status: "ok", plugins: [] }) as unknown);
 
   const core = {
     httpBaseUrl: "http://example.test",
@@ -136,10 +133,6 @@ function createCore(activeAdminMode: boolean): {
         rotate: vi.fn(async () => ({ revoked: true })),
         revoke: vi.fn(async () => ({ revoked: true })),
       },
-      plugins: {
-        list: pluginsList,
-        get: vi.fn(async () => ({ status: "ok", plugin: {} })),
-      },
       deviceTokens: {
         issue: vi.fn(async () => ({ status: "ok" })),
         revoke: vi.fn(async () => ({ status: "ok" })),
@@ -182,7 +175,7 @@ function createCore(activeAdminMode: boolean): {
     },
   } as unknown as OperatorCore;
 
-  return { core, pluginsList };
+  return { core };
 }
 
 describe("ConfigurePage (strict admin tabs)", () => {
@@ -227,9 +220,6 @@ describe("ConfigurePage (strict admin tabs)", () => {
         testRoot.container.querySelector("[data-testid='admin-http-tab-secrets']"),
       ).not.toBeNull();
       expect(
-        testRoot.container.querySelector("[data-testid='admin-http-tab-plugins']"),
-      ).not.toBeNull();
-      expect(
         testRoot.container.querySelector("[data-testid='admin-http-tab-gateway']"),
       ).not.toBeNull();
       expect(
@@ -240,8 +230,8 @@ describe("ConfigurePage (strict admin tabs)", () => {
     }
   });
 
-  it("keeps admin mutations disabled outside Elevated Mode while allowing read actions", async () => {
-    const { core, pluginsList } = createCore(false);
+  it("keeps admin mutations disabled outside Elevated Mode", async () => {
+    const { core } = createCore(false);
 
     const testRoot = renderIntoDocument(
       React.createElement(
@@ -256,17 +246,6 @@ describe("ConfigurePage (strict admin tabs)", () => {
     );
 
     try {
-      await switchAdminTab(testRoot.container, "admin-http-tab-plugins");
-      const listPluginsButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-http-plugins-list']",
-      );
-      expect(listPluginsButton).not.toBeNull();
-      await act(async () => {
-        listPluginsButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await Promise.resolve();
-      });
-      expect(pluginsList).toHaveBeenCalledTimes(1);
-
       await switchAdminTab(testRoot.container, "admin-http-tab-gateway");
       const issueButton = testRoot.container.querySelector<HTMLButtonElement>(
         "[data-testid='admin-http-tokens-issue']",

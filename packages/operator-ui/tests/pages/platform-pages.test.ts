@@ -37,7 +37,7 @@ describe("Platform pages", () => {
     });
   });
 
-  it("shows node-configure fallback states for non-desktop and missing desktop api", async () => {
+  it("shows desktop page fallback states for non-desktop and missing desktop api", async () => {
     await withHostNodeConfigurePage({ kind: "web" }, ({ container }) => {
       expect(container.textContent).toContain(
         "Node configuration is only available in the desktop app.",

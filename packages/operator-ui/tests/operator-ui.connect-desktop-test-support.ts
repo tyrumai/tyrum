@@ -61,7 +61,7 @@ function registerConnectDesktopBasicTests(): void {
     container.remove();
   });
 
-  it("routes desktop mode to node configuration and auto-connects the local node", async () => {
+  it("routes desktop mode to the desktop page and auto-connects the local node", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -113,13 +113,13 @@ function registerConnectDesktopBasicTests(): void {
     expect(desktopApi.node.connect).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      clickButtonByTestId(container, "nav-node-configure");
+      clickButtonByTestId(container, "nav-desktop");
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("Node Configuration");
-    expect(container.querySelector('[data-testid="nav-node-configure"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="nav-desktop"]')).toBeNull();
+    expect(container.textContent).toContain("Desktop");
+    expect(container.querySelector('[data-testid="nav-desktop"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="nav-node-configure"]')).toBeNull();
     expect(container.querySelector('[data-testid="nav-connection"]')).toBeNull();
 
     act(() => {
@@ -261,7 +261,7 @@ function registerConnectDesktopSettingsTests(): void {
     });
 
     await act(async () => {
-      clickButtonByTestId(container, "nav-node-configure");
+      clickButtonByTestId(container, "nav-desktop");
       await Promise.resolve();
     });
 
@@ -356,7 +356,7 @@ function registerConnectDesktopSettingsTests(): void {
     });
 
     await act(async () => {
-      clickButtonByTestId(container, "nav-node-configure");
+      clickButtonByTestId(container, "nav-desktop");
       await Promise.resolve();
     });
 
@@ -399,7 +399,7 @@ function registerConnectDesktopSettingsTests(): void {
     delete (window as unknown as Record<string, unknown>)["tyrumDesktop"];
   });
 
-  it("keeps mac permission request errors visible in node configuration", async () => {
+  it("keeps mac permission request errors visible on the desktop page", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -445,7 +445,7 @@ function registerConnectDesktopSettingsTests(): void {
     });
 
     await act(async () => {
-      clickButtonByTestId(container, "nav-node-configure");
+      clickButtonByTestId(container, "nav-desktop");
       await Promise.resolve();
     });
 

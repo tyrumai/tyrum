@@ -308,10 +308,12 @@ describe("agent routes", () => {
     });
     expect(discord).toBeTruthy();
 
-    const telegramUserTurns = telegram!.turns
+    const telegramUserTurns = telegram!.transcript
       .filter((t) => t.role === "user")
       .map((t) => t.content);
-    const discordUserTurns = discord!.turns.filter((t) => t.role === "user").map((t) => t.content);
+    const discordUserTurns = discord!.transcript
+      .filter((t) => t.role === "user")
+      .map((t) => t.content);
 
     expect(discordUserTurns.join("\n").toLowerCase()).not.toContain("prefer tea");
     expect(telegramUserTurns.join("\n").toLowerCase()).toContain("prefer tea");

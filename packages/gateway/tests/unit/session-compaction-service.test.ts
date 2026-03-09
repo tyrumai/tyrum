@@ -31,9 +31,9 @@ describe("shouldCompactSessionForUsage", () => {
           sessions: { max_turns: 0, compaction: { auto: true, reserved_input_tokens: 20_000 } },
         } as never,
         session: {
-          turns: [
-            { role: "user", content: "m1", timestamp: "2026-03-08T00:00:00Z" },
-            { role: "assistant", content: "r1", timestamp: "2026-03-08T00:00:00Z" },
+          transcript: [
+            { kind: "text", id: "turn-1", role: "user", content: "m1", created_at: "2026-03-08T00:00:00Z" },
+            { kind: "text", id: "turn-2", role: "assistant", content: "r1", created_at: "2026-03-08T00:00:00Z" },
           ],
         } as never,
         modelResolution: { candidates: [] } as never,
@@ -49,11 +49,11 @@ describe("shouldCompactSessionForUsage", () => {
           sessions: { max_turns: 2, compaction: { auto: true, reserved_input_tokens: 20_000 } },
         } as never,
         session: {
-          turns: [
-            { role: "user", content: "m1", timestamp: "2026-03-08T00:00:00Z" },
-            { role: "assistant", content: "r1", timestamp: "2026-03-08T00:00:00Z" },
-            { role: "user", content: "m2", timestamp: "2026-03-08T00:00:01Z" },
-            { role: "assistant", content: "r2", timestamp: "2026-03-08T00:00:01Z" },
+          transcript: [
+            { kind: "text", id: "turn-1", role: "user", content: "m1", created_at: "2026-03-08T00:00:00Z" },
+            { kind: "text", id: "turn-2", role: "assistant", content: "r1", created_at: "2026-03-08T00:00:00Z" },
+            { kind: "text", id: "turn-3", role: "user", content: "m2", created_at: "2026-03-08T00:00:01Z" },
+            { kind: "text", id: "turn-4", role: "assistant", content: "r2", created_at: "2026-03-08T00:00:01Z" },
           ],
         } as never,
         modelResolution: { candidates: [] } as never,
@@ -89,11 +89,11 @@ describe("shouldCompactSessionForUsage", () => {
         session_id: "session-1",
         agent_id: "agent-1",
         summary: "existing summary",
-        turns: [
-          { role: "user", content: "u1", timestamp: "2026-03-08T00:00:00Z" },
-          { role: "assistant", content: "a1", timestamp: "2026-03-08T00:00:00Z" },
-          { role: "user", content: "u2", timestamp: "2026-03-08T00:00:01Z" },
-          { role: "assistant", content: "a2", timestamp: "2026-03-08T00:00:01Z" },
+        transcript: [
+          { kind: "text", id: "turn-1", role: "user", content: "u1", created_at: "2026-03-08T00:00:00Z" },
+          { kind: "text", id: "turn-2", role: "assistant", content: "a1", created_at: "2026-03-08T00:00:00Z" },
+          { kind: "text", id: "turn-3", role: "user", content: "u2", created_at: "2026-03-08T00:00:01Z" },
+          { kind: "text", id: "turn-4", role: "assistant", content: "a2", created_at: "2026-03-08T00:00:01Z" },
         ],
       } as never,
       model: {} as never,

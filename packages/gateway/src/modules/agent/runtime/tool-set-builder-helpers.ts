@@ -8,6 +8,8 @@ import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal, ApprovalStatus } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
+import type { SqlDb } from "../../../statestore/types.js";
+import type { SessionDal } from "../session-dal.js";
 
 export interface ToolExecutionContext {
   tenantId: string;
@@ -46,6 +48,8 @@ export interface ToolSetBuilderDeps {
   tenantId: string;
   agentId: string;
   workspaceId: string;
+  sessionDal?: SessionDal;
+  wsEventDb?: SqlDb;
   policyService: PolicyService;
   approvalDal: ApprovalDal;
   approvalNotifier: ApprovalNotifier;
@@ -103,6 +107,14 @@ export type ApprovalDecisionResult = {
   reason?: string;
 };
 
+export type ApprovalStatusUpdate = {
+  approvalId: string;
+  status: ApprovalStatus;
+  prompt: string;
+  createdAt: string;
+  reason?: string;
+};
+
 export async function awaitApprovalForToolExecution(
   deps: Pick<
     ToolSetBuilderDeps,
@@ -127,6 +139,7 @@ export async function awaitApprovalForToolExecution(
     suggested_overrides?: unknown;
     applied_override_ids?: string[];
   },
+  onStatusUpdate?: (update: ApprovalStatusUpdate) => Promise<void> | void,
 ): Promise<ApprovalDecisionResult> {
   const deadline = Date.now() + deps.approvalWaitMs;
   const approvalKey = `${context.planId}:step:${String(stepIndex)}:tool_call:${toolCallId}`;
@@ -165,6 +178,12 @@ export async function awaitApprovalForToolExecution(
   });
 
   deps.approvalNotifier.notify(approval);
+  await onStatusUpdate?.({
+    approvalId: approval.approval_id,
+    status: approval.status,
+    prompt: approval.prompt,
+    createdAt: approval.created_at,
+  });
 
   while (Date.now() < deadline) {
     await deps.approvalDal.expireStale({ tenantId: deps.tenantId });
@@ -172,27 +191,53 @@ export async function awaitApprovalForToolExecution(
       tenantId: deps.tenantId,
       approvalId: approval.approval_id,
     });
-    if (!current)
+    if (!current) {
+      await onStatusUpdate?.({
+        approvalId: approval.approval_id,
+        status: "expired",
+        prompt: approval.prompt,
+        createdAt: approval.created_at,
+        reason: "approval record not found",
+      });
       return {
         approved: false,
         status: "expired",
         approvalId: approval.approval_id,
         reason: "approval record not found",
       };
-    if (current.status === "approved")
+    }
+    if (current.status === "approved") {
+      const reason = extractApprovalReason(current);
+      await onStatusUpdate?.({
+        approvalId: current.approval_id,
+        status: current.status,
+        prompt: current.prompt,
+        createdAt: current.created_at,
+        reason,
+      });
       return {
         approved: true,
         status: "approved",
         approvalId: current.approval_id,
-        reason: extractApprovalReason(current),
+        reason,
       };
-    if (current.status === "denied" || current.status === "expired")
+    }
+    if (current.status === "denied" || current.status === "expired") {
+      const reason = extractApprovalReason(current);
+      await onStatusUpdate?.({
+        approvalId: current.approval_id,
+        status: current.status,
+        prompt: current.prompt,
+        createdAt: current.created_at,
+        reason,
+      });
       return {
         approved: false,
         status: current.status,
         approvalId: current.approval_id,
-        reason: extractApprovalReason(current),
+        reason,
       };
+    }
 
     const sleepMs = Math.min(deps.approvalPollMs, Math.max(1, deadline - Date.now()));
     await new Promise((resolve) => setTimeout(resolve, sleepMs));
@@ -202,10 +247,18 @@ export async function awaitApprovalForToolExecution(
     tenantId: deps.tenantId,
     approvalId: approval.approval_id,
   });
+  const reason = extractApprovalReason(expired) ?? "approval timed out";
+  await onStatusUpdate?.({
+    approvalId: approval.approval_id,
+    status: "expired",
+    prompt: approval.prompt,
+    createdAt: approval.created_at,
+    reason,
+  });
   return {
     approved: false,
     status: "expired",
     approvalId: approval.approval_id,
-    reason: extractApprovalReason(expired) ?? "approval timed out",
+    reason,
   };
 }

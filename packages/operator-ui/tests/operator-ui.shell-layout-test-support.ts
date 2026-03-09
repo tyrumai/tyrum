@@ -100,7 +100,7 @@ function registerShellLayoutRenderTests(): void {
     expect(container.querySelector(".alert")).toBeNull();
 
     const desktopLink = container.querySelector<HTMLButtonElement>(
-      '[data-testid="nav-node-configure"]',
+      '[data-testid="nav-desktop"]',
     );
     expect(desktopLink).not.toBeNull();
 

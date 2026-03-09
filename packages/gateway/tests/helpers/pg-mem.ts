@@ -5,6 +5,11 @@ const SESSION_TITLES_MIGRATION_MARKERS = [
   "ALTER TABLE sessions ADD COLUMN title TEXT NOT NULL DEFAULT ''",
   "FROM jsonb_array_elements(",
 ] as const;
+const SESSION_TRANSCRIPT_MIGRATION_MARKERS = [
+  "UPDATE sessions",
+  "SET turns_json = COALESCE(",
+  "jsonb_array_elements(sessions.turns_json::jsonb)",
+] as const;
 
 type SessionTitleMigrationRow = {
   tenant_id: string;
@@ -14,9 +19,19 @@ type SessionTitleMigrationRow = {
   workspace_id: string;
   channel_thread_id: string;
 };
+type SessionTranscriptMigrationRow = {
+  tenant_id: string;
+  session_id: string;
+  turns_json: string;
+  created_at: string;
+};
 
 function isSessionTitlesMigration(sql: string): boolean {
   return SESSION_TITLES_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
+}
+
+function isSessionTranscriptMigration(sql: string): boolean {
+  return SESSION_TRANSCRIPT_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
 }
 
 function toSqlTextLiteral(value: string): string {
@@ -43,6 +58,41 @@ function deriveBackfilledSessionTitle(turnsJson: string): string {
   return "";
 }
 
+function migrateLegacyTurnsToTranscript(turnsJson: string, createdAt: string, sessionId: string): string {
+  try {
+    const parsed = JSON.parse(turnsJson) as unknown;
+    if (!Array.isArray(parsed)) return turnsJson;
+    const hasLegacyTurns = parsed.some((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+      const record = item as Record<string, unknown>;
+      return typeof record["role"] === "string" && record["kind"] === undefined;
+    });
+    if (!hasLegacyTurns) return turnsJson;
+    return JSON.stringify(
+      parsed.map((item, index) => {
+        const record =
+          item && typeof item === "object" && !Array.isArray(item)
+            ? (item as Record<string, unknown>)
+            : {};
+        const role = record["role"];
+        return {
+          kind: "text",
+          id: `${sessionId}-migrated-${index + 1}`,
+          role:
+            role === "user" || role === "assistant" || role === "system" ? role : "assistant",
+          content: typeof record["content"] === "string" ? record["content"] : "",
+          created_at:
+            typeof record["timestamp"] === "string" && record["timestamp"].trim().length > 0
+              ? record["timestamp"]
+              : createdAt,
+        };
+      }),
+    );
+  } catch {
+    return turnsJson;
+  }
+}
+
 function applySessionTitlesMigration(mem: ReturnType<typeof newDb>): void {
   mem.public.none("ALTER TABLE sessions ADD COLUMN title TEXT NOT NULL DEFAULT ''");
   const sessions = mem.public.many<SessionTitleMigrationRow>(
@@ -66,6 +116,26 @@ function applySessionTitlesMigration(mem: ReturnType<typeof newDb>): void {
     mem.public.none(
       `UPDATE sessions
           SET title = ${toSqlTextLiteral(title)}
+        WHERE tenant_id = ${toSqlTextLiteral(session.tenant_id)}
+          AND session_id = ${toSqlTextLiteral(session.session_id)}`,
+    );
+  }
+}
+
+function applySessionTranscriptMigration(mem: ReturnType<typeof newDb>): void {
+  const sessions = mem.public.many<SessionTranscriptMigrationRow>(
+    "SELECT tenant_id, session_id, turns_json, created_at FROM sessions",
+  );
+  for (const session of sessions) {
+    const migrated = migrateLegacyTurnsToTranscript(
+      session.turns_json,
+      session.created_at,
+      session.session_id,
+    );
+    if (migrated === session.turns_json) continue;
+    mem.public.none(
+      `UPDATE sessions
+          SET turns_json = ${toSqlTextLiteral(migrated)}
         WHERE tenant_id = ${toSqlTextLiteral(session.tenant_id)}
           AND session_id = ${toSqlTextLiteral(session.session_id)}`,
     );
@@ -159,9 +229,15 @@ export function createPgMemDb(): ReturnType<typeof newDb> {
   registerCommonPgFunctions(mem);
   registerNoopPlpgsql(mem);
   mem.public.interceptQueries((sql) => {
-    if (!isSessionTitlesMigration(sql)) return null;
-    applySessionTitlesMigration(mem);
-    return [];
+    if (isSessionTitlesMigration(sql)) {
+      applySessionTitlesMigration(mem);
+      return [];
+    }
+    if (isSessionTranscriptMigration(sql)) {
+      applySessionTranscriptMigration(mem);
+      return [];
+    }
+    return null;
   });
   return mem;
 }

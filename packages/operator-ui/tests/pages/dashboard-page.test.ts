@@ -198,7 +198,7 @@ describe("DashboardPage", () => {
       React.createElement(DashboardPage, {
         core,
         onNavigate,
-        connectionRouteId: "node-configure",
+        connectionRouteId: "desktop",
       }),
     );
 
@@ -211,7 +211,7 @@ describe("DashboardPage", () => {
       connectionRow?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(onNavigate).toHaveBeenCalledWith("node-configure");
+    expect(onNavigate).toHaveBeenCalledWith("desktop");
 
     cleanupTestRoot({ container, root });
   });

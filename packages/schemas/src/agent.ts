@@ -227,7 +227,7 @@ export const SkillManifest = z.object({
 });
 export type SkillManifest = z.infer<typeof SkillManifest>;
 
-export const SkillProvenanceSource = z.enum(["workspace", "user", "bundled", "shared"]);
+export const SkillProvenanceSource = z.enum(["workspace", "managed", "user", "bundled", "shared"]);
 export type SkillProvenanceSource = z.infer<typeof SkillProvenanceSource>;
 
 export const SkillStatus = z

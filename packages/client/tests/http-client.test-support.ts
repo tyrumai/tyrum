@@ -73,6 +73,15 @@ const adminApiPaths = [
   "artifacts.getBytes",
   "health.get",
   "toolRegistry.list",
+  "extensions.list",
+  "extensions.get",
+  "extensions.importSkill",
+  "extensions.uploadSkill",
+  "extensions.importMcp",
+  "extensions.uploadMcp",
+  "extensions.toggle",
+  "extensions.revert",
+  "extensions.refresh",
 ] as const;
 
 type MockTyrumHttpFetch = TyrumHttpFetch & ReturnType<typeof vi.fn>;

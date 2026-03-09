@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Bot,
   Building2,
+  Blocks,
   Globe,
   LayoutGrid,
   Link2,
@@ -32,7 +33,7 @@ function lazyNamed<TProps>(
 const DashboardPage = lazyNamed<{
   core: OperatorCore;
   onNavigate: (id: string) => void;
-  connectionRouteId: "configure" | "node-configure";
+  connectionRouteId: "configure" | "desktop";
 }>(() => import("./components/pages/dashboard-page.js"), "DashboardPage");
 const ChatPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/chat-page.js"),
@@ -53,6 +54,10 @@ const WorkBoardPage = lazyNamed<{ core: OperatorCore }>(
 const AgentsPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/agents-page.js"),
   "AgentsPage",
+);
+const ExtensionsPage = lazyNamed<{ core: OperatorCore }>(
+  () => import("./components/pages/extensions-page.js"),
+  "ExtensionsPage",
 );
 const RunsPage = lazyNamed<{
   core: OperatorCore;
@@ -84,10 +89,11 @@ export type OperatorUiRouteId =
   | "approvals"
   | "workboard"
   | "agents"
+  | "extensions"
   | "runs"
   | "pairing"
   | "configure"
-  | "node-configure"
+  | "desktop"
   | "browser";
 
 export interface OperatorRouteRenderContext {
@@ -121,7 +127,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
       <DashboardPage
         core={core}
         onNavigate={navigate}
-        connectionRouteId={hostKind === "desktop" ? "node-configure" : "configure"}
+        connectionRouteId={hostKind === "desktop" ? "desktop" : "configure"}
       />
     ),
   },
@@ -171,6 +177,15 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     render: ({ core }) => <AgentsPage core={core} />,
   },
   {
+    id: "extensions",
+    label: "Extensions",
+    icon: Blocks,
+    navGroup: "sidebar",
+    shortcut: true,
+    hostKinds: ["desktop", "web"],
+    render: ({ core }) => <ExtensionsPage core={core} />,
+  },
+  {
     id: "runs",
     label: "Runs",
     icon: Play,
@@ -200,8 +215,8 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     render: ({ core }) => <ConfigurePage core={core} />,
   },
   {
-    id: "node-configure",
-    label: "Configure",
+    id: "desktop",
+    label: "Desktop",
     icon: Monitor,
     navGroup: "platformDesktop",
     shortcut: false,

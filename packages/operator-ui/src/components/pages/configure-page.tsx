@@ -7,7 +7,6 @@ import { AuthTokensCard } from "./admin-http-tokens.js";
 import { ToolRegistryCard } from "./admin-http-tools.js";
 import { AdminHttpModelsPanel } from "./admin-http-models.js";
 import { AdminHttpProvidersPanel } from "./admin-http-providers.js";
-import { PluginsCard } from "./admin-http-plugins.js";
 import { AdminHttpPolicyAuthPanels } from "./admin-http-policy-auth-panels.js";
 import { AdminHttpRoutingConfigPanel } from "./admin-http-routing-config.js";
 import { AdminHttpSecretsPanel } from "./admin-http-secrets.js";
@@ -47,9 +46,6 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
           <TabsTrigger value="secrets" data-testid="admin-http-tab-secrets">
             Secrets
           </TabsTrigger>
-          <TabsTrigger value="plugins" data-testid="admin-http-tab-plugins">
-            Plugins
-          </TabsTrigger>
           <TabsTrigger value="tools" data-testid="admin-http-tab-tools">
             Tools
           </TabsTrigger>
@@ -87,10 +83,6 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
 
         <TabsContent value="secrets">
           <AdminHttpSecretsPanel core={core} />
-        </TabsContent>
-
-        <TabsContent value="plugins">
-          <PluginsCard core={core} />
         </TabsContent>
 
         <TabsContent value="tools">

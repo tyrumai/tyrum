@@ -54,10 +54,10 @@ describe("Session v1 WS protocol", () => {
       thread_id: "ui-550e8400-e29b-41d4-a716-446655440000",
       title: "Hello",
       summary: "",
-      turns_count: 2,
+      transcript_count: 2,
       updated_at: now,
       created_at: now,
-      last_turn: { role: "assistant", content: "Hello" },
+      last_text: { role: "assistant", content: "Hello" },
     };
 
     const session = {
@@ -67,9 +67,21 @@ describe("Session v1 WS protocol", () => {
       thread_id: sessionListItem.thread_id,
       title: sessionListItem.title,
       summary: "",
-      turns: [
-        { role: "user", content: "Hi" },
-        { role: "assistant", content: "Hello" },
+      transcript: [
+        {
+          kind: "text",
+          id: "t-1",
+          role: "user",
+          content: "Hi",
+          created_at: now,
+        },
+        {
+          kind: "text",
+          id: "t-2",
+          role: "assistant",
+          content: "Hello",
+          created_at: now,
+        },
       ],
       updated_at: now,
       created_at: now,

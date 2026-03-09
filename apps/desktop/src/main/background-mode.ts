@@ -373,7 +373,7 @@ export class BackgroundModeController {
         label: "Open Node Configuration",
         click: () => {
           this.onShowMainWindow();
-          this.onRequestNavigate({ pageId: "node-configure" });
+          this.onRequestNavigate({ pageId: "desktop" });
         },
       },
       { type: "separator" },

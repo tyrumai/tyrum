@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DateTimeSchema } from "../common.js";
 import { AgentKey, Lane, TyrumKey } from "../keys.js";
+import { SessionTranscriptItem, SessionTranscriptTextPreview } from "../session-transcript.js";
 import {
   WsError,
   WsEventEnvelope,
@@ -40,14 +41,6 @@ export const WsSessionSendResult = z
   })
   .strict();
 export type WsSessionSendResult = z.infer<typeof WsSessionSendResult>;
-
-export const WsSessionTurn = z
-  .object({
-    role: WsMessageRole,
-    content: z.string(),
-  })
-  .strict();
-export type WsSessionTurn = z.infer<typeof WsSessionTurn>;
 
 export const WsSessionListPayload = z
   .object({
@@ -177,10 +170,10 @@ export const WsSessionListItem = z
     thread_id: z.string().trim().min(1),
     title: z.string().default(""),
     summary: z.string().default(""),
-    turns_count: z.number().int().nonnegative(),
+    transcript_count: z.number().int().nonnegative(),
     updated_at: DateTimeSchema,
     created_at: DateTimeSchema,
-    last_turn: WsSessionTurn.optional(),
+    last_text: SessionTranscriptTextPreview.optional(),
   })
   .strict();
 export type WsSessionListItem = z.infer<typeof WsSessionListItem>;
@@ -212,7 +205,7 @@ export const WsSessionGetSession = z
     thread_id: z.string().trim().min(1),
     title: z.string().default(""),
     summary: z.string().default(""),
-    turns: z.array(WsSessionTurn),
+    transcript: z.array(SessionTranscriptItem),
     updated_at: DateTimeSchema,
     created_at: DateTimeSchema,
   })

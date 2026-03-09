@@ -91,6 +91,120 @@ args:
     expect(mcpServers.map((server) => server.id)).toEqual(["calendar"]);
   });
 
+  it("loads managed skills and MCP servers from runtime packages when local files are absent", async () => {
+    const store = createLocalAgentContextStore({
+      db: container.db,
+      home: homeDir,
+      identityScopeDal: container.identityScopeDal,
+      logger: container.logger,
+    });
+    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-local");
+    const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
+    const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+    await container.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+    const scope = { tenantId, agentId, workspaceId };
+
+    await container.db.run(
+      `INSERT INTO runtime_package_revisions (
+         tenant_id, package_kind, package_key, package_json, artifact_id, enabled, created_at, created_by_json, reason
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tenantId,
+        "skill",
+        "db-skill",
+        JSON.stringify({
+          format: "agent-skill-bundle",
+          key: "db-skill",
+          manifest: {
+            meta: {
+              id: "db-skill",
+              name: "DB Skill",
+              version: "1.0.0",
+              description: "Managed skill",
+            },
+            body: "Prefer the managed skill.",
+          },
+          files: [
+            {
+              path: "SKILL.md",
+              content_base64: Buffer.from(
+                `---
+id: db-skill
+name: DB Skill
+version: 1.0.0
+description: Managed skill
+---
+Prefer the managed skill.
+`,
+                "utf-8",
+              ).toString("base64"),
+            },
+          ],
+          source: {
+            kind: "upload",
+            filename: "SKILL.md",
+            content_type: "text/markdown",
+          },
+        }),
+        null,
+        1,
+        new Date().toISOString(),
+        JSON.stringify({ kind: "test" }),
+        "seed",
+      ],
+    );
+    await container.db.run(
+      `INSERT INTO runtime_package_revisions (
+         tenant_id, package_kind, package_key, package_json, artifact_id, enabled, created_at, created_by_json, reason
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tenantId,
+        "mcp",
+        "calendar",
+        JSON.stringify({
+          format: "mcp-package",
+          key: "calendar",
+          spec: {
+            id: "calendar",
+            name: "Calendar MCP",
+            enabled: true,
+            transport: "remote",
+            url: "https://example.com/mcp",
+          },
+          files: [],
+          source: {
+            kind: "direct-url",
+            url: "https://example.com/mcp",
+            mode: "remote",
+          },
+        }),
+        null,
+        1,
+        new Date().toISOString(),
+        JSON.stringify({ kind: "test" }),
+        "seed",
+      ],
+    );
+
+    const config = AgentConfig.parse({
+      model: { model: "openai/gpt-4.1" },
+      skills: { enabled: ["db-skill"], workspace_trusted: true },
+      mcp: { enabled: ["calendar"] },
+      memory: { v1: { enabled: true } },
+    });
+
+    const skills = await store.getEnabledSkills(scope, config);
+    const mcpServers = await store.getEnabledMcpServers(scope, config);
+
+    expect(skills.map((skill) => [skill.meta.id, skill.provenance.source])).toEqual([
+      ["db-skill", "managed"],
+    ]);
+    expect(mcpServers.map((server) => server.id)).toEqual(["calendar"]);
+  });
+
   it("resolves runtime scope keys to durable ids before seeding local identity", async () => {
     const store = createLocalAgentContextStore({
       db: container.db,
@@ -127,8 +241,9 @@ args:
 
 describe("SharedAgentContextStore", () => {
   it("loads identity, skills, and mcp from shared state", async () => {
+    const sharedHome = mkdtempSync(join(tmpdir(), "tyrum-agent-context-store-shared-"));
     const container = createContainer(
-      { dbPath: ":memory:", migrationsDir },
+      { dbPath: ":memory:", migrationsDir, tyrumHome: sharedHome },
       { deploymentConfig: { state: { mode: "shared" } } },
     );
 
@@ -142,6 +257,7 @@ describe("SharedAgentContextStore", () => {
 
     const store = createSharedAgentContextStore({
       db: container.db,
+      home: sharedHome,
       logger: container.logger,
     });
     const scope = { tenantId, agentId, workspaceId };
@@ -228,5 +344,6 @@ describe("SharedAgentContextStore", () => {
     expect(mcpServers.map((server) => server.id)).toEqual(["calendar"]);
 
     await container.db.close();
+    rmSync(sharedHome, { recursive: true, force: true });
   });
 });
