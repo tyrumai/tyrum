@@ -192,7 +192,7 @@ describe("shouldCompactSessionForUsage", () => {
     });
   });
 
-  it("preserves non-text transcript items and the existing title on model compaction", async () => {
+  it("preserves all non-text transcript items and the existing title on model compaction", async () => {
     mockGenerateText.mockResolvedValue({ text: "compacted summary" } as never);
     const replaceTranscript = vi.fn(async () => undefined);
 
@@ -277,6 +277,7 @@ describe("shouldCompactSessionForUsage", () => {
       tenantId: "tenant-1",
       sessionId: "session-1",
       transcript: [
+        expect.objectContaining({ id: "tool-1", kind: "tool" }),
         expect.objectContaining({ id: "turn-2", kind: "text" }),
         expect.objectContaining({ id: "approval-1", kind: "approval" }),
         expect.objectContaining({ id: "turn-3", kind: "text" }),

@@ -245,24 +245,25 @@ export function splitTranscriptForCompaction(input: {
   kept: SessionTranscriptItem[];
 } {
   const keepLastMessages = Math.max(0, input.keepLastMessages);
-  if (keepLastMessages === 0) {
-    return { dropped: input.transcript.slice(), kept: [] };
-  }
-
-  let keptTextCount = 0;
+  const dropped: SessionTranscriptItem[] = [];
+  const kept: SessionTranscriptItem[] = [];
+  let remainingTextToKeep = keepLastMessages;
   for (let index = input.transcript.length - 1; index >= 0; index -= 1) {
     const item = input.transcript[index];
-    if (!item || item.kind !== "text") continue;
-    keptTextCount += 1;
-    if (keptTextCount === keepLastMessages) {
-      return {
-        dropped: input.transcript.slice(0, index),
-        kept: input.transcript.slice(index),
-      };
+    if (!item) continue;
+    if (item.kind !== "text") {
+      kept.push(item);
+      continue;
     }
+    if (remainingTextToKeep > 0) {
+      kept.push(item);
+      remainingTextToKeep -= 1;
+      continue;
+    }
+    dropped.push(item);
   }
 
-  return { dropped: [], kept: input.transcript.slice() };
+  return { dropped: dropped.toReversed(), kept: kept.toReversed() };
 }
 
 export function buildStoredTranscript(input: {

@@ -64,6 +64,16 @@ export type {
 
 const logger = new Logger({ base: { module: "agent.session_dal" } });
 
+function preserveNonTextCreatedAt(
+  existing: SessionTranscriptItem | undefined,
+  next: SessionTranscriptItem,
+): SessionTranscriptItem {
+  if (!existing || existing.kind !== next.kind || next.kind === "text") {
+    return next;
+  }
+  return { ...next, created_at: existing.created_at };
+}
+
 export class SessionDal {
   private readonly jsonObserver: PersistedJsonObserver;
 
@@ -333,10 +343,12 @@ export class SessionDal {
       tenantId: input.tenantId,
       sessionId: input.sessionId,
     });
+    const existingItem = session.transcript.find((item) => item.id === input.item.id);
+    const nextItem = preserveNonTextCreatedAt(existingItem, input.item);
     const nextTranscript = sortSessionTranscript(
-      session.transcript.some((item) => item.id === input.item.id)
-        ? session.transcript.map((item) => (item.id === input.item.id ? input.item : item))
-        : [...session.transcript, input.item],
+      existingItem
+        ? session.transcript.map((item) => (item.id === nextItem.id ? nextItem : item))
+        : [...session.transcript, nextItem],
     );
 
     await this.replaceTranscript({
