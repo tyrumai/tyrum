@@ -24,7 +24,6 @@ describe("ScrollArea", () => {
     expect((viewport as HTMLElement | null)?.className).toContain("[&>div]:!min-w-0");
     expect((viewport as HTMLElement | null)?.className).toContain("[&>div]:!w-full");
     expect((viewport as HTMLElement | null)?.className).toContain("[&>div]:!box-border");
-    expect((viewport as HTMLElement | null)?.className).toContain("[&>div]:!pr-3");
 
     const scrollbar = container.querySelector("[data-orientation='vertical']");
     expect(scrollbar).not.toBeNull();

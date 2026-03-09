@@ -98,7 +98,7 @@ export default defineConfig({
         "apps/*/src/**/*.js",
         "apps/*/src/**/*.jsx",
       ],
-      exclude: ["**/*.d.ts"],
+      exclude: ["**/*.d.ts", "apps/web/src/layout-harness*.ts", "apps/web/src/layout-harness*.tsx"],
       thresholds: enforceCoverageThresholds ? coverageThresholds : undefined,
     },
   },

@@ -15,7 +15,7 @@ export const ScrollArea = React.forwardRef<
     >
       <ScrollAreaPrimitive.Viewport
         data-scroll-area-viewport=""
-        className="h-full min-w-0 w-full rounded-[inherit] [&>div]:!block [&>div]:!box-border [&>div]:!min-w-0 [&>div]:!w-full [&>div]:!pr-3"
+        className="h-full min-w-0 w-full rounded-[inherit] [&>div]:!block [&>div]:!box-border [&>div]:!min-w-0 [&>div]:!w-full"
         onScroll={onScroll}
       >
         {children}
