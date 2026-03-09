@@ -2,6 +2,7 @@ import { z } from "zod";
 import { Sha256Hex } from "./artifact.js";
 import { DateTimeSchema } from "./common.js";
 import { ExecutionBudgets, ExecutionRunId } from "./execution.js";
+import { canonicalizeToolIdList } from "./tool-id.js";
 
 export const ToolIntentCostBudget = ExecutionBudgets.refine(
   (budget) =>
@@ -26,7 +27,7 @@ export const ToolIntentV1 = z
       .refine((value) => value !== undefined, "expected_evidence is required"),
 
     execution_profile: z.string().trim().min(1).optional(),
-    tool_allowlist: z.array(z.string().trim().min(1)).optional(),
+    tool_allowlist: z.array(z.string().trim().min(1)).transform(canonicalizeToolIdList).optional(),
 
     intent_graph_sha256: Sha256Hex,
 

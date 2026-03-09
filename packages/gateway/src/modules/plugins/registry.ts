@@ -114,7 +114,17 @@ export class PluginRegistry {
   }
   getToolDescriptors(): ToolDescriptor[] {
     return [...this.plugins.values()].flatMap((plugin) =>
-      [...plugin.tools.values()].map((tool) => tool.descriptor),
+      [...plugin.tools.values()].map((tool) => ({
+        id: tool.descriptor.id,
+        description: tool.descriptor.description,
+        risk: tool.descriptor.risk,
+        requires_confirmation: tool.descriptor.requires_confirmation,
+        keywords: tool.descriptor.keywords,
+        inputSchema: tool.descriptor.inputSchema,
+        source: "plugin" as const,
+        family: tool.descriptor.family ?? "plugin",
+        backingServerId: tool.descriptor.backingServerId,
+      })),
     );
   }
 

@@ -21,7 +21,7 @@ export function defaultPolicyBundle(): PolicyBundleT {
     v: 1,
     tools: {
       default: "require_approval",
-      allow: ["tool.fs.read"],
+      allow: ["read"],
       require_approval: [],
       deny: [],
     },

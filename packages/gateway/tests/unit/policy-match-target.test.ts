@@ -6,7 +6,7 @@ describe("canonicalizeToolMatchTarget", () => {
     canonicalizeToolMatchTarget(toolId, args, home);
 
   it("canonicalizes fs paths with stable workspace-relative formatting", () => {
-    const target = canonicalizeToolMatchTarget("tool.fs.read", {
+    const target = canonicalizeToolMatchTarget("read", {
       path: " ./docs//architecture/../policy-overrides.md ",
     });
 
@@ -14,21 +14,21 @@ describe("canonicalizeToolMatchTarget", () => {
   });
 
   it("rejects parent traversal that would escape the workspace boundary", () => {
-    const target = canonicalizeToolMatchTarget("tool.fs.read", { path: "a/../../b" });
+    const target = canonicalizeToolMatchTarget("read", { path: "a/../../b" });
 
     // Match targets for fs must be workspace-relative and must not contain "..".
     expect(target).toBe("read:");
   });
 
   it("rejects absolute fs paths that escape the workspace boundary", () => {
-    const target = canonicalizeWithHome("tool.fs.read", { path: "/etc/passwd" }, "/workspace");
+    const target = canonicalizeWithHome("read", { path: "/etc/passwd" }, "/workspace");
 
     expect(target).toBe("read:");
   });
 
   it("canonicalizes absolute fs paths within the workspace to workspace-relative targets", () => {
     const target = canonicalizeWithHome(
-      "tool.fs.read",
+      "read",
       { path: "/workspace/docs//architecture/../policy-overrides.md" },
       "/workspace",
     );
@@ -38,7 +38,7 @@ describe("canonicalizeToolMatchTarget", () => {
 
   it("canonicalizes Windows drive paths within the workspace to workspace-relative targets", () => {
     const target = canonicalizeWithHome(
-      "tool.fs.read",
+      "read",
       { path: "C:\\workspace\\docs\\policy-overrides.md" },
       "C:\\workspace",
     );
@@ -47,13 +47,13 @@ describe("canonicalizeToolMatchTarget", () => {
   });
 
   it("canonicalizes '.' to an explicit workspace-root target", () => {
-    const target = canonicalizeToolMatchTarget("tool.fs.read", { path: "." });
+    const target = canonicalizeToolMatchTarget("read", { path: "." });
 
     expect(target).toBe("read:.");
   });
 
   it("canonicalizes exec commands by collapsing non-semantic whitespace", () => {
-    const target = canonicalizeToolMatchTarget("tool.exec", {
+    const target = canonicalizeToolMatchTarget("bash", {
       command: "  git   status   --porcelain  ",
     });
 
@@ -62,13 +62,13 @@ describe("canonicalizeToolMatchTarget", () => {
 
   it("canonicalizes http fetch urls by stripping fragments (and query params)", () => {
     expect(
-      canonicalizeToolMatchTarget("tool.http.fetch", {
+      canonicalizeToolMatchTarget("webfetch", {
         url: "https://example.com/a?token=secret#frag",
       }),
     ).toBe("https://example.com/a");
 
     expect(
-      canonicalizeToolMatchTarget("tool.http.fetch", {
+      canonicalizeToolMatchTarget("webfetch", {
         url: "https://example.com/a#access_token=secret",
       }),
     ).toBe("https://example.com/a");

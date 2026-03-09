@@ -79,6 +79,7 @@ function registerControlPlaneSessionTests(fixture: ControlPlaneFixture): void {
           agent_id: "default",
           channel: "ui",
           thread_id: "ui-1",
+          title: "",
         },
       }),
     );
@@ -87,6 +88,7 @@ function registerControlPlaneSessionTests(fixture: ControlPlaneFixture): void {
       agent_id: "default",
       channel: "ui",
       thread_id: "ui-1",
+      title: "",
     });
 
     const listP = client.sessionList({});
@@ -116,6 +118,7 @@ function registerControlPlaneSessionTests(fixture: ControlPlaneFixture): void {
             agent_id: "default",
             channel: "ui",
             thread_id: "ui-1",
+            title: "",
             summary: "",
             turns: [{ role: "user", content: "hi" }],
             created_at: "2026-02-21T12:00:00Z",

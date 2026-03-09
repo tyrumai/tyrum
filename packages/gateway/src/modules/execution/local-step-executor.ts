@@ -1,5 +1,7 @@
 import type { ActionPrimitive as ActionPrimitiveT, EvaluationContext } from "@tyrum/schemas";
 import { spawn } from "node:child_process";
+import { buildBuiltinExaServerSpec } from "../agent/builtin-exa.js";
+import { McpManager } from "../agent/mcp-manager.js";
 import { isBlockedUrl, resolvesToBlockedAddress, sanitizeEnv } from "../agent/tool-executor.js";
 import type { ArtifactStore } from "../artifact/store.js";
 import type { Logger } from "../observability/logger.js";
@@ -49,6 +51,7 @@ class LocalStepExecutor implements StepExecutor {
   private readonly redactionEngine?: RedactionEngine;
   private readonly artifactStore?: ArtifactStore;
   private readonly logger?: Logger;
+  private readonly mcpManager: McpManager;
 
   constructor(opts: LocalStepExecutorOptions) {
     this.tyrumHome = opts.tyrumHome;
@@ -58,6 +61,7 @@ class LocalStepExecutor implements StepExecutor {
     this.redactionEngine = opts.redactionEngine;
     this.artifactStore = opts.artifactStore;
     this.logger = opts.logger;
+    this.mcpManager = new McpManager({ logger: opts.logger });
   }
 
   async execute(
@@ -100,6 +104,8 @@ class LocalStepExecutor implements StepExecutor {
           stepIndex,
           timeoutMs,
         );
+      case "Mcp":
+        return this.executeMcp(action, resolved as Record<string, unknown>);
       default:
         return { success: false, error: `unsupported action type: ${action.type}` };
     }
@@ -419,6 +425,63 @@ class LocalStepExecutor implements StepExecutor {
       const message = err instanceof Error ? err.message : String(err);
       this.logger?.warn("executor.artifact_store_failed", { error: message });
       return undefined;
+    }
+  }
+
+  private async executeMcp(
+    action: ActionPrimitiveT,
+    args: Record<string, unknown>,
+  ): Promise<StepResult> {
+    const serverId = typeof args["server_id"] === "string" ? args["server_id"].trim() : "";
+    const toolName = typeof args["tool_name"] === "string" ? args["tool_name"].trim() : "";
+    const input =
+      args["input"] && typeof args["input"] === "object" && !Array.isArray(args["input"])
+        ? (args["input"] as Record<string, unknown>)
+        : {};
+
+    if (!serverId || !toolName) {
+      return { success: false, error: "missing required MCP arguments: server_id and tool_name" };
+    }
+    if (serverId !== "exa") {
+      return { success: false, error: `unsupported MCP server: ${serverId}` };
+    }
+
+    try {
+      const spec = await buildBuiltinExaServerSpec(this.secretProvider);
+      const result = await this.mcpManager.callTool(spec, toolName, input);
+      if (result.isError) {
+        const message = result.content
+          .map((item) => (typeof item === "string" ? item : JSON.stringify(item)))
+          .join("\n");
+        return { success: false, error: message || "MCP tool call failed" };
+      }
+
+      const text = result.content
+        .map((item) => {
+          if (
+            typeof item === "object" &&
+            item !== null &&
+            (item as Record<string, unknown>)["type"] === "text"
+          ) {
+            return String((item as Record<string, unknown>)["text"] ?? "");
+          }
+          return typeof item === "string" ? item : JSON.stringify(item);
+        })
+        .join("\n");
+
+      return {
+        success: true,
+        result: {
+          ok: true,
+          type: action.type,
+          server_id: serverId,
+          tool_name: toolName,
+          output: text,
+        },
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { success: false, error: message };
     }
   }
 }

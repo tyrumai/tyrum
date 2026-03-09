@@ -12,14 +12,14 @@ import {
 } from "../../src/modules/identity/scope.js";
 
 describe("PolicyService provenance rules", () => {
-  it("defaults to requiring approval for untrusted tool.exec when provenance config is omitted", async () => {
+  it("defaults to requiring approval for untrusted bash when provenance config is omitted", async () => {
     const db = openTestSqliteDb();
     try {
       await seedDeploymentPolicyBundle(db, {
         v: 1,
         tools: {
           default: "deny",
-          allow: ["tool.exec"],
+          allow: ["bash"],
           require_approval: [],
           deny: [],
         },
@@ -40,7 +40,7 @@ describe("PolicyService provenance rules", () => {
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
         workspaceId: DEFAULT_WORKSPACE_ID,
-        toolId: "tool.exec",
+        toolId: "bash",
         toolMatchTarget: "echo ok",
         inputProvenance: { source: "web", trusted: false },
       });
@@ -50,14 +50,14 @@ describe("PolicyService provenance rules", () => {
     }
   });
 
-  it("escalates tool.exec to require_approval when input provenance is untrusted", async () => {
+  it("escalates bash to require_approval when input provenance is untrusted", async () => {
     const db = openTestSqliteDb();
     try {
       await seedDeploymentPolicyBundle(db, {
         v: 1,
         tools: {
           default: "deny",
-          allow: ["tool.exec"],
+          allow: ["bash"],
           require_approval: [],
           deny: [],
         },
@@ -81,7 +81,7 @@ describe("PolicyService provenance rules", () => {
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
         workspaceId: DEFAULT_WORKSPACE_ID,
-        toolId: "tool.exec",
+        toolId: "bash",
         toolMatchTarget: "echo ok",
         inputProvenance: { source: "user", trusted: true },
       });
@@ -91,7 +91,7 @@ describe("PolicyService provenance rules", () => {
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
         workspaceId: DEFAULT_WORKSPACE_ID,
-        toolId: "tool.exec",
+        toolId: "bash",
         toolMatchTarget: "echo ok",
         inputProvenance: { source: "web", trusted: false },
       });
@@ -108,7 +108,7 @@ describe("PolicyService provenance rules", () => {
         v: 1,
         tools: {
           default: "deny",
-          allow: ["tool.exec"],
+          allow: ["bash"],
           require_approval: [],
           deny: [],
         },
@@ -133,7 +133,7 @@ describe("PolicyService provenance rules", () => {
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
         workspaceId: DEFAULT_WORKSPACE_ID,
-        toolId: "tool.exec",
+        toolId: "bash",
         pattern: "echo ok",
       });
 
@@ -141,7 +141,7 @@ describe("PolicyService provenance rules", () => {
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
         workspaceId: DEFAULT_WORKSPACE_ID,
-        toolId: "tool.exec",
+        toolId: "bash",
         toolMatchTarget: "echo ok",
         inputProvenance: { source: "web", trusted: false },
       });

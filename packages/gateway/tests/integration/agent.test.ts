@@ -102,7 +102,7 @@ describe("agent routes", () => {
         },
         skills: { enabled: ["file-reader"], workspace_trusted: true },
         mcp: { enabled: ["calendar"] },
-        tools: { allow: ["tool.fs.read", "mcp.*"] },
+        tools: { allow: ["read", "mcp.*"] },
         sessions: { ttl_days: 30, max_turns: 20 },
         memory: { v1: { enabled: true } },
       }),
@@ -132,7 +132,7 @@ describe("agent routes", () => {
       expect.objectContaining({ id: "file-reader", source: "workspace" }),
     ]);
     expect(payload.mcp.map((server) => server.id)).toEqual(["calendar"]);
-    expect(payload.tools).toContain("tool.fs.read");
+    expect(payload.tools).toContain("read");
 
     await agents?.shutdown();
     await container.db.close();

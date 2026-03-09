@@ -168,7 +168,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     await seedAgentConfig(container, {
       agentKey: "agent-test",
       workspaceKey: "ws-test",
-      toolsAllow: ["tool.exec"],
+      toolsAllow: ["bash"],
     });
 
     const languageModel = createSequencedToolLoopLanguageModel([
@@ -177,7 +177,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
         toolCalls: [
           {
             id: "tc-expire",
-            name: "tool.exec",
+            name: "bash",
             arguments: JSON.stringify({ command: "echo hi" }),
           },
         ],
@@ -207,7 +207,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     });
 
     const pending = await waitForPendingApproval(container);
-    expect(pending.prompt).toContain("tool.exec");
+    expect(pending.prompt).toContain("bash");
     expect(pending.status).toBe("pending");
 
     let resumed = false;
@@ -239,7 +239,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       clearInterval(expiryTimer);
     }
     expect(result.reply).toBe("done");
-    expect(result.used_tools).not.toContain("tool.exec");
+    expect(result.used_tools).not.toContain("bash");
 
     const resolved = await container.approvalDal.getById({
       tenantId: DEFAULT_TENANT_ID,
@@ -254,7 +254,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     await seedAgentConfig(container, {
       agentKey: "agent-test",
       workspaceKey: "ws-test",
-      toolsAllow: ["tool.exec"],
+      toolsAllow: ["bash"],
     });
 
     const languageModel = createSequencedToolLoopLanguageModel([
@@ -263,7 +263,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
         toolCalls: [
           {
             id: "tc-deny-missing-token",
-            name: "tool.exec",
+            name: "bash",
             arguments: JSON.stringify({ command: "echo hi" }),
           },
         ],
@@ -292,7 +292,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     });
 
     const pending = await waitForPendingApproval(container);
-    expect(pending.prompt).toContain("tool.exec");
+    expect(pending.prompt).toContain("bash");
     expect(pending.status).toBe("pending");
 
     await container.approvalDal.respond({
@@ -321,7 +321,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
   it("short-circuits policy denies without creating approvals (tool not executed)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-perms-agent-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    await seedAgentConfig(container, { toolsAllow: ["tool.fs.write"] });
+    await seedAgentConfig(container, { toolsAllow: ["write"] });
 
     await seedDeploymentPolicyBundle(container.db, {
       v: 1,
@@ -329,7 +329,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
         default: "allow",
         allow: [],
         require_approval: [],
-        deny: ["tool.fs.write"],
+        deny: ["write"],
       },
     });
 
@@ -339,7 +339,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
         toolCalls: [
           {
             id: "tc-denied",
-            name: "tool.fs.write",
+            name: "write",
             arguments: JSON.stringify({ path: "blocked.txt", content: "secret" }),
           },
         ],
@@ -365,7 +365,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     });
 
     expect(result.reply).toBe("done");
-    expect(result.used_tools).not.toContain("tool.fs.write");
+    expect(result.used_tools).not.toContain("write");
 
     const pending = await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
     expect(pending).toHaveLength(0);
@@ -377,14 +377,14 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
 
     await writeFile(join(homeDir, "a.txt"), "file A", "utf-8");
-    await seedAgentConfig(container, { toolsAllow: ["tool.fs.read", "tool.exec"] });
+    await seedAgentConfig(container, { toolsAllow: ["read", "bash"] });
 
     const languageModel = createSequencedToolLoopLanguageModel([
       {
         kind: "tool-calls",
         toolCalls: [
-          { id: "tc-read", name: "tool.fs.read", arguments: JSON.stringify({ path: "a.txt" }) },
-          { id: "tc-exec", name: "tool.exec", arguments: JSON.stringify({ command: "echo hi" }) },
+          { id: "tc-read", name: "read", arguments: JSON.stringify({ path: "a.txt" }) },
+          { id: "tc-exec", name: "bash", arguments: JSON.stringify({ command: "echo hi" }) },
         ],
       },
       { kind: "text", text: "done" },
@@ -409,7 +409,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
 
     const approvalEngine = new ExecutionEngine({ db: container.db });
     const pending = await waitForPendingApproval(container);
-    expect(pending.prompt).toContain("tool.exec");
+    expect(pending.prompt).toContain("bash");
     const updated = await container.approvalDal.respond({
       tenantId: DEFAULT_TENANT_ID,
       approvalId: pending.approval_id,
@@ -422,8 +422,8 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
 
     const result = await turnPromise;
     expect(result.reply).toBe("done");
-    expect(result.used_tools).toContain("tool.fs.read");
-    expect(result.used_tools).toContain("tool.exec");
+    expect(result.used_tools).toContain("read");
+    expect(result.used_tools).toContain("bash");
   });
 
   it("does not resolve secrets until tool execution is approved", async () => {
@@ -431,13 +431,13 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
 
     const fetchUrl = "https://93.184.216.34";
-    await seedAgentConfig(container, { toolsAllow: ["tool.http.fetch"] });
+    await seedAgentConfig(container, { toolsAllow: ["webfetch"] });
 
     await seedDeploymentPolicyBundle(container.db, {
       v: 1,
       tools: {
         default: "deny",
-        allow: ["tool.http.fetch"],
+        allow: ["webfetch"],
         require_approval: [],
         deny: [],
       },
@@ -493,7 +493,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
         toolCalls: [
           {
             id: "tc-fetch",
-            name: "tool.http.fetch",
+            name: "webfetch",
             arguments: JSON.stringify({
               url: fetchUrl,
               headers: { Authorization: "secret:handle-abc" },
@@ -542,6 +542,6 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     expect(result.reply).toBe("done");
     expect(secretProvider.resolve).toHaveBeenCalled();
     expect(fetchStub).toHaveBeenCalled();
-    expect(result.used_tools).toContain("tool.http.fetch");
+    expect(result.used_tools).toContain("webfetch");
   });
 });

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
 import { Lane, TyrumKey } from "./keys.js";
 import { PolicyOverride } from "./policy-bundle.js";
+import { canonicalizeToolId } from "./tool-id.js";
 
 export const ApprovalStatus = z.enum(["pending", "approved", "denied", "expired", "cancelled"]);
 export type ApprovalStatus = z.infer<typeof ApprovalStatus>;
@@ -117,7 +118,7 @@ export const ApprovalResolveRequest = z
       .array(
         z
           .object({
-            tool_id: z.string().trim().min(1),
+            tool_id: z.string().trim().min(1).transform(canonicalizeToolId),
             pattern: z.string().trim().min(1),
             workspace_id: z.string().trim().min(1).optional(),
           })

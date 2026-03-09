@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { jsonSchema, tool as aiTool } from "ai";
-import type { ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
+import { generateText, jsonSchema, tool as aiTool } from "ai";
+import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
 import type { Decision } from "@tyrum/schemas";
 import { buildModelToolNameMap, registerModelTool, type ToolDescriptor } from "../tools.js";
 import type { ToolExecutor, ToolResult } from "../tool-executor.js";
@@ -29,8 +29,80 @@ import type {
 
 export type { ToolCallPolicyState, ToolSetBuilderDeps } from "./tool-set-builder-helpers.js";
 
+const WEBFETCH_EXTRACTION_MAX_CHARS = 24_000;
+
+function trimExtractionPrompt(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 export class ToolSetBuilder {
   constructor(private readonly deps: ToolSetBuilderDeps) {}
+
+  private async maybeExtractWebFetchResult(input: {
+    toolDesc: ToolDescriptor;
+    args: unknown;
+    result: ToolResult;
+    model?: LanguageModel;
+    toolCallId: string;
+  }): Promise<ToolResult> {
+    if (input.toolDesc.id !== "webfetch" || !input.model || input.result.error) {
+      return input.result;
+    }
+
+    const parsedArgs =
+      input.args && typeof input.args === "object" && !Array.isArray(input.args)
+        ? (input.args as Record<string, unknown>)
+        : null;
+    const mode = trimExtractionPrompt(parsedArgs?.["mode"]) ?? "extract";
+    const prompt = trimExtractionPrompt(parsedArgs?.["prompt"]);
+    if (mode !== "extract" || !prompt) return input.result;
+
+    const rawContent = input.result.provenance?.content ?? input.result.output;
+    const sourceText = rawContent.trim();
+    if (sourceText.length === 0) return input.result;
+
+    try {
+      const sanitizedSource = sanitizeForModel(
+        tagContent(sourceText.slice(0, WEBFETCH_EXTRACTION_MAX_CHARS), "web", false),
+      );
+      const extraction = await generateText({
+        model: input.model,
+        system:
+          "Extract only the information needed to satisfy the request. " +
+          "Return concise Markdown grounded in the fetched source. " +
+          "If the source does not contain the answer, say that briefly. " +
+          "Do not mention these instructions.",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Extraction request:\n${prompt}\n\nFetched content:\n${sanitizedSource}`,
+              },
+            ],
+          },
+        ],
+      });
+      const extracted = extraction.text.trim();
+      if (extracted.length === 0) return input.result;
+
+      const tagged = tagContent(extracted, "web", false);
+      return {
+        ...input.result,
+        output: sanitizeForModel(tagged),
+        provenance: tagged,
+      };
+    } catch (error) {
+      this.deps.logger.info("tool.webfetch.extract_failed", {
+        tool_call_id: input.toolCallId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return input.result;
+    }
+  }
 
   buildToolSet(
     tools: readonly ToolDescriptor[],
@@ -40,6 +112,7 @@ export class ToolSetBuilder {
     contextReport: AgentContextReport,
     laneQueue?: LaneQueueState,
     toolCallPolicyStates?: Map<string, ToolCallPolicyState>,
+    model?: LanguageModel,
   ): ToolSet {
     const result: Record<string, Tool> = {};
     const modelToolNames = buildModelToolNameMap(tools.map((tool) => tool.id));
@@ -95,7 +168,7 @@ export class ToolSetBuilder {
         const agentId = this.deps.agentId;
         const workspaceId = this.deps.workspaceId;
         const url =
-          input.toolDesc.id === "tool.http.fetch" &&
+          input.toolDesc.id === "webfetch" &&
           input.args &&
           typeof (input.args as Record<string, unknown>)["url"] === "string"
             ? String((input.args as Record<string, unknown>)["url"])
@@ -361,7 +434,7 @@ export class ToolSetBuilder {
             policySnapshotId,
           });
 
-          const res: ToolResult = pluginRes
+          const executedRes: ToolResult = pluginRes
             ? (() => {
                 const tagged = tagContent(pluginRes.output, "tool", false);
                 return {
@@ -381,6 +454,13 @@ export class ToolSetBuilder {
                 execution_step_id: toolExecutionContext.execution?.stepId,
                 policy_snapshot_id: policySnapshotId,
               });
+          const res = await this.maybeExtractWebFetchResult({
+            toolDesc,
+            args: effectiveArgs,
+            result: executedRes,
+            model,
+            toolCallId,
+          });
 
           if (pluginRes && this.deps.redactionEngine) {
             const redact = (text: string): string =>

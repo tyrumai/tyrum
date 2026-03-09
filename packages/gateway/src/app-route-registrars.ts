@@ -40,6 +40,7 @@ import { createSharedStateConfigRoutes } from "./routes/shared-state-config.js";
 import { createSnapshotRoutes } from "./routes/snapshot.js";
 import { createStatusRoutes } from "./routes/status.js";
 import { createSystemRoutes } from "./routes/system.js";
+import { createToolRegistryRoutes } from "./routes/tool-registry.js";
 import { createUsageRoutes } from "./routes/usage.js";
 import { createWatcherRoutes } from "./routes/watcher.js";
 import { createWorkflowRoutes } from "./routes/workflow.js";
@@ -280,6 +281,18 @@ export function registerModelsAndConfigRoutes(context: AppRouteContext): void {
       }),
     );
   }
+
+  context.app.route(
+    "/",
+    createToolRegistryRoutes({
+      agents: context.opts.agents,
+      db: context.container.db,
+      logger: context.container.logger,
+      plugins: context.opts.plugins,
+      pluginCatalogProvider: context.opts.pluginCatalogProvider,
+      stateMode: resolveGatewayStateMode(context.container.deploymentConfig),
+    }),
+  );
 
   context.app.route(
     "/",

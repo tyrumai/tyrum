@@ -52,13 +52,13 @@ describe("Playbook LLM step executor", () => {
           {
             type: "tool-call" as const,
             toolCallId: "tc-1",
-            toolName: "tool.exec",
+            toolName: "bash",
             input: JSON.stringify({ command: "echo one" }),
           },
           {
             type: "tool-call" as const,
             toolCallId: "tc-2",
-            toolName: "tool.exec",
+            toolName: "bash",
             input: JSON.stringify({ command: "echo two" }),
           },
         ],
@@ -83,7 +83,7 @@ describe("Playbook LLM step executor", () => {
             model: "openai/gpt-4.1",
             prompt: "Run two commands.",
             max_tool_calls: 1,
-            tools: { allow: ["tool.exec"] },
+            tools: { allow: ["bash"] },
             __playbook: { output: { type: "json", schema: { type: "object" } } },
           },
         },
@@ -148,7 +148,7 @@ describe("Playbook LLM step executor", () => {
           tools: {
             default: "allow",
             allow: [],
-            require_approval: ["tool.exec"],
+            require_approval: ["bash"],
             deny: [],
           },
           network_egress: { default: "allow", allow: [], require_approval: [], deny: [] },
@@ -163,7 +163,7 @@ describe("Playbook LLM step executor", () => {
           {
             type: "tool-call" as const,
             toolCallId: "tc-1",
-            toolName: "tool.exec",
+            toolName: "bash",
             input: JSON.stringify({ command: "echo one" }),
           },
         ],
@@ -189,7 +189,7 @@ describe("Playbook LLM step executor", () => {
             model: "openai/gpt-4.1",
             prompt: "Run one command.",
             max_tool_calls: 5,
-            tools: { allow: ["tool.exec"] },
+            tools: { allow: ["bash"] },
             __playbook: { output: { type: "json", schema: { type: "object" } } },
           },
         },
@@ -224,7 +224,7 @@ describe("Playbook LLM step executor", () => {
       [runId],
     );
     expect(approval?.status).toBe("pending");
-    expect(approval?.prompt ?? "").toContain("tool.exec");
+    expect(approval?.prompt ?? "").toContain("bash");
   });
 
   it("pauses when policy requires approval for HTTP fetch tool calls", async () => {
@@ -243,7 +243,7 @@ describe("Playbook LLM step executor", () => {
           tools: {
             default: "allow",
             allow: [],
-            require_approval: ["tool.http.fetch"],
+            require_approval: ["webfetch"],
             deny: [],
           },
           network_egress: { default: "allow", allow: [], require_approval: [], deny: [] },
@@ -258,7 +258,7 @@ describe("Playbook LLM step executor", () => {
           {
             type: "tool-call" as const,
             toolCallId: "tc-http-1",
-            toolName: "tool.http.fetch",
+            toolName: "webfetch",
             input: JSON.stringify({ url: "https://example.com" }),
           },
         ],
@@ -284,7 +284,7 @@ describe("Playbook LLM step executor", () => {
             model: "openai/gpt-4.1",
             prompt: "Fetch https://example.com.",
             max_tool_calls: 5,
-            tools: { allow: ["tool.http.fetch"] },
+            tools: { allow: ["webfetch"] },
             __playbook: { output: { type: "json", schema: { type: "object" } } },
           },
         },
@@ -319,7 +319,7 @@ describe("Playbook LLM step executor", () => {
       [runId],
     );
     expect(approval?.status).toBe("pending");
-    expect(approval?.prompt ?? "").toContain("tool.http.fetch");
+    expect(approval?.prompt ?? "").toContain("webfetch");
   });
 
   it("succeeds when JSON output matches schema", async () => {

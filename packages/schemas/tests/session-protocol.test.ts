@@ -52,6 +52,7 @@ describe("Session v1 WS protocol", () => {
       agent_id: "default",
       channel: "ui",
       thread_id: "ui-550e8400-e29b-41d4-a716-446655440000",
+      title: "Hello",
       summary: "",
       turns_count: 2,
       updated_at: now,
@@ -64,6 +65,7 @@ describe("Session v1 WS protocol", () => {
       agent_id: "default",
       channel: "ui",
       thread_id: sessionListItem.thread_id,
+      title: sessionListItem.title,
       summary: "",
       turns: [
         { role: "user", content: "Hi" },
@@ -83,6 +85,7 @@ describe("Session v1 WS protocol", () => {
           agent_id: "default",
           channel: "ui",
           thread_id: sessionListItem.thread_id,
+          title: "",
         },
       },
       {

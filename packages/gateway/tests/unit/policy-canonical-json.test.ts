@@ -38,7 +38,7 @@ describe("PolicySnapshotDal canonical hashing", () => {
       v: 1 as const,
       tools: {
         default: "require_approval" as const,
-        allow: ["tool.fs.read"],
+        allow: ["read"],
         require_approval: [],
         deny: [],
       },
@@ -54,7 +54,7 @@ describe("PolicySnapshotDal canonical hashing", () => {
       tools: {
         deny: [],
         require_approval: [],
-        allow: ["tool.fs.read"],
+        allow: ["read"],
         default: "require_approval" as const,
       },
       v: 1 as const,

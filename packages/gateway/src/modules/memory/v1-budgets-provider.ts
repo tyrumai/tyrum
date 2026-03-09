@@ -6,7 +6,7 @@ import { DEFAULT_AGENT_KEY } from "../identity/scope.js";
 
 const DEFAULT_BUDGETS: AgentConfigT["memory"]["v1"]["budgets"] = AgentConfig.parse({
   model: { model: "openai/gpt-5.4" },
-  tools: { allow: ["tool.fs.read"] },
+  tools: { allow: ["read"] },
 }).memory.v1.budgets;
 
 export function createMemoryV1BudgetsProvider(

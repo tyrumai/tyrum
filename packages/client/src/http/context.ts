@@ -64,9 +64,39 @@ const ContextDetailResponse = z
   })
   .strict();
 
+const ToolRegistryQuery = z
+  .object({
+    agent_key: AgentKey.optional(),
+  })
+  .strict();
+
+const ToolRegistryEntry = z
+  .object({
+    id: NonEmptyString,
+    description: z.string(),
+    risk: z.enum(["low", "medium", "high"]),
+    requires_confirmation: z.boolean(),
+    keywords: z.array(z.string()),
+    source: z.enum(["builtin", "builtin_mcp", "mcp", "plugin"]),
+    family: z.string().nullable(),
+    backing_server_id: z.string().nullable(),
+    enabled_by_agent: z.boolean(),
+  })
+  .strict();
+
+const ToolRegistryResponse = z
+  .object({
+    status: z.literal("ok"),
+    allowlist: z.array(z.string()),
+    mcp_servers: z.array(z.string()),
+    tools: z.array(ToolRegistryEntry),
+  })
+  .strict();
+
 export type ContextGetResponse = z.infer<typeof ContextGetResponse>;
 export type ContextListResponse = z.infer<typeof ContextListResponse>;
 export type ContextDetailResponse = z.infer<typeof ContextDetailResponse>;
+export type ToolRegistryResponse = z.infer<typeof ToolRegistryResponse>;
 
 export interface ContextApi {
   get(
@@ -78,6 +108,10 @@ export interface ContextApi {
     options?: TyrumRequestOptions,
   ): Promise<ContextListResponse>;
   detail(id: string, options?: TyrumRequestOptions): Promise<ContextDetailResponse>;
+  tools(
+    query?: z.input<typeof ToolRegistryQuery>,
+    options?: TyrumRequestOptions,
+  ): Promise<ToolRegistryResponse>;
 }
 
 export function createContextApi(transport: HttpTransport): ContextApi {
@@ -110,6 +144,17 @@ export function createContextApi(transport: HttpTransport): ContextApi {
         method: "GET",
         path: `/context/detail/${encodeURIComponent(parsedId)}`,
         response: ContextDetailResponse,
+        signal: options?.signal,
+      });
+    },
+
+    async tools(query, options) {
+      const parsedQuery = validateOrThrow(ToolRegistryQuery, query ?? {}, "context tools query");
+      return await transport.request({
+        method: "GET",
+        path: "/context/tools",
+        query: parsedQuery,
+        response: ToolRegistryResponse,
         signal: options?.signal,
       });
     },

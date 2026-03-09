@@ -64,6 +64,7 @@ export type {
   ArtifactMetadataResponse,
   ArtifactBytesResult,
   HealthResponse,
+  ToolRegistryListResult,
 } from "./http/index.js";
 
 export type {

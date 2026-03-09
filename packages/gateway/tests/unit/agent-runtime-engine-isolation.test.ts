@@ -217,7 +217,7 @@ describe("AgentRuntime - engine isolation and backoff", () => {
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
         mcp: { enabled: [] },
-        tools: { allow: ["tool.exec"] },
+        tools: { allow: ["bash"] },
         sessions: { ttl_days: 30, max_turns: 20 },
         memory: { v1: { enabled: false } },
       },
@@ -253,7 +253,7 @@ describe("AgentRuntime - engine isolation and backoff", () => {
               {
                 type: "tool-call" as const,
                 toolCallId: "tc-1",
-                toolName: "tool.exec",
+                toolName: "bash",
                 input: JSON.stringify({ command: "echo hi" }),
               },
             ],

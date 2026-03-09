@@ -405,7 +405,7 @@ describe("Approval routes (with DAL access)", () => {
           agent_id: DEFAULT_AGENT_ID,
           suggested_overrides: [
             {
-              tool_id: "tool.exec",
+              tool_id: "bash",
               pattern: "echo hi",
               workspace_id: DEFAULT_WORKSPACE_ID,
             },
@@ -487,7 +487,7 @@ describe("Approval routes (with DAL access)", () => {
         mode: "always",
         overrides: [
           {
-            tool_id: "tool.exec",
+            tool_id: "bash",
             pattern: "echo hi",
             workspace_id: DEFAULT_WORKSPACE_ID,
           },

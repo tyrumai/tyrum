@@ -30,12 +30,12 @@ describe("approval respond policy overrides", () => {
       agentId: DEFAULT_AGENT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
-      prompt: "Allow tool.exec?",
+      prompt: "Allow bash?",
       context: {
         policy: {
           agent_id: DEFAULT_AGENT_ID,
           suggested_overrides: [
-            { tool_id: "tool.exec", pattern: "echo *", workspace_id: DEFAULT_WORKSPACE_ID },
+            { tool_id: "bash", pattern: "echo *", workspace_id: DEFAULT_WORKSPACE_ID },
           ],
         },
       },
@@ -61,9 +61,7 @@ describe("approval respond policy overrides", () => {
       body: JSON.stringify({
         decision: "approved",
         mode: "always",
-        overrides: [
-          { tool_id: "tool.exec", pattern: "echo *", workspace_id: DEFAULT_WORKSPACE_ID },
-        ],
+        overrides: [{ tool_id: "bash", pattern: "echo *", workspace_id: DEFAULT_WORKSPACE_ID }],
       }),
     });
     expect(res.status).toBe(400);
@@ -71,7 +69,7 @@ describe("approval respond policy overrides", () => {
       await policyOverrideDal.list({
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
-        toolId: "tool.exec",
+        toolId: "bash",
       }),
     ).toHaveLength(0);
   });
@@ -87,12 +85,12 @@ describe("approval respond policy overrides", () => {
       agentId: DEFAULT_AGENT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
-      prompt: "Allow tool.exec?",
+      prompt: "Allow bash?",
       context: {
         policy: {
           agent_id: DEFAULT_AGENT_ID,
           suggested_overrides: [
-            { tool_id: "tool.exec", pattern: "echo hi", workspace_id: invalidWorkspaceId },
+            { tool_id: "bash", pattern: "echo hi", workspace_id: invalidWorkspaceId },
           ],
         },
       },
@@ -118,7 +116,7 @@ describe("approval respond policy overrides", () => {
       body: JSON.stringify({
         decision: "approved",
         mode: "always",
-        overrides: [{ tool_id: "tool.exec", pattern: "echo hi", workspace_id: invalidWorkspaceId }],
+        overrides: [{ tool_id: "bash", pattern: "echo hi", workspace_id: invalidWorkspaceId }],
       }),
     });
 
@@ -137,7 +135,7 @@ describe("approval respond policy overrides", () => {
       await policyOverrideDal.list({
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
-        toolId: "tool.exec",
+        toolId: "bash",
       }),
     ).toHaveLength(0);
   });
@@ -152,12 +150,12 @@ describe("approval respond policy overrides", () => {
       agentId: DEFAULT_AGENT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
-      prompt: "Allow tool.exec?",
+      prompt: "Allow bash?",
       context: {
         policy: {
           agent_id: DEFAULT_AGENT_ID,
           suggested_overrides: [
-            { tool_id: "tool.exec", pattern: "echo hi", workspace_id: DEFAULT_WORKSPACE_ID },
+            { tool_id: "bash", pattern: "echo hi", workspace_id: DEFAULT_WORKSPACE_ID },
           ],
         },
       },
@@ -180,7 +178,7 @@ describe("approval respond policy overrides", () => {
     const reqBody = {
       decision: "approved",
       mode: "always",
-      overrides: [{ tool_id: "tool.exec", pattern: "echo hi", workspace_id: DEFAULT_WORKSPACE_ID }],
+      overrides: [{ tool_id: "bash", pattern: "echo hi", workspace_id: DEFAULT_WORKSPACE_ID }],
     };
 
     const firstRes = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
@@ -196,7 +194,7 @@ describe("approval respond policy overrides", () => {
       await policyOverrideDal.list({
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
-        toolId: "tool.exec",
+        toolId: "bash",
       }),
     ).toHaveLength(1);
 
@@ -213,7 +211,7 @@ describe("approval respond policy overrides", () => {
       await policyOverrideDal.list({
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
-        toolId: "tool.exec",
+        toolId: "bash",
       }),
     ).toHaveLength(1);
   });
@@ -243,12 +241,12 @@ describe("approval respond policy overrides", () => {
       agentId: DEFAULT_AGENT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
-      prompt: "Allow tool.exec?",
+      prompt: "Allow bash?",
       context: {
         policy: {
           agent_id: DEFAULT_AGENT_ID,
           suggested_overrides: [
-            { tool_id: "tool.exec", pattern: "echo hi", workspace_id: DEFAULT_WORKSPACE_ID },
+            { tool_id: "bash", pattern: "echo hi", workspace_id: DEFAULT_WORKSPACE_ID },
           ],
         },
       },
@@ -274,9 +272,7 @@ describe("approval respond policy overrides", () => {
       body: JSON.stringify({
         decision: "approved",
         mode: "always",
-        overrides: [
-          { tool_id: "tool.exec", pattern: "echo hi", workspace_id: DEFAULT_WORKSPACE_ID },
-        ],
+        overrides: [{ tool_id: "bash", pattern: "echo hi", workspace_id: DEFAULT_WORKSPACE_ID }],
       }),
     });
 
@@ -291,7 +287,7 @@ describe("approval respond policy overrides", () => {
       await policyOverrideDal.list({
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
-        toolId: "tool.exec",
+        toolId: "bash",
       }),
     ).toHaveLength(1);
   });

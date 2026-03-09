@@ -358,7 +358,7 @@ describe("LocalStepExecutor playbook output contracts", () => {
     const { executor, context } = await makePolicyExecutor({
       bundle: {
         v: 1,
-        tools: { default: "deny", allow: ["tool.http.fetch"], require_approval: [], deny: [] },
+        tools: { default: "deny", allow: ["webfetch"], require_approval: [], deny: [] },
         network_egress: { default: "deny", allow: [], require_approval: [], deny: [] },
         secrets: { default: "allow", allow: [], require_approval: [], deny: [] },
       },
@@ -403,7 +403,7 @@ describe("LocalStepExecutor playbook output contracts", () => {
     const { executor, context } = await makePolicyExecutor({
       bundle: {
         v: 1,
-        tools: { default: "deny", allow: ["tool.http.fetch"], require_approval: [], deny: [] },
+        tools: { default: "deny", allow: ["webfetch"], require_approval: [], deny: [] },
         network_egress: {
           default: "deny",
           allow: ["https://93.184.216.34/*"],

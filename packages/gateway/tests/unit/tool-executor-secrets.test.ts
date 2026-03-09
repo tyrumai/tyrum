@@ -7,17 +7,28 @@ import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import type { SecretResolutionAuditDal } from "../../src/modules/secret/resolution-audit-dal.js";
-import type { SecretHandle } from "@tyrum/schemas";
+import type { McpServerSpec, SecretHandle } from "@tyrum/schemas";
 import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
-function stubMcpManager(): McpManager {
+function stubMcpManager(overrides?: Partial<McpManager>): McpManager {
   return {
     listToolDescriptors: vi.fn(async () => []),
     shutdown: vi.fn(async () => {}),
     callTool: vi.fn(async () => ({ content: [{ type: "text", text: "mcp-result" }] })),
+    ...overrides,
   } as unknown as McpManager;
+}
+
+function createMcpSpec(id: string): McpServerSpec {
+  return {
+    id,
+    name: `Server ${id}`,
+    enabled: true,
+    transport: "stdio",
+    command: "node",
+  };
 }
 
 function stubSecretProvider(secrets: Map<string, string>): SecretProvider {
@@ -60,45 +71,41 @@ describe("ToolExecutor secret resolution", () => {
   it("resolves secret: prefixed arg values before execution", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
 
-    const mockFetch = vi.fn(async () => ({
-      text: async () => "api-response",
-    })) as unknown as typeof fetch;
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "api-response" }],
+    }));
 
     const secrets = new Map([["handle-abc", "my-api-key-value"]]);
     const provider = stubSecretProvider(secrets);
 
+    const mcpSpec = createMcpSpec("remote");
     const executor = new ToolExecutor(
       homeDir,
-      stubMcpManager(),
-      new Map(),
-      mockFetch,
+      stubMcpManager({ callTool: callToolMock as McpManager["callTool"] }),
+      new Map([["remote", mcpSpec]]),
+      fetch,
       provider,
       allowPublicDnsLookup,
     );
 
-    await executor.execute("tool.http.fetch", "call-1", {
+    await executor.execute("mcp.remote.submit", "call-1", {
       url: "https://api.example.com",
       headers: { Authorization: "secret:handle-abc" },
     });
 
-    // The fetch should have been called with the resolved secret value
-    expect(mockFetch).toHaveBeenCalledWith(
-      "https://api.example.com",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "my-api-key-value",
-        }),
-      }),
-    );
+    expect(callToolMock).toHaveBeenCalledWith(mcpSpec, "submit", {
+      url: "https://api.example.com",
+      headers: { Authorization: "my-api-key-value" },
+    });
   });
 
   it("records audit rows for resolved secrets when audit context is provided", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
     db = openTestSqliteDb();
 
-    const mockFetch = vi.fn(async () => ({
-      text: async () => "ok",
-    })) as unknown as typeof fetch;
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "ok" }],
+    }));
 
     const secrets = new Map([["handle-abc", "my-api-key-value"]]);
     const provider = stubSecretProvider(secrets);
@@ -109,7 +116,7 @@ describe("ToolExecutor secret resolution", () => {
           tenant_id: DEFAULT_TENANT_ID,
           secret_resolution_id: "sr-1",
           tool_call_id: "call-1",
-          tool_id: "tool.http.fetch",
+          tool_id: "webfetch",
           handle_id: "handle-abc",
           provider: "db",
           scope: "handle-abc",
@@ -126,11 +133,12 @@ describe("ToolExecutor secret resolution", () => {
       }),
     } as unknown as SecretResolutionAuditDal;
 
+    const mcpSpec = createMcpSpec("remote");
     const executor = new ToolExecutor(
       homeDir,
-      stubMcpManager(),
-      new Map(),
-      mockFetch,
+      stubMcpManager({ callTool: callToolMock as McpManager["callTool"] }),
+      new Map([["remote", mcpSpec]]),
+      fetch,
       provider,
       allowPublicDnsLookup,
       undefined,
@@ -144,7 +152,7 @@ describe("ToolExecutor secret resolution", () => {
     );
 
     await executor.execute(
-      "tool.http.fetch",
+      "mcp.remote.submit",
       "call-1",
       {
         url: "https://api.example.com",
@@ -164,7 +172,7 @@ describe("ToolExecutor secret resolution", () => {
       expect.objectContaining({
         tenantId: DEFAULT_TENANT_ID,
         toolCallId: "call-1",
-        toolId: "tool.http.fetch",
+        toolId: "mcp.remote.submit",
         handleId: "handle-abc",
         provider: "db",
         scope: "handle-abc",
@@ -181,9 +189,9 @@ describe("ToolExecutor secret resolution", () => {
     homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
     db = openTestSqliteDb();
 
-    const mockFetch = vi.fn(async () => ({
-      text: async () => "ok",
-    })) as unknown as typeof fetch;
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "ok" }],
+    }));
 
     const provider = stubSecretProvider(new Map([["handle-abc", "my-api-key-value"]]));
     const auditDal: SecretResolutionAuditDal = {
@@ -194,9 +202,9 @@ describe("ToolExecutor secret resolution", () => {
 
     const executor = new ToolExecutor(
       homeDir,
-      stubMcpManager(),
-      new Map(),
-      mockFetch,
+      stubMcpManager({ callTool: callToolMock as McpManager["callTool"] }),
+      new Map([["remote", createMcpSpec("remote")]]),
+      fetch,
       provider,
       allowPublicDnsLookup,
       undefined,
@@ -210,7 +218,7 @@ describe("ToolExecutor secret resolution", () => {
     );
 
     const result = await executor.execute(
-      "tool.http.fetch",
+      "mcp.remote.submit",
       "call-missing-tenant-audit",
       {
         url: "https://api.example.com",
@@ -223,30 +231,30 @@ describe("ToolExecutor secret resolution", () => {
     );
 
     expect(result.error).toBe("tenantId is required for secret resolution audit");
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(callToolMock).not.toHaveBeenCalled();
     expect(auditDal.record).not.toHaveBeenCalled();
   });
 
   it("redacts resolved secret values from tool output", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
 
-    const mockFetch = vi.fn(async () => ({
-      text: async () => "Response contains my-api-key-value in the body",
-    })) as unknown as typeof fetch;
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "Response contains my-api-key-value in the body" }],
+    }));
 
     const secrets = new Map([["handle-abc", "my-api-key-value"]]);
     const provider = stubSecretProvider(secrets);
 
     const executor = new ToolExecutor(
       homeDir,
-      stubMcpManager(),
-      new Map(),
-      mockFetch,
+      stubMcpManager({ callTool: callToolMock as McpManager["callTool"] }),
+      new Map([["remote", createMcpSpec("remote")]]),
+      fetch,
       provider,
       allowPublicDnsLookup,
     );
 
-    const result = await executor.execute("tool.http.fetch", "call-2", {
+    const result = await executor.execute("mcp.remote.submit", "call-2", {
       url: "https://api.example.com",
       headers: { Authorization: "secret:handle-abc" },
     });
@@ -267,7 +275,7 @@ describe("ToolExecutor secret resolution", () => {
       // no secret provider
     );
 
-    const result = await executor.execute("tool.fs.read", "call-3", { path: "test.txt" });
+    const result = await executor.execute("read", "call-3", { path: "test.txt" });
 
     expect(result.output).toContain('<data source="tool">');
     expect(result.output).toContain("file content");
@@ -276,70 +284,63 @@ describe("ToolExecutor secret resolution", () => {
   it("leaves non-secret string args unchanged", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
 
-    const mockFetch = vi.fn(async () => ({
-      text: async () => "ok",
-    })) as unknown as typeof fetch;
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "ok" }],
+    }));
 
     const secrets = new Map<string, string>();
     const provider = stubSecretProvider(secrets);
 
+    const mcpSpec = createMcpSpec("remote");
     const executor = new ToolExecutor(
       homeDir,
-      stubMcpManager(),
-      new Map(),
-      mockFetch,
+      stubMcpManager({ callTool: callToolMock as McpManager["callTool"] }),
+      new Map([["remote", mcpSpec]]),
+      fetch,
       provider,
       allowPublicDnsLookup,
     );
 
-    await executor.execute("tool.http.fetch", "call-4", {
+    await executor.execute("mcp.remote.submit", "call-4", {
       url: "https://example.com",
       headers: { "Content-Type": "application/json" },
     });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      "https://example.com",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          "Content-Type": "application/json",
-        }),
-      }),
-    );
+    expect(callToolMock).toHaveBeenCalledWith(mcpSpec, "submit", {
+      url: "https://example.com",
+      headers: { "Content-Type": "application/json" },
+    });
   });
 
   it("keeps original value when secret handle is not found", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
 
-    const mockFetch = vi.fn(async () => ({
-      text: async () => "ok",
-    })) as unknown as typeof fetch;
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "ok" }],
+    }));
 
     const secrets = new Map<string, string>(); // empty — no secrets
     const provider = stubSecretProvider(secrets);
 
+    const mcpSpec = createMcpSpec("remote");
     const executor = new ToolExecutor(
       homeDir,
-      stubMcpManager(),
-      new Map(),
-      mockFetch,
+      stubMcpManager({ callTool: callToolMock as McpManager["callTool"] }),
+      new Map([["remote", mcpSpec]]),
+      fetch,
       provider,
       allowPublicDnsLookup,
     );
 
-    await executor.execute("tool.http.fetch", "call-5", {
+    await executor.execute("mcp.remote.submit", "call-5", {
       url: "https://example.com",
       headers: { Authorization: "secret:nonexistent" },
     });
 
-    // Should pass through the unresolved value
-    expect(mockFetch).toHaveBeenCalledWith(
-      "https://example.com",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "secret:nonexistent",
-        }),
-      }),
-    );
+    expect(callToolMock).toHaveBeenCalledWith(mcpSpec, "submit", {
+      url: "https://example.com",
+      headers: { Authorization: "secret:nonexistent" },
+    });
   });
 
   it("resolves secrets in nested array args", async () => {
@@ -353,7 +354,7 @@ describe("ToolExecutor secret resolution", () => {
 
     // Use fs.read which has a path arg; also pass an extra arg with nested secrets
     // to verify the walk function handles arrays
-    const result = await executor.execute("tool.fs.read", "call-6", {
+    const result = await executor.execute("read", "call-6", {
       path: "test.txt",
       tags: ["secret:handle-xyz", "plain"],
     });
@@ -366,9 +367,9 @@ describe("ToolExecutor secret resolution", () => {
   it("redacts multiple secret values from output", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
 
-    const mockFetch = vi.fn(async () => ({
-      text: async () => "key1=secret-AAA and key2=secret-BBB here",
-    })) as unknown as typeof fetch;
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "key1=secret-AAA and key2=secret-BBB here" }],
+    }));
 
     const secrets = new Map([
       ["h1", "secret-AAA"],
@@ -378,14 +379,14 @@ describe("ToolExecutor secret resolution", () => {
 
     const executor = new ToolExecutor(
       homeDir,
-      stubMcpManager(),
-      new Map(),
-      mockFetch,
+      stubMcpManager({ callTool: callToolMock as McpManager["callTool"] }),
+      new Map([["remote", createMcpSpec("remote")]]),
+      fetch,
       provider,
       allowPublicDnsLookup,
     );
 
-    const result = await executor.execute("tool.http.fetch", "call-7", {
+    const result = await executor.execute("mcp.remote.submit", "call-7", {
       url: "https://example.com",
       headers: {
         "X-Key-1": "secret:h1",

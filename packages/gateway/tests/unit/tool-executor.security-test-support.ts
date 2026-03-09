@@ -98,7 +98,7 @@ export function registerSanitizeEnvTests(): void {
 }
 
 export function registerEnvSanitizationTests(home: HomeDirState): void {
-  it("tool.exec does not leak sensitive env vars", async () => {
+  it("bash does not leak sensitive env vars", async () => {
     const origTyrum = process.env["TYRUM_TEST_SECRET"];
     const origGateway = process.env["GATEWAY_TEST_SECRET"];
     process.env["TYRUM_TEST_SECRET"] = "should-not-appear";
@@ -106,7 +106,7 @@ export function registerEnvSanitizationTests(home: HomeDirState): void {
 
     try {
       const result = await createToolExecutor({ homeDir: requireHomeDir(home) }).execute(
-        "tool.exec",
+        "bash",
         "call-env-1",
         { command: "env" },
       );

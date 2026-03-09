@@ -25,7 +25,7 @@ Policy rules can depend on provenance (for example: “deny shell when the input
 
 A conservative provenance rule is:
 
-- `PolicyBundle.provenance.untrusted_shell_requires_approval` escalates `tool.exec` from `allow → require_approval` when enabled and when the tool call is driven by untrusted-input provenance.
+- `PolicyBundle.provenance.untrusted_shell_requires_approval` escalates `bash` from `allow → require_approval` when enabled and when the tool call is driven by untrusted-input provenance.
 
 Operators can relax this behavior by setting `provenance.untrusted_shell_requires_approval: false` in policy bundles (deployment/agent/playbook). For narrow exceptions, prefer `approve always` policy overrides on stable tool match targets rather than broad allowlists.
 

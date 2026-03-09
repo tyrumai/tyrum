@@ -56,7 +56,7 @@ describe("resolvePolicyGatedPluginToolExposure", () => {
       policyService,
       tenantId: "tenant-a",
       agentId: "agent-a",
-      allowlist: ["tool.fs.read"],
+      allowlist: ["read"],
       pluginTools: [
         { ...SIDE_EFFECTING_PLUGIN_TOOL, id: " plugin.echo.danger " },
         READ_ONLY_PLUGIN_TOOL,
@@ -67,7 +67,7 @@ describe("resolvePolicyGatedPluginToolExposure", () => {
       tenantId: "tenant-a",
       agentId: "agent-a",
     });
-    expect(result.allowlist).toEqual(["tool.fs.read", "plugin.echo.danger"]);
+    expect(result.allowlist).toEqual(["read", "plugin.echo.danger"]);
     expect(result.pluginTools.map((tool) => tool.id)).toEqual([
       "plugin.echo.danger",
       "plugin.echo.readonly",

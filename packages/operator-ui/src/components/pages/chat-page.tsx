@@ -14,29 +14,14 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0]?.trim() ?? "";
 }
 
-function deriveThreadTitle(session: {
-  thread_id: string;
-  last_turn?: { role: string; content: string } | undefined;
-}): string {
-  const last = session.last_turn;
-  const line = last ? firstLine(last.content) : "";
-  if (line) return line;
+function deriveThreadTitle(session: { title: string; thread_id: string }): string {
+  const title = firstLine(session.title);
+  if (title) return title;
   return session.thread_id;
 }
 
-function deriveThreadPreview(session: {
-  summary: string;
-  last_turn?: { role: string; content: string } | undefined;
-}): string {
-  const summary = firstLine(session.summary);
-  if (summary) return summary;
-
-  const lines = (session.last_turn?.content ?? "").split(/\r?\n/);
-  for (const line of lines.slice(1)) {
-    const trimmed = line.trim();
-    if (trimmed) return trimmed;
-  }
-  return "";
+function deriveThreadPreview(session: { summary: string }): string {
+  return firstLine(session.summary);
 }
 
 interface ChatThreadSummary {
@@ -44,11 +29,11 @@ interface ChatThreadSummary {
   session_id: string;
   channel: string;
   thread_id: string;
+  title: string;
   summary: string;
   last_turn?: { role: string; content: string } | undefined;
   created_at: string;
   updated_at: string;
-  title: string;
   preview: string;
 }
 

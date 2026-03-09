@@ -113,6 +113,9 @@ function toDescriptor(spec: McpServerSpecT, tool: McpToolInfo): ToolDescriptor {
     risk: "medium",
     requires_confirmation: true,
     keywords: ["mcp", spec.id.toLowerCase(), spec.name.toLowerCase(), tool.name.toLowerCase()],
+    source: "mcp",
+    family: "mcp",
+    backingServerId: spec.id,
     inputSchema:
       tool.inputSchema && typeof tool.inputSchema === "object"
         ? (tool.inputSchema as Record<string, unknown>)

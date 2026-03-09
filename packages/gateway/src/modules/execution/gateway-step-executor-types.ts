@@ -3,7 +3,7 @@ import type { ModelMessage } from "ai";
 
 export const DEFAULT_TOOL_APPROVAL_WAIT_MS = 120_000;
 
-export const SUPPORTED_LLM_TOOL_IDS = new Set<string>(["tool.exec", "tool.http.fetch"]);
+export const SUPPORTED_LLM_TOOL_IDS = new Set<string>(["bash", "webfetch"]);
 
 export type ToolBudgetState = {
   toolCallsUsed: number;

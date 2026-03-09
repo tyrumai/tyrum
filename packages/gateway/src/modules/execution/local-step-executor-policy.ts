@@ -19,7 +19,7 @@ export async function maybeEnforceLocalExecutorPolicy(input: {
     return undefined;
   }
 
-  if (input.action.type !== "CLI" && input.action.type !== "Http") {
+  if (input.action.type !== "CLI" && input.action.type !== "Http" && input.action.type !== "Mcp") {
     return undefined;
   }
 

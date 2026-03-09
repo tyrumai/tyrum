@@ -34,12 +34,13 @@ describe("ToolIntent", () => {
       step_index: 1,
       cost_budget: { max_total_tokens: 123 },
       execution_profile: "default",
-      tool_allowlist: ["tool.http.fetch"],
+      tool_allowlist: ["webfetch"],
       created_at: "2026-02-19T12:00:00Z",
       created_by: "agent:default:main",
     });
 
     expect(parsed.cost_budget.max_total_tokens).toBe(123);
+    expect(parsed.tool_allowlist).toEqual(["webfetch"]);
   });
 
   it("rejects missing expected_evidence", () => {

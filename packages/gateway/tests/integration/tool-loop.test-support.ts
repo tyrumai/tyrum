@@ -333,19 +333,19 @@ export function createFetchStub(
 }
 
 export function readToolCall(id: string, path: string): ToolCallFixture {
-  return { id, name: "tool.fs.read", arguments: JSON.stringify({ path }) };
+  return { id, name: "read", arguments: JSON.stringify({ path }) };
 }
 
 export function fetchToolCall(id: string, url: string): ToolCallFixture {
-  return { id, name: "tool.http.fetch", arguments: JSON.stringify({ url }) };
+  return { id, name: "webfetch", arguments: JSON.stringify({ url }) };
 }
 
 export function execToolCall(id: string, command: string): ToolCallFixture {
-  return { id, name: "tool.exec", arguments: JSON.stringify({ command }) };
+  return { id, name: "bash", arguments: JSON.stringify({ command }) };
 }
 
 export function writeToolCall(id: string, path: string, content: string): ToolCallFixture {
-  return { id, name: "tool.fs.write", arguments: JSON.stringify({ path, content }) };
+  return { id, name: "write", arguments: JSON.stringify({ path, content }) };
 }
 
 export function toolCallsStep(...toolCalls: ToolCallFixture[]): ToolLoopStep {

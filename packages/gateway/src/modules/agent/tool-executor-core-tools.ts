@@ -1,21 +1,36 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
+import type { SecretProvider } from "../secret/provider.js";
 import type { McpManager } from "./mcp-manager.js";
 import { tagContent } from "./provenance.js";
 import { sanitizeForModel } from "./sanitizer.js";
 import {
   DEFAULT_EXEC_TIMEOUT_MS,
-  HTTP_TIMEOUT_MS,
   MAX_EXEC_TIMEOUT_MS,
   MAX_RESPONSE_BYTES,
   TRUNCATION_MARKER,
-  isBlockedUrl,
-  resolvesToBlockedAddress,
   sanitizeEnv,
 } from "./tool-executor-shared.js";
 import type { DnsLookupFn, ToolResult } from "./tool-executor-shared.js";
+import {
+  makeToolResult,
+  normalizeTextForPatching,
+  parseBooleanArg,
+  parseNumberArg,
+  parseStringArg,
+  renderPatchedText,
+  resolvePathArg,
+  selectReadContent,
+} from "./tool-executor-local-utils.js";
+import { executeGlobTool, executeGrepTool } from "./tool-executor-search-tools.js";
+import {
+  executeCodeSearchTool,
+  executeWebFetchTool,
+  executeWebSearchTool,
+} from "./tool-executor-mcp-tools.js";
+export { executeMcpTool } from "./tool-executor-mcp-tools.js";
 
 type WorkspaceLeaseRunner = <T>(
   toolCallId: string,
@@ -29,26 +44,22 @@ type CoreToolContext = {
   dnsLookup: DnsLookupFn;
   mcpManager: McpManager;
   mcpServerSpecs: ReadonlyMap<string, McpServerSpecT>;
+  secretProvider?: SecretProvider;
   assertSandboxed: (filePath: string) => string;
   withWorkspaceLease: WorkspaceLeaseRunner;
 };
+
+type StructuredPatchHunk =
+  | { kind: "add"; path: string; lines: string[] }
+  | { kind: "delete"; path: string }
+  | { kind: "update"; path: string; moveTo?: string; sections: PatchSection[] };
+
+type PatchSection = { lines: string[] };
 
 function truncateOutput(output: string): string {
   return output.length > MAX_RESPONSE_BYTES
     ? `${output.slice(0, MAX_RESPONSE_BYTES)}${TRUNCATION_MARKER}`
     : output;
-}
-
-function parseStringArg(args: Record<string, unknown> | null, key: string): string | undefined {
-  return typeof args?.[key] === "string" ? (args[key] as string) : undefined;
-}
-
-function selectReadContent(content: string, offset?: number, limit?: number): string {
-  if (offset === undefined && limit === undefined) return content;
-  const lines = content.split("\n");
-  const start = offset ?? 0;
-  const selected = limit !== undefined ? lines.slice(start, start + limit) : lines.slice(start);
-  return selected.join("\n");
 }
 
 async function executeFsRead(
@@ -57,24 +68,17 @@ async function executeFsRead(
   args: unknown,
 ): Promise<ToolResult> {
   const parsed = args as Record<string, unknown> | null;
-  const rawPath = parseStringArg(parsed, "path");
+  const rawPath = resolvePathArg(parsed);
   if (!rawPath) {
     return { tool_call_id: toolCallId, output: "", error: "missing required argument: path" };
   }
 
-  const offsetRaw = parsed?.["offset"];
-  const limitRaw = parsed?.["limit"];
-  const offset = typeof offsetRaw === "number" ? Math.floor(offsetRaw) : undefined;
-  const limit = typeof limitRaw === "number" ? Math.floor(limitRaw) : undefined;
-
-  if (offset !== undefined && (Number.isNaN(offset) || offset < 0)) {
-    return {
-      tool_call_id: toolCallId,
-      output: "",
-      error: "offset must be a non-negative integer",
-    };
+  const offset = parseNumberArg(parsed, "offset");
+  const limit = parseNumberArg(parsed, "limit");
+  if (offset !== undefined && (offset < 0 || !Number.isInteger(offset))) {
+    return { tool_call_id: toolCallId, output: "", error: "offset must be a non-negative integer" };
   }
-  if (limit !== undefined && (Number.isNaN(limit) || limit < 1)) {
+  if (limit !== undefined && (limit < 1 || !Number.isInteger(limit))) {
     return { tool_call_id: toolCallId, output: "", error: "limit must be a positive integer" };
   }
 
@@ -84,9 +88,8 @@ async function executeFsRead(
     { ttlMs: 30_000, waitMs: 30_000 },
     async () => {
       const content = await readFile(safePath, "utf-8");
-      const relativePath = relative(resolve(context.home), safePath);
-      const normalizedPath = relativePath.trim().length > 0 ? relativePath : rawPath;
       const selected = selectReadContent(content, offset, limit);
+      const relativePath = relative(resolve(context.home), safePath);
       const isTruncated = selected.length > MAX_RESPONSE_BYTES;
       const tagged = tagContent(truncateOutput(selected), "tool");
       return {
@@ -95,7 +98,7 @@ async function executeFsRead(
         provenance: tagged,
         meta: {
           kind: "fs.read",
-          path: normalizedPath,
+          path: relativePath.trim().length > 0 ? relativePath : rawPath,
           offset,
           limit,
           raw_chars: content.length,
@@ -108,70 +111,17 @@ async function executeFsRead(
   );
 }
 
-async function executeHttpFetch(
-  context: CoreToolContext,
-  toolCallId: string,
-  args: unknown,
-): Promise<ToolResult> {
-  const parsed = args as Record<string, unknown> | null;
-  const url = parseStringArg(parsed, "url");
-  if (!url) {
-    return { tool_call_id: toolCallId, output: "", error: "missing required argument: url" };
-  }
-
-  if (isBlockedUrl(url) || (await resolvesToBlockedAddress(url, context.dnsLookup))) {
-    return {
-      tool_call_id: toolCallId,
-      output: "",
-      error: "blocked url: requests to private/internal network addresses are denied",
-    };
-  }
-
-  const method = parseStringArg(parsed, "method") ?? "GET";
-  const headers: Record<string, string> = {};
-  const headersRaw = parsed?.["headers"];
-  if (headersRaw && typeof headersRaw === "object" && !Array.isArray(headersRaw)) {
-    for (const [key, value] of Object.entries(headersRaw as Record<string, unknown>)) {
-      if (typeof value === "string") {
-        headers[key] = value;
-      }
-    }
-  }
-
-  const body = parseStringArg(parsed, "body");
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
-
-  try {
-    const response = await context.fetchImpl(url, {
-      method,
-      headers,
-      body,
-      signal: controller.signal,
-    });
-    const tagged = tagContent(truncateOutput(await response.text()), "web", false);
-    return {
-      tool_call_id: toolCallId,
-      output: sanitizeForModel(tagged),
-      provenance: tagged,
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 async function executeFsWrite(
   context: CoreToolContext,
   toolCallId: string,
   args: unknown,
 ): Promise<ToolResult> {
   const parsed = args as Record<string, unknown> | null;
-  const rawPath = parseStringArg(parsed, "path");
+  const rawPath = resolvePathArg(parsed);
+  const content = parseStringArg(parsed, "content");
   if (!rawPath) {
     return { tool_call_id: toolCallId, output: "", error: "missing required argument: path" };
   }
-
-  const content = parseStringArg(parsed, "content");
   if (content === undefined) {
     return { tool_call_id: toolCallId, output: "", error: "missing required argument: content" };
   }
@@ -183,12 +133,253 @@ async function executeFsWrite(
     async () => {
       await mkdir(dirname(safePath), { recursive: true });
       await writeFile(safePath, content, "utf-8");
-      const tagged = tagContent(`Wrote ${content.length} bytes to ${safePath}`, "tool");
-      return {
-        tool_call_id: toolCallId,
-        output: sanitizeForModel(tagged),
-        provenance: tagged,
-      };
+      return makeToolResult(toolCallId, `Wrote ${content.length} bytes to ${safePath}`, "tool");
+    },
+  );
+}
+
+function replaceExactString(input: {
+  content: string;
+  oldString: string;
+  newString: string;
+  replaceAll: boolean;
+}): { updated: string; replacements: number } {
+  if (!input.oldString) {
+    throw new Error("old_string must not be empty");
+  }
+  if (input.replaceAll) {
+    const occurrences = input.content.split(input.oldString).length - 1;
+    if (occurrences === 0) {
+      throw new Error("old_string not found");
+    }
+    return {
+      updated: input.content.split(input.oldString).join(input.newString),
+      replacements: occurrences,
+    };
+  }
+
+  const first = input.content.indexOf(input.oldString);
+  if (first === -1) {
+    throw new Error("old_string not found");
+  }
+  const second = input.content.indexOf(input.oldString, first + input.oldString.length);
+  if (second !== -1) {
+    throw new Error("old_string matched multiple times; set replace_all=true");
+  }
+  return {
+    updated:
+      input.content.slice(0, first) +
+      input.newString +
+      input.content.slice(first + input.oldString.length),
+    replacements: 1,
+  };
+}
+
+async function executeFsEdit(
+  context: CoreToolContext,
+  toolCallId: string,
+  args: unknown,
+): Promise<ToolResult> {
+  const parsed = args as Record<string, unknown> | null;
+  const rawPath = resolvePathArg(parsed);
+  const oldString = parseStringArg(parsed, "old_string") ?? parseStringArg(parsed, "oldString");
+  const newString = parseStringArg(parsed, "new_string") ?? parseStringArg(parsed, "newString");
+  const replaceAll =
+    parseBooleanArg(parsed, "replace_all") ?? parseBooleanArg(parsed, "replaceAll") ?? false;
+  if (!rawPath) {
+    return { tool_call_id: toolCallId, output: "", error: "missing required argument: path" };
+  }
+  if (oldString === undefined || newString === undefined) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: "missing required arguments: old_string and new_string",
+    };
+  }
+
+  const safePath = context.assertSandboxed(rawPath);
+  return await context.withWorkspaceLease(
+    toolCallId,
+    { ttlMs: 30_000, waitMs: 30_000 },
+    async () => {
+      const content = await readFile(safePath, "utf-8");
+      const result = replaceExactString({ content, oldString, newString, replaceAll });
+      await writeFile(safePath, result.updated, "utf-8");
+      return makeToolResult(
+        toolCallId,
+        `Edited ${safePath} (${String(result.replacements)} replacement${result.replacements === 1 ? "" : "s"})`,
+        "tool",
+      );
+    },
+  );
+}
+
+function parseStructuredPatch(patchText: string): StructuredPatchHunk[] {
+  const lines = patchText.replaceAll("\r\n", "\n").split("\n");
+  if (lines[0] !== "*** Begin Patch") {
+    throw new Error("patch must start with '*** Begin Patch'");
+  }
+  const hunks: StructuredPatchHunk[] = [];
+  let index = 1;
+
+  while (index < lines.length) {
+    const line = lines[index] ?? "";
+    if (line === "*** End Patch") break;
+
+    if (line.startsWith("*** Add File: ")) {
+      const path = line.slice("*** Add File: ".length).trim();
+      const addLines: string[] = [];
+      index += 1;
+      while (index < lines.length) {
+        const current = lines[index] ?? "";
+        if (current.startsWith("*** ")) break;
+        if (!current.startsWith("+")) {
+          throw new Error(`invalid add-file line: ${current}`);
+        }
+        addLines.push(current.slice(1));
+        index += 1;
+      }
+      hunks.push({ kind: "add", path, lines: addLines });
+      continue;
+    }
+
+    if (line.startsWith("*** Delete File: ")) {
+      hunks.push({ kind: "delete", path: line.slice("*** Delete File: ".length).trim() });
+      index += 1;
+      continue;
+    }
+
+    if (line.startsWith("*** Update File: ")) {
+      const path = line.slice("*** Update File: ".length).trim();
+      index += 1;
+      let moveTo: string | undefined;
+      if ((lines[index] ?? "").startsWith("*** Move to: ")) {
+        moveTo = (lines[index] ?? "").slice("*** Move to: ".length).trim();
+        index += 1;
+      }
+      const sections: PatchSection[] = [];
+      let currentSection: string[] = [];
+      while (index < lines.length) {
+        const current = lines[index] ?? "";
+        if (current === "*** End of File") {
+          index += 1;
+          continue;
+        }
+        if (current.startsWith("*** ")) break;
+        if (current === "@@" || current.startsWith("@@ ")) {
+          if (currentSection.length > 0) {
+            sections.push({ lines: currentSection });
+            currentSection = [];
+          }
+          index += 1;
+          continue;
+        }
+        if (![" ", "+", "-"].includes(current[0] ?? "")) {
+          throw new Error(`invalid update line: ${current}`);
+        }
+        currentSection.push(current);
+        index += 1;
+      }
+      if (currentSection.length > 0) {
+        sections.push({ lines: currentSection });
+      }
+      hunks.push({ kind: "update", path, moveTo, sections });
+      continue;
+    }
+
+    throw new Error(`invalid patch hunk header: ${line}`);
+  }
+
+  if (lines.at(-1) !== "*** End Patch") {
+    throw new Error("patch must end with '*** End Patch'");
+  }
+  return hunks;
+}
+
+function applyPatchSection(
+  content: string,
+  section: PatchSection,
+  cursor: number,
+): {
+  content: string;
+  cursor: number;
+} {
+  const before = section.lines
+    .filter((line) => line.startsWith(" ") || line.startsWith("-"))
+    .map((line) => line.slice(1))
+    .join("\n");
+  const after = section.lines
+    .filter((line) => line.startsWith(" ") || line.startsWith("+"))
+    .map((line) => line.slice(1))
+    .join("\n");
+
+  const searchFrom = Math.max(0, cursor);
+  const index = before.length === 0 ? searchFrom : content.indexOf(before, searchFrom);
+  if (index === -1) {
+    throw new Error("patch context did not match target file");
+  }
+  const updated = content.slice(0, index) + after + content.slice(index + before.length);
+  return { content: updated, cursor: index + after.length };
+}
+
+async function executeApplyPatch(
+  context: CoreToolContext,
+  toolCallId: string,
+  args: unknown,
+): Promise<ToolResult> {
+  const parsed = args as Record<string, unknown> | null;
+  const patch = parseStringArg(parsed, "patch");
+  if (!patch) {
+    return { tool_call_id: toolCallId, output: "", error: "missing required argument: patch" };
+  }
+
+  return await context.withWorkspaceLease(
+    toolCallId,
+    { ttlMs: 30_000, waitMs: 30_000 },
+    async () => {
+      const hunks = parseStructuredPatch(patch);
+      const applied: string[] = [];
+
+      for (const hunk of hunks) {
+        const safePath = context.assertSandboxed(hunk.path);
+        if (hunk.kind === "add") {
+          await mkdir(dirname(safePath), { recursive: true });
+          await writeFile(safePath, hunk.lines.join("\n"), "utf-8");
+          applied.push(`add ${hunk.path}`);
+          continue;
+        }
+        if (hunk.kind === "delete") {
+          await rm(safePath, { force: true });
+          applied.push(`delete ${hunk.path}`);
+          continue;
+        }
+
+        const original = await readFile(safePath, "utf-8");
+        const normalized = normalizeTextForPatching(original);
+        let patched = normalized.text;
+        let cursor = 0;
+        for (const section of hunk.sections) {
+          const appliedSection = applyPatchSection(patched, section, cursor);
+          patched = appliedSection.content;
+          cursor = appliedSection.cursor;
+        }
+
+        const destinationPath = context.assertSandboxed(hunk.moveTo ?? hunk.path);
+        await mkdir(dirname(destinationPath), { recursive: true });
+        await writeFile(
+          destinationPath,
+          renderPatchedText(patched, normalized.hasTrailingNewline),
+          "utf-8",
+        );
+        if (destinationPath !== safePath) {
+          await rm(safePath, { force: true });
+        }
+        applied.push(
+          `${hunk.moveTo ? "move" : "update"} ${hunk.path}${hunk.moveTo ? ` -> ${hunk.moveTo}` : ""}`,
+        );
+      }
+
+      return makeToolResult(toolCallId, applied.join("\n") || "Patch applied.", "tool");
     },
   );
 }
@@ -205,9 +396,9 @@ async function executeExec(
   }
 
   const safeCwd = context.assertSandboxed(parseStringArg(parsed, "cwd") ?? ".");
-  const timeoutMsRaw = parsed?.["timeout_ms"];
+  const timeoutMsRaw = parseNumberArg(parsed, "timeout_ms");
   const timeoutMs =
-    typeof timeoutMsRaw === "number"
+    timeoutMsRaw !== undefined
       ? Math.max(1, Math.min(MAX_EXEC_TIMEOUT_MS, Math.floor(timeoutMsRaw)))
       : DEFAULT_EXEC_TIMEOUT_MS;
 
@@ -223,7 +414,6 @@ async function executeExec(
           stdio: ["ignore", "pipe", "pipe"],
           detached: true,
         });
-
         const chunks: Buffer[] = [];
         let size = 0;
         const pushChunk = (data: Buffer) => {
@@ -232,42 +422,30 @@ async function executeExec(
           chunks.push(data.length <= remaining ? data : data.subarray(0, remaining));
           size += Math.min(data.length, remaining);
         };
-
         child.stdout.on("data", pushChunk);
         child.stderr.on("data", pushChunk);
 
         let finished = false;
-        let timeoutFired = false;
-        const killProcessGroup = (signal: NodeJS.Signals) => {
+        const killGroup = (signal: NodeJS.Signals) => {
           if (finished) return;
           if (child.pid) {
             try {
               process.kill(-child.pid, signal);
               return;
-            } catch {
-              // Intentional: process-group cleanup is best-effort during timeout handling.
-              // Best-effort process-group cleanup; fall back to the child pid.
-            }
+            } catch {}
           }
           try {
             child.kill(signal);
-          } catch {
-            // Intentional: shutdown races during child cleanup should not mask the tool result.
-            // Best-effort cleanup; ignore shutdown races.
-          }
+          } catch {}
         };
 
         const timer = setTimeout(() => {
-          timeoutFired = true;
-          killProcessGroup("SIGTERM");
+          killGroup("SIGTERM");
         }, effectiveTimeoutMs);
-        const killTimer = setTimeout(() => killProcessGroup("SIGKILL"), effectiveTimeoutMs + 250);
+        const killTimer = setTimeout(() => {
+          killGroup("SIGKILL");
+        }, effectiveTimeoutMs + 250);
 
-        child.on("spawn", () => {
-          if (timeoutFired) {
-            killProcessGroup("SIGTERM");
-          }
-        });
         child.on("close", (code) => {
           finished = true;
           clearTimeout(timer);
@@ -285,71 +463,7 @@ async function executeExec(
       }),
   );
 
-  const tagged = tagContent(truncateOutput(output), "tool");
-  return {
-    tool_call_id: toolCallId,
-    output: sanitizeForModel(tagged),
-    provenance: tagged,
-  };
-}
-
-export async function executeMcpTool(
-  context: CoreToolContext,
-  toolId: string,
-  toolCallId: string,
-  args: unknown,
-): Promise<ToolResult> {
-  const parts = toolId.split(".");
-  if (parts.length < 3) {
-    return { tool_call_id: toolCallId, output: "", error: `invalid MCP tool ID: ${toolId}` };
-  }
-
-  const serverId = parts[1]!;
-  const toolName = parts.slice(2).join(".");
-  const spec = context.mcpServerSpecs.get(serverId);
-  if (!spec) {
-    return {
-      tool_call_id: toolCallId,
-      output: "",
-      error: `MCP server not found: ${serverId}`,
-    };
-  }
-
-  const result = await context.mcpManager.callTool(
-    spec,
-    toolName,
-    (args as Record<string, unknown>) ?? {},
-  );
-  if (result.isError) {
-    const errorText = result.content
-      .map((content) => (typeof content === "string" ? content : JSON.stringify(content)))
-      .join("\n");
-    return {
-      tool_call_id: toolCallId,
-      output: "",
-      error: errorText || "MCP tool call failed",
-    };
-  }
-
-  const output = result.content
-    .map((content) => {
-      if (
-        typeof content === "object" &&
-        content !== null &&
-        (content as Record<string, unknown>)["type"] === "text"
-      ) {
-        return String((content as Record<string, unknown>)["text"]);
-      }
-      return typeof content === "string" ? content : JSON.stringify(content);
-    })
-    .join("\n");
-
-  const tagged = tagContent(truncateOutput(output), "tool", false);
-  return {
-    tool_call_id: toolCallId,
-    output: sanitizeForModel(tagged),
-    provenance: tagged,
-  };
+  return makeToolResult(toolCallId, output, "tool");
 }
 
 export async function executeCoreTool(
@@ -359,14 +473,26 @@ export async function executeCoreTool(
   args: unknown,
 ): Promise<ToolResult | null> {
   switch (toolId) {
-    case "tool.fs.read":
+    case "read":
       return await executeFsRead(context, toolCallId, args);
-    case "tool.http.fetch":
-      return await executeHttpFetch(context, toolCallId, args);
-    case "tool.fs.write":
+    case "write":
       return await executeFsWrite(context, toolCallId, args);
-    case "tool.exec":
+    case "edit":
+      return await executeFsEdit(context, toolCallId, args);
+    case "apply_patch":
+      return await executeApplyPatch(context, toolCallId, args);
+    case "bash":
       return await executeExec(context, toolCallId, args);
+    case "glob":
+      return await executeGlobTool(context, toolCallId, args);
+    case "grep":
+      return await executeGrepTool(context, toolCallId, args);
+    case "webfetch":
+      return await executeWebFetchTool(context, toolCallId, args);
+    case "websearch":
+      return await executeWebSearchTool(context, toolCallId, args);
+    case "codesearch":
+      return await executeCodeSearchTool(context, toolCallId, args);
     default:
       return null;
   }

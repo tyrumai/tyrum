@@ -36,6 +36,7 @@ import type {
 import {
   buildStoredTranscript,
   isSessionMessageArray,
+  normalizeSessionTitle,
   normalizeContainerKind,
   normalizeRepairTimestamp,
   normalizeTime,
@@ -130,6 +131,7 @@ export class SessionDal {
   ): Promise<void> {
     await this.db.run(UPDATE_SESSION_SQL, [
       this.stringifyTurns(input.stored.turns),
+      input.stored.title,
       input.stored.summary,
       input.updatedAt ?? new Date().toISOString(),
       input.tenantId,
@@ -141,6 +143,7 @@ export class SessionDal {
     input: SessionIdentity & {
       turns: SessionMessage[];
       summary: string;
+      title?: string;
       updatedAt?: string;
     },
   ): Promise<void> {
@@ -150,6 +153,7 @@ export class SessionDal {
       updatedAt: input.updatedAt,
       stored: {
         turns: input.turns,
+        title: normalizeSessionTitle(input.title ?? ""),
         summary: input.summary,
         droppedMessages: 0,
       },
@@ -231,7 +235,7 @@ export class SessionDal {
 
     const nowIso = new Date().toISOString();
     const inserted = await this.db.get<RawSessionRow>(
-      "INSERT INTO sessions (tenant_id, session_id, session_key, agent_id, workspace_id, channel_thread_id, summary, turns_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?) ON CONFLICT (tenant_id, session_key) DO NOTHING RETURNING *",
+      "INSERT INTO sessions (tenant_id, session_id, session_key, agent_id, workspace_id, channel_thread_id, title, summary, turns_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, '', '', '[]', ?, ?) ON CONFLICT (tenant_id, session_key) DO NOTHING RETURNING *",
       [tenantId, randomUUID(), sessionKey, agentId, workspaceId, channelThreadId, nowIso, nowIso],
     );
     if (inserted) return toSessionRow(inserted, this.jsonObserver);
@@ -267,7 +271,7 @@ export class SessionDal {
     }
 
     const rows = await this.db.all<RawSessionListRow>(
-      `SELECT s.session_id, s.session_key, ag.agent_key, ca.connector_key, ct.provider_thread_id, s.summary, s.turns_json, s.created_at, s.updated_at FROM sessions s JOIN agents ag ON ag.tenant_id = s.tenant_id AND ag.agent_id = s.agent_id JOIN channel_threads ct ON ct.tenant_id = s.tenant_id AND ct.workspace_id = s.workspace_id AND ct.channel_thread_id = s.channel_thread_id JOIN channel_accounts ca ON ca.tenant_id = ct.tenant_id AND ca.workspace_id = ct.workspace_id AND ca.channel_account_id = ct.channel_account_id WHERE ${where.join(" AND ")} ORDER BY s.updated_at DESC, s.session_id DESC LIMIT ?`,
+      `SELECT s.session_id, s.session_key, ag.agent_key, ca.connector_key, ct.provider_thread_id, s.title, s.summary, s.turns_json, s.created_at, s.updated_at FROM sessions s JOIN agents ag ON ag.tenant_id = s.tenant_id AND ag.agent_id = s.agent_id JOIN channel_threads ct ON ct.tenant_id = s.tenant_id AND ct.workspace_id = s.workspace_id AND ct.channel_thread_id = s.channel_thread_id JOIN channel_accounts ca ON ca.tenant_id = ct.tenant_id AND ca.workspace_id = ct.workspace_id AND ca.channel_account_id = ct.channel_account_id WHERE ${where.join(" AND ")} ORDER BY s.updated_at DESC, s.session_id DESC LIMIT ?`,
       [...params, limit + 1],
     );
     const selectedRows = rows.slice(0, limit);
@@ -286,7 +290,7 @@ export class SessionDal {
 
   async reset(input: SessionIdentity): Promise<boolean> {
     const res = await this.db.run(
-      "UPDATE sessions SET turns_json = '[]', summary = '', updated_at = ? WHERE tenant_id = ? AND session_id = ?",
+      "UPDATE sessions SET turns_json = '[]', title = '', summary = '', updated_at = ? WHERE tenant_id = ? AND session_id = ?",
       [new Date().toISOString(), input.tenantId, input.sessionId],
     );
     return res.changes === 1;
@@ -297,23 +301,42 @@ export class SessionDal {
     sessionId: string;
     userMessage: string;
     assistantMessage: string;
+    maxTurns?: number;
     timestamp: string;
   }): Promise<SessionRow> {
     const session = await this.requireSession({
       tenantId: input.tenantId,
       sessionId: input.sessionId,
     });
-    await this.replaceTranscript({
-      tenantId: input.tenantId,
-      sessionId: input.sessionId,
-      turns: [
-        ...session.turns,
-        { role: "user", content: input.userMessage, timestamp: input.timestamp },
-        { role: "assistant", content: input.assistantMessage, timestamp: input.timestamp },
-      ],
-      summary: session.summary,
-      updatedAt: input.timestamp,
-    });
+    const turns = [
+      ...session.turns,
+      { role: "user", content: input.userMessage, timestamp: input.timestamp },
+      { role: "assistant", content: input.assistantMessage, timestamp: input.timestamp },
+    ];
+    const maxTurns = input.maxTurns ?? 0;
+    if (maxTurns > 0) {
+      const stored = buildStoredTranscript({
+        turns,
+        keepLastMessages: maxTurns * 2,
+        previousTitle: session.title,
+        previousSummary: session.summary,
+      });
+      await this.writeSession({
+        tenantId: input.tenantId,
+        sessionId: input.sessionId,
+        stored,
+        updatedAt: input.timestamp,
+      });
+    } else {
+      await this.replaceTranscript({
+        tenantId: input.tenantId,
+        sessionId: input.sessionId,
+        turns,
+        title: session.title,
+        summary: session.summary,
+        updatedAt: input.timestamp,
+      });
+    }
 
     const updated = await this.getById({ tenantId: input.tenantId, sessionId: input.sessionId });
     if (!updated) throw new Error(`session '${input.sessionId}' missing after update`);
@@ -330,15 +353,27 @@ export class SessionDal {
     const stored = buildStoredTranscript({
       turns: session.turns,
       keepLastMessages: Math.max(0, input.keepLastMessages),
+      previousTitle: session.title,
       previousSummary: session.summary,
     });
     await this.writeSession({ tenantId: input.tenantId, sessionId: input.sessionId, stored });
     return { droppedMessages: stored.droppedMessages, keptMessages: stored.turns.length };
   }
 
+  async setTitleIfBlank(input: SessionIdentity & { title: string }): Promise<boolean> {
+    const title = normalizeSessionTitle(input.title);
+    if (!title) return false;
+    const result = await this.db.run(
+      "UPDATE sessions SET title = ?, updated_at = ? WHERE tenant_id = ? AND session_id = ? AND trim(title) = ''",
+      [title, new Date().toISOString(), input.tenantId, input.sessionId],
+    );
+    return result.changes === 1;
+  }
+
   async repairFromChannelLogs(input: {
     tenantId: string;
     sessionId: string;
+    maxTurns?: number;
   }): Promise<SessionRepairResult | null> {
     const session = await this.requireSession({
       tenantId: input.tenantId,
@@ -377,10 +412,33 @@ export class SessionDal {
 
     if (sourceRows === 0) return null;
 
+    const maxTurns = input.maxTurns ?? 0;
+    if (maxTurns > 0) {
+      const stored = buildStoredTranscript({
+        turns: rebuiltTurns,
+        keepLastMessages: maxTurns * 2,
+        previousTitle: session.title,
+        previousSummary: session.summary,
+      });
+      await this.writeSession({
+        tenantId: input.tenantId,
+        sessionId: input.sessionId,
+        stored,
+        updatedAt: stored.turns.at(-1)?.timestamp ?? session.updated_at,
+      });
+      return {
+        source_rows: sourceRows,
+        rebuilt_messages: rebuiltTurns.length,
+        kept_messages: stored.turns.length,
+        dropped_messages: stored.droppedMessages,
+      };
+    }
+
     await this.replaceTranscript({
       tenantId: input.tenantId,
       sessionId: input.sessionId,
       turns: rebuiltTurns,
+      title: session.title,
       summary: session.summary,
       updatedAt: rebuiltTurns.at(-1)?.timestamp ?? session.updated_at,
     });

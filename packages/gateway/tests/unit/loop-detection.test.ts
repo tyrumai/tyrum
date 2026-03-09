@@ -8,12 +8,12 @@ import {
 describe("detectWithinTurnToolLoop", () => {
   it("reports all tool names in an alternating cycle", () => {
     const steps = [
-      { toolCalls: [{ toolName: "tool.fs.read", input: { path: "a.txt" } }] },
-      { toolCalls: [{ toolName: "tool.exec.bash", input: { cmd: "echo hi" } }] },
-      { toolCalls: [{ toolName: "tool.fs.read", input: { path: "a.txt" } }] },
-      { toolCalls: [{ toolName: "tool.exec.bash", input: { cmd: "echo hi" } }] },
-      { toolCalls: [{ toolName: "tool.fs.read", input: { path: "a.txt" } }] },
-      { toolCalls: [{ toolName: "tool.exec.bash", input: { cmd: "echo hi" } }] },
+      { toolCalls: [{ toolName: "read", input: { path: "a.txt" } }] },
+      { toolCalls: [{ toolName: "bash", input: { cmd: "echo hi" } }] },
+      { toolCalls: [{ toolName: "read", input: { path: "a.txt" } }] },
+      { toolCalls: [{ toolName: "bash", input: { cmd: "echo hi" } }] },
+      { toolCalls: [{ toolName: "read", input: { path: "a.txt" } }] },
+      { toolCalls: [{ toolName: "bash", input: { cmd: "echo hi" } }] },
     ];
 
     const result = detectWithinTurnToolLoop({
@@ -24,7 +24,7 @@ describe("detectWithinTurnToolLoop", () => {
 
     expect(result).toEqual({
       kind: "cycle",
-      toolNames: ["tool.fs.read", "tool.exec.bash"],
+      toolNames: ["read", "bash"],
     });
   });
 });
@@ -32,12 +32,12 @@ describe("detectWithinTurnToolLoop", () => {
 describe("signatureForToolStep", () => {
   it("does not crash when tool call input is missing", () => {
     const result = signatureForToolStep({
-      toolCalls: [{ toolName: "tool.fs.read" }],
+      toolCalls: [{ toolName: "read" }],
     });
 
     expect(result).toEqual({
-      signature: expect.stringMatching(/^tool\.fs\.read:[0-9a-f]{64}$/),
-      toolNames: ["tool.fs.read"],
+      signature: expect.stringMatching(/^read:[0-9a-f]{64}$/),
+      toolNames: ["read"],
     });
   });
 });

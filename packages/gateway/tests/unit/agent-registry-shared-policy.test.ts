@@ -39,7 +39,7 @@ describe("AgentRegistry shared policy wiring", () => {
       scope: { tenantId, scopeKind: "deployment" },
       bundle: {
         v: 1,
-        tools: { default: "deny", allow: ["tool.exec"], require_approval: [], deny: [] },
+        tools: { default: "deny", allow: ["bash"], require_approval: [], deny: [] },
       },
       createdBy: { kind: "test" },
     });
@@ -47,7 +47,7 @@ describe("AgentRegistry shared policy wiring", () => {
       scope: { tenantId, scopeKind: "agent", agentId },
       bundle: {
         v: 1,
-        tools: { default: "deny", allow: [], require_approval: ["tool.exec"], deny: [] },
+        tools: { default: "deny", allow: [], require_approval: ["bash"], deny: [] },
       },
       createdBy: { kind: "test" },
     });
@@ -65,7 +65,7 @@ describe("AgentRegistry shared policy wiring", () => {
       tenantId,
       agentId,
       workspaceId,
-      toolId: "tool.exec",
+      toolId: "bash",
       toolMatchTarget: "echo ok",
     });
 

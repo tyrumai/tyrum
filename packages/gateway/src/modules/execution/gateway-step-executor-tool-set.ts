@@ -113,7 +113,7 @@ function createPolicyStateResolver(input: BuildToolSetInput) {
     const matchTarget = canonicalizeToolMatchTarget(input2.toolId, input2.args, undefined);
     const policySnapshotId = input.executionContext.policySnapshotId;
     const url =
-      input2.toolId === "tool.http.fetch"
+      input2.toolId === "webfetch"
         ? (() => {
             const rec = coerceRecord(input2.args) ?? {};
             return typeof rec["url"] === "string" ? rec["url"] : undefined;
@@ -245,7 +245,7 @@ export function buildToolSet(input: BuildToolSetInput): ToolSet {
   const runTool = createToolRunner(input);
 
   const createPolicyAwareTool = (input2: {
-    toolId: "tool.exec" | "tool.http.fetch";
+    toolId: "bash" | "webfetch";
     description: string;
     inputSchema: Record<string, unknown>;
     toAction: (args: Record<string, unknown>) => ActionPrimitiveT;
@@ -314,9 +314,9 @@ export function buildToolSet(input: BuildToolSetInput): ToolSet {
       },
     });
 
-  if (allowed.has("tool.exec")) {
+  if (allowed.has("bash")) {
     const modelTool = createPolicyAwareTool({
-      toolId: "tool.exec",
+      toolId: "bash",
       description: "Execute a shell command in the workspace sandbox.",
       inputSchema: {
         type: "object",
@@ -344,45 +344,43 @@ export function buildToolSet(input: BuildToolSetInput): ToolSet {
         };
       },
     });
-    registerModelTool(tools, "tool.exec", modelTool, modelToolNames);
+    registerModelTool(tools, "bash", modelTool, modelToolNames);
   }
 
-  if (allowed.has("tool.http.fetch")) {
+  if (allowed.has("webfetch")) {
     const modelTool = createPolicyAwareTool({
-      toolId: "tool.http.fetch",
-      description: "Fetch an HTTP URL (SSRF protected, output capped).",
+      toolId: "webfetch",
+      description: "Fetch an HTTP URL via the hosted research fetcher (SSRF protected).",
       inputSchema: {
         type: "object",
         properties: {
           url: { type: "string" },
-          method: { type: "string" },
-          headers: { type: "object" },
-          body: { type: "string" },
-          timeout_ms: { type: "number" },
+          mode: { type: "string", enum: ["extract", "raw"] },
+          prompt: { type: "string" },
         },
         required: ["url"],
         additionalProperties: true,
       },
       toAction: (record) => {
         const url = typeof record["url"] === "string" ? record["url"] : "";
-        const method = typeof record["method"] === "string" ? record["method"] : undefined;
-        const headers = coerceRecord(record["headers"]);
-        const body = typeof record["body"] === "string" ? record["body"] : undefined;
-        const timeoutMs = parseTimeoutMsArg(record);
+        const mode = typeof record["mode"] === "string" ? record["mode"] : undefined;
+        const prompt = typeof record["prompt"] === "string" ? record["prompt"] : undefined;
 
         return {
-          type: "Http",
+          type: "Mcp",
           args: {
-            url,
-            ...(method ? { method } : undefined),
-            ...(headers ? { headers } : undefined),
-            ...(body ? { body } : undefined),
-            ...(timeoutMs ? { timeout_ms: timeoutMs } : undefined),
+            server_id: "exa",
+            tool_name: "crawling_exa",
+            input: {
+              url,
+              ...(mode ? { mode } : undefined),
+              ...(prompt ? { prompt } : undefined),
+            },
           },
         };
       },
     });
-    registerModelTool(tools, "tool.http.fetch", modelTool, modelToolNames);
+    registerModelTool(tools, "webfetch", modelTool, modelToolNames);
   }
 
   return tools;

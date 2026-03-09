@@ -16,7 +16,7 @@ export function registerApprovalPlanTests(): void {
         {
           approval_id: "7",
           approval_key: "approval-7",
-          kind: "tool.exec",
+          kind: "bash",
           prompt: "Approve payment?",
           context: { amount: 100 },
           expires_at: null,
@@ -32,7 +32,7 @@ export function registerApprovalPlanTests(): void {
         payload: {
           approval_id: "7",
           approval_key: "approval-7",
-          kind: "tool.exec",
+          kind: "bash",
           prompt: "Approve payment?",
           context: { amount: 100 },
           expires_at: null,
@@ -62,7 +62,7 @@ export function registerApprovalPlanTests(): void {
         {
           approval_id: "7",
           approval_key: "approval-7",
-          kind: "tool.exec",
+          kind: "bash",
           prompt: "Approve payment?",
           context: { amount: 100 },
           expires_at: null,
@@ -97,7 +97,7 @@ export function registerApprovalPlanTests(): void {
         {
           approval_id: "7",
           approval_key: "approval-7",
-          kind: "tool.exec",
+          kind: "bash",
           prompt: "Approve payment?",
           context: { amount: 100 },
           expires_at: null,
@@ -119,7 +119,7 @@ export function registerApprovalPlanTests(): void {
         {
           approval_id: "1",
           approval_key: "approval-1",
-          kind: "tool.exec",
+          kind: "bash",
           prompt: "Approve?",
           context: null,
           expires_at: null,

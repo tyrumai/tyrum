@@ -69,7 +69,7 @@ describe("Agent config routes integration", () => {
         palette: "graphite",
         character: "architect",
       },
-      tools: { allow: ["tool.fs.read"] },
+      tools: { allow: ["read"] },
     });
 
     const putInvalidJson = await app.request("/config/agents/default", {
@@ -115,7 +115,7 @@ describe("Agent config routes integration", () => {
         palette: "graphite",
         character: "architect",
       },
-      tools: { allow: ["tool.fs.read", "tool.fs.write"] },
+      tools: { allow: ["read", "write"] },
     });
     const putV2 = await app.request("/config/agents/default", {
       method: "PUT",

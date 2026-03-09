@@ -272,6 +272,64 @@ export function createAdminHttpTestCore(): {
         update: routingConfigUpdate,
         revert: vi.fn(async () => ({ revision: 0, config: { v: 1 } }) as unknown),
       },
+      toolRegistry: {
+        list: vi.fn(
+          async () =>
+            ({
+              status: "ok",
+              tools: [
+                {
+                  source: "builtin",
+                  canonical_id: "read",
+                  description: "Read files from disk.",
+                  risk: "low",
+                  requires_confirmation: false,
+                  effective_exposure: {
+                    enabled: true,
+                    reason: "enabled",
+                    agent_key: "default",
+                  },
+                  keywords: ["read", "file"],
+                },
+                {
+                  source: "builtin_mcp",
+                  canonical_id: "websearch",
+                  description: "Search the web via Exa.",
+                  risk: "medium",
+                  requires_confirmation: true,
+                  effective_exposure: {
+                    enabled: true,
+                    reason: "enabled",
+                    agent_key: "default",
+                  },
+                  backing_server: {
+                    id: "exa",
+                    name: "Exa",
+                    transport: "remote",
+                    url: "https://mcp.exa.ai/mcp",
+                  },
+                },
+                {
+                  source: "plugin",
+                  canonical_id: "plugin.echo.say",
+                  description: "Echo text back to the caller.",
+                  risk: "low",
+                  requires_confirmation: false,
+                  effective_exposure: {
+                    enabled: false,
+                    reason: "disabled_by_agent_allowlist",
+                    agent_key: "default",
+                  },
+                  plugin: {
+                    id: "echo",
+                    name: "Echo",
+                    version: "0.0.1",
+                  },
+                },
+              ],
+            }) as unknown,
+        ),
+      },
       secrets: {
         store: vi.fn(async () => ({ handle: {} }) as unknown),
         list: vi.fn(async () => ({ handles: [] }) as unknown),

@@ -70,6 +70,7 @@ export async function handleSessionListMessage(
         agent_id: session.agent_id,
         channel: session.channel,
         thread_id: session.thread_id,
+        title: session.title ?? "",
         summary: session.summary ?? "",
         turns_count: session.turns_count,
         updated_at: session.updated_at,
@@ -142,6 +143,7 @@ export async function handleSessionGetMessage(
         agent_id: looked.agent_key,
         channel: looked.connector_key,
         thread_id: looked.provider_thread_id,
+        title: looked.session.title ?? "",
         summary: looked.session.summary ?? "",
         turns: looked.session.turns.map((turn) => ({ role: turn.role, content: turn.content })),
         updated_at: looked.session.updated_at,
@@ -205,6 +207,7 @@ export async function handleSessionCreateMessage(
       agent_id: agentKey,
       channel: connectorKey,
       thread_id: providerThreadId,
+      title: session.title ?? "",
     });
     return { request_id: msg.request_id, type: msg.type, ok: true, result };
   } catch (err) {

@@ -47,6 +47,7 @@ import {
   type SessionCompactionResult,
 } from "./session-compaction-service.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
+import { listBuiltinToolDescriptors, type ToolDescriptor } from "../tools.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -265,6 +266,59 @@ export class AgentRuntime {
     };
 
     return AgentStatusResponse.parse(status);
+  }
+
+  async listRegisteredTools(): Promise<{
+    allowlist: string[];
+    tools: ToolDescriptor[];
+    mcpServers: string[];
+  }> {
+    const agentId = await this.opts.container.identityScopeDal.ensureAgentId(
+      this.tenantId,
+      this.agentId,
+    );
+    const workspaceId = await this.opts.container.identityScopeDal.ensureWorkspaceId(
+      this.tenantId,
+      this.workspaceId,
+    );
+    await this.opts.container.identityScopeDal.ensureMembership(
+      this.tenantId,
+      agentId,
+      workspaceId,
+    );
+    const config = await (
+      await ensureAgentConfigSeeded({
+        db: this.opts.container.db,
+        stateMode: resolveGatewayStateMode(this.opts.container.deploymentConfig),
+        tenantId: this.tenantId,
+        agentId,
+        agentKey: this.agentId,
+        createdBy: { kind: "agent-runtime" },
+        reason: "seed",
+      })
+    ).config;
+    const ctx = await loadCurrentAgentContext({
+      contextStore: this.contextStore,
+      tenantId: this.tenantId,
+      agentId,
+      workspaceId,
+      config,
+    });
+
+    const mcpTools = await this.mcpManager.listToolDescriptors(ctx.mcpServers);
+    const pluginTools = this.plugins?.getToolDescriptors() ?? [];
+    const byId = new Map<string, ToolDescriptor>();
+    for (const tool of [...listBuiltinToolDescriptors(), ...mcpTools, ...pluginTools]) {
+      if (!byId.has(tool.id)) {
+        byId.set(tool.id, tool);
+      }
+    }
+
+    return {
+      allowlist: [...ctx.config.tools.allow],
+      tools: Array.from(byId.values()).toSorted((left, right) => left.id.localeCompare(right.id)),
+      mcpServers: ctx.mcpServers.map((server) => server.id),
+    };
   }
 
   getLastContextReport(): AgentContextReport | undefined {

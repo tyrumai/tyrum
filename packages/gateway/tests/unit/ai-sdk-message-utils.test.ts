@@ -26,7 +26,7 @@ describe("AI SDK message utils", () => {
         role: "tool",
         content: [
           { type: "tool-approval-response", approvalId: "approval-1", approved: true },
-          { type: "tool-result", toolCallId: "tc-1", toolName: "tool.exec", output: { ok: true } },
+          { type: "tool-result", toolCallId: "tc-1", toolName: "bash", output: { ok: true } },
         ],
       } as unknown as ModelMessage,
     ];

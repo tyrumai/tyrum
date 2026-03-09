@@ -43,7 +43,7 @@ export const busyShutdownPolicyConfig =
   `v: 1\n` +
   `tools:\n` +
   `  default: require_approval\n` +
-  `  allow: ["tool.exec"]\n` +
+  `  allow: ["bash"]\n` +
   `  require_approval: []\n` +
   `  deny: []\n`;
 
@@ -51,7 +51,7 @@ export const busyShutdownPolicyBundle: PolicyBundleT = {
   v: 1,
   tools: {
     default: "require_approval",
-    allow: ["tool.exec"],
+    allow: ["bash"],
     require_approval: [],
     deny: [],
   },
