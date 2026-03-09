@@ -349,6 +349,66 @@ export function registerHttpClientOpsTests(): void {
     expect(updated.persona.name).toBe("Ada");
   });
 
+  it("toolRegistry.list sends GET /config/tools and validates tool metadata", async () => {
+    const fetch = makeFetchMock(async () =>
+      jsonResponse({
+        status: "ok",
+        tools: [
+          {
+            source: "builtin",
+            canonical_id: "read",
+            description: "Read files from disk.",
+            risk: "low",
+            requires_confirmation: false,
+            effective_exposure: {
+              enabled: true,
+              reason: "enabled",
+              agent_key: "default",
+            },
+            keywords: ["read", "file"],
+            input_schema: {
+              type: "object",
+              properties: {
+                path: { type: "string" },
+              },
+            },
+          },
+          {
+            source: "builtin_mcp",
+            canonical_id: "websearch",
+            description: "Search the web.",
+            risk: "medium",
+            requires_confirmation: true,
+            effective_exposure: {
+              enabled: true,
+              reason: "enabled",
+              agent_key: "default",
+            },
+            backing_server: {
+              id: "exa",
+              name: "Exa",
+              transport: "remote",
+              url: "https://mcp.exa.ai/mcp",
+            },
+          },
+        ],
+      }),
+    );
+    const client = createTestClient({ fetch });
+
+    const result = await client.toolRegistry.list();
+    expect(result.tools).toHaveLength(2);
+    expect(result.tools[0]?.canonical_id).toBe("read");
+    expect(result.tools[1]?.backing_server?.id).toBe("exa");
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://gateway.example/config/tools");
+    expect(init.method).toBe("GET");
+  });
+
   it("health.get sends GET /healthz and validates response", async () => {
     const fetch = mockJsonFetch({ status: "ok", is_exposed: false });
     const client = createTestClient({ fetch });

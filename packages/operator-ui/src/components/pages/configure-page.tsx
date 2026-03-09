@@ -4,6 +4,7 @@ import { AuditPanel } from "../admin-http/audit-panel.js";
 import { AppPage } from "../layout/app-page.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { AuthTokensCard } from "./admin-http-tokens.js";
+import { ToolRegistryCard } from "./admin-http-tools.js";
 import { AdminHttpModelsPanel } from "./admin-http-models.js";
 import { AdminHttpProvidersPanel } from "./admin-http-providers.js";
 import { PluginsCard } from "./admin-http-plugins.js";
@@ -49,6 +50,9 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
           <TabsTrigger value="plugins" data-testid="admin-http-tab-plugins">
             Plugins
           </TabsTrigger>
+          <TabsTrigger value="tools" data-testid="admin-http-tab-tools">
+            Tools
+          </TabsTrigger>
           <TabsTrigger value="device-tokens" data-testid="admin-http-tab-gateway">
             Tokens
           </TabsTrigger>
@@ -87,6 +91,10 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
 
         <TabsContent value="plugins">
           <PluginsCard core={core} />
+        </TabsContent>
+
+        <TabsContent value="tools">
+          <ToolRegistryCard core={core} />
         </TabsContent>
 
         <TabsContent value="device-tokens">

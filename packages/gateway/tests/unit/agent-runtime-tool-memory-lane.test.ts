@@ -209,7 +209,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
         "  enabled: []",
         "tools:",
         "  allow:",
-        "    - tool.fs.read",
+        "    - read",
         "sessions:",
         "  ttl_days: 30",
         "  max_turns: 20",
@@ -303,7 +303,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
               {
                 type: "tool-call" as const,
                 toolCallId: "tc-1",
-                toolName: "tool.fs.read",
+                toolName: "read",
                 input: JSON.stringify({ path: "notes.txt" }),
               },
             ],
@@ -337,7 +337,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     });
 
     expect(res2.reply).toBe("done");
-    expect(res2.used_tools).toContain("tool.fs.read");
+    expect(res2.used_tools).toContain("read");
   }, 10_000);
 
   it("does not clear unclaimed steer signals mid-run (so they can be claimed at a later tool boundary)", async () => {
@@ -359,7 +359,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
         "  enabled: []",
         "tools:",
         "  allow:",
-        "    - tool.fs.read",
+        "    - read",
         "sessions:",
         "  ttl_days: 30",
         "  max_turns: 20",
@@ -454,7 +454,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
               {
                 type: "tool-call" as const,
                 toolCallId: "tc-1",
-                toolName: "tool.fs.read",
+                toolName: "read",
                 input: JSON.stringify({ path: "notes.txt" }),
               },
             ],
@@ -488,7 +488,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     });
 
     expect(res2.reply).toBe("done");
-    expect(res2.used_tools).not.toContain("tool.fs.read");
+    expect(res2.used_tools).not.toContain("read");
 
     const signalConsumed = await container.db.get<{ n: number }>(
       "SELECT COUNT(*) AS n FROM lane_queue_signals WHERE key = ? AND lane = ?",

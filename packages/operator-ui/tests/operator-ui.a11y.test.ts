@@ -47,6 +47,7 @@ class FakeWsClient implements OperatorWsClient {
       agent_id: "default",
       channel: "ui",
       thread_id: "ui-session-1",
+      title: "",
       summary: "",
       turns: [],
       updated_at: "2026-01-01T00:00:00.000Z",
@@ -58,6 +59,7 @@ class FakeWsClient implements OperatorWsClient {
     agent_id: "default",
     channel: "ui",
     thread_id: "ui-session-1",
+    title: "",
   }));
   sessionCompact = vi.fn(async () => ({
     session_id: "session-1",

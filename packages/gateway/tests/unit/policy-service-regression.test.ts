@@ -36,7 +36,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           DEFAULT_TENANT_ID,
           JSON.stringify({
             v: 1,
-            tools: { default: "deny", allow: ["tool.exec"], require_approval: [], deny: [] },
+            tools: { default: "deny", allow: ["bash"], require_approval: [], deny: [] },
           }),
           new Date().toISOString(),
           JSON.stringify({ kind: "test" }),
@@ -52,7 +52,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           DEFAULT_AGENT_ID,
           JSON.stringify({
             v: 1,
-            tools: { default: "deny", allow: [], require_approval: ["tool.exec"], deny: [] },
+            tools: { default: "deny", allow: [], require_approval: ["bash"], deny: [] },
           }),
           new Date().toISOString(),
           JSON.stringify({ kind: "test" }),
@@ -76,7 +76,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
         workspaceId: DEFAULT_WORKSPACE_ID,
-        toolId: "tool.exec",
+        toolId: "bash",
         toolMatchTarget: "echo ok",
       });
 
@@ -110,7 +110,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           DEFAULT_TENANT_ID,
           JSON.stringify({
             v: 1,
-            tools: { default: "deny", allow: ["tool.exec"], require_approval: [], deny: [] },
+            tools: { default: "deny", allow: ["bash"], require_approval: [], deny: [] },
           }),
           new Date().toISOString(),
           JSON.stringify({ kind: "test" }),
@@ -124,7 +124,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
             tenantId: DEFAULT_TENANT_ID,
             agentId: DEFAULT_AGENT_ID,
             workspaceId: DEFAULT_WORKSPACE_ID,
-            toolId: "tool.exec",
+            toolId: "bash",
             toolMatchTarget: "echo ok",
           })
         ).decision,
@@ -138,7 +138,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           DEFAULT_TENANT_ID,
           JSON.stringify({
             v: 1,
-            tools: { default: "deny", allow: [], require_approval: ["tool.exec"], deny: [] },
+            tools: { default: "deny", allow: [], require_approval: ["bash"], deny: [] },
           }),
           new Date().toISOString(),
           JSON.stringify({ kind: "test" }),
@@ -152,7 +152,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
             tenantId: DEFAULT_TENANT_ID,
             agentId: DEFAULT_AGENT_ID,
             workspaceId: DEFAULT_WORKSPACE_ID,
-            toolId: "tool.exec",
+            toolId: "bash",
             toolMatchTarget: "echo ok",
           })
         ).decision,
@@ -192,7 +192,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
             "  default: deny",
             "  allow: []",
             "  require_approval:",
-            "    - tool.exec",
+            "    - bash",
             "  deny: []",
             "",
           ].join("\n"),
@@ -203,7 +203,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           v: 1,
           tools: {
             default: "deny",
-            allow: ["tool.exec"],
+            allow: ["bash"],
             require_approval: [],
             deny: [],
           },
@@ -220,7 +220,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           tenantId: DEFAULT_TENANT_ID,
           agentId: DEFAULT_AGENT_ID,
           workspaceId: DEFAULT_WORKSPACE_ID,
-          toolId: "tool.exec",
+          toolId: "bash",
           toolMatchTarget: "echo ok",
           playbookBundle,
         });
@@ -240,7 +240,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           v: 1,
           tools: {
             default: "deny",
-            allow: ["tool.exec"],
+            allow: ["bash"],
             require_approval: ["tool.*"],
             deny: [],
           },
@@ -256,7 +256,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           tenantId: DEFAULT_TENANT_ID,
           agentId: DEFAULT_AGENT_ID,
           workspaceId: DEFAULT_WORKSPACE_ID,
-          toolId: "tool.exec",
+          toolId: "bash",
           toolMatchTarget: "echo ok",
           playbookBundle,
         });
@@ -276,9 +276,9 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           v: 1,
           tools: {
             default: "allow",
-            allow: ["tool.exec"],
+            allow: ["bash"],
             require_approval: ["tool.*"],
-            deny: ["tool.exec"],
+            deny: ["bash"],
           },
         });
 
@@ -292,7 +292,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           tenantId: DEFAULT_TENANT_ID,
           agentId: DEFAULT_AGENT_ID,
           workspaceId: DEFAULT_WORKSPACE_ID,
-          toolId: "tool.exec",
+          toolId: "bash",
           toolMatchTarget: "echo ok",
           playbookBundle,
         });
@@ -315,7 +315,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
             tools: {
               default: "deny",
               allow: [],
-              require_approval: ["tool.exec"],
+              require_approval: ["bash"],
               deny: [],
             },
           },
@@ -325,7 +325,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           v: 1,
           tools: {
             default: "deny",
-            allow: ["tool.exec"],
+            allow: ["bash"],
             require_approval: [],
             deny: [],
           },
@@ -346,7 +346,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           tenantId: DEFAULT_TENANT_ID,
           agentId: DEFAULT_AGENT_ID,
           workspaceId: DEFAULT_WORKSPACE_ID,
-          toolId: "tool.exec",
+          toolId: "bash",
           toolMatchTarget: "echo ok",
           playbookBundle,
         });
@@ -368,7 +368,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
             default: "allow",
             allow: [],
             require_approval: [],
-            deny: ["tool.exec"],
+            deny: ["bash"],
           },
         });
 
@@ -383,7 +383,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           tenantId: DEFAULT_TENANT_ID,
           agentId: DEFAULT_AGENT_ID,
           workspaceId: DEFAULT_WORKSPACE_ID,
-          toolId: "tool.exec",
+          toolId: "bash",
           pattern: "echo ok",
         });
 
@@ -391,7 +391,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           tenantId: DEFAULT_TENANT_ID,
           agentId: DEFAULT_AGENT_ID,
           workspaceId: DEFAULT_WORKSPACE_ID,
-          toolId: "tool.exec",
+          toolId: "bash",
           toolMatchTarget: "echo ok",
           playbookBundle,
         });
@@ -456,7 +456,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           v: 1,
           tools: {
             default: "deny",
-            allow: ["tool.http.fetch"],
+            allow: ["webfetch"],
             require_approval: [],
             deny: [],
           },
@@ -479,7 +479,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           tenantId: DEFAULT_TENANT_ID,
           agentId: DEFAULT_AGENT_ID,
           workspaceId: DEFAULT_WORKSPACE_ID,
-          toolId: "tool.http.fetch",
+          toolId: "webfetch",
           pattern: "https://example.com/",
         });
 
@@ -487,7 +487,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           tenantId: DEFAULT_TENANT_ID,
           agentId: DEFAULT_AGENT_ID,
           workspaceId: DEFAULT_WORKSPACE_ID,
-          toolId: "tool.http.fetch",
+          toolId: "webfetch",
           toolMatchTarget: "https://example.com/",
           url: "https://example.com/",
           playbookBundle,
@@ -510,7 +510,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           tools: {
             default: "deny",
             allow: [],
-            require_approval: ["tool.exec"],
+            require_approval: ["bash"],
             deny: [],
           },
         });
@@ -526,7 +526,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           tenantId: DEFAULT_TENANT_ID,
           agentId: DEFAULT_AGENT_ID,
           workspaceId: DEFAULT_WORKSPACE_ID,
-          toolId: "tool.exec",
+          toolId: "bash",
           pattern: "echo ok",
         });
 
@@ -534,7 +534,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
           tenantId: DEFAULT_TENANT_ID,
           agentId: DEFAULT_AGENT_ID,
           workspaceId: DEFAULT_WORKSPACE_ID,
-          toolId: "tool.exec",
+          toolId: "bash",
           toolMatchTarget: "echo ok",
           playbookBundle,
         });

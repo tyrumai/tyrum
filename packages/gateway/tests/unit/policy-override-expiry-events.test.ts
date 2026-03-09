@@ -45,7 +45,7 @@ describe("policy overrides expiry events", () => {
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
-      toolId: "tool.exec",
+      toolId: "bash",
       pattern: "echo hi",
       expiresAt: new Date(Date.now() - 60_000).toISOString(),
     });
@@ -150,7 +150,7 @@ describe("policy overrides expiry events", () => {
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
-      toolId: "tool.exec",
+      toolId: "bash",
       pattern: "echo hi",
       expiresAt: new Date(Date.now() - 60_000).toISOString(),
     });
@@ -179,7 +179,7 @@ describe("policy overrides expiry events", () => {
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
-      toolId: "tool.exec",
+      toolId: "bash",
     });
     expect(active).toEqual([]);
 

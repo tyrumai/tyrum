@@ -143,7 +143,7 @@ describe("stable ws event builders", () => {
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
-      toolId: "tool.exec",
+      toolId: "bash",
       pattern: "echo stable event",
       createdBy: { kind: "test" },
     });

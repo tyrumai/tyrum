@@ -1,5 +1,5 @@
 import type { WsEventEnvelope } from "@tyrum/schemas";
-import { UuidSchema } from "@tyrum/schemas";
+import { UuidSchema, canonicalizeToolId } from "@tyrum/schemas";
 import type { ApprovalDal, ApprovalRow } from "./dal.js";
 import type { PolicyOverrideDal, PolicyOverrideRow } from "../policy/override-dal.js";
 import { isSafeSuggestedOverridePattern } from "../policy/override-guardrails.js";
@@ -78,7 +78,7 @@ function extractSuggestedOverrides(
     const workspaceId = entry["workspace_id"];
     if (typeof toolId === "string" && typeof pattern === "string") {
       overrides.push({
-        tool_id: toolId,
+        tool_id: canonicalizeToolId(toolId),
         pattern,
         workspace_id: typeof workspaceId === "string" ? workspaceId : undefined,
       });
@@ -102,7 +102,8 @@ function normalizeSelectedOverrides(
 
   const normalized: NormalizedSelectedOverride[] = [];
   for (const entry of overrides) {
-    const toolId = typeof entry?.tool_id === "string" ? entry.tool_id.trim() : "";
+    const toolId =
+      typeof entry?.tool_id === "string" ? canonicalizeToolId(entry.tool_id).trim() : "";
     const pattern = typeof entry?.pattern === "string" ? entry.pattern.trim() : "";
     const workspaceId =
       typeof entry?.workspace_id === "string" ? entry.workspace_id.trim() : undefined;

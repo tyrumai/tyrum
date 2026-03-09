@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { canonicalizeToolIdList } from "./tool-id.js";
 
 /**
  * Playbook steps are authored as `command` strings and compiled into typed
@@ -90,7 +91,7 @@ export const PlaybookStep = z
         /** Tool allowlist for this step (tool ids). */
         tools: z
           .object({
-            allow: z.array(z.string().trim().min(1)).default([]),
+            allow: z.array(z.string().trim().min(1)).default([]).overwrite(canonicalizeToolIdList),
           })
           .strict()
           .optional(),

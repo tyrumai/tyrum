@@ -72,6 +72,7 @@ const adminApiPaths = [
   "artifacts.getMetadata",
   "artifacts.getBytes",
   "health.get",
+  "toolRegistry.list",
 ] as const;
 
 type MockTyrumHttpFetch = TyrumHttpFetch & ReturnType<typeof vi.fn>;

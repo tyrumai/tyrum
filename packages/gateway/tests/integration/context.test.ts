@@ -106,7 +106,7 @@ describe("/context", () => {
         toolCalls: [
           {
             id: "tc-1",
-            name: "tool.fs.read",
+            name: "read",
             arguments: JSON.stringify({ path: "big.txt" }),
           },
         ],
@@ -162,7 +162,7 @@ describe("/context", () => {
 
     expect(ctxPayload.report!.system_prompt.sections?.length).toBeGreaterThan(0);
     expect(ctxPayload.report!.tool_schema_total_chars).toBeGreaterThan(0);
-    expect(ctxPayload.report!.tool_schema_top?.some((p) => p.id === "tool.fs.read")).toBe(true);
+    expect(ctxPayload.report!.tool_schema_top?.some((p) => p.id === "read")).toBe(true);
 
     const fileReport = ctxPayload.report!.injected_files?.find((f) => f.path === "big.txt");
     expect(fileReport).toBeTruthy();
@@ -171,7 +171,7 @@ describe("/context", () => {
     expect(fileReport!.truncated).toBe(true);
     expect(fileReport!.truncation_marker).toBe("...(truncated)");
 
-    expect(ctxPayload.report!.tool_calls?.some((c) => c.tool_id === "tool.fs.read")).toBe(true);
+    expect(ctxPayload.report!.tool_calls?.some((c) => c.tool_id === "read")).toBe(true);
 
     const listRes = await app.request("/context/list");
     expect(listRes.status).toBe(200);

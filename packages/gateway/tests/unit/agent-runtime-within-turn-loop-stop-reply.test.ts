@@ -41,7 +41,7 @@ describe("AgentRuntime within-turn loop stop reply", () => {
         "  enabled: []",
         "tools:",
         "  allow:",
-        "    - tool.fs.read",
+        "    - read",
         "sessions:",
         "  ttl_days: 30",
         "  max_turns: 20",
@@ -84,7 +84,7 @@ describe("AgentRuntime within-turn loop stop reply", () => {
               {
                 type: "tool-call" as const,
                 toolCallId: "tc-1",
-                toolName: "tool.fs.read",
+                toolName: "read",
                 input: JSON.stringify({ path: "notes.txt" }),
               },
             ],
@@ -100,7 +100,7 @@ describe("AgentRuntime within-turn loop stop reply", () => {
             {
               type: "tool-call" as const,
               toolCallId: `tc-${String(callCount)}`,
-              toolName: "tool.fs.read",
+              toolName: "read",
               input: JSON.stringify({ path: "notes.txt" }),
             },
           ],

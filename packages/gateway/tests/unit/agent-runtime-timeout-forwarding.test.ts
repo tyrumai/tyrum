@@ -10,6 +10,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 const generateTextMock = vi.hoisted(() => vi.fn());
+const TITLE_PROMPT_TEXT = "Write a concise session title.";
+
+function isTitleGenerateRequest(value: unknown): boolean {
+  return (
+    typeof (value as { system?: unknown } | undefined)?.system === "string" &&
+    ((value as { system: string }).system.includes(TITLE_PROMPT_TEXT) ?? false)
+  );
+}
 
 vi.mock("ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("ai")>();
@@ -36,10 +44,10 @@ describe("AgentRuntime", () => {
   });
 
   it("passes an abortSignal to generateText for execution timeouts", async () => {
-    generateTextMock.mockResolvedValueOnce({
-      text: "ok",
+    generateTextMock.mockImplementation(async (input) => ({
+      text: isTitleGenerateRequest(input) ? "Generated session title" : "ok",
       steps: [],
-    });
+    }));
 
     const { createContainer } = await import("../../src/container.js");
     const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
@@ -65,8 +73,10 @@ describe("AgentRuntime", () => {
     });
 
     expect(res.reply).toBe("ok");
-    expect(generateTextMock).toHaveBeenCalledOnce();
-    const call = generateTextMock.mock.calls[0]?.[0] as { abortSignal?: AbortSignal } | undefined;
+    const call = generateTextMock.mock.calls
+      .map(([first]) => first)
+      .find((entry) => !isTitleGenerateRequest(entry)) as { abortSignal?: AbortSignal } | undefined;
+    expect(call).toBeDefined();
     expect(call?.abortSignal).toBeInstanceOf(AbortSignal);
   });
 });

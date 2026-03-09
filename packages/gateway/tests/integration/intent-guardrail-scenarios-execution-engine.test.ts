@@ -180,7 +180,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
       DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
-        tools: { default: "allow", allow: [], require_approval: ["tool.http.fetch"], deny: [] },
+        tools: { default: "allow", allow: [], require_approval: ["webfetch"], deny: [] },
         network_egress: { default: "allow", allow: [], require_approval: [], deny: [] },
       }),
     );

@@ -84,3 +84,4 @@ export type {
 export type { ContextGetResponse, ContextListResponse, ContextDetailResponse } from "./context.js";
 export type { ArtifactMetadataResponse, ArtifactBytesResult } from "./artifacts.js";
 export type { HealthResponse } from "./health.js";
+export type { ToolRegistryListResult } from "./tool-registry.js";

@@ -6,9 +6,9 @@ import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/ident
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../../src/modules/workspace/lease.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import {
-  createTextFetchMock,
   createToolExecutor,
   requireHomeDir,
+  stubMcpManager,
   type HomeDirState,
 } from "./tool-executor.shared-test-support.js";
 
@@ -17,7 +17,7 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
     const homeDir = requireHomeDir(home);
     await writeFile(join(homeDir, "test.txt"), "hello world", "utf-8");
 
-    const result = await createToolExecutor({ homeDir }).execute("tool.fs.read", "call-1", {
+    const result = await createToolExecutor({ homeDir }).execute("read", "call-1", {
       path: "test.txt",
     });
 
@@ -29,7 +29,7 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
 
   it("fs.read returns error for missing path argument", async () => {
     const result = await createToolExecutor({ homeDir: requireHomeDir(home) }).execute(
-      "tool.fs.read",
+      "read",
       "call-2",
       {},
     );
@@ -37,62 +37,151 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
     expect(result.error).toBe("missing required argument: path");
   });
 
-  it("http.fetch performs outbound request", async () => {
-    const mockFetch = createTextFetchMock("response-body");
+  it("webfetch delegates to Exa crawling via MCP", async () => {
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "response-body" }],
+    }));
     const dnsLookup = vi.fn(async () => [{ address: "93.184.216.34", family: 4 as const }]);
 
     const result = await createToolExecutor({
       homeDir: requireHomeDir(home),
-      fetchImpl: mockFetch,
+      mcpManager: stubMcpManager({ callTool: callToolMock }),
       dnsLookup,
-    }).execute("tool.http.fetch", "call-3", {
+    }).execute("webfetch", "call-3", {
       url: "https://example.com/api",
+      mode: "raw",
     });
 
     expect(result.output).toContain("response-body");
     expect(result.output).toContain('<data source="web">');
     expect(result.error).toBeUndefined();
-    expect(mockFetch).toHaveBeenCalledWith(
-      "https://example.com/api",
-      expect.objectContaining({ method: "GET" }),
+    expect(callToolMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "exa",
+        name: "Exa",
+        transport: "remote",
+        url: expect.stringContaining("https://mcp.exa.ai/mcp"),
+      }),
+      "crawling_exa",
+      { url: "https://example.com/api" },
     );
     expect(dnsLookup).toHaveBeenCalledWith("example.com");
   });
 
-  it("http.fetch blocks requests to private network addresses", async () => {
-    const mockFetch = createTextFetchMock("should-not-fetch");
+  it("webfetch forwards the Exa API key from the secret provider", async () => {
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "response-body" }],
+    }));
+    const secretProvider = {
+      resolve: vi.fn(async () => "exa-test-key"),
+      store: vi.fn(),
+      revoke: vi.fn(),
+      list: vi.fn(async () => []),
+    } as const;
 
     const result = await createToolExecutor({
       homeDir: requireHomeDir(home),
-      fetchImpl: mockFetch,
-    }).execute("tool.http.fetch", "call-ssrf-1", {
+      mcpManager: stubMcpManager({ callTool: callToolMock }),
+      secretProvider,
+    }).execute("webfetch", "call-3a", {
+      url: "https://example.com/api",
+      mode: "raw",
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(secretProvider.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ handle_id: "exa_api_key", scope: "exa_api_key" }),
+    );
+    expect(callToolMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "exa",
+        url: expect.stringContaining("exaApiKey=exa-test-key"),
+      }),
+      "crawling_exa",
+      { url: "https://example.com/api" },
+    );
+  });
+
+  it("webfetch allows bare URL calls without requiring an extract prompt", async () => {
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "response-body" }],
+    }));
+
+    const result = await createToolExecutor({
+      homeDir: requireHomeDir(home),
+      mcpManager: stubMcpManager({ callTool: callToolMock }),
+    }).execute("webfetch", "call-3b", {
+      url: "https://example.com/api",
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.output).toContain("response-body");
+    expect(callToolMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "exa" }),
+      "crawling_exa",
+      { url: "https://example.com/api" },
+    );
+  });
+
+  it("apply_patch accepts a trailing newline after the end marker", async () => {
+    const homeDir = requireHomeDir(home);
+    await writeFile(join(homeDir, "notes.txt"), "hello\n", "utf-8");
+
+    const result = await createToolExecutor({ homeDir }).execute("apply_patch", "call-3c", {
+      patch: [
+        "*** Begin Patch",
+        "*** Update File: notes.txt",
+        "@@",
+        "-hello",
+        "+hi",
+        "*** End Patch",
+        "",
+      ].join("\n"),
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.output).toContain("update notes.txt");
+    await expect(readFile(join(homeDir, "notes.txt"), "utf-8")).resolves.toBe("hi\n");
+  });
+
+  it("http.fetch blocks requests to private network addresses", async () => {
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "should-not-fetch" }],
+    }));
+
+    const result = await createToolExecutor({
+      homeDir: requireHomeDir(home),
+      mcpManager: stubMcpManager({ callTool: callToolMock }),
+    }).execute("webfetch", "call-ssrf-1", {
       url: "http://169.254.169.254/latest/meta-data/",
     });
 
     expect(result.error).toContain("blocked url");
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(callToolMock).not.toHaveBeenCalled();
   });
 
   it("http.fetch blocks hostnames that resolve to private addresses", async () => {
-    const mockFetch = createTextFetchMock("should-not-fetch");
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "should-not-fetch" }],
+    }));
     const dnsLookup = vi.fn(async () => [{ address: "10.0.0.42", family: 4 as const }]);
 
     const result = await createToolExecutor({
       homeDir: requireHomeDir(home),
-      fetchImpl: mockFetch,
+      mcpManager: stubMcpManager({ callTool: callToolMock }),
       dnsLookup,
-    }).execute("tool.http.fetch", "call-ssrf-2", {
+    }).execute("webfetch", "call-ssrf-2", {
       url: "https://example.com/private",
     });
 
     expect(result.error).toContain("blocked url");
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(callToolMock).not.toHaveBeenCalled();
     expect(dnsLookup).toHaveBeenCalledWith("example.com");
   });
 
   it("http.fetch returns error for missing url", async () => {
     const result = await createToolExecutor({ homeDir: requireHomeDir(home) }).execute(
-      "tool.http.fetch",
+      "webfetch",
       "call-4",
       {},
     );
@@ -100,10 +189,24 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
     expect(result.error).toBe("missing required argument: url");
   });
 
+  it("grep returns a structured error for invalid regex patterns", async () => {
+    const homeDir = requireHomeDir(home);
+    await writeFile(join(homeDir, "notes.txt"), "hello world\n", "utf-8");
+
+    const result = await createToolExecutor({ homeDir }).execute("grep", "call-4a", {
+      path: ".",
+      pattern: "[unterminated",
+      regex: true,
+    });
+
+    expect(result.output).toBe("");
+    expect(result.error).toContain("invalid regex pattern");
+  });
+
   it("fs.write writes file content", async () => {
     const homeDir = requireHomeDir(home);
 
-    const result = await createToolExecutor({ homeDir }).execute("tool.fs.write", "call-5", {
+    const result = await createToolExecutor({ homeDir }).execute("write", "call-5", {
       path: "test.txt",
       content: "data",
     });
@@ -116,11 +219,13 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
     expect(written).toBe("data");
   });
 
-  it("tool.exec executes commands", async () => {
+  it("bash executes commands", async () => {
     const result = await createToolExecutor({ homeDir: requireHomeDir(home) }).execute(
-      "tool.exec",
+      "bash",
       "call-6",
-      { command: "echo hi" },
+      {
+        command: "echo hi",
+      },
     );
 
     expect(result.error).toBeUndefined();
@@ -129,7 +234,7 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
     expect(result.output).toContain("[exit code:");
   });
 
-  it("tool.exec timeout includes workspace lease wait", async () => {
+  it("bash timeout includes workspace lease wait", async () => {
     const db = openTestSqliteDb();
     const tenantId = DEFAULT_TENANT_ID;
     const workspaceId = DEFAULT_WORKSPACE_ID;
@@ -168,7 +273,7 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
       });
 
       const startedAtMs = Date.now();
-      const result = await executor.execute("tool.exec", "call-lease-timeout-1", {
+      const result = await executor.execute("bash", "call-lease-timeout-1", {
         command: "sleep 1",
         timeout_ms: timeoutMs,
       });
@@ -181,6 +286,50 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
     } finally {
       await db.close();
     }
+  });
+
+  it("websearch delegates to Exa search via MCP", async () => {
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "search-result" }],
+    }));
+
+    const result = await createToolExecutor({
+      homeDir: requireHomeDir(home),
+      mcpManager: stubMcpManager({ callTool: callToolMock }),
+    }).execute("websearch", "call-websearch-1", {
+      query: "site:example.com release notes",
+      num_results: 3,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.output).toContain("search-result");
+    expect(callToolMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "exa" }),
+      "web_search_exa",
+      { query: "site:example.com release notes", numResults: 3 },
+    );
+  });
+
+  it("codesearch delegates to Exa code context via MCP", async () => {
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "code-context" }],
+    }));
+
+    const result = await createToolExecutor({
+      homeDir: requireHomeDir(home),
+      mcpManager: stubMcpManager({ callTool: callToolMock }),
+    }).execute("codesearch", "call-codesearch-1", {
+      query: "react startTransition example",
+      tokens_num: 1024,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.output).toContain("code-context");
+    expect(callToolMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "exa" }),
+      "get_code_context_exa",
+      { query: "react startTransition example", tokensNum: 1024 },
+    );
   });
 
   it("unknown tool returns error", async () => {

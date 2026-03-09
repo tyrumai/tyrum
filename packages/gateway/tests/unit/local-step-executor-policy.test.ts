@@ -171,7 +171,7 @@ describe("LocalStepExecutor policy enforcement", () => {
     );
 
     expect(res.success).toBe(false);
-    expect(res.error).toContain("policy denied tool.http.fetch");
+    expect(res.error).toContain("policy denied webfetch");
     expect(evaluateSecretsFromSnapshot).toHaveBeenCalled();
     expect(evaluateToolCallFromSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ secretScopes: ["db:billing"] }),

@@ -472,7 +472,7 @@ function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb })
       execute: vi.fn(
         async (): Promise<StepResult> => ({
           success: false,
-          error: "policy denied tool.exec",
+          error: "policy denied bash",
           failureKind: "policy",
         }),
       ),

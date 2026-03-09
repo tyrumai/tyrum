@@ -65,6 +65,7 @@ export class FakeWsClient {
       agent_id: "default",
       channel: "ui",
       thread_id: "ui-1",
+      title: "",
       summary: "",
       turns: [],
       updated_at: "2026-01-01T00:00:00.000Z",
@@ -76,6 +77,7 @@ export class FakeWsClient {
     agent_id: "default",
     channel: "ui",
     thread_id: "ui-1",
+    title: "",
   }));
   sessionCompact = vi.fn(async () => ({
     session_id: "session-1",

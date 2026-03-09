@@ -39,7 +39,9 @@ describe("SessionDal", () => {
 
     expect(first.session_key).toBe("agent:default:telegram:default:dm:dm-1");
     expect(first.session_id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(first.title).toBe("");
     expect(second.session_id).toBe(first.session_id);
+    expect(second.title).toBe("");
     expect(second.turns).toEqual([]);
   });
 
@@ -105,6 +107,7 @@ describe("SessionDal", () => {
     });
 
     expect(updated.turns).toHaveLength(6);
+    expect(updated.title).toBe("");
     expect(updated.turns[0]?.content).toBe("u1");
     expect(updated.turns[5]?.content).toBe("a3");
   });
@@ -187,6 +190,7 @@ describe("SessionDal", () => {
       sessionId: session.session_id,
     });
     expect(updated?.turns).toEqual([]);
+    expect(updated?.title).toBe("");
     expect(updated?.summary).toContain("u1");
     expect(updated?.summary).toContain("a1");
   });
@@ -226,6 +230,41 @@ describe("SessionDal", () => {
       "persisted_json_read_failures_total",
     );
     expect(metricsText).toContain('table="sessions",column="turns_json",reason="invalid_json"');
+  });
+
+  it("sets a title only while the stored title is blank", async () => {
+    const dal = createDal();
+    const session = await dal.getOrCreate({
+      connectorKey: "telegram",
+      providerThreadId: "thread-title",
+      containerKind: "group",
+    });
+
+    const setBlank = await dal.setTitleIfBlank({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      title: "  Investigate failing webhook retry  ",
+    });
+    expect(setBlank).toBe(true);
+
+    const updated = await dal.getById({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+    });
+    expect(updated?.title).toBe("Investigate failing webhook retry");
+
+    const setAgain = await dal.setTitleIfBlank({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      title: "should not overwrite",
+    });
+    expect(setAgain).toBe(false);
+
+    const unchanged = await dal.getById({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+    });
+    expect(unchanged?.title).toBe("Investigate failing webhook retry");
   });
 
   it("repairs bounded session turns and summary from retained channel logs", async () => {
@@ -294,6 +333,7 @@ describe("SessionDal", () => {
         tenantId: session.tenant_id,
         sessionId: session.session_id,
       });
+      expect(updated?.title).toBe("");
       expect(updated?.summary).toBe("stale-summary");
       expect(updated?.turns).toEqual([
         { role: "user", content: "u1", timestamp: "2026-02-17T00:10:00.000Z" },
@@ -488,6 +528,8 @@ describe("SessionDal", () => {
     ) as Record<string, unknown>;
     expect(Object.keys(decodedCursor).toSorted()).toEqual(["session_id", "updated_at"]);
     expect(page1.sessions.map((s) => s.session_id)).toEqual([s3.session_key, s2.session_key]);
+    expect(page1.sessions[0]?.title).toBe("");
+    expect(page1.sessions[1]?.title).toBe("");
     expect(page1.sessions[0]?.turns_count).toBe(2);
     expect(page1.sessions[0]?.last_turn).toEqual({ role: "assistant", content: "world" });
     expect(page1.sessions[1]?.turns_count).toBe(0);

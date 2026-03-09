@@ -3,7 +3,7 @@ import type {
   PolicyOverrideStatus as PolicyOverrideStatusT,
   WsEventEnvelope,
 } from "@tyrum/schemas";
-import { PolicyOverride } from "@tyrum/schemas";
+import { PolicyOverride, canonicalizeToolId } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { POLICY_WS_AUDIENCE } from "../../ws/audience.js";
@@ -96,7 +96,7 @@ export class PolicyOverrideDal {
     }
     if (params.toolId) {
       where.push("tool_id = ?");
-      values.push(params.toolId);
+      values.push(canonicalizeToolId(params.toolId));
     }
     if (params.status) {
       where.push("status = ?");
@@ -165,7 +165,7 @@ export class PolicyOverrideDal {
         overrideKey,
         params.agentId,
         params.workspaceId ?? null,
-        params.toolId,
+        canonicalizeToolId(params.toolId),
         params.pattern,
         params.createdFromApprovalId ?? null,
         params.createdFromPolicySnapshotId ?? null,

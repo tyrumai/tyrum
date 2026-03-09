@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import type { GatewayStateMode } from "../runtime-state/mode.js";
+import { BUILTIN_TOOL_REGISTRY } from "./tool-catalog.js";
 
 export type ToolRisk = "low" | "medium" | "high";
+export type ToolSource = "builtin" | "builtin_mcp" | "mcp" | "plugin";
 
 export interface ToolDescriptor {
   id: string;
@@ -10,256 +12,10 @@ export interface ToolDescriptor {
   requires_confirmation: boolean;
   keywords: readonly string[];
   inputSchema?: Record<string, unknown>;
+  source?: ToolSource;
+  family?: string;
+  backingServerId?: string;
 }
-
-const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
-  {
-    id: "tool.fs.read",
-    description: "Read files from the local filesystem.",
-    risk: "low",
-    requires_confirmation: false,
-    keywords: ["read", "file", "open", "inspect", "view", "log"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        path: { type: "string", description: "Absolute or workspace-relative path to the file." },
-        offset: {
-          type: "number",
-          description: "Optional line offset to start reading from (0-indexed).",
-        },
-        limit: {
-          type: "number",
-          description: "Optional maximum number of lines to return.",
-        },
-      },
-      required: ["path"],
-      additionalProperties: false,
-    },
-  },
-  {
-    id: "tool.fs.write",
-    description: "Write or patch files in the local filesystem.",
-    risk: "high",
-    requires_confirmation: true,
-    keywords: ["write", "edit", "update", "patch", "create", "file"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        path: { type: "string", description: "Absolute or workspace-relative path to write." },
-        content: { type: "string", description: "File content to write." },
-      },
-      required: ["path", "content"],
-      additionalProperties: false,
-    },
-  },
-  {
-    id: "tool.exec",
-    description: "Execute shell commands on the local machine.",
-    risk: "high",
-    requires_confirmation: true,
-    keywords: ["run", "command", "shell", "terminal", "execute", "build"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        command: { type: "string", description: "Shell command to execute." },
-        cwd: {
-          type: "string",
-          description: "Optional working directory (absolute or workspace-relative).",
-        },
-        timeout_ms: { type: "number", description: "Optional timeout in milliseconds." },
-      },
-      required: ["command"],
-      additionalProperties: false,
-    },
-  },
-  {
-    id: "tool.http.fetch",
-    description: "Make outbound HTTP requests.",
-    risk: "medium",
-    requires_confirmation: true,
-    keywords: ["fetch", "http", "api", "request", "web", "endpoint"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        url: { type: "string", description: "URL to fetch." },
-        method: { type: "string", description: "HTTP method (GET, POST, etc.). Defaults to GET." },
-        headers: {
-          type: "object",
-          additionalProperties: { type: "string" },
-          description: "Optional HTTP headers.",
-        },
-        body: { type: "string", description: "Optional request body." },
-      },
-      required: ["url"],
-      additionalProperties: false,
-    },
-  },
-  {
-    id: "tool.node.dispatch",
-    description: "Dispatch tasks to connected node capabilities.",
-    risk: "high",
-    requires_confirmation: true,
-    keywords: ["node", "device", "screen", "automation", "dispatch"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        capability: {
-          type: "string",
-          description: "Capability descriptor id (example: tyrum.desktop).",
-        },
-        action: { type: "string", description: "ActionPrimitiveKind (example: Desktop)." },
-        args: {
-          type: "object",
-          additionalProperties: {},
-          description: "Optional action arguments.",
-        },
-        timeout_ms: {
-          type: "number",
-          description: "Optional timeout in milliseconds (default: 30000).",
-        },
-      },
-      required: ["capability", "action"],
-      additionalProperties: false,
-    },
-  },
-  {
-    id: "tool.automation.schedule.list",
-    description: "List automation schedules for the current or specified agent/workspace scope.",
-    risk: "low",
-    requires_confirmation: false,
-    keywords: ["automation", "schedule", "heartbeat", "cron", "list"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        agent_key: { type: "string" },
-        workspace_key: { type: "string" },
-        include_deleted: { type: "boolean" },
-      },
-      additionalProperties: false,
-    },
-  },
-  {
-    id: "tool.automation.schedule.get",
-    description: "Fetch a single automation schedule by id.",
-    risk: "low",
-    requires_confirmation: false,
-    keywords: ["automation", "schedule", "heartbeat", "cron", "get"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        schedule_id: { type: "string" },
-        include_deleted: { type: "boolean" },
-      },
-      required: ["schedule_id"],
-      additionalProperties: false,
-    },
-  },
-  {
-    id: "tool.automation.schedule.create",
-    description: "Create a recurring automation schedule such as a heartbeat or cron job.",
-    risk: "medium",
-    requires_confirmation: true,
-    keywords: ["automation", "schedule", "heartbeat", "cron", "create"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        kind: { type: "string", enum: ["heartbeat", "cron"] },
-        enabled: { type: "boolean" },
-        agent_key: { type: "string" },
-        workspace_key: { type: "string" },
-        cadence: {
-          type: "object",
-          description:
-            "Either {type:'interval', interval_ms} or {type:'cron', expression, timezone}.",
-        },
-        execution: {
-          type: "object",
-          description: "Either agent_turn, playbook, or steps execution.",
-        },
-        delivery: {
-          type: "object",
-          properties: {
-            mode: { type: "string", enum: ["quiet", "notify"] },
-          },
-          additionalProperties: false,
-        },
-      },
-      required: ["kind", "cadence", "execution"],
-      additionalProperties: false,
-    },
-  },
-  {
-    id: "tool.automation.schedule.update",
-    description: "Update an existing automation schedule.",
-    risk: "medium",
-    requires_confirmation: true,
-    keywords: ["automation", "schedule", "heartbeat", "cron", "update"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        schedule_id: { type: "string" },
-        kind: { type: "string", enum: ["heartbeat", "cron"] },
-        enabled: { type: "boolean" },
-        cadence: { type: "object" },
-        execution: { type: "object" },
-        delivery: {
-          type: "object",
-          properties: {
-            mode: { type: "string", enum: ["quiet", "notify"] },
-          },
-          additionalProperties: false,
-        },
-      },
-      required: ["schedule_id"],
-      additionalProperties: false,
-    },
-  },
-  {
-    id: "tool.automation.schedule.pause",
-    description: "Pause an automation schedule without deleting it.",
-    risk: "medium",
-    requires_confirmation: true,
-    keywords: ["automation", "schedule", "pause", "disable"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        schedule_id: { type: "string" },
-      },
-      required: ["schedule_id"],
-      additionalProperties: false,
-    },
-  },
-  {
-    id: "tool.automation.schedule.resume",
-    description: "Resume a paused automation schedule.",
-    risk: "medium",
-    requires_confirmation: true,
-    keywords: ["automation", "schedule", "resume", "enable"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        schedule_id: { type: "string" },
-      },
-      required: ["schedule_id"],
-      additionalProperties: false,
-    },
-  },
-  {
-    id: "tool.automation.schedule.delete",
-    description: "Delete an automation schedule.",
-    risk: "high",
-    requires_confirmation: true,
-    keywords: ["automation", "schedule", "delete", "remove"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        schedule_id: { type: "string" },
-      },
-      required: ["schedule_id"],
-      additionalProperties: false,
-    },
-  },
-];
 
 function shortToolIdHash(toolId: string): string {
   return createHash("sha256").update(toolId).digest("hex").slice(0, 8);
@@ -363,14 +119,15 @@ export function registerModelTool<T>(
 }
 
 export function isToolAllowed(allowlist: readonly string[], toolId: string): boolean {
+  const normalizedToolId = toolId.trim();
   for (const entry of allowlist) {
     if (entry === "*") return true;
     if (entry.endsWith("*")) {
       const prefix = entry.slice(0, -1);
-      if (toolId.startsWith(prefix)) return true;
+      if (normalizedToolId.startsWith(prefix)) return true;
       continue;
     }
-    if (entry === toolId) return true;
+    if (entry === normalizedToolId) return true;
   }
   return false;
 }
@@ -398,7 +155,11 @@ export function isBuiltinToolAvailableInStateMode(
     return true;
   }
 
-  return toolId !== "tool.fs.read" && toolId !== "tool.fs.write" && toolId !== "tool.exec";
+  return !["read", "write", "edit", "apply_patch", "bash", "glob", "grep"].includes(toolId);
+}
+
+export function listBuiltinToolDescriptors(): ToolDescriptor[] {
+  return BUILTIN_TOOL_REGISTRY.map((tool) => ({ ...tool }));
 }
 
 export function selectToolDirectory(

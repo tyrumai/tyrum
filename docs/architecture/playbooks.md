@@ -170,8 +170,8 @@ LLM steps use the `llm` command namespace plus an `llm` config block. They must 
     max_tool_calls: 2
     tools:
       allow:
-        - tool.http.fetch
-        - tool.exec
+        - webfetch
+        - bash
   output:
     type: json
     schema:

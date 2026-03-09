@@ -81,7 +81,7 @@ describe("secret resolution events", () => {
     );
 
     await executor.execute(
-      "tool.http.fetch",
+      "webfetch",
       "call-1",
       {
         url: "https://api.example.com",
@@ -119,7 +119,7 @@ describe("secret resolution events", () => {
       },
       resolution: {
         tool_call_id: "call-1",
-        tool_id: "tool.http.fetch",
+        tool_id: "webfetch",
         handle_id: "handle-abc",
         provider: "db",
         scope: "handle-abc",

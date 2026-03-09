@@ -329,7 +329,7 @@ function registerOverrideTests(): void {
               policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
               suggested_overrides: [
                 {
-                  tool_id: "tool.exec",
+                  tool_id: "bash",
                   pattern: "echo hi",
                   workspace_id: DEFAULT_WORKSPACE_ID,
                 },
@@ -366,7 +366,7 @@ function registerOverrideTests(): void {
           created_by: { kind: "ws" },
           agent_id: DEFAULT_AGENT_ID,
           workspace_id: DEFAULT_WORKSPACE_ID,
-          tool_id: "tool.exec",
+          tool_id: "bash",
           pattern: "echo hi",
           created_from_approval_id: approvalId,
           created_from_policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
@@ -388,9 +388,7 @@ function registerOverrideTests(): void {
           approval_id: approvalId,
           decision: "approved",
           mode: "always",
-          overrides: [
-            { tool_id: "tool.exec", pattern: "echo hi", workspace_id: DEFAULT_WORKSPACE_ID },
-          ],
+          overrides: [{ tool_id: "bash", pattern: "echo hi", workspace_id: DEFAULT_WORKSPACE_ID }],
         },
       }),
       deps,
@@ -431,7 +429,7 @@ function registerOverrideTests(): void {
               policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
               suggested_overrides: [
                 {
-                  tool_id: "tool.exec",
+                  tool_id: "bash",
                   pattern: "echo *",
                   workspace_id: DEFAULT_WORKSPACE_ID,
                 },
@@ -492,7 +490,7 @@ function registerOverrideTests(): void {
           created_by: { kind: "ws" },
           agent_id: DEFAULT_AGENT_ID,
           workspace_id: DEFAULT_WORKSPACE_ID,
-          tool_id: "tool.exec",
+          tool_id: "bash",
           pattern: "echo *",
           created_from_approval_id: approvalId,
           created_from_policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
@@ -514,9 +512,7 @@ function registerOverrideTests(): void {
           approval_id: approvalId,
           decision: "approved",
           mode: "always",
-          overrides: [
-            { tool_id: "tool.exec", pattern: "echo *", workspace_id: DEFAULT_WORKSPACE_ID },
-          ],
+          overrides: [{ tool_id: "bash", pattern: "echo *", workspace_id: DEFAULT_WORKSPACE_ID }],
         },
       }),
       deps,

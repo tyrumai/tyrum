@@ -19,6 +19,20 @@ describe("PlaybookStep", () => {
     expect(step.command).toContain("llm");
   });
 
+  it("canonicalizes legacy llm tool allowlists", () => {
+    const step = PlaybookStep.parse({
+      id: "step-1",
+      command: "llm generate",
+      llm: {
+        ...baseLlm,
+        tools: { allow: ["webfetch", "bash"] },
+      },
+      output: "json",
+    });
+
+    expect(step.llm?.tools?.allow).toEqual(["webfetch", "bash"]);
+  });
+
   it("rejects llm steps missing llm config", () => {
     expectRejects(PlaybookStep, { id: "step-1", command: "llm generate", output: "json" });
   });

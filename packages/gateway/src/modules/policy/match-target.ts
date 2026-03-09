@@ -1,6 +1,7 @@
 import { posix as pathPosix, win32 as pathWin32 } from "node:path";
 import {
   ActionPrimitiveKind,
+  canonicalizeToolId,
   descriptorIdForClientCapability,
   requiredCapability,
 } from "@tyrum/schemas";
@@ -218,15 +219,15 @@ export function canonicalizeToolMatchTarget(
   args: unknown,
   workspaceRoot?: string,
 ): string {
-  const normalizedToolId = toolId.trim();
+  const normalizedToolId = canonicalizeToolId(toolId.trim());
   const parsed = asRecord(args);
 
-  if (normalizedToolId === "tool.exec") {
+  if (normalizedToolId === "bash") {
     const command = normalizeToken(parsed?.["command"]);
     return command ? collapseWhitespace(command) : "";
   }
 
-  if (normalizedToolId === "tool.http.fetch") {
+  if (normalizedToolId === "webfetch") {
     const url = normalizeToken(parsed?.["url"]);
     if (!url) return "";
     const q = url.indexOf("?");
@@ -237,12 +238,23 @@ export function canonicalizeToolMatchTarget(
     return url.slice(0, end).trim();
   }
 
-  if (normalizedToolId.startsWith("tool.fs.")) {
-    const operation = normalizeToken(normalizedToolId.slice("tool.fs.".length));
+  if (["read", "write", "edit", "apply_patch", "glob", "grep"].includes(normalizedToolId)) {
+    if (normalizedToolId === "apply_patch") return "apply_patch";
+    if (normalizedToolId === "glob") {
+      const pattern = normalizeToken(parsed?.["pattern"]) ?? "";
+      return pattern ? `glob:${pattern}` : "glob:";
+    }
+    if (normalizedToolId === "grep") {
+      const pattern = normalizeToken(parsed?.["pattern"]) ?? "";
+      return pattern ? `grep:${pattern}` : "grep:";
+    }
+    const canonicalOperation = ["read", "write", "edit"].includes(normalizedToolId)
+      ? normalizedToolId
+      : undefined;
     const rawPath = normalizeToken(parsed?.["path"]) ?? "";
     const canonicalPath = normalizeFsPath(rawPath, workspaceRoot);
-    if (!operation) return canonicalPath;
-    return `${operation}:${canonicalPath}`;
+    if (!canonicalOperation) return canonicalPath;
+    return `${canonicalOperation}:${canonicalPath}`;
   }
 
   if (normalizedToolId === "tool.node.dispatch") {

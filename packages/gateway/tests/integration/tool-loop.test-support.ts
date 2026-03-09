@@ -333,19 +333,19 @@ export function createFetchStub(
 }
 
 export function readToolCall(id: string, path: string): ToolCallFixture {
-  return { id, name: "tool.fs.read", arguments: JSON.stringify({ path }) };
+  return { id, name: "read", arguments: JSON.stringify({ path }) };
 }
 
 export function fetchToolCall(id: string, url: string): ToolCallFixture {
-  return { id, name: "tool.http.fetch", arguments: JSON.stringify({ url }) };
+  return { id, name: "webfetch", arguments: JSON.stringify({ url }) };
 }
 
 export function execToolCall(id: string, command: string): ToolCallFixture {
-  return { id, name: "tool.exec", arguments: JSON.stringify({ command }) };
+  return { id, name: "bash", arguments: JSON.stringify({ command }) };
 }
 
 export function writeToolCall(id: string, path: string, content: string): ToolCallFixture {
-  return { id, name: "tool.fs.write", arguments: JSON.stringify({ path, content }) };
+  return { id, name: "write", arguments: JSON.stringify({ path, content }) };
 }
 
 export function toolCallsStep(...toolCalls: ToolCallFixture[]): ToolLoopStep {
@@ -383,6 +383,19 @@ export function collectPromptToolIds(prompt: unknown[]): {
   }
 
   return { toolCallIds, toolResultIds };
+}
+
+export function findLastNonTitleGenerateCall(
+  languageModel: MockLanguageModelV3,
+): { prompt: unknown[] } | undefined {
+  for (let index = languageModel.doGenerateCalls.length - 1; index >= 0; index -= 1) {
+    const call = languageModel.doGenerateCalls[index];
+    if (!call) continue;
+    const promptText = JSON.stringify(call.prompt);
+    if (promptText.includes("Write a concise session title.")) continue;
+    return call as { prompt: unknown[] };
+  }
+  return undefined;
 }
 
 export function findSuggestedOverride(pending: ApprovalRow): {

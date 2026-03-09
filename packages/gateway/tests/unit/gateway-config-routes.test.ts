@@ -89,7 +89,7 @@ describe("gateway config routes", () => {
       body: JSON.stringify({
         bundle: {
           v: 1,
-          tools: { default: "deny", allow: ["tool.exec"], require_approval: [], deny: [] },
+          tools: { default: "deny", allow: ["bash"], require_approval: [], deny: [] },
         },
         reason: "deployment",
       }),
@@ -102,7 +102,7 @@ describe("gateway config routes", () => {
       body: JSON.stringify({
         bundle: {
           v: 1,
-          tools: { default: "deny", allow: [], require_approval: ["tool.exec"], deny: [] },
+          tools: { default: "deny", allow: [], require_approval: ["bash"], deny: [] },
         },
         reason: "agent",
       }),
@@ -114,7 +114,7 @@ describe("gateway config routes", () => {
     const deploymentPayload = (await getDeployment.json()) as {
       bundle: { tools?: { allow?: string[] } };
     };
-    expect(deploymentPayload.bundle.tools?.allow).toEqual(["tool.exec"]);
+    expect(deploymentPayload.bundle.tools?.allow).toEqual(["bash"]);
 
     const getAgent = await app.request("/config/policy/agents/default");
     expect(getAgent.status).toBe(200);
@@ -123,7 +123,7 @@ describe("gateway config routes", () => {
       bundle: { tools?: { require_approval?: string[] } };
     };
     expect(agentPayload.agent_key).toBe("default");
-    expect(agentPayload.bundle.tools?.require_approval).toEqual(["tool.exec"]);
+    expect(agentPayload.bundle.tools?.require_approval).toEqual(["bash"]);
   });
 
   it("does not create agents when reading a missing agent policy bundle", async () => {

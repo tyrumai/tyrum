@@ -91,7 +91,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
         mcp: { enabled: ["calendar"] },
-        tools: { allow: ["tool.fs.read", "mcp.*"] },
+        tools: { allow: ["read", "mcp.*"] },
         sessions: { ttl_days: 30, max_turns: 20 },
         memory: { v1: { enabled: false } },
       },
@@ -134,7 +134,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
         mcp: { enabled: ["calendar"] },
-        tools: { allow: ["tool.fs.read"] },
+        tools: { allow: ["read"] },
         sessions: { ttl_days: 30, max_turns: 20 },
         memory: { v1: { enabled: false } },
       },
@@ -223,7 +223,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     });
 
     const toolDesc = {
-      id: "tool.exec",
+      id: "bash",
       description: "Execute shell commands on the local machine.",
       risk: "high" as const,
       requires_confirmation: true,
@@ -259,13 +259,13 @@ describe("AgentRuntime - session lifecycle and policy", () => {
       makeContextReport(),
     );
 
-    const res = await toolSet["tool.exec"]!.execute({ command: "echo hi" });
+    const res = await toolSet["bash"]!.execute({ command: "echo hi" });
 
     expect(res).toBe("ok");
     expect(policyService.evaluateToolCall).toHaveBeenCalledTimes(1);
     expect(approvalSpy).toHaveBeenCalledTimes(1);
     expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
-    expect(usedTools.has("tool.exec")).toBe(true);
+    expect(usedTools.has("bash")).toBe(true);
   });
 
   it("rejects approvals that don't match tool_call_id during execution resume", async () => {
@@ -289,10 +289,10 @@ describe("AgentRuntime - session lifecycle and policy", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: "plan-1:step:0:tool_call:tc-other",
       kind: "workflow_step",
-      prompt: "Approve tool.exec",
+      prompt: "Approve bash",
       context: {
         source: "agent-tool-execution",
-        tool_id: "tool.exec",
+        tool_id: "bash",
         tool_call_id: "tc-other",
         tool_match_target: "echo hi",
       },
@@ -304,7 +304,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     });
 
     const toolDesc = {
-      id: "tool.exec",
+      id: "bash",
       description: "Execute shell commands on the local machine.",
       risk: "high" as const,
       requires_confirmation: true,
@@ -346,13 +346,13 @@ describe("AgentRuntime - session lifecycle and policy", () => {
       makeContextReport(),
     );
 
-    const res = await toolSet["tool.exec"]!.execute({ command: "echo hi" }, {
+    const res = await toolSet["bash"]!.execute({ command: "echo hi" }, {
       toolCallId: "tc-expected",
     } as unknown);
 
     expect(res).toContain("tool execution not approved");
     expect(toolExecutor.execute).toHaveBeenCalledTimes(0);
-    expect(usedTools.has("tool.exec")).toBe(false);
+    expect(usedTools.has("bash")).toBe(false);
   });
 
   it("trims secret handle fields when resolving resumed tool args", async () => {
@@ -389,10 +389,10 @@ describe("AgentRuntime - session lifecycle and policy", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: "plan-1:step:0:tool_call:tc-secret",
       kind: "workflow_step",
-      prompt: "Resume tool.exec",
+      prompt: "Resume bash",
       context: {
         source: "agent-tool-execution",
-        tool_id: "tool.exec",
+        tool_id: "bash",
         tool_call_id: "tc-secret",
         ai_sdk: {
           tool_args_handle: {
@@ -406,7 +406,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     });
 
     const toolDesc = {
-      id: "tool.exec",
+      id: "bash",
       description: "Execute shell commands on the local machine.",
       risk: "high" as const,
       requires_confirmation: false,
@@ -448,7 +448,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
       makeContextReport(),
     );
 
-    await toolSet["tool.exec"]!.execute({ command: "echo hi" }, {
+    await toolSet["bash"]!.execute({ command: "echo hi" }, {
       toolCallId: "tc-secret",
     } as unknown);
 

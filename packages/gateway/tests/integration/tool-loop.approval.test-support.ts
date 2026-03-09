@@ -12,6 +12,7 @@ import {
   defaultApprovalScope,
   execToolCall,
   fetchToolCall,
+  findLastNonTitleGenerateCall,
   findSuggestedOverride,
   readToolCall,
   resetToolLoopContainer,
@@ -32,7 +33,7 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
     const ids = await seedAgentConfig(container, {
       agentKey: "agent-test",
       workspaceKey: "ws-test",
-      config: { tools: { allow: ["tool.exec"] } },
+      config: { tools: { allow: ["bash"] } },
     });
 
     const runtime = createTestRuntime({
@@ -55,7 +56,7 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
     });
 
     const pending = await waitForPendingApproval(container);
-    expect(pending.prompt).toContain("tool.exec");
+    expect(pending.prompt).toContain("bash");
     expect(pending.kind).toBe("workflow_step");
     expect(pending.agent_id).toBe(ids.agentId);
     expect(pending.workspace_id).toBe(ids.workspaceId);
@@ -71,12 +72,12 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
 
     const result = await turnPromise;
     expect(result.reply).toBe("approved and executed");
-    expect(result.used_tools).toContain("tool.exec");
+    expect(result.used_tools).toContain("bash");
   });
 
   it("does not re-request approval when an engine step already has an approved stepApprovalId", async () => {
     const { homeDir, container } = await setupToolLoopTest(state, {
-      seedConfig: { config: { tools: { allow: ["tool.exec"] } } },
+      seedConfig: { config: { tools: { allow: ["bash"] } } },
     });
 
     const toolCallId = "tc-already-approved";
@@ -85,10 +86,10 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
       ...defaultApprovalScope,
       approvalKey: "tool-loop-already-approved",
       kind: "workflow_step",
-      prompt: "Approve execution of 'tool.exec' (risk=high)",
+      prompt: "Approve execution of 'bash' (risk=high)",
       context: {
         source: "agent-tool-execution",
-        tool_id: "tool.exec",
+        tool_id: "bash",
         tool_call_id: toolCallId,
         tool_match_target: command,
       },
@@ -124,13 +125,13 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
     );
 
     expect(result.response.reply).toBe("done");
-    expect(result.response.used_tools).toContain("tool.exec");
+    expect(result.response.used_tools).toContain("bash");
     expect(await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID })).toHaveLength(0);
   }, 10_000);
 
   it("preserves multi-step tool messages when pausing for approval", async () => {
     const { homeDir, container } = await setupToolLoopTest(state, {
-      seedConfig: { config: { tools: { allow: ["tool.fs.read", "tool.exec"] } } },
+      seedConfig: { config: { tools: { allow: ["read", "bash"] } } },
     });
     const safeOutput = "SAFE_TOOL_OUTPUT_123";
     await writeFile(join(homeDir, "safe.txt"), safeOutput, "utf-8");
@@ -155,7 +156,7 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
     });
 
     const pending = await waitForPendingApproval(container);
-    expect(pending.prompt).toContain("tool.exec");
+    expect(pending.prompt).toContain("bash");
     const res = await respondToApproval(container, pending.approval_id, {
       decision: "approved",
       reason: "approved in test",
@@ -165,25 +166,25 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
     const result = await turnPromise;
     expect(result.reply).toBe("done");
 
-    const finalCall = languageModel.doGenerateCalls.at(-1);
+    const finalCall = findLastNonTitleGenerateCall(languageModel);
     expect(finalCall).toBeTruthy();
     expect(JSON.stringify(finalCall!.prompt)).toContain(safeOutput);
   }, 10_000);
 
-  it("requires approval for tool.exec when driven by untrusted tool output", async () => {
+  it("requires approval for bash when driven by untrusted tool output", async () => {
     const { homeDir } = await setupToolLoopTest(state);
     const fetchUrl = "https://93.184.216.34";
 
     const container = await resetToolLoopContainer(state, {
       seedConfig: {
-        config: { tools: { allow: ["tool.http.fetch", "tool.exec"] } },
+        config: { tools: { allow: ["webfetch", "bash"] } },
       },
     });
     await seedDeploymentPolicyBundle(container.db, {
       v: 1,
       tools: {
         default: "deny",
-        allow: ["tool.http.fetch", "tool.exec"],
+        allow: ["webfetch", "bash"],
         require_approval: [],
         deny: [],
       },
@@ -219,7 +220,7 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
     });
 
     const pending = await waitForPendingApproval(container);
-    expect(pending.prompt).toContain("tool.exec");
+    expect(pending.prompt).toContain("bash");
     const res = await respondToApproval(container, pending.approval_id, {
       decision: "approved",
       reason: "approved in test",
@@ -228,13 +229,13 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
 
     const result = await turnPromise;
     expect(result.reply).toBe("done");
-    expect(result.used_tools).toContain("tool.http.fetch");
-    expect(result.used_tools).toContain("tool.exec");
+    expect(result.used_tools).toContain("webfetch");
+    expect(result.used_tools).toContain("bash");
   }, 10_000);
 
   it("does not corrupt tool approval resume state via redaction", async () => {
     const { homeDir, container } = await setupToolLoopTest(state, {
-      seedConfig: { config: { tools: { allow: ["tool.fs.write"] } } },
+      seedConfig: { config: { tools: { allow: ["write"] } } },
     });
 
     const secret = "sk-test-secret-token-12345678901234567890";
@@ -264,7 +265,7 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
     });
 
     const pending = await waitForPendingApproval(container);
-    expect(pending.prompt).toContain("tool.fs.write");
+    expect(pending.prompt).toContain("write");
     expect(JSON.stringify(pending.context)).not.toContain(secret);
 
     const res = await respondToApproval(container, pending.approval_id, {
@@ -282,7 +283,7 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
 
   it("supports approve-always by creating a policy override that skips future approvals", async () => {
     const { homeDir, container } = await setupToolLoopTest(state, {
-      seedConfig: { config: { tools: { allow: ["tool.exec"] } } },
+      seedConfig: { config: { tools: { allow: ["bash"] } } },
     });
     const toolCalls = [execToolCall("tc-always", "echo hello")];
 
@@ -303,7 +304,7 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
     });
 
     const pending = await waitForPendingApproval(container);
-    expect(pending.prompt).toContain("tool.exec");
+    expect(pending.prompt).toContain("bash");
     const selectedOverride = findSuggestedOverride(pending);
     const res = await respondToApproval(
       container,
@@ -325,12 +326,12 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
 
     const result1 = await turn1Promise;
     expect(result1.reply).toBe("approved and executed");
-    expect(result1.used_tools).toContain("tool.exec");
+    expect(result1.used_tools).toContain("bash");
 
     const overrides = await container.policyOverrideDal.list({
       tenantId: DEFAULT_TENANT_ID,
       agentId: pending.agent_id,
-      toolId: "tool.exec",
+      toolId: "bash",
     });
     expect(overrides.length).toBeGreaterThan(0);
 
@@ -356,6 +357,6 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
 
     const result2 = await turn2Promise;
     expect(result2.reply).toBe("executed without approval");
-    expect(result2.used_tools).toContain("tool.exec");
+    expect(result2.used_tools).toContain("bash");
   });
 }

@@ -70,7 +70,7 @@ describe("PlaybookManifest schema", () => {
             prompt: 'Return JSON: {"ok": true}',
             max_tool_calls: 2,
             tools: {
-              allow: ["tool.http.fetch"],
+              allow: ["webfetch"],
             },
           },
           output: {
@@ -330,7 +330,7 @@ describe("PlaybookRunner", () => {
               model: "openai/gpt-4.1",
               prompt: 'Return JSON: {"ok": true}',
               max_tool_calls: 2,
-              tools: { allow: ["tool.http.fetch"] },
+              tools: { allow: ["webfetch"] },
             },
             output: "json",
           },
@@ -396,7 +396,7 @@ describe("PlaybookRunner", () => {
       model: "openai/gpt-4.1",
       prompt: 'Return JSON: {"ok": true}',
       max_tool_calls: 2,
-      tools: { allow: ["tool.http.fetch"] },
+      tools: { allow: ["webfetch"] },
       __playbook: {
         playbook_id: "ns-test",
         step_id: "llm",

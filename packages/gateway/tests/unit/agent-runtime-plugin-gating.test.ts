@@ -109,7 +109,7 @@ describe("AgentRuntime - plugin tool gating", () => {
 
     await writeFile(
       join(homeDir, "agent.yml"),
-      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\n    - plugin.echo.danger\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  v1: { enabled: false }\n`,
+      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - read\n    - plugin.echo.danger\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  v1: { enabled: false }\n`,
       "utf-8",
     );
 
@@ -160,7 +160,7 @@ describe("AgentRuntime - plugin tool gating", () => {
 
     await writeFile(
       join(homeDir, "agent.yml"),
-      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  v1: { enabled: false }\n`,
+      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  v1: { enabled: false }\n`,
       "utf-8",
     );
 
@@ -168,7 +168,7 @@ describe("AgentRuntime - plugin tool gating", () => {
       v: 1,
       tools: {
         default: "require_approval",
-        allow: ["tool.fs.read"],
+        allow: ["read"],
         require_approval: ["plugin.echo.danger"],
         deny: [],
       },
@@ -221,7 +221,7 @@ describe("AgentRuntime - plugin tool gating", () => {
 
     await writeFile(
       join(homeDir, "agent.yml"),
-      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  v1: { enabled: false }\n`,
+      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  v1: { enabled: false }\n`,
       "utf-8",
     );
 
@@ -229,7 +229,7 @@ describe("AgentRuntime - plugin tool gating", () => {
       v: 1,
       tools: {
         default: "require_approval",
-        allow: ["tool.fs.read"],
+        allow: ["read"],
         require_approval: ["plugin.echo.danger"],
         deny: [],
       },

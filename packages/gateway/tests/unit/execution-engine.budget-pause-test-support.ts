@@ -203,11 +203,11 @@ function registerApprovalResumeTests(fixture: { db: () => SqliteDb }): void {
             success: true,
             pause: {
               kind: "policy",
-              prompt: "Approve execution of 'tool.http.fetch'",
-              detail: "approval required for tool 'tool.http.fetch'",
+              prompt: "Approve execution of 'webfetch'",
+              detail: "approval required for tool 'webfetch'",
               context: {
                 source: "llm-step-tool-execution",
-                tool_id: "tool.http.fetch",
+                tool_id: "webfetch",
                 tool_call_id: "tc-1",
               },
             },
@@ -226,7 +226,7 @@ function registerApprovalResumeTests(fixture: { db: () => SqliteDb }): void {
     }>("SELECT status, paused_reason, paused_detail FROM execution_runs LIMIT 1");
     expect(pausedRun?.status).toBe("paused");
     expect(pausedRun?.paused_reason).toBe("policy");
-    expect(pausedRun?.paused_detail).toContain("tool.http.fetch");
+    expect(pausedRun?.paused_detail).toContain("webfetch");
     const pausedStep = await db.get<{ status: string; approval_id: string | null }>(
       "SELECT status, approval_id FROM execution_steps LIMIT 1",
     );

@@ -3,7 +3,7 @@ import { canonicalizeToolMatchTarget } from "../../src/modules/policy/match-targ
 import { toolCallFromAction } from "../../src/modules/execution/engine/tool-call.js";
 
 describe("toolCallFromAction", () => {
-  it("normalizes CLI actions to tool.exec", () => {
+  it("normalizes CLI actions to bash", () => {
     const tool = toolCallFromAction({
       type: "CLI",
       args: {
@@ -13,14 +13,14 @@ describe("toolCallFromAction", () => {
     });
 
     expect(tool).toEqual({
-      toolId: "tool.exec",
-      matchTarget: canonicalizeToolMatchTarget("tool.exec", {
+      toolId: "bash",
+      matchTarget: canonicalizeToolMatchTarget("bash", {
         command: "git status --short",
       }),
     });
   });
 
-  it("normalizes Http actions to tool.http.fetch and keeps the url", () => {
+  it("normalizes Http actions to webfetch and keeps the url", () => {
     const tool = toolCallFromAction({
       type: "Http",
       args: {
@@ -29,8 +29,8 @@ describe("toolCallFromAction", () => {
     });
 
     expect(tool).toEqual({
-      toolId: "tool.http.fetch",
-      matchTarget: canonicalizeToolMatchTarget("tool.http.fetch", {
+      toolId: "webfetch",
+      matchTarget: canonicalizeToolMatchTarget("webfetch", {
         url: "https://example.com/health",
       }),
       url: "https://example.com/health",

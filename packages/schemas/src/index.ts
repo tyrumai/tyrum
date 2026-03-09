@@ -87,6 +87,8 @@ export { WorkArtifactId, WorkArtifactKind, WorkArtifact } from "./work-artifacts
 // prettier-ignore
 export { ToolIntentCostBudget, ToolIntentV1, ToolIntent } from "./tool-intent.js";
 // prettier-ignore
+export { canonicalizeToolId, canonicalizeToolIdList } from "./tool-id.js";
+// prettier-ignore
 export { DecisionRecordId, DecisionRecord } from "./work-decisions.js";
 // prettier-ignore
 export { WorkSignalId, WorkSignalTriggerKind, WorkSignalStatus, WorkSignal } from "./work-signals.js";

@@ -84,7 +84,7 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
       DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
-        tools: { default: "allow", allow: [], require_approval: [], deny: ["tool.http.fetch"] },
+        tools: { default: "allow", allow: [], require_approval: [], deny: ["webfetch"] },
         network_egress: { default: "allow", allow: [], require_approval: [], deny: [] },
       }),
     );
@@ -149,7 +149,7 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
         workspaceId: DEFAULT_WORKSPACE_ID,
-        toolId: "tool.exec",
+        toolId: "bash",
         pattern: "echo hi",
         createdFromPolicySnapshotId: invalidSnapshotId,
       });
@@ -199,7 +199,7 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
       tenantId: scopeIds.tenantId,
       agentId: scopeIds.agentId,
       workspaceId: scopeIds.workspaceId,
-      toolId: "tool.exec",
+      toolId: "bash",
       pattern: "echo hi",
       createdFromPolicySnapshotId: snapshot.policy_snapshot_id,
     });
@@ -292,7 +292,7 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     const policyService = new PolicyService({ home, snapshotDal, overrideDal });
     const bundle = PolicyBundle.parse({
       v: 1,
-      tools: { default: "deny", allow: ["tool.exec"], require_approval: [], deny: [] },
+      tools: { default: "deny", allow: ["bash"], require_approval: [], deny: [] },
       secrets: { default: "deny", allow: ["db:MY_API_KEY"], require_approval: [], deny: [] },
     });
     const snapshot = await snapshotDal.getOrCreate(DEFAULT_TENANT_ID, bundle);

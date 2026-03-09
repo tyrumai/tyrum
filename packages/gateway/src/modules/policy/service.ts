@@ -4,6 +4,7 @@ import type {
   PolicyDecision as PolicyDecisionT,
   RuleDecision as RuleDecisionT,
 } from "@tyrum/schemas";
+import { canonicalizeToolId } from "@tyrum/schemas";
 import { wildcardMatch } from "./wildcard.js";
 import type { Logger } from "../observability/logger.js";
 import {
@@ -112,6 +113,7 @@ export class PolicyService {
     playbookBundle?: PolicyBundleT;
     inputProvenance?: { source: string; trusted: boolean };
   }): Promise<PolicyEvaluation> {
+    const toolId = canonicalizeToolId(params.toolId);
     const effective = await this.loadEffectiveBundle({
       playbookBundle: params.playbookBundle,
       tenantId: params.tenantId,
@@ -124,7 +126,7 @@ export class PolicyService {
       snapshot,
       agentId: params.agentId,
       workspaceId: params.workspaceId,
-      toolId: params.toolId,
+      toolId,
       toolMatchTarget: params.toolMatchTarget,
       url: params.url,
       secretScopes: params.secretScopes,
@@ -143,6 +145,7 @@ export class PolicyService {
     secretScopes?: string[];
     inputProvenance?: { source: string; trusted: boolean };
   }): Promise<PolicyEvaluation> {
+    const toolId = canonicalizeToolId(params.toolId);
     const snapshot = await this.opts.snapshotDal.getById(params.tenantId, params.policySnapshotId);
     if (!snapshot) {
       const record: PolicyDecisionT = {
@@ -169,7 +172,7 @@ export class PolicyService {
       snapshot,
       agentId: params.agentId,
       workspaceId: params.workspaceId,
-      toolId: params.toolId,
+      toolId,
       toolMatchTarget: params.toolMatchTarget,
       url: params.url,
       secretScopes: params.secretScopes,
@@ -286,7 +289,7 @@ export class PolicyService {
     if (
       params.bundle.provenance?.untrusted_shell_requires_approval === true &&
       params.inputProvenance?.trusted === false &&
-      params.toolId.trim() === "tool.exec"
+      params.toolId.trim() === "bash"
     ) {
       toolDecision = mostRestrictiveDecision(toolDecision, "require_approval");
       rules.push({

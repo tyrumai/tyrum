@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { jsonSchema, tool as aiTool } from "ai";
-import type { ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
+import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
 import type { Decision } from "@tyrum/schemas";
 import { buildModelToolNameMap, registerModelTool, type ToolDescriptor } from "../tools.js";
 import type { ToolExecutor, ToolResult } from "../tool-executor.js";
 import { tagContent } from "../provenance.js";
 import { sanitizeForModel, containsInjectionPatterns } from "../sanitizer.js";
+import { runWebFetchExtractionPass } from "../webfetch-extraction.js";
 import type { AgentContextReport } from "./types.js";
 import type { LaneQueueState } from "./turn-engine-bridge.js";
 import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.js";
@@ -32,6 +33,34 @@ export type { ToolCallPolicyState, ToolSetBuilderDeps } from "./tool-set-builder
 export class ToolSetBuilder {
   constructor(private readonly deps: ToolSetBuilderDeps) {}
 
+  private async maybeExtractWebFetchResult(input: {
+    toolDesc: ToolDescriptor;
+    args: unknown;
+    result: ToolResult;
+    model?: LanguageModel;
+    toolCallId: string;
+  }): Promise<ToolResult> {
+    if (input.toolDesc.id !== "webfetch" || !input.model || input.result.error) {
+      return input.result;
+    }
+
+    const rawContent = input.result.provenance?.content ?? input.result.output;
+    const extraction = await runWebFetchExtractionPass({
+      args: input.args,
+      rawContent,
+      model: input.model,
+      toolCallId: input.toolCallId,
+      logger: this.deps.logger,
+    });
+    if (!extraction) return input.result;
+
+    return {
+      ...input.result,
+      output: extraction.output,
+      provenance: extraction.provenance,
+    };
+  }
+
   buildToolSet(
     tools: readonly ToolDescriptor[],
     toolExecutor: ToolExecutor,
@@ -40,6 +69,7 @@ export class ToolSetBuilder {
     contextReport: AgentContextReport,
     laneQueue?: LaneQueueState,
     toolCallPolicyStates?: Map<string, ToolCallPolicyState>,
+    model?: LanguageModel,
   ): ToolSet {
     const result: Record<string, Tool> = {};
     const modelToolNames = buildModelToolNameMap(tools.map((tool) => tool.id));
@@ -95,7 +125,7 @@ export class ToolSetBuilder {
         const agentId = this.deps.agentId;
         const workspaceId = this.deps.workspaceId;
         const url =
-          input.toolDesc.id === "tool.http.fetch" &&
+          input.toolDesc.id === "webfetch" &&
           input.args &&
           typeof (input.args as Record<string, unknown>)["url"] === "string"
             ? String((input.args as Record<string, unknown>)["url"])
@@ -361,7 +391,7 @@ export class ToolSetBuilder {
             policySnapshotId,
           });
 
-          const res: ToolResult = pluginRes
+          const executedRes: ToolResult = pluginRes
             ? (() => {
                 const tagged = tagContent(pluginRes.output, "tool", false);
                 return {
@@ -381,6 +411,13 @@ export class ToolSetBuilder {
                 execution_step_id: toolExecutionContext.execution?.stepId,
                 policy_snapshot_id: policySnapshotId,
               });
+          const res = await this.maybeExtractWebFetchResult({
+            toolDesc,
+            args: effectiveArgs,
+            result: executedRes,
+            model,
+            toolCallId,
+          });
 
           if (pluginRes && this.deps.redactionEngine) {
             const redact = (text: string): string =>

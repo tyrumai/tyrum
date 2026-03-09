@@ -85,20 +85,40 @@ export async function turnDirect(
     workspace_id: session.workspace_id,
   };
 
-  if (isStatusQuery(resolved.message)) {
-    const reply = await handleStatusQuery(deps.opts.container, workScope);
+  const finalizeAndMaybeCompact = async (params: {
+    reply: string;
+    turnKind?: "normal" | "skip";
+    usage?: ReturnType<typeof extractUsageSnapshot>;
+  }) => {
     const response = await finalizeTurn({
       container: deps.opts.container,
       sessionDal: deps.sessionDal,
       ctx,
       session,
       resolved,
-      reply,
+      reply: params.reply,
       model,
       usedTools,
       contextReport,
-      turnKind: "skip",
+      turnKind: params.turnKind,
     });
+    await maybeAutoCompactSession({
+      deps,
+      tenantId: session.tenant_id,
+      ctx,
+      sessionId: response.session_id,
+      model,
+      modelResolution,
+      usage: params.usage,
+      abortSignal,
+      timeoutMs: turnOpts?.timeoutMs,
+    });
+    return response;
+  };
+
+  if (isStatusQuery(resolved.message)) {
+    const reply = await handleStatusQuery(deps.opts.container, workScope);
+    const response = await finalizeAndMaybeCompact({ reply, turnKind: "skip" });
     return { response, contextReport };
   }
 
@@ -107,16 +127,8 @@ export async function turnDirect(
     { resolved, workScope },
   );
   if (intakeResult) {
-    const response = await finalizeTurn({
-      container: deps.opts.container,
-      sessionDal: deps.sessionDal,
-      ctx,
-      session,
-      resolved,
+    const response = await finalizeAndMaybeCompact({
       reply: intakeResult.reply,
-      model,
-      usedTools,
-      contextReport,
       turnKind: "skip",
     });
     return { response, contextReport };
@@ -138,16 +150,8 @@ export async function turnDirect(
         createdFromSessionKey: mainLaneSessionKey,
       },
     );
-    const response = await finalizeTurn({
-      container: deps.opts.container,
-      sessionDal: deps.sessionDal,
-      ctx,
-      session,
-      resolved,
+    const response = await finalizeAndMaybeCompact({
       reply: delegation.reply,
-      model,
-      usedTools,
-      contextReport,
       turnKind: "skip",
     });
     return { response, contextReport };
@@ -192,18 +196,7 @@ export async function turnDirect(
   if (remainingSteps <= 0) {
     const automation = resolveAutomationMetadata(resolved.metadata);
     const reply = automation?.delivery_mode === "quiet" ? "" : "No assistant response returned.";
-    const response = await finalizeTurn({
-      container: deps.opts.container,
-      sessionDal: deps.sessionDal,
-      ctx,
-      session,
-      resolved,
-      reply,
-      model,
-      usedTools,
-      contextReport,
-      turnKind: "skip",
-    });
+    const response = await finalizeAndMaybeCompact({ reply, turnKind: "skip" });
     return { response, contextReport };
   }
 
@@ -287,27 +280,9 @@ export async function turnDirect(
   const reply = resolveTurnReply(rawReply, withinTurnLoop.value, {
     allowEmpty: automation?.delivery_mode === "quiet",
   });
-  const response = await finalizeTurn({
-    container: deps.opts.container,
-    sessionDal: deps.sessionDal,
-    ctx,
-    session,
-    resolved,
+  const response = await finalizeAndMaybeCompact({
     reply,
-    model,
-    usedTools,
-    contextReport,
-  });
-  await maybeAutoCompactSession({
-    deps,
-    tenantId: session.tenant_id,
-    ctx,
-    sessionId: response.session_id,
-    model,
-    modelResolution,
     usage: extractUsageSnapshot(result.totalUsage),
-    abortSignal,
-    timeoutMs: turnOpts?.timeoutMs,
   });
   return { response, contextReport };
 }
@@ -371,6 +346,15 @@ export async function turnStreamDirect(
       usedTools,
       contextReport,
       turnKind: "skip",
+    });
+    await maybeAutoCompactSession({
+      deps,
+      tenantId: session.tenant_id,
+      ctx,
+      sessionId: response.session_id,
+      model,
+      modelResolution,
+      usage: undefined,
     });
 
     const streamResult = streamText({

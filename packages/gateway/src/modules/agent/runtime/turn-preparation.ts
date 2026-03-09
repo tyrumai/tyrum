@@ -427,6 +427,24 @@ export async function prepareTurn(
   const nodeDispatchService = deps.opts.protocolDeps
     ? new NodeDispatchService(deps.opts.protocolDeps)
     : undefined;
+  const modelResolution = await resolveSessionModelImpl(
+    {
+      container: deps.opts.container,
+      languageModelOverride: deps.languageModelOverride,
+      secretProvider: deps.secretProvider,
+      oauthLeaseOwner: deps.instanceOwner,
+      fetchImpl: deps.fetchImpl,
+    },
+    {
+      config: ctx.config,
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      executionProfileId: executionProfile.id,
+      profileModelId: executionProfile.profile.model_id,
+      fetchImpl: deps.fetchImpl,
+    },
+  );
+  const model = modelResolution.model;
   const toolExecutor = new ToolExecutor(
     deps.home,
     deps.mcpManager,
@@ -472,6 +490,7 @@ export async function prepareTurn(
     validatedReport,
     laneQueue,
     toolCallPolicyStates,
+    model,
   );
 
   const userContent: Array<{ type: "text"; text: string }> = [
@@ -484,26 +503,6 @@ export async function prepareTurn(
     ...(automationDigestText ? [{ type: "text" as const, text: automationDigestText }] : []),
     { type: "text", text: resolved.message },
   ];
-
-  const modelResolution = await resolveSessionModelImpl(
-    {
-      container: deps.opts.container,
-      languageModelOverride: deps.languageModelOverride,
-      secretProvider: deps.secretProvider,
-      oauthLeaseOwner: deps.instanceOwner,
-      fetchImpl: deps.fetchImpl,
-    },
-    {
-      config: ctx.config,
-      tenantId: session.tenant_id,
-      sessionId: session.session_id,
-      executionProfileId: executionProfile.id,
-      profileModelId: executionProfile.profile.model_id,
-      fetchImpl: deps.fetchImpl,
-    },
-  );
-  const model = modelResolution.model;
-
   return {
     ctx,
     executionProfile,

@@ -3,6 +3,7 @@ import { AgentId, AgentKey, TenantKey, WorkspaceKey, AgentSessionKey } from "./k
 import { UuidSchema } from "./common.js";
 import { NormalizedContainerKind, NormalizedMessageEnvelope } from "./message.js";
 import { MemorySensitivity } from "./memory.js";
+import { canonicalizeToolIdList } from "./tool-id.js";
 
 export const AgentModelConfig = z.object({
   model: z
@@ -36,7 +37,7 @@ export const AgentMcpConfig = z.object({
 export type AgentMcpConfig = z.infer<typeof AgentMcpConfig>;
 
 export const AgentToolConfig = z.object({
-  allow: z.array(z.string().trim().min(1)).default([]),
+  allow: z.array(z.string().trim().min(1)).default([]).overwrite(canonicalizeToolIdList),
 });
 export type AgentToolConfig = z.infer<typeof AgentToolConfig>;
 
@@ -204,7 +205,7 @@ export const IdentityPack = z.object({
 export type IdentityPack = z.infer<typeof IdentityPack>;
 
 export const SkillRequires = z.object({
-  tools: z.array(z.string().trim().min(1)).optional(),
+  tools: z.array(z.string().trim().min(1)).overwrite(canonicalizeToolIdList).optional(),
   mcp: z.array(z.string().trim().min(1)).optional(),
   nodes: z.array(z.string().trim().min(1)).optional(),
 });

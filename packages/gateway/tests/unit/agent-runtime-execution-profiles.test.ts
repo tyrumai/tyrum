@@ -48,7 +48,7 @@ describe("AgentRuntime (execution profiles)", () => {
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
         mcp: { enabled: [] },
-        tools: { allow: ["tool.fs.read", "tool.fs.write", "tool.exec"] },
+        tools: { allow: ["read", "write", "bash"] },
         sessions: { ttl_days: 30, max_turns: 20 },
         memory: { v1: { enabled: false } },
       }),
@@ -96,9 +96,9 @@ describe("AgentRuntime (execution profiles)", () => {
     });
 
     const explorerTools = runtime.getLastContextReport()?.selected_tools ?? [];
-    expect(explorerTools).toContain("tool.fs.read");
-    expect(explorerTools).not.toContain("tool.fs.write");
-    expect(explorerTools).not.toContain("tool.exec");
+    expect(explorerTools).toContain("read");
+    expect(explorerTools).not.toContain("write");
+    expect(explorerTools).not.toContain("bash");
 
     await runtime.turn({
       channel: "test",
@@ -107,9 +107,9 @@ describe("AgentRuntime (execution profiles)", () => {
     });
 
     const mainTools = runtime.getLastContextReport()?.selected_tools ?? [];
-    expect(mainTools).toContain("tool.fs.read");
-    expect(mainTools).toContain("tool.fs.write");
-    expect(mainTools).toContain("tool.exec");
+    expect(mainTools).toContain("read");
+    expect(mainTools).toContain("write");
+    expect(mainTools).toContain("bash");
 
     const executorSubagentId = randomUUID();
     const executorSessionKey = `agent:default:subagent:${executorSubagentId}`;
@@ -136,8 +136,8 @@ describe("AgentRuntime (execution profiles)", () => {
     });
 
     const executorTools = runtime.getLastContextReport()?.selected_tools ?? [];
-    expect(executorTools).toContain("tool.fs.read");
-    expect(executorTools).toContain("tool.fs.write");
-    expect(executorTools).toContain("tool.exec");
+    expect(executorTools).toContain("read");
+    expect(executorTools).toContain("write");
+    expect(executorTools).toContain("bash");
   });
 });

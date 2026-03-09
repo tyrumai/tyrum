@@ -100,6 +100,15 @@ describe("AgentConfig", () => {
       sessions: { context_pruning: { max_messages: 4 } },
     });
   });
+
+  it("accepts canonical tool allowlists", () => {
+    const parsed = AgentConfig.parse({
+      model: { model: "openai/gpt-5.4" },
+      tools: { allow: ["read", "bash"] },
+    });
+
+    expect(parsed.tools.allow).toEqual(["read", "bash"]);
+  });
 });
 
 describe("IdentityPack", () => {
@@ -144,14 +153,14 @@ describe("SkillManifest", () => {
         name: "Local Files",
         version: "1.0.0",
         requires: {
-          tools: ["tool.fs.read"],
+          tools: ["read"],
         },
       },
       body: "Use filesystem tools carefully.",
     });
 
     expect(parsed.meta.id).toBe("local-files");
-    expect(parsed.meta.requires?.tools).toEqual(["tool.fs.read"]);
+    expect(parsed.meta.requires?.tools).toEqual(["read"]);
   });
 
   it("rejects SkillManifest missing meta.id", () => {

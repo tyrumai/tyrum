@@ -293,7 +293,7 @@ describe("WS control-plane requests", () => {
       scope: { tenantId: DEFAULT_TENANT_ID, scopeKind: "deployment" },
       bundle: {
         v: 1,
-        tools: { default: "deny", allow: ["tool.exec"], require_approval: [], deny: [] },
+        tools: { default: "deny", allow: ["bash"], require_approval: [], deny: [] },
       },
       createdBy: { kind: "test" },
     });
@@ -301,7 +301,7 @@ describe("WS control-plane requests", () => {
       scope: { tenantId: DEFAULT_TENANT_ID, scopeKind: "agent", agentId: helperAgentId },
       bundle: {
         v: 1,
-        tools: { default: "deny", allow: [], require_approval: ["tool.exec"], deny: [] },
+        tools: { default: "deny", allow: [], require_approval: ["bash"], deny: [] },
       },
       createdBy: { kind: "test" },
     });
@@ -371,7 +371,7 @@ describe("WS control-plane requests", () => {
       job!.policy_snapshot_id,
     );
 
-    expect(snapshot?.bundle.tools?.require_approval).toContain("tool.exec");
+    expect(snapshot?.bundle.tools?.require_approval).toContain("bash");
 
     await agentRuntime.shutdown();
     await container.db.close();

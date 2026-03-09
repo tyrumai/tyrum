@@ -159,6 +159,7 @@ export function createChatStore() {
     agent_id: "default",
     channel: "ui",
     thread_id: "ui-thread-1",
+    title: "Layout regression coverage",
     summary: "Layout regression coverage thread",
     turns: [
       { role: "user", content: "Can we prevent page overflow regressions?" },
@@ -182,6 +183,7 @@ export function createChatStore() {
           session_id: "session-1",
           channel: "ui",
           thread_id: "ui-thread-1",
+          title: "Layout regression coverage",
           summary: "Layout regression coverage thread",
           last_turn: { role: "assistant", content: "Yes. We can add browser geometry checks." },
           created_at: "2026-03-08T00:00:00.000Z",

@@ -14,7 +14,7 @@ function registerPolicyAndUsageTests(fixture: SlashCommandFixture): void {
     const created = await policyOverrideDal.create({
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
-      toolId: "tool.exec",
+      toolId: "bash",
       pattern: "git status*",
       createdBy: { kind: "test" },
     });

@@ -1,4 +1,4 @@
-import type { LanguageModel } from "ai";
+import { generateText, type LanguageModel } from "ai";
 import type { AgentTurnResponse as AgentTurnResponseT } from "@tyrum/schemas";
 import { AgentTurnResponse } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../../container.js";
@@ -8,6 +8,7 @@ import { recordMemoryV1SystemEpisode } from "../../memory/v1-episode-recorder.js
 import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
 import type { AgentContextReport, AgentLoadedContext } from "./types.js";
 import { classifyTurnMemory } from "./turn-memory-policy.js";
+import { normalizeSessionTitle } from "../session-dal-helpers.js";
 
 type FinalizeContainer = Pick<GatewayContainer, "contextReportDal" | "logger" | "memoryV1Dal">;
 
@@ -144,6 +145,55 @@ async function recordAgentTurnEpisode(input: {
   }
 }
 
+async function maybeGenerateSessionTitle(input: {
+  container: FinalizeContainer;
+  sessionDal: SessionDal;
+  session: SessionRow;
+  resolved: ResolvedAgentTurnInput;
+  reply: string;
+  model: LanguageModel;
+}): Promise<void> {
+  if (input.session.title.trim().length > 0) return;
+
+  try {
+    const result = await generateText({
+      model: input.model,
+      system:
+        "Write a concise session title. Return plain text only. " +
+        "Use 3 to 8 words, no quotes, no markdown, no trailing punctuation.",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                `User message:\n${input.resolved.message}\n\n` +
+                `Assistant reply:\n${input.reply}\n\n` +
+                "Title:",
+            },
+          ],
+        },
+      ],
+    });
+    const title = normalizeSessionTitle(result.text ?? "");
+    if (!title) return;
+    await input.sessionDal.setTitleIfBlank({
+      tenantId: input.session.tenant_id,
+      sessionId: input.session.session_id,
+      title,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    input.container.logger.warn("agents.session_title_generation_failed", {
+      session_id: input.session.session_id,
+      channel: input.resolved.channel,
+      thread_id: input.resolved.thread_id,
+      error: message,
+    });
+  }
+}
+
 export async function finalizeTurn(input: {
   container: FinalizeContainer;
   sessionDal: SessionDal;
@@ -160,12 +210,20 @@ export async function finalizeTurn(input: {
   const finalizedReply = applyCrossTurnLoopWarning(input);
 
   await persistContextReport(input);
-  await input.sessionDal.appendTurn({
+  const updatedSession = await input.sessionDal.appendTurn({
     tenantId: input.session.tenant_id,
     sessionId: input.session.session_id,
     userMessage: input.resolved.message,
     assistantMessage: finalizedReply,
     timestamp: nowIso,
+  });
+  await maybeGenerateSessionTitle({
+    container: input.container,
+    sessionDal: input.sessionDal,
+    session: updatedSession,
+    resolved: input.resolved,
+    reply: finalizedReply,
+    model: input.model,
   });
   let noteWritten = false;
   let episodeWritten = false;

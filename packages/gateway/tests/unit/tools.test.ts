@@ -8,29 +8,29 @@ import {
 
 describe("selectToolDirectory", () => {
   it("includes confirmation-required tools by default", () => {
-    const tools = selectToolDirectory("run shell command", ["tool.exec", "tool.fs.read"], []);
+    const tools = selectToolDirectory("run shell command", ["bash", "read"], []);
 
-    expect(tools.map((t) => t.id)).toContain("tool.fs.read");
-    expect(tools.map((t) => t.id)).toContain("tool.exec");
+    expect(tools.map((t) => t.id)).toContain("read");
+    expect(tools.map((t) => t.id)).toContain("bash");
   });
 
   it("can exclude confirmation-required tools when explicitly disabled", () => {
-    const tools = selectToolDirectory("run shell command", ["tool.exec"], [], 8, false);
+    const tools = selectToolDirectory("run shell command", ["bash"], [], 8, false);
 
-    expect(tools.map((t) => t.id)).not.toContain("tool.exec");
+    expect(tools.map((t) => t.id)).not.toContain("bash");
   });
 
   it("excludes gateway-local fs and exec tools in shared mode", () => {
     const tools = selectToolDirectory(
       "read a file and run a command",
-      ["tool.fs.read", "tool.fs.write", "tool.exec", "tool.http.fetch"],
+      ["read", "write", "bash", "webfetch"],
       [],
       8,
       true,
       "shared",
     );
 
-    expect(tools.map((t) => t.id)).toEqual(["tool.http.fetch"]);
+    expect(tools.map((t) => t.id)).toEqual(["webfetch"]);
   });
 
   it("applies confirmation filtering to MCP tools", () => {
@@ -59,22 +59,22 @@ describe("selectToolDirectory", () => {
 
 describe("model tool naming", () => {
   it("sanitizes dotted tool ids for model-facing names", () => {
-    const names = buildModelToolNameMap(["tool.fs.read", "plugin.echo.danger"]);
+    const names = buildModelToolNameMap(["mcp.calendar.events_list", "plugin.echo.danger"]);
 
-    expect(names.get("tool.fs.read")).toBe("tool_fs_read");
+    expect(names.get("mcp.calendar.events_list")).toBe("mcp_calendar_events_list");
     expect(names.get("plugin.echo.danger")).toBe("plugin_echo_danger");
   });
 
   it("keeps canonical tool ids as non-enumerable aliases", () => {
-    const names = buildModelToolNameMap(["tool.fs.read"]);
+    const names = buildModelToolNameMap(["read"]);
     const toolSet: Record<string, { id: string }> = {};
-    const tool = { id: "tool.fs.read" };
+    const tool = { id: "read" };
 
-    registerModelTool(toolSet, "tool.fs.read", tool, names);
+    registerModelTool(toolSet, "read", tool, names);
 
-    expect(Object.keys(toolSet)).toEqual(["tool_fs_read"]);
-    expect(toolSet["tool_fs_read"]).toBe(tool);
-    expect(toolSet["tool.fs.read"]).toBe(tool);
+    expect(Object.keys(toolSet)).toEqual(["read"]);
+    expect(toolSet["read"]).toBe(tool);
+    expect(toolSet["read"]).toBe(tool);
   });
 
   it("deduplicates model-facing names when sanitized ids would collide", () => {
@@ -86,19 +86,19 @@ describe("model tool naming", () => {
   });
 
   it("avoids colliding with another tool's canonical id", () => {
-    const names = buildModelToolNameMap(["tool.fs.read", "tool_fs_read"]);
+    const names = buildModelToolNameMap(["read", "tool_fs_read"]);
     const toolSet: Record<string, { id: string }> = {};
-    const firstTool = { id: "tool.fs.read" };
+    const firstTool = { id: "read" };
     const secondTool = { id: "tool_fs_read" };
-    const firstModelToolName = names.get("tool.fs.read");
+    const firstModelToolName = names.get("read");
 
-    registerModelTool(toolSet, "tool.fs.read", firstTool, names);
+    registerModelTool(toolSet, "read", firstTool, names);
     registerModelTool(toolSet, "tool_fs_read", secondTool, names);
 
     expect(firstModelToolName).toBeDefined();
     expect(Object.keys(toolSet)).toEqual([firstModelToolName, "tool_fs_read"]);
     expect(toolSet[firstModelToolName ?? ""]).toBe(firstTool);
-    expect(toolSet["tool.fs.read"]).toBe(firstTool);
+    expect(toolSet["read"]).toBe(firstTool);
     expect(toolSet["tool_fs_read"]).toBe(secondTool);
   });
 

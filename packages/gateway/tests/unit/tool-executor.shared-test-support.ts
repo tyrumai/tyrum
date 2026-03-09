@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, vi } from "vitest";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
+import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
 
 export type HomeDirState = {
@@ -16,6 +17,7 @@ type ToolExecutorFactoryOptions = {
   mcpManager?: ToolExecutorCtor[1];
   mcpServerSpecs?: ToolExecutorCtor[2];
   fetchImpl?: ToolExecutorCtor[3];
+  secretProvider?: SecretProvider;
   dnsLookup?: ToolExecutorCtor[5];
   workspaceLease?: ToolExecutorCtor[8];
   nodeDispatchService?: ToolExecutorCtor[9];
@@ -66,6 +68,7 @@ export function createToolExecutor({
   mcpManager = stubMcpManager(),
   mcpServerSpecs = new Map(),
   fetchImpl = fetch,
+  secretProvider,
   dnsLookup,
   workspaceLease,
   nodeDispatchService,
@@ -76,7 +79,7 @@ export function createToolExecutor({
     mcpManager,
     mcpServerSpecs,
     fetchImpl,
-    undefined,
+    secretProvider,
     dnsLookup,
     undefined,
     undefined,

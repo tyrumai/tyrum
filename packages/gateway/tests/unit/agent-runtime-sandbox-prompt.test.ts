@@ -44,7 +44,10 @@ describe("AgentRuntime system prompt sandbox section", () => {
       doGenerate: async (options) => {
         const call = options as LanguageModelV3CallOptions;
         const system = call.prompt.find((m) => m.role === "system");
-        capturedSystem = system?.role === "system" ? system.content : undefined;
+        const systemText = system?.role === "system" ? system.content : undefined;
+        if (systemText && !systemText.includes("Write a concise session title")) {
+          capturedSystem = systemText;
+        }
 
         return {
           content: [{ type: "text" as const, text: "hello" }],

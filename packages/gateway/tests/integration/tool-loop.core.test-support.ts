@@ -7,6 +7,7 @@ import {
   createSequencedToolLoopLanguageModel,
   createTestRuntime,
   createToolLoopLanguageModel,
+  findLastNonTitleGenerateCall,
   readToolCall,
   setupToolLoopTest,
   textStep,
@@ -22,7 +23,7 @@ import {
 export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
   it("executes tool calls and returns the final reply", async () => {
     const { homeDir, container } = await setupToolLoopTest(state, {
-      seedConfig: { config: { tools: { allow: ["tool.fs.read"] } } },
+      seedConfig: { config: { tools: { allow: ["read"] } } },
     });
     await writeFixtureFiles(homeDir, { "notes.txt": "important notes" });
 
@@ -39,14 +40,14 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
     });
 
     expect(result.reply).toBe("I read the file, it says: important notes");
-    expect(result.used_tools).toContain("tool.fs.read");
+    expect(result.used_tools).toContain("read");
   }, 10_000);
 
   it("prunes older tool results from the model prompt deterministically", async () => {
     const { homeDir, container } = await setupToolLoopTest(state, {
       seedConfig: {
         config: {
-          tools: { allow: ["tool.fs.read"] },
+          tools: { allow: ["read"] },
           sessions: { context_pruning: { max_messages: 8, tool_prune_keep_last_messages: 4 } },
         },
       },
@@ -72,7 +73,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
     });
 
     expect(result.reply).toBe("done");
-    const lastCall = languageModel.doGenerateCalls.at(-1);
+    const lastCall = findLastNonTitleGenerateCall(languageModel);
     expect(lastCall).toBeTruthy();
     const promptText = JSON.stringify(lastCall!.prompt);
     expect(promptText).toContain("SECOND_TOOL_OUTPUT_456");
@@ -84,7 +85,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
     const { homeDir, container } = await setupToolLoopTest(state, {
       seedConfig: {
         config: {
-          tools: { allow: ["tool.fs.read"] },
+          tools: { allow: ["read"] },
           sessions: { context_pruning: { max_messages: 8, tool_prune_keep_last_messages: 7 } },
         },
       },
@@ -112,7 +113,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
     });
 
     expect(result.reply).toBe("done");
-    const lastCall = languageModel.doGenerateCalls.at(-1);
+    const lastCall = findLastNonTitleGenerateCall(languageModel);
     expect(lastCall).toBeTruthy();
 
     const { toolCallIds, toolResultIds } = collectPromptToolIds(lastCall!.prompt);
@@ -144,7 +145,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
     const url = "https://example.com";
     const { homeDir, container } = await setupToolLoopTest(state, {
       seedConfig: {
-        config: { tools: { allow: ["tool.fs.read", "tool.http.fetch"] } },
+        config: { tools: { allow: ["read", "webfetch"] } },
       },
     });
     await writeFixtureFiles(homeDir, { "a.txt": "file A" });
@@ -169,7 +170,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
     });
 
     const pending = await waitForPendingApproval(container);
-    expect(pending.prompt).toContain("tool.http.fetch");
+    expect(pending.prompt).toContain("webfetch");
     const res = await respondToApproval(container, pending.approval_id, {
       decision: "approved",
       reason: "approved in test",
@@ -178,14 +179,14 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
 
     const result = await turnPromise;
     expect(result.reply).toBe("done with both tools");
-    expect(result.used_tools).toContain("tool.fs.read");
-    expect(result.used_tools).toContain("tool.http.fetch");
+    expect(result.used_tools).toContain("read");
+    expect(result.used_tools).toContain("webfetch");
     expect(result.used_tools).toHaveLength(2);
   });
 
   it("queues approval requests even when maxSteps is exhausted", async () => {
     const { homeDir, container } = await setupToolLoopTest(state, {
-      seedConfig: { config: { tools: { allow: ["tool.exec"] } } },
+      seedConfig: { config: { tools: { allow: ["bash"] } } },
     });
 
     const runtime = createTestRuntime({
@@ -195,7 +196,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
         toolCalls: [
           {
             id: "tc-budget",
-            name: "tool.exec",
+            name: "bash",
             arguments: JSON.stringify({ command: "echo approved" }),
           },
         ],
@@ -213,7 +214,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
     });
 
     const pending = await waitForPendingApproval(container, 1_000);
-    expect(pending.prompt).toContain("tool.exec");
+    expect(pending.prompt).toContain("bash");
     expect(pending.kind).toBe("workflow_step");
 
     const res = await respondToApproval(container, pending.approval_id, {
@@ -230,7 +231,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
     const { homeDir, container } = await setupToolLoopTest(state, {
       seedConfig: {
         config: {
-          tools: { allow: ["tool.fs.read"] },
+          tools: { allow: ["read"] },
           sessions: {
             loop_detection: {
               within_turn: { enabled: false },
@@ -260,12 +261,12 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
     });
 
     expect(result.reply).toBe("No assistant response returned.");
-    expect(result.used_tools).toContain("tool.fs.read");
+    expect(result.used_tools).toContain("read");
   });
 
   it("detects and stops a within-turn tool loop (consecutive)", async () => {
     const { homeDir, container } = await setupToolLoopTest(state, {
-      seedConfig: { config: { tools: { allow: ["tool.fs.read"] } } },
+      seedConfig: { config: { tools: { allow: ["read"] } } },
     });
     await writeFixtureFiles(homeDir, { "notes.txt": "important notes" });
 
@@ -287,12 +288,12 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
     });
 
     expect(result.reply).toContain("Loop detected");
-    expect(result.used_tools).toContain("tool.fs.read");
+    expect(result.used_tools).toContain("read");
   });
 
   it("detects and stops a within-turn tool loop (cycle)", async () => {
     const { homeDir, container } = await setupToolLoopTest(state, {
-      seedConfig: { config: { tools: { allow: ["tool.fs.read"] } } },
+      seedConfig: { config: { tools: { allow: ["read"] } } },
     });
     await writeFixtureFiles(homeDir, { "a.txt": "A", "b.txt": "B" });
 
@@ -318,12 +319,12 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
     });
 
     expect(result.reply).toContain("Loop detected");
-    expect(result.used_tools).toContain("tool.fs.read");
+    expect(result.used_tools).toContain("read");
   });
 
   it("does not execute high-risk tool when approval is denied", async () => {
     const { homeDir, container } = await setupToolLoopTest(state, {
-      seedConfig: { config: { tools: { allow: ["tool.fs.write"] } } },
+      seedConfig: { config: { tools: { allow: ["write"] } } },
     });
     const runtime = createTestRuntime({
       container,
@@ -332,7 +333,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
         toolCalls: [
           {
             id: "tc-deny",
-            name: "tool.fs.write",
+            name: "write",
             arguments: JSON.stringify({ path: "blocked.txt", content: "secret" }),
           },
         ],
@@ -359,7 +360,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
 
     const result = await turnPromise;
     expect(result.reply).toBe("approval denied");
-    expect(result.used_tools).not.toContain("tool.fs.write");
+    expect(result.used_tools).not.toContain("write");
     await expect(access(join(homeDir, "blocked.txt"))).rejects.toThrow();
   });
 }

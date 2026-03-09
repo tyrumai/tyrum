@@ -21,6 +21,7 @@ function sampleListItem(sessionId: string, updatedAt = "2026-01-01T00:00:00.000Z
     agent_id: "default",
     channel: "ui",
     thread_id: `ui-${sessionId}`,
+    title: "",
     summary: "",
     turns_count: 0,
     updated_at: updatedAt,
@@ -35,6 +36,7 @@ function sampleGetSession(sessionId: string) {
     agent_id: "default",
     channel: "ui",
     thread_id: `ui-${sessionId}`,
+    title: "",
     summary: "",
     turns: [{ role: "user", content: "hello" }],
     updated_at: "2026-01-01T00:00:00.000Z",
@@ -51,6 +53,7 @@ function createFakeWs() {
       agent_id: "default",
       channel: "ui",
       thread_id: "ui-session-1",
+      title: "",
     })),
     sessionCompact: vi.fn(async () => ({
       session_id: "session-1",
@@ -223,6 +226,7 @@ describe("chatStore", () => {
       agent_id: "default",
       channel: "ui",
       thread_id: "ui-session-9",
+      title: "",
     });
     ws.sessionList.mockResolvedValueOnce({
       sessions: [sampleListItem("session-9")],
@@ -296,6 +300,7 @@ describe("chatStore", () => {
       agent_id: string;
       channel: string;
       thread_id: string;
+      title: string;
     }>();
 
     const ws = createFakeWs();
@@ -312,6 +317,7 @@ describe("chatStore", () => {
       agent_id: "default",
       channel: "ui",
       thread_id: "ui-session-9",
+      title: "",
     });
     await newChatP;
 

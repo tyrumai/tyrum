@@ -84,7 +84,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
 
     const toolDescs = [
       {
-        id: "tool.exec",
+        id: "bash",
         description: "Execute shell commands on the local machine.",
         risk: "high" as const,
         requires_confirmation: true,
@@ -97,7 +97,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
         },
       },
       {
-        id: "tool.http.fetch",
+        id: "webfetch",
         description: "Make outbound HTTP requests.",
         risk: "medium" as const,
         requires_confirmation: true,
@@ -113,7 +113,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
 
     const toolExecutor = {
       execute: vi.fn(async (toolId: string) => {
-        if (toolId === "tool.http.fetch") {
+        if (toolId === "webfetch") {
           return {
             tool_call_id: "tc-test-fetch",
             output: "ok",
@@ -144,8 +144,8 @@ describe("AgentRuntime - provenance and policy overrides", () => {
       makeContextReport(),
     );
 
-    const execPromise = toolSet["tool.exec"]!.execute({ command: "secret:h1" });
-    const fetchPromise = toolSet["tool.http.fetch"]!.execute({ url: "https://example.com" });
+    const execPromise = toolSet["bash"]!.execute({ command: "secret:h1" });
+    const fetchPromise = toolSet["webfetch"]!.execute({ url: "https://example.com" });
 
     await fetchPromise;
     resolveList?.([
@@ -163,7 +163,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
         (call) =>
           call[0] as { toolId?: string; inputProvenance?: { source: string; trusted: boolean } },
       )
-      .find((call) => call.toolId === "tool.exec");
+      .find((call) => call.toolId === "bash");
     expect(execCall?.inputProvenance).toEqual({ source: "user", trusted: true });
   });
 
@@ -190,7 +190,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
     });
 
     const toolDesc = {
-      id: "tool.fs.read",
+      id: "read",
       description: "Read files from workspace.",
       risk: "high" as const,
       requires_confirmation: false,
@@ -226,7 +226,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
       makeContextReport(),
     );
 
-    const result = await toolSet["tool.fs.read"]!.execute({
+    const result = await toolSet["read"]!.execute({
       path: " ./docs//architecture/../policy-overrides.md ",
     });
 
@@ -238,7 +238,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
     );
     expect(approvalSpy).toHaveBeenCalledWith(
       expect.any(Object),
-      expect.objectContaining({ id: "tool.fs.read" }),
+      expect.objectContaining({ id: "read" }),
       expect.any(Object),
       expect.any(String),
       expect.any(Object),
@@ -247,7 +247,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
         workspace_id: DEFAULT_WORKSPACE_ID,
         suggested_overrides: [
           {
-            tool_id: "tool.fs.read",
+            tool_id: "read",
             pattern: "read:docs/policy-overrides.md",
             workspace_id: DEFAULT_WORKSPACE_ID,
           },
@@ -255,7 +255,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
       }),
     );
     expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
-    expect(usedTools.has("tool.fs.read")).toBe(true);
+    expect(usedTools.has("read")).toBe(true);
   });
 
   it("suggests a conservative prefix override for Desktop act node dispatch", async () => {
@@ -389,7 +389,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
     });
 
     const toolDesc = {
-      id: "tool.exec",
+      id: "bash",
       description: "Execute shell commands.",
       risk: "high" as const,
       requires_confirmation: true,
@@ -425,7 +425,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
       makeContextReport(),
     );
 
-    const result = await toolSet["tool.exec"]!.execute({ command: "echo *" });
+    const result = await toolSet["bash"]!.execute({ command: "echo *" });
     expect(result).toBe("ok");
 
     expect(policyService.evaluateToolCall).toHaveBeenCalledWith(

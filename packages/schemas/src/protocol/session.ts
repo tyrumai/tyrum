@@ -174,6 +174,7 @@ export const WsSessionListItem = z
     agent_id: AgentKey,
     channel: z.string().trim().min(1),
     thread_id: z.string().trim().min(1),
+    title: z.string().default(""),
     summary: z.string().default(""),
     turns_count: z.number().int().nonnegative(),
     updated_at: DateTimeSchema,
@@ -208,6 +209,7 @@ export const WsSessionGetSession = z
     agent_id: AgentKey,
     channel: z.string().trim().min(1),
     thread_id: z.string().trim().min(1),
+    title: z.string().default(""),
     summary: z.string().default(""),
     turns: z.array(WsSessionTurn),
     updated_at: DateTimeSchema,
@@ -240,6 +242,7 @@ export const WsSessionCreateResult = z
     agent_id: AgentKey,
     channel: z.string().trim().min(1),
     thread_id: z.string().trim().min(1),
+    title: z.string().default(""),
   })
   .strict();
 export type WsSessionCreateResult = z.infer<typeof WsSessionCreateResult>;

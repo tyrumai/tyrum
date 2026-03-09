@@ -23,7 +23,7 @@ function createMcpSpec(id: string, name: string): McpServerSpec {
 export function registerPathSandboxingTests(home: HomeDirState): void {
   it("rejects paths outside TYRUM_HOME via ..", async () => {
     const result = await createToolExecutor({ homeDir: requireHomeDir(home) }).execute(
-      "tool.fs.read",
+      "read",
       "call-sb-1",
       { path: "../../../etc/passwd" },
     );
@@ -33,7 +33,7 @@ export function registerPathSandboxingTests(home: HomeDirState): void {
 
   it("rejects absolute paths outside TYRUM_HOME", async () => {
     const result = await createToolExecutor({ homeDir: requireHomeDir(home) }).execute(
-      "tool.fs.read",
+      "read",
       "call-sb-2",
       { path: "/etc/passwd" },
     );
@@ -46,7 +46,7 @@ export function registerPathSandboxingTests(home: HomeDirState): void {
     await mkdir(join(homeDir, "sub"), { recursive: true });
     await writeFile(join(homeDir, "sub/data.txt"), "nested content", "utf-8");
 
-    const result = await createToolExecutor({ homeDir }).execute("tool.fs.read", "call-sb-3", {
+    const result = await createToolExecutor({ homeDir }).execute("read", "call-sb-3", {
       path: "sub/data.txt",
     });
 
@@ -73,7 +73,7 @@ export function registerMcpDelegationTests(home: HomeDirState): void {
     });
 
     expect(result.output).toContain("calendar-result");
-    expect(result.output).toContain('<data source="tool">');
+    expect(result.output).toContain('<data source="web">');
     expect(result.error).toBeUndefined();
     expect(callToolMock).toHaveBeenCalledWith(spec, "events_list", { date: "2026-02-17" });
   });

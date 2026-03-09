@@ -32,6 +32,7 @@ import { createPolicyApi, type PolicyApi } from "./policy.js";
 import { createProviderConfigApi, type ProviderConfigApi } from "./provider-config.js";
 import { createRoutingConfigApi, type RoutingConfigApi } from "./routing-config.js";
 import { createSecretsApi, type SecretsApi } from "./secrets.js";
+import { createToolRegistryApi, type ToolRegistryApi } from "./tool-registry.js";
 import { HttpTransport, type TyrumHttpClientOptions } from "./shared.js";
 
 export interface TyrumHttpClient {
@@ -65,6 +66,7 @@ export interface TyrumHttpClient {
   context?: ContextApi;
   artifacts?: ArtifactsApi;
   health?: HealthApi;
+  toolRegistry?: ToolRegistryApi;
 }
 
 export type TyrumHttpClientOperator = TyrumHttpClient & {
@@ -77,6 +79,7 @@ export type TyrumHttpClientOperator = TyrumHttpClient & {
   context: ContextApi;
   artifacts: ArtifactsApi;
   health: HealthApi;
+  toolRegistry: ToolRegistryApi;
 };
 
 export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHttpClientOperator {
@@ -107,6 +110,7 @@ export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHtt
     context: createContextApi(transport),
     artifacts: createArtifactsApi(transport),
     health: createHealthApi(transport),
+    toolRegistry: createToolRegistryApi(transport),
   };
 }
 

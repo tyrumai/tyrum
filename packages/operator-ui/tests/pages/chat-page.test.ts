@@ -9,7 +9,7 @@ import { ChatPage } from "../../src/components/pages/chat-page.js";
 import { cleanupTestRoot, renderIntoDocument, stubMatchMedia } from "../test-utils.js";
 
 describe("ChatPage", () => {
-  it("derives thread titles from the last turn even when the last turn is assistant", async () => {
+  it("uses the persisted session title instead of deriving it from the last turn", async () => {
     const ws = {
       sessionList: vi.fn().mockResolvedValue({
         sessions: [
@@ -18,6 +18,7 @@ describe("ChatPage", () => {
             session_id: "ui:thread-1",
             channel: "ui",
             thread_id: "ui-550e8400-e29b-41d4-a716-446655440000",
+            title: "Persisted title",
             summary: "",
             last_turn: { role: "assistant", content: "Assistant title\nMore details" },
             created_at: new Date().toISOString(),
@@ -47,7 +48,7 @@ describe("ChatPage", () => {
     expect(threadButton).not.toBeNull();
 
     const title = threadButton?.querySelector<HTMLDivElement>("div.text-sm.font-medium");
-    expect(title?.textContent?.trim()).toBe("Assistant title");
+    expect(title?.textContent?.trim()).toBe("Persisted title");
 
     cleanupTestRoot(testRoot);
   });
@@ -61,6 +62,7 @@ describe("ChatPage", () => {
             session_id: "ui:thread-1",
             channel: "ui",
             thread_id: "ui-550e8400-e29b-41d4-a716-446655440000",
+            title: "Persisted title",
             summary: "Conversation summary",
             last_turn: { role: "assistant", content: "Assistant title\nMore details" },
             created_at: new Date().toISOString(),
@@ -104,6 +106,7 @@ describe("ChatPage", () => {
             session_id: "ui:thread-1",
             channel: "ui",
             thread_id: "ui-550e8400-e29b-41d4-a716-446655440000",
+            title: "Persisted title",
             summary: "Conversation summary",
             last_turn: { role: "assistant", content: "Assistant title\nMore details" },
             created_at: new Date().toISOString(),
@@ -212,6 +215,7 @@ describe("ChatPage", () => {
             session_id: "ui:thread-1",
             channel: "ui",
             thread_id: "ui-550e8400-e29b-41d4-a716-446655440000",
+            title: "Persisted title",
             summary: "Conversation summary",
             last_turn: { role: "assistant", content: "Assistant title\nMore details" },
             created_at: new Date().toISOString(),
@@ -226,6 +230,7 @@ describe("ChatPage", () => {
           session_id: "ui:thread-1",
           channel: "ui",
           thread_id: "ui-550e8400-e29b-41d4-a716-446655440000",
+          title: "Persisted title",
           summary: "Conversation summary",
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
