@@ -1,15 +1,4 @@
 import React from "react";
-import {
-  Bot,
-  Globe,
-  LayoutDashboard,
-  Link2,
-  MessageSquare,
-  Settings,
-  ShieldCheck,
-  SquareKanban,
-  Wrench,
-} from "lucide-react";
 import { AppShell } from "../../../packages/operator-ui/src/components/layout/app-shell.js";
 import { Sidebar } from "../../../packages/operator-ui/src/components/layout/sidebar.js";
 import { AgentsPage } from "../../../packages/operator-ui/src/components/pages/agents-page.js";
@@ -45,6 +34,25 @@ type LayoutRoute =
   | "configure"
   | "browser"
   | "node-configure";
+
+function HarnessIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+      <path d="M5 8h6" />
+      <path d="M8 5v6" />
+    </svg>
+  );
+}
 
 function createBrowserRoute(): React.ReactNode {
   return (
@@ -97,15 +105,15 @@ export function LayoutHarnessApp() {
   const params = new URLSearchParams(window.location.search);
   const route = (params.get("route") ?? "dashboard") as LayoutRoute;
   const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "chat", label: "Chat", icon: MessageSquare },
-    { id: "approvals", label: "Approvals", icon: ShieldCheck },
-    { id: "agents", label: "Agents", icon: Bot },
-    { id: "pairing", label: "Pairings", icon: Link2 },
-    { id: "workboard", label: "Work", icon: SquareKanban },
-    { id: "configure", label: "Configure", icon: Settings },
-    { id: "browser", label: "Browser", icon: Globe },
-    { id: "node-configure", label: "Node", icon: Wrench },
+    { id: "dashboard", label: "Dashboard", icon: HarnessIcon },
+    { id: "chat", label: "Chat", icon: HarnessIcon },
+    { id: "approvals", label: "Approvals", icon: HarnessIcon },
+    { id: "agents", label: "Agents", icon: HarnessIcon },
+    { id: "pairing", label: "Pairings", icon: HarnessIcon },
+    { id: "workboard", label: "Work", icon: HarnessIcon },
+    { id: "configure", label: "Configure", icon: HarnessIcon },
+    { id: "browser", label: "Browser", icon: HarnessIcon },
+    { id: "node-configure", label: "Node", icon: HarnessIcon },
   ];
 
   return (

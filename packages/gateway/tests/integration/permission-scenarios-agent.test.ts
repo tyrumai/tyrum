@@ -426,19 +426,19 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     expect(result.used_tools).toContain("bash");
   });
 
-  it("does not resolve secrets until tool execution is approved", async () => {
+  it("does not resolve the Exa API key until tool execution is approved", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-perms-agent-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
 
-    const fetchUrl = "https://93.184.216.34";
+    const fetchUrl = "https://example.com";
     await seedAgentConfig(container, { toolsAllow: ["webfetch"] });
 
     await seedDeploymentPolicyBundle(container.db, {
       v: 1,
       tools: {
-        default: "deny",
-        allow: ["webfetch"],
-        require_approval: [],
+        default: "allow",
+        allow: [],
+        require_approval: ["webfetch"],
         deny: [],
       },
       network_egress: {
@@ -447,26 +447,12 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
         require_approval: [],
         deny: [],
       },
-      secrets: {
-        default: "allow",
-        allow: [],
-        require_approval: ["db:billing"],
-        deny: [],
-      },
     });
 
-    const handles: SecretHandle[] = [
-      {
-        handle_id: "handle-abc",
-        provider: "db",
-        scope: "billing",
-        created_at: new Date().toISOString(),
-      },
-    ];
     const secretProvider: SecretProvider = {
       resolve: vi.fn(async (handle: SecretHandle) => {
-        if (handle.handle_id !== "handle-abc") return null;
-        return "SECRET_VALUE";
+        if (handle.handle_id !== "exa_api_key") return null;
+        return "exa-key";
       }),
       store: vi.fn(async () => ({
         handle_id: "h1",
@@ -475,17 +461,18 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
         created_at: "",
       })),
       revoke: vi.fn(async () => true),
-      list: vi.fn(async () => handles),
+      list: vi.fn(async () => []),
     };
 
-    const fetchStub = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      const resolved = typeof url === "string" ? url : url.toString();
-      if (resolved !== fetchUrl) {
-        return new Response("not found", { status: 404 });
-      }
-      expect(init?.headers).toMatchObject({ Authorization: "SECRET_VALUE" });
-      return new Response("ok", { status: 200 });
-    }) as unknown as typeof fetch;
+    const mcpManager = stubMcpManager();
+    mcpManager.callTool.mockImplementation(
+      async (spec: { url?: string }, toolName: string, args: Record<string, unknown>) => {
+        expect(spec.url).toContain("exaApiKey=exa-key");
+        expect(toolName).toBe("crawling_exa");
+        expect(args).toEqual({ url: fetchUrl });
+        return { content: [{ type: "text", text: "ok" }], isError: false };
+      },
+    );
 
     const languageModel = createSequencedToolLoopLanguageModel([
       {
@@ -494,10 +481,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
           {
             id: "tc-fetch",
             name: "webfetch",
-            arguments: JSON.stringify({
-              url: fetchUrl,
-              headers: { Authorization: "secret:handle-abc" },
-            }),
+            arguments: JSON.stringify({ url: fetchUrl }),
           },
         ],
       },
@@ -508,9 +492,8 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       container,
       home: homeDir,
       languageModel,
-      fetchImpl: fetchStub,
       secretProvider,
-      mcpManager: stubMcpManager() as unknown as ConstructorParameters<
+      mcpManager: mcpManager as unknown as ConstructorParameters<
         typeof AgentRuntime
       >[0]["mcpManager"],
       approvalWaitMs: 10_000,
@@ -525,8 +508,10 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
 
     const approvalEngine = new ExecutionEngine({ db: container.db });
     const pending = await waitForPendingApproval(container);
-    expect(secretProvider.list).toHaveBeenCalled();
+    expect(pending.prompt).toContain("webfetch");
+    expect(secretProvider.list).not.toHaveBeenCalled();
     expect(secretProvider.resolve).not.toHaveBeenCalled();
+    expect(mcpManager.callTool).not.toHaveBeenCalled();
 
     const updated = await container.approvalDal.respond({
       tenantId: DEFAULT_TENANT_ID,
@@ -541,7 +526,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     const result = await turnPromise;
     expect(result.reply).toBe("done");
     expect(secretProvider.resolve).toHaveBeenCalled();
-    expect(fetchStub).toHaveBeenCalled();
+    expect(mcpManager.callTool).toHaveBeenCalled();
     expect(result.used_tools).toContain("webfetch");
   });
 });

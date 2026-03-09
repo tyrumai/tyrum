@@ -68,6 +68,40 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
     expect(dnsLookup).toHaveBeenCalledWith("example.com");
   });
 
+  it("webfetch forwards the Exa API key from the secret provider", async () => {
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "response-body" }],
+    }));
+    const secretProvider = {
+      resolve: vi.fn(async () => "exa-test-key"),
+      store: vi.fn(),
+      revoke: vi.fn(),
+      list: vi.fn(async () => []),
+    } as const;
+
+    const result = await createToolExecutor({
+      homeDir: requireHomeDir(home),
+      mcpManager: stubMcpManager({ callTool: callToolMock }),
+      secretProvider,
+    }).execute("webfetch", "call-3a", {
+      url: "https://example.com/api",
+      mode: "raw",
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(secretProvider.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ handle_id: "exa_api_key", scope: "exa_api_key" }),
+    );
+    expect(callToolMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "exa",
+        url: expect.stringContaining("exaApiKey=exa-test-key"),
+      }),
+      "crawling_exa",
+      { url: "https://example.com/api" },
+    );
+  });
+
   it("webfetch allows bare URL calls without requiring an extract prompt", async () => {
     const callToolMock = vi.fn(async () => ({
       content: [{ type: "text", text: "response-body" }],

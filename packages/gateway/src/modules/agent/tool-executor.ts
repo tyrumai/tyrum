@@ -134,6 +134,7 @@ export class ToolExecutor {
       dnsLookup: this.dnsLookup,
       mcpManager: this.mcpManager,
       mcpServerSpecs: this.mcpServerSpecs,
+      secretProvider: this.secretProvider,
       assertSandboxed: (filePath: string) => this.assertSandboxed(filePath),
       withWorkspaceLease: <T>(
         callId: string,
