@@ -2,159 +2,16 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
-import type { ActivityState } from "../../../operator-core/src/stores/activity-store.js";
-import { createStore } from "../../../operator-core/src/store.js";
+import { AgentConfig } from "@tyrum/schemas";
 import { ActivityPage } from "../../src/components/pages/activity-page.js";
+import {
+  createCore,
+  createSampleActivityState,
+  flushActivityPage,
+  sampleAgentConfigUpdateResponse,
+  sampleManagedAgentDetail,
+} from "./activity-page-test-support.js";
 import { cleanupTestRoot, renderIntoDocument, stubMatchMedia } from "../test-utils.js";
-
-function createActivityState(overrides: Partial<ActivityState> = {}): ActivityState {
-  return {
-    agentsById: {},
-    agentIds: [],
-    workstreamsById: {},
-    workstreamIds: [],
-    selectedAgentId: null,
-    selectedWorkstreamId: null,
-    ...overrides,
-  };
-}
-
-function createCore(
-  overrides: {
-    activity?: Partial<ActivityState>;
-    statusLoading?: boolean;
-  } = {},
-) {
-  const { store: statusStore } = createStore({
-    status: null,
-    usage: null,
-    presenceByInstanceId: {},
-    loading: {
-      status: overrides.statusLoading ?? false,
-      usage: false,
-      presence: false,
-    },
-    error: { status: null, usage: null, presence: null },
-    lastSyncedAt: null,
-  });
-  const activityState = createActivityState(overrides.activity);
-  const activity = createStore(activityState);
-  const activityStore = {
-    ...activity.store,
-    clearSelection() {
-      activity.setState((prev) => ({ ...prev, selectedWorkstreamId: null }));
-    },
-    selectWorkstream(workstreamId: string | null) {
-      activity.setState((prev) => ({ ...prev, selectedWorkstreamId: workstreamId }));
-    },
-  };
-
-  return {
-    activityStore,
-    statusStore,
-  };
-}
-
-function createPersona(name: string) {
-  return {
-    name,
-    description: `${name} operator persona`,
-    tone: "direct" as const,
-    palette: "graphite" as const,
-    character: "operator" as const,
-  };
-}
-
-function createWorkstream(
-  overrides: Partial<ActivityState["workstreamsById"][string]> & {
-    id: string;
-    key: string;
-    lane: string;
-    agentId: string;
-    currentRoom: NonNullable<ActivityState["workstreamsById"][string]>["currentRoom"];
-  },
-) {
-  const persona = createPersona(overrides.agentId === "alpha" ? "Alpha" : "Beta");
-  return {
-    id: overrides.id,
-    key: overrides.key,
-    lane: overrides.lane,
-    agentId: overrides.agentId,
-    persona,
-    latestRunId: overrides.latestRunId ?? null,
-    runStatus: overrides.runStatus ?? null,
-    queuedRunCount: overrides.queuedRunCount ?? 0,
-    lease: overrides.lease ?? { owner: null, expiresAtMs: null, active: false },
-    attentionLevel: overrides.attentionLevel ?? "low",
-    attentionScore: overrides.attentionScore ?? 20,
-    currentRoom: overrides.currentRoom,
-    bubbleText: overrides.bubbleText ?? null,
-    recentEvents: overrides.recentEvents ?? [],
-  };
-}
-
-function createSampleActivityState(): ActivityState {
-  const main = createWorkstream({
-    id: "agent:alpha:main::main",
-    key: "agent:alpha:main",
-    lane: "main",
-    agentId: "alpha",
-    latestRunId: "run-1",
-    runStatus: "running",
-    queuedRunCount: 1,
-    lease: { owner: "Alpha", expiresAtMs: null, active: true },
-    attentionLevel: "high",
-    attentionScore: 78,
-    currentRoom: "strategy-desk",
-    bubbleText: "Planning the next move",
-    recentEvents: [
-      {
-        id: "evt-1",
-        type: "message.delta",
-        occurredAt: "2026-03-09T09:00:00.000Z",
-        summary: "Planning the next move",
-      },
-    ],
-  });
-  const review = createWorkstream({
-    id: "agent:alpha:main::review",
-    key: "agent:alpha:main",
-    lane: "review",
-    agentId: "alpha",
-    latestRunId: "run-2",
-    runStatus: "paused",
-    attentionLevel: "medium",
-    attentionScore: 42,
-    currentRoom: "approval-desk",
-    bubbleText: "Waiting for review",
-    recentEvents: [
-      {
-        id: "evt-2",
-        type: "approval.updated",
-        occurredAt: "2026-03-09T09:05:00.000Z",
-        summary: "Waiting for review",
-      },
-    ],
-  });
-  return {
-    agentIds: ["alpha"],
-    agentsById: {
-      alpha: {
-        agentId: "alpha",
-        persona: createPersona("Alpha"),
-        workstreamIds: [main.id, review.id],
-        selectedWorkstreamId: main.id,
-      },
-    },
-    workstreamIds: [main.id, review.id],
-    selectedAgentId: "alpha",
-    selectedWorkstreamId: main.id,
-    workstreamsById: {
-      [main.id]: main,
-      [review.id]: review,
-    },
-  };
-}
 
 describe("ActivityPage", () => {
   afterEach(() => {
@@ -352,5 +209,222 @@ describe("ActivityPage", () => {
       }
       reducedMotion.cleanup();
     }
+  });
+
+  it("shows agent-level workstream tabs and labeled persona editor controls", async () => {
+    const getAgent = vi.fn().mockResolvedValue(sampleManagedAgentDetail("alpha"));
+    const core = createCore({
+      activity: createSampleActivityState(),
+      getAgent,
+    });
+
+    const testRoot = renderIntoDocument(React.createElement(ActivityPage, { core: core as never }));
+    await flushActivityPage();
+
+    expect(getAgent).toHaveBeenCalledWith("alpha");
+    expect(testRoot.container.textContent).toContain("Agent identity");
+
+    const mainTab = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="activity-inspector-workstream-agent:alpha:main::main"]',
+    );
+    const reviewTab = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="activity-inspector-workstream-agent:alpha:main::review"]',
+    );
+    const nameInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="activity-persona-name"]',
+    );
+    const descriptionInput = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="activity-persona-description"]',
+    );
+    const toneInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="activity-persona-tone"]',
+    );
+    const paletteInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="activity-persona-palette"]',
+    );
+    const characterInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="activity-persona-character"]',
+    );
+
+    expect(mainTab?.getAttribute("aria-pressed")).toBe("true");
+    expect(reviewTab?.getAttribute("aria-pressed")).toBe("false");
+    expect(nameInput?.value).toBe("Alpha");
+    expect(descriptionInput?.value).toBe("Alpha operator persona");
+    expect(toneInput?.value).toBe("direct");
+    expect(paletteInput?.value).toBe("graphite");
+    expect(characterInput?.value).toBe("operator");
+
+    for (const control of [nameInput, descriptionInput, toneInput, paletteInput, characterInput]) {
+      expect(control).not.toBeNull();
+      expect(control?.id).toBeTruthy();
+      expect(testRoot.container.querySelector(`label[for="${control?.id}"]`)).not.toBeNull();
+    }
+
+    act(() => {
+      reviewTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(reviewTab?.getAttribute("aria-pressed")).toBe("true");
+    expect(testRoot.container.textContent).toContain("Waiting for review");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("randomizes the persona preview and saves the persisted config revision with an audit reason", async () => {
+    const updateAgentConfig = vi.fn().mockResolvedValue({
+      ...sampleAgentConfigUpdateResponse("alpha"),
+      revision: 7,
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-5.4" },
+        persona: {
+          name: "Euclid",
+          description: "Autonomous navigator with a curious tone.",
+          tone: "curious",
+          palette: "ocean",
+          character: "navigator",
+        },
+      }),
+      persona: {
+        name: "Euclid",
+        description: "Autonomous navigator with a curious tone.",
+        tone: "curious",
+        palette: "ocean",
+        character: "navigator",
+      },
+    });
+    const core = createCore({
+      activity: createSampleActivityState(),
+      updateAgentConfig,
+    });
+
+    const testRoot = renderIntoDocument(React.createElement(ActivityPage, { core: core as never }));
+    await flushActivityPage();
+
+    const randomizeButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="activity-persona-randomize"]',
+    );
+    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="activity-persona-save"]',
+    );
+    const nameInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="activity-persona-name"]',
+    );
+
+    expect(randomizeButton).not.toBeNull();
+    expect(saveButton).not.toBeNull();
+
+    await act(async () => {
+      randomizeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const previewName = nameInput?.value ?? "";
+    const toneInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="activity-persona-tone"]',
+    );
+    const paletteInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="activity-persona-palette"]',
+    );
+    const characterInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="activity-persona-character"]',
+    );
+
+    expect(previewName).toBe("Euclid");
+    expect(testRoot.container.textContent).toContain(previewName);
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(updateAgentConfig).toHaveBeenCalledWith(
+      "alpha",
+      expect.objectContaining({
+        reason: "activity inspector persona update",
+        config: expect.objectContaining({
+          persona: expect.objectContaining({
+            name: previewName,
+            tone: toneInput?.value,
+            palette: paletteInput?.value,
+            character: characterInput?.value,
+          }),
+        }),
+      }),
+    );
+    expect(testRoot.container.textContent).toContain("Saved as revision 7");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("surfaces save failures without discarding the previewed persona edits", async () => {
+    const updateAgentConfig = vi.fn().mockRejectedValue(new Error("save exploded"));
+    const core = createCore({
+      activity: createSampleActivityState(),
+      updateAgentConfig,
+    });
+
+    const testRoot = renderIntoDocument(React.createElement(ActivityPage, { core: core as never }));
+    await flushActivityPage();
+
+    const randomizeButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="activity-persona-randomize"]',
+    );
+    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="activity-persona-save"]',
+    );
+
+    expect(randomizeButton).not.toBeNull();
+    expect(saveButton).not.toBeNull();
+
+    await act(async () => {
+      randomizeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const nameInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="activity-persona-name"]',
+    );
+    const previewName = nameInput?.value ?? "";
+    expect(previewName).toBe("Euclid");
+    expect(testRoot.container.textContent).toContain(previewName);
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(testRoot.container.textContent).toContain("Save failed");
+    expect(testRoot.container.textContent).toContain("save exploded");
+    expect(nameInput?.value).toBe(previewName);
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("falls back to read-only inspector persona details when managed config is unavailable", async () => {
+    const getAgent = vi.fn().mockRejectedValue(new Error("agent 'alpha' not found"));
+    const core = createCore({
+      activity: createSampleActivityState(),
+      getAgent,
+    });
+
+    const testRoot = renderIntoDocument(React.createElement(ActivityPage, { core: core as never }));
+    await flushActivityPage();
+
+    expect(testRoot.container.textContent).toContain("Managed persona config unavailable");
+    expect(testRoot.container.textContent).toContain("Alpha");
+
+    const randomizeButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="activity-persona-randomize"]',
+    );
+    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="activity-persona-save"]',
+    );
+
+    expect(randomizeButton?.disabled).toBe(true);
+    expect(saveButton?.disabled).toBe(true);
+
+    cleanupTestRoot(testRoot);
   });
 });

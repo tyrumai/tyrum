@@ -87,13 +87,13 @@ export type ActivitySceneModel = {
   actors: ActivitySceneActor[];
 };
 
-function compactWorkstreamKey(key: string): string {
+export function compactWorkstreamKey(key: string): string {
   const parts = key.split(":").filter((part) => part.length > 0);
   if (parts.length <= 2) return key;
   return parts.slice(-2).join(":");
 }
 
-function formatLaneLabel(lane: string): string {
+export function formatLaneLabel(lane: string): string {
   return lane === "main" ? "Main" : lane.charAt(0).toUpperCase() + lane.slice(1);
 }
 

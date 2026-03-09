@@ -3,123 +3,17 @@ import type {
   AgentPersona as AgentPersonaT,
   IdentityPack as IdentityPackT,
 } from "@tyrum/schemas";
-import { AgentConfig, AgentPersona } from "@tyrum/schemas";
+import {
+  AgentConfig,
+  AgentPersona,
+  CODEX_AGENT_NAMES,
+  PERSONA_CHARACTERS,
+  PERSONA_PALETTES,
+  PERSONA_TONES,
+  buildPersonaDescription,
+} from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { safeJsonParse } from "../../utils/json.js";
-
-const CODEX_AGENT_NAMES = [
-  "Euclid",
-  "Archimedes",
-  "Ptolemy",
-  "Hypatia",
-  "Avicenna",
-  "Averroes",
-  "Aquinas",
-  "Copernicus",
-  "Kepler",
-  "Galileo",
-  "Bacon",
-  "Descartes",
-  "Pascal",
-  "Fermat",
-  "Huygens",
-  "Leibniz",
-  "Newton",
-  "Halley",
-  "Euler",
-  "Lagrange",
-  "Laplace",
-  "Volta",
-  "Gauss",
-  "Ampere",
-  "Faraday",
-  "Darwin",
-  "Lovelace",
-  "Boole",
-  "Pasteur",
-  "Maxwell",
-  "Mendel",
-  "Curie",
-  "Planck",
-  "Tesla",
-  "Poincare",
-  "Noether",
-  "Hilbert",
-  "Einstein",
-  "Raman",
-  "Bohr",
-  "Turing",
-  "Hubble",
-  "Feynman",
-  "Franklin",
-  "McClintock",
-  "Meitner",
-  "Herschel",
-  "Linnaeus",
-  "Wegener",
-  "Chandrasekhar",
-  "Sagan",
-  "Goodall",
-  "Carson",
-  "Carver",
-  "Socrates",
-  "Plato",
-  "Aristotle",
-  "Epicurus",
-  "Cicero",
-  "Confucius",
-  "Mencius",
-  "Zeno",
-  "Locke",
-  "Hume",
-  "Kant",
-  "Hegel",
-  "Kierkegaard",
-  "Mill",
-  "Nietzsche",
-  "Peirce",
-  "James",
-  "Dewey",
-  "Russell",
-  "Popper",
-  "Sartre",
-  "Beauvoir",
-  "Arendt",
-  "Rawls",
-  "Singer",
-  "Anscombe",
-  "Parfit",
-  "Kuhn",
-  "Boyle",
-  "Hooke",
-  "Harvey",
-  "Dalton",
-  "Ohm",
-  "Helmholtz",
-  "Gibbs",
-  "Lorentz",
-  "Schrodinger",
-  "Heisenberg",
-  "Pauli",
-  "Dirac",
-  "Bernoulli",
-  "Godel",
-  "Nash",
-  "Banach",
-  "Ramanujan",
-  "Erdos",
-] as const;
-
-const PERSONA_TONES = ["direct", "curious", "measured", "warm", "wry", "steady"] as const;
-const PERSONA_PALETTES = ["graphite", "moss", "ember", "ocean", "linen", "slate"] as const;
-const PERSONA_CHARACTERS = [
-  "architect",
-  "builder",
-  "analyst",
-  "navigator",
-  "operator",
-  "researcher",
-] as const;
 
 type LatestConfigRow = {
   agent_id: string;
@@ -152,10 +46,6 @@ function parseStoredConfig(configJson: string): AgentConfigT | undefined {
   const parsed = safeJsonParse(configJson, null) as unknown;
   const config = AgentConfig.safeParse(parsed);
   return config.success ? config.data : undefined;
-}
-
-function defaultDescription(character: string, tone: string): string {
-  return `Autonomous ${character} with a ${tone} tone.`;
 }
 
 export async function listLatestAgentConfigsByAgentId(
@@ -222,7 +112,7 @@ function buildSeededPersonaRecord(params: {
 
   return AgentPersona.parse({
     name: params.name,
-    description: defaultDescription(character, tone),
+    description: buildPersonaDescription(character, tone),
     tone,
     palette,
     character,
@@ -269,7 +159,7 @@ export function resolveAgentPersona(params: {
   const tone = params.identity?.meta.style?.tone?.trim() || "direct";
   const name = params.identity?.meta.name?.trim() || humanizeAgentKey(params.agentKey) || "Agent";
   const description =
-    params.identity?.meta.description?.trim() || defaultDescription("architect", tone);
+    params.identity?.meta.description?.trim() || buildPersonaDescription("architect", tone);
 
   return AgentPersona.parse({
     name,
