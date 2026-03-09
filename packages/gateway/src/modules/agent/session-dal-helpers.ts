@@ -131,6 +131,128 @@ function isSessionTranscriptTextItem(value: unknown): value is SessionTranscript
   return SessionTranscriptTextItemSchema.safeParse(value).success;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isTranscriptRole(value: unknown): value is SessionTranscriptTextItem["role"] {
+  return value === "assistant" || value === "system" || value === "user";
+}
+
+function isToolStatus(value: unknown): boolean {
+  return (
+    value === "queued" ||
+    value === "running" ||
+    value === "completed" ||
+    value === "failed" ||
+    value === "awaiting_approval"
+  );
+}
+
+function isApprovalStatus(value: unknown): boolean {
+  return (
+    value === "pending" ||
+    value === "approved" ||
+    value === "denied" ||
+    value === "expired" ||
+    value === "cancelled"
+  );
+}
+
+function hasStringField(record: Record<string, unknown>, key: string): boolean {
+  return typeof record[key] === "string";
+}
+
+type SessionTranscriptListPreviewItem =
+  | {
+      kind: "text";
+      role: SessionTranscriptTextItem["role"];
+      content: string;
+    }
+  | { kind: "tool" }
+  | { kind: "approval" };
+
+function isSessionTranscriptItemPreview(value: unknown): value is SessionTranscriptListPreviewItem {
+  if (!isRecord(value) || typeof value["kind"] !== "string") return false;
+
+  if (value["kind"] === "text") {
+    return (
+      hasStringField(value, "id") &&
+      isTranscriptRole(value["role"]) &&
+      hasStringField(value, "content") &&
+      hasStringField(value, "created_at")
+    );
+  }
+
+  if (value["kind"] === "tool") {
+    return (
+      hasStringField(value, "id") &&
+      hasStringField(value, "tool_id") &&
+      hasStringField(value, "tool_call_id") &&
+      isToolStatus(value["status"]) &&
+      hasStringField(value, "summary") &&
+      hasStringField(value, "created_at") &&
+      hasStringField(value, "updated_at")
+    );
+  }
+
+  if (value["kind"] === "approval") {
+    return (
+      hasStringField(value, "id") &&
+      hasStringField(value, "approval_id") &&
+      isApprovalStatus(value["status"]) &&
+      hasStringField(value, "title") &&
+      hasStringField(value, "detail") &&
+      hasStringField(value, "created_at") &&
+      hasStringField(value, "updated_at")
+    );
+  }
+
+  return false;
+}
+
+function extractTranscriptListPreview(
+  raw: string,
+  observer: PersistedJsonObserver,
+): { transcriptCount: number; lastText: SessionTranscriptTextPreview | null } {
+  const parsed = parsePersistedJson<unknown[]>({
+    raw,
+    fallback: [],
+    ...SESSION_TURNS_JSON_META,
+    observer,
+  });
+
+  let transcriptCount = 0;
+  let invalidItems = 0;
+  let lastText: SessionTranscriptTextPreview | null = null;
+
+  for (const item of parsed) {
+    if (!isSessionTranscriptItemPreview(item)) {
+      invalidItems += 1;
+      continue;
+    }
+
+    transcriptCount += 1;
+    if (item.kind === "text") {
+      lastText = {
+        role: item.role,
+        content: item.content,
+      };
+    }
+  }
+
+  if (invalidItems > 0) {
+    reportPersistedJsonReadFailure({
+      observer,
+      ...SESSION_TURNS_JSON_META,
+      reason: "invalid_value",
+      extra: { invalid_items: invalidItems },
+    });
+  }
+
+  return { transcriptCount, lastText };
+}
+
 export function isSessionTranscriptArray(value: unknown): value is SessionTranscriptItem[] {
   return Array.isArray(value) && value.every(isSessionTranscriptItem);
 }
@@ -181,8 +303,7 @@ export function toSessionListRow(
   raw: RawSessionListRow,
   observer: PersistedJsonObserver,
 ): SessionListRow {
-  const transcript = parseTranscript(raw.transcript_json, observer);
-  const lastText = transcript.toReversed().find(isSessionTranscriptTextItem);
+  const { transcriptCount, lastText } = extractTranscriptListPreview(raw.transcript_json, observer);
   return {
     agent_id: raw.agent_key,
     session_id: raw.session_key,
@@ -190,7 +311,7 @@ export function toSessionListRow(
     thread_id: raw.provider_thread_id,
     title: raw.title,
     summary: raw.summary,
-    transcript_count: transcript.length,
+    transcript_count: transcriptCount,
     last_text: lastText ? { role: lastText.role, content: lastText.content } : null,
     created_at: normalizeTime(raw.created_at),
     updated_at: normalizeTime(raw.updated_at),
