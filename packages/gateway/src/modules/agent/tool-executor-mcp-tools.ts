@@ -139,7 +139,7 @@ export async function executeWebFetchTool(
     };
   }
 
-  const mode = parseStringArg(parsed, "mode") ?? "extract";
+  const mode = parseStringArg(parsed, "mode") ?? "raw";
   const prompt = parseStringArg(parsed, "prompt");
   if (mode === "extract" && !prompt) {
     return {

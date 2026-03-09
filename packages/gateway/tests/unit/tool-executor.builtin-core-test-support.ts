@@ -68,6 +68,27 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
     expect(dnsLookup).toHaveBeenCalledWith("example.com");
   });
 
+  it("webfetch allows bare URL calls without requiring an extract prompt", async () => {
+    const callToolMock = vi.fn(async () => ({
+      content: [{ type: "text", text: "response-body" }],
+    }));
+
+    const result = await createToolExecutor({
+      homeDir: requireHomeDir(home),
+      mcpManager: stubMcpManager({ callTool: callToolMock }),
+    }).execute("webfetch", "call-3b", {
+      url: "https://example.com/api",
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.output).toContain("response-body");
+    expect(callToolMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "exa" }),
+      "crawling_exa",
+      { url: "https://example.com/api" },
+    );
+  });
+
   it("http.fetch blocks requests to private network addresses", async () => {
     const callToolMock = vi.fn(async () => ({
       content: [{ type: "text", text: "should-not-fetch" }],
