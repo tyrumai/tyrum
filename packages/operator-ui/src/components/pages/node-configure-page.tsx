@@ -21,7 +21,7 @@ import {
   SHELL_DIRECTORY_NOTES,
 } from "./node-configure-page.shared.js";
 
-type ConfigureTab = "general" | "desktop" | "browser" | "shell" | "web";
+type ConfigureTab = "connection" | "profile" | "desktop" | "browser" | "shell" | "web";
 
 export function NodeConfigurePage({ onReloadPage }: { onReloadPage?: () => void }) {
   const host = useHostApi();
@@ -56,9 +56,9 @@ function DesktopNodeConfigurePage({
   api: DesktopApi;
   onReloadPage?: () => void;
 }) {
-  const [tab, setTab] = useState<ConfigureTab>("general");
+  const [tab, setTab] = useState<ConfigureTab>("connection");
   const model = useDesktopNodeConfigureModel(api, onReloadPage);
-  const saveBusy = model.generalSaving || model.securitySaving;
+  const saveBusy = model.generalSaving || model.profileSaving || model.securitySaving;
 
   if (model.loading) {
     return (
@@ -92,18 +92,15 @@ function DesktopNodeConfigurePage({
         className="grid gap-4"
       >
         <TabsList className="flex-wrap">
-          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="connection">Connection</TabsTrigger>
+          <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="desktop">Desktop</TabsTrigger>
           <TabsTrigger value="browser">Browser</TabsTrigger>
           <TabsTrigger value="shell">Shell</TabsTrigger>
           <TabsTrigger value="web">Web</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="grid gap-5">
-          <SecurityProfileCard
-            profile={model.displayProfile}
-            onProfileChange={model.applyProfile}
-          />
+        <TabsContent value="connection" className="grid gap-5">
           <NodeConnectionCard
             connection={model.connection}
             currentOperatorConnection={model.currentOperatorConnection}
@@ -122,13 +119,29 @@ function DesktopNodeConfigurePage({
             onToggleBackgroundMode={model.toggleBackgroundMode}
           />
           <SaveActions
-            buttonLabel="Save General Settings"
-            testId="node-configure-save-general"
+            buttonLabel="Save Connection Settings"
+            testId="node-configure-save-connection"
             isLoading={model.generalSaving}
             saved={model.generalSaved}
-            disabled={saveBusy || (!model.generalDirty && !model.securityDirty)}
+            disabled={saveBusy || !model.generalDirty}
             errorMessage={model.generalError}
             onSave={model.saveGeneral}
+          />
+        </TabsContent>
+
+        <TabsContent value="profile" className="grid gap-5">
+          <SecurityProfileCard
+            profile={model.displayProfile}
+            onProfileChange={model.applyProfile}
+          />
+          <SaveActions
+            buttonLabel="Save Profile Settings"
+            testId="node-configure-save-profile"
+            isLoading={model.profileSaving}
+            saved={model.profileSaved}
+            disabled={saveBusy || !model.securityDirty}
+            errorMessage={model.profileError}
+            onSave={model.saveProfile}
           />
         </TabsContent>
 

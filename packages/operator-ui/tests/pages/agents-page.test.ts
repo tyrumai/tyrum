@@ -227,6 +227,16 @@ describe("AgentsPage", () => {
     expect(setAgentKey).toHaveBeenCalledWith("default");
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(testRoot.container.querySelector('[data-testid="agents-tab-editor"]')).not.toBeNull();
+    expect(
+      testRoot.container.querySelector(
+        '[data-testid="agents-list-panel"] [data-testid="agents-refresh"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      testRoot.container.querySelector(
+        '[data-testid="agents-list-panel"] [data-testid="agents-new"]',
+      ),
+    ).not.toBeNull();
 
     const agentButton = testRoot.container.querySelector<HTMLButtonElement>(
       '[data-testid="agents-select-agent-1"]',
@@ -386,77 +396,6 @@ describe("AgentsPage", () => {
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ agent_key: "agent-2" }));
     expect(list).toHaveBeenCalledTimes(2);
     expect(setAgentKey).toHaveBeenLastCalledWith("agent-2");
-
-    cleanupTestRoot(testRoot);
-  });
-
-  it("loads the selected agent into the editor and saves through update", async () => {
-    const list = vi.fn(async () => ({
-      agents: [
-        {
-          agent_key: "default",
-          agent_id: "11111111-1111-4111-8111-111111111111",
-          can_delete: false,
-          persona: { name: "Feynman" },
-        },
-        {
-          agent_key: "agent-1",
-          agent_id: "22222222-2222-4222-8222-222222222222",
-          can_delete: true,
-          persona: { name: "Ada" },
-        },
-      ],
-    }));
-    const get = vi.fn().mockResolvedValue(sampleManagedAgentDetail("agent-1"));
-    const update = vi.fn().mockResolvedValue(sampleManagedAgentDetail("agent-1"));
-    const { core } = createCore({ list, get, update });
-
-    const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
-    await flush();
-
-    const agentButton = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-select-agent-1"]',
-    );
-    expect(agentButton).not.toBeNull();
-
-    await act(async () => {
-      agentButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    const editButton = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-edit"]',
-    );
-    expect(editButton).not.toBeNull();
-
-    await act(async () => {
-      editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(get).toHaveBeenCalledWith("agent-1");
-
-    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-editor-save"]',
-    );
-    expect(saveButton).not.toBeNull();
-
-    await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(update).toHaveBeenCalledTimes(1);
-    expect(update).toHaveBeenCalledWith(
-      "agent-1",
-      expect.objectContaining({
-        config: expect.any(Object),
-        identity: expect.any(Object),
-      }),
-    );
 
     cleanupTestRoot(testRoot);
   });

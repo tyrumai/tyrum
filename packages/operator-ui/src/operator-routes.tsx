@@ -9,7 +9,7 @@ import {
   MessageSquare,
   Monitor,
   Play,
-  Shield,
+  Settings,
   ShieldCheck,
   SquareKanban,
 } from "lucide-react";
@@ -28,10 +28,11 @@ function lazyNamed<TProps>(
   });
 }
 
-const DashboardPage = lazyNamed<{ core: OperatorCore; onNavigate: (id: string) => void }>(
-  () => import("./components/pages/dashboard-page.js"),
-  "DashboardPage",
-);
+const DashboardPage = lazyNamed<{
+  core: OperatorCore;
+  onNavigate: (id: string) => void;
+  connectionRouteId: "configure" | "node-configure";
+}>(() => import("./components/pages/dashboard-page.js"), "DashboardPage");
 const ChatPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/chat-page.js"),
   "ChatPage",
@@ -110,7 +111,13 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     navGroup: "sidebar",
     shortcut: true,
     hostKinds: ["desktop", "web"],
-    render: ({ core, navigate }) => <DashboardPage core={core} onNavigate={navigate} />,
+    render: ({ core, hostKind, navigate }) => (
+      <DashboardPage
+        core={core}
+        onNavigate={navigate}
+        connectionRouteId={hostKind === "desktop" ? "node-configure" : "configure"}
+      />
+    ),
   },
   {
     id: "chat",
@@ -171,7 +178,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   {
     id: "configure",
     label: "Configure",
-    icon: Shield,
+    icon: Settings,
     navGroup: "sidebar",
     shortcut: true,
     hostKinds: ["desktop", "web"],

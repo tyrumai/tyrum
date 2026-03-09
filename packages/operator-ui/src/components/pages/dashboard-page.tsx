@@ -16,6 +16,7 @@ import { useOperatorStore } from "../../use-operator-store.js";
 export interface DashboardPageProps {
   core: OperatorCore;
   onNavigate?: (id: string) => void;
+  connectionRouteId?: "configure" | "node-configure";
 }
 
 function SummaryRow({
@@ -25,6 +26,7 @@ function SummaryRow({
   loading = false,
   onClick,
   testId,
+  valueClassName,
 }: {
   label: string;
   value: React.ReactNode;
@@ -32,6 +34,7 @@ function SummaryRow({
   loading?: boolean;
   onClick?: () => void;
   testId?: string;
+  valueClassName?: string;
 }) {
   const interactive = onClick !== undefined;
   const content = (
@@ -40,7 +43,7 @@ function SummaryRow({
         <div className="text-sm font-medium text-fg">{label}</div>
         {description ? <div className="mt-0.5 text-sm text-fg-muted">{description}</div> : null}
       </div>
-      <div className="shrink-0 text-right">
+      <div className={cn("text-right", valueClassName ?? "shrink-0")}>
         {loading ? (
           <Skeleton className="ml-auto h-6 w-20" />
         ) : (
@@ -91,7 +94,11 @@ function DashboardSection({ title, children }: { title: string; children: React.
   );
 }
 
-export function DashboardPage({ core, onNavigate }: DashboardPageProps) {
+export function DashboardPage({
+  core,
+  onNavigate,
+  connectionRouteId = "configure",
+}: DashboardPageProps) {
   const status = useOperatorStore(core.statusStore);
   const connection = useOperatorStore(core.connectionStore);
   const approvals = useOperatorStore(core.approvalsStore);
@@ -146,8 +153,12 @@ export function DashboardPage({ core, onNavigate }: DashboardPageProps) {
           <SummaryRow
             label="Connection"
             testId="dashboard-card-connection"
+            onClick={() => {
+              onNavigate?.(connectionRouteId);
+            }}
+            valueClassName="min-w-0 max-w-[14rem]"
             value={
-              <span className="inline-flex max-w-full items-center gap-2">
+              <span className="inline-flex max-w-full items-center justify-end gap-2">
                 <StatusDot
                   variant={connectionDisplay.variant}
                   pulse={connectionDisplay.pulse}
