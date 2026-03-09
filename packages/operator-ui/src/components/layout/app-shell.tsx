@@ -14,6 +14,13 @@ export interface AppShellProps extends React.HTMLAttributes<HTMLDivElement> {
 
 const AppShellContentWidthContext = React.createContext<number | null>(null);
 
+function measureContentBoxWidth(element: HTMLElement): number {
+  const styles = window.getComputedStyle(element);
+  const paddingLeft = Number.parseFloat(styles.paddingLeft) || 0;
+  const paddingRight = Number.parseFloat(styles.paddingRight) || 0;
+  return Math.max(0, element.clientWidth - paddingLeft - paddingRight);
+}
+
 export function useAppShellMinWidth(minWidthPx: number): boolean {
   const contentWidth = React.useContext(AppShellContentWidthContext);
   const viewportMatches = useMediaQuery(`(min-width: ${String(minWidthPx)}px)`);
@@ -50,14 +57,14 @@ export function AppShell({
       setContentWidth(Math.round(width));
     };
 
-    updateWidth(element.getBoundingClientRect().width);
+    updateWidth(measureContentBoxWidth(element));
     if (typeof ResizeObserver !== "function") {
       return;
     }
 
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
-      updateWidth(entry?.contentRect.width ?? element.getBoundingClientRect().width);
+      updateWidth(entry?.contentRect.width ?? measureContentBoxWidth(element));
     });
     observer.observe(element);
     return () => {
