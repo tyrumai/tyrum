@@ -33,7 +33,10 @@ export function ElevatedModeTooltip({
             }}
             className="inline-flex cursor-not-allowed"
           >
-            <span className="pointer-events-none opacity-50">{children}</span>
+            {/* Prevent nested disabled controls from compounding the shared muted state. */}
+            <span className="pointer-events-none opacity-50 [&_:disabled]:!opacity-100">
+              {children}
+            </span>
           </span>
         </TooltipTrigger>
         <TooltipContent side="top">Elevated Mode required</TooltipContent>
