@@ -84,7 +84,7 @@ describe("deriveActivityScene", () => {
     ).toBe("Mail room");
   });
 
-  it("marks same-agent concurrency as a split home bay and keeps shared identity", () => {
+  it("keeps shared identity across same-agent concurrency in different rooms", () => {
     const state = createState({
       "agent:alpha:main::main": createWorkstream("agent:alpha:main::main", "lounge", "main"),
       "agent:alpha:main::review": createWorkstream(
@@ -95,16 +95,14 @@ describe("deriveActivityScene", () => {
     });
 
     const scene = deriveActivityScene(state, state.selectedWorkstreamId);
-    const alphaBay = scene.bays.find((bay) => bay.agentId === "alpha");
     const alphaActors = scene.actors.filter((actor) => actor.agentId === "alpha");
 
-    expect(alphaBay?.state).toBe("split");
     expect(alphaActors).toHaveLength(2);
     expect(new Set(alphaActors.map((actor) => actor.identityId)).size).toBe(1);
     expect(new Set(alphaActors.map((actor) => actor.badgeLabel)).size).toBe(2);
   });
 
-  it("keeps one actor per key plus lane workstream and merges back to a solo bay", () => {
+  it("keeps one actor per key plus lane workstream in a solo configuration", () => {
     const state = createState({
       "agent:alpha:main::main": createWorkstream("agent:alpha:main::main", "strategy-desk", "main"),
     });
@@ -112,7 +110,6 @@ describe("deriveActivityScene", () => {
     const scene = deriveActivityScene(state, state.selectedWorkstreamId);
 
     expect(scene.actors.map((actor) => actor.workstreamId)).toEqual(["agent:alpha:main::main"]);
-    expect(scene.bays.find((bay) => bay.agentId === "alpha")?.state).toBe("merged");
     expect(scene.actors[0]?.badgeLabel).toContain("Main");
     expect(scene.actors[0]?.badgeLabel).toContain("alpha:main");
   });

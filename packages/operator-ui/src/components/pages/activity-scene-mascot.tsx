@@ -147,7 +147,7 @@ export function renderMascot(
     <svg
       aria-hidden={true}
       viewBox="0 0 72 72"
-      className="h-[4.5rem] w-[4.5rem] drop-shadow-[0_6px_14px_rgba(0,0,0,0.24)]"
+      className="h-[2.75rem] w-[2.75rem] drop-shadow-[0_4px_10px_rgba(0,0,0,0.22)]"
       style={lean ? { transform: `rotate(${lean}deg)` } : undefined}
     >
       <ellipse cx="36" cy="62" rx="16" ry="4.5" fill="rgba(0,0,0,0.18)" />
