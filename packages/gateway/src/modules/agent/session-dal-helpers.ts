@@ -229,23 +229,59 @@ function compactSessionSummary(
   return lines.join("\n");
 }
 
+export function countTextTranscriptItems(transcript: readonly SessionTranscriptItem[]): number {
+  let count = 0;
+  for (const item of transcript) {
+    if (item.kind === "text") count += 1;
+  }
+  return count;
+}
+
+export function splitTranscriptForCompaction(input: {
+  transcript: readonly SessionTranscriptItem[];
+  keepLastMessages: number;
+}): {
+  dropped: SessionTranscriptItem[];
+  kept: SessionTranscriptItem[];
+} {
+  const keepLastMessages = Math.max(0, input.keepLastMessages);
+  if (keepLastMessages === 0) {
+    return { dropped: input.transcript.slice(), kept: [] };
+  }
+
+  let keptTextCount = 0;
+  for (let index = input.transcript.length - 1; index >= 0; index -= 1) {
+    const item = input.transcript[index];
+    if (!item || item.kind !== "text") continue;
+    keptTextCount += 1;
+    if (keptTextCount === keepLastMessages) {
+      return {
+        dropped: input.transcript.slice(0, index),
+        kept: input.transcript.slice(index),
+      };
+    }
+  }
+
+  return { dropped: [], kept: input.transcript.slice() };
+}
+
 export function buildStoredTranscript(input: {
   transcript: readonly SessionTranscriptItem[];
   keepLastMessages: number;
   previousSummary?: string;
   previousTitle?: string;
 }): StoredTranscript {
-  const keepLastMessages = Math.max(0, input.keepLastMessages);
-  const overflow = input.transcript.length - keepLastMessages;
-  const dropped = overflow > 0 ? input.transcript.slice(0, overflow) : [];
-  const transcript = keepLastMessages > 0 ? input.transcript.slice(-keepLastMessages) : [];
+  const { dropped, kept: transcript } = splitTranscriptForCompaction({
+    transcript: input.transcript,
+    keepLastMessages: input.keepLastMessages,
+  });
   const previousSummary = input.previousSummary ?? "";
   const previousTitle = normalizeSessionTitle(input.previousTitle ?? "");
   return {
     transcript: transcript.slice(),
     title: previousTitle,
     summary: dropped.length > 0 ? compactSessionSummary(previousSummary, dropped) : previousSummary,
-    droppedMessages: dropped.length,
+    droppedMessages: countTextTranscriptItems(dropped),
   };
 }
 

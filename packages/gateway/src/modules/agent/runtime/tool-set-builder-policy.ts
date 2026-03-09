@@ -128,7 +128,8 @@ async function resolveResumedToolArgs(
 
   try {
     return JSON.parse(raw) as unknown;
-  } catch {
+  } catch (error) {
+    void error;
     return input.args;
   }
 }

@@ -29,7 +29,8 @@ export function decodeSessionCursor(
       sessionId.trim().length > 0
       ? { updated_at: updatedAt, session_id: sessionId }
       : undefined;
-  } catch {
+  } catch (error) {
+    void error;
     return undefined;
   }
 }

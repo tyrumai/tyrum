@@ -1,16 +1,13 @@
 import { generateText, stepCountIs } from "ai";
 import type { LanguageModel, ModelMessage } from "ai";
-import type {
-  AgentConfig as AgentConfigT,
-  SessionTranscriptItem,
-  SessionTranscriptTextItem,
-} from "@tyrum/schemas";
+import type { AgentConfig as AgentConfigT, SessionTranscriptTextItem } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../../container.js";
 import { ensureAgentConfigSeeded } from "../default-config.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import type { AgentContextStore } from "../context-store.js";
 import type { SessionDal } from "../session-dal.js";
 import type { SessionRow } from "../session-dal.js";
+import { countTextTranscriptItems, splitTranscriptForCompaction } from "../session-dal-helpers.js";
 import { maybeRunPreCompactionMemoryFlush } from "./pre-compaction-memory-flush.js";
 import {
   resolveSessionModelDetailed,
@@ -182,27 +179,6 @@ function buildSummaryHistoryMessages(
   return messages;
 }
 
-function textTranscript(session: SessionRow): SessionTranscriptTextItem[] {
-  return session.transcript.filter(
-    (item): item is SessionTranscriptTextItem => item.kind === "text",
-  );
-}
-
-function getDroppedTurns(
-  session: SessionRow,
-  keepLastMessages: number,
-): SessionTranscriptTextItem[] {
-  const transcript = textTranscript(session);
-  const overflow = transcript.length - keepLastMessages;
-  if (overflow <= 0) return [];
-  return transcript.slice(0, overflow);
-}
-
-function getKeptTurns(session: SessionRow, keepLastMessages: number): SessionTranscriptTextItem[] {
-  if (keepLastMessages <= 0) return [];
-  return textTranscript(session).slice(-keepLastMessages);
-}
-
 function compactionTimeoutMs(timeoutMs: number | undefined): number | undefined {
   if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     return DEFAULT_COMPACTION_TIMEOUT_MS;
@@ -267,7 +243,7 @@ export function shouldCompactSessionForUsage(input: {
   if (!Number.isFinite(maxTurns) || maxTurns <= 0) {
     return false;
   }
-  return textTranscript(input.session).length >= maxTurns * 2;
+  return countTextTranscriptItems(input.session.transcript) >= maxTurns * 2;
 }
 
 export async function compactSessionWithResolvedModel(input: {
@@ -285,12 +261,18 @@ export async function compactSessionWithResolvedModel(input: {
     0,
     input.keepLastMessages ?? getKeepLastMessages(input.ctx.config),
   );
-  const droppedTurns = getDroppedTurns(input.session, keepLastMessages);
+  const { dropped, kept } = splitTranscriptForCompaction({
+    transcript: input.session.transcript,
+    keepLastMessages,
+  });
+  const droppedTurns = dropped.filter(
+    (item): item is SessionTranscriptTextItem => item.kind === "text",
+  );
   if (droppedTurns.length === 0) {
     return {
       compacted: false,
       droppedMessages: 0,
-      keptMessages: textTranscript(input.session).length,
+      keptMessages: countTextTranscriptItems(input.session.transcript),
       summary: input.session.summary,
       reason: "noop",
     };
@@ -308,7 +290,6 @@ export async function compactSessionWithResolvedModel(input: {
     },
   );
 
-  const keptTurns = getKeptTurns(input.session, keepLastMessages);
   const timeout = compactionTimeoutMs(input.timeoutMs);
   if (timeout === 0) {
     return await runDeterministicFallbackCompaction({
@@ -338,14 +319,15 @@ export async function compactSessionWithResolvedModel(input: {
     await input.sessionDal.replaceTranscript({
       tenantId: input.session.tenant_id,
       sessionId: input.session.session_id,
-      transcript: keptTurns as SessionTranscriptItem[],
+      transcript: kept.slice(),
+      title: input.session.title,
       summary,
     });
 
     return {
       compacted: true,
       droppedMessages: droppedTurns.length,
-      keptMessages: keptTurns.length,
+      keptMessages: countTextTranscriptItems(kept),
       summary,
       reason: "model",
     };

@@ -205,6 +205,89 @@ Prefer the managed skill.
     expect(mcpServers.map((server) => server.id)).toEqual(["calendar"]);
   });
 
+  it("resolves managed stdio MCP cwd relative to the materialized bundle", async () => {
+    const store = createLocalAgentContextStore({
+      db: container.db,
+      home: homeDir,
+      identityScopeDal: container.identityScopeDal,
+      logger: container.logger,
+    });
+    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-local");
+    const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
+    const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+    await container.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+
+    await container.db.run(
+      `INSERT INTO runtime_package_revisions (
+         tenant_id, package_kind, package_key, package_json, artifact_id, enabled, created_at, created_by_json, reason
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tenantId,
+        "mcp",
+        "stdio-calendar",
+        JSON.stringify({
+          format: "mcp-package",
+          key: "stdio-calendar",
+          spec: {
+            id: "stdio-calendar",
+            name: "Calendar MCP",
+            enabled: true,
+            transport: "stdio",
+            command: "node",
+            args: ["./scripts/server.mjs"],
+            cwd: ".",
+          },
+          files: [
+            {
+              path: "server.yml",
+              content_base64: Buffer.from(
+                `id: stdio-calendar
+name: Calendar MCP
+enabled: true
+transport: stdio
+command: node
+args:
+  - ./scripts/server.mjs
+cwd: .
+`,
+                "utf-8",
+              ).toString("base64"),
+            },
+            {
+              path: "scripts/server.mjs",
+              content_base64: Buffer.from("console.log('calendar');\n", "utf-8").toString("base64"),
+            },
+          ],
+          source: {
+            kind: "upload",
+            filename: "calendar.zip",
+            content_type: "application/zip",
+          },
+        }),
+        null,
+        1,
+        new Date().toISOString(),
+        JSON.stringify({ kind: "test" }),
+        "seed",
+      ],
+    );
+
+    const config = AgentConfig.parse({
+      model: { model: "openai/gpt-4.1" },
+      skills: { enabled: [], workspace_trusted: true },
+      mcp: { enabled: ["stdio-calendar"] },
+      memory: { v1: { enabled: true } },
+    });
+
+    const [server] = await store.getEnabledMcpServers({ tenantId, agentId, workspaceId }, config);
+    expect(server).toBeDefined();
+    expect(server?.transport).toBe("stdio");
+    expect(server?.cwd).toBe(join(homeDir, "managed", "mcp", "stdio-calendar"));
+  });
+
   it("resolves runtime scope keys to durable ids before seeding local identity", async () => {
     const store = createLocalAgentContextStore({
       db: container.db,

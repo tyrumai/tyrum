@@ -104,6 +104,26 @@ Read the referenced file before changing it.
     ]);
   });
 
+  it("rejects direct-url skill imports that target localhost or private addresses", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const response = await app.request("/config/extensions/skill/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: "direct-url",
+        url: "http://127.0.0.1:8080/skill.zip",
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "invalid_request",
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("imports, toggles, refreshes, and reverts an npm-backed MCP server", async () => {
     const importResponse = await app.request("/config/extensions/mcp/import", {
       method: "POST",

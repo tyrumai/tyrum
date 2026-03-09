@@ -51,6 +51,15 @@ function findAddColumnBlock(sql: string, table: string, column: string): string 
   return match ? (match[0] ?? null) : null;
 }
 
+function findRenameColumnSource(sql: string, table: string, column: string): string | null {
+  const pattern = new RegExp(
+    `ALTER\\s+TABLE\\s+${escapeRegex(table)}\\s+RENAME\\s+COLUMN\\s+(\\w+)\\s+TO\\s+${escapeRegex(column)}\\s*;`,
+    "m",
+  );
+  const match = sql.match(pattern);
+  return match ? (match[1] ?? null) : null;
+}
+
 describe("Postgres migrations", () => {
   it("keeps *_json column defaults aligned with canonical spec", () => {
     const specs = readSpecs().filter((s) => s.default !== null);
@@ -63,15 +72,27 @@ describe("Postgres migrations", () => {
         createTableBlock && createTableBlock.includes(spec.column)
           ? createTableBlock
           : findAddColumnBlock(sql, spec.table, spec.column);
-      expect(block, `missing column definition for ${spec.table}.${spec.column}`).toBeTruthy();
-      if (!block) continue;
+      const renamedFrom = block ? null : findRenameColumnSource(sql, spec.table, spec.column);
+      const effectiveBlock =
+        block ??
+        (renamedFrom && createTableBlock?.includes(renamedFrom)
+          ? createTableBlock
+          : renamedFrom
+            ? findAddColumnBlock(sql, spec.table, renamedFrom)
+            : null);
+      const effectiveColumn = renamedFrom ?? spec.column;
+      expect(
+        effectiveBlock,
+        `missing column definition for ${spec.table}.${spec.column}`,
+      ).toBeTruthy();
+      if (!effectiveBlock) continue;
 
       const defaultValue = spec.default;
       const colPattern = new RegExp(
-        `\\b${escapeRegex(spec.column)}\\b[\\s\\S]{0,200}?DEFAULT\\s+'${escapeRegex(defaultValue)}'`,
+        `\\b${escapeRegex(effectiveColumn)}\\b[\\s\\S]{0,200}?DEFAULT\\s+'${escapeRegex(defaultValue)}'`,
         "m",
       );
-      expect(block, `${spec.table}.${spec.column} default`).toMatch(colPattern);
+      expect(effectiveBlock, `${spec.table}.${spec.column} default`).toMatch(colPattern);
     }
   });
 });

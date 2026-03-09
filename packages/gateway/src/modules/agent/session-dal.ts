@@ -34,6 +34,7 @@ import type {
 } from "./session-dal-helpers.js";
 import {
   buildStoredTranscript,
+  countTextTranscriptItems,
   normalizeSessionTitle,
   normalizeContainerKind,
   normalizeRepairTimestamp,
@@ -368,7 +369,10 @@ export class SessionDal {
       previousSummary: session.summary,
     });
     await this.writeSession({ tenantId: input.tenantId, sessionId: input.sessionId, stored });
-    return { droppedMessages: stored.droppedMessages, keptMessages: stored.transcript.length };
+    return {
+      droppedMessages: stored.droppedMessages,
+      keptMessages: countTextTranscriptItems(stored.transcript),
+    };
   }
 
   async setTitleIfBlank(input: SessionIdentity & { title: string }): Promise<boolean> {

@@ -1,3 +1,4 @@
+import { dirname, isAbsolute, resolve } from "node:path";
 import type {
   AgentConfig as AgentConfigT,
   IdentityPack as IdentityPackT,
@@ -37,6 +38,23 @@ export interface AgentContextStore {
   getIdentity(scope: AgentContextScope): Promise<IdentityPackT>;
   getEnabledSkills(scope: AgentContextScope, config: AgentConfigT): Promise<LoadedSkillManifest[]>;
   getEnabledMcpServers(scope: AgentContextScope, config: AgentConfigT): Promise<McpServerSpecT[]>;
+}
+
+function normalizeManagedMcpSpec(
+  spec: McpServerSpecT,
+  materializedPath: string | undefined,
+): McpServerSpecT {
+  if (spec.transport !== "stdio" || !materializedPath) {
+    return spec;
+  }
+  const bundleDir = dirname(materializedPath);
+  if (!spec.cwd) {
+    return { ...spec, cwd: bundleDir };
+  }
+  if (isAbsolute(spec.cwd)) {
+    return spec;
+  }
+  return { ...spec, cwd: resolve(bundleDir, spec.cwd) };
 }
 
 class LocalAgentContextStore implements AgentContextStore {
@@ -230,10 +248,7 @@ class LocalAgentContextStore implements AgentContextStore {
           kind: "mcp",
           revision: managed,
         });
-        const spec =
-          pkg.spec.transport === "stdio" && !pkg.spec.cwd && materializedPath
-            ? { ...pkg.spec, cwd: materializedPath.replace(/\/server\.yml$/u, "") }
-            : pkg.spec;
+        const spec = normalizeManagedMcpSpec(pkg.spec, materializedPath);
         loaded.push(spec.id === serverId ? spec : { ...spec, id: serverId });
       } catch (error) {
         this.logger?.warn("agent.managed_mcp_invalid", {
@@ -387,10 +402,7 @@ class SharedAgentContextStore implements AgentContextStore {
           kind: "mcp",
           revision: shared,
         });
-        const spec =
-          pkg.spec.transport === "stdio" && !pkg.spec.cwd && materializedPath
-            ? { ...pkg.spec, cwd: materializedPath.replace(/\/server\.yml$/u, "") }
-            : pkg.spec;
+        const spec = normalizeManagedMcpSpec(pkg.spec, materializedPath);
         loaded.push(spec.id === serverId ? spec : { ...spec, id: serverId });
       } catch (error) {
         this.logger?.warn("agent.shared_mcp_invalid", {

@@ -30,7 +30,8 @@ export async function listLatestAgentConfigs(db: SqlDb, tenantId: string): Promi
     try {
       const parsed = AgentConfig.safeParse(JSON.parse(row.config_json) as unknown);
       return parsed.success ? [parsed.data] : [];
-    } catch {
+    } catch (error) {
+      void error;
       return [];
     }
   });

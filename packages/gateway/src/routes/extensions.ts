@@ -12,6 +12,7 @@ import {
   type McpImportInput,
   type UploadInput,
 } from "../modules/extensions/service.js";
+import { UnsafeExtensionUrlError } from "../modules/extensions/package-source.js";
 import type { SqlDb } from "../statestore/types.js";
 
 const extensionKindSchema = z.enum(["skill", "mcp"]);
@@ -82,7 +83,8 @@ async function parseJsonBody<T>(
   let body: unknown;
   try {
     body = (await request.json()) as unknown;
-  } catch {
+  } catch (error) {
+    void error;
     return { success: false, message: "invalid json" };
   }
 
@@ -91,6 +93,19 @@ async function parseJsonBody<T>(
     return { success: false, message: parsed.error.message };
   }
   return { success: true, data: parsed.data };
+}
+
+function toRouteErrorResponse(error: unknown): {
+  status: 400;
+  body: { error: string; message: string };
+} {
+  if (error instanceof UnsafeExtensionUrlError) {
+    return {
+      status: 400,
+      body: { error: "invalid_request", message: error.message },
+    };
+  }
+  throw error;
 }
 
 function toUploadInput(parsed: z.output<typeof uploadRequestSchema>): UploadInput {
@@ -158,8 +173,13 @@ export function createExtensionsRoutes(deps: {
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.message }, 400);
     }
-    const item = await service.importSkill(tenantId, claims.token_id, parsed.data);
-    return c.json(ExtensionsMutateResponse.parse({ item }), 200);
+    try {
+      const item = await service.importSkill(tenantId, claims.token_id, parsed.data);
+      return c.json(ExtensionsMutateResponse.parse({ item }), 200);
+    } catch (error) {
+      const response = toRouteErrorResponse(error);
+      return c.json(response.body, response.status);
+    }
   });
 
   app.post("/config/extensions/skill/upload", async (c) => {
@@ -180,8 +200,17 @@ export function createExtensionsRoutes(deps: {
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.message }, 400);
     }
-    const item = await service.importMcp(tenantId, claims.token_id, toMcpImportInput(parsed.data));
-    return c.json(ExtensionsMutateResponse.parse({ item }), 200);
+    try {
+      const item = await service.importMcp(
+        tenantId,
+        claims.token_id,
+        toMcpImportInput(parsed.data),
+      );
+      return c.json(ExtensionsMutateResponse.parse({ item }), 200);
+    } catch (error) {
+      const response = toRouteErrorResponse(error);
+      return c.json(response.body, response.status);
+    }
   });
 
   app.post("/config/extensions/mcp/upload", async (c) => {
@@ -243,12 +272,18 @@ export function createExtensionsRoutes(deps: {
     const claims = requireAuthClaims(c);
     const kind = extensionKindSchema.parse(c.req.param("kind"));
     const key = c.req.param("key").trim();
-    const item = await service.refreshExtension({
-      tenantId,
-      tokenId: claims.token_id,
-      kind,
-      key,
-    });
+    let item;
+    try {
+      item = await service.refreshExtension({
+        tenantId,
+        tokenId: claims.token_id,
+        kind,
+        key,
+      });
+    } catch (error) {
+      const response = toRouteErrorResponse(error);
+      return c.json(response.body, response.status);
+    }
     if (!item) {
       return c.json({ error: "not_found", message: `extension '${key}' not found` }, 404);
     }
