@@ -24,6 +24,7 @@ Public user-facing docs for install, onboarding, and architecture.
 
 ## Product Reference
 
+- [Activity](./activity.md)
 - [Policy Service](./policy_service.md)
 - [HTTP Executor](./executors/http_executor.md)
 - [Web Executor](./executors/web_executor.md)
