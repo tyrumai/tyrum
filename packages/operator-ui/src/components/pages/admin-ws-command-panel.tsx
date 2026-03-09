@@ -1,6 +1,7 @@
 import { isElevatedModeActive, type OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { useApiCallState } from "../../hooks/use-api-call-state.js";
+import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
@@ -36,41 +37,30 @@ export function AdminWsCommandPanel({ core }: { core: OperatorCore }): React.Rea
         />
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="danger"
-          data-testid="admin-ws-command-run"
-          isLoading={action.state.status === "loading"}
-          disabled={!canMutate}
-          onClick={() => {
-            const trimmed = command.trim();
-            if (!trimmed) {
-              action.fail("Command is required.");
-              return;
-            }
-            void action.run(async () => {
-              if (!isElevatedModeActive(core.elevatedModeStore.getSnapshot())) {
-                requestEnter();
-                throw new Error("Enter Elevated Mode to run commands.");
-              }
-              return await core.ws.commandExecute(trimmed);
-            });
-          }}
-        >
-          Run command
-        </Button>
-        {!canMutate ? (
+        <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
           <Button
             type="button"
-            variant="secondary"
-            size="sm"
+            variant="danger"
+            data-testid="admin-ws-command-run"
+            isLoading={action.state.status === "loading"}
             onClick={() => {
-              requestEnter();
+              const trimmed = command.trim();
+              if (!trimmed) {
+                action.fail("Command is required.");
+                return;
+              }
+              void action.run(async () => {
+                if (!isElevatedModeActive(core.elevatedModeStore.getSnapshot())) {
+                  requestEnter();
+                  throw new Error("Enter Elevated Mode to run commands.");
+                }
+                return await core.ws.commandExecute(trimmed);
+              });
             }}
           >
-            Enter Elevated Mode
+            Run command
           </Button>
-        ) : null}
+        </ElevatedModeTooltip>
       </CardFooter>
     </Card>
   );

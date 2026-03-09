@@ -1,8 +1,9 @@
 import * as React from "react";
+import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
-import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
+import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Select } from "../ui/select.js";
 import {
   EXECUTION_PROFILE_LABELS,
@@ -102,47 +103,38 @@ function ProviderAccountCard({
               : "none"}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={!canMutate}
-            onClick={() => {
-              if (!canMutate) {
-                requestEnter();
-                return;
-              }
-              onEdit(account);
-            }}
-          >
-            Edit
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            isLoading={actionKey === `${account.account_key}:${nextStatus}`}
-            disabled={!canMutate}
-            onClick={() => {
-              onToggleStatus(account, nextStatus);
-            }}
-          >
-            {account.status === "active" ? "Disable" : "Enable"}
-          </Button>
-          <Button
-            type="button"
-            variant="danger"
-            disabled={!canMutate}
-            onClick={() => {
-              if (!canMutate) {
-                requestEnter();
-                return;
-              }
-              onRemove(account);
-            }}
-          >
-            Remove
-          </Button>
-        </div>
+        <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                onEdit(account);
+              }}
+            >
+              Edit
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              isLoading={actionKey === `${account.account_key}:${nextStatus}`}
+              onClick={() => {
+                onToggleStatus(account, nextStatus);
+              }}
+            >
+              {account.status === "active" ? "Disable" : "Enable"}
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => {
+                onRemove(account);
+              }}
+            >
+              Remove
+            </Button>
+          </div>
+        </ElevatedModeTooltip>
       </div>
     </div>
   );
@@ -196,36 +188,28 @@ function ProviderGroupCard({
               </a>
             ) : null}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={!canMutate}
-              onClick={() => {
-                if (!canMutate) {
-                  requestEnter();
-                  return;
-                }
-                onAddAccount(group.provider_key);
-              }}
-            >
-              Add account
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              disabled={!canMutate}
-              onClick={() => {
-                if (!canMutate) {
-                  requestEnter();
-                  return;
-                }
-                onRemoveProvider(group);
-              }}
-            >
-              Remove provider
-            </Button>
-          </div>
+          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  onAddAccount(group.provider_key);
+                }}
+              >
+                Add account
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => {
+                  onRemoveProvider(group);
+                }}
+              >
+                Remove provider
+              </Button>
+            </div>
+          </ElevatedModeTooltip>
         </div>
       </CardHeader>
       <CardContent className="grid gap-3 pt-0">
@@ -306,20 +290,18 @@ export function ProvidersCard({
             >
               Refresh
             </Button>
-            <Button
-              type="button"
-              data-testid="providers-add-open"
-              disabled={!canMutate || registry.every((provider) => !provider.supported)}
-              onClick={() => {
-                if (!canMutate) {
-                  requestEnter();
-                  return;
-                }
-                onAddProvider();
-              }}
-            >
-              Add provider
-            </Button>
+            <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+              <Button
+                type="button"
+                data-testid="providers-add-open"
+                disabled={registry.every((provider) => !provider.supported)}
+                onClick={() => {
+                  onAddProvider();
+                }}
+              >
+                Add provider
+              </Button>
+            </ElevatedModeTooltip>
           </div>
         </div>
       </CardHeader>
@@ -362,19 +344,6 @@ export function ProvidersCard({
           ))
         )}
       </CardContent>
-      {!canMutate ? (
-        <CardFooter>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => {
-              requestEnter();
-            }}
-          >
-            Enter Elevated Mode
-          </Button>
-        </CardFooter>
-      ) : null}
     </Card>
   );
 }

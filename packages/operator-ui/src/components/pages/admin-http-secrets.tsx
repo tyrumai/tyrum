@@ -1,5 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
+import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
@@ -202,27 +203,17 @@ function SecretsStoreCard({
           <ApiResultCard heading="Store result" value={result} error={error} />
         </CardContent>
         <CardFooter>
-          <Button
-            type="button"
-            variant="danger"
-            data-testid="secrets-store-open"
-            disabled={!canMutate || !canStore}
-            onClick={() => setOpen(true)}
-          >
-            Store secret
-          </Button>
-          {!canMutate ? (
+          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
             <Button
               type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                requestEnter();
-              }}
+              variant="danger"
+              data-testid="secrets-store-open"
+              disabled={!canStore}
+              onClick={() => setOpen(true)}
             >
-              Enter Elevated Mode
+              Store secret
             </Button>
-          ) : null}
+          </ElevatedModeTooltip>
         </CardFooter>
       </Card>
 
@@ -308,27 +299,17 @@ function SecretsRotateCard({
           <ApiResultCard heading="Rotate result" value={result} error={error} />
         </CardContent>
         <CardFooter>
-          <Button
-            type="button"
-            variant="danger"
-            data-testid="secrets-rotate-open"
-            disabled={!canMutate || !canRotate}
-            onClick={() => setOpen(true)}
-          >
-            Rotate secret
-          </Button>
-          {!canMutate ? (
+          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
             <Button
               type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                requestEnter();
-              }}
+              variant="danger"
+              data-testid="secrets-rotate-open"
+              disabled={!canRotate}
+              onClick={() => setOpen(true)}
             >
-              Enter Elevated Mode
+              Rotate secret
             </Button>
-          ) : null}
+          </ElevatedModeTooltip>
         </CardFooter>
       </Card>
 
@@ -397,27 +378,17 @@ function SecretsRevokeCard({
           <ApiResultCard heading="Revoke result" value={result} error={error} />
         </CardContent>
         <CardFooter>
-          <Button
-            type="button"
-            variant="danger"
-            data-testid="secrets-revoke-open"
-            disabled={!canMutate || !canRevoke}
-            onClick={() => setOpen(true)}
-          >
-            Revoke secret
-          </Button>
-          {!canMutate ? (
+          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
             <Button
               type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                requestEnter();
-              }}
+              variant="danger"
+              data-testid="secrets-revoke-open"
+              disabled={!canRevoke}
+              onClick={() => setOpen(true)}
             >
-              Enter Elevated Mode
+              Revoke secret
             </Button>
-          ) : null}
+          </ElevatedModeTooltip>
         </CardFooter>
       </Card>
 

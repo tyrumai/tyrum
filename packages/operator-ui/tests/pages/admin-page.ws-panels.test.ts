@@ -241,10 +241,7 @@ describe("ConfigurePage WebSocket panels", () => {
         "[data-testid='admin-ws-command-run']",
       );
       expect(commandButton).not.toBeNull();
-      expect(commandButton?.disabled).toBe(true);
-      expect(
-        testRoot.container.querySelector("[data-testid='configure-read-only-notice']"),
-      ).not.toBeNull();
+      expect(commandButton?.closest("[data-elevated-mode-guard]")).not.toBeNull();
     } finally {
       cleanupTestRoot(testRoot);
     }

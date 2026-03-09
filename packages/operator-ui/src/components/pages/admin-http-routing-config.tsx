@@ -1,6 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { isRecord } from "../../utils/is-record.js";
+import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
@@ -134,27 +135,17 @@ function RoutingConfigUpdateCard({
           <ApiResultCard heading="Update result" value={result} error={error} />
         </CardContent>
         <CardFooter>
-          <Button
-            type="button"
-            variant="danger"
-            data-testid="routing-config-update-open"
-            disabled={!canMutate || !canUpdate}
-            onClick={() => setOpen(true)}
-          >
-            Update channels config
-          </Button>
-          {!canMutate ? (
+          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
             <Button
               type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                requestEnter();
-              }}
+              variant="danger"
+              data-testid="routing-config-update-open"
+              disabled={!canUpdate}
+              onClick={() => setOpen(true)}
             >
-              Enter Elevated Mode
+              Update channels config
             </Button>
-          ) : null}
+          </ElevatedModeTooltip>
         </CardFooter>
       </Card>
 
@@ -230,27 +221,17 @@ function RoutingConfigRevertCard({
           <ApiResultCard heading="Revert result" value={result} error={error} />
         </CardContent>
         <CardFooter>
-          <Button
-            type="button"
-            variant="danger"
-            data-testid="routing-config-revert-open"
-            disabled={!canMutate || !canRevert}
-            onClick={() => setOpen(true)}
-          >
-            Revert channels config
-          </Button>
-          {!canMutate ? (
+          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
             <Button
               type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                requestEnter();
-              }}
+              variant="danger"
+              data-testid="routing-config-revert-open"
+              disabled={!canRevert}
+              onClick={() => setOpen(true)}
             >
-              Enter Elevated Mode
+              Revert channels config
             </Button>
-          ) : null}
+          </ElevatedModeTooltip>
         </CardFooter>
       </Card>
 

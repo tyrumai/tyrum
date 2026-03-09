@@ -1,6 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import type { AuthTokenListEntry } from "@tyrum/client/browser";
 import * as React from "react";
+import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
 import { ApiResultCard } from "../ui/api-result-card.js";
 import { Badge } from "../ui/badge.js";
@@ -53,6 +54,7 @@ function TokenListCard({
   busy,
   error,
   canMutate,
+  requestEnter,
   onRefresh,
   onRevoke,
 }: {
@@ -60,6 +62,7 @@ function TokenListCard({
   busy: boolean;
   error: unknown;
   canMutate: boolean;
+  requestEnter: () => void;
   onRefresh: () => Promise<void>;
   onRevoke: (token: AuthTokenListEntry) => void;
 }): React.ReactElement {
@@ -129,18 +132,20 @@ function TokenListCard({
               </div>
             </div>
             <div>
-              <Button
-                type="button"
-                variant="danger"
-                size="sm"
-                data-testid={`admin-http-token-revoke-${token.token_id}`}
-                disabled={!canMutate || isInactiveToken(token)}
-                onClick={() => {
-                  onRevoke(token);
-                }}
-              >
-                Revoke
-              </Button>
+              <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  data-testid={`admin-http-token-revoke-${token.token_id}`}
+                  disabled={isInactiveToken(token)}
+                  onClick={() => {
+                    onRevoke(token);
+                  }}
+                >
+                  Revoke
+                </Button>
+              </ElevatedModeTooltip>
             </div>
           </div>
         ))}
@@ -256,7 +261,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
   const [revokeError, setRevokeError] = React.useState<unknown>(undefined);
 
   const issueDeviceIdTrimmed = issueDeviceId.trim();
-  const canIssue = canMutate && (issueRole === "admin" || issueDeviceIdTrimmed.length > 0);
+  const canIssue = issueRole === "admin" || issueDeviceIdTrimmed.length > 0;
 
   const loadTokens = React.useCallback(async (): Promise<void> => {
     setListBusy(true);
@@ -348,6 +353,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
           busy={listBusy}
           error={listError}
           canMutate={canMutate}
+          requestEnter={requestEnter}
           onRefresh={loadTokens}
           onRevoke={setRevokeTarget}
         />
@@ -372,29 +378,19 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
         <ApiResultCard heading="Revoke result" value={revokeResult} error={revokeError} />
       </CardContent>
       <CardFooter className="gap-3">
-        <Button
-          type="button"
-          variant="danger"
-          data-testid="admin-http-tokens-issue"
-          disabled={!canIssue}
-          onClick={() => {
-            setIssueOpen(true);
-          }}
-        >
-          Issue token
-        </Button>
-        {!canMutate ? (
+        <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
           <Button
             type="button"
-            variant="secondary"
-            size="sm"
+            variant="danger"
+            data-testid="admin-http-tokens-issue"
+            disabled={!canIssue}
             onClick={() => {
-              requestEnter();
+              setIssueOpen(true);
             }}
           >
-            Enter Elevated Mode
+            Issue token
           </Button>
-        ) : null}
+        </ElevatedModeTooltip>
       </CardFooter>
 
       <ConfirmDangerDialog
