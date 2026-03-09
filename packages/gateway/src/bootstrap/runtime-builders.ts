@@ -6,6 +6,7 @@ import { NodeDispatchService } from "../modules/agent/node-dispatch-service.js";
 import { AgentRegistry } from "../modules/agent/registry.js";
 import { AuthAudit } from "../modules/auth/audit.js";
 import { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
+import { deriveAgentIdFromKey } from "../modules/execution/gateway-step-executor-types.js";
 import { ApprovalEngineActionProcessor } from "../modules/approval/engine-action-processor.js";
 import { WsNotifier } from "../modules/approval/notifier.js";
 import { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
@@ -427,9 +428,30 @@ export function createWorkerLoop(
     nodeDispatchService: new NodeDispatchService(protocol.protocolDeps),
     fallback: toolExecutor,
   }) satisfies ExecutionStepExecutor;
+  const agents = protocol.protocolDeps.agents;
   const executor = createGatewayStepExecutor({
     container: context.container,
     toolExecutor: nodeDispatchExecutor,
+    decideExecutor: agents
+      ? async ({ request, planId, stepIndex, timeoutMs, context: executionContext }) => {
+          const runtime = await agents.getRuntime({
+            tenantId: executionContext.tenantId,
+            agentKey:
+              executionContext.agentId?.trim() || deriveAgentIdFromKey(executionContext.key),
+          });
+          const response = await runtime.executeDecideAction(request, {
+            timeoutMs,
+            execution: {
+              planId,
+              runId: executionContext.runId,
+              stepIndex,
+              stepId: executionContext.stepId,
+              stepApprovalId: executionContext.approvalId ?? undefined,
+            },
+          });
+          return { success: true, result: response };
+        }
+      : undefined,
   }) satisfies ExecutionStepExecutor;
 
   return startExecutionWorkerLoop({

@@ -285,7 +285,10 @@ export class HttpTransport {
       }
       this.fetchImpl = options.fetch;
     } else if (!pinRaw && !allowSelfSigned && caCertPem === undefined) {
-      this.fetchImpl = fetch;
+      // Wrap the global fetch so browser calls retain the correct invocation
+      // shape. Calling a stored native Window method as an object property can
+      // throw "Illegal invocation" in Chromium.
+      this.fetchImpl = (input, init) => fetch(input, init);
     } else {
       if (!pinRaw) {
         if (allowSelfSigned) {
