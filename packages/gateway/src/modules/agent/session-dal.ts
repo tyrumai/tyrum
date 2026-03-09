@@ -308,7 +308,7 @@ export class SessionDal {
       tenantId: input.tenantId,
       sessionId: input.sessionId,
     });
-    const turns = [
+    const turns: SessionMessage[] = [
       ...session.turns,
       { role: "user", content: input.userMessage, timestamp: input.timestamp },
       { role: "assistant", content: input.assistantMessage, timestamp: input.timestamp },
