@@ -1,6 +1,5 @@
 import type {
   ActivityAttentionLevel,
-  ActivityRoom,
   ActivityState,
   ActivityWorkstream,
   OperatorCore,
@@ -14,20 +13,12 @@ import { EmptyState } from "../ui/empty-state.js";
 import { Skeleton } from "../ui/skeleton.js";
 import { cn } from "../../lib/cn.js";
 import { useOperatorStore } from "../../use-operator-store.js";
+import { ActivityScene } from "./activity-scene.js";
+import { ACTIVITY_ROOM_LABELS } from "./activity-scene-model.js";
 
 export interface ActivityPageProps {
   core: OperatorCore;
 }
-
-const ROOM_LABELS: Record<ActivityRoom, string> = {
-  lounge: "Lounge",
-  "strategy-desk": "Strategy desk",
-  library: "Library",
-  "terminal-lab": "Terminal lab",
-  archive: "Archive",
-  "mail-room": "Mail room",
-  "approval-desk": "Approval desk",
-};
 
 const ATTENTION_LABELS: Record<ActivityAttentionLevel, string> = {
   critical: "Critical",
@@ -188,51 +179,14 @@ export function ActivityPage({ core }: ActivityPageProps) {
             description="The Activity page shell is ready. Workstream cards and the animated building scene will appear here once activity starts flowing."
           />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {activity.workstreamIds.map((workstreamId) => {
-              const workstream = activity.workstreamsById[workstreamId];
-              if (!workstream) return null;
-              const active = workstream.id === selectedWorkstreamId;
-              return (
-                <button
-                  key={workstream.id}
-                  type="button"
-                  data-testid={`activity-workstream-${workstream.id}`}
-                  data-active={active ? "true" : undefined}
-                  className={cn(
-                    "rounded-lg border p-3 text-left transition-colors",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-                    active
-                      ? "border-primary bg-primary/5"
-                      : "border-border/70 bg-bg-subtle/50 hover:bg-bg-subtle",
-                  )}
-                  onClick={() => {
-                    setSelectionCleared(false);
-                    core.activityStore.selectWorkstream(workstream.id);
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-fg">
-                        {workstream.persona.name}
-                      </div>
-                      <div className="truncate text-xs text-fg-muted">{workstream.key}</div>
-                    </div>
-                    <Badge variant={ATTENTION_BADGE_VARIANTS[workstream.attentionLevel]}>
-                      {ATTENTION_LABELS[workstream.attentionLevel]}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Badge variant="outline">{ROOM_LABELS[workstream.currentRoom]}</Badge>
-                    <Badge variant="outline">{formatRunStatus(workstream.runStatus)}</Badge>
-                  </div>
-                  <p className="mt-3 line-clamp-3 text-sm text-fg">
-                    {workstream.bubbleText ?? "No live bubble text yet."}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
+          <ActivityScene
+            activity={activity}
+            selectedWorkstreamId={selectedWorkstreamId}
+            onSelectWorkstream={(workstreamId) => {
+              setSelectionCleared(false);
+              core.activityStore.selectWorkstream(workstreamId);
+            }}
+          />
         )}
       </Section>
 
@@ -260,7 +214,10 @@ export function ActivityPage({ core }: ActivityPageProps) {
             </div>
 
             <dl className="rounded-lg border border-border/70 bg-bg-subtle/50 px-4">
-              <DetailRow label="Room" value={ROOM_LABELS[selectedWorkstream.currentRoom]} />
+              <DetailRow
+                label="Room"
+                value={ACTIVITY_ROOM_LABELS[selectedWorkstream.currentRoom]}
+              />
               <DetailRow
                 label="Lane"
                 value={selectedWorkstream.lane === "main" ? "Main" : selectedWorkstream.lane}

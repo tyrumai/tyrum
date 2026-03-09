@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import React, { act } from "react";
 import type { ActivityState } from "../../../operator-core/src/stores/activity-store.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import { ActivityPage } from "../../src/components/pages/activity-page.js";
-import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+import { cleanupTestRoot, renderIntoDocument, stubMatchMedia } from "../test-utils.js";
 
 function createActivityState(overrides: Partial<ActivityState> = {}): ActivityState {
   return {
@@ -55,7 +55,112 @@ function createCore(
   };
 }
 
+function createPersona(name: string) {
+  return {
+    name,
+    description: `${name} operator persona`,
+    tone: "direct" as const,
+    palette: "graphite" as const,
+    character: "operator" as const,
+  };
+}
+
+function createWorkstream(
+  overrides: Partial<ActivityState["workstreamsById"][string]> & {
+    id: string;
+    key: string;
+    lane: string;
+    agentId: string;
+    currentRoom: NonNullable<ActivityState["workstreamsById"][string]>["currentRoom"];
+  },
+) {
+  const persona = createPersona(overrides.agentId === "alpha" ? "Alpha" : "Beta");
+  return {
+    id: overrides.id,
+    key: overrides.key,
+    lane: overrides.lane,
+    agentId: overrides.agentId,
+    persona,
+    latestRunId: overrides.latestRunId ?? null,
+    runStatus: overrides.runStatus ?? null,
+    queuedRunCount: overrides.queuedRunCount ?? 0,
+    lease: overrides.lease ?? { owner: null, expiresAtMs: null, active: false },
+    attentionLevel: overrides.attentionLevel ?? "low",
+    attentionScore: overrides.attentionScore ?? 20,
+    currentRoom: overrides.currentRoom,
+    bubbleText: overrides.bubbleText ?? null,
+    recentEvents: overrides.recentEvents ?? [],
+  };
+}
+
+function createSampleActivityState(): ActivityState {
+  const main = createWorkstream({
+    id: "agent:alpha:main::main",
+    key: "agent:alpha:main",
+    lane: "main",
+    agentId: "alpha",
+    latestRunId: "run-1",
+    runStatus: "running",
+    queuedRunCount: 1,
+    lease: { owner: "Alpha", expiresAtMs: null, active: true },
+    attentionLevel: "high",
+    attentionScore: 78,
+    currentRoom: "strategy-desk",
+    bubbleText: "Planning the next move",
+    recentEvents: [
+      {
+        id: "evt-1",
+        type: "message.delta",
+        occurredAt: "2026-03-09T09:00:00.000Z",
+        summary: "Planning the next move",
+      },
+    ],
+  });
+  const review = createWorkstream({
+    id: "agent:alpha:main::review",
+    key: "agent:alpha:main",
+    lane: "review",
+    agentId: "alpha",
+    latestRunId: "run-2",
+    runStatus: "paused",
+    attentionLevel: "medium",
+    attentionScore: 42,
+    currentRoom: "approval-desk",
+    bubbleText: "Waiting for review",
+    recentEvents: [
+      {
+        id: "evt-2",
+        type: "approval.updated",
+        occurredAt: "2026-03-09T09:05:00.000Z",
+        summary: "Waiting for review",
+      },
+    ],
+  });
+  return {
+    agentIds: ["alpha"],
+    agentsById: {
+      alpha: {
+        agentId: "alpha",
+        persona: createPersona("Alpha"),
+        workstreamIds: [main.id, review.id],
+        selectedWorkstreamId: main.id,
+      },
+    },
+    workstreamIds: [main.id, review.id],
+    selectedAgentId: "alpha",
+    selectedWorkstreamId: main.id,
+    workstreamsById: {
+      [main.id]: main,
+      [review.id]: review,
+    },
+  };
+}
+
 describe("ActivityPage", () => {
+  afterEach(() => {
+    delete (document as Document & { visibilityState?: string }).visibilityState;
+  });
+
   it("renders a stable empty shell with filter, scene, inspector, and timeline regions", () => {
     const core = createCore();
     const testRoot = renderIntoDocument(React.createElement(ActivityPage, { core: core as never }));
@@ -91,86 +196,7 @@ describe("ActivityPage", () => {
 
   it("renders the selected workstream and recent events, and lets the operator switch focus", () => {
     const core = createCore({
-      activity: {
-        agentIds: ["alpha"],
-        agentsById: {
-          alpha: {
-            agentId: "alpha",
-            persona: {
-              name: "Alpha",
-              description: "Primary operator",
-              tone: "direct",
-              palette: "graphite",
-              character: "operator",
-            },
-            workstreamIds: ["agent:alpha:main::main", "agent:alpha:main::review"],
-            selectedWorkstreamId: "agent:alpha:main::main",
-          },
-        },
-        workstreamIds: ["agent:alpha:main::main", "agent:alpha:main::review"],
-        selectedAgentId: "alpha",
-        selectedWorkstreamId: "agent:alpha:main::main",
-        workstreamsById: {
-          "agent:alpha:main::main": {
-            id: "agent:alpha:main::main",
-            key: "agent:alpha:main",
-            lane: "main",
-            agentId: "alpha",
-            persona: {
-              name: "Alpha",
-              description: "Primary operator",
-              tone: "direct",
-              palette: "graphite",
-              character: "operator",
-            },
-            latestRunId: "run-1",
-            runStatus: "running",
-            queuedRunCount: 1,
-            lease: { owner: "Alpha", expiresAtMs: null, active: true },
-            attentionLevel: "high",
-            attentionScore: 78,
-            currentRoom: "strategy-desk",
-            bubbleText: "Planning the next move",
-            recentEvents: [
-              {
-                id: "evt-1",
-                type: "message.delta",
-                occurredAt: "2026-03-09T09:00:00.000Z",
-                summary: "Planning the next move",
-              },
-            ],
-          },
-          "agent:alpha:main::review": {
-            id: "agent:alpha:main::review",
-            key: "agent:alpha:main",
-            lane: "review",
-            agentId: "alpha",
-            persona: {
-              name: "Alpha",
-              description: "Primary operator",
-              tone: "direct",
-              palette: "graphite",
-              character: "operator",
-            },
-            latestRunId: "run-2",
-            runStatus: "paused",
-            queuedRunCount: 0,
-            lease: { owner: null, expiresAtMs: null, active: false },
-            attentionLevel: "medium",
-            attentionScore: 42,
-            currentRoom: "approval-desk",
-            bubbleText: "Waiting for review",
-            recentEvents: [
-              {
-                id: "evt-2",
-                type: "approval.updated",
-                occurredAt: "2026-03-09T09:05:00.000Z",
-                summary: "Waiting for review",
-              },
-            ],
-          },
-        },
-      },
+      activity: createSampleActivityState(),
     });
 
     const testRoot = renderIntoDocument(React.createElement(ActivityPage, { core: core as never }));
@@ -197,86 +223,7 @@ describe("ActivityPage", () => {
 
   it("keeps the all-workstreams cleared state instead of snapping back to the first stream", () => {
     const core = createCore({
-      activity: {
-        agentIds: ["alpha"],
-        agentsById: {
-          alpha: {
-            agentId: "alpha",
-            persona: {
-              name: "Alpha",
-              description: "Primary operator",
-              tone: "direct",
-              palette: "graphite",
-              character: "operator",
-            },
-            workstreamIds: ["agent:alpha:main::main", "agent:alpha:main::review"],
-            selectedWorkstreamId: "agent:alpha:main::main",
-          },
-        },
-        workstreamIds: ["agent:alpha:main::main", "agent:alpha:main::review"],
-        selectedAgentId: "alpha",
-        selectedWorkstreamId: "agent:alpha:main::main",
-        workstreamsById: {
-          "agent:alpha:main::main": {
-            id: "agent:alpha:main::main",
-            key: "agent:alpha:main",
-            lane: "main",
-            agentId: "alpha",
-            persona: {
-              name: "Alpha",
-              description: "Primary operator",
-              tone: "direct",
-              palette: "graphite",
-              character: "operator",
-            },
-            latestRunId: "run-1",
-            runStatus: "running",
-            queuedRunCount: 1,
-            lease: { owner: "Alpha", expiresAtMs: null, active: true },
-            attentionLevel: "high",
-            attentionScore: 78,
-            currentRoom: "strategy-desk",
-            bubbleText: "Planning the next move",
-            recentEvents: [
-              {
-                id: "evt-1",
-                type: "message.delta",
-                occurredAt: "2026-03-09T09:00:00.000Z",
-                summary: "Planning the next move",
-              },
-            ],
-          },
-          "agent:alpha:main::review": {
-            id: "agent:alpha:main::review",
-            key: "agent:alpha:main",
-            lane: "review",
-            agentId: "alpha",
-            persona: {
-              name: "Alpha",
-              description: "Primary operator",
-              tone: "direct",
-              palette: "graphite",
-              character: "operator",
-            },
-            latestRunId: "run-2",
-            runStatus: "paused",
-            queuedRunCount: 0,
-            lease: { owner: null, expiresAtMs: null, active: false },
-            attentionLevel: "medium",
-            attentionScore: 42,
-            currentRoom: "approval-desk",
-            bubbleText: "Waiting for review",
-            recentEvents: [
-              {
-                id: "evt-2",
-                type: "approval.updated",
-                occurredAt: "2026-03-09T09:05:00.000Z",
-                summary: "Waiting for review",
-              },
-            ],
-          },
-        },
-      },
+      activity: createSampleActivityState(),
     });
 
     const testRoot = renderIntoDocument(React.createElement(ActivityPage, { core: core as never }));
@@ -297,5 +244,55 @@ describe("ActivityPage", () => {
     expect(testRoot.container.textContent).not.toContain("run-1");
 
     cleanupTestRoot(testRoot);
+  });
+
+  it("renders the fixed building rooms and switches to reduced motion when requested", () => {
+    const reducedMotion = stubMatchMedia("(prefers-reduced-motion: reduce)", true);
+    const core = createCore({ activity: createSampleActivityState() });
+
+    const testRoot = renderIntoDocument(React.createElement(ActivityPage, { core: core as never }));
+
+    const viewport = testRoot.container.querySelector<HTMLElement>(
+      '[data-testid="activity-scene-viewport"]',
+    );
+    expect(viewport?.dataset.motionMode).toBe("reduced");
+    expect(testRoot.container.textContent).toContain("Lounge");
+    expect(testRoot.container.textContent).toContain("Strategy desk");
+    expect(testRoot.container.textContent).toContain("Library");
+    expect(testRoot.container.textContent).toContain("Terminal lab");
+    expect(testRoot.container.textContent).toContain("Archive");
+    expect(testRoot.container.textContent).toContain("Mail room");
+    expect(testRoot.container.textContent).toContain("Approval desk");
+
+    cleanupTestRoot(testRoot);
+    reducedMotion.cleanup();
+  });
+
+  it("suspends motion when the document becomes hidden", () => {
+    const reducedMotion = stubMatchMedia("(prefers-reduced-motion: reduce)", false);
+    const core = createCore({ activity: createSampleActivityState() });
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+
+    const testRoot = renderIntoDocument(React.createElement(ActivityPage, { core: core as never }));
+    const viewport = testRoot.container.querySelector<HTMLElement>(
+      '[data-testid="activity-scene-viewport"]',
+    );
+    expect(viewport?.dataset.visibilityState).toBe("visible");
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    expect(viewport?.dataset.visibilityState).toBe("hidden");
+
+    cleanupTestRoot(testRoot);
+    reducedMotion.cleanup();
   });
 });
