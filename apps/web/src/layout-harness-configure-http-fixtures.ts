@@ -122,7 +122,10 @@ export function createHarnessConfigureHttpFixtures() {
       updatePreset: async () => ({ status: "ok" as const }),
       deletePreset: async () => ({ status: "ok" as const }),
       listAssignments: async () => assignments,
-      updateAssignments: async () => ({ status: "ok" as const, assignments: assignments.assignments }),
+      updateAssignments: async () => ({
+        status: "ok" as const,
+        assignments: assignments.assignments,
+      }),
     },
     routingConfig: {
       get: async () => ({ status: "ok" as const, config: { v: 1 } }),

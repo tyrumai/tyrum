@@ -25,11 +25,10 @@ describe("SessionDal.list (postgres)", () => {
         containerKind: "group",
       });
 
-      await db.run("UPDATE sessions SET transcript_json = ? WHERE tenant_id = ? AND session_id = ?", [
-        "{ not: json",
-        s1.tenant_id,
-        s1.session_id,
-      ]);
+      await db.run(
+        "UPDATE sessions SET transcript_json = ? WHERE tenant_id = ? AND session_id = ?",
+        ["{ not: json", s1.tenant_id, s1.session_id],
+      );
 
       const page = await dal.list({ connectorKey: "ui", limit: 10 });
       expect(page.sessions.map((s) => s.session_id).toSorted()).toEqual(
@@ -51,7 +50,9 @@ describe("SessionDal.list (postgres)", () => {
       const metricsText = await metrics.registry.getSingleMetricAsString(
         "persisted_json_read_failures_total",
       );
-      expect(metricsText).toContain('table="sessions",column="transcript_json",reason="invalid_json"');
+      expect(metricsText).toContain(
+        'table="sessions",column="transcript_json",reason="invalid_json"',
+      );
     } finally {
       await close();
     }
@@ -76,11 +77,10 @@ describe("SessionDal.list (postgres)", () => {
         containerKind: "group",
       });
 
-      await db.run("UPDATE sessions SET transcript_json = ? WHERE tenant_id = ? AND session_id = ?", [
-        "{}",
-        s1.tenant_id,
-        s1.session_id,
-      ]);
+      await db.run(
+        "UPDATE sessions SET transcript_json = ? WHERE tenant_id = ? AND session_id = ?",
+        ["{}", s1.tenant_id, s1.session_id],
+      );
 
       const page = await dal.list({ connectorKey: "ui", limit: 10 });
       expect(page.sessions.map((s) => s.session_id).toSorted()).toEqual(
@@ -124,11 +124,10 @@ describe("SessionDal.list (postgres)", () => {
         containerKind: "group",
       });
 
-      await db.run("UPDATE sessions SET transcript_json = ? WHERE tenant_id = ? AND session_id = ?", [
-        '[{"role":"user"}]',
-        session.tenant_id,
-        session.session_id,
-      ]);
+      await db.run(
+        "UPDATE sessions SET transcript_json = ? WHERE tenant_id = ? AND session_id = ?",
+        ['[{"role":"user"}]', session.tenant_id, session.session_id],
+      );
 
       const page = await dal.list({ connectorKey: "ui", limit: 10 });
       const corrupted = page.sessions.find((s) => s.session_id === session.session_key);
@@ -146,7 +145,9 @@ describe("SessionDal.list (postgres)", () => {
       const metricsText = await metrics.registry.getSingleMetricAsString(
         "persisted_json_read_failures_total",
       );
-      expect(metricsText).toContain('table="sessions",column="transcript_json",reason="invalid_value"');
+      expect(metricsText).toContain(
+        'table="sessions",column="transcript_json",reason="invalid_value"',
+      );
     } finally {
       await close();
     }

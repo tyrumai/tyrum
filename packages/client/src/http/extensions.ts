@@ -84,9 +84,18 @@ export interface ExtensionsApi {
     key: string,
     options?: TyrumRequestOptions,
   ): Promise<ExtensionsDetailResponseT>;
-  importSkill(input: SkillImportInput, options?: TyrumRequestOptions): Promise<ExtensionsMutateResponseT>;
-  uploadSkill(input: UploadInput, options?: TyrumRequestOptions): Promise<ExtensionsMutateResponseT>;
-  importMcp(input: McpImportInput, options?: TyrumRequestOptions): Promise<ExtensionsMutateResponseT>;
+  importSkill(
+    input: SkillImportInput,
+    options?: TyrumRequestOptions,
+  ): Promise<ExtensionsMutateResponseT>;
+  uploadSkill(
+    input: UploadInput,
+    options?: TyrumRequestOptions,
+  ): Promise<ExtensionsMutateResponseT>;
+  importMcp(
+    input: McpImportInput,
+    options?: TyrumRequestOptions,
+  ): Promise<ExtensionsMutateResponseT>;
   uploadMcp(input: UploadInput, options?: TyrumRequestOptions): Promise<ExtensionsMutateResponseT>;
   toggle(
     kind: ExtensionKind,

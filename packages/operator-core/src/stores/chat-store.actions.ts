@@ -1,9 +1,6 @@
 import { toOperatorCoreError } from "../operator-error.js";
 import type { ChatStoreContext } from "./chat-store.types.js";
-import {
-  activeToolCallIdsForSession,
-  mergeFetchedTranscript,
-} from "./chat-store.transcript.js";
+import { activeToolCallIdsForSession, mergeFetchedTranscript } from "./chat-store.transcript.js";
 
 function normalizeAgentId(agentId: string): string {
   const trimmed = agentId.trim();

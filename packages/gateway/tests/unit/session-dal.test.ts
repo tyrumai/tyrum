@@ -201,7 +201,9 @@ describe("SessionDal", () => {
     const metricsText = await metrics.registry.getSingleMetricAsString(
       "persisted_json_read_failures_total",
     );
-    expect(metricsText).toContain('table="sessions",column="transcript_json",reason="invalid_json"');
+    expect(metricsText).toContain(
+      'table="sessions",column="transcript_json",reason="invalid_json"',
+    );
   });
 
   it("sets a title only while the stored title is blank", async () => {
@@ -329,5 +331,4 @@ describe("SessionDal", () => {
       vi.useRealTimers();
     }
   });
-
 });

@@ -1,11 +1,18 @@
-import type { AgentTurnRequest as AgentTurnRequestT, NormalizedContainerKind } from "@tyrum/schemas";
+import type {
+  AgentTurnRequest as AgentTurnRequestT,
+  NormalizedContainerKind,
+} from "@tyrum/schemas";
 import {
   ensureDefaultHeartbeatSchedule,
   loadAgentConfigFromDb,
   maybeCleanupSessions,
   semanticSearch,
 } from "./turn-preparation-helpers.js";
-import { isStatusQuery, parseIntakeModeDecision, type ResolvedAgentTurnInput } from "./turn-helpers.js";
+import {
+  isStatusQuery,
+  parseIntakeModeDecision,
+  type ResolvedAgentTurnInput,
+} from "./turn-helpers.js";
 import type { ResolvedExecutionProfile } from "./intake-delegation.js";
 import type { AgentLoadedContext } from "./types.js";
 import type { TurnPreparationRuntimeDeps } from "./turn-preparation-runtime.js";

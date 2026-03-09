@@ -99,9 +99,7 @@ function registerShellLayoutRenderTests(): void {
     expect(container.querySelector(".stack")).toBeNull();
     expect(container.querySelector(".alert")).toBeNull();
 
-    const desktopLink = container.querySelector<HTMLButtonElement>(
-      '[data-testid="nav-desktop"]',
-    );
+    const desktopLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-desktop"]');
     expect(desktopLink).not.toBeNull();
 
     await act(async () => {

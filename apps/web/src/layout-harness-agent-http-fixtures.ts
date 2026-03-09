@@ -104,7 +104,9 @@ function createManagedAgentList() {
   };
 }
 
-export function createHarnessAgentHttpFixtures(createManagedAgentDetail: (agentKey: string) => unknown) {
+export function createHarnessAgentHttpFixtures(
+  createManagedAgentDetail: (agentKey: string) => unknown,
+) {
   const getManagedExtensionDetail = (kind: "skill" | "mcp", key: string) =>
     kind === "skill" ? createManagedSkillDetail(key) : createManagedMcpDetail(key);
 

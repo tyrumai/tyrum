@@ -10,7 +10,9 @@ import type { SqlDb } from "../../../statestore/types.js";
 const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
 const PRE_COMPACTION_FLUSH_TRUNCATION_MARKER = "...(truncated)";
 const MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS = 2_000;
-function formatPreCompactionFlushPrompt(droppedTurns: readonly SessionTranscriptTextItem[]): string {
+function formatPreCompactionFlushPrompt(
+  droppedTurns: readonly SessionTranscriptTextItem[],
+): string {
   const lines = droppedTurns.map((turn) => {
     const role =
       turn.role === "assistant" ? "Assistant" : turn.role === "system" ? "System" : "User";

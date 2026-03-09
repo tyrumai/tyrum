@@ -58,7 +58,11 @@ function deriveBackfilledSessionTitle(turnsJson: string): string {
   return "";
 }
 
-function migrateLegacyTurnsToTranscript(turnsJson: string, createdAt: string, sessionId: string): string {
+function migrateLegacyTurnsToTranscript(
+  turnsJson: string,
+  createdAt: string,
+  sessionId: string,
+): string {
   try {
     const parsed = JSON.parse(turnsJson) as unknown;
     if (!Array.isArray(parsed)) return turnsJson;
@@ -78,8 +82,7 @@ function migrateLegacyTurnsToTranscript(turnsJson: string, createdAt: string, se
         return {
           kind: "text",
           id: `${sessionId}-migrated-${index + 1}`,
-          role:
-            role === "user" || role === "assistant" || role === "system" ? role : "assistant",
+          role: role === "user" || role === "assistant" || role === "system" ? role : "assistant",
           content: typeof record["content"] === "string" ? record["content"] : "",
           created_at:
             typeof record["timestamp"] === "string" && record["timestamp"].trim().length > 0

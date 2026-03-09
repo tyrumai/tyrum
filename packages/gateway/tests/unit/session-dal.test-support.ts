@@ -20,9 +20,10 @@ export function createSessionDalFixture(): { db: SqliteDb; dal: SessionDal } {
   return createObservedSessionDalFixture();
 }
 
-export function createObservedSessionDalFixture(
-  options?: SessionDalOptions,
-): { db: SqliteDb; dal: SessionDal } {
+export function createObservedSessionDalFixture(options?: SessionDalOptions): {
+  db: SqliteDb;
+  dal: SessionDal;
+} {
   const db = openTestSqliteDb();
   const identityScopeDal = new IdentityScopeDal(db, { cacheTtlMs: 60_000 });
   const channelThreadDal = new ChannelThreadDal(db);
@@ -79,7 +80,12 @@ export async function seedRepairTurns(input: {
   dal: SessionDal;
   session: SessionRow;
   threadId: string;
-  turns: Array<{ messageId: string; userText: string; assistantText: string; receivedAtMs: number }>;
+  turns: Array<{
+    messageId: string;
+    userText: string;
+    assistantText: string;
+    receivedAtMs: number;
+  }>;
 }) {
   const inboxDal = new ChannelInboxDal(input.db, input.dal);
   const outboxDal = new ChannelOutboxDal(input.db);

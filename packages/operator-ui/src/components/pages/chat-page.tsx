@@ -107,7 +107,8 @@ export function ChatPage({ core }: { core: OperatorCore }) {
   const showThreads = lgUp || mobileView === "threads";
   const showConversation = lgUp || mobileView === "conversation";
   const canSend = Boolean(active) && !chat.send.sending && draft.trim().length > 0;
-  const working = chat.send.sending || chat.active.typing || chat.active.activeToolCallIds.length > 0;
+  const working =
+    chat.send.sending || chat.active.typing || chat.active.activeToolCallIds.length > 0;
 
   return (
     <div

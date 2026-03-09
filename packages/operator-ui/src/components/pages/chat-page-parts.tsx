@@ -37,7 +37,9 @@ export function deriveThreadPreview(session: {
 }
 
 export function isBottomLocked(element: HTMLElement): boolean {
-  return element.scrollHeight - element.scrollTop - element.clientHeight <= CHAT_AUTOSCROLL_THRESHOLD_PX;
+  return (
+    element.scrollHeight - element.scrollTop - element.clientHeight <= CHAT_AUTOSCROLL_THRESHOLD_PX
+  );
 }
 
 function transcriptTimestamp(item: SessionTranscriptItem): string {
@@ -104,9 +106,7 @@ function MarkdownToggle({
           type="button"
           className={cn(
             "rounded px-2 py-1 text-xs font-medium transition-colors",
-            value === mode
-              ? "bg-bg text-fg shadow-sm"
-              : "text-fg-muted hover:text-fg",
+            value === mode ? "bg-bg text-fg shadow-sm" : "text-fg-muted hover:text-fg",
           )}
           onClick={() => onChange(mode)}
         >
@@ -212,7 +212,11 @@ function ChatApprovalItem({
       <div className="text-sm text-warning-950">{item.detail}</div>
       {actionable ? (
         <div className="mt-3 flex gap-2">
-          <Button size="sm" disabled={resolving} onClick={() => onResolve(item.approval_id, "approved")}>
+          <Button
+            size="sm"
+            disabled={resolving}
+            onClick={() => onResolve(item.approval_id, "approved")}
+          >
             Approve
           </Button>
           <Button
@@ -329,7 +333,11 @@ export function ChatConversationPanel({
         </div>
       ) : null}
 
-      <div ref={transcriptRef} className="min-h-0 flex-1 overflow-y-auto p-4" data-testid="chat-transcript">
+      <div
+        ref={transcriptRef}
+        className="min-h-0 flex-1 overflow-y-auto p-4"
+        data-testid="chat-transcript"
+      >
         {transcript.length === 0 ? (
           <div className="text-sm text-fg-muted">No messages yet.</div>
         ) : (

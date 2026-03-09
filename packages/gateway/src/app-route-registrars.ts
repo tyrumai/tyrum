@@ -438,9 +438,9 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
   }
 
   if (context.opts.agents) {
-  context.app.route(
-    "/",
-    createAgentRoutes({
+    context.app.route(
+      "/",
+      createAgentRoutes({
         agents: context.opts.agents,
         db: context.container.db,
       }),

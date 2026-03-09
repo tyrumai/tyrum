@@ -12,18 +12,12 @@ import {
 
 type ChatStateSetter = (updater: (prev: ChatState) => ChatState) => void;
 
-function handleTypingState(
-  setState: ChatStateSetter,
-  data: unknown,
-  typing: boolean,
-): void {
+function handleTypingState(setState: ChatStateSetter, data: unknown, typing: boolean): void {
   const payload = readPayload(data);
   const sessionId = typeof payload?.["session_id"] === "string" ? payload["session_id"] : null;
   if (!sessionId) return;
   setState((prev) =>
-    prev.active.sessionId !== sessionId
-      ? prev
-      : { ...prev, active: { ...prev.active, typing } },
+    prev.active.sessionId !== sessionId ? prev : { ...prev, active: { ...prev.active, typing } },
   );
 }
 

@@ -202,7 +202,10 @@ describe("SessionDal expiry and listing", () => {
       Buffer.from(page1.nextCursor as string, "base64url").toString("utf-8"),
     ) as Record<string, unknown>;
     expect(Object.keys(decodedCursor).toSorted()).toEqual(["session_id", "updated_at"]);
-    expect(page1.sessions.map((session) => session.session_id)).toEqual([s3.session_key, s2.session_key]);
+    expect(page1.sessions.map((session) => session.session_id)).toEqual([
+      s3.session_key,
+      s2.session_key,
+    ]);
     expect(page1.sessions[0]?.title).toBe("");
     expect(page1.sessions[1]?.title).toBe("");
     expect(page1.sessions[0]?.transcript_count).toBe(2);

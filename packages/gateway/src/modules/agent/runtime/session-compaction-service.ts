@@ -183,10 +183,15 @@ function buildSummaryHistoryMessages(
 }
 
 function textTranscript(session: SessionRow): SessionTranscriptTextItem[] {
-  return session.transcript.filter((item): item is SessionTranscriptTextItem => item.kind === "text");
+  return session.transcript.filter(
+    (item): item is SessionTranscriptTextItem => item.kind === "text",
+  );
 }
 
-function getDroppedTurns(session: SessionRow, keepLastMessages: number): SessionTranscriptTextItem[] {
+function getDroppedTurns(
+  session: SessionRow,
+  keepLastMessages: number,
+): SessionTranscriptTextItem[] {
   const transcript = textTranscript(session);
   const overflow = transcript.length - keepLastMessages;
   if (overflow <= 0) return [];

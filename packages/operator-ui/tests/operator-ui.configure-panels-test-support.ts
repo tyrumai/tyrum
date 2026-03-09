@@ -3,10 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
-import {
-  waitForSelector,
-  openConfigureTab,
-} from "./operator-ui.test-support.js";
+import { waitForSelector, openConfigureTab } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
 function registerConfigurePanelsNavTests(): void {

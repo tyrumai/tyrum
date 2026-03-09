@@ -87,7 +87,9 @@ export function toApprovalTranscriptItem(
   const prompt = typeof record["prompt"] === "string" ? record["prompt"] : "";
   if (!approvalId || !status || !prompt) return null;
   const scope =
-    typeof record["scope"] === "object" && record["scope"] !== null && !Array.isArray(record["scope"])
+    typeof record["scope"] === "object" &&
+    record["scope"] !== null &&
+    !Array.isArray(record["scope"])
       ? (record["scope"] as Record<string, unknown>)
       : null;
   return {

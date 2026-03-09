@@ -34,7 +34,11 @@ function createSkillDetail(
     version: null,
     enabled: true,
     revision: 2,
-    source: { kind: "direct-url", url: "https://example.com/skills/review.zip", filename: "review.zip" },
+    source: {
+      kind: "direct-url",
+      url: "https://example.com/skills/review.zip",
+      filename: "review.zip",
+    },
     refreshable: true,
     materialized_path: "/tmp/managed/skills/agent-review/SKILL.md",
     assignment_count: 1,
@@ -280,8 +284,8 @@ async function setInput(container: HTMLElement, placeholder: string, value: stri
 }
 
 async function clickButton(container: HTMLElement, label: string): Promise<void> {
-  const button = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((candidate) =>
-    candidate.textContent?.trim() === label,
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+    (candidate) => candidate.textContent?.trim() === label,
   );
   expect(button).toBeDefined();
   await act(async () => {
@@ -295,8 +299,8 @@ async function clickButton(container: HTMLElement, label: string): Promise<void>
 }
 
 async function clickTab(container: HTMLElement, label: string): Promise<void> {
-  const tab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find((candidate) =>
-    candidate.textContent?.trim() === label,
+  const tab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
+    (candidate) => candidate.textContent?.trim() === label,
   );
   expect(tab).toBeDefined();
   await act(async () => {
@@ -317,7 +321,9 @@ beforeEach(() => {
 
 describe("ExtensionsPage", () => {
   it("loads, inspects, mutates, and imports managed extensions", async () => {
-    const testRoot = renderIntoDocument(React.createElement(ExtensionsPage, { core: createCore() }));
+    const testRoot = renderIntoDocument(
+      React.createElement(ExtensionsPage, { core: createCore() }),
+    );
     try {
       await flush();
 
@@ -334,10 +340,16 @@ describe("ExtensionsPage", () => {
 
       await clickButton(testRoot.container, "Disable");
       await flush();
-      expect(extensionsApi.toggle).toHaveBeenCalledWith("skill", "agent-review", { enabled: false });
+      expect(extensionsApi.toggle).toHaveBeenCalledWith("skill", "agent-review", {
+        enabled: false,
+      });
       expect(testRoot.container.textContent).toContain("disabled");
 
-      await setInput(testRoot.container, "https://example.com/skill.zip", "https://example.com/imported-skill.zip");
+      await setInput(
+        testRoot.container,
+        "https://example.com/skill.zip",
+        "https://example.com/imported-skill.zip",
+      );
       await clickButton(testRoot.container, "Import URL");
       await flush();
       expect(extensionsApi.importSkill).toHaveBeenCalledWith({
@@ -368,7 +380,9 @@ describe("ExtensionsPage", () => {
 
   it("shows the elevated-mode guard when mutations are locked", async () => {
     mutationAccess.canMutate = false;
-    const testRoot = renderIntoDocument(React.createElement(ExtensionsPage, { core: createCore() }));
+    const testRoot = renderIntoDocument(
+      React.createElement(ExtensionsPage, { core: createCore() }),
+    );
     try {
       await flush();
 

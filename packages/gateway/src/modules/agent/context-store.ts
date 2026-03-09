@@ -13,11 +13,7 @@ import {
 } from "./home.js";
 import { AgentIdentityDal } from "./identity-dal.js";
 import { RuntimePackageDal } from "./runtime-package-dal.js";
-import {
-  loadSkillFromDir,
-  loadEnabledMcpServers,
-  type LoadedSkillManifest,
-} from "./workspace.js";
+import { loadSkillFromDir, loadEnabledMcpServers, type LoadedSkillManifest } from "./workspace.js";
 import { parseFrontmatterDocument } from "./frontmatter.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
@@ -175,7 +171,8 @@ class LocalAgentContextStore implements AgentContextStore {
             ...pkg.manifest,
             provenance: {
               source: "managed",
-              path: materializedPath ?? `db://runtime-packages/skill/${skillId}@${managed.revision}`,
+              path:
+                materializedPath ?? `db://runtime-packages/skill/${skillId}@${managed.revision}`,
             },
           });
           continue;
@@ -233,9 +230,10 @@ class LocalAgentContextStore implements AgentContextStore {
           kind: "mcp",
           revision: managed,
         });
-        const spec = pkg.spec.transport === "stdio" && !pkg.spec.cwd && materializedPath
-          ? { ...pkg.spec, cwd: materializedPath.replace(/\/server\.yml$/u, "") }
-          : pkg.spec;
+        const spec =
+          pkg.spec.transport === "stdio" && !pkg.spec.cwd && materializedPath
+            ? { ...pkg.spec, cwd: materializedPath.replace(/\/server\.yml$/u, "") }
+            : pkg.spec;
         loaded.push(spec.id === serverId ? spec : { ...spec, id: serverId });
       } catch (error) {
         this.logger?.warn("agent.managed_mcp_invalid", {
@@ -415,7 +413,12 @@ export function createSharedAgentContextStore(params: {
   logger?: Logger;
   bundledSkillsDir?: string;
 }): AgentContextStore {
-  return new SharedAgentContextStore(params.db, params.home, params.logger, params.bundledSkillsDir);
+  return new SharedAgentContextStore(
+    params.db,
+    params.home,
+    params.logger,
+    params.bundledSkillsDir,
+  );
 }
 
 export function createDefaultAgentContextStore(params: {

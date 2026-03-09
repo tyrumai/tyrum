@@ -450,12 +450,7 @@ describe("AgentRuntime - engine timing and concurrency", () => {
         session!.transcript
           .filter((item) => item.kind === "text")
           .map((item) => `${item.role}:${item.content}`),
-      ).toEqual([
-        "user:m1",
-        "assistant:first",
-        "user:m2",
-        "assistant:second",
-      ]);
+      ).toEqual(["user:m1", "assistant:first", "user:m2", "assistant:second"]);
     } finally {
       gate.resolve();
       await Promise.allSettled([p1, p2]);

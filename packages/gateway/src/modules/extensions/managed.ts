@@ -55,7 +55,9 @@ function toBundleFiles(files: readonly { path: string; content: Buffer }[]) {
   );
 }
 
-function fileMapFromBundle(files: readonly { path: string; content: Buffer }[]): Map<string, Buffer> {
+function fileMapFromBundle(
+  files: readonly { path: string; content: Buffer }[],
+): Map<string, Buffer> {
   return new Map(files.map((file) => [normalizeRelativePath(file.path), file.content]));
 }
 
