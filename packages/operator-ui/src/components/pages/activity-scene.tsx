@@ -32,13 +32,13 @@ function useVisibilityState(): DocumentVisibilityState {
 }
 
 const ROOM_AMBIENT: Record<ActivityRoom, string> = {
-  "terminal-lab": "rgba(77, 170, 97, 0.35)",
-  "approval-desk": "rgba(200, 155, 60, 0.30)",
-  "mail-room": "rgba(160, 140, 100, 0.25)",
-  archive: "rgba(140, 138, 130, 0.20)",
-  library: "rgba(190, 160, 60, 0.30)",
-  "strategy-desk": "rgba(100, 120, 150, 0.25)",
-  lounge: "rgba(170, 135, 80, 0.28)",
+  lounge: "rgba(210, 175, 130, 0.20)",
+  "strategy-desk": "rgba(160, 180, 155, 0.18)",
+  "approval-desk": "rgba(200, 170, 140, 0.18)",
+  library: "rgba(195, 165, 125, 0.20)",
+  "terminal-lab": "rgba(135, 180, 160, 0.20)",
+  "mail-room": "rgba(200, 185, 145, 0.16)",
+  archive: "rgba(170, 165, 180, 0.14)",
 };
 
 function idleAnimParams(roomId: ActivityRoom): { duration: number; keyframes: Keyframe[] } {
@@ -193,7 +193,7 @@ export function ActivityScene({
           style={{
             aspectRatio: `${String(W)} / ${String(H)}`,
             background:
-              "linear-gradient(180deg, rgba(100,96,88,0.12) 0%, rgba(32,35,33,0.05) 50%, rgba(22,23,22,0.03) 100%)",
+              "linear-gradient(180deg, rgba(215,200,180,0.08) 0%, rgba(200,188,170,0.04) 50%, rgba(188,178,162,0.02) 100%)",
           }}
         >
           <svg
