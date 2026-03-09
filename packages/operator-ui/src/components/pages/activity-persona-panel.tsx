@@ -13,6 +13,7 @@ import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Input } from "../ui/input.js";
 import { Textarea } from "../ui/textarea.js";
+import { compactWorkstreamKey, formatLaneLabel } from "./activity-scene-model.js";
 
 const SAVE_REASON = "activity inspector persona update";
 
@@ -28,7 +29,7 @@ function readPersona(detail: ManagedAgentDetail): AgentPersonaT {
 }
 
 function workstreamTabLabel(workstream: ActivityWorkstream): string {
-  return `${workstream.lane === "main" ? "Main" : workstream.lane} · ${workstream.key}`;
+  return `${formatLaneLabel(workstream.lane)} · ${compactWorkstreamKey(workstream.key)}`;
 }
 
 function collectUsedNames(activity: ActivityState, selectedAgentId: string): string[] {

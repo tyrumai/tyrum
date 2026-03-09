@@ -248,6 +248,8 @@ describe("ActivityPage", () => {
 
     expect(mainTab?.getAttribute("aria-pressed")).toBe("true");
     expect(reviewTab?.getAttribute("aria-pressed")).toBe("false");
+    expect(mainTab?.textContent).toBe("Main · alpha:main");
+    expect(reviewTab?.textContent).toBe("Review · alpha:main");
     expect(nameInput?.value).toBe("Alpha");
     expect(descriptionInput?.value).toBe("Alpha operator persona");
     expect(toneInput?.value).toBe("direct");
