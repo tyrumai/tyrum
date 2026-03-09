@@ -38,7 +38,7 @@ describe("WorkBoardPage", () => {
 
   it("uses a status selector on narrow screens without horizontal board scrolling", () => {
     const { core } = createCore("connected");
-    const matchMedia = stubMatchMedia("(min-width: 1120px)", false);
+    const matchMedia = stubMatchMedia("(min-width: 1160px)", false);
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
 
     try {
@@ -59,7 +59,7 @@ describe("WorkBoardPage", () => {
 
   it("renders an aligned board header on large screens", () => {
     const { core } = createCore("connected");
-    const matchMedia = stubMatchMedia("(min-width: 1120px)", true);
+    const matchMedia = stubMatchMedia("(min-width: 1160px)", true);
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
 
     try {
@@ -73,6 +73,11 @@ describe("WorkBoardPage", () => {
       expect(boardHeader).not.toBeNull();
       expect(boardHeader?.style.gridTemplateColumns).toBe(
         `repeat(${WORK_ITEM_STATUSES.length}, minmax(0, 1fr))`,
+      );
+      expect(boardHeader?.style.minWidth).toBe("1120px");
+      expect(boardHeader?.nextElementSibling).not.toBeNull();
+      expect((boardHeader?.nextElementSibling as HTMLElement | null)?.style.minWidth).toBe(
+        "1120px",
       );
     } finally {
       matchMedia.cleanup();
@@ -157,7 +162,7 @@ describe("WorkBoardPage", () => {
       },
     );
 
-    const matchMedia = stubMatchMedia("(min-width: 1120px)", true);
+    const matchMedia = stubMatchMedia("(min-width: 1160px)", true);
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
     try {
       await flushEffects();
@@ -346,7 +351,7 @@ describe("WorkBoardPage", () => {
       error: "WorkBoard is not supported by this gateway (database not configured).",
     });
 
-    const matchMedia = stubMatchMedia("(min-width: 1120px)", true);
+    const matchMedia = stubMatchMedia("(min-width: 1160px)", true);
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
     try {
       await flushEffects();
