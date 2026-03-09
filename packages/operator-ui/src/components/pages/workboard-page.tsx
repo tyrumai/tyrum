@@ -41,7 +41,11 @@ const DESKTOP_BOARD_GRID_STYLE = {
   gridTemplateColumns: `repeat(${WORK_ITEM_STATUSES.length}, minmax(0, 1fr))`,
 } as const;
 
-const WORKBOARD_DESKTOP_CONTENT_WIDTH_PX = 1120;
+const WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX = 1120;
+const WORKBOARD_DESKTOP_CONTENT_WIDTH_PX = WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX + 40;
+const DESKTOP_BOARD_MIN_WIDTH_STYLE = {
+  minWidth: WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX,
+} as const;
 
 function makeAgentScope(): WorkStateKVScope {
   return { kind: "agent", ...DEFAULT_SCOPE_KEYS };
@@ -355,7 +359,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
                 <div
                   data-testid="workboard-board-header"
                   className="grid border-b border-border bg-bg-subtle"
-                  style={DESKTOP_BOARD_GRID_STYLE}
+                  style={{ ...DESKTOP_BOARD_GRID_STYLE, ...DESKTOP_BOARD_MIN_WIDTH_STYLE }}
                 >
                   {WORK_ITEM_STATUSES.map((status) => (
                     <div
@@ -371,7 +375,10 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
                     </div>
                   ))}
                 </div>
-                <div className="min-w-[70rem] grid" style={DESKTOP_BOARD_GRID_STYLE}>
+                <div
+                  className="grid"
+                  style={{ ...DESKTOP_BOARD_GRID_STYLE, ...DESKTOP_BOARD_MIN_WIDTH_STYLE }}
+                >
                   {WORK_ITEM_STATUSES.map((status) => (
                     <div
                       key={status}
