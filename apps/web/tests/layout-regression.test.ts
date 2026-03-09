@@ -26,6 +26,11 @@ type LayoutCase = {
 
 const cases: LayoutCase[] = [
   {
+    name: "activity",
+    route: "activity",
+    selectors: ["[data-testid='activity-page']"],
+  },
+  {
     name: "dashboard",
     route: "dashboard",
     selectors: ["[data-layout-content]"],

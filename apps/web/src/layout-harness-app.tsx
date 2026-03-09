@@ -1,6 +1,7 @@
 import React from "react";
 import { AppShell } from "../../../packages/operator-ui/src/components/layout/app-shell.js";
 import { Sidebar } from "../../../packages/operator-ui/src/components/layout/sidebar.js";
+import { ActivityPage } from "../../../packages/operator-ui/src/components/pages/activity-page.js";
 import { AgentsPage } from "../../../packages/operator-ui/src/components/pages/agents-page.js";
 import { ApprovalsPage } from "../../../packages/operator-ui/src/components/pages/approvals-page.js";
 import { ChatPage } from "../../../packages/operator-ui/src/components/pages/chat-page.js";
@@ -14,6 +15,7 @@ import { BrowserNodeProvider } from "../../../packages/operator-ui/src/browser-n
 import { ElevatedModeProvider } from "../../../packages/operator-ui/src/elevated-mode.js";
 import { OperatorUiHostProvider } from "../../../packages/operator-ui/src/host/host-api.js";
 import {
+  createActivityCore,
   createAgentsCore,
   createApprovalsCore,
   createChatCore,
@@ -25,6 +27,7 @@ import {
 } from "./layout-harness-route-fixtures.js";
 
 type LayoutRoute =
+  | "activity"
   | "dashboard"
   | "chat"
   | "approvals"
@@ -72,6 +75,8 @@ function createNodeConfigureRoute(): React.ReactNode {
 
 function renderRoute(route: LayoutRoute): React.ReactNode {
   switch (route) {
+    case "activity":
+      return <ActivityPage core={createActivityCore()} />;
     case "dashboard":
       return <DashboardPage core={createDashboardCore()} />;
     case "chat":
@@ -105,6 +110,7 @@ export function LayoutHarnessApp() {
   const params = new URLSearchParams(window.location.search);
   const route = (params.get("route") ?? "dashboard") as LayoutRoute;
   const navItems = [
+    { id: "activity", label: "Activity", icon: HarnessIcon },
     { id: "dashboard", label: "Dashboard", icon: HarnessIcon },
     { id: "chat", label: "Chat", icon: HarnessIcon },
     { id: "approvals", label: "Approvals", icon: HarnessIcon },

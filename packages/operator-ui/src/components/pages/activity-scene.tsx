@@ -1,8 +1,15 @@
-import type { ActivityAttentionLevel, ActivityState } from "@tyrum/operator-core";
+import type { ActivityRoom, ActivityState } from "@tyrum/operator-core";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "../../lib/cn.js";
 import { useMediaQuery } from "../../hooks/use-media-query.js";
-import { ACTIVITY_ROOM_LABELS, deriveActivityScene } from "./activity-scene-model.js";
+import { RoomFurniture } from "./activity-scene-furniture.js";
+import {
+  PALETTE_COLORS,
+  actorColors,
+  attentionRing,
+  renderMascot,
+} from "./activity-scene-mascot.js";
+import { deriveActivityScene } from "./activity-scene-model.js";
 
 interface ActivitySceneProps {
   activity: ActivityState;
@@ -30,81 +37,46 @@ function useVisibilityState(): DocumentVisibilityState {
   return visibilityState;
 }
 
-function hashAgentId(value: string): number {
-  let hash = 0;
-  for (const char of value) {
-    hash = (hash * 31 + char.charCodeAt(0)) % 360;
-  }
-  return hash;
-}
+const ROOM_AMBIENT: Record<ActivityRoom, string> = {
+  "terminal-lab": "rgba(77, 138, 97, 0.10)",
+  "approval-desk": "rgba(179, 130, 60, 0.08)",
+  "mail-room": "rgba(123, 107, 82, 0.07)",
+  archive: "rgba(138, 136, 127, 0.06)",
+  library: "rgba(170, 140, 70, 0.08)",
+  "strategy-desk": "rgba(123, 107, 82, 0.06)",
+  lounge: "rgba(160, 120, 80, 0.07)",
+};
 
-function actorColors(agentId: string) {
-  const hue = hashAgentId(agentId);
-  return {
-    shell: `hsl(${String(hue)} 45% 62%)`,
-    shellDark: `hsl(${String(hue)} 42% 46%)`,
-    shellLight: `hsl(${String(hue)} 56% 78%)`,
-  };
-}
-
-function attentionRing(attentionLevel: ActivityAttentionLevel) {
-  if (attentionLevel === "critical") return "rgba(197, 106, 95, 0.88)";
-  if (attentionLevel === "high") return "rgba(179, 130, 60, 0.82)";
-  if (attentionLevel === "medium") return "rgba(123, 107, 82, 0.82)";
-  return "rgba(138, 136, 127, 0.5)";
-}
-
-function roomTint(roomId: keyof typeof ACTIVITY_ROOM_LABELS): string {
+function idleAnimParams(roomId: ActivityRoom): { duration: number; keyframes: Keyframe[] } {
   switch (roomId) {
     case "terminal-lab":
-      return "rgba(77, 138, 97, 0.12)";
-    case "approval-desk":
-      return "rgba(179, 130, 60, 0.12)";
-    case "mail-room":
-      return "rgba(123, 107, 82, 0.12)";
-    case "archive":
-      return "rgba(138, 136, 127, 0.12)";
+      return {
+        duration: 1400,
+        keyframes: [
+          { transform: "translateY(0px) scale(1)" },
+          { transform: "translateY(-2px) scale(1.01)" },
+          { transform: "translateY(1px) scale(0.995)" },
+        ],
+      };
+    case "lounge":
+      return {
+        duration: 3200,
+        keyframes: [
+          { transform: "translateY(0px) scale(1)" },
+          { transform: "translateY(-3px) scale(1.01)" },
+          { transform: "translateY(1px) scale(0.99)" },
+        ],
+      };
     default:
-      return "rgba(123, 107, 82, 0.08)";
+      return {
+        duration: 2200,
+        keyframes: [
+          { transform: "translateY(0px) scale(1)" },
+          { transform: "translateY(-5px) scale(1.02)" },
+          { transform: "translateY(1px) scale(0.99)" },
+        ],
+      };
   }
-}
-
-function renderMascot(agentId: string, active: boolean, attentionLevel: ActivityAttentionLevel) {
-  const colors = actorColors(agentId);
-  return (
-    <svg
-      aria-hidden={true}
-      viewBox="0 0 72 72"
-      className="h-[4.5rem] w-[4.5rem] drop-shadow-[0_6px_14px_rgba(0,0,0,0.24)]"
-    >
-      <ellipse cx="36" cy="62" rx="16" ry="4.5" fill="rgba(0,0,0,0.18)" />
-      <path
-        d="M20 31c0-10 7.4-18 16-18s16 8 16 18v16c0 9-7.2 14-16 14S20 56 20 47z"
-        fill={colors.shell}
-        stroke={colors.shellDark}
-        strokeWidth="2.5"
-      />
-      <circle cx="36" cy="22" r="12.5" fill={colors.shellLight} stroke={colors.shellDark} />
-      <path d="M29 20h3.8" stroke="#201f1b" strokeLinecap="round" strokeWidth="2.8" />
-      <path d="M39.2 20H43" stroke="#201f1b" strokeLinecap="round" strokeWidth="2.8" />
-      <path
-        d="M31 27.5c1.8 2 3.5 2.8 5 2.8s3.2-.8 5-2.8"
-        stroke="#201f1b"
-        strokeLinecap="round"
-        strokeWidth="2.4"
-      />
-      <path
-        d="M24 43.5h24"
-        stroke={active ? attentionRing(attentionLevel) : colors.shellDark}
-        strokeLinecap="round"
-        strokeWidth="3"
-      />
-      <path d="M28 55v8" stroke={colors.shellDark} strokeLinecap="round" strokeWidth="3" />
-      <path d="M44 55v8" stroke={colors.shellDark} strokeLinecap="round" strokeWidth="3" />
-      <path d="M20 37l-5 4" stroke={colors.shellDark} strokeLinecap="round" strokeWidth="3" />
-      <path d="M52 37l5 4" stroke={colors.shellDark} strokeLinecap="round" strokeWidth="3" />
-    </svg>
-  );
 }
 
 export function ActivityScene({
@@ -143,20 +115,15 @@ export function ActivityScene({
     );
     for (const [index, node] of actorNodes.entries()) {
       if (typeof node.animate !== "function") continue;
+      const roomId = (node.dataset["roomId"] ?? "lounge") as ActivityRoom;
+      const params = idleAnimParams(roomId);
       animations.push(
-        node.animate(
-          [
-            { transform: "translateY(0px) scale(1)" },
-            { transform: "translateY(-5px) scale(1.02)" },
-            { transform: "translateY(1px) scale(0.99)" },
-          ],
-          {
-            duration: 2200 + index * 140,
-            delay: index * 80,
-            easing: "ease-in-out",
-            iterations: Number.POSITIVE_INFINITY,
-          },
-        ),
+        node.animate(params.keyframes, {
+          duration: params.duration + index * 140,
+          delay: index * 80,
+          easing: "ease-in-out",
+          iterations: Number.POSITIVE_INFINITY,
+        }),
       );
     }
 
@@ -183,81 +150,192 @@ export function ActivityScene({
     };
   }, [motionSignature, shouldAnimate]);
 
+  const W = scene.width;
+  const H = scene.height;
+  const WALL = 8;
+  const FLOOR_H = 6;
+  const fc = "var(--tyrum-color-border)";
+  const wallFill = "rgba(80,76,68,0.45)";
+  const floorFill = "rgba(100,96,88,0.38)";
+
   return (
-    <div className="space-y-4">
+    <div>
       <div
         data-testid="activity-scene-viewport"
         data-motion-mode={prefersReducedMotion ? "reduced" : "full"}
         data-visibility-state={visibilityState}
-        className="overflow-hidden rounded-[1.5rem] border border-border/70 bg-bg-card/80"
+        className="overflow-hidden border border-border/50 bg-bg-card/80"
+        style={{ borderRadius: "6px" }}
       >
         <div
           ref={sceneRef}
           className="relative"
           style={{
-            aspectRatio: `${String(scene.width)} / ${String(scene.height)}`,
+            aspectRatio: `${String(W)} / ${String(H)}`,
             background:
-              "linear-gradient(180deg, rgba(123,107,82,0.14) 0%, rgba(32,35,33,0.06) 46%, rgba(22,23,22,0.02) 100%)",
+              "linear-gradient(180deg, rgba(100,96,88,0.10) 0%, rgba(32,35,33,0.04) 50%, rgba(22,23,22,0.02) 100%)",
           }}
         >
           <svg
-            aria-label="Hybrid house-office activity building"
+            aria-label="Activity building cutaway"
             className="absolute inset-0 h-full w-full"
-            viewBox={`0 0 ${String(scene.width)} ${String(scene.height)}`}
+            viewBox={`0 0 ${String(W)} ${String(H)}`}
           >
-            <rect
-              x="18"
-              y="28"
-              width="924"
-              height="664"
-              rx="28"
-              fill="var(--tyrum-color-bg-card)"
-              stroke="var(--tyrum-color-border)"
-            />
-            <path
-              d="M48 88L168 28l120 60"
-              fill="none"
-              stroke="var(--tyrum-color-border)"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="5"
-            />
-            <path
-              d="M600 68h312"
-              fill="none"
-              stroke="var(--tyrum-color-border)"
-              strokeLinecap="round"
-              strokeWidth="5"
-            />
-            <path
-              d="M48 248h864M48 452h864M48 576h864"
-              fill="none"
-              stroke="rgba(138,136,127,0.32)"
-              strokeDasharray="10 10"
-              strokeWidth="2"
-            />
-            {scene.rooms.map((room) => (
-              <g key={room.id}>
-                <rect
-                  x={room.x}
-                  y={room.y}
-                  width={room.width}
-                  height={room.height}
-                  rx="18"
-                  fill={roomTint(room.id)}
-                  stroke="var(--tyrum-color-border)"
-                />
-                <text
-                  x={room.x + 18}
-                  y={room.y + 28}
-                  fill="var(--tyrum-color-fg)"
-                  fontSize="18"
-                  fontWeight="600"
+            <defs>
+              {scene.rooms.map((room) => (
+                <radialGradient
+                  key={`ambient-${room.id}`}
+                  id={`ambient-${room.id}`}
+                  cx="50%"
+                  cy="60%"
+                  r="70%"
                 >
-                  {room.label}
-                </text>
+                  <stop offset="0%" stopColor={ROOM_AMBIENT[room.id]} />
+                  <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+                </radialGradient>
+              ))}
+            </defs>
+
+            {/* Building shell — outer walls */}
+            <rect
+              x={18}
+              y={24}
+              width={W - 36}
+              height={H - 48}
+              fill="none"
+              stroke={wallFill}
+              strokeWidth={WALL}
+            />
+
+            {/* Roof parapet */}
+            <rect x={14} y={20} width={W - 28} height={WALL} fill={floorFill} />
+            {/* Rooftop details */}
+            <rect x={120} y={10} width="4" height="14" fill={fc} />
+            <rect x={116} y={8} width="12" height="4" rx="1" fill={fc} />
+            <rect
+              x={W - 160}
+              y={12}
+              width="20"
+              height="10"
+              rx="2"
+              fill="none"
+              stroke={fc}
+              strokeWidth="1.5"
+            />
+            <rect x={W - 156} y={14} width="5" height="6" rx="1" fill={fc} opacity="0.4" />
+
+            {/* Floor slabs */}
+            {[248, 452, 576].map((fy) => (
+              <rect
+                key={`floor-${fy}`}
+                x={22}
+                y={fy - FLOOR_H / 2}
+                width={W - 44}
+                height={FLOOR_H}
+                fill={floorFill}
+              />
+            ))}
+
+            {/* Foundation slab above home bays */}
+            <rect x={18} y={576} width={W - 36} height={WALL + 2} fill={wallFill} />
+
+            {/* Ground line */}
+            <rect x={0} y={H - 24} width={W} height={24} fill="rgba(60,58,52,0.18)" />
+            <path d={`M0 ${H - 24}h${W}`} stroke={fc} strokeWidth="1" opacity="0.4" />
+            {/* Terrain marks */}
+            {[60, 180, 340, 520, 680, 820].map((gx) => (
+              <path
+                key={`grass-${gx}`}
+                d={`M${gx} ${H - 18}c2-6 6-6 8 0`}
+                stroke="rgba(90,110,75,0.25)"
+                strokeWidth="1.5"
+                fill="none"
+              />
+            ))}
+
+            {/* Rooms — walls and fills */}
+            {scene.rooms.map((room) => {
+              const roomSpec = room;
+              return (
+                <g key={room.id}>
+                  {/* Room background */}
+                  <rect
+                    x={roomSpec.x}
+                    y={roomSpec.y}
+                    width={roomSpec.width}
+                    height={roomSpec.height}
+                    fill={ROOM_AMBIENT[room.id]}
+                  />
+                  {/* Ambient glow */}
+                  <rect
+                    x={roomSpec.x}
+                    y={roomSpec.y}
+                    width={roomSpec.width}
+                    height={roomSpec.height}
+                    fill={`url(#ambient-${room.id})`}
+                  />
+                  {/* Room nameplate */}
+                  <rect
+                    x={roomSpec.x + 10}
+                    y={roomSpec.y + 6}
+                    width={Math.min(roomSpec.label.length * 9 + 12, roomSpec.width - 20)}
+                    height="18"
+                    rx="3"
+                    fill="rgba(32,35,33,0.6)"
+                  />
+                  <text
+                    x={roomSpec.x + 16}
+                    y={roomSpec.y + 19}
+                    fill="var(--tyrum-color-fg-muted)"
+                    fontSize="11"
+                    fontWeight="500"
+                  >
+                    {roomSpec.label}
+                  </text>
+
+                  {/* Furniture */}
+                  <RoomFurniture
+                    roomId={room.id}
+                    x={roomSpec.x}
+                    y={roomSpec.y}
+                    w={roomSpec.width}
+                    h={roomSpec.height}
+                  />
+                </g>
+              );
+            })}
+
+            {/* Vertical wall dividers — segmented with doorway gaps */}
+            {/* Floor 1 left wall (lounge | strategy-desk): gap at y=170-210 */}
+            <rect x={292} y={28} width={4} height={142} fill={wallFill} />
+            <rect x={292} y={210} width={4} height={38} fill={wallFill} />
+            {/* Floor 1 right wall (strategy-desk | approval-desk): gap at y=170-210 */}
+            <rect x={568} y={28} width={4} height={142} fill={wallFill} />
+            <rect x={568} y={210} width={4} height={38} fill={wallFill} />
+            {/* Floor 2 left wall (library | terminal-lab): gap at y=370-410 */}
+            <rect x={292} y={248} width={4} height={122} fill={wallFill} />
+            <rect x={292} y={410} width={4} height={42} fill={wallFill} />
+            {/* Floor 2 right wall (terminal-lab | mail-room): gap at y=370-410 */}
+            <rect x={568} y={248} width={4} height={122} fill={wallFill} />
+            <rect x={568} y={410} width={4} height={42} fill={wallFill} />
+
+            {/* Cutaway hatch on left and right edges */}
+            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map((i) => (
+              <g key={`hatch-${i}`}>
+                <path
+                  d={`M22 ${28 + i * 40}l-6 12`}
+                  stroke="rgba(138,136,127,0.18)"
+                  strokeWidth="1"
+                />
+                <path
+                  d={`M${W - 22} ${28 + i * 40}l6 12`}
+                  stroke="rgba(138,136,127,0.18)"
+                  strokeWidth="1"
+                />
               </g>
             ))}
+
+            {/* Home bays */}
             {scene.bays.map((bay) => (
               <g key={bay.id}>
                 <rect
@@ -265,101 +343,137 @@ export function ActivityScene({
                   y={bay.y}
                   width={bay.width}
                   height={bay.height}
-                  rx="18"
-                  fill="rgba(123,107,82,0.08)"
-                  stroke="var(--tyrum-color-border)"
+                  fill="rgba(60,58,52,0.12)"
+                  stroke={fc}
+                  strokeWidth="1"
+                  strokeDasharray="4 3"
                 />
-                <text x={bay.x + 18} y={bay.y + 30} fill="var(--tyrum-color-fg)" fontSize="17">
+                {/* Nameplate */}
+                <rect
+                  x={bay.x + 8}
+                  y={bay.y + 6}
+                  width={Math.min(bay.label.length * 7 + 10, bay.width - 16)}
+                  height="16"
+                  rx="2"
+                  fill="rgba(32,35,33,0.5)"
+                />
+                <text
+                  x={bay.x + 13}
+                  y={bay.y + 18}
+                  fill="var(--tyrum-color-fg-muted)"
+                  fontSize="10"
+                  fontWeight="500"
+                >
                   {bay.label}
                 </text>
-                <text
-                  x={bay.x + 18}
-                  y={bay.y + 56}
-                  fill="var(--tyrum-color-fg-muted)"
-                  fontSize="13"
-                >
-                  {bay.state === "split"
-                    ? `Split into ${String(bay.workstreamCount)} streams`
-                    : "Merged home bay"}
-                </text>
+                {/* Desk */}
+                <rect
+                  x={bay.x + 10}
+                  y={bay.y + 30}
+                  width={Math.min(bay.width - 20, 60)}
+                  height="2"
+                  rx="0.5"
+                  fill={fc}
+                  opacity="0.4"
+                />
+                {/* Mug */}
+                <rect
+                  x={bay.x + bay.width - 28}
+                  y={bay.y + 24}
+                  width="6"
+                  height="8"
+                  rx="1.5"
+                  fill="none"
+                  stroke={fc}
+                  strokeWidth="1"
+                  opacity="0.3"
+                />
+                {/* Plant */}
+                <circle
+                  cx={bay.x + bay.width - 40}
+                  cy={bay.y + 26}
+                  r="4"
+                  fill="rgba(77,120,72,0.2)"
+                />
               </g>
             ))}
-            {scene.actors.map((actor) => (
-              <path
-                key={`path:${actor.workstreamId}`}
-                d={`M ${String(actor.bayX)} ${String(actor.bayY)} Q ${String((actor.bayX + actor.x) / 2)} ${String(actor.y + 72)} ${String(actor.x)} ${String(actor.y + 26)}`}
-                fill="none"
-                opacity={actor.selected ? 0.9 : 0.42}
-                stroke={attentionRing(actor.attentionLevel)}
-                strokeDasharray={actor.selected ? "0" : "5 8"}
-                strokeWidth={actor.selected ? 3.2 : 2}
-              />
-            ))}
+
+            {/* Connection paths — actor to home bay */}
+            {scene.actors.map((actor) => {
+              const ws = activity.workstreamsById[actor.workstreamId];
+              const colors = ws ? actorColors(ws.persona) : PALETTE_COLORS["graphite"]!;
+              return (
+                <path
+                  key={`path:${actor.workstreamId}`}
+                  d={`M ${String(actor.bayX)} ${String(actor.bayY)} Q ${String((actor.bayX + actor.x) / 2)} ${String(actor.y + 72)} ${String(actor.x)} ${String(actor.y + 26)}`}
+                  fill="none"
+                  opacity={actor.selected ? 0.6 : 0.15}
+                  stroke={colors.shell}
+                  strokeWidth={actor.selected ? 2 : 1.5}
+                />
+              );
+            })}
           </svg>
 
-          {scene.actors.map((actor) => (
-            <button
-              key={actor.id}
-              type="button"
-              aria-label={`${actor.name}, ${actor.badgeLabel}, ${actor.roomLabel}`}
-              data-testid={`activity-workstream-${actor.workstreamId}`}
-              data-active={actor.selected ? "true" : undefined}
-              className={cn(
-                "group absolute z-10 w-32 -translate-x-1/2 -translate-y-1/2 text-left transition-all duration-500",
-                actor.selected ? "opacity-100" : "opacity-95 hover:opacity-100",
-              )}
-              style={{
-                left: `${String((actor.x / scene.width) * 100)}%`,
-                top: `${String((actor.y / scene.height) * 100)}%`,
-              }}
-              onClick={() => {
-                onSelectWorkstream(actor.workstreamId);
-              }}
-            >
-              {actor.bubbleText ? (
-                <div
-                  data-activity-motion="bubble"
-                  className={cn(
-                    "mx-auto mb-2 w-fit max-w-28 rounded-2xl border border-border/80 bg-bg/90 px-3 py-1.5 text-center text-[11px] leading-4 text-fg shadow-sm",
-                    !shouldAnimate && "opacity-95",
-                  )}
-                >
-                  {actor.bubbleText}
-                </div>
-              ) : null}
-              <div
-                data-activity-motion="actor"
-                className="flex flex-col items-center"
+          {/* Actor overlays */}
+          {scene.actors.map((actor) => {
+            const ws = activity.workstreamsById[actor.workstreamId];
+            const persona = ws?.persona ?? {
+              name: "Agent",
+              description: "",
+              tone: "direct",
+              palette: "graphite",
+              character: "operator",
+            };
+            return (
+              <button
+                key={actor.id}
+                type="button"
+                aria-label={`${actor.name}, ${actor.badgeLabel}, ${actor.roomLabel}`}
+                data-testid={`activity-workstream-${actor.workstreamId}`}
+                data-active={actor.selected ? "true" : undefined}
+                className={cn(
+                  "group absolute z-10 w-32 -translate-x-1/2 -translate-y-1/2 text-left transition-opacity duration-300",
+                  actor.selected ? "opacity-100" : "opacity-90 hover:opacity-100",
+                )}
                 style={{
-                  filter: actor.selected
-                    ? `drop-shadow(0 0 0.75rem ${attentionRing(actor.attentionLevel)})`
-                    : undefined,
+                  left: `${String((actor.x / W) * 100)}%`,
+                  top: `${String((actor.y / H) * 100)}%`,
+                }}
+                onClick={() => {
+                  onSelectWorkstream(actor.workstreamId);
                 }}
               >
-                {renderMascot(actor.agentId, actor.selected, actor.attentionLevel)}
-                <span className="mt-2 rounded-full border border-border/80 bg-bg/92 px-2.5 py-1 text-center text-[11px] font-medium text-fg shadow-sm">
-                  {actor.badgeLabel}
-                </span>
-              </div>
-            </button>
-          ))}
+                {actor.bubbleText ? (
+                  <div
+                    data-activity-motion="bubble"
+                    className={cn(
+                      "mx-auto mb-2 w-fit max-w-28 rounded-md border border-border/60 bg-bg/90 px-2 py-1 text-center text-[10px] leading-[14px] text-fg shadow-sm",
+                      !shouldAnimate && "opacity-95",
+                    )}
+                  >
+                    {actor.bubbleText}
+                  </div>
+                ) : null}
+                <div
+                  data-activity-motion="actor"
+                  data-room-id={actor.roomId}
+                  className="flex flex-col items-center"
+                  style={{
+                    filter: actor.selected
+                      ? `drop-shadow(0 0 0.6rem ${attentionRing(actor.attentionLevel)})`
+                      : undefined,
+                  }}
+                >
+                  {renderMascot(persona, actor.selected, actor.attentionLevel, actor.roomId)}
+                  <span className="mt-1 rounded border border-border/60 bg-bg/90 px-1.5 py-0.5 text-center text-[10px] font-medium text-fg shadow-sm">
+                    {actor.badgeLabel}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-        <span className="rounded-full border border-border/70 bg-bg-subtle/40 px-2.5 py-1">
-          One actor per active key plus lane
-        </span>
-        <span className="rounded-full border border-border/70 bg-bg-subtle/40 px-2.5 py-1">
-          Same-agent streams share mascot identity
-        </span>
-        <span className="rounded-full border border-border/70 bg-bg-subtle/40 px-2.5 py-1">
-          {prefersReducedMotion
-            ? "Reduced motion: static room cues only"
-            : visibilityState === "hidden"
-              ? "Motion paused while the tab is hidden"
-              : "WAAPI idle loops active"}
-        </span>
       </div>
     </div>
   );

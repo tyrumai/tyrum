@@ -3,6 +3,7 @@ import {
   type OperatorCore,
 } from "../../../packages/operator-core/src/index.js";
 import type { DesktopApi } from "../../../packages/operator-ui/src/desktop-api.js";
+import { createActivityFixtureStore } from "./layout-harness-activity-fixtures.js";
 import {
   createAgentStatusStore,
   createApprovalsStore,
@@ -270,6 +271,24 @@ export function createConfigureCore(): OperatorCore {
       plugins: {
         list: async () => ({ plugins: [{ id: "echo", version: "1.0.0" }] }),
         get: async () => ({ id: "echo", version: "1.0.0", description: "Test plugin" }),
+      },
+    },
+  } as unknown as OperatorCore;
+}
+
+export function createActivityCore(): OperatorCore {
+  return {
+    activityStore: createActivityFixtureStore(),
+    statusStore: createStatusStore(),
+    http: {
+      agents: {
+        get: async (agentKey: string) => createManagedAgentDetail(agentKey),
+      },
+      agentConfig: {
+        update: async (agentKey: string) => ({
+          config: createManagedAgentDetail(agentKey).config,
+          revision: 2,
+        }),
       },
     },
   } as unknown as OperatorCore;

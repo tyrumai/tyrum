@@ -4,8 +4,8 @@ import type {
   ActivityWorkstream,
   OperatorCore,
 } from "@tyrum/operator-core";
-import { Building2, Orbit, Sparkles } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { Building2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { AppPage } from "../layout/app-page.js";
 import { Badge, type BadgeVariant } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -13,7 +13,6 @@ import { EmptyState } from "../ui/empty-state.js";
 import { Skeleton } from "../ui/skeleton.js";
 import { cn } from "../../lib/cn.js";
 import { useOperatorStore } from "../../use-operator-store.js";
-import { ActivityPersonaPanel } from "./activity-persona-panel.js";
 import { ActivityScene } from "./activity-scene.js";
 import { ACTIVITY_ROOM_LABELS } from "./activity-scene-model.js";
 
@@ -37,46 +36,6 @@ const ATTENTION_BADGE_VARIANTS: Record<ActivityAttentionLevel, BadgeVariant> = {
   idle: "outline",
 };
 
-function Section({
-  title,
-  description,
-  testId,
-  className,
-  children,
-}: {
-  title: string;
-  description: string;
-  testId: string;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      aria-label={title}
-      data-testid={testId}
-      className={cn(
-        "flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-bg-card/60",
-        className,
-      )}
-    >
-      <div className="border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold text-fg">{title}</h2>
-        <p className="mt-1 text-xs text-fg-muted">{description}</p>
-      </div>
-      <div className="min-h-0 flex-1 p-4">{children}</div>
-    </section>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex items-start justify-between gap-3 border-b border-border/70 py-2 last:border-b-0">
-      <dt className="text-xs font-medium uppercase tracking-wide text-fg-muted">{label}</dt>
-      <dd className="text-right text-sm text-fg">{value}</dd>
-    </div>
-  );
-}
-
 function formatRunStatus(status: ActivityWorkstream["runStatus"]): string {
   if (!status) return "Idle";
   return status.charAt(0).toUpperCase() + status.slice(1);
@@ -86,8 +45,6 @@ function formatOccurredAt(value: string): string {
   const timestamp = Date.parse(value);
   if (Number.isNaN(timestamp)) return value;
   return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   }).format(timestamp);
@@ -97,7 +54,66 @@ function collectTimelineEvents(activity: ActivityState) {
   return activity.workstreamIds
     .flatMap((workstreamId) => activity.workstreamsById[workstreamId]?.recentEvents ?? [])
     .toSorted((left, right) => Date.parse(right.occurredAt) - Date.parse(left.occurredAt))
-    .slice(0, 8);
+    .slice(0, 6);
+}
+
+function ActorPopover({
+  workstream,
+  onClose,
+}: {
+  workstream: ActivityWorkstream;
+  onClose: () => void;
+}) {
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(event: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={popoverRef}
+      data-testid="activity-actor-popover"
+      className="absolute right-4 top-4 z-30 w-64 rounded-lg border border-border bg-bg-card p-3 shadow-lg"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-fg">{workstream.persona.name}</div>
+          <div className="mt-0.5 text-xs text-fg-muted">{workstream.persona.description}</div>
+        </div>
+        <Badge variant={ATTENTION_BADGE_VARIANTS[workstream.attentionLevel]}>
+          {ATTENTION_LABELS[workstream.attentionLevel]}
+        </Badge>
+      </div>
+      <div className="mt-3 space-y-1.5 text-xs">
+        <div className="flex justify-between">
+          <span className="text-fg-muted">Room</span>
+          <span className="text-fg">{ACTIVITY_ROOM_LABELS[workstream.currentRoom]}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-fg-muted">Status</span>
+          <span className="text-fg">{formatRunStatus(workstream.runStatus)}</span>
+        </div>
+        {workstream.queuedRunCount > 0 && (
+          <div className="flex justify-between">
+            <span className="text-fg-muted">Queue</span>
+            <span className="text-fg">{workstream.queuedRunCount}</span>
+          </div>
+        )}
+        {workstream.bubbleText && (
+          <div className="mt-2 rounded border border-border/50 bg-bg/60 px-2 py-1.5 text-xs text-fg-muted">
+            {workstream.bubbleText}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function ActivityPage({ core }: ActivityPageProps) {
@@ -123,14 +139,14 @@ export function ActivityPage({ core }: ActivityPageProps) {
     ? (activity.workstreamsById[selectedWorkstreamId] ?? null)
     : null;
   const timelineEvents = selectedWorkstream?.recentEvents.length
-    ? selectedWorkstream.recentEvents
+    ? selectedWorkstream.recentEvents.slice(0, 6)
     : collectTimelineEvents(activity);
 
   return (
     <AppPage
       title="Activity"
       data-testid="activity-page"
-      contentClassName="max-w-6xl gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.9fr)]"
+      contentClassName="max-w-5xl gap-3"
       actions={
         <div data-testid="activity-page-filters" className="flex flex-wrap items-center gap-2">
           <Button
@@ -149,35 +165,19 @@ export function ActivityPage({ core }: ActivityPageProps) {
         </div>
       }
     >
-      <Section
-        title="Scene"
-        description="Reserved for the animated building scene and room-level workstream cues."
-        testId="activity-page-scene"
-      >
+      <div data-testid="activity-page-scene" className="relative">
         {isLoading ? (
-          <div
-            data-testid="activity-page-loading"
-            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
-          >
-            <div className="sm:col-span-2 xl:col-span-3">
-              <p className="text-sm text-fg-muted">Preparing activity scene</p>
-            </div>
+          <div data-testid="activity-page-loading" className="space-y-3 px-4 py-8">
+            <p className="text-sm text-fg-muted">Preparing activity scene</p>
             {Array.from({ length: 3 }, (_, index) => (
-              <div
-                key={`activity-scene-skeleton-${index}`}
-                className="rounded-lg border border-border/70 bg-bg-subtle/50 p-3"
-              >
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="mt-3 h-10 w-full" />
-                <Skeleton className="mt-2 h-4 w-20" />
-              </div>
+              <Skeleton key={`activity-scene-skeleton-${index}`} className="h-10 w-full" />
             ))}
           </div>
         ) : activity.workstreamIds.length === 0 ? (
           <EmptyState
             icon={Building2}
             title="Scene coming online"
-            description="The Activity page shell is ready. Workstream cards and the animated building scene will appear here once activity starts flowing."
+            description="Workstream activity will appear here once agents start flowing."
           />
         ) : (
           <ActivityScene
@@ -189,113 +189,36 @@ export function ActivityPage({ core }: ActivityPageProps) {
             }}
           />
         )}
-      </Section>
 
-      <Section
-        title="Inspector"
-        description="Selected workstream details, persona context, and attention signals."
-        testId="activity-page-inspector"
-      >
-        {selectedWorkstream ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-border/70 bg-bg-subtle/50 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-semibold text-fg">
-                    {selectedWorkstream.persona.name}
-                  </h3>
-                  <p className="mt-1 text-sm text-fg-muted">
-                    {selectedWorkstream.persona.description || "No persona description available."}
-                  </p>
-                </div>
-                <Badge variant={ATTENTION_BADGE_VARIANTS[selectedWorkstream.attentionLevel]}>
-                  {ATTENTION_LABELS[selectedWorkstream.attentionLevel]}
-                </Badge>
-              </div>
-            </div>
-
-            <ActivityPersonaPanel
-              activity={activity}
-              core={core}
-              selectedWorkstream={selectedWorkstream}
-              onSelectWorkstream={(workstreamId) => {
-                setSelectionCleared(false);
-                core.activityStore.selectWorkstream(workstreamId);
-              }}
-            />
-
-            <dl className="rounded-lg border border-border/70 bg-bg-subtle/50 px-4">
-              <DetailRow label="Agent" value={selectedWorkstream.agentId} />
-              <DetailRow label="Key" value={selectedWorkstream.key} />
-              <DetailRow
-                label="Room"
-                value={ACTIVITY_ROOM_LABELS[selectedWorkstream.currentRoom]}
-              />
-              <DetailRow
-                label="Lane"
-                value={selectedWorkstream.lane === "main" ? "Main" : selectedWorkstream.lane}
-              />
-              <DetailRow label="Run" value={selectedWorkstream.latestRunId ?? "No run yet"} />
-              <DetailRow label="Status" value={formatRunStatus(selectedWorkstream.runStatus)} />
-              <DetailRow label="Queue" value={String(selectedWorkstream.queuedRunCount)} />
-              <DetailRow
-                label="Lease"
-                value={
-                  selectedWorkstream.lease.active
-                    ? (selectedWorkstream.lease.owner ?? "Active")
-                    : "Open"
-                }
-              />
-            </dl>
-
-            <div className="rounded-lg border border-border/70 bg-bg-subtle/50 p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-fg">
-                <Orbit className="h-4 w-4" aria-hidden={true} />
-                Bubble text
-              </div>
-              <p className="mt-2 text-sm text-fg">
-                {selectedWorkstream.bubbleText ?? "No live bubble text yet."}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <EmptyState
-            icon={Sparkles}
-            title="No workstream selected"
-            description="Choose a workstream from the scene to inspect its room, run status, queue depth, and recent events."
+        {selectedWorkstream && (
+          <ActorPopover
+            workstream={selectedWorkstream}
+            onClose={() => {
+              setSelectionCleared(true);
+              core.activityStore.clearSelection();
+            }}
           />
         )}
-      </Section>
+      </div>
 
-      <Section
-        title="Recent activity"
-        description="Recent events for the selected workstream, or the freshest activity across the scene."
-        testId="activity-page-timeline"
-        className="lg:col-span-2"
-      >
-        {timelineEvents.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border/70 bg-bg-subtle/30 px-4 py-6 text-sm text-fg-muted">
-            No activity events yet.
-          </div>
-        ) : (
-          <ol className="space-y-3">
-            {timelineEvents.map((event) => (
-              <li
-                key={event.id}
-                className="rounded-lg border border-border/70 bg-bg-subtle/40 px-4 py-3"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-sm font-medium text-fg">{event.summary}</div>
-                  <div className="text-xs text-fg-muted">{formatOccurredAt(event.occurredAt)}</div>
-                </div>
-                <div className="mt-1 text-xs uppercase tracking-wide text-fg-muted">
-                  {event.type.replaceAll(".", " ")}
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
-      </Section>
+      {timelineEvents.length > 0 && (
+        <div
+          data-testid="activity-page-timeline"
+          className={cn(
+            "flex flex-col gap-1 px-1",
+            selectedWorkstream && "border-l-2 border-primary/30 pl-3",
+          )}
+        >
+          {timelineEvents.map((event) => (
+            <div key={event.id} className="flex items-baseline gap-2">
+              <span className="shrink-0 text-[11px] tabular-nums text-fg-muted">
+                {formatOccurredAt(event.occurredAt)}
+              </span>
+              <span className="text-xs text-fg">{event.summary}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </AppPage>
   );
 }
