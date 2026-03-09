@@ -339,6 +339,7 @@ jobs:
           xvfb-run -a --server-args="-screen 0 1920x1080x24"
           pnpm test
           --passWithNoTests
+          --exclude=apps/web/tests/layout-regression.test.ts
           --shard=${{ matrix.shard }}/4
           --reporter=blob
           --outputFile=vitest-reports/blob-${{ matrix.shard }}.json
@@ -354,10 +355,44 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  layout-regression:
+    name: Layout Regression (ubuntu-latest)
+    needs: [changes, validation]
+    if: needs.validation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Cache Playwright browsers (Chromium)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright (Chromium)
+        shell: bash
+        run: pnpm --filter tyrum-desktop exec playwright install --with-deps chromium
+
+      - name: Run layout regression suite
+        run: pnpm vitest run apps/web/tests/layout-regression.test.ts
+
   test-merge:
     name: Test + coverage (merge) (ubuntu-latest)
-    needs: [changes, validation, test-shards]
-    if: needs.validation.result == 'success' && needs.test-shards.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
+    needs: [changes, validation, test-shards, layout-regression]
+    if: needs.validation.result == 'success' && needs.test-shards.result == 'success' && needs.layout-regression.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

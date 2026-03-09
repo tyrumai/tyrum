@@ -333,7 +333,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       {desktopBoard ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <ScrollArea className="h-full">
-            <div className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
+            <div data-layout-content="" className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
               {!isConnected ? (
                 <Alert
                   variant="warning"
@@ -420,7 +420,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       ) : null}
       <div className="min-h-0 flex-1 overflow-hidden lg:hidden">
         <ScrollArea className="h-full">
-          <div className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
+          <div data-layout-content="" className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
             {!isConnected ? (
               <Alert
                 variant="warning"

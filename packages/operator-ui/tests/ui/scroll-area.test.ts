@@ -20,9 +20,13 @@ describe("ScrollArea", () => {
 
     const viewport = container.querySelector("[data-scroll-area-viewport]");
     expect(viewport?.querySelector(".scroll-content")?.textContent).toContain("Content");
+    expect((viewport as HTMLElement | null)?.className).toContain("min-w-0");
+    expect((viewport as HTMLElement | null)?.className).toContain("[&>div]:!min-w-0");
+    expect((viewport as HTMLElement | null)?.className).toContain("[&>div]:!w-full");
+    expect((viewport as HTMLElement | null)?.className).toContain("[&>div]:!box-border");
 
-    const thumb = container.querySelector("[data-scroll-area-thumb]");
-    expect(thumb).not.toBeNull();
+    const scrollbar = container.querySelector("[data-orientation='vertical']");
+    expect(scrollbar).not.toBeNull();
 
     cleanupTestRoot({ root, container });
   });

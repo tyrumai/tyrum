@@ -71,7 +71,7 @@ function OutlineBadgeList({ emptyText, items }: { emptyText: string; items: stri
 function SkillsCard({ status }: { status: AgentStatusResponse }) {
   const detailedSkills = status.skills_detailed ?? [];
   return (
-    <Card data-testid="agents-identity-skills">
+    <Card className="min-w-0" data-testid="agents-identity-skills">
       <CardHeader className="pb-2.5">
         <div className="text-sm font-medium text-fg">Skills</div>
       </CardHeader>
@@ -104,7 +104,7 @@ function SkillsCard({ status }: { status: AgentStatusResponse }) {
 
 function McpCard({ status }: { status: AgentStatusResponse }) {
   return (
-    <Card data-testid="agents-identity-mcp">
+    <Card className="min-w-0" data-testid="agents-identity-mcp">
       <CardHeader className="pb-2.5">
         <div className="text-sm font-medium text-fg">MCP</div>
       </CardHeader>
@@ -165,7 +165,7 @@ function SessionsCard({ status }: { status: AgentStatusResponse }) {
   ];
 
   return (
-    <Card data-testid="agents-identity-sessions">
+    <Card className="min-w-0" data-testid="agents-identity-sessions">
       <CardHeader className="pb-2.5">
         <div className="text-sm font-medium text-fg">Sessions</div>
       </CardHeader>
@@ -243,9 +243,12 @@ export function AgentIdentityPanel({
   ];
 
   return (
-    <div className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm text-fg-muted">
+    <div className="grid min-w-0 gap-4" data-testid="agents-identity-panel">
+      <div
+        className="flex min-w-0 flex-wrap items-center justify-between gap-3"
+        data-testid="agents-identity-header"
+      >
+        <div className="min-w-0 flex-1 text-sm text-fg-muted [overflow-wrap:anywhere]">
           Identity, runtime model, tool access, memory support, and session policy for the selected
           agent.
         </div>
@@ -253,6 +256,7 @@ export function AgentIdentityPanel({
           type="button"
           size="sm"
           variant="secondary"
+          className="shrink-0"
           data-testid="agents-status-refresh"
           disabled={loading}
           isLoading={loading}
@@ -263,8 +267,8 @@ export function AgentIdentityPanel({
         </Button>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card data-testid="agents-identity-overview">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-2" data-testid="agents-identity-sections">
+        <Card className="min-w-0" data-testid="agents-identity-overview">
           <CardHeader className="pb-2.5">
             <div className="text-sm font-medium text-fg">Overview</div>
           </CardHeader>
@@ -288,7 +292,7 @@ export function AgentIdentityPanel({
           </CardContent>
         </Card>
 
-        <Card data-testid="agents-identity-model">
+        <Card className="min-w-0" data-testid="agents-identity-model">
           <CardHeader className="pb-2.5">
             <div className="text-sm font-medium text-fg">Model</div>
           </CardHeader>
@@ -322,7 +326,7 @@ export function AgentIdentityPanel({
 
         <SkillsCard status={status} />
 
-        <Card data-testid="agents-identity-tools">
+        <Card className="min-w-0" data-testid="agents-identity-tools">
           <CardHeader className="pb-2.5">
             <div className="text-sm font-medium text-fg">Tools</div>
           </CardHeader>

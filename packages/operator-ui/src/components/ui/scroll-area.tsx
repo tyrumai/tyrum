@@ -15,12 +15,12 @@ export const ScrollArea = React.forwardRef<
     >
       <ScrollAreaPrimitive.Viewport
         data-scroll-area-viewport=""
-        className="h-full w-full rounded-[inherit] [&>div]:!block"
+        className="h-full min-w-0 w-full rounded-[inherit] [&>div]:!block [&>div]:!box-border [&>div]:!min-w-0 [&>div]:!w-full"
         onScroll={onScroll}
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
-      <ScrollBar forceMount />
+      <ScrollBar />
       <ScrollAreaPrimitive.Corner />
     </ScrollAreaPrimitive.Root>
   );
@@ -37,7 +37,7 @@ export const ScrollBar = React.forwardRef<
       orientation={orientation}
       forceMount={forceMount}
       className={cn(
-        "flex touch-none select-none p-0.5 transition-colors",
+        "flex touch-none select-none p-0.5 transition-colors data-[state=hidden]:pointer-events-none data-[state=hidden]:opacity-0",
         orientation === "vertical"
           ? "h-full w-2.5 border-l border-l-transparent"
           : "h-2.5 flex-col border-t border-t-transparent",
