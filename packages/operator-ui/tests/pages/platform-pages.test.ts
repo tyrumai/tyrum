@@ -49,7 +49,7 @@ describe("Platform pages", () => {
     });
   });
 
-  it("saves general node settings and requests a desktop rebootstrap when connection settings change", async () => {
+  it("saves connection settings and requests a desktop rebootstrap when connection settings change", async () => {
     const setConfig = vi.fn(async () => {});
     const onReloadPage = vi.fn();
     const desktopApi = createDesktopApi({
@@ -100,14 +100,10 @@ describe("Platform pages", () => {
         });
 
         await clickSwitchAndFlush(container, 0);
-        await clickByTestIdAndFlush(container, "node-configure-save-general");
+        await clickByTestIdAndFlush(container, "node-configure-save-connection");
 
         expect(setConfig).toHaveBeenCalledTimes(1);
         expect(setConfig).toHaveBeenCalledWith({
-          permissions: { profile: "balanced", overrides: {} },
-          capabilities: { desktop: true, playwright: true, cli: true, http: true },
-          cli: { allowedCommands: [], allowedWorkingDirs: [] },
-          web: { allowedDomains: [], headless: true },
           mode: "remote",
           remote: {
             wsUrl: "wss://edge.example/ws",
@@ -225,7 +221,7 @@ describe("Platform pages", () => {
     });
   });
 
-  it("clears general saved feedback after browser or shell edits", async () => {
+  it("keeps connection saved feedback after shell edits", async () => {
     const setConfig = vi.fn(async () => {});
     const desktopApi = createDesktopApi({
       config: createNodeConfig(),
@@ -234,13 +230,16 @@ describe("Platform pages", () => {
 
     await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
       await flushEffects();
-      await clickLabelAndFlush(container, "Safe");
-      await clickByTestIdAndFlush(container, "node-configure-save-general");
+      const portInput = getInputByLabel(container, "Embedded gateway port");
+      act(() => {
+        setNativeValue(portInput, "8789");
+      });
+      await clickByTestIdAndFlush(container, "node-configure-save-connection");
 
-      const generalSaveButton = container.querySelector<HTMLButtonElement>(
-        '[data-testid="node-configure-save-general"]',
+      const connectionSaveButton = container.querySelector<HTMLButtonElement>(
+        '[data-testid="node-configure-save-connection"]',
       );
-      expect(generalSaveButton?.textContent).toContain("Saved!");
+      expect(connectionSaveButton?.textContent).toContain("Saved!");
 
       await clickTabAndFlush(container, "Shell");
       const commandsTextarea = getTextareaByLabel(container, "Allowed commands");
@@ -248,11 +247,11 @@ describe("Platform pages", () => {
         setNativeValue(commandsTextarea, "echo hello");
       });
 
-      await clickTabAndFlush(container, "General");
+      await clickTabAndFlush(container, "Connection");
       expect(
-        container.querySelector<HTMLButtonElement>('[data-testid="node-configure-save-general"]')
+        container.querySelector<HTMLButtonElement>('[data-testid="node-configure-save-connection"]')
           ?.textContent,
-      ).toBe("Save General Settings");
+      ).toContain("Saved!");
     });
   });
 
@@ -263,10 +262,11 @@ describe("Platform pages", () => {
 
     await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
       await flushEffects();
+      await clickTabAndFlush(container, "Profile");
       await clickLabelAndFlush(container, "Safe");
       await clickTabAndFlush(container, "Browser");
       await clickByTestIdAndFlush(container, "node-capability-browser");
-      await clickTabAndFlush(container, "General");
+      await clickTabAndFlush(container, "Profile");
 
       const customRadio = container.querySelector<HTMLElement>("#node-profile-custom");
       expect(customRadio?.getAttribute("data-state")).toBe("checked");
@@ -314,6 +314,7 @@ describe("Platform pages", () => {
 
     await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
       await flushEffects();
+      await clickTabAndFlush(container, "Profile");
 
       const balancedRadio = container.querySelector<HTMLElement>("#node-profile-balanced");
       const customRadio = container.querySelector<HTMLElement>("#node-profile-custom");
@@ -351,7 +352,7 @@ describe("Platform pages", () => {
     });
   });
 
-  it("clears general and security saved indicators independently", async () => {
+  it("clears connection and security saved indicators independently", async () => {
     vi.useFakeTimers();
 
     const desktopApi = createDesktopApi({
@@ -367,7 +368,7 @@ describe("Platform pages", () => {
           setNativeValue(portInput, "8789");
         });
 
-        await clickByTestIdAndFlush(container, "node-configure-save-general");
+        await clickByTestIdAndFlush(container, "node-configure-save-connection");
         expect(container.textContent).toContain("Saved!");
 
         await clickTabAndFlush(container, "Browser");
@@ -385,18 +386,18 @@ describe("Platform pages", () => {
         );
         expect(securitySaveButton?.textContent).toContain("Save Node Settings");
 
-        await clickTabAndFlush(container, "General");
-        const generalSaveButton = container.querySelector<HTMLButtonElement>(
-          '[data-testid="node-configure-save-general"]',
+        await clickTabAndFlush(container, "Connection");
+        const connectionSaveButton = container.querySelector<HTMLButtonElement>(
+          '[data-testid="node-configure-save-connection"]',
         );
-        expect(generalSaveButton?.textContent).toContain("Save General Settings");
+        expect(connectionSaveButton?.textContent).toContain("Save Connection Settings");
       });
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("blocks a second save while a general save is still in flight", async () => {
+  it("blocks a second save while a connection save is still in flight", async () => {
     let resolveSetConfig: (() => void) | null = null;
     const setConfig = vi.fn(
       () =>
@@ -413,19 +414,11 @@ describe("Platform pages", () => {
       await flushEffects();
 
       const portInput = getInputByLabel(container, "Embedded gateway port");
-      const safeRadio = container.querySelector<HTMLElement>("#node-profile-safe");
-      expect(safeRadio).not.toBeNull();
-
       act(() => {
         setNativeValue(portInput, "8789");
       });
 
-      await act(async () => {
-        safeRadio?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await Promise.resolve();
-      });
-
-      await clickByTestIdAndFlush(container, "node-configure-save-general");
+      await clickByTestIdAndFlush(container, "node-configure-save-connection");
       expect(setConfig).toHaveBeenCalledTimes(1);
 
       await clickTabAndFlush(container, "Browser");
@@ -442,6 +435,52 @@ describe("Platform pages", () => {
         resolveSetConfig?.();
         await Promise.resolve();
       });
+    });
+  });
+
+  it("saves profile changes separately from connection settings", async () => {
+    const setConfig = vi.fn(async () => {});
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
+      setConfig,
+    });
+
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
+      await flushEffects();
+      await clickTabAndFlush(container, "Profile");
+      await clickLabelAndFlush(container, "Safe");
+      await clickByTestIdAndFlush(container, "node-configure-save-profile");
+
+      expect(setConfig).toHaveBeenCalledTimes(1);
+      expect(setConfig).toHaveBeenCalledWith({
+        permissions: { profile: "safe", overrides: {} },
+        capabilities: { desktop: true, playwright: false, cli: false, http: false },
+        cli: { allowedCommands: [], allowedWorkingDirs: [] },
+        web: { allowedDomains: [], headless: true },
+      });
+    });
+  });
+
+  it("keeps the profile save button disabled for unrelated shell edits", async () => {
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
+    });
+
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
+      await flushEffects();
+      await clickTabAndFlush(container, "Shell");
+
+      const commandsTextarea = getTextareaByLabel(container, "Allowed commands");
+      act(() => {
+        setNativeValue(commandsTextarea, "git status");
+      });
+
+      await clickTabAndFlush(container, "Profile");
+      const profileSaveButton = container.querySelector<HTMLButtonElement>(
+        '[data-testid="node-configure-save-profile"]',
+      );
+      expect(profileSaveButton?.disabled).toBe(true);
+      expect(profileSaveButton?.textContent).toContain("Save Profile Settings");
     });
   });
 

@@ -21,6 +21,7 @@ export interface SidebarProps extends React.HTMLAttributes<HTMLElement> {
   items: SidebarNavItem[];
   activeItemId: string;
   onNavigate: (id: string) => void;
+  onConnectionClick?: () => void;
   secondaryItems?: SidebarNavItem[];
   secondaryLabel?: string;
   secondaryCollapsible?: boolean;
@@ -68,14 +69,13 @@ function SidebarNavButton({ item, activeItemId, collapsed, onNavigate }: Sidebar
   const active = item.id === activeItemId;
   const badgeCount = item.badgeCount ?? 0;
   const badgeText = badgeCount > 99 ? "99+" : String(badgeCount);
-
-  return (
+  const button = (
     <button
       type="button"
       data-testid={item.testId ?? `nav-${item.id}`}
       data-active={active ? "true" : undefined}
       aria-current={active ? "page" : undefined}
-      title={collapsed ? item.label : undefined}
+      aria-label={collapsed ? item.label : undefined}
       className={cn(
         "relative flex w-full rounded-md border text-sm transition-colors duration-150",
         collapsed
@@ -111,6 +111,17 @@ function SidebarNavButton({ item, activeItemId, collapsed, onNavigate }: Sidebar
         </>
       ) : null}
     </button>
+  );
+
+  if (!collapsed) {
+    return button;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent side="right">{item.label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -151,46 +162,48 @@ function SidebarNav({
   );
 
   return (
-    <nav className={cn("flex flex-1 flex-col gap-1 py-2", collapsed ? "px-1" : "px-2")}>
-      {items.map(renderNavItem)}
-      {showSecondaryItems ? (
-        <>
-          <div className="mt-4 border-t border-border" />
-          {secondaryCollapsible && !collapsed ? (
-            <button
-              type="button"
-              data-testid="sidebar-secondary-toggle"
-              className={cn(
-                "mt-2 rounded-md py-1 text-left text-xs font-medium text-fg-muted hover:text-fg",
-                SIDEBAR_EXPANDED_ROW_LAYOUT,
-                "px-2.5",
-              )}
-              onClick={onToggleSecondary}
-            >
-              <ChevronDown
+    <TooltipProvider>
+      <nav className={cn("flex flex-1 flex-col gap-1 py-2", collapsed ? "px-1" : "px-2")}>
+        {items.map(renderNavItem)}
+        {showSecondaryItems ? (
+          <>
+            <div className="mt-4 border-t border-border" />
+            {secondaryCollapsible && !collapsed ? (
+              <button
+                type="button"
+                data-testid="sidebar-secondary-toggle"
                 className={cn(
-                  "h-3 w-3 shrink-0 transition-transform",
-                  secondaryCollapsed ? "-rotate-90" : null,
+                  "mt-2 rounded-md py-1 text-left text-xs font-medium text-fg-muted hover:text-fg",
+                  SIDEBAR_EXPANDED_ROW_LAYOUT,
+                  "px-2.5",
                 )}
-              />
-              <span>{secondaryLabel}</span>
-            </button>
-          ) : !collapsed ? (
-            <div
-              className={cn(
-                "mt-2 py-1 text-xs font-medium text-fg-muted",
-                SIDEBAR_EXPANDED_ROW_LAYOUT,
-                "px-2.5",
-              )}
-            >
-              <span aria-hidden="true" className="h-4 w-4 shrink-0" />
-              <span>{secondaryLabel}</span>
-            </div>
-          ) : null}
-          {collapsed || secondaryVisible ? secondaryItems.map(renderNavItem) : null}
-        </>
-      ) : null}
-    </nav>
+                onClick={onToggleSecondary}
+              >
+                <ChevronDown
+                  className={cn(
+                    "h-3 w-3 shrink-0 transition-transform",
+                    secondaryCollapsed ? "-rotate-90" : null,
+                  )}
+                />
+                <span>{secondaryLabel}</span>
+              </button>
+            ) : !collapsed ? (
+              <div
+                className={cn(
+                  "mt-2 py-1 text-xs font-medium text-fg-muted",
+                  SIDEBAR_EXPANDED_ROW_LAYOUT,
+                  "px-2.5",
+                )}
+              >
+                <span aria-hidden="true" className="h-4 w-4 shrink-0" />
+                <span>{secondaryLabel}</span>
+              </div>
+            ) : null}
+            {collapsed || secondaryVisible ? secondaryItems.map(renderNavItem) : null}
+          </>
+        ) : null}
+      </nav>
+    </TooltipProvider>
   );
 }
 
@@ -260,10 +273,32 @@ function SidebarSyncNowButton({
 interface SidebarStatusControlsProps {
   collapsed: boolean;
   connectionStatus: SidebarConnectionStatus;
+  onConnectionClick?: () => void;
 }
 
-function SidebarStatusControls({ collapsed, connectionStatus }: SidebarStatusControlsProps) {
+function SidebarStatusControls({
+  collapsed,
+  connectionStatus,
+  onConnectionClick,
+}: SidebarStatusControlsProps) {
   const connectionDisplay = getConnectionDisplay(connectionStatus);
+  const interactive = onConnectionClick !== undefined;
+  const content = (
+    <SidebarFooterRowContent
+      collapsed={collapsed}
+      icon={
+        <StatusDot
+          data-testid="connection-status-dot"
+          variant={connectionDisplay.variant}
+          pulse={connectionDisplay.pulse}
+          role="img"
+          aria-label={`Connection ${connectionDisplay.label}`}
+        />
+      }
+    >
+      <span data-testid="connection-status-label">{connectionDisplay.label}</span>
+    </SidebarFooterRowContent>
+  );
 
   return (
     <div
@@ -273,29 +308,35 @@ function SidebarStatusControls({ collapsed, connectionStatus }: SidebarStatusCon
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <span
-              className={cn(
-                "inline-flex w-full items-center rounded-md text-sm text-fg-muted",
-                collapsed
-                  ? "justify-center px-1.5 py-1.5"
-                  : `${SIDEBAR_EXPANDED_ROW_LAYOUT} px-2.5 py-1.5 text-left`,
-              )}
-            >
-              <SidebarFooterRowContent
-                collapsed={collapsed}
-                icon={
-                  <StatusDot
-                    data-testid="connection-status-dot"
-                    variant={connectionDisplay.variant}
-                    pulse={connectionDisplay.pulse}
-                    role="img"
-                    aria-label={`Connection ${connectionDisplay.label}`}
-                  />
-                }
+            {interactive ? (
+              <button
+                type="button"
+                data-testid="sidebar-connection-status"
+                className={cn(
+                  "inline-flex w-full items-center rounded-md text-sm text-fg-muted transition-colors",
+                  collapsed
+                    ? "justify-center px-1.5 py-1.5"
+                    : `${SIDEBAR_EXPANDED_ROW_LAYOUT} px-2.5 py-1.5 text-left`,
+                  "hover:bg-bg-subtle hover:text-fg",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                )}
+                onClick={onConnectionClick}
               >
-                <span data-testid="connection-status-label">{connectionDisplay.label}</span>
-              </SidebarFooterRowContent>
-            </span>
+                {content}
+              </button>
+            ) : (
+              <span
+                data-testid="sidebar-connection-status"
+                className={cn(
+                  "inline-flex w-full items-center rounded-md text-sm text-fg-muted",
+                  collapsed
+                    ? "justify-center px-1.5 py-1.5"
+                    : `${SIDEBAR_EXPANDED_ROW_LAYOUT} px-2.5 py-1.5 text-left`,
+                )}
+              >
+                {content}
+              </span>
+            )}
           </TooltipTrigger>
           <TooltipContent side={collapsed ? "right" : "top"}>
             {connectionDisplay.label}
@@ -343,6 +384,7 @@ interface SidebarFooterProps {
   collapsed: boolean;
   collapsible: boolean;
   connectionStatus: SidebarConnectionStatus;
+  onConnectionClick?: () => void;
   onSyncNow?: () => void;
   syncNowDisabled: boolean;
   syncNowLoading: boolean;
@@ -353,6 +395,7 @@ function SidebarFooter({
   collapsed,
   collapsible,
   connectionStatus,
+  onConnectionClick,
   onSyncNow,
   syncNowDisabled,
   syncNowLoading,
@@ -374,7 +417,11 @@ function SidebarFooter({
         />
       ) : null}
 
-      <SidebarStatusControls collapsed={collapsed} connectionStatus={connectionStatus} />
+      <SidebarStatusControls
+        collapsed={collapsed}
+        connectionStatus={connectionStatus}
+        onConnectionClick={onConnectionClick}
+      />
 
       {collapsible ? (
         <SidebarCollapseToggle collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />
@@ -393,6 +440,7 @@ export function Sidebar({
   secondaryDefaultCollapsed = true,
   collapsible = false,
   connectionStatus = "disconnected",
+  onConnectionClick,
   onSyncNow,
   syncNowDisabled = false,
   syncNowLoading = false,
@@ -459,6 +507,7 @@ export function Sidebar({
         collapsed={collapsed}
         collapsible={collapsible}
         connectionStatus={connectionStatus}
+        onConnectionClick={onConnectionClick}
         onSyncNow={onSyncNow}
         syncNowDisabled={syncNowDisabled}
         syncNowLoading={syncNowLoading}

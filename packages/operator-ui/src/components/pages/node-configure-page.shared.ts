@@ -24,6 +24,7 @@ export interface AllowlistDraftState {
 
 export interface SaveResetTimers {
   general: ReturnType<typeof setTimeout> | null;
+  profile: ReturnType<typeof setTimeout> | null;
   security: ReturnType<typeof setTimeout> | null;
 }
 
@@ -236,15 +237,8 @@ export function validateConnectionState(state: ConnectionState): string | null {
   return null;
 }
 
-export function buildGeneralSavePartial(security: SecurityState, connection: ConnectionState) {
+export function buildConnectionSavePartial(connection: ConnectionState) {
   const partial: Record<string, unknown> = {
-    permissions: {
-      profile: security.profile,
-      overrides: security.overrides,
-    },
-    capabilities: security.capabilities,
-    cli: security.cli,
-    web: security.web,
     mode: connection.mode,
   };
 

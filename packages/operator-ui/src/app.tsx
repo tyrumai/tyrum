@@ -103,11 +103,14 @@ function OperatorUiAppRoot({
           <Sidebar
             items={viewModel.sidebarItems}
             secondaryItems={viewModel.platformItems}
-            secondaryLabel="Platform"
+            secondaryLabel="Node"
             activeItemId={viewModel.route}
             onNavigate={viewModel.navigate}
             collapsible
             connectionStatus={viewModel.connection.status}
+            onConnectionClick={() => {
+              viewModel.navigate(hostKind === "desktop" ? "node-configure" : "configure");
+            }}
             onSyncNow={() => {
               void core.syncAllNow();
             }}

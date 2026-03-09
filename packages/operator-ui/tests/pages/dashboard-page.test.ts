@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -30,14 +30,14 @@ describe("DashboardPage", () => {
     expect(source).not.toContain("lg:grid-cols-2");
   });
 
-  it("prevents the value column from shrinking so connection text stays inside the row", () => {
+  it("lets the connection value column shrink and wrap within the row", () => {
     const source = readFileSync(
       join(process.cwd(), "packages/operator-ui/src/components/pages/dashboard-page.tsx"),
       "utf8",
     );
 
-    expect(source).toContain('className="shrink-0 text-right"');
-    expect(source).toContain('className="inline-flex max-w-full items-center gap-2"');
+    expect(source).toContain('valueClassName="min-w-0 max-w-[14rem]"');
+    expect(source).toContain('className="inline-flex max-w-full items-center justify-end gap-2"');
   });
 
   it("pulses the connection dot only while connecting", () => {
@@ -139,5 +139,80 @@ describe("DashboardPage", () => {
     expect(source).not.toContain("dashboard-runs-badge");
     expect(source).not.toContain("dashboard-pairing-badge");
     expect(source).not.toContain("dashboard-agents-badge");
+  });
+
+  it("navigates to the configured connection route from the connection row", () => {
+    const { store: connectionStore } = createStore({
+      status: "connected",
+      clientId: null,
+      lastDisconnect: null,
+      transportError: null,
+    });
+    const { store: statusStore } = createStore({
+      status: null,
+      usage: null,
+      presenceByInstanceId: {},
+      loading: { status: false, usage: false, presence: false },
+      error: { status: null, usage: null, presence: null },
+      lastSyncedAt: null,
+    });
+    const { store: approvalsStore } = createStore({
+      byId: {},
+      pendingIds: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+    const { store: pairingStore } = createStore({
+      byId: {},
+      pendingIds: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+    const { store: runsStore } = createStore({
+      runsById: {},
+      stepsById: {},
+      attemptsById: {},
+      stepIdsByRunId: {},
+      attemptIdsByStepId: {},
+    });
+    const { store: workboardStore } = createStore({
+      items: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+
+    const onNavigate = vi.fn();
+    const core = {
+      connectionStore,
+      statusStore,
+      approvalsStore,
+      pairingStore,
+      runsStore,
+      workboardStore,
+    } as unknown as OperatorCore;
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(DashboardPage, {
+        core,
+        onNavigate,
+        connectionRouteId: "node-configure",
+      }),
+    );
+
+    const connectionRow = container.querySelector<HTMLButtonElement>(
+      '[data-testid="dashboard-card-connection"]',
+    );
+    expect(connectionRow).not.toBeNull();
+
+    act(() => {
+      connectionRow?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onNavigate).toHaveBeenCalledWith("node-configure");
+
+    cleanupTestRoot({ container, root });
   });
 });

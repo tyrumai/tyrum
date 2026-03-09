@@ -179,6 +179,44 @@ describe("Sidebar", () => {
     const dot = container.querySelector<HTMLSpanElement>("[data-testid='connection-status-dot']");
     expect(dot).not.toBeNull();
     expect(dot?.className).toContain("bg-success");
+    const navButton = container.querySelector<HTMLButtonElement>("[data-testid='nav-dashboard']");
+    expect(navButton?.getAttribute("aria-label")).toBe("Dashboard");
+    expect(navButton?.getAttribute("title")).toBeNull();
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("routes clicks from the connection status row when requested", () => {
+    const ThemeProvider = (operatorUi as Record<string, unknown>)["ThemeProvider"];
+    const Sidebar = (operatorUi as Record<string, unknown>)["Sidebar"];
+    const onConnectionClick = vi.fn();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        ThemeProvider as React.ComponentType,
+        null,
+        React.createElement(Sidebar as React.ComponentType, {
+          items: [
+            { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
+          ],
+          activeItemId: "dashboard",
+          onNavigate: vi.fn(),
+          connectionStatus: "connected",
+          onConnectionClick,
+        }),
+      ),
+    );
+
+    const connectionButton = container.querySelector<HTMLButtonElement>(
+      "[data-testid='sidebar-connection-status']",
+    );
+    expect(connectionButton).not.toBeNull();
+
+    act(() => {
+      connectionButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onConnectionClick).toHaveBeenCalledTimes(1);
 
     cleanupTestRoot({ container, root });
   });
@@ -239,7 +277,7 @@ describe("Sidebar", () => {
           activeItemId: "dashboard",
           onNavigate: vi.fn(),
           secondaryItems: [{ id: "approvals", label: "Approvals", icon: ShieldCheck }],
-          secondaryLabel: "Platform",
+          secondaryLabel: "Node",
           secondaryCollapsible: true,
           connectionStatus: "connected",
           onSyncNow: vi.fn(),

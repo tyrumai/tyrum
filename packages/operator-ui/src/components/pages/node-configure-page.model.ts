@@ -15,7 +15,7 @@ import {
   type SaveResetTimers,
   type SecurityState,
   areSecurityStatesEqual,
-  buildGeneralSavePartial,
+  buildConnectionSavePartial,
   cloneConnectionState,
   cloneSecurityState,
   createAllowlistDraftState,
@@ -61,6 +61,9 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
   const [generalSaving, setGeneralSaving] = useState(false);
   const [generalSaved, setGeneralSaved] = useState(false);
   const [generalError, setGeneralError] = useState<string | null>(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [securitySaving, setSecuritySaving] = useState(false);
   const [securitySaved, setSecuritySaved] = useState(false);
   const [securityError, setSecurityError] = useState<string | null>(null);
@@ -77,18 +80,19 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
   });
   const saveResetTimers = useRef<SaveResetTimers>({
     general: null,
+    profile: null,
     security: null,
   });
   const mountedRef = useRef(true);
   const initialSecurityRef = useRef<SecurityState | null>(null);
   const initialConnectionRef = useRef<ConnectionState | null>(null);
   const operatorConnectionRequestRef = useRef(0);
-  const saveInFlightRef = useRef<"general" | "security" | null>(null);
+  const saveInFlightRef = useRef<"general" | "profile" | "security" | null>(null);
 
   useEffect(() => {
     return () => {
       mountedRef.current = false;
-      for (const key of ["general", "security"] as const) {
+      for (const key of ["general", "profile", "security"] as const) {
         if (saveResetTimers.current[key]) {
           clearTimeout(saveResetTimers.current[key]);
           saveResetTimers.current[key] = null;
@@ -188,6 +192,7 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
     initialSecurityRef.current === null
       ? false
       : !areSecurityStatesEqual(initialSecurityRef.current, security);
+  const profileDirty = securityDirty && displayProfile !== "custom";
   const generalDirty =
     initialConnectionRef.current === null
       ? false
@@ -237,8 +242,23 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
       });
   };
 
+  const saveProfile = () => {
+    if (saveInFlightRef.current || profileSaving || !profileDirty) return;
+    saveInFlightRef.current = "profile";
+    setProfileSaving(true);
+    setProfileError(null);
+    setProfileSaved(false);
+    void persistSecurity()
+      .then(() => saveSucceeded("profile", setProfileSaved, setProfileError))
+      .catch((error: unknown) => setProfileError(formatErrorMessage(error)))
+      .finally(() => {
+        saveInFlightRef.current = null;
+        setProfileSaving(false);
+      });
+  };
+
   const saveGeneral = () => {
-    if (saveInFlightRef.current || generalSaving || (!generalDirty && !securityDirty)) return;
+    if (saveInFlightRef.current || generalSaving || !generalDirty) return;
 
     const validationError = validateConnectionState(connection);
     if (validationError) {
@@ -255,7 +275,7 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
     const previousConnection = initialConnectionRef.current
       ? cloneConnectionState(initialConnectionRef.current)
       : null;
-    const partial = buildGeneralSavePartial(security, connection);
+    const partial = buildConnectionSavePartial(connection);
     const shouldReload = previousConnection
       ? hasConnectionSettingsChanged(previousConnection, connection)
       : true;
@@ -267,7 +287,6 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
     void api
       .setConfig(partial)
       .then(async () => {
-        initialSecurityRef.current = cloneSecurityState(security);
         initialConnectionRef.current = cloneConnectionState({
           ...connection,
           remoteToken: "",
@@ -363,6 +382,10 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
     generalSaved,
     generalError,
     generalDirty,
+    profileSaving,
+    profileSaved,
+    profileError,
+    profileDirty,
     securitySaving,
     securitySaved,
     securityError,
@@ -381,7 +404,7 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
       const nextSecurity = createProfilePreset(profile);
       setSecurity(nextSecurity);
       setAllowlistDrafts(createAllowlistDraftState(nextSecurity));
-      setGeneralSaved(false);
+      setProfileSaved(false);
       setSecuritySaved(false);
     },
     setCapability: (key: keyof CapFlags, nextEnabled: boolean) => {
@@ -389,7 +412,7 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
         ...current,
         capabilities: { ...current.capabilities, [key]: nextEnabled },
       }));
-      setGeneralSaved(false);
+      setProfileSaved(false);
       setSecuritySaved(false);
     },
     updateCliField: (field: keyof CliConfig, value: string) => {
@@ -401,7 +424,7 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
         ...current,
         [field === "allowedCommands" ? "cliCommands" : "cliWorkingDirs"]: value,
       }));
-      setGeneralSaved(false);
+      setProfileSaved(false);
       setSecuritySaved(false);
     },
     updateBrowserDomains: (value: string) => {
@@ -410,7 +433,7 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
         web: { ...current.web, allowedDomains: splitAllowlistLines(value) },
       }));
       setAllowlistDrafts((current) => ({ ...current, browserDomains: value }));
-      setGeneralSaved(false);
+      setProfileSaved(false);
       setSecuritySaved(false);
     },
     setBrowserHeadless: (headless: boolean) => {
@@ -418,7 +441,7 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
         ...current,
         web: { ...current.web, headless },
       }));
-      setGeneralSaved(false);
+      setProfileSaved(false);
       setSecuritySaved(false);
     },
     setMode: (mode: ConnectionState["mode"]) => {
@@ -445,6 +468,7 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
       setConnection((current) => ({ ...current, remoteTlsAllowSelfSigned }));
       setGeneralSaved(false);
     },
+    saveProfile,
     saveSecurity,
     saveGeneral,
     toggleBackgroundMode,

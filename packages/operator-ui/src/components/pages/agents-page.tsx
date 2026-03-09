@@ -1,6 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import type { AgentStatusResponse } from "@tyrum/schemas";
-import { Bot, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Bot, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { cn } from "../../lib/cn.js";
@@ -90,7 +90,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
   const [selectedAgentKey, setSelectedAgentKey] = useState(trimAgentKey(agentStatus.agentKey));
   const [selectionReady, setSelectionReady] = useState(false);
   const [activeTab, setActiveTab] = useState("identity");
-  const [editorMode, setEditorMode] = useState<"create" | "edit" | null>(null);
+  const [createMode, setCreateMode] = useState(false);
   const [createNonce, setCreateNonce] = useState(0);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -165,15 +165,22 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     void core.agentStatusStore.refresh();
   }, [core.agentStatusStore, isConnected, selectedAgentKey, selectionReady]);
 
-  const renderEditor = activeTab === "editor";
-  const toolbarActions = (
-    <div className="flex flex-wrap items-center gap-2">
+  const openCreateEditor = () => {
+    setCreateMode(true);
+    setCreateNonce((current) => current + 1);
+    setActiveTab("editor");
+  };
+
+  const renderEditor = createMode || selectedAgentOption !== null;
+  const mobileToolbarActions = (
+    <div className="flex flex-wrap items-center gap-2 lg:hidden">
       <select
         data-testid="agents-select"
         aria-label="Selected agent"
         value={selectedAgentKey}
         disabled={agentOptions.length === 0}
         onChange={(event) => {
+          setCreateMode(false);
           setSelectionReady(true);
           setSelectedAgentKey(event.currentTarget.value);
         }}
@@ -192,58 +199,31 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
       <Button
         type="button"
         size="sm"
-        variant="secondary"
-        data-testid="agents-new"
-        disabled={!isConnected}
-        onClick={() => {
-          setEditorMode("create");
-          setCreateNonce((current) => current + 1);
-          setActiveTab("editor");
-        }}
-      >
-        <Plus className="h-3.5 w-3.5" />
-        New agent
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="secondary"
-        data-testid="agents-edit"
-        disabled={!isConnected || !selectedAgentOption}
-        onClick={() => {
-          setEditorMode("edit");
-          setActiveTab("editor");
-        }}
-      >
-        <Pencil className="h-3.5 w-3.5" />
-        Edit
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="danger"
-        data-testid="agents-delete"
-        disabled={!isConnected || !selectedAgentOption?.canDelete}
-        onClick={() => {
-          setDeleteOpen(true);
-        }}
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-        Delete
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="secondary"
-        data-testid="agents-refresh"
+        variant="ghost"
+        data-testid="agents-refresh-mobile"
+        className="h-8 w-8 p-0 text-fg-muted hover:text-fg"
         disabled={!isConnected || agentsLoading}
         isLoading={agentsLoading}
         onClick={() => {
           void refreshAgentList();
         }}
+        title="Refresh list"
       >
         <RefreshCw className="h-3.5 w-3.5" />
-        Refresh list
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        data-testid="agents-new-mobile"
+        className="h-8 w-8 p-0 text-fg-muted hover:text-fg"
+        disabled={!isConnected}
+        onClick={() => {
+          openCreateEditor();
+        }}
+        title="New agent"
+      >
+        <Plus className="h-4 w-4" />
       </Button>
     </div>
   );
@@ -253,7 +233,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
       className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-bg"
       data-testid="agents-page"
     >
-      <AppPageToolbar title="Agents" actions={toolbarActions} />
+      <AppPageToolbar title="Agents" actions={mobileToolbarActions} />
 
       <ConfirmDangerDialog
         open={deleteOpen}
@@ -267,7 +247,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
           await deleteAction.runAndThrow(async () => {
             await core.http.agents.delete(selectedAgentOption.agentKey);
           });
-          setEditorMode(null);
+          setCreateMode(false);
           setActiveTab("identity");
           await refreshAgentList();
         }}
@@ -278,8 +258,39 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
           className="hidden h-full w-[180px] shrink-0 flex-col border-r border-border bg-bg-subtle/30 lg:flex"
           data-testid="agents-list-panel"
         >
-          <div className="flex h-14 shrink-0 items-center border-b border-border px-3">
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-3">
             <div className="text-sm font-medium text-fg">Managed agents</div>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                data-testid="agents-refresh"
+                className="h-7 w-7 p-0 text-fg-muted hover:text-fg"
+                disabled={!isConnected || agentsLoading}
+                isLoading={agentsLoading}
+                onClick={() => {
+                  void refreshAgentList();
+                }}
+                title="Refresh list"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                data-testid="agents-new"
+                className="h-7 w-7 p-0 text-fg-muted hover:text-fg"
+                disabled={!isConnected}
+                onClick={() => {
+                  openCreateEditor();
+                }}
+                title="New agent"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">
             {agentsLoading && agentKeys.length === 0 ? (
@@ -315,6 +326,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                             : "bg-transparent text-fg-muted hover:bg-bg-subtle hover:text-fg",
                         )}
                         onClick={() => {
+                          setCreateMode(false);
                           setSelectionReady(true);
                           setSelectedAgentKey(agent.agentKey);
                         }}
@@ -354,6 +366,21 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                 />
                 {selectedAgentActive ? "Currently active" : "Currently idle"}
               </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="danger"
+                data-testid="agents-delete"
+                disabled={!isConnected || !selectedAgentOption?.canDelete}
+                onClick={() => {
+                  setDeleteOpen(true);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </Button>
             </div>
           </div>
 
@@ -413,27 +440,27 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                     />
                   </TabsContent>
 
-                  <TabsContent value="editor">
-                    {renderEditor && editorMode ? (
+                  <TabsContent value="editor" forceMount>
+                    {renderEditor ? (
                       <AgentsPageEditor
                         core={core}
-                        mode={editorMode}
+                        mode={createMode ? "create" : "edit"}
                         createNonce={createNonce}
-                        agentKey={editorMode === "edit" ? selectedAgentOption?.agentKey : undefined}
+                        agentKey={createMode ? undefined : selectedAgentOption?.agentKey}
                         onSaved={(savedAgentKey) => {
-                          setEditorMode(null);
+                          setCreateMode(false);
                           setActiveTab("identity");
                           void refreshAgentList(savedAgentKey);
                         }}
                         onCancelCreate={() => {
-                          setEditorMode(null);
+                          setCreateMode(false);
                           setActiveTab("identity");
                         }}
                       />
                     ) : (
                       <Card data-testid="agents-editor-placeholder">
                         <CardContent className="py-10 text-sm text-fg-muted">
-                          Choose Edit for the selected agent or New agent to create a managed agent.
+                          Select an agent or create a managed agent to configure it here.
                         </CardContent>
                       </Card>
                     )}
