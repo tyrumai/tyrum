@@ -6,7 +6,7 @@ import type {
   OperatorCore,
 } from "@tyrum/operator-core";
 import { Building2, Orbit, Sparkles } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AppPage } from "../layout/app-page.js";
 import { Badge, type BadgeVariant } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -111,8 +111,22 @@ function collectTimelineEvents(activity: ActivityState) {
 export function ActivityPage({ core }: ActivityPageProps) {
   const activity = useOperatorStore(core.activityStore);
   const status = useOperatorStore(core.statusStore);
+  const [selectionCleared, setSelectionCleared] = useState(false);
+
+  useEffect(() => {
+    if (activity.workstreamIds.length === 0) {
+      setSelectionCleared(false);
+      return;
+    }
+    if (activity.selectedWorkstreamId !== null) {
+      setSelectionCleared(false);
+    }
+  }, [activity.selectedWorkstreamId, activity.workstreamIds.length]);
+
   const isLoading = activity.workstreamIds.length === 0 && status.loading.status;
-  const selectedWorkstreamId = activity.selectedWorkstreamId ?? activity.workstreamIds[0] ?? null;
+  const selectedWorkstreamId = selectionCleared
+    ? null
+    : (activity.selectedWorkstreamId ?? activity.workstreamIds[0] ?? null);
   const selectedWorkstream = selectedWorkstreamId
     ? (activity.workstreamsById[selectedWorkstreamId] ?? null)
     : null;
@@ -132,6 +146,7 @@ export function ActivityPage({ core }: ActivityPageProps) {
             variant={selectedWorkstreamId ? "outline" : "secondary"}
             aria-pressed={selectedWorkstreamId === null}
             onClick={() => {
+              setSelectionCleared(true);
               core.activityStore.clearSelection();
             }}
           >
@@ -192,6 +207,7 @@ export function ActivityPage({ core }: ActivityPageProps) {
                       : "border-border/70 bg-bg-subtle/50 hover:bg-bg-subtle",
                   )}
                   onClick={() => {
+                    setSelectionCleared(false);
                     core.activityStore.selectWorkstream(workstream.id);
                   }}
                 >
