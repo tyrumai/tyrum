@@ -112,5 +112,89 @@ describe("AgentRuntime system prompt sandbox section", () => {
     expect(capturedSystem).toContain("Sandbox:");
     expect(capturedSystem).toContain("Hardening profile: hardened");
     expect(capturedSystem).toContain("Elevated execution available: true");
+    expect(capturedSystem?.match(/Elevated execution available:/g)).toHaveLength(1);
+    expect(capturedSystem?.match(/Hardening profile:/g)).toHaveLength(1);
+  });
+
+  it("reports unknown elevated execution availability when policy resolution fails", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-sandbox-prompt-unknown-"));
+    container = createContainer(
+      {
+        dbPath: ":memory:",
+        migrationsDir,
+      },
+      {
+        deploymentConfig: {
+          toolrunner: { hardeningProfile: "hardened" },
+        },
+      },
+    );
+
+    let capturedSystem: string | undefined;
+    const model = new MockLanguageModelV3({
+      doGenerate: async (options) => {
+        const call = options as LanguageModelV3CallOptions;
+        const system = call.prompt.find((m) => m.role === "system");
+        const systemText = system?.role === "system" ? system.content : undefined;
+        if (systemText && !systemText.includes("Write a concise session title")) {
+          capturedSystem = systemText;
+        }
+
+        return {
+          content: [{ type: "text" as const, text: "hello" }],
+          finishReason: { unified: "stop" as const, raw: undefined },
+          usage: {
+            inputTokens: {
+              total: 10,
+              noCache: 10,
+              cacheRead: undefined,
+              cacheWrite: undefined,
+            },
+            outputTokens: {
+              total: 5,
+              text: 5,
+              reasoning: undefined,
+            },
+          },
+          warnings: [],
+        };
+      },
+      doStream: async () => {
+        throw new Error("not implemented");
+      },
+    });
+
+    const policyService = {
+      isEnabled: () => true,
+      isObserveOnly: () => false,
+      getStatus: async () => ({
+        enabled: true,
+        observe_only: false,
+        effective_sha256: "policy-sha",
+        sources: { deployment: "default", agent: null },
+      }),
+      loadEffectiveBundle: async () => {
+        throw new Error("bundle unavailable");
+      },
+    } as unknown as ConstructorParameters<typeof AgentRuntime>[0]["policyService"];
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: model,
+      fetchImpl: (async () => new Response("not found", { status: 404 })) as typeof fetch,
+      policyService,
+    });
+
+    const result = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-unknown",
+      message: "hello",
+    });
+
+    expect(result.reply).toBe("hello");
+    expect(capturedSystem).toContain("Sandbox:");
+    expect(capturedSystem).toContain("Hardening profile: hardened");
+    expect(capturedSystem).toContain("Elevated execution available: unknown");
   });
 });

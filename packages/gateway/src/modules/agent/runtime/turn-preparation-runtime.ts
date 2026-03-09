@@ -75,8 +75,6 @@ export function buildRuntimePrompt(input: {
   home: string;
   stateMode: "local" | "shared";
   model: string;
-  sandboxProfile: string;
-  elevatedExecutionAvailable: boolean | null;
   approvalWorkflowAvailable: boolean;
 }): string {
   return formatRuntimePrompt({

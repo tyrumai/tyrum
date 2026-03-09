@@ -20,6 +20,7 @@ SET turns_json = COALESCE(
   '[]'
 )
 WHERE json_valid(turns_json) = 1
+  AND json_type(turns_json) = 'array'
   AND EXISTS (
     SELECT 1
     FROM json_each(sessions.turns_json) AS turn

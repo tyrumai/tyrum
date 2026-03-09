@@ -5,7 +5,6 @@ import type { LaneQueueState } from "./turn-engine-bridge.js";
 import type { ToolCallPolicyState } from "./tool-set-builder.js";
 import {
   buildSandboxPrompt,
-  deriveElevatedExecutionAvailable,
   isStatusQuery,
   parseIntakeModeDecision,
   resolveAgentTurnInput,
@@ -160,12 +159,6 @@ export async function prepareTurn(
   const hardeningProfile = resolveSandboxHardeningProfile(
     deps.opts.container.deploymentConfig.toolrunner.hardeningProfile,
   );
-  const elevatedExecutionAvailable = Boolean(
-    await deriveElevatedExecutionAvailable(deps.policyService, {
-      tenantId: deps.tenantId,
-      agentId: session.agent_id,
-    }),
-  );
   const runtimePrompt = buildRuntimePrompt({
     nowIso: new Date().toISOString(),
     agentId: session.agent_id,
@@ -176,8 +169,6 @@ export async function prepareTurn(
     home: deps.home,
     stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
     model: executionProfile.profile.model_id ?? executionProfile.id,
-    sandboxProfile: hardeningProfile,
-    elevatedExecutionAvailable,
     approvalWorkflowAvailable: true,
   });
 

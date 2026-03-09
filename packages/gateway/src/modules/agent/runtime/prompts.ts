@@ -74,8 +74,6 @@ export function formatRuntimePrompt(input: {
   gitRoot?: string;
   stateMode: string;
   model: string;
-  sandboxProfile: string;
-  elevatedExecutionAvailable: boolean | null;
   approvalWorkflowAvailable: boolean;
 }): string {
   return [
@@ -89,12 +87,6 @@ export function formatRuntimePrompt(input: {
     `Gateway cwd: ${input.cwd}`,
     `Workspace path: ${input.home}`,
     `Git repo root: ${input.gitRoot ?? "none detected"}`,
-    `Sandbox profile: ${input.sandboxProfile}`,
-    `Elevated execution available: ${
-      input.elevatedExecutionAvailable === null
-        ? "unknown"
-        : String(input.elevatedExecutionAvailable)
-    }`,
     `Approval workflow available: ${String(input.approvalWorkflowAvailable)}`,
     `Agent id: ${input.agentId}`,
     `Workspace id: ${input.workspaceId}`,
