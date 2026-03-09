@@ -1,14 +1,16 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { ChevronLeft, Plus, RefreshCw, Send, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useMediaQuery } from "../../hooks/use-media-query.js";
 import { cn } from "../../lib/cn.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
+import { useAppShellMinWidth } from "../layout/app-shell.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { ScrollArea } from "../ui/scroll-area.js";
+
+const CHAT_TWO_PANEL_CONTENT_WIDTH_PX = 800;
 
 function firstLine(text: string): string {
   return text.split(/\r?\n/)[0]?.trim() ?? "";
@@ -53,6 +55,7 @@ interface ChatThreadSummary {
 }
 
 function ChatThreadsPanel({
+  splitView,
   connected,
   loading,
   agentsLoading,
@@ -68,6 +71,7 @@ function ChatThreadsPanel({
   onAgentChange,
   onNewChat,
 }: {
+  splitView: boolean;
   connected: boolean;
   loading: boolean;
   agentsLoading: boolean;
@@ -85,7 +89,10 @@ function ChatThreadsPanel({
 }) {
   return (
     <div
-      className="flex h-full min-h-0 w-full shrink-0 flex-col border-r border-border bg-bg-subtle/30 lg:w-[260px]"
+      className={cn(
+        "flex h-full min-h-0 shrink-0 flex-col border-r border-border bg-bg-subtle/30",
+        splitView ? "w-[260px]" : "w-full",
+      )}
       data-testid="chat-threads-panel"
     >
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-3">
@@ -370,7 +377,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);
   const isConnected = connection.status === "connected";
   const chat = useOperatorStore(core.chatStore);
-  const lgUp = useMediaQuery("(min-width: 1024px)");
+  const lgUp = useAppShellMinWidth(CHAT_TWO_PANEL_CONTENT_WIDTH_PX);
 
   const [draft, setDraft] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -448,6 +455,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
       <div className="flex h-full flex-1 w-full min-h-0" data-testid="chat-panels">
         {showThreads ? (
           <ChatThreadsPanel
+            splitView={lgUp}
             connected={isConnected}
             loading={chat.sessions.loading}
             agentsLoading={chat.agents.loading}
