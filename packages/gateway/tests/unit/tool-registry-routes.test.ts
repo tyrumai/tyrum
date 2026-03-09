@@ -21,21 +21,23 @@ describe("tool registry routes", () => {
   });
 
   it("returns built-in, plugin, and MCP tool descriptors with source metadata", async () => {
-    vi.spyOn(McpManager.prototype, "listServerToolDescriptors").mockResolvedValue([
-      {
-        id: "mcp.exa.web_search_exa",
-        description: "Search the web with Exa.",
-        risk: "medium",
-        requires_confirmation: true,
-        keywords: ["mcp", "exa", "search"],
-        inputSchema: {
-          type: "object",
-          properties: {
-            query: { type: "string" },
+    const listServerToolDescriptors = vi
+      .spyOn(McpManager.prototype, "listServerToolDescriptors")
+      .mockResolvedValue([
+        {
+          id: "mcp.exa.web_search_exa",
+          description: "Search the web with Exa.",
+          risk: "medium",
+          requires_confirmation: true,
+          keywords: ["mcp", "exa", "search"],
+          inputSchema: {
+            type: "object",
+            properties: {
+              query: { type: "string" },
+            },
           },
         },
-      },
-    ]);
+      ]);
     vi.spyOn(McpManager.prototype, "shutdown").mockResolvedValue(undefined);
 
     const db = {
@@ -198,5 +200,6 @@ describe("tool registry routes", () => {
         }),
       }),
     );
+    expect(listServerToolDescriptors).toHaveBeenCalledTimes(1);
   });
 });

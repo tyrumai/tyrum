@@ -1,8 +1,12 @@
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../container.js";
-import type { ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
+import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
 import { jsonSchema, tool as aiTool } from "ai";
 import { buildModelToolNameMap, registerModelTool } from "../agent/tools.js";
+import {
+  resolveWebFetchResultText,
+  runWebFetchExtractionPass,
+} from "../agent/webfetch-extraction.js";
 import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
 import type { SecretProvider } from "../secret/provider.js";
 import { coerceRecord } from "../util/coerce.js";
@@ -30,6 +34,7 @@ type BuildToolSetInput = {
   executionContext: StepExecutionContext;
   container: GatewayContainer;
   secretProvider?: SecretProvider;
+  languageModel?: LanguageModel;
   toolCallPolicyStates: Map<string, ToolCallPolicyState>;
 };
 
@@ -234,6 +239,16 @@ function resolveToolCallId(options: ToolExecutionOptions): string {
     : "tc-unknown";
 }
 
+function applyExtractedWebFetchOutput(result: unknown, extractedOutput: string): unknown {
+  if (result && typeof result === "object" && !Array.isArray(result)) {
+    const record = result as Record<string, unknown>;
+    if (typeof record["output"] === "string") {
+      return { ...record, output: extractedOutput };
+    }
+  }
+  return extractedOutput;
+}
+
 export function buildToolSet(input: BuildToolSetInput): ToolSet {
   const allowed = new Set(input.allowedToolIds);
   const tools: Record<string, Tool> = {};
@@ -310,7 +325,20 @@ export function buildToolSet(input: BuildToolSetInput): ToolSet {
         }
 
         const record = coerceRecord(args) ?? {};
-        return await runTool(input2.toAction(record), toolCallId);
+        const result = await runTool(input2.toAction(record), toolCallId);
+        if (input2.toolId !== "webfetch") return result;
+
+        const rawContent = resolveWebFetchResultText(result);
+        if (!rawContent) return result;
+
+        const extraction = await runWebFetchExtractionPass({
+          args,
+          rawContent,
+          model: input.languageModel,
+          toolCallId,
+          logger: input.container.logger,
+        });
+        return extraction ? applyExtractedWebFetchOutput(result, extraction.output) : result;
       },
     });
 

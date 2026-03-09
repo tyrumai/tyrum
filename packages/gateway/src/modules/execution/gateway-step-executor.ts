@@ -187,6 +187,7 @@ async function executeLlmAction(input: {
     executionContext: input.executionContext,
     container: input.container,
     secretProvider: input.secretProvider,
+    languageModel: modelResolved.model as unknown as LanguageModel,
     toolCallPolicyStates,
   });
 

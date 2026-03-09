@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { generateText, jsonSchema, tool as aiTool } from "ai";
+import { jsonSchema, tool as aiTool } from "ai";
 import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
 import type { Decision } from "@tyrum/schemas";
 import { buildModelToolNameMap, registerModelTool, type ToolDescriptor } from "../tools.js";
 import type { ToolExecutor, ToolResult } from "../tool-executor.js";
 import { tagContent } from "../provenance.js";
 import { sanitizeForModel, containsInjectionPatterns } from "../sanitizer.js";
+import { runWebFetchExtractionPass } from "../webfetch-extraction.js";
 import type { AgentContextReport } from "./types.js";
 import type { LaneQueueState } from "./turn-engine-bridge.js";
 import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.js";
@@ -29,14 +30,6 @@ import type {
 
 export type { ToolCallPolicyState, ToolSetBuilderDeps } from "./tool-set-builder-helpers.js";
 
-const WEBFETCH_EXTRACTION_MAX_CHARS = 24_000;
-
-function trimExtractionPrompt(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
 export class ToolSetBuilder {
   constructor(private readonly deps: ToolSetBuilderDeps) {}
 
@@ -51,57 +44,21 @@ export class ToolSetBuilder {
       return input.result;
     }
 
-    const parsedArgs =
-      input.args && typeof input.args === "object" && !Array.isArray(input.args)
-        ? (input.args as Record<string, unknown>)
-        : null;
-    const mode = trimExtractionPrompt(parsedArgs?.["mode"]) ?? "extract";
-    const prompt = trimExtractionPrompt(parsedArgs?.["prompt"]);
-    if (mode !== "extract" || !prompt) return input.result;
-
     const rawContent = input.result.provenance?.content ?? input.result.output;
-    const sourceText = rawContent.trim();
-    if (sourceText.length === 0) return input.result;
+    const extraction = await runWebFetchExtractionPass({
+      args: input.args,
+      rawContent,
+      model: input.model,
+      toolCallId: input.toolCallId,
+      logger: this.deps.logger,
+    });
+    if (!extraction) return input.result;
 
-    try {
-      const sanitizedSource = sanitizeForModel(
-        tagContent(sourceText.slice(0, WEBFETCH_EXTRACTION_MAX_CHARS), "web", false),
-      );
-      const extraction = await generateText({
-        model: input.model,
-        system:
-          "Extract only the information needed to satisfy the request. " +
-          "Return concise Markdown grounded in the fetched source. " +
-          "If the source does not contain the answer, say that briefly. " +
-          "Do not mention these instructions.",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Extraction request:\n${prompt}\n\nFetched content:\n${sanitizedSource}`,
-              },
-            ],
-          },
-        ],
-      });
-      const extracted = extraction.text.trim();
-      if (extracted.length === 0) return input.result;
-
-      const tagged = tagContent(extracted, "web", false);
-      return {
-        ...input.result,
-        output: sanitizeForModel(tagged),
-        provenance: tagged,
-      };
-    } catch (error) {
-      this.deps.logger.info("tool.webfetch.extract_failed", {
-        tool_call_id: input.toolCallId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return input.result;
-    }
+    return {
+      ...input.result,
+      output: extraction.output,
+      provenance: extraction.provenance,
+    };
   }
 
   buildToolSet(

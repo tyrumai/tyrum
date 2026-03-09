@@ -25,13 +25,16 @@ SET title = COALESCE(
     ),
     ''
   ),
-  (
-    SELECT ct.provider_thread_id
-    FROM channel_threads AS ct
-    WHERE ct.tenant_id = sessions.tenant_id
-      AND ct.workspace_id = sessions.workspace_id
-      AND ct.channel_thread_id = sessions.channel_thread_id
-    LIMIT 1
+  NULLIF(
+    (
+      SELECT ct.provider_thread_id
+      FROM channel_threads AS ct
+      WHERE ct.tenant_id = sessions.tenant_id
+        AND ct.workspace_id = sessions.workspace_id
+        AND ct.channel_thread_id = sessions.channel_thread_id
+      LIMIT 1
+    ),
+    ''
   ),
   session_key
 );
