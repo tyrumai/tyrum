@@ -174,21 +174,6 @@ export function createBlankForm(): AgentEditorFormState {
   });
 }
 
-export function createPersonaFallbackForm(input: {
-  agentKey: string;
-  persona: NonNullable<AgentConfigT["persona"]>;
-}): AgentEditorFormState {
-  return {
-    ...createBlankForm(),
-    agentKey: input.agentKey,
-    name: input.persona.name,
-    description: input.persona.description,
-    tone: input.persona.tone,
-    palette: input.persona.palette,
-    character: input.persona.character,
-  };
-}
-
 export function readPersonaFromForm(
   form: AgentEditorFormState,
 ): NonNullable<AgentConfigT["persona"]> {
