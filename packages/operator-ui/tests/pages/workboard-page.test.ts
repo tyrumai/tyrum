@@ -38,7 +38,7 @@ describe("WorkBoardPage", () => {
 
   it("uses a status selector on narrow screens without horizontal board scrolling", () => {
     const { core } = createCore("connected");
-    const matchMedia = stubMatchMedia("(min-width: 1024px)", false);
+    const matchMedia = stubMatchMedia("(min-width: 1120px)", false);
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
 
     try {
@@ -59,7 +59,7 @@ describe("WorkBoardPage", () => {
 
   it("renders an aligned board header on large screens", () => {
     const { core } = createCore("connected");
-    const matchMedia = stubMatchMedia("(min-width: 1024px)", true);
+    const matchMedia = stubMatchMedia("(min-width: 1120px)", true);
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
 
     try {
@@ -157,7 +157,7 @@ describe("WorkBoardPage", () => {
       },
     );
 
-    const matchMedia = stubMatchMedia("(min-width: 1024px)", true);
+    const matchMedia = stubMatchMedia("(min-width: 1120px)", true);
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
     try {
       await flushEffects();
@@ -346,6 +346,7 @@ describe("WorkBoardPage", () => {
       error: "WorkBoard is not supported by this gateway (database not configured).",
     });
 
+    const matchMedia = stubMatchMedia("(min-width: 1120px)", true);
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
     try {
       await flushEffects();
@@ -353,6 +354,7 @@ describe("WorkBoardPage", () => {
         "WorkBoard is not supported by this gateway (database not configured).",
       );
     } finally {
+      matchMedia.cleanup();
       cleanupTestRoot(testRoot);
     }
   });

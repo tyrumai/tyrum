@@ -124,7 +124,7 @@ describe("ChatPage", () => {
       transportError: null,
     });
 
-    const matchMedia = stubMatchMedia("(min-width: 1024px)", true);
+    const matchMedia = stubMatchMedia("(min-width: 800px)", true);
     const core = { connectionStore, chatStore } as unknown as OperatorCore;
     const testRoot = renderIntoDocument(React.createElement(ChatPage, { core }));
 
@@ -181,7 +181,7 @@ describe("ChatPage", () => {
       transportError: null,
     });
 
-    const matchMedia = stubMatchMedia("(min-width: 1024px)", true);
+    const matchMedia = stubMatchMedia("(min-width: 800px)", true);
     const core = { connectionStore, chatStore } as unknown as OperatorCore;
     const testRoot = renderIntoDocument(React.createElement(ChatPage, { core }));
 
@@ -244,7 +244,7 @@ describe("ChatPage", () => {
       transportError: null,
     });
 
-    const matchMedia = stubMatchMedia("(min-width: 1024px)", false);
+    const matchMedia = stubMatchMedia("(min-width: 800px)", false);
     const core = { connectionStore, chatStore } as unknown as OperatorCore;
     const testRoot = renderIntoDocument(React.createElement(ChatPage, { core }));
 
