@@ -17,6 +17,7 @@ async function resolveExaApiKey(secretProvider?: SecretProvider): Promise<string
     });
     return value?.trim() ? value : undefined;
   } catch {
+    // Intentional: Exa API key resolution is optional; fall back to anonymous access.
     return undefined;
   }
 }

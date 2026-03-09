@@ -118,7 +118,7 @@ export const ApprovalResolveRequest = z
       .array(
         z
           .object({
-            tool_id: z.string().trim().min(1).transform(canonicalizeToolId),
+            tool_id: z.string().trim().min(1).overwrite(canonicalizeToolId),
             pattern: z.string().trim().min(1),
             workspace_id: z.string().trim().min(1).optional(),
           })

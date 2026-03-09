@@ -23,6 +23,7 @@ import {
   renderPatchedText,
   resolvePathArg,
   selectReadContent,
+  truncateOutput,
 } from "./tool-executor-local-utils.js";
 import { executeGlobTool, executeGrepTool } from "./tool-executor-search-tools.js";
 import {
@@ -55,12 +56,6 @@ type StructuredPatchHunk =
   | { kind: "update"; path: string; moveTo?: string; sections: PatchSection[] };
 
 type PatchSection = { lines: string[] };
-
-function truncateOutput(output: string): string {
-  return output.length > MAX_RESPONSE_BYTES
-    ? `${output.slice(0, MAX_RESPONSE_BYTES)}${TRUNCATION_MARKER}`
-    : output;
-}
 
 async function executeFsRead(
   context: CoreToolContext,
@@ -435,11 +430,15 @@ async function executeExec(
             try {
               process.kill(-child.pid, signal);
               return;
-            } catch {}
+            } catch {
+              // Intentional: the process group may already be gone or unsupported here.
+            }
           }
           try {
             child.kill(signal);
-          } catch {}
+          } catch {
+            // Intentional: the child may already be exiting; surface captured output instead.
+          }
         };
 
         const timer = setTimeout(() => {

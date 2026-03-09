@@ -189,6 +189,20 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
     expect(result.error).toBe("missing required argument: url");
   });
 
+  it("grep returns a structured error for invalid regex patterns", async () => {
+    const homeDir = requireHomeDir(home);
+    await writeFile(join(homeDir, "notes.txt"), "hello world\n", "utf-8");
+
+    const result = await createToolExecutor({ homeDir }).execute("grep", "call-4a", {
+      path: ".",
+      pattern: "[unterminated",
+      regex: true,
+    });
+
+    expect(result.output).toBe("");
+    expect(result.error).toContain("invalid regex pattern");
+  });
+
   it("fs.write writes file content", async () => {
     const homeDir = requireHomeDir(home);
 

@@ -27,7 +27,7 @@ export const ToolIntentV1 = z
       .refine((value) => value !== undefined, "expected_evidence is required"),
 
     execution_profile: z.string().trim().min(1).optional(),
-    tool_allowlist: z.array(z.string().trim().min(1)).transform(canonicalizeToolIdList).optional(),
+    tool_allowlist: z.array(z.string().trim().min(1)).overwrite(canonicalizeToolIdList).optional(),
 
     intent_graph_sha256: Sha256Hex,
 

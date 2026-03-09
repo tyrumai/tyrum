@@ -36,6 +36,7 @@ type ToolRegistryEntry = {
   risk: ToolDescriptor["risk"];
   requires_confirmation: boolean;
   effective_exposure: ToolEffectiveExposure;
+  family?: string;
   keywords?: string[];
   input_schema?: Record<string, unknown>;
   backing_server?: {
@@ -82,6 +83,7 @@ function toBaseEntry(
     risk: descriptor.risk,
     requires_confirmation: descriptor.requires_confirmation,
     effective_exposure: effectiveExposure,
+    family: descriptor.family,
     keywords: descriptor.keywords.length > 0 ? [...descriptor.keywords] : undefined,
     input_schema: descriptor.inputSchema,
   };
@@ -100,6 +102,7 @@ function toPluginEntry(
     risk: base.risk,
     requires_confirmation: base.requires_confirmation,
     effective_exposure: base.effective_exposure,
+    family: base.family,
     keywords: base.keywords,
     input_schema: base.input_schema,
     plugin: toPluginInfo(plugin),
@@ -118,6 +121,7 @@ function toBuiltinEntry(
     risk: base.risk,
     requires_confirmation: base.requires_confirmation,
     effective_exposure: base.effective_exposure,
+    family: base.family,
     keywords: base.keywords,
     input_schema: base.input_schema,
     backing_server: toBuiltinBackingServer(descriptor),

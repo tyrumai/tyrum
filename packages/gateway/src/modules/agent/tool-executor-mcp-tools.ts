@@ -2,14 +2,8 @@ import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
 import type { SecretProvider } from "../secret/provider.js";
 import { buildBuiltinExaServerSpec } from "./builtin-exa.js";
 import type { McpManager } from "./mcp-manager.js";
-import { tagContent } from "./provenance.js";
-import { sanitizeForModel } from "./sanitizer.js";
-import {
-  MAX_RESPONSE_BYTES,
-  TRUNCATION_MARKER,
-  isBlockedUrl,
-  resolvesToBlockedAddress,
-} from "./tool-executor-shared.js";
+import { makeToolResult, parseNumberArg, parseStringArg } from "./tool-executor-local-utils.js";
+import { isBlockedUrl, resolvesToBlockedAddress } from "./tool-executor-shared.js";
 import type { DnsLookupFn, ToolResult } from "./tool-executor-shared.js";
 import { resolveWebFetchRequest } from "./webfetch-extraction.js";
 
@@ -19,30 +13,6 @@ type McpToolContext = {
   mcpServerSpecs: ReadonlyMap<string, McpServerSpecT>;
   secretProvider?: SecretProvider;
 };
-
-function truncateOutput(output: string): string {
-  return output.length > MAX_RESPONSE_BYTES
-    ? `${output.slice(0, MAX_RESPONSE_BYTES)}${TRUNCATION_MARKER}`
-    : output;
-}
-
-function makeToolResult(toolCallId: string, output: string): ToolResult {
-  const tagged = tagContent(truncateOutput(output), "web", false);
-  return {
-    tool_call_id: toolCallId,
-    output: sanitizeForModel(tagged),
-    provenance: tagged,
-  };
-}
-
-function parseStringArg(args: Record<string, unknown> | null, key: string): string | undefined {
-  return typeof args?.[key] === "string" ? (args[key] as string) : undefined;
-}
-
-function parseNumberArg(args: Record<string, unknown> | null, key: string): number | undefined {
-  const value = args?.[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
 
 function normalizeMcpText(content: unknown): string {
   if (
@@ -79,6 +49,7 @@ function parseMcpToolResult(
   return makeToolResult(
     toolCallId,
     result.content.map((item) => normalizeMcpText(item)).join("\n"),
+    "web",
   );
 }
 

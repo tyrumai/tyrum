@@ -3,7 +3,7 @@ import { sanitizeForModel } from "./sanitizer.js";
 import { MAX_RESPONSE_BYTES, TRUNCATION_MARKER } from "./tool-executor-shared.js";
 import type { ToolResult } from "./tool-executor-shared.js";
 
-function truncateOutput(output: string): string {
+export function truncateOutput(output: string): string {
   return output.length > MAX_RESPONSE_BYTES
     ? `${output.slice(0, MAX_RESPONSE_BYTES)}${TRUNCATION_MARKER}`
     : output;

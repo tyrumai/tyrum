@@ -252,6 +252,8 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     risk: "low",
     requires_confirmation: false,
     keywords: ["automation", "schedule", "heartbeat", "cron", "list"],
+    source: "builtin",
+    family: "automation",
     inputSchema: {
       type: "object",
       properties: {
@@ -268,6 +270,8 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     risk: "low",
     requires_confirmation: false,
     keywords: ["automation", "schedule", "heartbeat", "cron", "get"],
+    source: "builtin",
+    family: "automation",
     inputSchema: {
       type: "object",
       properties: {
@@ -284,6 +288,8 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     risk: "medium",
     requires_confirmation: true,
     keywords: ["automation", "schedule", "heartbeat", "cron", "create"],
+    source: "builtin",
+    family: "automation",
     inputSchema: {
       type: "object",
       properties: {
@@ -318,6 +324,8 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     risk: "medium",
     requires_confirmation: true,
     keywords: ["automation", "schedule", "heartbeat", "cron", "update"],
+    source: "builtin",
+    family: "automation",
     inputSchema: {
       type: "object",
       properties: {
@@ -344,6 +352,8 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     risk: "medium",
     requires_confirmation: true,
     keywords: ["automation", "schedule", "pause", "disable"],
+    source: "builtin",
+    family: "automation",
     inputSchema: {
       type: "object",
       properties: {
@@ -359,6 +369,8 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     risk: "medium",
     requires_confirmation: true,
     keywords: ["automation", "schedule", "resume", "enable"],
+    source: "builtin",
+    family: "automation",
     inputSchema: {
       type: "object",
       properties: {
@@ -374,6 +386,8 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     risk: "high",
     requires_confirmation: true,
     keywords: ["automation", "schedule", "delete", "remove"],
+    source: "builtin",
+    family: "automation",
     inputSchema: {
       type: "object",
       properties: {

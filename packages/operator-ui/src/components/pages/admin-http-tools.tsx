@@ -33,6 +33,7 @@ function matchesFilter(tool: ToolRegistryEntry, query: string): boolean {
     tool.canonical_id,
     tool.description,
     tool.source,
+    tool.family,
     tool.backing_server?.id,
     tool.backing_server?.name,
     tool.plugin?.id,
@@ -78,6 +79,7 @@ function ToolRow({ tool }: { tool: ToolRegistryEntry }): React.ReactElement {
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">{SOURCE_LABELS[tool.source]}</Badge>
+          {tool.family ? <Badge variant="outline">{tool.family}</Badge> : null}
           <Badge variant={riskBadgeVariant(tool.risk)}>{tool.risk} risk</Badge>
           <Badge variant={tool.requires_confirmation ? "warning" : "default"}>
             {tool.requires_confirmation ? "Confirm required" : "No confirm"}

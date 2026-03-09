@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -10,68 +10,16 @@ import { prepareTurn } from "../../src/modules/agent/runtime/turn-preparation.js
 import { turnDirect } from "../../src/modules/agent/runtime/turn-direct.js";
 import { maybeRunPreCompactionMemoryFlush } from "../../src/modules/agent/runtime/pre-compaction-memory-flush.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
-import { AgentConfig } from "@tyrum/schemas";
-import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
+import {
+  createMockMcpManager,
+  createSequencedTextLanguageModel,
+  listNonTitleGenerateCalls,
+  seedAgentConfig,
+  usage,
+} from "./pre-compaction-memory-flush.test-support.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
-
-function usage() {
-  return {
-    inputTokens: {
-      total: 10,
-      noCache: 10,
-      cacheRead: undefined,
-      cacheWrite: undefined,
-    },
-    outputTokens: {
-      total: 5,
-      text: 5,
-      reasoning: undefined,
-    },
-  };
-}
-
-function createSequencedTextLanguageModel(texts: readonly string[]): MockLanguageModelV3 {
-  let callCount = 0;
-
-  return new MockLanguageModelV3({
-    doGenerate: async () => {
-      const text = texts[callCount] ?? texts.at(-1) ?? "";
-      callCount += 1;
-      return {
-        content: [{ type: "text" as const, text }],
-        finishReason: { unified: "stop" as const, raw: undefined },
-        usage: usage(),
-        warnings: [],
-      };
-    },
-  });
-}
-
-async function seedAgentConfig(
-  container: GatewayContainer,
-  opts?: { maxTurns?: number },
-): Promise<{ tenantId: string; agentId: string }> {
-  const tenantId = DEFAULT_TENANT_ID;
-  const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
-  await new AgentConfigDal(container.db).set({
-    tenantId,
-    agentId,
-    config: AgentConfig.parse({
-      model: { model: "openai/gpt-4.1" },
-      skills: { enabled: [] },
-      mcp: { enabled: [] },
-      tools: { allow: [] },
-      sessions: { ttl_days: 30, max_turns: opts?.maxTurns ?? 1 },
-      memory: { v1: { enabled: true } },
-    }),
-    createdBy: { kind: "test" },
-    reason: "pre-compaction flush test",
-  });
-  return { tenantId, agentId };
-}
 
 describe("Pre-compaction memory flush", () => {
   let homeDir: string | undefined;
@@ -99,11 +47,7 @@ describe("Pre-compaction memory flush", () => {
       "summary: first / a1",
     ]);
 
-    const mcpManager = {
-      listToolDescriptors: vi.fn(async () => []),
-      shutdown: vi.fn(async () => {}),
-      callTool: vi.fn(async () => ({ content: [] })),
-    };
+    const mcpManager = createMockMcpManager();
 
     const runtime = new AgentRuntime({
       container,
@@ -128,9 +72,10 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(second.reply).toBe("a2");
 
-    expect(languageModel.doGenerateCalls).toHaveLength(4);
+    const nonTitleCalls = listNonTitleGenerateCalls(languageModel);
+    expect(nonTitleCalls).toHaveLength(4);
 
-    const flushCall = languageModel.doGenerateCalls[2];
+    const flushCall = nonTitleCalls[2];
     const flushPromptText = flushCall
       ? flushCall.prompt
           .filter((msg) => msg.role === "user")
@@ -181,11 +126,7 @@ describe("Pre-compaction memory flush", () => {
       "summary: secret redaction",
     ]);
 
-    const mcpManager = {
-      listToolDescriptors: vi.fn(async () => []),
-      shutdown: vi.fn(async () => {}),
-      callTool: vi.fn(async () => ({ content: [] })),
-    };
+    const mcpManager = createMockMcpManager();
 
     const runtime = new AgentRuntime({
       container,
@@ -210,8 +151,9 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(second.reply).toBe("a2");
 
-    expect(languageModel.doGenerateCalls).toHaveLength(4);
-    const flushCall = languageModel.doGenerateCalls[2];
+    const nonTitleCalls = listNonTitleGenerateCalls(languageModel);
+    expect(nonTitleCalls).toHaveLength(4);
+    const flushCall = nonTitleCalls[2];
     const flushPromptText = flushCall
       ? flushCall.prompt
           .filter((msg) => msg.role === "user")
@@ -239,11 +181,7 @@ describe("Pre-compaction memory flush", () => {
       "summary: secret output redaction",
     ]);
 
-    const mcpManager = {
-      listToolDescriptors: vi.fn(async () => []),
-      shutdown: vi.fn(async () => {}),
-      callTool: vi.fn(async () => ({ content: [] })),
-    };
+    const mcpManager = createMockMcpManager();
 
     const runtime = new AgentRuntime({
       container,
@@ -294,11 +232,7 @@ describe("Pre-compaction memory flush", () => {
       "summary: truncate",
     ]);
 
-    const mcpManager = {
-      listToolDescriptors: vi.fn(async () => []),
-      shutdown: vi.fn(async () => {}),
-      callTool: vi.fn(async () => ({ content: [] })),
-    };
+    const mcpManager = createMockMcpManager();
 
     const runtime = new AgentRuntime({
       container,
@@ -323,8 +257,9 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(second.reply).toBe("a2");
 
-    expect(languageModel.doGenerateCalls).toHaveLength(4);
-    const flushCall = languageModel.doGenerateCalls[2];
+    const nonTitleCalls = listNonTitleGenerateCalls(languageModel);
+    expect(nonTitleCalls).toHaveLength(4);
+    const flushCall = nonTitleCalls[2];
     const flushPromptText = flushCall
       ? flushCall.prompt
           .filter((msg) => msg.role === "user")
@@ -352,11 +287,7 @@ describe("Pre-compaction memory flush", () => {
       "summary: threshold",
     ]);
 
-    const mcpManager = {
-      listToolDescriptors: vi.fn(async () => []),
-      shutdown: vi.fn(async () => {}),
-      callTool: vi.fn(async () => ({ content: [] })),
-    };
+    const mcpManager = createMockMcpManager();
 
     const runtime = new AgentRuntime({
       container,
@@ -373,7 +304,7 @@ describe("Pre-compaction memory flush", () => {
       message: "first",
     });
     expect(first.reply).toBe("a1");
-    expect(languageModel.doGenerateCalls).toHaveLength(1);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(1);
 
     const second = await runtime.turn({
       channel: "test",
@@ -381,7 +312,7 @@ describe("Pre-compaction memory flush", () => {
       message: "second",
     });
     expect(second.reply).toBe("a2");
-    expect(languageModel.doGenerateCalls).toHaveLength(2);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(2);
 
     const third = await runtime.turn({
       channel: "test",
@@ -389,7 +320,7 @@ describe("Pre-compaction memory flush", () => {
       message: "third",
     });
     expect(third.reply).toBe("a3");
-    expect(languageModel.doGenerateCalls).toHaveLength(5);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(5);
 
     const memory = new MemoryV1Dal(container.db);
     const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, agentId);
@@ -403,11 +334,7 @@ describe("Pre-compaction memory flush", () => {
 
     const languageModel = createSequencedTextLanguageModel(["FLUSH_OK"]);
 
-    const mcpManager = {
-      listToolDescriptors: vi.fn(async () => []),
-      shutdown: vi.fn(async () => {}),
-      callTool: vi.fn(async () => ({ content: [] })),
-    };
+    const mcpManager = createMockMcpManager();
 
     const runtime = new AgentRuntime({
       container,
@@ -454,7 +381,7 @@ describe("Pre-compaction memory flush", () => {
       model: prepared.model,
       droppedTurns: prepared.session.turns,
     });
-    expect(languageModel.doGenerateCalls).toHaveLength(1);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(1);
 
     const memory = new MemoryV1Dal(container.db);
     const firstList = await memory.list({ tenantId, agentId, limit: 50 });
@@ -466,7 +393,7 @@ describe("Pre-compaction memory flush", () => {
       model: prepared.model,
       droppedTurns: prepared.session.turns,
     });
-    expect(languageModel.doGenerateCalls).toHaveLength(1);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(1);
 
     const secondList = await memory.list({ tenantId, agentId, limit: 50 });
     expect(secondList.items).toHaveLength(1);
@@ -480,6 +407,18 @@ describe("Pre-compaction memory flush", () => {
     let callCount = 0;
     const languageModel = new MockLanguageModelV3({
       doGenerate: async (options) => {
+        if (
+          JSON.stringify((options as { prompt?: unknown[] }).prompt ?? []).includes(
+            "Write a concise session title.",
+          )
+        ) {
+          return {
+            content: [{ type: "text" as const, text: "Generated session title" }],
+            finishReason: { unified: "stop" as const, raw: undefined },
+            usage: usage(),
+            warnings: [],
+          };
+        }
         callCount += 1;
 
         if (callCount === 1) {
@@ -524,11 +463,7 @@ describe("Pre-compaction memory flush", () => {
       },
     });
 
-    const mcpManager = {
-      listToolDescriptors: vi.fn(async () => []),
-      shutdown: vi.fn(async () => {}),
-      callTool: vi.fn(async () => ({ content: [] })),
-    };
+    const mcpManager = createMockMcpManager();
 
     const runtime = new AgentRuntime({
       container,

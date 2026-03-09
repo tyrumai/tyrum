@@ -91,7 +91,7 @@ export const PlaybookStep = z
         /** Tool allowlist for this step (tool ids). */
         tools: z
           .object({
-            allow: z.array(z.string().trim().min(1)).default([]).transform(canonicalizeToolIdList),
+            allow: z.array(z.string().trim().min(1)).default([]).overwrite(canonicalizeToolIdList),
           })
           .strict()
           .optional(),

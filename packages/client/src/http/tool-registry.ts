@@ -35,6 +35,7 @@ const ToolRegistryEntry = z
         agent_key: z.string().trim().min(1).optional(),
       })
       .strict(),
+    family: z.string().trim().min(1).optional(),
     keywords: z.array(z.string().trim().min(1)).optional(),
     input_schema: z.record(z.string(), z.unknown()).optional(),
     backing_server: ToolRegistryBackingServer.optional(),

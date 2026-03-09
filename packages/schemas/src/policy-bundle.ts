@@ -72,12 +72,12 @@ export const PolicyBundleV1 = z
     tools: z
       .object({
         default: Decision.default("deny"),
-        allow: z.array(z.string().trim().min(1)).default([]).transform(canonicalizeToolIdList),
+        allow: z.array(z.string().trim().min(1)).default([]).overwrite(canonicalizeToolIdList),
         require_approval: z
           .array(z.string().trim().min(1))
           .default([])
-          .transform(canonicalizeToolIdList),
-        deny: z.array(z.string().trim().min(1)).default([]).transform(canonicalizeToolIdList),
+          .overwrite(canonicalizeToolIdList),
+        deny: z.array(z.string().trim().min(1)).default([]).overwrite(canonicalizeToolIdList),
       })
       .strict()
       .optional(),
@@ -176,7 +176,7 @@ export const PolicyOverride = z
     agent_id: AgentId,
     workspace_id: WorkspaceId.optional(),
 
-    tool_id: z.string().trim().min(1).transform(canonicalizeToolId),
+    tool_id: z.string().trim().min(1).overwrite(canonicalizeToolId),
     pattern: z.string().trim().min(1),
 
     created_from_approval_id: UuidSchema.optional(),
@@ -194,7 +194,7 @@ export type PolicyOverride = z.infer<typeof PolicyOverride>;
 export const PolicyOverrideListRequest = z
   .object({
     agent_id: AgentId.optional(),
-    tool_id: z.string().trim().min(1).transform(canonicalizeToolId).optional(),
+    tool_id: z.string().trim().min(1).overwrite(canonicalizeToolId).optional(),
     status: PolicyOverrideStatus.optional(),
     limit: z.number().int().min(1).max(500).default(100),
     cursor: z.string().trim().min(1).optional(),
@@ -229,7 +229,7 @@ export const PolicyOverrideCreateRequest = z
   .object({
     agent_id: AgentId,
     workspace_id: WorkspaceId.optional(),
-    tool_id: z.string().trim().min(1).transform(canonicalizeToolId),
+    tool_id: z.string().trim().min(1).overwrite(canonicalizeToolId),
     pattern: z.string().trim().min(1),
     created_by: z.unknown().optional(),
     created_from_approval_id: UuidSchema.optional(),

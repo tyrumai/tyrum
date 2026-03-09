@@ -6,6 +6,7 @@ const LEGACY_TOOL_ID_MAP = new Map<string, string>([
 ]);
 
 const LEGACY_TOOL_ID_LIST_MAP = new Map<string, readonly string[]>([
+  ["tool.*", ["*"]],
   ["tool.fs.*", ["read", "write", "edit", "apply_patch", "glob", "grep"]],
 ]);
 

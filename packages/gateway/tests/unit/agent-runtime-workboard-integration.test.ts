@@ -16,6 +16,29 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 const generateTextMock = vi.hoisted(() => vi.fn());
+const TITLE_PROMPT_TEXT = "Write a concise session title.";
+
+function isTitleGenerateRequest(value: unknown): boolean {
+  return (
+    typeof (value as { system?: unknown } | undefined)?.system === "string" &&
+    ((value as { system: string }).system.includes(TITLE_PROMPT_TEXT) ?? false)
+  );
+}
+
+function mockNoNonTitleInference(): void {
+  generateTextMock.mockImplementation(async (input) => {
+    if (isTitleGenerateRequest(input)) {
+      return { text: "Generated session title", steps: [] };
+    }
+    throw new Error("unexpected model inference");
+  });
+}
+
+function firstNonTitleGenerateCall(): unknown {
+  return generateTextMock.mock.calls
+    .map(([first]) => first)
+    .find((entry) => !isTitleGenerateRequest(entry));
+}
 
 vi.mock("ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("ai")>();
@@ -43,9 +66,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
   });
 
   it("answers status? via WorkBoard without model inference", async () => {
-    generateTextMock.mockImplementation(() => {
-      throw new Error("unexpected model inference");
-    });
+    mockNoNonTitleInference();
 
     const { createContainer } = await import("../../src/container.js");
     const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
@@ -97,7 +118,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     expect(result.reply).toContain(workItemId);
     expect(result.reply).toContain("Test work item");
     expect(result.reply).toContain(taskId);
-    expect(generateTextMock).not.toHaveBeenCalled();
+    expect(firstNonTitleGenerateCall()).toBeUndefined();
   });
 
   it("records last_active_session_key on inbound interactive turns", async () => {
@@ -164,7 +185,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     const res = await runtime.turn({ channel: "test", thread_id: "thread-1", message: "hello" });
     expect(res.reply).toBe("ok");
 
-    const call = generateTextMock.mock.calls[0]?.[0] as
+    const call = firstNonTitleGenerateCall() as
       | { messages?: Array<{ role: string; content: Array<{ type: string; text: string }> }> }
       | undefined;
 
@@ -223,7 +244,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     const res = await runtime.turn({ channel: "test", thread_id: "thread-1", message: "hello" });
     expect(res.reply).toBe("ok");
 
-    const call = generateTextMock.mock.calls[0]?.[0] as
+    const call = firstNonTitleGenerateCall() as
       | { messages?: Array<{ role: string; content: Array<{ type: string; text: string }> }> }
       | undefined;
 
@@ -235,9 +256,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
   });
 
   it("delegates /delegate_execute to a WorkItem and returns its id immediately", async () => {
-    generateTextMock.mockImplementation(() => {
-      throw new Error("unexpected model inference");
-    });
+    mockNoNonTitleInference();
 
     const { createContainer } = await import("../../src/container.js");
     const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
@@ -288,9 +307,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
   });
 
   it("delegates /delegate_plan to an initiative WorkItem", async () => {
-    generateTextMock.mockImplementation(() => {
-      throw new Error("unexpected model inference");
-    });
+    mockNoNonTitleInference();
 
     const { createContainer } = await import("../../src/container.js");
     const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");

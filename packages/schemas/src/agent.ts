@@ -37,7 +37,7 @@ export const AgentMcpConfig = z.object({
 export type AgentMcpConfig = z.infer<typeof AgentMcpConfig>;
 
 export const AgentToolConfig = z.object({
-  allow: z.array(z.string().trim().min(1)).default([]).transform(canonicalizeToolIdList),
+  allow: z.array(z.string().trim().min(1)).default([]).overwrite(canonicalizeToolIdList),
 });
 export type AgentToolConfig = z.infer<typeof AgentToolConfig>;
 
@@ -205,7 +205,7 @@ export const IdentityPack = z.object({
 export type IdentityPack = z.infer<typeof IdentityPack>;
 
 export const SkillRequires = z.object({
-  tools: z.array(z.string().trim().min(1)).transform(canonicalizeToolIdList).optional(),
+  tools: z.array(z.string().trim().min(1)).overwrite(canonicalizeToolIdList).optional(),
   mcp: z.array(z.string().trim().min(1)).optional(),
   nodes: z.array(z.string().trim().min(1)).optional(),
 });

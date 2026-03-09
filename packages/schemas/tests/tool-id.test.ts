@@ -19,4 +19,8 @@ describe("tool id canonicalization", () => {
       "grep",
     ]);
   });
+
+  it("expands legacy global tool wildcards to any canonical tool", () => {
+    expect(canonicalizeToolIdList(["tool.*"])).toEqual(["*"]);
+  });
 });

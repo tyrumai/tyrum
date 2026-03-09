@@ -200,6 +200,13 @@ describe("tool registry routes", () => {
         }),
       }),
     );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin",
+        canonical_id: "tool.automation.schedule.list",
+        family: "automation",
+      }),
+    );
     expect(listServerToolDescriptors).toHaveBeenCalledTimes(1);
   });
 });

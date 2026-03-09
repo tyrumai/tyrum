@@ -22,10 +22,10 @@ SET config_json = replace(
   '"tool.http.fetch"',
   '"webfetch"'
 )
-WHERE POSITION('"tool.fs.read"' IN config_json) > 0
-   OR POSITION('"tool.fs.write"' IN config_json) > 0
-   OR POSITION('"tool.exec"' IN config_json) > 0
-   OR POSITION('"tool.http.fetch"' IN config_json) > 0;
+WHERE strpos(config_json, '"tool.fs.read"') > 0
+   OR strpos(config_json, '"tool.fs.write"') > 0
+   OR strpos(config_json, '"tool.exec"') > 0
+   OR strpos(config_json, '"tool.http.fetch"') > 0;
 
 UPDATE approvals
 SET context_json = replace(
@@ -41,10 +41,10 @@ SET context_json = replace(
   '"tool.http.fetch"',
   '"webfetch"'
 )
-WHERE POSITION('"tool.fs.read"' IN context_json) > 0
-   OR POSITION('"tool.fs.write"' IN context_json) > 0
-   OR POSITION('"tool.exec"' IN context_json) > 0
-   OR POSITION('"tool.http.fetch"' IN context_json) > 0;
+WHERE strpos(context_json, '"tool.fs.read"') > 0
+   OR strpos(context_json, '"tool.fs.write"') > 0
+   OR strpos(context_json, '"tool.exec"') > 0
+   OR strpos(context_json, '"tool.http.fetch"') > 0;
 
 UPDATE policy_snapshots
 SET bundle_json = replace(
@@ -60,7 +60,7 @@ SET bundle_json = replace(
   '"tool.http.fetch"',
   '"webfetch"'
 )
-WHERE POSITION('"tool.fs.read"' IN bundle_json) > 0
-   OR POSITION('"tool.fs.write"' IN bundle_json) > 0
-   OR POSITION('"tool.exec"' IN bundle_json) > 0
-   OR POSITION('"tool.http.fetch"' IN bundle_json) > 0;
+WHERE strpos(bundle_json, '"tool.fs.read"') > 0
+   OR strpos(bundle_json, '"tool.fs.write"') > 0
+   OR strpos(bundle_json, '"tool.exec"') > 0
+   OR strpos(bundle_json, '"tool.http.fetch"') > 0;

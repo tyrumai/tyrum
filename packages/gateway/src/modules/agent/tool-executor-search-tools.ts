@@ -1,9 +1,7 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { wildcardMatch } from "../policy/wildcard.js";
-import { tagContent } from "./provenance.js";
-import { sanitizeForModel } from "./sanitizer.js";
-import { MAX_RESPONSE_BYTES, TRUNCATION_MARKER } from "./tool-executor-shared.js";
+import { makeToolResult, parseStringArg } from "./tool-executor-local-utils.js";
 import type { ToolResult } from "./tool-executor-shared.js";
 
 type SearchToolContext = {
@@ -11,25 +9,6 @@ type SearchToolContext = {
 };
 
 const IGNORED_WALK_DIRS = new Set([".git", "node_modules", "dist", "coverage", ".turbo"]);
-
-function truncateOutput(output: string): string {
-  return output.length > MAX_RESPONSE_BYTES
-    ? `${output.slice(0, MAX_RESPONSE_BYTES)}${TRUNCATION_MARKER}`
-    : output;
-}
-
-function makeToolResult(toolCallId: string, output: string): ToolResult {
-  const tagged = tagContent(truncateOutput(output), "tool", false);
-  return {
-    tool_call_id: toolCallId,
-    output: sanitizeForModel(tagged),
-    provenance: tagged,
-  };
-}
-
-function parseStringArg(args: Record<string, unknown> | null, key: string): string | undefined {
-  return typeof args?.[key] === "string" ? (args[key] as string) : undefined;
-}
 
 async function walkFiles(root: string): Promise<string[]> {
   const files: string[] = [];
@@ -82,7 +61,7 @@ export async function executeGlobTool(
     .map((filePath) => relative(basePath, filePath).replaceAll("\\", "/"))
     .filter((filePath) => matchesGlobPattern(pattern, filePath))
     .toSorted((left, right) => left.localeCompare(right));
-  return makeToolResult(toolCallId, matches.join("\n"));
+  return makeToolResult(toolCallId, matches.join("\n"), "tool");
 }
 
 export async function executeGrepTool(
@@ -99,7 +78,17 @@ export async function executeGrepTool(
   const includePattern = parseStringArg(parsed, "include");
   const regex = parsed?.["regex"] === true;
   const ignoreCase = parsed?.["ignore_case"] === true;
-  const matcher = buildGrepRegExp(pattern, regex, ignoreCase);
+  let matcher: RegExp;
+  try {
+    matcher = buildGrepRegExp(pattern, regex, ignoreCase);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: regex ? `invalid regex pattern: ${message}` : message,
+    };
+  }
 
   const matches: string[] = [];
   for (const filePath of await walkFiles(basePath)) {
@@ -118,5 +107,5 @@ export async function executeGrepTool(
     }
   }
 
-  return makeToolResult(toolCallId, matches.join("\n"));
+  return makeToolResult(toolCallId, matches.join("\n"), "tool");
 }
