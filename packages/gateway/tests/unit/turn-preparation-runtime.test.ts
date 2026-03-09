@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { execFileMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
@@ -14,12 +14,18 @@ vi.mock("node:child_process", async () => {
 
 import {
   buildRuntimePrompt,
+  resetGitRootCacheForTests,
   resolveGitRoot,
 } from "../../src/modules/agent/runtime/turn-preparation-runtime.js";
 
 describe("turn preparation runtime helpers", () => {
-  it("caches git root lookups per home directory", async () => {
+  beforeEach(() => {
     execFileMock.mockReset();
+    resetGitRootCacheForTests();
+    vi.restoreAllMocks();
+  });
+
+  it("caches git root lookups per home directory", async () => {
     execFileMock.mockImplementation((...args: unknown[]) => {
       const callback = args.at(-1) as
         | ((error: Error | null, stdout: string, stderr: string) => void)
@@ -40,8 +46,36 @@ describe("turn preparation runtime helpers", () => {
     );
   });
 
+  it("refreshes cached git roots after the ttl expires", async () => {
+    execFileMock.mockImplementationOnce((...args: unknown[]) => {
+      const callback = args.at(-1) as
+        | ((error: Error | null, stdout: string, stderr: string) => void)
+        | undefined;
+      queueMicrotask(() => callback?.(null, "/repo-1\n", ""));
+      return {} as never;
+    });
+    execFileMock.mockImplementationOnce((...args: unknown[]) => {
+      const callback = args.at(-1) as
+        | ((error: Error | null, stdout: string, stderr: string) => void)
+        | undefined;
+      queueMicrotask(() => callback?.(null, "/repo-2\n", ""));
+      return {} as never;
+    });
+
+    const now = vi.spyOn(Date, "now");
+    now.mockReturnValue(0);
+    await expect(resolveGitRoot("/workspace")).resolves.toBe("/repo-1");
+
+    now.mockReturnValue(30_000);
+    await expect(resolveGitRoot("/workspace")).resolves.toBe("/repo-1");
+
+    now.mockReturnValue(61_000);
+    await expect(resolveGitRoot("/workspace")).resolves.toBe("/repo-2");
+
+    expect(execFileMock).toHaveBeenCalledTimes(2);
+  });
+
   it("includes the resolved git root in the runtime prompt", async () => {
-    execFileMock.mockReset();
     execFileMock.mockImplementation((...args: unknown[]) => {
       const callback = args.at(-1) as
         | ((error: Error | null, stdout: string, stderr: string) => void)

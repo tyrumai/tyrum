@@ -55,7 +55,22 @@ export interface TurnPreparationRuntimeDeps extends PrepareTurnHelperDeps {
   approvalPollMs: number;
 }
 
-const gitRootByHome = new Map<string, Promise<string | undefined>>();
+const GIT_ROOT_CACHE_TTL_MS = 60_000;
+const MAX_GIT_ROOT_CACHE_ENTRIES = 64;
+
+interface GitRootCacheEntry {
+  expiresAtMs: number;
+  value: Promise<string | undefined>;
+}
+
+const gitRootByHome = new Map<string, GitRootCacheEntry>();
+
+function evictOldestGitRootCacheEntry(): void {
+  const oldestKey = gitRootByHome.keys().next().value;
+  if (typeof oldestKey === "string") {
+    gitRootByHome.delete(oldestKey);
+  }
+}
 
 function resolveGitRootProcess(home: string): Promise<string | undefined> {
   return new Promise((resolve) => {
@@ -78,15 +93,30 @@ function resolveGitRootProcess(home: string): Promise<string | undefined> {
   });
 }
 
+export function resetGitRootCacheForTests(): void {
+  gitRootByHome.clear();
+}
+
 export async function resolveGitRoot(cwd: string): Promise<string | undefined> {
   const home = cwd.trim();
   if (!home) return undefined;
 
-  let gitRoot = gitRootByHome.get(home);
-  if (!gitRoot) {
-    gitRoot = resolveGitRootProcess(home);
-    gitRootByHome.set(home, gitRoot);
+  const cached = gitRootByHome.get(home);
+  const now = Date.now();
+  if (cached && cached.expiresAtMs > now) {
+    return await cached.value;
   }
+  gitRootByHome.delete(home);
+
+  if (gitRootByHome.size >= MAX_GIT_ROOT_CACHE_ENTRIES) {
+    evictOldestGitRootCacheEntry();
+  }
+
+  const gitRoot = resolveGitRootProcess(home).catch(() => undefined);
+  gitRootByHome.set(home, {
+    expiresAtMs: now + GIT_ROOT_CACHE_TTL_MS,
+    value: gitRoot,
+  });
 
   return await gitRoot;
 }

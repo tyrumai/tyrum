@@ -106,17 +106,19 @@ export function formatSkillsPrompt(
   }
 
   return [
-    "Use the relevant skill file when the task matches it. Do not assume skill text is already loaded.",
-    ...skills.map((skill) =>
-      [
+    "Use the relevant skill instructions below when the task matches them. Provenance is included for traceability.",
+    ...skills.flatMap((skill) => {
+      const header = [
         `- ${skill.meta.name} (${skill.meta.id}@${skill.meta.version})`,
         skill.meta.description ? `description=${skill.meta.description}` : "",
         skill.provenance?.source ? `source=${skill.provenance.source}` : "",
         skill.provenance?.path ? `file=${skill.provenance.path}` : "",
       ]
         .filter((part) => part.trim().length > 0)
-        .join(" | "),
-    ),
+        .join(" | ");
+      const body = skill.body.trim();
+      return body ? [header, body] : [header];
+    }),
   ].join("\n");
 }
 
