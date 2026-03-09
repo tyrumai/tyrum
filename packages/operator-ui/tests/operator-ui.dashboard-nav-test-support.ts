@@ -262,7 +262,7 @@ function registerDashboardTests(): void {
 }
 
 function registerNavShortcutTests(): void {
-  it("supports Cmd/Ctrl+1-7 page navigation shortcuts across the primary routes", async () => {
+  it("supports Cmd/Ctrl+1-8 page navigation shortcuts across the primary routes", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -283,7 +283,17 @@ function registerNavShortcutTests(): void {
 
     await act(async () => {
       window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "7", ctrlKey: true, bubbles: true }),
+        new KeyboardEvent("keydown", { key: "3", ctrlKey: true, bubbles: true }),
+      );
+      await vi.dynamicImportSettled();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="activity-page"]')).not.toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "8", ctrlKey: true, bubbles: true }),
       );
       await vi.dynamicImportSettled();
       await Promise.resolve();
