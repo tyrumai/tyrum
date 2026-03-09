@@ -174,9 +174,7 @@ export function createBlankForm(): AgentEditorFormState {
   });
 }
 
-export function readPersonaFromForm(
-  form: AgentEditorFormState,
-): NonNullable<AgentConfigT["persona"]> {
+function readPersonaFromForm(form: AgentEditorFormState): NonNullable<AgentConfigT["persona"]> {
   return {
     name: form.name.trim(),
     description: form.description.trim(),
