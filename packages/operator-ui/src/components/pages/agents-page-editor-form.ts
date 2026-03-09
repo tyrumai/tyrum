@@ -174,6 +174,16 @@ export function createBlankForm(): AgentEditorFormState {
   });
 }
 
+function readPersonaFromForm(form: AgentEditorFormState): NonNullable<AgentConfigT["persona"]> {
+  return {
+    name: form.name.trim(),
+    description: form.description.trim(),
+    tone: form.tone.trim(),
+    palette: form.palette.trim(),
+    character: form.character.trim(),
+  };
+}
+
 function parseOptionalInt(value: string): number | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -202,11 +212,7 @@ export function buildPayload(
           : {}),
       },
       persona: {
-        name: form.name.trim(),
-        description: form.description.trim(),
-        tone: form.tone.trim(),
-        palette: form.palette.trim(),
-        character: form.character.trim(),
+        ...readPersonaFromForm(form),
       },
       skills: {
         enabled: splitList(form.skillsEnabled),

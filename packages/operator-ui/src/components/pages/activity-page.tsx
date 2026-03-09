@@ -13,6 +13,7 @@ import { EmptyState } from "../ui/empty-state.js";
 import { Skeleton } from "../ui/skeleton.js";
 import { cn } from "../../lib/cn.js";
 import { useOperatorStore } from "../../use-operator-store.js";
+import { ActivityPersonaPanel } from "./activity-persona-panel.js";
 import { ActivityScene } from "./activity-scene.js";
 import { ACTIVITY_ROOM_LABELS } from "./activity-scene-model.js";
 
@@ -213,7 +214,19 @@ export function ActivityPage({ core }: ActivityPageProps) {
               </div>
             </div>
 
+            <ActivityPersonaPanel
+              activity={activity}
+              core={core}
+              selectedWorkstream={selectedWorkstream}
+              onSelectWorkstream={(workstreamId) => {
+                setSelectionCleared(false);
+                core.activityStore.selectWorkstream(workstreamId);
+              }}
+            />
+
             <dl className="rounded-lg border border-border/70 bg-bg-subtle/50 px-4">
+              <DetailRow label="Agent" value={selectedWorkstream.agentId} />
+              <DetailRow label="Key" value={selectedWorkstream.key} />
               <DetailRow
                 label="Room"
                 value={ACTIVITY_ROOM_LABELS[selectedWorkstream.currentRoom]}
