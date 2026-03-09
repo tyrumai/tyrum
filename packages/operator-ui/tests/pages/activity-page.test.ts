@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import type { ActivityState } from "../../../operator-core/src/stores/activity-store.js";
 import { createStore } from "../../../operator-core/src/store.js";
@@ -294,5 +294,63 @@ describe("ActivityPage", () => {
 
     cleanupTestRoot(testRoot);
     reducedMotion.cleanup();
+  });
+
+  it("does not restart idle animations when selection changes without changing scene topology", () => {
+    const reducedMotion = stubMatchMedia("(prefers-reduced-motion: reduce)", false);
+    const originalAnimate = HTMLElement.prototype.animate;
+    const originalGetAnimations = HTMLElement.prototype.getAnimations;
+    const cancel = vi.fn();
+    const animate = vi.fn(() => ({ cancel }) as unknown as Animation);
+
+    Object.defineProperty(HTMLElement.prototype, "animate", {
+      configurable: true,
+      value: animate,
+    });
+    Object.defineProperty(HTMLElement.prototype, "getAnimations", {
+      configurable: true,
+      value: () => [],
+    });
+
+    try {
+      const core = createCore({ activity: createSampleActivityState() });
+      const testRoot = renderIntoDocument(
+        React.createElement(ActivityPage, { core: core as never }),
+      );
+
+      const initialAnimateCalls = animate.mock.calls.length;
+      expect(initialAnimateCalls).toBeGreaterThan(0);
+
+      const reviewButton = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="activity-workstream-agent:alpha:main::review"]',
+      );
+      expect(reviewButton).not.toBeNull();
+
+      act(() => {
+        reviewButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(animate).toHaveBeenCalledTimes(initialAnimateCalls);
+
+      cleanupTestRoot(testRoot);
+    } finally {
+      if (originalAnimate) {
+        Object.defineProperty(HTMLElement.prototype, "animate", {
+          configurable: true,
+          value: originalAnimate,
+        });
+      } else {
+        delete (HTMLElement.prototype as Partial<typeof HTMLElement.prototype>).animate;
+      }
+      if (originalGetAnimations) {
+        Object.defineProperty(HTMLElement.prototype, "getAnimations", {
+          configurable: true,
+          value: originalGetAnimations,
+        });
+      } else {
+        delete (HTMLElement.prototype as Partial<typeof HTMLElement.prototype>).getAnimations;
+      }
+      reducedMotion.cleanup();
+    }
   });
 });

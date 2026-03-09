@@ -116,6 +116,11 @@ export function ActivityScene({
   const visibilityState = useVisibilityState();
   const shouldAnimate = !prefersReducedMotion && visibilityState === "visible";
   const scene = deriveActivityScene(activity, selectedWorkstreamId);
+  const motionSignature = scene.actors
+    .map(
+      (actor) => `${actor.workstreamId}:${actor.slotId}:${actor.bubbleText ? "bubble" : "quiet"}`,
+    )
+    .join("|");
   const sceneRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -176,7 +181,7 @@ export function ActivityScene({
         animation.cancel();
       }
     };
-  }, [shouldAnimate, scene.actors]);
+  }, [motionSignature, shouldAnimate]);
 
   return (
     <div className="space-y-4">
