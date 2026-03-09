@@ -57,6 +57,7 @@ export interface TyrumDesktopApi {
   node: {
     connect: () => Promise<{ status: string }>;
     disconnect: () => Promise<{ status: string }>;
+    getStatus: () => Promise<{ status: string; connected: boolean; deviceId: string | null }>;
   };
   onStatusChange: (cb: (status: unknown) => void) => () => void;
   onLog: (cb: (entry: unknown) => void) => () => void;

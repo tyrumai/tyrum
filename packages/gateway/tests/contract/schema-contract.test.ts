@@ -82,6 +82,7 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
         "agent_state_kv",
         "subagents",
         "work_scope_activity",
+        "session_lane_node_attachments",
       ] as const;
 
       for (const table of tables) {

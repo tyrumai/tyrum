@@ -180,6 +180,7 @@ describe("AgentRuntime - desktop dispatch", () => {
                 toolCallId: "tc-1",
                 toolName: "tool.node.dispatch",
                 input: JSON.stringify({
+                  node_id: nodeId,
                   capability: "tyrum.desktop",
                   action: "Desktop",
                   args: { op: "snapshot", include_tree: false },

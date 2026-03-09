@@ -143,7 +143,10 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
               });
               return pending.map((p) => ({
                 pairing_id: p.pairing_id,
-                node: { capabilities: p.node.capabilities as unknown as string[] },
+                node: {
+                  node_id: p.node.node_id,
+                  capabilities: p.node.capabilities as unknown as string[],
+                },
               }));
             },
             timeoutMs: 90_000,
@@ -195,6 +198,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             "tool.node.dispatch",
             "call-1",
             {
+              node_id: pairing.node.node_id,
               capability: "tyrum.desktop",
               action: "Desktop",
               args: { op: "snapshot", include_tree: true, max_nodes: 512, max_text_chars: 8192 },
@@ -261,6 +265,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             "tool.node.dispatch",
             "call-2",
             {
+              node_id: pairing.node.node_id,
               capability: "tyrum.desktop",
               action: "Desktop",
               args: { op: "mouse", action: "move", x: 5, y: 5 },

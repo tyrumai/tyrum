@@ -47,7 +47,7 @@ function createRuntime(config: DesktopNodeConfig, permissions: ResolvedPermissio
     onStatusChange: (status) =>
       sender.send("status:change", {
         nodeStatus: toNodeStatusString(status),
-        node: status,
+        node: { ...status, deviceId: runtime?.deviceId ?? null },
       }),
     onConsentRequest: (msg) => sender.send("consent:request", msg),
     onPlanUpdate: (msg) => sender.send("plan:update", msg),
@@ -153,8 +153,23 @@ async function handleNodeConnect(): Promise<{ status: "connecting" | "disconnect
 
 async function handleNodeDisconnect(): Promise<{ status: "disconnected" }> {
   await cleanupNodeResources();
-  sender.send("status:change", { nodeStatus: "disconnected" });
+  sender.send("status:change", {
+    nodeStatus: "disconnected",
+    node: { connected: false, deviceId: null },
+  });
   return { status: "disconnected" };
+}
+
+function handleNodeGetStatus(): {
+  status: "connected" | "disconnected";
+  connected: boolean;
+  deviceId: string | null;
+} {
+  return {
+    status: runtime?.connected ? "connected" : "disconnected",
+    connected: runtime?.connected ?? false,
+    deviceId: runtime?.deviceId ?? null,
+  };
 }
 
 function handleConsentRespond(
@@ -174,5 +189,6 @@ export function registerNodeIpc(window: BrowserWindow): void {
 
   ipcMain.handle("node:connect", handleNodeConnect);
   ipcMain.handle("node:disconnect", handleNodeDisconnect);
+  ipcMain.handle("node:get-status", handleNodeGetStatus);
   ipcMain.handle("consent:respond", handleConsentRespond);
 }

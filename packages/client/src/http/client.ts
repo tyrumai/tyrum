@@ -18,10 +18,12 @@ import { createHealthApi, type HealthApi } from "./health.js";
 import { createModelsApi, type ModelsApi } from "./models.js";
 import { createModelConfigApi, type ModelConfigApi } from "./model-config.js";
 import {
+  createNodesApi,
   createPairingsApi,
   createPresenceApi,
   createStatusApi,
   createUsageApi,
+  type NodesApi,
   type PairingsApi,
   type PresenceApi,
   type StatusApi,
@@ -50,6 +52,7 @@ export interface TyrumHttpClient {
   status: StatusApi;
   usage: UsageApi;
   presence: PresenceApi;
+  nodes: NodesApi;
   pairings: PairingsApi;
   /**
    * Operator/admin surfaces.
@@ -100,6 +103,7 @@ export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHtt
     status: createStatusApi(transport),
     usage: createUsageApi(transport),
     presence: createPresenceApi(transport),
+    nodes: createNodesApi(transport),
     pairings: createPairingsApi(transport),
     agents: createAgentsApi(transport),
     agentConfig: createAgentConfigApi(transport),

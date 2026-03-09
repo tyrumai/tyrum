@@ -63,3 +63,41 @@ export const NodePairingRequest = z
     }
   });
 export type NodePairingRequest = z.infer<typeof NodePairingRequest>;
+
+export const NodeInventoryDispatch = z
+  .object({
+    capability: CapabilityDescriptor.shape.id,
+    action: z.string().trim().min(1),
+    ready: z.boolean(),
+    allowed: z.boolean(),
+    dispatchable: z.boolean(),
+  })
+  .strict();
+export type NodeInventoryDispatch = z.infer<typeof NodeInventoryDispatch>;
+
+export const NodeInventoryEntry = z
+  .object({
+    node_id: NodeId,
+    label: z.string().trim().min(1).optional(),
+    mode: z.string().trim().min(1).optional(),
+    version: z.string().trim().min(1).optional(),
+    connected: z.boolean(),
+    paired_status: NodePairingStatus.nullable(),
+    attached_to_requested_lane: z.boolean(),
+    source_client_device_id: z.string().trim().min(1).nullable().optional(),
+    last_seen_at: DateTimeSchema.optional(),
+    dispatches: z.array(NodeInventoryDispatch),
+  })
+  .strict();
+export type NodeInventoryEntry = z.infer<typeof NodeInventoryEntry>;
+
+export const NodeInventoryResponse = z
+  .object({
+    status: z.literal("ok"),
+    generated_at: DateTimeSchema,
+    key: z.string().trim().min(1).optional(),
+    lane: z.string().trim().min(1).optional(),
+    nodes: z.array(NodeInventoryEntry),
+  })
+  .strict();
+export type NodeInventoryResponse = z.infer<typeof NodeInventoryResponse>;

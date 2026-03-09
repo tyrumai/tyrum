@@ -109,7 +109,7 @@ export function LayoutHarnessApp() {
     { id: "chat", label: "Chat", icon: HarnessIcon },
     { id: "approvals", label: "Approvals", icon: HarnessIcon },
     { id: "agents", label: "Agents", icon: HarnessIcon },
-    { id: "pairing", label: "Pairings", icon: HarnessIcon },
+    { id: "pairing", label: "Nodes", icon: HarnessIcon },
     { id: "workboard", label: "Work", icon: HarnessIcon },
     { id: "configure", label: "Configure", icon: HarnessIcon },
     { id: "browser", label: "Browser", icon: HarnessIcon },

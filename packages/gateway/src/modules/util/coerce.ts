@@ -9,6 +9,11 @@ export function coerceString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+export function readRecordString(value: unknown, key: string): string | undefined {
+  const record = coerceRecord(value);
+  return coerceString(record?.[key]);
+}
+
 export function coerceStringRecord(value: unknown): Record<string, string> | undefined {
   const record = coerceRecord(value);
   if (!record) return undefined;

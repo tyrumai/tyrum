@@ -265,6 +265,26 @@ describe("chatStore", () => {
     expect(chat.getSnapshot().send.error).toBeNull();
   });
 
+  it("sendMessage forwards the attached node id when provided", async () => {
+    const ws = createFakeWs();
+    ws.sessionGet.mockResolvedValue({ session: sampleGetSession("session-1") });
+    ws.sessionList.mockResolvedValue({ sessions: [], next_cursor: null });
+
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    await chat.openSession("session-1");
+    await chat.sendMessage("hello", { attachedNodeId: "node-desktop-1" });
+
+    expect(ws.sessionSend).toHaveBeenCalledWith({
+      agent_id: "default",
+      channel: "ui",
+      thread_id: "ui-session-1",
+      content: "hello",
+      attached_node_id: "node-desktop-1",
+    });
+  });
+
   it("does not reopen the old session after switching agents mid-send", async () => {
     const send = deferred<{ session_id: string; assistant_message: string }>();
     const ws = createFakeWs();

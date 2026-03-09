@@ -23,6 +23,7 @@ import { createMemoryExportRoutes } from "./routes/memory-export.js";
 import { createMetricsRoutes } from "./routes/metrics.js";
 import { createModelConfigRoutes } from "./routes/model-config.js";
 import { createModelsDevRoutes } from "./routes/models-dev.js";
+import { createNodesRoute } from "./routes/nodes.js";
 import { createOperatorUiRoutes } from "./routes/operator-ui.js";
 import { createPairingRoutes } from "./routes/pairing.js";
 import { createPlanRoutes } from "./routes/plan.js";
@@ -57,6 +58,7 @@ import { WsEventDal } from "./modules/ws-event/dal.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
 import { gatewayMetrics } from "./modules/observability/metrics.js";
 import { PolicyBundleConfigDal } from "./modules/policy/config-dal.js";
+import { NodeInventoryService } from "./modules/node/inventory-service.js";
 import { isSharedStateMode, resolveGatewayStateMode } from "./modules/runtime-state/mode.js";
 
 export interface AppRouteDependencies {
@@ -159,6 +161,20 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
       presenceDal: context.container.presenceDal,
     }),
   );
+  if (context.opts.connectionManager) {
+    context.app.route(
+      "/",
+      createNodesRoute(
+        new NodeInventoryService({
+          connectionManager: context.opts.connectionManager,
+          connectionDirectory: context.opts.connectionDirectory,
+          nodePairingDal: context.container.nodePairingDal,
+          presenceDal: context.container.presenceDal,
+          attachmentDal: context.container.sessionLaneNodeAttachmentDal,
+        }),
+      ),
+    );
+  }
   context.app.route(
     "/",
     createUsageRoutes({

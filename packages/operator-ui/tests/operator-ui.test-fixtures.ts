@@ -10,6 +10,11 @@ import {
   createAuthTokenHttpFixtures,
   createDeviceTokenHttpFixtures,
 } from "./operator-ui.token-http-fixtures.js";
+import {
+  sampleAgentStatusResponse,
+  sampleNodeInventoryResponse,
+  samplePresenceResponse,
+} from "./operator-ui.http-fixture-data.js";
 export class FakeWsClient implements OperatorWsClient {
   connected: boolean;
   constructor(initiallyConnected = true) {
@@ -125,59 +130,6 @@ export function sampleUsageResponse() {
       totals: { duration_ms: 0, input_tokens: 0, output_tokens: 0, total_tokens: 0, usd_micros: 0 },
     },
     provider: null,
-  } as const;
-}
-
-export function sampleAgentStatusResponse() {
-  return {
-    enabled: true,
-    home: "/tmp/agents/default",
-    identity: {
-      name: "Default Agent",
-      description: "Primary operator agent",
-    },
-    model: {
-      model: "openai/gpt-5.4",
-      variant: "balanced",
-      fallback: ["openai/gpt-5.4"],
-    },
-    skills: ["review", "deploy"],
-    workspace_skills_trusted: true,
-    mcp: [
-      {
-        id: "filesystem",
-        name: "Filesystem",
-        enabled: true,
-        transport: "stdio",
-      },
-    ],
-    tools: ["shell", "http"],
-    sessions: {
-      ttl_days: 365,
-      max_turns: 0,
-      context_pruning: {
-        max_messages: 0,
-        tool_prune_keep_last_messages: 4,
-      },
-      loop_detection: {
-        within_turn: {
-          consecutive_repeat_limit: 2,
-          cycle_repeat_limit: 3,
-        },
-        cross_turn: {
-          window_assistant_messages: 8,
-          similarity_threshold: 0.92,
-        },
-      },
-    },
-  } as const;
-}
-
-export function samplePresenceResponse() {
-  return {
-    status: "ok",
-    generated_at: "2026-01-01T00:00:00.000Z",
-    entries: [],
   } as const;
 }
 
@@ -328,6 +280,7 @@ export function createFakeHttpClient(): {
   statusGet: ReturnType<typeof vi.fn>;
   usageGet: ReturnType<typeof vi.fn>;
   presenceList: ReturnType<typeof vi.fn>;
+  nodesList: ReturnType<typeof vi.fn>;
   pairingsList: ReturnType<typeof vi.fn>;
   pairingsApprove: ReturnType<typeof vi.fn>;
   pairingsDeny: ReturnType<typeof vi.fn>;
@@ -341,6 +294,7 @@ export function createFakeHttpClient(): {
   const statusGet = vi.fn(async () => sampleStatusResponse());
   const usageGet = vi.fn(async () => sampleUsageResponse());
   const presenceList = vi.fn(async () => samplePresenceResponse());
+  const nodesList = vi.fn(async () => sampleNodeInventoryResponse());
   const pairingsList = vi.fn(
     async () => ({ status: "ok", pairings: [samplePairingRequestPending()] }) as const,
   );
@@ -378,6 +332,7 @@ export function createFakeHttpClient(): {
     status: { get: statusGet },
     usage: { get: usageGet },
     presence: { list: presenceList },
+    nodes: { list: nodesList },
     agentStatus: { get: agentStatusGet },
     agentList: { get: agentListGet },
     pairings: {
@@ -501,6 +456,7 @@ export function createFakeHttpClient(): {
     statusGet,
     usageGet,
     presenceList,
+    nodesList,
     pairingsList,
     pairingsApprove,
     pairingsDeny,

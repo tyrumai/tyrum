@@ -105,7 +105,7 @@ function registerPairingApproveTests(): void {
       capability_allowlist: [{ id: "tyrum.http", version: "1.0.0" }],
       reason: "ok",
     });
-    expect(toastSuccess).toHaveBeenCalledWith("Pairing approved");
+    expect(toastSuccess).toHaveBeenCalledWith("Node approved");
 
     const approveButtonAfter = container.querySelector<HTMLButtonElement>(
       '[data-testid="pairing-approve-1"]',
@@ -375,9 +375,9 @@ function registerPairingDenyRevokeTests(): void {
     });
 
     expect(pairingsList).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("No pairing requests");
+    expect(container.textContent).toContain("No node requests");
     expect(container.textContent).toContain(
-      "Pairing requests appear when devices want to connect.",
+      "Node requests appear here when devices want to connect.",
     );
 
     act(() => {
@@ -446,7 +446,7 @@ function registerPairingDenyRevokeTests(): void {
     });
 
     expect(pairingsDeny).toHaveBeenCalledTimes(1);
-    expect(toastSuccess).toHaveBeenCalledWith("Pairing denied");
+    expect(toastSuccess).toHaveBeenCalledWith("Node denied");
 
     const denyButtonAfter = container.querySelector<HTMLButtonElement>(
       '[data-testid="pairing-deny-1"]',

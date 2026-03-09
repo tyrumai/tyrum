@@ -1,9 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { LanguageModel, ToolSet } from "ai";
-import type {
-  AgentTurnRequest as AgentTurnRequestT,
-  NormalizedContainerKind,
-} from "@tyrum/schemas";
+import type { AgentTurnRequest as AgentTurnRequestT } from "@tyrum/schemas";
 import type { LaneQueueState } from "./turn-engine-bridge.js";
 import type { ToolCallPolicyState } from "./tool-set-builder.js";
 import { ToolSetBuilder } from "./tool-set-builder.js";
@@ -27,22 +24,16 @@ import {
   resolveSessionModelDetailed as resolveSessionModelImpl,
   type ResolvedSessionModel,
 } from "./session-model-resolution.js";
-import {
-  semanticSearch,
-  ensureDefaultHeartbeatSchedule,
-  maybeCleanupSessions,
-  loadAgentConfigFromDb,
-} from "./turn-preparation-helpers.js";
+import { semanticSearch } from "./turn-preparation-helpers.js";
+import { resolveIdentityAndContext } from "./turn-preparation-identity.js";
 import { buildWorkFocusDigest } from "./work-focus-digest.js";
 import type { AgentContextReport, AgentLoadedContext, AgentRuntimeOptions } from "./types.js";
 import { resolveAutomationMetadata, buildAutomationDigest } from "./automation-delivery.js";
 import { resolveExecutionProfile, type ResolvedExecutionProfile } from "./intake-delegation.js";
 import type { AgentContextStore } from "../context-store.js";
-import { loadCurrentAgentContext } from "../load-context.js";
 import type { SessionRow } from "../session-dal.js";
 import { SessionDal } from "../session-dal.js";
 import { isToolAllowed, selectToolDirectory } from "../tools.js";
-import { parseChannelSourceKey } from "../../channels/interface.js";
 import { tagContent } from "../provenance.js";
 import { sanitizeForModel } from "../sanitizer.js";
 import { MemoryV1Dal } from "../../memory/v1-dal.js";
@@ -50,6 +41,7 @@ import { buildMemoryV1Digest } from "../../memory/v1-digest.js";
 import { McpManager } from "../mcp-manager.js";
 import { NodeDispatchService } from "../node-dispatch-service.js";
 import { ToolExecutor } from "../tool-executor.js";
+import { NodeInventoryService } from "../../node/inventory-service.js";
 import { resolveSandboxHardeningProfile } from "../../sandbox/hardening.js";
 import { LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
@@ -59,7 +51,6 @@ import type { PolicyService } from "../../policy/service.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import { buildContextReport } from "./turn-context-report.js";
-import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
 
 export type TurnExecutionContext = {
   planId: string;
@@ -109,55 +100,6 @@ export type PrepareTurnDeps = {
   cleanupAtMs: number;
   setCleanupAtMs: (ms: number) => void;
 };
-
-async function resolveIdentityAndContext(
-  deps: PrepareTurnDeps,
-  input: AgentTurnRequestT,
-  resolved: ResolvedAgentTurnInput,
-) {
-  const agentKey = input.agent_key?.trim() || deps.agentId;
-  const workspaceKey = input.workspace_key?.trim() || deps.workspaceId;
-
-  const agentId = await deps.opts.container.identityScopeDal.ensureAgentId(deps.tenantId, agentKey);
-  const workspaceId = await deps.opts.container.identityScopeDal.ensureWorkspaceId(
-    deps.tenantId,
-    workspaceKey,
-  );
-  await deps.opts.container.identityScopeDal.ensureMembership(deps.tenantId, agentId, workspaceId);
-  await ensureDefaultHeartbeatSchedule(deps, agentId, workspaceId);
-
-  const config = await loadAgentConfigFromDb(deps, {
-    tenantId: deps.tenantId,
-    agentId,
-    agentKey,
-  });
-  const loaded = await loadCurrentAgentContext({
-    contextStore: deps.contextStore,
-    tenantId: deps.tenantId,
-    agentId,
-    workspaceId,
-    config,
-  });
-  const persona = resolveAgentPersona({
-    agentKey,
-    config: loaded.config,
-    identity: loaded.identity,
-  });
-  const ctx = {
-    ...loaded,
-    identity: applyPersonaToIdentity(loaded.identity, persona),
-  };
-  maybeCleanupSessions(deps, ctx.config.sessions.ttl_days, agentKey);
-
-  const containerKind: NormalizedContainerKind =
-    input.container_kind ?? resolved.envelope?.container.kind ?? "channel";
-
-  const parsedChannel = parseChannelSourceKey(resolved.channel);
-  const connectorKey = parsedChannel.connector;
-  const accountKey = resolved.envelope?.delivery.account ?? parsedChannel.accountId;
-
-  return { agentKey, workspaceKey, ctx, containerKind, connectorKey, accountKey };
-}
 
 async function resolveToolsAndMemory(
   deps: PrepareTurnDeps,
@@ -427,6 +369,15 @@ export async function prepareTurn(
   const nodeDispatchService = deps.opts.protocolDeps
     ? new NodeDispatchService(deps.opts.protocolDeps)
     : undefined;
+  const nodeInventoryService = deps.opts.protocolDeps
+    ? new NodeInventoryService({
+        connectionManager: deps.opts.protocolDeps.connectionManager,
+        connectionDirectory: deps.opts.protocolDeps.cluster?.connectionDirectory,
+        nodePairingDal: deps.opts.container.nodePairingDal,
+        presenceDal: deps.opts.container.presenceDal,
+        attachmentDal: deps.opts.container.sessionLaneNodeAttachmentDal,
+      })
+    : undefined;
   const modelResolution = await resolveSessionModelImpl(
     {
       container: deps.opts.container,
@@ -464,6 +415,7 @@ export async function prepareTurn(
     nodeDispatchService,
     deps.opts.container.artifactStore,
     deps.opts.container.identityScopeDal,
+    nodeInventoryService,
   );
 
   const usedTools = new Set<string>();
@@ -478,6 +430,14 @@ export async function prepareTurn(
       sessionId: session.session_id,
       channel: resolved.channel,
       threadId: resolved.thread_id,
+      workSessionKey:
+        typeof resolved.metadata?.["work_session_key"] === "string"
+          ? resolved.metadata["work_session_key"]
+          : undefined,
+      workLane:
+        typeof resolved.metadata?.["work_lane"] === "string"
+          ? resolved.metadata["work_lane"]
+          : undefined,
       execution: exec
         ? {
             runId: exec.runId,

@@ -49,7 +49,7 @@ export interface ChatStore extends ExternalStore<ChatState> {
   loadMoreSessions(): Promise<void>;
   openSession(sessionId: string): Promise<void>;
   newChat(): Promise<void>;
-  sendMessage(content: string): Promise<void>;
+  sendMessage(content: string, input?: { attachedNodeId?: string | null }): Promise<void>;
   compactActive(input?: { keepLastMessages?: number }): Promise<void>;
   deleteActive(): Promise<void>;
 }
@@ -246,7 +246,11 @@ async function newChatImpl(ctx: ChatStoreContext): Promise<void> {
   }
 }
 
-async function sendMessageImpl(ctx: ChatStoreContext, content: string): Promise<void> {
+async function sendMessageImpl(
+  ctx: ChatStoreContext,
+  content: string,
+  input?: { attachedNodeId?: string | null },
+): Promise<void> {
   const text = content.trim();
   if (!text) return;
 
@@ -265,6 +269,7 @@ async function sendMessageImpl(ctx: ChatStoreContext, content: string): Promise<
       channel: session.channel,
       thread_id: session.thread_id,
       content: text,
+      ...(input?.attachedNodeId ? { attached_node_id: input.attachedNodeId } : {}),
     });
     void reply;
 
@@ -394,7 +399,7 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
     loadMoreSessions: () => loadMoreSessionsImpl(ctx),
     openSession: (sessionId) => openSessionImpl(ctx, sessionId),
     newChat: () => newChatImpl(ctx),
-    sendMessage: (content) => sendMessageImpl(ctx, content),
+    sendMessage: (content, input) => sendMessageImpl(ctx, content, input),
     compactActive: (input) => compactActiveImpl(ctx, input),
     deleteActive: () => deleteActiveImpl(ctx),
   };

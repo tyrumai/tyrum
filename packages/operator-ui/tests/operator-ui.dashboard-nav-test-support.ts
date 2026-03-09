@@ -75,7 +75,7 @@ function registerDashboardTests(): void {
     expect(container.textContent).not.toContain("Instance ID");
     expect(container.textContent).not.toContain("Tokens Used");
     expect(container.textContent).toContain("Active runs");
-    expect(container.textContent).toContain("Pending pairings");
+    expect(container.textContent).toContain("Pending nodes");
 
     expect(container.querySelector('[data-testid="dashboard-approvals-badge"]')).toBeNull();
 

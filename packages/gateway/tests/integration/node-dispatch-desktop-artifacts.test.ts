@@ -24,6 +24,8 @@ type ExecutionScopeIds = {
   attemptId: string;
 };
 
+const NODE_ID = "node-1";
+
 async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds): Promise<void> {
   await db.run(
     `INSERT INTO execution_jobs (
@@ -188,6 +190,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       "tool.node.dispatch",
       "call-1",
       {
+        node_id: NODE_ID,
         capability: "tyrum.desktop",
         action: "Desktop",
         args: { op: "screenshot", display: "primary" },
@@ -294,6 +297,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       "tool.node.dispatch",
       "call-3",
       {
+        node_id: NODE_ID,
         capability: "tyrum.desktop",
         action: "Desktop",
         args: { op: "snapshot", include_tree: true },
@@ -391,6 +395,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       "tool.node.dispatch",
       "call-2",
       {
+        node_id: NODE_ID,
         capability: "tyrum.desktop",
         action: "Desktop",
         args: { op: "snapshot", include_tree: true },
@@ -501,6 +506,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       "tool.node.dispatch",
       "call-4",
       {
+        node_id: nodeId,
         capability: "tyrum.desktop",
         action: "Desktop",
         args: { op: "screenshot", display: "primary" },

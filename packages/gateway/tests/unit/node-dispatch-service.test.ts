@@ -188,6 +188,198 @@ describe("NodeDispatchService", () => {
     expect(res.result.ok).toBe(true);
   });
 
+  it("targets the requested node id without falling back to another eligible node", async () => {
+    const { NodeDispatchService } =
+      await import("../../src/modules/agent/node-dispatch-service.js");
+
+    const cm = new ConnectionManager();
+    const registry = new TaskResultRegistry();
+    const firstWs = createMockWs(registry);
+    const secondWs = createMockWs(registry);
+    cm.addClient(firstWs as never, ["desktop"], {
+      id: "conn-1",
+      role: "node",
+      deviceId: "node-1",
+      protocolRev: 2,
+      authClaims: { tenant_id: "default" } as never,
+    });
+    cm.addClient(secondWs as never, ["desktop"], {
+      id: "conn-2",
+      role: "node",
+      deviceId: "node-2",
+      protocolRev: 2,
+      authClaims: { tenant_id: "default" } as never,
+    });
+    cm.setReadyCapabilities("conn-1", []);
+
+    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
+    const deps: ProtocolDeps = {
+      connectionManager: cm,
+      taskResults: registry,
+      nodePairingDal: {
+        getByNodeId: async () => ({
+          status: "approved",
+          capability_allowlist: [
+            { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+          ],
+        }),
+      } as never,
+    };
+
+    const service = new NodeDispatchService(deps);
+    await expect(
+      service.dispatchAndWait(
+        { type: "Desktop", args: {} },
+        {
+          tenantId: "default",
+          runId: crypto.randomUUID(),
+          stepId: crypto.randomUUID(),
+          attemptId: crypto.randomUUID(),
+        },
+        { timeoutMs: 5_000, nodeId: "node-1" },
+      ),
+    ).rejects.toThrow(/not ready/i);
+
+    expect(firstWs.send).not.toHaveBeenCalled();
+    expect(secondWs.send).not.toHaveBeenCalled();
+  });
+
+  it("targets the requested approved node when multiple eligible nodes exist", async () => {
+    const { NodeDispatchService } =
+      await import("../../src/modules/agent/node-dispatch-service.js");
+
+    const cm = new ConnectionManager();
+    const registry = new TaskResultRegistry();
+    const firstWs = createMockWs(registry);
+    const secondWs = createMockWs(registry);
+    cm.addClient(firstWs as never, ["desktop"], {
+      id: "conn-1",
+      role: "node",
+      deviceId: "node-1",
+      protocolRev: 2,
+      authClaims: { tenant_id: "default" } as never,
+    });
+    cm.addClient(secondWs as never, ["desktop"], {
+      id: "conn-2",
+      role: "node",
+      deviceId: "node-2",
+      protocolRev: 2,
+      authClaims: { tenant_id: "default" } as never,
+    });
+
+    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
+    const deps: ProtocolDeps = {
+      connectionManager: cm,
+      taskResults: registry,
+      nodePairingDal: {
+        getByNodeId: async () => ({
+          status: "approved",
+          capability_allowlist: [
+            { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+          ],
+        }),
+      } as never,
+    };
+
+    const service = new NodeDispatchService(deps);
+    const res = await service.dispatchAndWait(
+      { type: "Desktop", args: {} },
+      {
+        tenantId: "default",
+        runId: crypto.randomUUID(),
+        stepId: crypto.randomUUID(),
+        attemptId: crypto.randomUUID(),
+      },
+      { timeoutMs: 5_000, nodeId: "node-2" },
+    );
+
+    expect(res.result.ok).toBe(true);
+    expect(firstWs.send).not.toHaveBeenCalled();
+    expect(secondWs.send).toHaveBeenCalledOnce();
+  });
+
+  it("prefers a remote edge row for targeted dispatch when a stale local row is fresher", async () => {
+    const { NodeDispatchService } =
+      await import("../../src/modules/agent/node-dispatch-service.js");
+
+    const cm = new ConnectionManager();
+    const registry = new TaskResultRegistry();
+    const enqueue = vi.fn(async (_tenantId: string, _topic: string, payload: unknown) => {
+      const direct = payload as {
+        connection_id?: string;
+        message?: { request_id?: string };
+      };
+      const requestId = direct.message?.request_id;
+      if (typeof requestId === "string" && requestId.length > 0) {
+        registry.resolve(requestId, { ok: true, evidence: { foo: "bar" } });
+      }
+    });
+
+    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
+    const deps: ProtocolDeps = {
+      connectionManager: cm,
+      taskResults: registry,
+      cluster: {
+        edgeId: "edge-local",
+        outboxDal: { enqueue } as never,
+        connectionDirectory: {
+          listNonExpired: vi.fn(async () => [
+            {
+              role: "node",
+              device_id: "node-1",
+              connection_id: "conn-local-stale",
+              edge_id: "edge-local",
+              protocol_rev: 2,
+              capabilities: ["desktop"],
+              ready_capabilities: ["desktop"],
+              last_seen_at_ms: 2_000,
+              expires_at_ms: Date.now() + 30_000,
+            },
+            {
+              role: "node",
+              device_id: "node-1",
+              connection_id: "conn-remote-live",
+              edge_id: "edge-remote",
+              protocol_rev: 2,
+              capabilities: ["desktop"],
+              ready_capabilities: ["desktop"],
+              last_seen_at_ms: 1_000,
+              expires_at_ms: Date.now() + 30_000,
+            },
+          ]),
+        } as never,
+      },
+      nodePairingDal: {
+        getByNodeId: async () => ({
+          status: "approved",
+          capability_allowlist: [
+            { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+          ],
+        }),
+      } as never,
+    };
+
+    const service = new NodeDispatchService(deps);
+    const res = await service.dispatchAndWait(
+      { type: "Desktop", args: {} },
+      {
+        tenantId: "default",
+        runId: crypto.randomUUID(),
+        stepId: crypto.randomUUID(),
+        attemptId: crypto.randomUUID(),
+      },
+      { timeoutMs: 5_000, nodeId: "node-1" },
+    );
+
+    expect(res.result.ok).toBe(true);
+    expect(enqueue).toHaveBeenCalledWith(
+      "default",
+      "ws.direct",
+      expect.objectContaining({ connection_id: "conn-remote-live" }),
+      expect.objectContaining({ targetEdgeId: "edge-remote" }),
+    );
+  });
+
   it("rejects when task result registry is missing", async () => {
     const { NodeDispatchService } =
       await import("../../src/modules/agent/node-dispatch-service.js");

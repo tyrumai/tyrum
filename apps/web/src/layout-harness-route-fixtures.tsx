@@ -118,7 +118,18 @@ export function createApprovalsCore(): OperatorCore {
 
 export function createPairingCore(): OperatorCore {
   return {
+    connectionStore: createConnectionStore(),
+    chatStore: createChatStore(),
     pairingStore: createPairingStore(),
+    http: {
+      nodes: {
+        list: async () => ({
+          status: "ok",
+          generated_at: "2026-03-08T00:00:00.000Z",
+          nodes: [],
+        }),
+      },
+    },
   } as unknown as OperatorCore;
 }
 

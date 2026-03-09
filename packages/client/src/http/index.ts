@@ -13,6 +13,7 @@ export type {
   StatusResponse,
   UsageResponse,
   PresenceResponse,
+  NodeInventoryResponse,
   PairingListResponse,
   PairingMutateResponse,
 } from "./observability.js";
