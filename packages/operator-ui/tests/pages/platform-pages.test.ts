@@ -461,6 +461,29 @@ describe("Platform pages", () => {
     });
   });
 
+  it("keeps the profile save button disabled for unrelated shell edits", async () => {
+    const desktopApi = createDesktopApi({
+      config: createNodeConfig(),
+    });
+
+    await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
+      await flushEffects();
+      await clickTabAndFlush(container, "Shell");
+
+      const commandsTextarea = getTextareaByLabel(container, "Allowed commands");
+      act(() => {
+        setNativeValue(commandsTextarea, "git status");
+      });
+
+      await clickTabAndFlush(container, "Profile");
+      const profileSaveButton = container.querySelector<HTMLButtonElement>(
+        '[data-testid="node-configure-save-profile"]',
+      );
+      expect(profileSaveButton?.disabled).toBe(true);
+      expect(profileSaveButton?.textContent).toContain("Save Profile Settings");
+    });
+  });
+
   it("saves shell allowlist changes through node settings", async () => {
     const setConfig = vi.fn(async () => {});
     const desktopApi = createDesktopApi({

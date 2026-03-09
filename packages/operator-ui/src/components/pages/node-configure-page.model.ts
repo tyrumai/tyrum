@@ -192,6 +192,7 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
     initialSecurityRef.current === null
       ? false
       : !areSecurityStatesEqual(initialSecurityRef.current, security);
+  const profileDirty = securityDirty && displayProfile !== "custom";
   const generalDirty =
     initialConnectionRef.current === null
       ? false
@@ -242,7 +243,7 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
   };
 
   const saveProfile = () => {
-    if (saveInFlightRef.current || profileSaving || !securityDirty) return;
+    if (saveInFlightRef.current || profileSaving || !profileDirty) return;
     saveInFlightRef.current = "profile";
     setProfileSaving(true);
     setProfileError(null);
@@ -384,6 +385,7 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
     profileSaving,
     profileSaved,
     profileError,
+    profileDirty,
     securitySaving,
     securitySaved,
     securityError,

@@ -139,7 +139,7 @@ function DesktopNodeConfigurePage({
             testId="node-configure-save-profile"
             isLoading={model.profileSaving}
             saved={model.profileSaved}
-            disabled={saveBusy || !model.securityDirty}
+            disabled={saveBusy || !model.profileDirty}
             errorMessage={model.profileError}
             onSave={model.saveProfile}
           />
