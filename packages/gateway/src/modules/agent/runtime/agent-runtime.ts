@@ -417,6 +417,7 @@ export class AgentRuntime {
       approvalPollMs: this.approvalPollMs,
       db: this.opts.container.db,
       approvalDal: this.approvalDal,
+      sessionLaneNodeAttachmentDal: this.opts.container.sessionLaneNodeAttachmentDal,
       resolveExecutionProfile: (args: {
         laneQueueScope?: LaneQueueScope;
         metadata?: Record<string, unknown>;

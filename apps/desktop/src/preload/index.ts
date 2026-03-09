@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
   node: {
     connect: () => ipcRenderer.invoke("node:connect"),
     disconnect: () => ipcRenderer.invoke("node:disconnect"),
+    getStatus: () => ipcRenderer.invoke("node:get-status"),
   },
   onStatusChange: (cb: (status: unknown) => void) => {
     const listener = (_event: unknown, status: unknown) => cb(status);

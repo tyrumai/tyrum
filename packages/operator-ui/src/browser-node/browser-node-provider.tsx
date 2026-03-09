@@ -387,3 +387,7 @@ export function useBrowserNode(): BrowserNodeApi {
   }
   return value;
 }
+
+export function useBrowserNodeOptional(): BrowserNodeApi | null {
+  return useContext(BrowserNodeContext);
+}

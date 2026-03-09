@@ -7,7 +7,7 @@ import type {
   NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
   WorkScope,
 } from "@tyrum/schemas";
-import { AgentTurnRequest, AgentTurnResponse, SubagentSessionKey } from "@tyrum/schemas";
+import { AgentTurnRequest, SubagentSessionKey } from "@tyrum/schemas";
 import {
   applyDeterministicContextCompactionAndToolPruning,
   type ContextPruningConfig,
@@ -15,12 +15,17 @@ import {
 import type { ExecutionProfile } from "../execution-profiles.js";
 import { buildAgentTurnKey } from "../turn-key.js";
 import type { ApprovalDal } from "../../approval/dal.js";
-import { coerceRecord } from "../../util/coerce.js";
 import type { ExecutionEngine, StepExecutor } from "../../execution/engine.js";
 import { LaneQueueInterruptError, type LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
 import type { SqlDb } from "../../../statestore/types.js";
+import type { SessionLaneNodeAttachmentDal } from "../session-lane-node-attachment-dal.js";
 import { WorkboardDal } from "../../workboard/dal.js";
 import type { IdentityScopeDal } from "../../identity/scope.js";
+import {
+  loadTurnFailureFromRun,
+  loadTurnResultFromRun,
+  maybeResolvePausedRun,
+} from "./turn-engine-bridge-run-state.js";
 
 const TURN_ENGINE_MIN_BACKOFF_MS = 5;
 const TURN_ENGINE_MAX_BACKOFF_MS = 250;
@@ -71,6 +76,7 @@ export type TurnEngineBridgeDeps = {
   approvalPollMs: number;
   db: SqlDb;
   approvalDal: ApprovalDal;
+  sessionLaneNodeAttachmentDal: SessionLaneNodeAttachmentDal;
   resolveExecutionProfile: (input: {
     laneQueueScope?: LaneQueueScope;
     metadata?: Record<string, unknown>;
@@ -88,6 +94,14 @@ export type TurnEngineBridgeDeps = {
     err: unknown,
   ) => err is { pause: ToolExecutionApprovalPause };
 };
+
+function readMetadataString(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+): string | undefined {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
 
 export function prepareLaneQueueStep(
   laneQueue: LaneQueueState | undefined,
@@ -117,125 +131,6 @@ export function prepareLaneQueueStep(
   return {
     messages: applyDeterministicContextCompactionAndToolPruning(preparedMessages, contextPruning),
   };
-}
-
-export async function loadTurnResultFromRun(
-  deps: Pick<TurnEngineBridgeDeps, "db">,
-  runId: string,
-): Promise<AgentTurnResponseT | undefined> {
-  const row = await deps.db.get<{ result_json: string | null }>(
-    `SELECT a.result_json
-       FROM execution_attempts a
-       JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.run_id = ? AND a.result_json IS NOT NULL
-       ORDER BY a.attempt DESC
-       LIMIT 1`,
-    [runId],
-  );
-  if (!row?.result_json) return undefined;
-
-  try {
-    return AgentTurnResponse.parse(JSON.parse(row.result_json));
-  } catch {
-    // Intentional: treat malformed/unknown stored results as absent.
-    return undefined;
-  }
-}
-
-export async function loadTurnFailureFromRun(
-  deps: Pick<TurnEngineBridgeDeps, "db">,
-  runId: string,
-): Promise<string | undefined> {
-  const row = await deps.db.get<{ error: string | null }>(
-    `SELECT a.error
-       FROM execution_attempts a
-       JOIN execution_steps s ON s.step_id = a.step_id
-       WHERE s.run_id = ? AND a.error IS NOT NULL
-       ORDER BY a.attempt DESC
-       LIMIT 1`,
-    [runId],
-  );
-  const error = row?.error?.trim();
-  return error && error.length > 0 ? error : undefined;
-}
-
-export async function maybeResolvePausedRun(
-  deps: Pick<TurnEngineBridgeDeps, "approvalDal" | "db" | "executionEngine">,
-  runId: string,
-): Promise<boolean> {
-  const pausedStep = await deps.db.get<{ tenant_id: string; approval_id: string | null }>(
-    `SELECT tenant_id, approval_id
-       FROM execution_steps
-       WHERE run_id = ? AND status = 'paused'
-       ORDER BY step_index ASC
-       LIMIT 1`,
-    [runId],
-  );
-  const approvalId = pausedStep?.approval_id ?? null;
-  if (!pausedStep || approvalId === null) return false;
-  const tenantId = pausedStep.tenant_id;
-
-  await deps.approvalDal.expireStale({ tenantId });
-  let approval = await deps.approvalDal.getById({ tenantId, approvalId });
-  if (!approval) {
-    await deps.executionEngine.cancelRun(runId, "approval record not found");
-    return true;
-  }
-
-  const extractReason = (): string | undefined => {
-    const record = coerceRecord(approval?.resolution);
-    const reason = typeof record?.["reason"] === "string" ? record["reason"].trim() : "";
-    return reason.length > 0 ? reason : undefined;
-  };
-
-  if (approval.status === "pending") {
-    const expiresAt = approval.expires_at;
-    const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
-    if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
-      approval =
-        (await deps.approvalDal.expireById({ tenantId, approvalId: approval.approval_id })) ??
-        approval;
-    } else {
-      return false;
-    }
-  }
-
-  const ctx = coerceRecord(approval.context);
-  const isAgentToolExecution = ctx?.["source"] === "agent-tool-execution";
-  const resumeToken =
-    approval.resume_token?.trim() ||
-    (typeof ctx?.["resume_token"] === "string" ? ctx["resume_token"].trim() : "");
-
-  if (approval.status === "approved" && !resumeToken) {
-    await deps.executionEngine.cancelRun(
-      approval.run_id ?? runId,
-      extractReason() ?? "approved approval missing resume token",
-    );
-    return true;
-  }
-
-  if (
-    resumeToken &&
-    (approval.status === "approved" ||
-      (isAgentToolExecution && (approval.status === "denied" || approval.status === "expired")))
-  ) {
-    await deps.executionEngine.resumeRun(resumeToken);
-    return true;
-  }
-
-  if (approval.status === "denied" || approval.status === "expired") {
-    const reason =
-      extractReason() ?? (approval.status === "expired" ? "approval timed out" : "approval denied");
-    await deps.executionEngine.cancelRun(runId, reason);
-    return true;
-  }
-
-  if (approval.status === "cancelled") {
-    await deps.executionEngine.cancelRun(runId, extractReason() ?? "approval cancelled");
-    return true;
-  }
-
-  return false;
 }
 
 export async function turnViaExecutionEngine(
@@ -269,21 +164,28 @@ export async function turnViaExecutionEngine(
 
   if (lane === "main") {
     try {
+      const scopeIds = await deps.identityScopeDal.resolveScopeIds({
+        ...(tenantKey ? { tenantKey } : {}),
+        agentKey,
+        workspaceKey,
+      });
+      const workScope: WorkScope = {
+        tenant_id: scopeIds.tenantId,
+        agent_id: scopeIds.agentId,
+        workspace_id: scopeIds.workspaceId,
+      };
       await new WorkboardDal(deps.db).upsertScopeActivity({
-        scope: await (async (): Promise<WorkScope> => {
-          const scopeIds = await deps.identityScopeDal.resolveScopeIds({
-            ...(tenantKey ? { tenantKey } : {}),
-            agentKey,
-            workspaceKey,
-          });
-          return {
-            tenant_id: scopeIds.tenantId,
-            agent_id: scopeIds.agentId,
-            workspace_id: scopeIds.workspaceId,
-          };
-        })(),
+        scope: workScope,
         last_active_session_key: key,
         updated_at_ms: Date.now(),
+      });
+      await deps.sessionLaneNodeAttachmentDal.upsert({
+        tenantId: workScope.tenant_id,
+        key,
+        lane,
+        sourceClientDeviceId: readMetadataString(resolvedInput.metadata, "source_client_device_id"),
+        attachedNodeId: readMetadataString(resolvedInput.metadata, "attached_node_id") ?? null,
+        updatedAtMs: Date.now(),
       });
     } catch {
       // Intentional: ignore best-effort activity tracking failures.

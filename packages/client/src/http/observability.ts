@@ -1,6 +1,7 @@
 import {
   CapabilityDescriptor,
   DateTimeSchema,
+  NodeInventoryResponse as NodeInventoryResponseSchema,
   NodePairingRequest,
   NodePairingStatus,
   NodePairingTrustLevel,
@@ -136,6 +137,7 @@ const PairingDenyOrRevokeRequest = z
 export type StatusResponse = z.infer<typeof StatusResponse>;
 export type UsageResponse = z.infer<typeof UsageResponse>;
 export type PresenceResponse = z.infer<typeof PresenceResponse>;
+export type NodeInventoryResponse = z.infer<typeof NodeInventoryResponseSchema>;
 export type PairingListResponse = z.infer<typeof PairingListResponse>;
 export type PairingMutateResponse = z.infer<typeof PairingMutateResponse>;
 
@@ -149,6 +151,22 @@ export interface UsageApi {
 
 export interface PresenceApi {
   list(options?: TyrumRequestOptions): Promise<PresenceResponse>;
+}
+
+const NodesListQuery = z
+  .object({
+    capability: z.string().trim().min(1).optional(),
+    dispatchable_only: z.boolean().optional(),
+    key: z.string().trim().min(1).optional(),
+    lane: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+export interface NodesApi {
+  list(
+    query?: z.input<typeof NodesListQuery>,
+    options?: TyrumRequestOptions,
+  ): Promise<NodeInventoryResponse>;
 }
 
 export interface PairingsApi {
@@ -208,6 +226,21 @@ export function createPresenceApi(transport: HttpTransport): PresenceApi {
         method: "GET",
         path: "/presence",
         response: PresenceResponse,
+        signal: options?.signal,
+      });
+    },
+  };
+}
+
+export function createNodesApi(transport: HttpTransport): NodesApi {
+  return {
+    async list(query, options) {
+      const parsedQuery = validateOrThrow(NodesListQuery, query ?? {}, "nodes list query");
+      return await transport.request({
+        method: "GET",
+        path: "/nodes",
+        query: parsedQuery,
+        response: NodeInventoryResponseSchema,
         signal: options?.signal,
       });
     },

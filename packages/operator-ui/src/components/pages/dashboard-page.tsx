@@ -184,14 +184,14 @@ export function DashboardPage({
           />
 
           <SummaryRow
-            label="Pending pairings"
+            label="Pending nodes"
             loading={pairing.loading && pairing.lastSyncedAt === null}
             value={String(pairing.pendingIds.length)}
             onClick={() => {
               onNavigate?.("pairing");
             }}
             testId="dashboard-card-pairing"
-            description="Devices waiting for approval."
+            description="Nodes waiting for approval."
           />
 
           <SummaryRow

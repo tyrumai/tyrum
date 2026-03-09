@@ -9,14 +9,14 @@ export class NodeDispatchService {
   async dispatchAndWait(
     action: ActionPrimitive,
     scope: { tenantId: string; runId: string; stepId: string; attemptId: string },
-    opts?: { timeoutMs?: number },
+    opts?: { timeoutMs?: number; nodeId?: string },
   ): Promise<{ taskId: string; result: TaskResult }> {
     const registry = this.deps.taskResults;
     if (!registry) {
       throw new Error("task result registry is not configured");
     }
 
-    const taskId = await dispatchTask(action, scope, this.deps);
+    const taskId = await dispatchTask(action, scope, this.deps, opts?.nodeId);
     const result = await registry.wait(taskId, { timeoutMs: opts?.timeoutMs });
     return { taskId, result };
   }

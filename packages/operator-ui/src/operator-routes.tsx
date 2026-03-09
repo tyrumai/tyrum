@@ -183,7 +183,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
   },
   {
     id: "pairing",
-    label: "Pairings",
+    label: "Nodes",
     icon: Link2,
     navGroup: "sidebar",
     shortcut: true,

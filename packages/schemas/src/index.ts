@@ -63,7 +63,17 @@ export { PresenceRole, PresenceMode, PresenceReason, PresenceEntry, PresenceBeac
 // prettier-ignore
 export { WsRunListResponseOkEnvelope, WsRunListResponseErrEnvelope, WsRunListResponseEnvelope, WsRunListPayload, WsRunListRequest, WsRunListItem, WsRunListResult } from "./protocol.js";
 // prettier-ignore
-export { NodeIdentity, NodePairingStatus, NodePairingDecision, NodePairingTrustLevel, NodePairingResolution, NodePairingRequest } from "./node.js";
+export {
+  NodeIdentity,
+  NodeInventoryDispatch,
+  NodeInventoryEntry,
+  NodeInventoryResponse,
+  NodePairingStatus,
+  NodePairingDecision,
+  NodePairingTrustLevel,
+  NodePairingResolution,
+  NodePairingRequest,
+} from "./node.js";
 // prettier-ignore
 export { PlaybookOutputKind, PlaybookOutputSpec, PlaybookStep, PlaybookManifest, Playbook } from "./playbook.js";
 // prettier-ignore

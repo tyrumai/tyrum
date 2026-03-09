@@ -53,9 +53,16 @@ function registerControlPlaneSessionTests(fixture: ControlPlaneFixture): void {
       channel: "telegram",
       thread_id: "thread-1",
       content: "hello world",
+      attached_node_id: "node-1",
     });
     const sendReq = (await waitForMessage(ws)) as Record<string, unknown>;
     expect(sendReq["type"]).toBe("session.send");
+    expect(sendReq["payload"]).toMatchObject({
+      channel: "telegram",
+      thread_id: "thread-1",
+      content: "hello world",
+      attached_node_id: "node-1",
+    });
     ws.send(
       JSON.stringify({
         request_id: sendReq["request_id"],

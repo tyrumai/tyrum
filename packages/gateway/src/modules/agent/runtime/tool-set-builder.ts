@@ -407,6 +407,8 @@ export class ToolSetBuilder {
                 session_id: toolExecutionContext.sessionId,
                 channel: toolExecutionContext.channel,
                 thread_id: toolExecutionContext.threadId,
+                work_session_key: toolExecutionContext.workSessionKey,
+                work_lane: toolExecutionContext.workLane,
                 execution_run_id: toolExecutionContext.execution?.runId,
                 execution_step_id: toolExecutionContext.execution?.stepId,
                 policy_snapshot_id: policySnapshotId,

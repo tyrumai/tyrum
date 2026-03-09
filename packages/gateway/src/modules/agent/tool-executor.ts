@@ -3,12 +3,13 @@ import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
 import type { ArtifactStore } from "../artifact/store.js";
 import { requireTenantIdValue } from "../identity/scope.js";
 import type { IdentityScopeDal } from "../identity/scope.js";
+import type { NodeInventoryService } from "../node/inventory-service.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { SecretResolutionAuditDal } from "../secret/resolution-audit-dal.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
 import { executeCoreTool, executeMcpTool } from "./tool-executor-core-tools.js";
-import { executeNodeDispatchTool } from "./tool-executor-node-dispatch.js";
+import { executeNodeDispatchTool, executeNodeListTool } from "./tool-executor-node-dispatch.js";
 import { executeAutomationScheduleTool } from "./tool-executor-schedule-tools.js";
 import type { McpManager } from "./mcp-manager.js";
 import type { NodeDispatchService } from "./node-dispatch-service.js";
@@ -44,6 +45,7 @@ export class ToolExecutor {
     private readonly nodeDispatchService?: NodeDispatchService,
     private readonly artifactStore?: ArtifactStore,
     private readonly identityScopeDal?: IdentityScopeDal,
+    private readonly nodeInventoryService?: NodeInventoryService,
   ) {}
 
   private workspaceLeaseOwner(toolCallId: string): string {
@@ -162,6 +164,23 @@ export class ToolExecutor {
             tool_call_id: toolCallId,
             output: "",
             error: "node dispatch is not configured",
+          };
+    }
+    if (toolId === "tool.node.list") {
+      return this.nodeInventoryService
+        ? await executeNodeListTool(
+            {
+              workspaceLease: this.workspaceLease,
+              nodeInventoryService: this.nodeInventoryService,
+            },
+            toolCallId,
+            args,
+            audit,
+          )
+        : {
+            tool_call_id: toolCallId,
+            output: "",
+            error: "node inventory is not configured",
           };
     }
 

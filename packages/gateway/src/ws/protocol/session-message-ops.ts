@@ -332,11 +332,25 @@ export async function handleSessionSendMessage(
   try {
     const agentId = parsedReq.data.payload.agent_id ?? "default";
     const runtime = await deps.agents.getRuntime({ tenantId, agentKey: agentId });
+    const sourceClientDeviceId =
+      typeof client.device_id === "string" && client.device_id.trim().length > 0
+        ? client.device_id
+        : typeof client.auth_claims?.device_id === "string" &&
+            client.auth_claims.device_id.trim().length > 0
+          ? client.auth_claims.device_id
+          : undefined;
     const response = await runtime.turn({
       channel: parsedReq.data.payload.channel,
       thread_id: parsedReq.data.payload.thread_id,
       message: parsedReq.data.payload.content,
-      metadata: { source: "ws", request_id: msg.request_id },
+      metadata: {
+        source: "ws",
+        request_id: msg.request_id,
+        ...(sourceClientDeviceId ? { source_client_device_id: sourceClientDeviceId } : {}),
+        ...(parsedReq.data.payload.attached_node_id
+          ? { attached_node_id: parsedReq.data.payload.attached_node_id }
+          : {}),
+      },
     });
     const result = WsSessionSendResult.parse({
       session_id: response.session_id,

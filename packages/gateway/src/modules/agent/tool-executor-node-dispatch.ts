@@ -2,23 +2,29 @@ import {
   ActionPrimitiveKind,
   CapabilityDescriptor,
   descriptorIdForClientCapability,
+  NodeInventoryResponse,
   requiredCapability,
   type ActionPrimitive,
 } from "@tyrum/schemas";
 import {
   NoCapableNodeError,
   NodeDispatchDeniedError,
+  NodeNotCapableError,
+  NodeNotConnectedError,
   NodeNotPairedError,
+  NodeNotReadyError,
+  UnknownNodeError,
 } from "../../ws/protocol/errors.js";
 import type { ArtifactStore } from "../artifact/store.js";
-import {
-  resolveDesktopEvidenceSensitivity,
-  shapeDesktopEvidenceForArtifacts,
-} from "../desktop/shape-desktop-evidence.js";
 import {
   resolveBrowserEvidenceSensitivity,
   shapeBrowserEvidenceForArtifacts,
 } from "../browser/shape-browser-evidence.js";
+import {
+  resolveDesktopEvidenceSensitivity,
+  shapeDesktopEvidenceForArtifacts,
+} from "../desktop/shape-desktop-evidence.js";
+import type { NodeInventoryService } from "../node/inventory-service.js";
 import type { NodeDispatchService } from "./node-dispatch-service.js";
 import { tagContent } from "./provenance.js";
 import { sanitizeForModel } from "./sanitizer.js";
@@ -33,14 +39,22 @@ import type { ToolResult, WorkspaceLeaseConfig } from "./tool-executor-shared.js
 type NodeDispatchExecutorContext = {
   workspaceLease?: WorkspaceLeaseConfig;
   nodeDispatchService?: NodeDispatchService;
+  nodeInventoryService?: NodeInventoryService;
   artifactStore?: ArtifactStore;
 };
 
 type NodeDispatchAudit = {
+  work_session_key?: string;
+  work_lane?: string;
   execution_run_id?: string;
   execution_step_id?: string;
   policy_snapshot_id?: string;
 };
+
+function normalizeJsonObject(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+}
 
 async function shapeNodeDispatchEvidence(
   context: NodeDispatchExecutorContext,
@@ -96,16 +110,73 @@ async function shapeNodeDispatchEvidence(
   return shaped.evidence;
 }
 
+export async function executeNodeListTool(
+  context: NodeDispatchExecutorContext,
+  toolCallId: string,
+  args: unknown,
+  audit?: NodeDispatchAudit,
+): Promise<ToolResult> {
+  const parsed = normalizeJsonObject(args);
+  const tenantId = context.workspaceLease?.tenantId;
+  if (!tenantId || !context.nodeInventoryService) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: "tenantId is required for node inventory",
+    };
+  }
+
+  const capability =
+    typeof parsed?.["capability"] === "string" ? parsed["capability"].trim() : undefined;
+  const dispatchableOnly =
+    typeof parsed?.["dispatchable_only"] === "boolean" ? parsed["dispatchable_only"] : true;
+  const key =
+    typeof parsed?.["key"] === "string" && parsed["key"].trim().length > 0
+      ? parsed["key"].trim()
+      : audit?.work_session_key?.trim() || undefined;
+  const lane =
+    typeof parsed?.["lane"] === "string" && parsed["lane"].trim().length > 0
+      ? parsed["lane"].trim()
+      : audit?.work_lane?.trim() || undefined;
+
+  const payload = NodeInventoryResponse.parse({
+    status: "ok",
+    generated_at: new Date().toISOString(),
+    ...(await context.nodeInventoryService.list({
+      tenantId,
+      capability,
+      dispatchableOnly,
+      key,
+      lane,
+    })),
+  });
+
+  const tagged = tagContent(JSON.stringify(payload), "tool");
+  return {
+    tool_call_id: toolCallId,
+    output: sanitizeForModel(tagged),
+    provenance: tagged,
+  };
+}
+
 export async function executeNodeDispatchTool(
   context: NodeDispatchExecutorContext,
   toolCallId: string,
   args: unknown,
   audit?: NodeDispatchAudit,
 ): Promise<ToolResult> {
-  const parsed = args as Record<string, unknown> | null;
+  const parsed = normalizeJsonObject(args);
+  const nodeId = typeof parsed?.["node_id"] === "string" ? parsed["node_id"].trim() : "";
   const capability = typeof parsed?.["capability"] === "string" ? parsed["capability"].trim() : "";
   const actionToken = typeof parsed?.["action"] === "string" ? parsed["action"].trim() : "";
 
+  if (!nodeId) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: "missing required argument: node_id",
+    };
+  }
   if (!capability) {
     return {
       tool_call_id: toolCallId,
@@ -158,12 +229,7 @@ export async function executeNodeDispatchTool(
   }
 
   const argsRaw = parsed?.["args"];
-  const actionArgs =
-    argsRaw === undefined
-      ? {}
-      : argsRaw && typeof argsRaw === "object" && !Array.isArray(argsRaw)
-        ? (argsRaw as Record<string, unknown>)
-        : undefined;
+  const actionArgs = argsRaw === undefined ? {} : normalizeJsonObject(argsRaw);
   if (!actionArgs) {
     return {
       tool_call_id: toolCallId,
@@ -193,7 +259,7 @@ export async function executeNodeDispatchTool(
     const { taskId, result } = await context.nodeDispatchService.dispatchAndWait(
       action,
       { tenantId, runId, stepId, attemptId },
-      { timeoutMs },
+      { timeoutMs, nodeId },
     );
 
     const evidence = await shapeNodeDispatchEvidence(
@@ -208,6 +274,7 @@ export async function executeNodeDispatchTool(
     serializedPayload = JSON.stringify({
       ok: result.ok,
       task_id: taskId,
+      node_id: nodeId,
       evidence,
       error: result.error,
     });
@@ -215,6 +282,7 @@ export async function executeNodeDispatchTool(
       serializedPayload = JSON.stringify({
         ok: result.ok,
         task_id: taskId,
+        node_id: nodeId,
         error:
           typeof result.error === "string" && result.error.length > 4_096
             ? `${result.error.slice(0, 4_096)}${TRUNCATION_MARKER}`
@@ -233,6 +301,16 @@ export async function executeNodeDispatchTool(
       retryable = true;
     } else if (err instanceof NoCapableNodeError) {
       code = "no_capable_node";
+    } else if (err instanceof UnknownNodeError) {
+      code = "unknown_node";
+    } else if (err instanceof NodeNotConnectedError) {
+      code = "node_not_connected";
+      retryable = true;
+    } else if (err instanceof NodeNotCapableError) {
+      code = "node_not_capable";
+    } else if (err instanceof NodeNotReadyError) {
+      code = "node_not_ready";
+      retryable = true;
     } else if (err instanceof NodeDispatchDeniedError) {
       code = "policy_denied";
     } else if (err instanceof NodeNotPairedError) {

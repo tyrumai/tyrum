@@ -217,6 +217,37 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     },
   },
   {
+    id: "tool.node.list",
+    description: "List connected and dispatchable nodes for the current lane or a specified lane.",
+    risk: "low",
+    requires_confirmation: false,
+    keywords: ["node", "device", "inventory", "list", "discover"],
+    source: "builtin",
+    family: "node",
+    inputSchema: {
+      type: "object",
+      properties: {
+        capability: {
+          type: "string",
+          description: "Optional capability descriptor id filter (example: tyrum.desktop).",
+        },
+        dispatchable_only: {
+          type: "boolean",
+          description: "When true, return only nodes with at least one dispatchable action.",
+        },
+        key: {
+          type: "string",
+          description: "Optional session key used to resolve lane attachment.",
+        },
+        lane: {
+          type: "string",
+          description: "Optional lane used to resolve lane attachment.",
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     id: "tool.node.dispatch",
     description: "Dispatch tasks to connected node capabilities.",
     risk: "high",
@@ -227,6 +258,10 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     inputSchema: {
       type: "object",
       properties: {
+        node_id: {
+          type: "string",
+          description: "Target node id returned by tool.node.list.",
+        },
         capability: {
           type: "string",
           description: "Capability descriptor id (example: tyrum.desktop).",
@@ -242,7 +277,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
           description: "Optional timeout in milliseconds (default: 30000).",
         },
       },
-      required: ["capability", "action"],
+      required: ["node_id", "capability", "action"],
       additionalProperties: false,
     },
   },

@@ -10,6 +10,7 @@ import type { EventLog } from "./modules/planner/event-log.js";
 import type { DiscoveryPipeline } from "./modules/discovery/pipeline.js";
 import type { RiskClassifier } from "./modules/risk/classifier.js";
 import type { SessionDal } from "./modules/agent/session-dal.js";
+import type { SessionLaneNodeAttachmentDal } from "./modules/agent/session-lane-node-attachment-dal.js";
 import type { TelegramBot } from "./modules/ingress/telegram-bot.js";
 import type { ApprovalDal } from "./modules/approval/dal.js";
 import type { WatcherProcessor } from "./modules/watcher/processor.js";
@@ -44,6 +45,7 @@ import {
   defaultRiskConfig,
 } from "./modules/risk/classifier.js";
 import { SessionDal as SessionDalImpl } from "./modules/agent/session-dal.js";
+import { SessionLaneNodeAttachmentDal as SessionLaneNodeAttachmentDalImpl } from "./modules/agent/session-lane-node-attachment-dal.js";
 import { TelegramBot as TelegramBotImpl } from "./modules/ingress/telegram-bot.js";
 import { WatcherProcessor as WatcherProcessorImpl } from "./modules/watcher/processor.js";
 import { CanvasDal as CanvasDalImpl } from "./modules/canvas/dal.js";
@@ -96,6 +98,7 @@ export interface GatewayContainer {
   discoveryPipeline: DiscoveryPipeline;
   riskClassifier: RiskClassifier;
   sessionDal: SessionDal;
+  sessionLaneNodeAttachmentDal: SessionLaneNodeAttachmentDal;
   eventBus: EventBus;
   telegramBot?: TelegramBot;
   approvalDal: ApprovalDal;
@@ -166,6 +169,7 @@ export function wireContainer(
   const discoveryPipeline = new DiscoveryPipelineImpl(connectorCache);
   const riskClassifier = new RiskClassifierImpl(defaultRiskConfig());
   const sessionDal = new SessionDalImpl(db, identityScopeDal, channelThreadDal);
+  const sessionLaneNodeAttachmentDal = new SessionLaneNodeAttachmentDalImpl(db);
   const eventBus = createEventBus();
 
   const telegramToken = deploymentConfig.channels.telegramBotToken;
@@ -237,6 +241,7 @@ export function wireContainer(
     discoveryPipeline,
     riskClassifier,
     sessionDal,
+    sessionLaneNodeAttachmentDal,
     eventBus,
     telegramBot,
     approvalDal,

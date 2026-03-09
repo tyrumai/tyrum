@@ -22,6 +22,7 @@ export const WsSessionSendPayload = z
     channel: z.string().trim().min(1),
     thread_id: z.string().trim().min(1),
     content: z.string().trim().min(1),
+    attached_node_id: z.string().trim().min(1).optional(),
   })
   .strict();
 export type WsSessionSendPayload = z.infer<typeof WsSessionSendPayload>;

@@ -22,6 +22,7 @@ type ToolExecutorFactoryOptions = {
   workspaceLease?: ToolExecutorCtor[8];
   nodeDispatchService?: ToolExecutorCtor[9];
   identityScopeDal?: ToolExecutorCtor[11];
+  nodeInventoryService?: ToolExecutorCtor[12];
 };
 
 export function registerTempHomeLifecycle(prefix = "tool-executor-"): HomeDirState {
@@ -73,6 +74,7 @@ export function createToolExecutor({
   workspaceLease,
   nodeDispatchService,
   identityScopeDal,
+  nodeInventoryService,
 }: ToolExecutorFactoryOptions): ToolExecutor {
   return new ToolExecutor(
     homeDir,
@@ -87,5 +89,6 @@ export function createToolExecutor({
     nodeDispatchService,
     undefined,
     identityScopeDal,
+    nodeInventoryService,
   );
 }

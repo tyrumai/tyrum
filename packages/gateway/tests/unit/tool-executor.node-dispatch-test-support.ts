@@ -15,6 +15,7 @@ import {
 } from "./tool-executor.shared-test-support.js";
 
 const nodeDispatchArgs = {
+  node_id: "node-1",
   capability: "tyrum.desktop",
   action: "Desktop",
 };
@@ -78,7 +79,7 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
     const result = await createToolExecutor({ homeDir: requireHomeDir(home) }).execute(
       "tool.node.dispatch",
       "call-7",
-      { capability: "screen", action: "capture" },
+      { node_id: "node-1", capability: "screen", action: "capture" },
     );
 
     expect(result.error).toBe("node dispatch is not configured");
@@ -99,9 +100,15 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
 
     expect(result.error).toBeUndefined();
     expect(nodeDispatchService.dispatchAndWait).toHaveBeenCalledOnce();
+    expect(nodeDispatchService.dispatchAndWait).toHaveBeenCalledWith(
+      { type: "Desktop", args: { x: 1 } },
+      expect.any(Object),
+      { timeoutMs: 30_000, nodeId: "node-1" },
+    );
     expect(result.output).toContain('<data source="tool">');
     expect(result.output).toContain('"ok":true');
     expect(result.output).toContain('"task_id":"task-123"');
+    expect(result.output).toContain('"node_id":"node-1"');
     expect(result.output).toContain('"foo":"bar"');
   });
 
@@ -125,13 +132,13 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
 
   const structuredErrorCases = [
     {
-      name: "tool.node.dispatch returns a structured no_capable_node error when no desktop node is connected",
+      name: "tool.node.dispatch returns a structured unknown_node error when the target node is unknown",
       service: () =>
         new NodeDispatchService({
           connectionManager: new ConnectionManager(),
           taskResults: new TaskResultRegistry(),
         } as never),
-      expectedCode: "no_capable_node",
+      expectedCode: "unknown_node",
     },
     {
       name: "tool.node.dispatch returns a structured not_paired error when a desktop node is connected but not paired",
@@ -203,5 +210,62 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
     expect(result.output).toContain('"truncated":true');
     expect(result.output).toContain("evidence too large");
     expect(result.output).not.toContain(huge.slice(0, 200));
+  });
+
+  it("tool.node.list defaults to the current work lane and returns structured inventory", async () => {
+    const db = openTestSqliteDb();
+
+    try {
+      const nodeInventoryService = {
+        list: vi.fn(async () => ({
+          key: "agent:default:ui:default:channel:thread-1",
+          lane: "main",
+          nodes: [
+            {
+              node_id: "node-1",
+              connected: true,
+              paired_status: "approved",
+              attached_to_requested_lane: true,
+              dispatches: [
+                {
+                  capability: "tyrum.desktop",
+                  action: "Desktop",
+                  ready: true,
+                  allowed: true,
+                  dispatchable: true,
+                },
+              ],
+            },
+          ],
+        })),
+      };
+
+      const result = await createToolExecutor({
+        homeDir: requireHomeDir(home),
+        workspaceLease: createWorkspaceLease(db),
+        nodeInventoryService: nodeInventoryService as never,
+      }).execute(
+        "tool.node.list",
+        "call-8",
+        {},
+        {
+          work_session_key: "agent:default:ui:default:channel:thread-1",
+          work_lane: "main",
+        },
+      );
+
+      expect(nodeInventoryService.list).toHaveBeenCalledWith({
+        tenantId: DEFAULT_TENANT_ID,
+        capability: undefined,
+        dispatchableOnly: true,
+        key: "agent:default:ui:default:channel:thread-1",
+        lane: "main",
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.output).toContain('"status":"ok"');
+      expect(result.output).toContain('"attached_to_requested_lane":true');
+    } finally {
+      await db.close();
+    }
   });
 }

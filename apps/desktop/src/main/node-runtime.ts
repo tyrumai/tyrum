@@ -23,6 +23,7 @@ export class NodeRuntime {
   private client: TyrumClient | null = null;
   private providers: CapabilityProvider[] = [];
   private config: DesktopNodeConfig;
+  private currentDeviceId: string | null = null;
 
   constructor(
     config: DesktopNodeConfig,
@@ -38,6 +39,10 @@ export class NodeRuntime {
 
   get permissions(): ResolvedPermissions {
     return this._permissions;
+  }
+
+  get deviceId(): string | null {
+    return this.currentDeviceId;
   }
 
   registerProvider(provider: CapabilityProvider): void {
@@ -106,6 +111,8 @@ export class NodeRuntime {
       };
       saveConfig(this.config);
     }
+
+    this.currentDeviceId = deviceId || null;
 
     return {
       ...current,
