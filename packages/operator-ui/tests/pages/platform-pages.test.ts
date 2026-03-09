@@ -221,7 +221,7 @@ describe("Platform pages", () => {
     });
   });
 
-  it("clears connection saved feedback after shell edits", async () => {
+  it("keeps connection saved feedback after shell edits", async () => {
     const setConfig = vi.fn(async () => {});
     const desktopApi = createDesktopApi({
       config: createNodeConfig(),
@@ -251,7 +251,7 @@ describe("Platform pages", () => {
       expect(
         container.querySelector<HTMLButtonElement>('[data-testid="node-configure-save-connection"]')
           ?.textContent,
-      ).toBe("Save Connection Settings");
+      ).toContain("Saved!");
     });
   });
 

@@ -402,7 +402,6 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
       const nextSecurity = createProfilePreset(profile);
       setSecurity(nextSecurity);
       setAllowlistDrafts(createAllowlistDraftState(nextSecurity));
-      setGeneralSaved(false);
       setProfileSaved(false);
       setSecuritySaved(false);
     },
@@ -411,7 +410,6 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
         ...current,
         capabilities: { ...current.capabilities, [key]: nextEnabled },
       }));
-      setGeneralSaved(false);
       setProfileSaved(false);
       setSecuritySaved(false);
     },
@@ -424,7 +422,6 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
         ...current,
         [field === "allowedCommands" ? "cliCommands" : "cliWorkingDirs"]: value,
       }));
-      setGeneralSaved(false);
       setProfileSaved(false);
       setSecuritySaved(false);
     },
@@ -434,7 +431,6 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
         web: { ...current.web, allowedDomains: splitAllowlistLines(value) },
       }));
       setAllowlistDrafts((current) => ({ ...current, browserDomains: value }));
-      setGeneralSaved(false);
       setProfileSaved(false);
       setSecuritySaved(false);
     },
@@ -443,7 +439,6 @@ export function useDesktopNodeConfigureModel(api: DesktopApi, onReloadPage?: () 
         ...current,
         web: { ...current.web, headless },
       }));
-      setGeneralSaved(false);
       setProfileSaved(false);
       setSecuritySaved(false);
     },
