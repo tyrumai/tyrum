@@ -218,6 +218,55 @@ describe("Sidebar", () => {
     cleanupTestRoot({ container, root });
   });
 
+  it("uses a shared expanded row layout for nav and footer items", () => {
+    const ThemeProvider = (operatorUi as Record<string, unknown>)["ThemeProvider"];
+    const Sidebar = (operatorUi as Record<string, unknown>)["Sidebar"];
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        ThemeProvider as React.ComponentType,
+        null,
+        React.createElement(Sidebar as React.ComponentType, {
+          items: [
+            {
+              id: "dashboard",
+              label: "Dashboard",
+              icon: LayoutDashboard,
+              testId: "nav-dashboard",
+              badgeCount: 1,
+            },
+          ],
+          activeItemId: "dashboard",
+          onNavigate: vi.fn(),
+          secondaryItems: [{ id: "approvals", label: "Approvals", icon: ShieldCheck }],
+          secondaryLabel: "Platform",
+          secondaryCollapsible: true,
+          connectionStatus: "connected",
+          onSyncNow: vi.fn(),
+          collapsible: true,
+        }),
+      ),
+    );
+
+    const expectedLayoutClass = "grid-cols-[1rem_minmax(0,1fr)_auto]";
+    expect(
+      container.querySelector<HTMLButtonElement>("[data-testid='nav-dashboard']")?.className,
+    ).toContain(expectedLayoutClass);
+    expect(
+      container.querySelector<HTMLButtonElement>("[data-testid='sidebar-secondary-toggle']")
+        ?.className,
+    ).toContain(expectedLayoutClass);
+    expect(
+      container.querySelector<HTMLButtonElement>("[data-testid='sidebar-sync-now']")?.className,
+    ).toContain(expectedLayoutClass);
+    expect(
+      container.querySelector<HTMLButtonElement>("[data-testid='sidebar-collapse-toggle']")
+        ?.className,
+    ).toContain(expectedLayoutClass);
+
+    cleanupTestRoot({ container, root });
+  });
+
   it("disables sync-now when requested", () => {
     const ThemeProvider = (operatorUi as Record<string, unknown>)["ThemeProvider"];
     const Sidebar = (operatorUi as Record<string, unknown>)["Sidebar"];

@@ -12,6 +12,24 @@ export interface AppShellProps extends React.HTMLAttributes<HTMLDivElement> {
   viewportLocked?: boolean;
 }
 
+const AppShellContentWidthContext = React.createContext<number | null>(null);
+
+function measureContentBoxWidth(element: HTMLElement): number {
+  const styles = window.getComputedStyle(element);
+  const paddingLeft = Number.parseFloat(styles.paddingLeft) || 0;
+  const paddingRight = Number.parseFloat(styles.paddingRight) || 0;
+  return Math.max(0, element.clientWidth - paddingLeft - paddingRight);
+}
+
+export function useAppShellMinWidth(minWidthPx: number): boolean {
+  const contentWidth = React.useContext(AppShellContentWidthContext);
+  const viewportMatches = useMediaQuery(`(min-width: ${String(minWidthPx)}px)`);
+  if (contentWidth === null) {
+    return viewportMatches;
+  }
+  return contentWidth >= minWidthPx;
+}
+
 export function AppShell({
   mode,
   sidebar,
@@ -26,6 +44,33 @@ export function AppShell({
   const showSidebar = mode === "desktop" || mdUp;
   const showMobileNav = mode === "web" && !mdUp;
   const lockViewport = mode === "desktop" || viewportLocked;
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const [contentWidth, setContentWidth] = React.useState<number | null>(null);
+
+  React.useLayoutEffect(() => {
+    const element = contentRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateWidth = (width: number) => {
+      setContentWidth(Math.round(width));
+    };
+
+    updateWidth(measureContentBoxWidth(element));
+    if (typeof ResizeObserver !== "function") {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      updateWidth(entry?.contentRect.width ?? measureContentBoxWidth(element));
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   return (
     <div
@@ -37,33 +82,35 @@ export function AppShell({
       style={{ backgroundImage: "var(--tyrum-app-bg-image)" }}
       {...props}
     >
-      <div className={cn("flex", lockViewport ? "h-full min-h-0" : "min-h-screen")}>
-        {showSidebar ? sidebar : null}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <main
-            className={cn(
-              "flex flex-1 min-h-0 flex-col overflow-x-hidden",
-              fullBleed || viewportLocked ? "overflow-y-hidden" : "overflow-y-auto",
-              showMobileNav ? "pb-[calc(3.5rem+env(safe-area-inset-bottom))]" : null,
-            )}
-          >
-            {fullBleed ? (
-              <div className="flex h-full min-h-0 flex-col overflow-hidden">{children}</div>
-            ) : (
-              <div
-                className={cn(
-                  "flex-1 min-h-0 px-4 py-4 md:px-5 md:py-5",
-                  mode === "web" ? "mx-auto w-full max-w-7xl" : null,
-                  viewportLocked ? "flex flex-col overflow-hidden" : null,
-                )}
-              >
-                {children}
-              </div>
-            )}
-          </main>
-          {showMobileNav ? mobileNav : null}
+      <AppShellContentWidthContext.Provider value={contentWidth}>
+        <div className={cn("flex", lockViewport ? "h-full min-h-0" : "min-h-screen")}>
+          {showSidebar ? sidebar : null}
+          <div ref={contentRef} className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <main
+              className={cn(
+                "flex flex-1 min-h-0 flex-col overflow-x-hidden",
+                fullBleed || viewportLocked ? "overflow-y-hidden" : "overflow-y-auto",
+                showMobileNav ? "pb-[calc(3.5rem+env(safe-area-inset-bottom))]" : null,
+              )}
+            >
+              {fullBleed ? (
+                <div className="flex h-full min-h-0 flex-col overflow-hidden">{children}</div>
+              ) : (
+                <div
+                  className={cn(
+                    "flex-1 min-h-0 px-4 py-4 md:px-5 md:py-5",
+                    mode === "web" ? "mx-auto w-full max-w-7xl" : null,
+                    viewportLocked ? "flex flex-col overflow-hidden" : null,
+                  )}
+                >
+                  {children}
+                </div>
+              )}
+            </main>
+            {showMobileNav ? mobileNav : null}
+          </div>
         </div>
-      </div>
+      </AppShellContentWidthContext.Provider>
     </div>
   );
 }

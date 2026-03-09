@@ -18,6 +18,10 @@ type LayoutCase = {
   route: string;
   clicks?: string[];
   selectors: string[];
+  viewport?: {
+    width: number;
+    height: number;
+  };
 };
 
 const cases: LayoutCase[] = [
@@ -50,6 +54,7 @@ const cases: LayoutCase[] = [
     name: "workboard",
     route: "workboard",
     selectors: ["[data-layout-content]", '[data-testid="workboard-board"]'],
+    viewport: { width: 1440, height: 900 },
   },
   {
     name: "agents identity",
@@ -205,6 +210,30 @@ async function assertNoHorizontalOverflow(page: Page, selectors: string[]): Prom
   }
 }
 
+async function assertNoInternalHorizontalClipping(page: Page, selectors: string[]): Promise<void> {
+  const result = await page.evaluate((candidateSelectors) => {
+    return candidateSelectors.map((selector) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (!element) {
+        return { selector, found: false, clippedBy: null };
+      }
+      return {
+        selector,
+        found: true,
+        clippedBy: Math.max(0, element.scrollWidth - element.clientWidth),
+      };
+    });
+  }, selectors);
+
+  for (const measurement of result) {
+    expect(measurement.found, `${measurement.selector} should exist`).toBe(true);
+    expect(
+      measurement.clippedBy,
+      `${measurement.selector} clipped ${measurement.clippedBy}px of horizontal content`,
+    ).toBeLessThanOrEqual(1);
+  }
+}
+
 describe("layout regression harness", () => {
   beforeAll(async () => {
     process.chdir(APP_ROOT);
@@ -233,7 +262,9 @@ describe("layout regression harness", () => {
 
   for (const testCase of cases) {
     it(`keeps ${testCase.name} within the desktop viewport`, { timeout: 30_000 }, async () => {
-      const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+      const page = await browser.newPage({
+        viewport: testCase.viewport ?? { width: 1280, height: 820 },
+      });
       try {
         await page.goto(`${baseUrl}?route=${testCase.route}`, { waitUntil: "load" });
         await page.waitForSelector(testCase.selectors[0]);
@@ -244,9 +275,67 @@ describe("layout regression harness", () => {
         }
 
         await assertNoHorizontalOverflow(page, testCase.selectors);
+        if (testCase.name === "workboard") {
+          await assertNoInternalHorizontalClipping(page, ['[data-testid="workboard-board"]']);
+        }
       } finally {
         await page.close();
       }
     });
   }
+
+  it("keeps workboard in the stacked layout at medium widths", { timeout: 30_000 }, async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    try {
+      await page.goto(`${baseUrl}?route=workboard`, { waitUntil: "load" });
+      await page.waitForSelector("[data-layout-content]");
+      await page.waitForSelector('[data-testid="workboard-status-selector"]');
+
+      expect(await page.locator('[data-testid="workboard-board"]').count()).toBe(0);
+      await assertNoHorizontalOverflow(page, ["[data-layout-content]"]);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("expands workboard when the sidebar collapses", { timeout: 30_000 }, async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    try {
+      await page.goto(`${baseUrl}?route=workboard`, { waitUntil: "load" });
+      await page.waitForSelector('[data-testid="workboard-status-selector"]');
+
+      await page.click('[data-testid="sidebar-collapse-toggle"]');
+      await page.waitForSelector('[data-testid="workboard-board"]');
+
+      await assertNoHorizontalOverflow(page, [
+        "[data-layout-content]",
+        '[data-testid="workboard-board"]',
+      ]);
+      await assertNoInternalHorizontalClipping(page, ['[data-testid="workboard-board"]']);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("expands chat when the sidebar collapses", { timeout: 30_000 }, async () => {
+    const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
+    try {
+      await page.goto(`${baseUrl}?route=chat`, { waitUntil: "load" });
+      await page.waitForSelector('[data-testid="chat-threads-panel"]');
+
+      expect(await page.locator('[data-testid="chat-conversation-panel"]').count()).toBe(0);
+
+      await page.click('[data-testid="sidebar-collapse-toggle"]');
+      await page.waitForSelector('[data-testid="chat-conversation-panel"]');
+
+      await assertNoHorizontalOverflow(page, [
+        '[data-testid="chat-page"]',
+        '[data-testid="chat-panels"]',
+        '[data-testid="chat-threads-panel"]',
+        '[data-testid="chat-conversation-panel"]',
+      ]);
+    } finally {
+      await page.close();
+    }
+  });
 });

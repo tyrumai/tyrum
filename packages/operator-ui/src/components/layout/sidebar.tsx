@@ -34,6 +34,8 @@ export interface SidebarProps extends React.HTMLAttributes<HTMLElement> {
 
 const STORAGE_KEY_SECONDARY = "tyrum-sidebar-secondary-collapsed";
 const STORAGE_KEY_SIDEBAR = "tyrum-sidebar-collapsed";
+const SIDEBAR_EXPANDED_ROW_LAYOUT =
+  "grid w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-x-2";
 
 function readStoredBool(key: string, defaultValue: boolean): boolean {
   try {
@@ -78,7 +80,7 @@ function SidebarNavButton({ item, activeItemId, collapsed, onNavigate }: Sidebar
         "relative flex w-full rounded-md border text-sm transition-colors duration-150",
         collapsed
           ? "justify-center border-transparent px-1.5 py-1.5"
-          : "items-start gap-2 px-2.5 py-1.5",
+          : `${SIDEBAR_EXPANDED_ROW_LAYOUT} border-transparent px-2.5 py-1.5 text-left`,
         active
           ? "border-border bg-bg text-fg font-medium"
           : "border-transparent text-fg-muted hover:border-border hover:bg-bg hover:text-fg",
@@ -95,14 +97,14 @@ function SidebarNavButton({ item, activeItemId, collapsed, onNavigate }: Sidebar
           className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-primary"
         />
       ) : null}
-      <Icon className={cn("h-4 w-4 shrink-0", collapsed ? null : "mt-0.5")} />
+      <Icon className="h-4 w-4 shrink-0" />
       {!collapsed ? (
         <>
-          <span className="min-w-0 flex-1 break-words leading-5 [overflow-wrap:anywhere]">
+          <span className="min-w-0 break-words leading-5 [overflow-wrap:anywhere]">
             {item.label}
           </span>
           {badgeCount > 0 ? (
-            <Badge variant={item.badgeVariant ?? "default"} className="ml-auto shrink-0">
+            <Badge variant={item.badgeVariant ?? "default"} className="shrink-0 justify-self-end">
               {badgeText}
             </Badge>
           ) : null}
@@ -158,7 +160,11 @@ function SidebarNav({
             <button
               type="button"
               data-testid="sidebar-secondary-toggle"
-              className="mt-2 flex w-full items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-fg-muted hover:text-fg"
+              className={cn(
+                "mt-2 rounded-md py-1 text-left text-xs font-medium text-fg-muted hover:text-fg",
+                SIDEBAR_EXPANDED_ROW_LAYOUT,
+                "px-2.5",
+              )}
               onClick={onToggleSecondary}
             >
               <ChevronDown
@@ -170,7 +176,16 @@ function SidebarNav({
               <span>{secondaryLabel}</span>
             </button>
           ) : !collapsed ? (
-            <div className="mt-2 px-2.5 text-xs font-medium text-fg-muted">{secondaryLabel}</div>
+            <div
+              className={cn(
+                "mt-2 py-1 text-xs font-medium text-fg-muted",
+                SIDEBAR_EXPANDED_ROW_LAYOUT,
+                "px-2.5",
+              )}
+            >
+              <span aria-hidden="true" className="h-4 w-4 shrink-0" />
+              <span>{secondaryLabel}</span>
+            </div>
           ) : null}
           {collapsed || secondaryVisible ? secondaryItems.map(renderNavItem) : null}
         </>
@@ -220,7 +235,9 @@ function SidebarSyncNowButton({
       disabled={syncNowDisabled || syncNowLoading}
       className={cn(
         "flex w-full items-center rounded-md text-sm transition-colors",
-        collapsed ? "justify-center px-1.5 py-1.5" : "justify-start gap-2 px-2.5 py-1.5",
+        collapsed
+          ? "justify-center px-1.5 py-1.5"
+          : `${SIDEBAR_EXPANDED_ROW_LAYOUT} px-2.5 py-1.5 text-left`,
         syncNowDisabled || syncNowLoading
           ? "cursor-not-allowed opacity-50"
           : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
@@ -259,7 +276,9 @@ function SidebarStatusControls({ collapsed, connectionStatus }: SidebarStatusCon
             <span
               className={cn(
                 "inline-flex w-full items-center rounded-md text-sm text-fg-muted",
-                collapsed ? "justify-center px-1.5 py-1.5" : "justify-start gap-2 px-2.5 py-1.5",
+                collapsed
+                  ? "justify-center px-1.5 py-1.5"
+                  : `${SIDEBAR_EXPANDED_ROW_LAYOUT} px-2.5 py-1.5 text-left`,
               )}
             >
               <SidebarFooterRowContent
@@ -300,7 +319,9 @@ function SidebarCollapseToggle({ collapsed, onToggleCollapsed }: SidebarCollapse
       title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       className={cn(
         "flex w-full items-center rounded-md text-sm transition-colors",
-        collapsed ? "justify-center px-1.5 py-1.5" : "justify-start gap-2 px-2.5 py-1.5",
+        collapsed
+          ? "justify-center px-1.5 py-1.5"
+          : `${SIDEBAR_EXPANDED_ROW_LAYOUT} px-2.5 py-1.5 text-left`,
         "text-fg-muted hover:bg-bg-subtle hover:text-fg",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
       )}
