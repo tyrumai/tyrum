@@ -111,6 +111,10 @@ class LocalStepExecutor implements StepExecutor {
     }
   }
 
+  async shutdown(): Promise<void> {
+    await this.mcpManager.shutdown();
+  }
+
   private async executeHttp(
     action: ActionPrimitiveT,
     args: Record<string, unknown>,

@@ -46,6 +46,7 @@ export interface StepExecutor {
     timeoutMs: number,
     context: StepExecutionContext,
   ): Promise<StepResult>;
+  shutdown?(): Promise<void>;
 }
 
 export interface ExecutionClock {

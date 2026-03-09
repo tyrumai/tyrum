@@ -59,4 +59,58 @@ describe("gateway step executor tool set", () => {
     expect(result["output"]).toEqual(expect.stringContaining('<data source="web">'));
     expect(result["output"]).not.toEqual(expect.stringContaining("raw crawl body"));
   });
+
+  it("runs the extraction pass for prompt-only webfetch calls", async () => {
+    const toolExecutor = {
+      execute: vi.fn(async () => ({
+        success: true,
+        result: {
+          ok: true,
+          type: "Mcp",
+          server_id: "exa",
+          tool_name: "crawling_exa",
+          output: "raw crawl body",
+        },
+      })),
+    };
+
+    const toolSet = buildToolSet({
+      planId: "plan-1",
+      stepIndex: 0,
+      timeoutMs: 5_000,
+      allowedToolIds: ["webfetch"],
+      maxToolCalls: 2,
+      toolExecutor: toolExecutor as never,
+      toolBudget: { toolCallsUsed: 0, countedToolCallIds: new Set<string>() },
+      executionContext: {
+        tenantId: DEFAULT_TENANT_ID,
+        runId: "run-1",
+        stepId: "step-1",
+        attemptId: "attempt-1",
+        approvalId: null,
+        agentId: null,
+        key: "default",
+        lane: "main",
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        policySnapshotId: null,
+      },
+      container: {
+        db: { get: vi.fn() },
+        logger: { warn: vi.fn(), info: vi.fn() },
+      } as never,
+      languageModel: createStubLanguageModel("## Extracted\n- prompt-only summary"),
+      toolCallPolicyStates: new Map(),
+    });
+
+    const result = (await toolSet["webfetch"]!.execute(
+      {
+        url: "https://example.com",
+        prompt: "Summarize the page",
+      },
+      { toolCallId: "tc-webfetch-2", messages: [] } as never,
+    )) as Record<string, unknown>;
+
+    expect(result["output"]).toEqual(expect.stringContaining("prompt-only summary"));
+    expect(result["output"]).not.toEqual(expect.stringContaining("raw crawl body"));
+  });
 });

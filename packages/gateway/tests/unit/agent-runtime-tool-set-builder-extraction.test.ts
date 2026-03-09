@@ -134,4 +134,62 @@ describe("ToolSetBuilder webfetch extraction", () => {
 
     expect(String(result)).toContain("raw crawl body");
   });
+
+  it("treats prompt-only webfetch calls as extraction requests", async () => {
+    ({ homeDir, container } = await setupTestEnv());
+
+    const toolSetBuilder = createToolSetBuilder({
+      home: homeDir,
+      container,
+      policyService: {
+        isEnabled: () => false,
+        isObserveOnly: () => false,
+      },
+    });
+
+    const toolExecutor = {
+      execute: vi.fn(async () => ({
+        tool_call_id: "tc-webfetch-3",
+        output: '<data source="web">\nraw crawl body\n</data>',
+        provenance: {
+          content: "raw crawl body",
+          source: "web" as const,
+          trusted: false,
+        },
+      })),
+    };
+
+    const toolSet = toolSetBuilder.buildToolSet(
+      [
+        {
+          id: "webfetch",
+          description: "Fetch web content",
+          risk: "medium",
+          requires_confirmation: false,
+          keywords: [],
+          inputSchema: { type: "object", additionalProperties: true },
+        },
+      ],
+      toolExecutor as never,
+      new Set<string>(),
+      {
+        planId: "plan-1",
+        sessionId: "session-1",
+        channel: "test",
+        threadId: "thread-1",
+      },
+      makeContextReport() as never,
+      undefined,
+      undefined,
+      createStubLanguageModel("## Extracted\n- prompt-only summary"),
+    );
+
+    const result = await toolSet["webfetch"]!.execute({
+      url: "https://example.com",
+      prompt: "Summarize the page",
+    });
+
+    expect(String(result)).toContain("prompt-only summary");
+    expect(String(result)).not.toContain("raw crawl body");
+  });
 });

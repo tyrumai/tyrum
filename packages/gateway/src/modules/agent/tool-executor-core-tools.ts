@@ -216,6 +216,9 @@ async function executeFsEdit(
 
 function parseStructuredPatch(patchText: string): StructuredPatchHunk[] {
   const lines = patchText.replaceAll("\r\n", "\n").split("\n");
+  while (lines.length > 0 && lines.at(-1) === "") {
+    lines.pop();
+  }
   if (lines[0] !== "*** Begin Patch") {
     throw new Error("patch must start with '*** Begin Patch'");
   }

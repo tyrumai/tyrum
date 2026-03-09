@@ -3,6 +3,7 @@ import { tagContent } from "./provenance.js";
 import { sanitizeForModel } from "./sanitizer.js";
 
 const WEBFETCH_EXTRACTION_MAX_CHARS = 24_000;
+export type WebFetchMode = "extract" | "raw";
 
 function trimExtractionPrompt(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -10,13 +11,28 @@ function trimExtractionPrompt(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-export function resolveWebFetchExtractionPrompt(args: unknown): string | undefined {
+export function resolveWebFetchRequest(args: unknown): {
+  mode: WebFetchMode;
+  prompt: string | undefined;
+} {
   const parsed =
     args && typeof args === "object" && !Array.isArray(args)
       ? (args as Record<string, unknown>)
       : null;
-  const mode = trimExtractionPrompt(parsed?.["mode"]) ?? "extract";
   const prompt = trimExtractionPrompt(parsed?.["prompt"]);
+  const requestedMode = trimExtractionPrompt(parsed?.["mode"]);
+  const mode =
+    requestedMode === "extract" || requestedMode === "raw"
+      ? requestedMode
+      : prompt
+        ? "extract"
+        : "raw";
+
+  return { mode, prompt };
+}
+
+export function resolveWebFetchExtractionPrompt(args: unknown): string | undefined {
+  const { mode, prompt } = resolveWebFetchRequest(args);
   return mode === "extract" ? prompt : undefined;
 }
 

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { ActionPrimitive } from "@tyrum/schemas";
 import { Ajv2019 } from "ajv/dist/2019.js";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
+import { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import { createLocalStepExecutor } from "../../src/modules/execution/local-step-executor.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import type { SecretHandle } from "@tyrum/schemas";
@@ -64,6 +65,15 @@ describe("LocalStepExecutor playbook output contracts", () => {
       },
     };
   }
+
+  it("shuts down the embedded MCP manager", async () => {
+    const shutdownSpy = vi.spyOn(McpManager.prototype, "shutdown").mockResolvedValue(undefined);
+    const executor = await makeExecutor();
+
+    await executor.shutdown?.();
+
+    expect(shutdownSpy).toHaveBeenCalledTimes(1);
+  });
 
   it("applies max_output_bytes cap for CLI output", async () => {
     const executor = await makeExecutor();

@@ -11,6 +11,7 @@ import {
   resolvesToBlockedAddress,
 } from "./tool-executor-shared.js";
 import type { DnsLookupFn, ToolResult } from "./tool-executor-shared.js";
+import { resolveWebFetchRequest } from "./webfetch-extraction.js";
 
 type McpToolContext = {
   dnsLookup: DnsLookupFn;
@@ -139,8 +140,7 @@ export async function executeWebFetchTool(
     };
   }
 
-  const mode = parseStringArg(parsed, "mode") ?? "raw";
-  const prompt = parseStringArg(parsed, "prompt");
+  const { mode, prompt } = resolveWebFetchRequest(parsed);
   if (mode === "extract" && !prompt) {
     return {
       tool_call_id: toolCallId,

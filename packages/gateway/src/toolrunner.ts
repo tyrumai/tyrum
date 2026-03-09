@@ -181,6 +181,7 @@ export async function runToolRunnerFromStdio(params?: {
       : resolveDefaultMigrationsDir(__dirname, dbPath);
 
   let db: SqliteDb | PostgresDb | undefined;
+  let executor: ReturnType<typeof createLocalStepExecutor> | undefined;
   try {
     const redactionEngine = new RedactionEngine();
 
@@ -224,7 +225,7 @@ export async function runToolRunnerFromStdio(params?: {
       redactionEngine,
     );
 
-    const executor = createLocalStepExecutor({
+    executor = createLocalStepExecutor({
       tyrumHome,
       secretProvider,
       policyService,
@@ -249,6 +250,7 @@ export async function runToolRunnerFromStdio(params?: {
     process.stderr.write(`toolrunner error: ${message}\n`);
     return 1;
   } finally {
+    await executor?.shutdown?.().catch(() => {});
     await db?.close().catch(() => {});
   }
 }

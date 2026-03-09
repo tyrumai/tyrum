@@ -89,6 +89,27 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
     );
   });
 
+  it("apply_patch accepts a trailing newline after the end marker", async () => {
+    const homeDir = requireHomeDir(home);
+    await writeFile(join(homeDir, "notes.txt"), "hello\n", "utf-8");
+
+    const result = await createToolExecutor({ homeDir }).execute("apply_patch", "call-3c", {
+      patch: [
+        "*** Begin Patch",
+        "*** Update File: notes.txt",
+        "@@",
+        "-hello",
+        "+hi",
+        "*** End Patch",
+        "",
+      ].join("\n"),
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.output).toContain("update notes.txt");
+    await expect(readFile(join(homeDir, "notes.txt"), "utf-8")).resolves.toBe("hi\n");
+  });
+
   it("http.fetch blocks requests to private network addresses", async () => {
     const callToolMock = vi.fn(async () => ({
       content: [{ type: "text", text: "should-not-fetch" }],
