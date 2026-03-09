@@ -12,6 +12,7 @@ import {
   defaultApprovalScope,
   execToolCall,
   fetchToolCall,
+  findLastNonTitleGenerateCall,
   findSuggestedOverride,
   readToolCall,
   resetToolLoopContainer,
@@ -165,7 +166,7 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
     const result = await turnPromise;
     expect(result.reply).toBe("done");
 
-    const finalCall = languageModel.doGenerateCalls.at(-1);
+    const finalCall = findLastNonTitleGenerateCall(languageModel);
     expect(finalCall).toBeTruthy();
     expect(JSON.stringify(finalCall!.prompt)).toContain(safeOutput);
   }, 10_000);

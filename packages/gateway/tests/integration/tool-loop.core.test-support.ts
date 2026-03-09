@@ -7,6 +7,7 @@ import {
   createSequencedToolLoopLanguageModel,
   createTestRuntime,
   createToolLoopLanguageModel,
+  findLastNonTitleGenerateCall,
   readToolCall,
   setupToolLoopTest,
   textStep,
@@ -72,7 +73,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
     });
 
     expect(result.reply).toBe("done");
-    const lastCall = languageModel.doGenerateCalls.at(-1);
+    const lastCall = findLastNonTitleGenerateCall(languageModel);
     expect(lastCall).toBeTruthy();
     const promptText = JSON.stringify(lastCall!.prompt);
     expect(promptText).toContain("SECOND_TOOL_OUTPUT_456");
@@ -112,7 +113,7 @@ export function registerToolLoopCoreTests(state: ToolLoopTestState): void {
     });
 
     expect(result.reply).toBe("done");
-    const lastCall = languageModel.doGenerateCalls.at(-1);
+    const lastCall = findLastNonTitleGenerateCall(languageModel);
     expect(lastCall).toBeTruthy();
 
     const { toolCallIds, toolResultIds } = collectPromptToolIds(lastCall!.prompt);

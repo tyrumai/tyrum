@@ -385,6 +385,19 @@ export function collectPromptToolIds(prompt: unknown[]): {
   return { toolCallIds, toolResultIds };
 }
 
+export function findLastNonTitleGenerateCall(
+  languageModel: MockLanguageModelV3,
+): { prompt: unknown[] } | undefined {
+  for (let index = languageModel.doGenerateCalls.length - 1; index >= 0; index -= 1) {
+    const call = languageModel.doGenerateCalls[index];
+    if (!call) continue;
+    const promptText = JSON.stringify(call.prompt);
+    if (promptText.includes("Write a concise session title.")) continue;
+    return call as { prompt: unknown[] };
+  }
+  return undefined;
+}
+
 export function findSuggestedOverride(pending: ApprovalRow): {
   tool_id: string;
   pattern: string;
