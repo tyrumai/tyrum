@@ -233,7 +233,7 @@ async function resolveTargetedDispatch(
         throw new NodeDispatchDeniedError(input.capability, policyState.policySnapshotId);
       }
 
-      const target = readyRows[0]!;
+      const target = readyRows.find((row) => row.edge_id !== deps.cluster!.edgeId) ?? readyRows[0]!;
       if (target.edge_id === deps.cluster.edgeId) {
         throw new NodeNotConnectedError(input.nodeId);
       }

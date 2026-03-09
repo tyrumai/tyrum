@@ -8,6 +8,7 @@ import type {
   WorkScope,
 } from "@tyrum/schemas";
 import { AgentTurnRequest, SubagentSessionKey } from "@tyrum/schemas";
+import { readRecordString } from "../../util/coerce.js";
 import {
   applyDeterministicContextCompactionAndToolPruning,
   type ContextPruningConfig,
@@ -101,14 +102,6 @@ export type TurnEngineBridgeDeps = {
   ) => err is { pause: ToolExecutionApprovalPause };
 };
 
-function readMetadataString(
-  metadata: Record<string, unknown> | undefined,
-  key: string,
-): string | undefined {
-  const value = metadata?.[key];
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
-}
-
 export function prepareLaneQueueStep(
   laneQueue: LaneQueueState | undefined,
   messages: Array<ModelMessage>,
@@ -189,8 +182,8 @@ export async function turnViaExecutionEngine(
         tenantId: workScope.tenant_id,
         key,
         lane,
-        sourceClientDeviceId: readMetadataString(resolvedInput.metadata, "source_client_device_id"),
-        attachedNodeId: readMetadataString(resolvedInput.metadata, "attached_node_id") ?? null,
+        sourceClientDeviceId: readRecordString(resolvedInput.metadata, "source_client_device_id"),
+        attachedNodeId: readRecordString(resolvedInput.metadata, "attached_node_id") ?? null,
         updatedAtMs: Date.now(),
       });
     } catch {

@@ -10,6 +10,7 @@ import type {
 } from "../backplane/connection-directory.js";
 import type { NodePairingDal } from "./pairing-dal.js";
 import type { PresenceDal } from "../presence/dal.js";
+import { readRecordString } from "../util/coerce.js";
 import type { ConnectionManager, ConnectedClient } from "../../ws/connection-manager.js";
 import { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
 
@@ -43,12 +44,6 @@ type NodeInventoryServiceDeps = {
 
 function capabilitySet(values: readonly CapabilityKind[] | undefined): Set<CapabilityKind> {
   return new Set(values ?? []);
-}
-
-function readMetadataString(metadata: unknown, key: string): string | undefined {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
-  const value = (metadata as Record<string, unknown>)[key];
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function upsertNode(map: Map<string, InventoryNode>, next: InventoryNode): void {
@@ -127,8 +122,8 @@ export class NodeInventoryService {
       upsertNode(nodesById, {
         nodeId: pairing.node.node_id,
         label: pairing.node.label,
-        mode: readMetadataString(pairing.node.metadata, "mode"),
-        version: readMetadataString(pairing.node.metadata, "version"),
+        mode: readRecordString(pairing.node.metadata, "mode"),
+        version: readRecordString(pairing.node.metadata, "version"),
         connected: false,
         capabilities: capabilitySet(pairing.node.capabilities),
         readyCapabilities: new Set(),
