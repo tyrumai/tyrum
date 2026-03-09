@@ -230,6 +230,26 @@ export function registerHttpClientCoreTests(): void {
     expect(getHeader(init, "authorization")).toBeNull();
   });
 
+  it("wraps the global fetch so browser-native invocation stays valid", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async function (this: unknown) {
+      if (this && this !== globalThis) {
+        throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+      }
+      return jsonResponse({ status: "ok", plugins: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    try {
+      const client = createTestClient();
+
+      await expect(client.plugins.list()).resolves.toEqual({ status: "ok", plugins: [] });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.stubGlobal("fetch", originalFetch);
+    }
+  });
+
   it("supports explicit none auth strategy", async () => {
     const fetch = mockJsonFetch({ status: "ok", plugins: [] });
     const client = createTestClient({ auth: { type: "none" }, fetch });

@@ -4,7 +4,17 @@ import { DateTimeSchema } from "./common.js";
 export const PresenceRole = z.enum(["gateway", "client", "node"]);
 export type PresenceRole = z.infer<typeof PresenceRole>;
 
-export const PresenceMode = z.enum(["ui", "web", "cli", "node", "backend", "probe", "test"]);
+export const PresenceMode = z.enum([
+  "ui",
+  "web",
+  "cli",
+  "node",
+  "backend",
+  "probe",
+  "test",
+  "desktop",
+  "browser-node",
+]);
 export type PresenceMode = z.infer<typeof PresenceMode>;
 
 export const PresenceReason = z.enum(["self", "connect", "periodic", "node-connected", "prune"]);
