@@ -209,6 +209,7 @@ type OperatorUiA11yRouteId =
   | "connect"
   | "dashboard"
   | "chat"
+  | "activity"
   | "approvals"
   | "agents"
   | "pairing"
@@ -293,6 +294,7 @@ describe("operator-ui a11y", () => {
     { mode: "desktop", route: "connect" },
     { mode: "desktop", route: "dashboard" },
     { mode: "desktop", route: "chat" },
+    { mode: "desktop", route: "activity" },
     { mode: "desktop", route: "approvals" },
     { mode: "desktop", route: "agents" },
     { mode: "desktop", route: "pairing" },
@@ -301,6 +303,7 @@ describe("operator-ui a11y", () => {
     { mode: "web", route: "connect" },
     { mode: "web", route: "dashboard" },
     { mode: "web", route: "chat" },
+    { mode: "web", route: "activity" },
     { mode: "web", route: "approvals" },
     { mode: "web", route: "agents" },
     { mode: "web", route: "pairing" },
