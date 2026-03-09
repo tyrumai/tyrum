@@ -21,6 +21,7 @@ export async function loadTurnResultFromRun(
   try {
     return AgentTurnResponse.parse(JSON.parse(row.result_json));
   } catch {
+    // Intentional: ignore malformed persisted JSON and fall back to other recovery paths.
     return undefined;
   }
 }

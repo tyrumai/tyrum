@@ -27,6 +27,12 @@ import {
   maybeResolvePausedRun,
 } from "./turn-engine-bridge-run-state.js";
 
+export {
+  loadTurnFailureFromRun,
+  loadTurnResultFromRun,
+  maybeResolvePausedRun,
+} from "./turn-engine-bridge-run-state.js";
+
 const TURN_ENGINE_MIN_BACKOFF_MS = 5;
 const TURN_ENGINE_MAX_BACKOFF_MS = 250;
 

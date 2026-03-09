@@ -9,7 +9,7 @@ import type {
   ConnectionDirectoryRow,
 } from "../backplane/connection-directory.js";
 import type { NodePairingDal } from "./pairing-dal.js";
-import type { PresenceDal, PresenceRow } from "../presence/dal.js";
+import type { PresenceDal } from "../presence/dal.js";
 import type { ConnectionManager, ConnectedClient } from "../../ws/connection-manager.js";
 import { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
 
@@ -48,7 +48,7 @@ function capabilitySet(values: readonly CapabilityKind[] | undefined): Set<Capab
 function readMetadataString(metadata: unknown, key: string): string | undefined {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
   const value = (metadata as Record<string, unknown>)[key];
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function upsertNode(map: Map<string, InventoryNode>, next: InventoryNode): void {
@@ -58,14 +58,10 @@ function upsertNode(map: Map<string, InventoryNode>, next: InventoryNode): void 
     return;
   }
 
-  const merged = existing.lastSeenAtMs ?? 0;
-  const incoming = next.lastSeenAtMs ?? 0;
-  if (incoming >= merged) {
-    existing.label = next.label ?? existing.label;
-    existing.mode = next.mode ?? existing.mode;
-    existing.version = next.version ?? existing.version;
-    existing.lastSeenAtMs = next.lastSeenAtMs ?? existing.lastSeenAtMs;
-  }
+  existing.label = existing.label ?? next.label;
+  existing.mode = existing.mode ?? next.mode;
+  existing.version = existing.version ?? next.version;
+  existing.lastSeenAtMs = Math.max(existing.lastSeenAtMs ?? 0, next.lastSeenAtMs ?? 0) || undefined;
   existing.connected ||= next.connected;
   for (const capability of next.capabilities) existing.capabilities.add(capability);
   for (const capability of next.readyCapabilities) existing.readyCapabilities.add(capability);
@@ -127,6 +123,7 @@ export class NodeInventoryService {
       ? await this.deps.nodePairingDal.list({ tenantId: input.tenantId, limit: 500 })
       : [];
     for (const pairing of pairings) {
+      const lastSeenAtMs = Date.parse(pairing.node.last_seen_at);
       upsertNode(nodesById, {
         nodeId: pairing.node.node_id,
         label: pairing.node.label,
@@ -135,6 +132,7 @@ export class NodeInventoryService {
         connected: false,
         capabilities: capabilitySet(pairing.node.capabilities),
         readyCapabilities: new Set(),
+        lastSeenAtMs: Number.isFinite(lastSeenAtMs) ? lastSeenAtMs : undefined,
       });
     }
 
@@ -149,15 +147,6 @@ export class NodeInventoryService {
             lane: attachmentLane,
           })
         : undefined;
-
-    const presenceRows = this.deps.presenceDal
-      ? await this.deps.presenceDal.listNonExpired(nowMs)
-      : [];
-    const presenceByNodeId = new Map<string, PresenceRow>();
-    for (const row of presenceRows) {
-      if (row.role !== "node") continue;
-      presenceByNodeId.set(row.instance_id, row);
-    }
 
     const filteredCapability = input.capability?.trim() || undefined;
     const dispatchableOnly = input.dispatchableOnly === true;
@@ -194,27 +183,18 @@ export class NodeInventoryService {
         continue;
       }
 
-      const presence = presenceByNodeId.get(nodeId);
-      const mode = node.mode ?? presence?.mode ?? undefined;
-      const version = node.version ?? presence?.version ?? undefined;
       entries.push({
         node_id: nodeId,
         ...(node.label ? { label: node.label } : {}),
-        ...(mode ? { mode } : {}),
-        ...(version ? { version } : {}),
+        ...(node.mode ? { mode: node.mode } : {}),
+        ...(node.version ? { version: node.version } : {}),
         connected: node.connected,
         paired_status: pairing?.status ?? null,
         attached_to_requested_lane: attachment?.attached_node_id === nodeId,
         ...(attachment?.attached_node_id === nodeId
           ? { source_client_device_id: attachment.source_client_device_id ?? null }
           : {}),
-        ...(presence?.last_seen_at_ms || node.lastSeenAtMs
-          ? {
-              last_seen_at: new Date(
-                presence?.last_seen_at_ms ?? node.lastSeenAtMs ?? nowMs,
-              ).toISOString(),
-            }
-          : {}),
+        ...(node.lastSeenAtMs ? { last_seen_at: new Date(node.lastSeenAtMs).toISOString() } : {}),
         dispatches,
       });
     }

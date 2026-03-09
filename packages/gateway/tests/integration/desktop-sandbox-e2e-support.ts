@@ -157,9 +157,11 @@ export function stubMcpManager(): McpManager {
 }
 
 export async function waitForPendingDesktopPairing(params: {
-  listPending: () => Promise<Array<{ pairing_id: number; node: { capabilities: string[] } }>>;
+  listPending: () => Promise<
+    Array<{ pairing_id: number; node: { node_id: string; capabilities: string[] } }>
+  >;
   timeoutMs?: number;
-}): Promise<{ pairing_id: number }> {
+}): Promise<{ pairing_id: number; node: { node_id: string; capabilities: string[] } }> {
   const deadlineMs = Date.now() + Math.max(1, Math.floor(params.timeoutMs ?? 60_000));
   while (Date.now() < deadlineMs) {
     const pairings = await params.listPending();
