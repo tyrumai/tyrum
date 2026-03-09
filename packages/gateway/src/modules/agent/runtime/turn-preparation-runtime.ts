@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import type {
   AgentTurnRequest as AgentTurnRequestT,
   NormalizedContainerKind,
@@ -55,17 +55,43 @@ export interface TurnPreparationRuntimeDeps extends PrepareTurnHelperDeps {
   approvalPollMs: number;
 }
 
-export function resolveGitRoot(cwd: string): string | undefined {
-  const result = spawnSync("git", ["-C", cwd, "rev-parse", "--show-toplevel"], {
-    encoding: "utf-8",
-    stdio: ["ignore", "pipe", "ignore"],
+const gitRootByHome = new Map<string, Promise<string | undefined>>();
+
+function resolveGitRootProcess(home: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    execFile(
+      "git",
+      ["-C", home, "rev-parse", "--show-toplevel"],
+      {
+        encoding: "utf-8",
+        maxBuffer: 16 * 1024,
+      },
+      (error, stdout) => {
+        if (error) {
+          resolve(undefined);
+          return;
+        }
+        const value = stdout.trim();
+        resolve(value.length > 0 ? value : undefined);
+      },
+    );
   });
-  if (result.status !== 0) return undefined;
-  const value = result.stdout.trim();
-  return value.length > 0 ? value : undefined;
 }
 
-export function buildRuntimePrompt(input: {
+export async function resolveGitRoot(cwd: string): Promise<string | undefined> {
+  const home = cwd.trim();
+  if (!home) return undefined;
+
+  let gitRoot = gitRootByHome.get(home);
+  if (!gitRoot) {
+    gitRoot = resolveGitRootProcess(home);
+    gitRootByHome.set(home, gitRoot);
+  }
+
+  return await gitRoot;
+}
+
+export async function buildRuntimePrompt(input: {
   nowIso: string;
   agentId: string;
   workspaceId: string;
@@ -76,12 +102,12 @@ export function buildRuntimePrompt(input: {
   stateMode: "local" | "shared";
   model: string;
   approvalWorkflowAvailable: boolean;
-}): string {
+}): Promise<string> {
   return formatRuntimePrompt({
     ...input,
     cwd: process.cwd(),
     shell: process.env["SHELL"]?.trim() || "unknown",
-    gitRoot: resolveGitRoot(input.home),
+    gitRoot: await resolveGitRoot(input.home),
   });
 }
 

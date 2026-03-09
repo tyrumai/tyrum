@@ -159,7 +159,7 @@ export async function prepareTurn(
   const hardeningProfile = resolveSandboxHardeningProfile(
     deps.opts.container.deploymentConfig.toolrunner.hardeningProfile,
   );
-  const runtimePrompt = buildRuntimePrompt({
+  const runtimePrompt = await buildRuntimePrompt({
     nowIso: new Date().toISOString(),
     agentId: session.agent_id,
     workspaceId: session.workspace_id,
