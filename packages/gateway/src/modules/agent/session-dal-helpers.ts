@@ -145,7 +145,8 @@ function isToolStatus(value: unknown): boolean {
     value === "running" ||
     value === "completed" ||
     value === "failed" ||
-    value === "awaiting_approval"
+    value === "awaiting_approval" ||
+    value === "cancelled"
   );
 }
 

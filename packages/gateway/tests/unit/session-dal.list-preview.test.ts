@@ -62,4 +62,34 @@ describe("toSessionListRow", () => {
     expect(itemSchemaSpy).not.toHaveBeenCalled();
     expect(textItemSchemaSpy).not.toHaveBeenCalled();
   });
+
+  it("counts cancelled tool items in transcript previews", () => {
+    const row = toSessionListRow(
+      rawSessionListRow(
+        JSON.stringify([
+          {
+            kind: "text",
+            id: "message-1",
+            role: "user",
+            content: "hello",
+            created_at: "2026-03-09T00:00:01.000Z",
+          },
+          {
+            kind: "tool",
+            id: "tool-1",
+            tool_id: "shell.exec",
+            tool_call_id: "call-1",
+            status: "cancelled",
+            summary: "Denied",
+            created_at: "2026-03-09T00:00:02.000Z",
+            updated_at: "2026-03-09T00:00:03.000Z",
+          },
+        ]),
+      ),
+      {},
+    );
+
+    expect(row.transcript_count).toBe(2);
+    expect(row.last_text).toEqual({ role: "user", content: "hello" });
+  });
 });
