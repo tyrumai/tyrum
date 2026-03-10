@@ -7,7 +7,7 @@ import type {
 import { ChevronLeft, Copy, Hammer, Send, ShieldCheck, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { toast } from "sonner";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
@@ -124,8 +124,6 @@ function ChatTextItem({
   item: SessionTranscriptTextItem;
   renderMode: "markdown" | "text";
 }) {
-  const [hovered, setHovered] = useState(false);
-
   return (
     <div
       className={cn(
@@ -136,8 +134,6 @@ function ChatTextItem({
             ? "border-amber-200/70 bg-amber-50/70"
             : "border-border bg-bg-subtle/70",
       )}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-fg-muted">
@@ -145,19 +141,17 @@ function ChatTextItem({
           <span>•</span>
           <span>{formatRelativeTime(item.created_at)}</span>
         </div>
-        {hovered ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0 text-fg-muted hover:text-fg"
-            onClick={() => {
-              void copyToClipboard(item.content);
-            }}
-            title="Copy message"
-          >
-            <Copy className="h-3.5 w-3.5" />
-          </Button>
-        ) : null}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 p-0 text-fg-muted opacity-0 hover:text-fg group-hover:opacity-100"
+          onClick={() => {
+            void copyToClipboard(item.content);
+          }}
+          title="Copy message"
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </Button>
       </div>
       {renderMode === "markdown" ? (
         <div className="prose prose-sm max-w-none text-fg prose-headings:text-fg prose-p:text-fg prose-strong:text-fg prose-code:text-fg prose-pre:bg-bg-subtle">
