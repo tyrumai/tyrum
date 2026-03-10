@@ -15,6 +15,37 @@ import {
 } from "./provider-model-config-routes.test-support.js";
 
 describe("provider + model config routes", () => {
+  it("starts with no configured presets and no execution-profile assignments", async () => {
+    const { app } = await createTestApp();
+
+    const presetsRes = await app.request("/config/models/presets");
+    expect(presetsRes.status).toBe(200);
+    const presetsBody = (await presetsRes.json()) as { presets: unknown[] };
+    expect(presetsBody.presets).toEqual([]);
+
+    const assignmentsRes = await app.request("/config/models/assignments");
+    expect(assignmentsRes.status).toBe(200);
+    const assignmentsBody = (await assignmentsRes.json()) as {
+      assignments: Array<{
+        execution_profile_id: string;
+        preset_key: string | null;
+        preset_display_name: string | null;
+        provider_key: string | null;
+        model_id: string | null;
+      }>;
+    };
+    expect(assignmentsBody.assignments).toHaveLength(EXECUTION_PROFILE_IDS.length);
+    expect(
+      assignmentsBody.assignments.every(
+        (assignment) =>
+          assignment.preset_key === null &&
+          assignment.preset_display_name === null &&
+          assignment.provider_key === null &&
+          assignment.model_id === null,
+      ),
+    ).toBe(true);
+  });
+
   it("lists registry entries and supports provider account CRUD", async () => {
     const { app, container } = await createTestApp();
     await seedCatalog(new ModelsDevCacheDal(container.db), {
@@ -246,6 +277,62 @@ describe("provider + model config routes", () => {
         (assignment) => assignment.preset_key === presetB.preset.preset_key,
       ),
     ).toBe(true);
+  });
+
+  it("accepts null execution-profile assignments and clears stored rows", async () => {
+    const { app, container } = await createTestApp();
+    await seedCatalog(
+      new ModelsDevCacheDal(container.db),
+      catalogFor("openai", {
+        "gpt-4.1": modelResponse("gpt-4.1", "GPT-4.1", { reasoning: true }),
+      }),
+    );
+
+    const accountRes = await createProviderAccount(app, {
+      provider_key: "openai",
+      display_name: "Primary OpenAI",
+      method_key: "api_key",
+      config: {},
+      secrets: { api_key: "sk-test-2" },
+    });
+    expect(accountRes.status).toBe(201);
+
+    const presetRes = await createModelPreset(app, {
+      display_name: "Interaction Default",
+      provider_key: "openai",
+      model_id: "gpt-4.1",
+      options: { reasoning_effort: "medium" },
+    });
+    expect(presetRes.status).toBe(201);
+    const preset = (await presetRes.json()) as { preset: { preset_key: string } };
+
+    const assignedRes = await app.request("/config/models/assignments", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        assignments: Object.fromEntries(
+          EXECUTION_PROFILE_IDS.map((profileId) => [profileId, preset.preset.preset_key]),
+        ),
+      }),
+    });
+    expect(assignedRes.status).toBe(200);
+
+    const clearedRes = await app.request("/config/models/assignments", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        assignments: Object.fromEntries(
+          EXECUTION_PROFILE_IDS.map((profileId) => [profileId, null]),
+        ),
+      }),
+    });
+    expect(clearedRes.status).toBe(200);
+    const clearedBody = (await clearedRes.json()) as {
+      assignments: Array<{ preset_key: string | null }>;
+    };
+    expect(clearedBody.assignments.every((assignment) => assignment.preset_key === null)).toBe(
+      true,
+    );
   });
 
   it("normalizes legacy self-prefixed OpenRouter model ids in available and preset routes", async () => {

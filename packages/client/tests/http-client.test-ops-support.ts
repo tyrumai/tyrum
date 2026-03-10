@@ -172,6 +172,7 @@ export function registerHttpClientOpsTests(): void {
         session_lanes: null,
         queue_depth: null,
         sandbox: null,
+        config_health: { status: "ok", issues: [] },
       }),
     );
     const client = createTestClient({ fetch });

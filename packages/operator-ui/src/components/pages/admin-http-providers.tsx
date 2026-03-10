@@ -85,10 +85,10 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
     if (!deletingProvider) return;
     if (
       deletingProvider.requiredExecutionProfileIds.some(
-        (profileId) => !deletingProvider.replacementAssignments[profileId],
+        (profileId) => !(profileId in deletingProvider.replacementAssignments),
       )
     ) {
-      throw new Error("Select a replacement preset for every required execution profile.");
+      throw new Error("Choose a replacement preset or None for every required execution profile.");
     }
     const replacementAssignments =
       deletingProvider.requiredExecutionProfileIds.length > 0

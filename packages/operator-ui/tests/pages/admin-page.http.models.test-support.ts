@@ -6,6 +6,7 @@ import {
   createAvailableModel,
   createModelAssignment,
   createModelPreset,
+  createUnassignedAssignmentsForAllProfiles,
   setModelConfigResponses,
   stubModelsFetch,
 } from "./admin-page.http.test-support.js";
@@ -24,7 +25,7 @@ export function setupFirstAssignmentSaveScenario(core: OperatorCore) {
   setModelConfigResponses(core, {
     presets: [presetDefault, presetReview],
     models: [createAvailableModel()],
-    assignments: [],
+    assignments: createUnassignedAssignmentsForAllProfiles(),
   });
 
   return { presetReview };
@@ -94,12 +95,16 @@ export function setupCreatePresetScenario(core: OperatorCore) {
     createAvailableModel({ model_id: "gpt-4.1-mini", model_name: "GPT-4.1 Mini" }),
   ];
 
-  setModelConfigResponses(core, { presets, models: availableModels, assignments: [] });
+  setModelConfigResponses(core, {
+    presets,
+    models: availableModels,
+    assignments: createUnassignedAssignmentsForAllProfiles(),
+  });
 
   const fetchMock = stubModelsFetch({
     presets: () => presets,
     models: availableModels,
-    assignments: [],
+    assignments: createUnassignedAssignmentsForAllProfiles(),
     createPreset: {
       expectedBody: {
         display_name: "GPT-4.1 Mini",
@@ -131,13 +136,13 @@ export function setupRefreshPresetScenario(core: OperatorCore) {
   const modelConfig = setModelConfigResponses(core, {
     presets: [],
     models: availableModels,
-    assignments: [],
+    assignments: createUnassignedAssignmentsForAllProfiles(),
   });
 
   const fetchMock = stubModelsFetch({
     presets: [createdPreset],
     models: availableModels,
-    assignments: [],
+    assignments: createUnassignedAssignmentsForAllProfiles(),
     createPreset: {
       expectedBody: {
         display_name: "GPT-4.1 Mini",
@@ -169,12 +174,16 @@ export function setupUpdatePresetScenario(core: OperatorCore) {
     }),
   ];
 
-  setModelConfigResponses(core, { presets, models: availableModels, assignments: [] });
+  setModelConfigResponses(core, {
+    presets,
+    models: availableModels,
+    assignments: createUnassignedAssignmentsForAllProfiles(),
+  });
 
   const fetchMock = stubModelsFetch({
     presets: () => presets,
     models: availableModels,
-    assignments: [],
+    assignments: createUnassignedAssignmentsForAllProfiles(),
     updatePreset: {
       presetKey: "legacy-openai",
       expectedBody: {
@@ -209,7 +218,11 @@ export function setupDeletePresetScenario(core: OperatorCore) {
       model_id: "gpt-4.1-mini",
     }),
   ];
-  let assignments = [createModelAssignment("interaction", presets[0]!)];
+  let assignments = createUnassignedAssignmentsForAllProfiles().map((assignment) =>
+    assignment.execution_profile_id === "interaction"
+      ? createModelAssignment("interaction", presets[0]!)
+      : assignment,
+  );
   const availableModels = [
     createAvailableModel(),
     createAvailableModel({ model_id: "gpt-4.1-mini", model_name: "GPT-4.1 Mini" }),
@@ -243,10 +256,15 @@ export function setupDeletePresetScenario(core: OperatorCore) {
           },
         });
         presets = [presets[1]!];
-        assignments = [
-          createModelAssignment("interaction", presets[0]!),
-          createModelAssignment("planner", presets[0]!),
-        ];
+        assignments = createUnassignedAssignmentsForAllProfiles().map((assignment) => {
+          if (assignment.execution_profile_id === "interaction") {
+            return createModelAssignment("interaction", presets[0]!);
+          }
+          if (assignment.execution_profile_id === "planner") {
+            return createModelAssignment("planner", presets[0]!);
+          }
+          return assignment;
+        });
         return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
       },
     },

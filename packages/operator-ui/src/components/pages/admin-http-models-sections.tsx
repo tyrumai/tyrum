@@ -21,8 +21,8 @@ export function ReplacementAssignmentsFields({
 }: {
   requiredExecutionProfileIds: string[];
   candidatePresets: ModelPreset[];
-  selections: Record<string, string>;
-  onChange: (profileId: string, presetKey: string) => void;
+  selections: Record<string, string | null>;
+  onChange: (profileId: string, presetKey: string | null) => void;
 }): React.ReactElement | null {
   if (requiredExecutionProfileIds.length === 0) return null;
 
@@ -39,10 +39,10 @@ export function ReplacementAssignmentsFields({
           label={`${EXECUTION_PROFILE_LABELS[profileId as keyof typeof EXECUTION_PROFILE_LABELS] ?? profileId} replacement`}
           value={selections[profileId] ?? ""}
           onChange={(event) => {
-            onChange(profileId, event.currentTarget.value);
+            onChange(profileId, event.currentTarget.value || null);
           }}
         >
-          <option value="">Select a preset</option>
+          <option value="">None</option>
           {candidatePresets.map((preset) => (
             <option key={preset.preset_key} value={preset.preset_key}>
               {preset.display_name} ({preset.provider_key}/{preset.model_id})
@@ -75,8 +75,8 @@ export function ExecutionProfilesCard({
   canMutate: boolean;
   assignmentChanged: boolean;
   presets: ModelPreset[];
-  assignmentDraft: Record<string, string>;
-  onAssignmentChange: (profileId: string, presetKey: string) => void;
+  assignmentDraft: Record<string, string | null>;
+  onAssignmentChange: (profileId: string, presetKey: string | null) => void;
   onRefresh: () => void;
   onSaveAssignments: () => void;
   requestEnter: () => void;
@@ -88,7 +88,7 @@ export function ExecutionProfilesCard({
           <div className="grid gap-1">
             <div className="text-sm font-medium text-fg">Execution profiles</div>
             <div className="text-sm text-fg-muted">
-              Each built-in execution profile must point at a configured model preset.
+              Each built-in execution profile can use a configured preset or stay set to None.
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -100,7 +100,7 @@ export function ExecutionProfilesCard({
                 type="button"
                 data-testid="models-assignments-save"
                 isLoading={savingAssignments}
-                disabled={!assignmentChanged || presets.length === 0}
+                disabled={!assignmentChanged}
                 onClick={onSaveAssignments}
               >
                 Save assignments
@@ -118,31 +118,34 @@ export function ExecutionProfilesCard({
             title="Model config failed"
             description={executionProfilesErrorMessage}
           />
-        ) : presets.length === 0 ? (
-          <Alert
-            variant="info"
-            title="No models configured"
-            description="Add a model preset before assigning execution profiles."
-          />
         ) : (
-          <div className="grid gap-3 md:grid-cols-2">
-            {EXECUTION_PROFILE_IDS.map((profileId) => (
-              <Select
-                key={profileId}
-                label={EXECUTION_PROFILE_LABELS[profileId]}
-                value={assignmentDraft[profileId] ?? ""}
-                onChange={(event) => {
-                  onAssignmentChange(profileId, event.currentTarget.value);
-                }}
-              >
-                <option value="">Select a preset</option>
-                {presets.map((preset) => (
-                  <option key={preset.preset_key} value={preset.preset_key}>
-                    {preset.display_name} ({preset.provider_key}/{preset.model_id})
-                  </option>
-                ))}
-              </Select>
-            ))}
+          <div className="grid gap-4">
+            {presets.length === 0 ? (
+              <Alert
+                variant="info"
+                title="No model presets configured"
+                description="Execution profiles can stay set to None until you add presets. Config health will keep surfacing unassigned profiles."
+              />
+            ) : null}
+            <div className="grid gap-3 md:grid-cols-2">
+              {EXECUTION_PROFILE_IDS.map((profileId) => (
+                <Select
+                  key={profileId}
+                  label={EXECUTION_PROFILE_LABELS[profileId]}
+                  value={assignmentDraft[profileId] ?? ""}
+                  onChange={(event) => {
+                    onAssignmentChange(profileId, event.currentTarget.value || null);
+                  }}
+                >
+                  <option value="">None</option>
+                  {presets.map((preset) => (
+                    <option key={preset.preset_key} value={preset.preset_key}>
+                      {preset.display_name} ({preset.provider_key}/{preset.model_id})
+                    </option>
+                  ))}
+                </Select>
+              ))}
+            </div>
           </div>
         )}
       </CardContent>

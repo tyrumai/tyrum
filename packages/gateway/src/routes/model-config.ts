@@ -27,12 +27,12 @@ import {
   type ExecutionProfileModelAssignmentRow,
 } from "../modules/models/execution-profile-model-assignment-dal.js";
 import { normalizeProviderScopedModelId } from "../modules/models/provider-model-id.js";
-import { coerceRecord, coerceString } from "../modules/util/coerce.js";
+import { coerceRecord } from "../modules/util/coerce.js";
 import { createUniqueKey, slugifyKey } from "./config-key-utils.js";
 
 const EXECUTION_PROFILE_IDS = ConfiguredExecutionProfileId.options;
 
-type ReplacementAssignments = Record<string, string>;
+type ReplacementAssignments = Record<string, string | null>;
 
 export interface ModelConfigRouteDeps {
   db: SqlDb;
@@ -102,24 +102,23 @@ async function toAssignmentResponse(input: {
     input.assignmentDal.list({ tenantId: input.tenantId }),
     loadPresetByKey(input.presetDal, input.tenantId),
   ]);
+  const assignmentsByProfileId = new Map(
+    assignments.map((assignment) => [assignment.execution_profile_id, assignment]),
+  );
 
   return ExecutionProfileModelAssignmentListResponse.parse({
     status: "ok",
-    assignments: assignments
-      .flatMap((assignment) => {
-        const preset = presetsByKey.get(assignment.preset_key);
-        if (!preset) return [];
-        return [
-          {
-            execution_profile_id: assignment.execution_profile_id,
-            preset_key: preset.preset_key,
-            preset_display_name: preset.display_name,
-            provider_key: preset.provider_key,
-            model_id: preset.model_id,
-          },
-        ];
-      })
-      .toSorted((a, b) => a.execution_profile_id.localeCompare(b.execution_profile_id)),
+    assignments: EXECUTION_PROFILE_IDS.map((executionProfileId) => {
+      const assignment = assignmentsByProfileId.get(executionProfileId);
+      const preset = assignment ? presetsByKey.get(assignment.preset_key) : undefined;
+      return {
+        execution_profile_id: executionProfileId,
+        preset_key: preset?.preset_key ?? null,
+        preset_display_name: preset?.display_name ?? null,
+        provider_key: preset?.provider_key ?? null,
+        model_id: preset?.model_id ?? null,
+      };
+    }),
   });
 }
 
@@ -142,7 +141,7 @@ async function validateReplacementAssignments(input: {
 }) {
   const replacements = input.replacementAssignments ?? {};
   const missing = input.requiredExecutionProfileIds.filter(
-    (profileId) => !coerceString(replacements[profileId]),
+    (profileId) => !(profileId in replacements),
   );
   if (missing.length > 0) {
     return {
@@ -157,6 +156,12 @@ async function validateReplacementAssignments(input: {
   const presetsByKey = await loadPresetByKey(input.presetDal, input.tenantId);
   const assignments = input.requiredExecutionProfileIds.map((executionProfileId) => {
     const presetKey = replacements[executionProfileId];
+    if (presetKey === null) {
+      return {
+        executionProfileId,
+        presetKey: null,
+      };
+    }
     const preset = presetKey ? presetsByKey.get(presetKey) : undefined;
     if (!preset || input.deletedPresetKeys.has(preset.preset_key)) {
       throw new Error(`replacement preset '${presetKey ?? ""}' is invalid`);
@@ -333,7 +338,7 @@ export function createModelConfigRoutes(deps: ModelConfigRouteDeps): Hono {
         }
 
         await deps.db.transaction(async (tx) => {
-          await new ExecutionProfileModelAssignmentDal(tx).upsertManyTx({
+          await new ExecutionProfileModelAssignmentDal(tx).setManyTx({
             tenantId,
             assignments: replacementAssignments.assignments,
           });
@@ -403,6 +408,13 @@ export function createModelConfigRoutes(deps: ModelConfigRouteDeps): Hono {
     const assignments = [];
     for (const executionProfileId of EXECUTION_PROFILE_IDS) {
       const presetKey = assignmentRecord[executionProfileId];
+      if (presetKey === null) {
+        assignments.push({
+          executionProfileId,
+          presetKey: null,
+        });
+        continue;
+      }
       const preset = presetKey ? presetsByKey.get(presetKey) : undefined;
       if (!preset) {
         return c.json(
@@ -417,7 +429,7 @@ export function createModelConfigRoutes(deps: ModelConfigRouteDeps): Hono {
     }
 
     try {
-      await deps.executionProfileModelAssignmentDal.upsertMany({
+      await deps.executionProfileModelAssignmentDal.setMany({
         tenantId,
         assignments,
       });

@@ -88,8 +88,12 @@ function resolveEmbeddingCandidate(
   };
 }
 
-function buildOrderedProviderIds(catalog: ProviderCatalog, primaryModelId: string): string[] {
+function buildOrderedProviderIds(
+  catalog: ProviderCatalog,
+  primaryModelId: string | null | undefined,
+): string[] {
   const primaryProviderId = (() => {
+    if (!primaryModelId) return undefined;
     try {
       return parseProviderModelId(primaryModelId).providerId;
     } catch {
@@ -216,7 +220,7 @@ export async function resolveEmbeddingPipeline(input: {
   secretProvider?: SecretProvider;
   instanceOwner: string;
   fetchImpl: typeof fetch;
-  primaryModelId: string;
+  primaryModelId: string | null | undefined;
   sessionId: string;
   tenantId: string;
   agentId: string;

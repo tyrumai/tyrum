@@ -230,6 +230,66 @@ describe("DashboardPage", () => {
     cleanupTestRoot({ container, root });
   });
 
+  it("renders configuration health issues and navigates to the relevant page", () => {
+    const { store: statusStore } = createStore({
+      status: {
+        version: "1.0.0",
+        db_kind: "sqlite",
+        sandbox: false,
+        config_health: {
+          status: "issues",
+          issues: [
+            {
+              code: "no_provider_accounts",
+              severity: "error",
+              message: "No active provider accounts are configured.",
+              target: { kind: "deployment", id: null },
+            },
+            {
+              code: "agent_model_unconfigured",
+              severity: "error",
+              message: "Agent 'default' has no primary model configured.",
+              target: { kind: "agent", id: "default" },
+            },
+          ],
+        },
+      },
+      usage: null,
+      presenceByInstanceId: {},
+      loading: { status: false, usage: false, presence: false },
+      error: { status: null, usage: null, presence: null },
+      lastSyncedAt: "2026-03-08T00:00:00.000Z",
+    });
+    const onNavigate = vi.fn();
+    const { core } = createMockCore({ statusStore });
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(DashboardPage, { core, onNavigate }),
+    );
+
+    expect(container.querySelector('[data-testid="dashboard-config-health"]')).not.toBeNull();
+    expect(container.textContent).toContain("Configuration Health");
+    expect(container.textContent).toContain("No active provider accounts are configured.");
+    expect(container.textContent).toContain("Agent 'default' has no primary model configured.");
+
+    const buttons = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(
+        '[data-testid="dashboard-config-health"] button',
+      ),
+    );
+    expect(buttons).toHaveLength(2);
+
+    act(() => {
+      buttons[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      buttons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onNavigate).toHaveBeenNthCalledWith(1, "configure");
+    expect(onNavigate).toHaveBeenNthCalledWith(2, "agents");
+
+    cleanupTestRoot({ container, root });
+  });
+
   it("renders work distribution, token usage, and activity feed with data", () => {
     const { store: workboardStore } = createStore({
       items: [

@@ -59,23 +59,31 @@ export class ExecutionProfileModelAssignmentDal {
     return row ? toRow(row) : undefined;
   }
 
-  async upsertMany(input: {
+  async setMany(input: {
     tenantId: string;
-    assignments: Array<{ executionProfileId: string; presetKey: string }>;
+    assignments: Array<{ executionProfileId: string; presetKey: string | null }>;
   }): Promise<ExecutionProfileModelAssignmentRow[]> {
     return await this.db.transaction(async (tx) => {
       const dal = tx === this.db ? this : this.createTxDal(tx);
-      await dal.upsertManyTx(input);
+      await dal.setManyTx(input);
       return await dal.list({ tenantId: input.tenantId });
     });
   }
 
-  async upsertManyTx(input: {
+  async setManyTx(input: {
     tenantId: string;
-    assignments: Array<{ executionProfileId: string; presetKey: string }>;
+    assignments: Array<{ executionProfileId: string; presetKey: string | null }>;
   }): Promise<void> {
     const nowIso = new Date().toISOString();
     for (const assignment of input.assignments) {
+      if (assignment.presetKey === null) {
+        await this.db.run(
+          `DELETE FROM execution_profile_model_assignments
+           WHERE tenant_id = ? AND execution_profile_id = ?`,
+          [input.tenantId, assignment.executionProfileId],
+        );
+        continue;
+      }
       await this.db.run(
         `INSERT INTO execution_profile_model_assignments (
            tenant_id,

@@ -19,6 +19,7 @@ export function sampleStatusResponse() {
     session_lanes: null,
     queue_depth: null,
     sandbox: null,
+    config_health: { status: "ok", issues: [] },
   } as const;
 }
 

@@ -64,6 +64,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): Hono {
       session_lanes: details.session_lanes,
       queue_depth: details.queue_depth,
       sandbox: details.sandbox,
+      config_health: details.config_health,
     });
   });
 

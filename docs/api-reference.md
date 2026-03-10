@@ -121,6 +121,8 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
 - Request: None
 - Response:
   - `200` JSON runtime details (`version`, `instance_id`, `role`, `db_kind`, `ws`, `policy`, etc.)
+  - Includes advisory `config_health` with normalized `issues[]` for invalid or incomplete configuration.
+  - `config_health` does not affect `/healthz`; it is for operator dashboards and diagnostics only.
   - `401` missing/invalid token
   - `403` insufficient scope (device tokens)
 
@@ -478,6 +480,7 @@ Provider-account `secrets` stores managed secret slots defined by the provider r
 - Device scope: `operator.admin`
 - Request: Optional JSON `ModelConfigDeleteRequest`
   - Use `replacement_assignments` when the provider still owns presets assigned to execution profiles.
+  - Each replacement assignment value may be another preset key or `null` to set that execution profile to `None`.
 - Response:
   - `200` JSON `ModelConfigDeleteResponse`
   - `409` JSON `ModelConfigDeleteConflictResponse` when replacement presets are required

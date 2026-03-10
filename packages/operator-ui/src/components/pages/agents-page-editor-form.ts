@@ -2,7 +2,7 @@ import { AgentConfig, IdentityPack } from "@tyrum/schemas";
 import type { AgentConfig as AgentConfigT, IdentityPack as IdentityPackT } from "@tyrum/schemas";
 
 const DEFAULT_CONFIG = AgentConfig.parse({
-  model: { model: "openai/gpt-4.1" },
+  model: { model: null },
 });
 
 const DEFAULT_IDENTITY = IdentityPack.parse({
@@ -109,7 +109,7 @@ export function snapshotToForm(snapshot: {
     verbosity: identity.meta.style?.verbosity ?? "",
     format: identity.meta.style?.format ?? "",
     identityBody: identity.body,
-    model: config.model.model,
+    model: config.model.model ?? "",
     variant: config.model.variant ?? "",
     fallbacks: joinList(config.model.fallback),
     skillsEnabled: joinList(config.skills.enabled),
@@ -194,6 +194,7 @@ export function buildPayload(
   form: AgentEditorFormState,
   preservedModelOptions?: Record<string, unknown>,
 ) {
+  const primaryModel = form.model.trim();
   const allowSensitivities = [
     form.allowPublic ? "public" : null,
     form.allowPrivate ? "private" : null,
@@ -203,14 +204,19 @@ export function buildPayload(
   const payload = {
     agent_key: form.agentKey.trim(),
     config: AgentConfig.parse({
-      model: {
-        model: form.model.trim(),
-        ...(form.variant.trim() ? { variant: form.variant.trim() } : {}),
-        ...(splitList(form.fallbacks).length > 0 ? { fallback: splitList(form.fallbacks) } : {}),
-        ...(preservedModelOptions && Object.keys(preservedModelOptions).length > 0
-          ? { options: preservedModelOptions }
-          : {}),
-      },
+      model:
+        primaryModel.length === 0
+          ? { model: null }
+          : {
+              model: primaryModel,
+              ...(form.variant.trim() ? { variant: form.variant.trim() } : {}),
+              ...(splitList(form.fallbacks).length > 0
+                ? { fallback: splitList(form.fallbacks) }
+                : {}),
+              ...(preservedModelOptions && Object.keys(preservedModelOptions).length > 0
+                ? { options: preservedModelOptions }
+                : {}),
+            },
       persona: {
         ...readPersonaFromForm(form),
       },

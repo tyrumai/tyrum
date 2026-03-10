@@ -5,7 +5,7 @@ import type { SqlDb } from "../../statestore/types.js";
 
 type StatusCountMap = Record<string, number>;
 type ActiveModelStatus = {
-  model_id: string;
+  model_id: string | null;
   provider: string | null;
   model: string | null;
   fallback_models: string[];
@@ -159,6 +159,14 @@ export async function loadActiveModel(
     const runtime = await agents.getRuntime({ tenantId, agentKey: "default" });
     const status = await runtime.status(true);
     const modelId = status.model.model;
+    if (modelId === null) {
+      return {
+        model_id: null,
+        provider: null,
+        model: null,
+        fallback_models: status.model.fallback ?? [],
+      };
+    }
     const slash = modelId.indexOf("/");
     const provider = slash > 0 ? modelId.slice(0, slash) : null;
     const model = slash > 0 && slash < modelId.length - 1 ? modelId.slice(slash + 1) : null;

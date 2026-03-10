@@ -341,7 +341,7 @@ describe("AgentRuntime baseURL resolution", () => {
       modelId: "gpt-4.1",
       options: {},
     });
-    await new ExecutionProfileModelAssignmentDal(container.db).upsertMany({
+    await new ExecutionProfileModelAssignmentDal(container.db).setMany({
       tenantId: DEFAULT_TENANT_ID,
       assignments: [{ executionProfileId: "interaction", presetKey: "interaction-default" }],
     });
@@ -424,7 +424,7 @@ describe("AgentRuntime baseURL resolution", () => {
       modelId: "gpt-4.1",
       options: { reasoning_effort: "low" },
     });
-    await new ExecutionProfileModelAssignmentDal(container.db).upsertMany({
+    await new ExecutionProfileModelAssignmentDal(container.db).setMany({
       tenantId: DEFAULT_TENANT_ID,
       assignments: [{ executionProfileId: "interaction", presetKey: "interaction-default" }],
     });

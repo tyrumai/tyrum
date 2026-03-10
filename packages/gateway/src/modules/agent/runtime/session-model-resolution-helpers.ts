@@ -49,7 +49,7 @@ export async function resolveCandidates(
     tenantId: string;
     sessionId: string;
     executionProfileId?: string;
-    profileModelId?: string;
+    profileModelId?: string | null;
   },
 ): Promise<{
   resolvedCandidates: ResolvedCandidate[];
@@ -147,6 +147,13 @@ export async function resolveCandidates(
     throw new Error(
       `invalid agent model id(s) (expected provider/model): ${invalidCandidateIds.join(", ")}`,
     );
+
+  if (rawCandidateIds.length === 0) {
+    if (executionProfileId) {
+      throw new Error(`no model configured for execution profile '${executionProfileId}'`);
+    }
+    throw new Error("no model configured for this agent");
+  }
 
   const resolvedCandidates: ResolvedCandidate[] = parsedCandidates
     .map((candidate): ResolvedCandidate | undefined => {

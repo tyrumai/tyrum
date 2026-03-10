@@ -18,6 +18,24 @@ import {
 } from "./admin-http-models.shared.js";
 import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
 
+function normalizeAssignments(assignments: Assignment[]): Assignment[] {
+  const assignmentsByProfileId = new Map(
+    assignments.map((assignment) => [assignment.execution_profile_id, assignment]),
+  );
+  return EXECUTION_PROFILE_IDS.map((executionProfileId) => {
+    const assignment = assignmentsByProfileId.get(executionProfileId);
+    return (
+      assignment ?? {
+        execution_profile_id: executionProfileId,
+        preset_key: null,
+        preset_display_name: null,
+        provider_key: null,
+        model_id: null,
+      }
+    );
+  });
+}
+
 export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.ReactElement {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const mutationHttp = useAdminHttpClient() ?? core.http;
@@ -25,7 +43,7 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
   const [presets, setPresets] = React.useState<ModelPreset[]>([]);
   const [availableModels, setAvailableModels] = React.useState<AvailableModel[]>([]);
   const [assignments, setAssignments] = React.useState<Assignment[]>([]);
-  const [assignmentDraft, setAssignmentDraft] = React.useState<Record<string, string>>({});
+  const [assignmentDraft, setAssignmentDraft] = React.useState<Record<string, string | null>>({});
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [savingAssignments, setSavingAssignments] = React.useState(false);
@@ -71,17 +89,18 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
       }
 
       if (assignmentResult.status === "fulfilled") {
-        setAssignments(assignmentResult.value.assignments);
+        const normalizedAssignments = normalizeAssignments(assignmentResult.value.assignments);
+        setAssignments(normalizedAssignments);
         setAssignmentDraft(
           Object.fromEntries(
-            assignmentResult.value.assignments.map((assignment) => [
+            normalizedAssignments.map((assignment) => [
               assignment.execution_profile_id,
               assignment.preset_key,
             ]),
           ),
         );
       } else {
-        setAssignments([]);
+        setAssignments(normalizeAssignments([]));
         setAssignmentDraft({});
         if (!nextExecutionProfilesErrorMessage && nextPresetCount > 0) {
           nextExecutionProfilesErrorMessage = formatErrorMessage(assignmentResult.reason);
@@ -105,7 +124,7 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
   );
   const assignmentChanged = EXECUTION_PROFILE_IDS.some(
     (profileId) =>
-      (assignmentDraft[profileId] ?? "") !== (assignmentPresetKeys.get(profileId) ?? ""),
+      (assignmentDraft[profileId] ?? null) !== (assignmentPresetKeys.get(profileId) ?? null),
   );
 
   const saveAssignments = async (): Promise<void> => {
@@ -129,10 +148,10 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
     if (!deletingPreset) return;
     if (
       deletingPreset.requiredExecutionProfileIds.some(
-        (profileId) => !deletingPreset.replacementAssignments[profileId],
+        (profileId) => !(profileId in deletingPreset.replacementAssignments),
       )
     ) {
-      throw new Error("Select a replacement preset for every required execution profile.");
+      throw new Error("Choose a replacement preset or None for every required execution profile.");
     }
     const replacementAssignments =
       deletingPreset.requiredExecutionProfileIds.length > 0
@@ -151,7 +170,7 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
             }
           : current,
       );
-      throw new Error("Select replacement presets before removing this model.");
+      throw new Error("Choose replacement presets or None before removing this model.");
     }
 
     setDeletingPreset(null);
