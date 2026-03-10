@@ -4,6 +4,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { buildMemoryV1Digest } from "../../src/modules/memory/v1-digest.js";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { retrieveMemoryV1 } from "../../src/modules/memory/v1-retrieval.js";
 
 describe("buildMemoryV1Digest", () => {
   afterEach(() => {
@@ -292,6 +293,29 @@ describe("buildMemoryV1Digest", () => {
       });
 
       expect(res.structured_item_count).toBe(1);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("tolerates undefined structured arrays in retrieval input", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const dal = new MemoryV1Dal(db);
+      const res = await retrieveMemoryV1({
+        dal,
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        query: "",
+        allow_sensitivities: ["public", "private"],
+        structured: {
+          fact_keys: undefined,
+          tags: undefined,
+        } as unknown as AgentConfig["memory"]["v1"]["structured"],
+      });
+
+      expect(res.hits).toEqual([]);
+      expect(res.structured_item_count).toBe(0);
     } finally {
       await db.close();
     }

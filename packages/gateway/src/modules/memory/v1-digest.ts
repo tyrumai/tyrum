@@ -1,4 +1,5 @@
 import type { AgentConfig, MemoryItem, MemoryItemKind } from "@tyrum/schemas";
+import { normalizeSnippet, truncate } from "./v1-dal-helpers.js";
 import type { MemoryV1SemanticSearchHit } from "./v1-semantic-index.js";
 import type { MemoryV1Dal } from "./v1-dal.js";
 import { retrieveMemoryV1 } from "./v1-retrieval.js";
@@ -10,17 +11,6 @@ export type MemoryV1DigestResult = {
   semantic_hit_count: number;
   structured_item_count: number;
 };
-
-function normalizeSnippet(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function truncate(value: string, maxChars: number): string {
-  if (maxChars <= 0) return "";
-  if (value.length <= maxChars) return value;
-  if (maxChars <= 3) return value.slice(0, maxChars);
-  return `${value.slice(0, maxChars - 3)}...`;
-}
 
 function estimateTokens(value: string): number {
   const trimmed = value.trim();
@@ -50,6 +40,7 @@ function formatItemHeader(item: MemoryItem): string {
     try {
       value = JSON.stringify(item.value);
     } catch {
+      // Intentional: fall back to string coercion for non-JSON-serializable fact values.
       value = String(item.value);
     }
     return `key=${item.key} value=${truncate(value, 240)} conf=${item.confidence.toFixed(2)}`;
@@ -181,6 +172,7 @@ export async function buildMemoryV1Digest(params: {
           config.semantic.enabled && params.semanticSearch ? params.semanticSearch : undefined,
       });
     } catch {
+      // Intentional: digest construction is best-effort and should degrade to an empty result.
       return {
         hits: [],
         keyword_hit_count: 0,

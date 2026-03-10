@@ -1,4 +1,5 @@
 import type { AgentConfig, MemoryItem, MemoryItemFilter, MemorySensitivity } from "@tyrum/schemas";
+import { normalizeSnippet, truncate } from "./v1-dal-helpers.js";
 import type { MemoryV1SemanticSearchHit } from "./v1-semantic-index.js";
 import type { MemoryV1Dal } from "./v1-dal.js";
 
@@ -28,17 +29,6 @@ type CandidateState = {
   structured_rank?: number;
   item?: MemoryItem;
 };
-
-function normalizeSnippet(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function truncate(value: string, maxChars: number): string {
-  if (maxChars <= 0) return "";
-  if (value.length <= maxChars) return value;
-  if (maxChars <= 3) return value.slice(0, maxChars);
-  return `${value.slice(0, maxChars - 3)}...`;
-}
 
 function sensitivityAllowed(
   sensitivity: MemorySensitivity,
@@ -126,6 +116,7 @@ function buildPreview(item: MemoryItem, maxChars = 240): string {
     try {
       rendered = JSON.stringify(item.value);
     } catch {
+      // Intentional: fall back to string coercion for non-JSON-serializable fact values.
       rendered = String(item.value);
     }
     return truncate(`${item.key}: ${rendered}`, maxChars);
@@ -183,6 +174,8 @@ export async function retrieveMemoryV1(params: {
   const query = params.query.trim();
   const candidates = new Map<string, CandidateState>();
   const scope = { tenantId: params.tenantId, agentId: params.agentId };
+  const structuredFactKeys = params.structured?.fact_keys ?? [];
+  const structuredTags = params.structured?.tags ?? [];
 
   const rememberCandidate = (memoryItemId: string): CandidateState => {
     const existing = candidates.get(memoryItemId);
@@ -198,10 +191,7 @@ export async function retrieveMemoryV1(params: {
   };
 
   let structuredItems: MemoryItem[] = [];
-  if (
-    params.structured &&
-    (params.structured.fact_keys.length > 0 || params.structured.tags.length > 0)
-  ) {
+  if (params.structured && (structuredFactKeys.length > 0 || structuredTags.length > 0)) {
     structuredItems = await loadStructuredItems({
       dal: params.dal,
       tenantId: params.tenantId,
@@ -252,6 +242,7 @@ export async function retrieveMemoryV1(params: {
         candidate.semantic_score = Math.max(candidate.semantic_score, hit.score);
       }
     } catch {
+      // Intentional: semantic retrieval is best-effort and should not block structured/keyword hits.
       semanticHits = [];
     }
   }
@@ -265,6 +256,7 @@ export async function retrieveMemoryV1(params: {
     try {
       item = candidate.item ?? (await params.dal.getById(candidate.memory_item_id, scope));
     } catch {
+      // Intentional: skip candidates whose backing item can no longer be loaded.
       continue;
     }
     if (!item) continue;

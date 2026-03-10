@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { MemoryItemKind, MemorySensitivity } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { normalizeSnippet } from "./v1-dal-helpers.js";
 import { VectorDal, cosineSimilarity } from "./vector-dal.js";
 
 export interface MemoryV1Embedder {
@@ -49,10 +50,6 @@ function trimForEmbedding(value: string, maxChars: number): string {
   return trimmed.slice(0, maxChars);
 }
 
-function normalizeSnippet(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
 function buildIndexText(
   row: Pick<MemoryEmbeddingCandidateRow, "kind" | "title" | "body_md" | "summary_md">,
 ): string | undefined {
@@ -86,6 +83,7 @@ function readSourceHash(value: string | null): string | undefined {
     const sourceHash = (parsed as Record<string, unknown>).source_hash;
     return typeof sourceHash === "string" && sourceHash.length > 0 ? sourceHash : undefined;
   } catch {
+    // Intentional: stale/malformed metadata should be treated as missing source hash.
     return undefined;
   }
 }
