@@ -26,9 +26,10 @@ import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
+import { useReconnectScrollArea, useReconnectTabState } from "../../reconnect-ui-state.js";
 
 export function ExtensionsPage({ core }: { core: OperatorCore }) {
-  const [tab, setTab] = useState<ExtensionsTab>("skills");
+  const [tab, setTab] = useReconnectTabState<ExtensionsTab>("extensions.tab", "skills");
   const [items, setItems] = useState(EMPTY_EXTENSIONS_BY_TAB);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [detailByKey, setDetailByKey] = useState<Record<string, ManagedExtensionDetail>>({});
@@ -41,6 +42,7 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
   const extensionsApi = core.http.extensions;
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const mutation = useApiAction<ManagedExtensionDetail>();
+  const scrollAreaRef = useReconnectScrollArea(`extensions:${tab}:page`);
 
   useEffect(() => {
     if (!extensionsApi) return;
@@ -175,7 +177,11 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
   }
 
   return (
-    <AppPage contentClassName="max-w-5xl gap-4" data-testid="extensions-page">
+    <AppPage
+      contentClassName="max-w-5xl gap-4"
+      data-testid="extensions-page"
+      scrollAreaRef={scrollAreaRef}
+    >
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2 text-base font-semibold text-fg">

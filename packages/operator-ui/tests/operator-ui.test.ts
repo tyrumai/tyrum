@@ -14,6 +14,7 @@ import { registerAgentRunsGeneralTests } from "./operator-ui.agent-runs-general-
 import { registerElevatedModeTests } from "./operator-ui.elevated-mode-test-support.js";
 import { registerElevatedModePersistenceTests } from "./operator-ui.elevated-mode-persistence-test-support.js";
 import { registerElevatedModeAuthTests } from "./operator-ui.elevated-mode-auth-test-support.js";
+import { registerReconnectUiStateTests } from "./operator-ui.reconnect-ui-state-test-support.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -37,4 +38,5 @@ describe("operator-ui", () => {
   registerElevatedModeTests();
   registerElevatedModePersistenceTests();
   registerElevatedModeAuthTests();
+  registerReconnectUiStateTests();
 });

@@ -1,5 +1,4 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useState } from "react";
 import { AuditPanel } from "../admin-http/audit-panel.js";
 import { AppPage } from "../layout/app-page.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
@@ -13,17 +12,44 @@ import { AdminHttpSecretsPanel } from "./admin-http-secrets.js";
 import { AdminWsCommandPanel } from "./admin-ws-command-panel.js";
 import { ConfigureGeneralPanel } from "./configure-general-panel.js";
 import { ThemeProvider, useThemeOptional } from "../../hooks/use-theme.js";
+import { useReconnectScrollArea, useReconnectTabState } from "../../reconnect-ui-state.js";
 
 export interface ConfigurePageProps {
   core: OperatorCore;
 }
 
+type ConfigurePageTab =
+  | "general"
+  | "policy"
+  | "providers"
+  | "models"
+  | "audit"
+  | "routing-config"
+  | "secrets"
+  | "tools"
+  | "device-tokens"
+  | "commands";
+
 function ConfigurePageContent({ core }: ConfigurePageProps) {
-  const [activeTab, setActiveTab] = useState("general");
+  const [activeTab, setActiveTab] = useReconnectTabState<ConfigurePageTab>(
+    "configure.tab",
+    "general",
+  );
+  const scrollAreaRef = useReconnectScrollArea(`configure:${activeTab}:page`);
 
   return (
-    <AppPage contentClassName="max-w-6xl gap-4" data-testid="configure-page">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="grid gap-3">
+    <AppPage
+      contentClassName="max-w-6xl gap-4"
+      data-testid="configure-page"
+      scrollAreaRef={scrollAreaRef}
+    >
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          setActiveTab(value as ConfigurePageTab);
+        }}
+        className="grid gap-3"
+      >
         <TabsList aria-label="Configure sections" className="flex-wrap">
           <TabsTrigger value="general" data-testid="configure-tab-general">
             General

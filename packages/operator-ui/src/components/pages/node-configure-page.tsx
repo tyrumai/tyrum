@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { DesktopApi } from "../../desktop-api.js";
 import { useHostApi } from "../../host/host-api.js";
 import { AppPage } from "../layout/app-page.js";
@@ -20,6 +19,7 @@ import {
   SHELL_COMMAND_NOTES,
   SHELL_DIRECTORY_NOTES,
 } from "./node-configure-page.shared.js";
+import { useReconnectScrollArea, useReconnectTabState } from "../../reconnect-ui-state.js";
 
 type ConfigureTab = "connection" | "profile" | "desktop" | "browser" | "shell" | "web";
 
@@ -56,7 +56,8 @@ function DesktopNodeConfigurePage({
   api: DesktopApi;
   onReloadPage?: () => void;
 }) {
-  const [tab, setTab] = useState<ConfigureTab>("connection");
+  const [tab, setTab] = useReconnectTabState<ConfigureTab>("desktop-configure.tab", "connection");
+  const scrollAreaRef = useReconnectScrollArea(`desktop-configure:${tab}:page`);
   const model = useDesktopNodeConfigureModel(api, onReloadPage);
   const saveBusy = model.generalSaving || model.profileSaving || model.securitySaving;
 
@@ -81,7 +82,7 @@ function DesktopNodeConfigurePage({
   }
 
   return (
-    <AppPage contentClassName="max-w-6xl gap-4">
+    <AppPage contentClassName="max-w-6xl gap-4" scrollAreaRef={scrollAreaRef}>
       <div className="text-sm text-fg-muted">
         Configure the local node runtime used by Tyrum Desktop.
       </div>

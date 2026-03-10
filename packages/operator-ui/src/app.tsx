@@ -13,6 +13,7 @@ import { BrowserNodeProvider } from "./browser-node/browser-node-provider.js";
 import { getDesktopApi } from "./desktop-api.js";
 import { OperatorUiHostProvider, useHostApiOptional, type HostKind } from "./host/host-api.js";
 import { CONNECT_PAGE_RENDER, getOperatorRouteDefinition } from "./operator-routes.js";
+import { RetainedUiStateProvider } from "./reconnect-ui-state.js";
 import { useOperatorAppViewModel } from "./use-operator-app-view-model.js";
 import type { ElevatedModeController } from "./components/elevated-mode/elevated-mode-controller.js";
 
@@ -92,6 +93,7 @@ function OperatorUiAppRoot({
     hostApi: host?.kind === "desktop" ? host.api : null,
   });
   const routeDefinition = getOperatorRouteDefinition(viewModel.route);
+  const reconnectUiScopeKey = `${mode}:${core.httpBaseUrl}:${core.deviceId ?? ""}`;
 
   const shell = (
     <AppShell
@@ -130,37 +132,43 @@ function OperatorUiAppRoot({
         ) : null
       }
     >
-      <ElevatedModeProvider core={core} mode={mode} elevatedModeController={elevatedModeController}>
-        {viewModel.showConnectPage ? (
-          <div className="flex min-h-0 flex-1 overflow-hidden">
-            <ScrollArea className="h-full w-full">
-              <div className="mx-auto flex min-h-full w-full max-w-md items-start px-4 py-6 md:items-center md:py-10">
-                <Suspense fallback={<OperatorRouteFallback />}>
-                  {CONNECT_PAGE_RENDER({
-                    core,
-                    mode,
-                    hostKind,
-                    navigate: viewModel.navigate,
-                    onReloadPage,
-                    onReconfigureGateway,
-                  })}
-                </Suspense>
-              </div>
-            </ScrollArea>
-          </div>
-        ) : (
-          <Suspense fallback={<OperatorRouteFallback />}>
-            {routeDefinition?.render({
-              core,
-              mode,
-              hostKind,
-              navigate: viewModel.navigate,
-              onReloadPage,
-              onReconfigureGateway,
-            }) ?? null}
-          </Suspense>
-        )}
-      </ElevatedModeProvider>
+      <RetainedUiStateProvider scopeKey={reconnectUiScopeKey}>
+        <ElevatedModeProvider
+          core={core}
+          mode={mode}
+          elevatedModeController={elevatedModeController}
+        >
+          {viewModel.showConnectPage ? (
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+              <ScrollArea className="h-full w-full">
+                <div className="mx-auto flex min-h-full w-full max-w-md items-start px-4 py-6 md:items-center md:py-10">
+                  <Suspense fallback={<OperatorRouteFallback />}>
+                    {CONNECT_PAGE_RENDER({
+                      core,
+                      mode,
+                      hostKind,
+                      navigate: viewModel.navigate,
+                      onReloadPage,
+                      onReconfigureGateway,
+                    })}
+                  </Suspense>
+                </div>
+              </ScrollArea>
+            </div>
+          ) : (
+            <Suspense fallback={<OperatorRouteFallback />}>
+              {routeDefinition?.render({
+                core,
+                mode,
+                hostKind,
+                navigate: viewModel.navigate,
+                onReloadPage,
+                onReconfigureGateway,
+              }) ?? null}
+            </Suspense>
+          )}
+        </ElevatedModeProvider>
+      </RetainedUiStateProvider>
     </AppShell>
   );
 
