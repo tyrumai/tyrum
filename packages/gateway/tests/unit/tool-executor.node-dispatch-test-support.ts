@@ -126,6 +126,28 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
     expect(result.error).toBe("node dispatch is not configured");
   });
 
+  it("tool.node.dispatch returns inspection configuration error when capability inspection is unavailable", async () => {
+    const db = openTestSqliteDb();
+
+    try {
+      const result = await createToolExecutor({
+        homeDir: requireHomeDir(home),
+        workspaceLease: createWorkspaceLease(db),
+        nodeDispatchService: {
+          dispatchAndWait: vi.fn(async () => ({
+            taskId: "task-123",
+            result: { ok: true, evidence: { foo: "bar" } },
+          })),
+        } as never,
+      }).execute("tool.node.dispatch", "call-7", nodeDispatchArgs);
+
+      expect(result.output).toBe("");
+      expect(result.error).toBe("node capability inspection is not configured");
+    } finally {
+      await db.close();
+    }
+  });
+
   it("tool.node.dispatch delegates to node dispatch service and returns structured output", async () => {
     const nodeDispatchService = {
       dispatchAndWait: vi.fn(async () => ({

@@ -318,11 +318,18 @@ export async function executeNodeDispatchTool(
   audit?: NodeDispatchAudit,
 ): Promise<ToolResult> {
   const tenantId = context.workspaceLease?.tenantId;
-  if (!tenantId || !context.nodeDispatchService || !context.inspectionService) {
+  if (!tenantId || !context.nodeDispatchService) {
     return {
       tool_call_id: toolCallId,
       output: "",
       error: "node dispatch is not configured",
+    };
+  }
+  if (!context.inspectionService) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: "node capability inspection is not configured",
     };
   }
 

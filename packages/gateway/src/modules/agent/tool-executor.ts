@@ -158,23 +158,31 @@ export class ToolExecutor {
       return await executeMcpTool(coreContext, toolId, toolCallId, args);
     }
     if (toolId === "tool.node.dispatch") {
-      return this.nodeDispatchService
-        ? await executeNodeDispatchTool(
-            {
-              workspaceLease: this.workspaceLease,
-              nodeDispatchService: this.nodeDispatchService,
-              inspectionService: this.nodeCapabilityInspectionService,
-              artifactStore: this.artifactStore,
-            },
-            toolCallId,
-            args,
-            audit,
-          )
-        : {
-            tool_call_id: toolCallId,
-            output: "",
-            error: "node dispatch is not configured",
-          };
+      if (!this.nodeDispatchService) {
+        return {
+          tool_call_id: toolCallId,
+          output: "",
+          error: "node dispatch is not configured",
+        };
+      }
+      if (!this.nodeCapabilityInspectionService) {
+        return {
+          tool_call_id: toolCallId,
+          output: "",
+          error: "node capability inspection is not configured",
+        };
+      }
+      return await executeNodeDispatchTool(
+        {
+          workspaceLease: this.workspaceLease,
+          nodeDispatchService: this.nodeDispatchService,
+          inspectionService: this.nodeCapabilityInspectionService,
+          artifactStore: this.artifactStore,
+        },
+        toolCallId,
+        args,
+        audit,
+      );
     }
     if (toolId === "tool.node.list") {
       return this.nodeInventoryService
