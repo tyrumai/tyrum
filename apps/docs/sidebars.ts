@@ -27,7 +27,6 @@ const sidebars: SidebarsConfig = {
       label: "Reference",
       items: [
         "api-reference",
-        "activity",
         "policy_service",
         "executors/http_executor",
         "executors/web_executor",
