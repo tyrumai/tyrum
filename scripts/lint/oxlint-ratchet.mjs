@@ -27,7 +27,8 @@ function loadBaseline() {
 }
 
 function runOxlintJson() {
-  const result = spawnSync("pnpm", ["exec", "oxlint", "-f", "json", "."], {
+  const oxlintBin = path.join(repoRoot, "node_modules", ".bin", "oxlint");
+  const result = spawnSync(oxlintBin, ["-f", "json", "."], {
     cwd: repoRoot,
     encoding: "utf8",
   });
