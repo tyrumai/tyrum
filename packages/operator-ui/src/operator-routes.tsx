@@ -3,7 +3,6 @@ import type { ExecutionRun } from "@tyrum/client";
 import type { LucideIcon } from "lucide-react";
 import {
   Bot,
-  Building2,
   Blocks,
   Globe,
   LayoutGrid,
@@ -38,10 +37,6 @@ const DashboardPage = lazyNamed<{
 const ChatPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/chat-page.js"),
   "ChatPage",
-);
-const ActivityPage = lazyNamed<{ core: OperatorCore }>(
-  () => import("./components/pages/activity-page.js"),
-  "ActivityPage",
 );
 const ApprovalsPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/approvals-page.js"),
@@ -85,7 +80,6 @@ const ACTIVE_RUN_STATUSES: ExecutionRun["status"][] = ["queued", "running", "pau
 export type OperatorUiRouteId =
   | "dashboard"
   | "chat"
-  | "activity"
   | "approvals"
   | "workboard"
   | "agents"
@@ -139,15 +133,6 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     shortcut: true,
     hostKinds: ["desktop", "web"],
     render: ({ core }) => <ChatPage core={core} />,
-  },
-  {
-    id: "activity",
-    label: "Activity",
-    icon: Building2,
-    navGroup: "sidebar",
-    shortcut: true,
-    hostKinds: ["desktop", "web"],
-    render: ({ core }) => <ActivityPage core={core} />,
   },
   {
     id: "approvals",

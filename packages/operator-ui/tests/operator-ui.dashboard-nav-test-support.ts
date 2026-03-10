@@ -289,11 +289,11 @@ function registerNavShortcutTests(): void {
       await Promise.resolve();
     });
 
-    expect(container.querySelector('[data-testid="activity-page"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="approvals-pending-live"]')).not.toBeNull();
 
     await act(async () => {
       window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "7", ctrlKey: true, bubbles: true }),
+        new KeyboardEvent("keydown", { key: "6", ctrlKey: true, bubbles: true }),
       );
       await vi.dynamicImportSettled();
       await Promise.resolve();
@@ -303,7 +303,7 @@ function registerNavShortcutTests(): void {
 
     await act(async () => {
       window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "9", ctrlKey: true, bubbles: true }),
+        new KeyboardEvent("keydown", { key: "8", ctrlKey: true, bubbles: true }),
       );
       await vi.dynamicImportSettled();
       await Promise.resolve();
