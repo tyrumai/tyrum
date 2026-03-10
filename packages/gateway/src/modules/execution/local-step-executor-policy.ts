@@ -6,6 +6,7 @@ import type { StepExecutionContext, StepResult } from "./engine.js";
 import { deriveAgentIdFromKey } from "./gateway-step-executor-types.js";
 import { resolveSecretScopesFromArgs } from "./gateway-step-executor-helpers.js";
 import { toolCallFromAction } from "./engine/tool-call.js";
+import { buildExecutionPolicyApprovalContext } from "./policy-approval-context.js";
 
 export async function maybeEnforceLocalExecutorPolicy(input: {
   action: ActionPrimitiveT;
@@ -112,14 +113,15 @@ export async function maybeEnforceLocalExecutorPolicy(input: {
         kind: "policy",
         prompt: "Policy approval required to continue execution",
         detail: `policy requires approval for '${tool.toolId}' (${tool.matchTarget || "unknown"})`,
-        context: {
-          source: "execution-engine",
-          policy_snapshot_id: policySnapshotId,
-          tool_id: tool.toolId,
-          tool_match_target: tool.matchTarget,
+        context: buildExecutionPolicyApprovalContext({
+          policySnapshotId,
+          toolId: tool.toolId,
+          toolMatchTarget: tool.matchTarget,
           url: tool.url,
           decision: decision.decision,
-        },
+          agentId,
+          workspaceId: input.context.workspaceId,
+        }),
       },
     };
   }

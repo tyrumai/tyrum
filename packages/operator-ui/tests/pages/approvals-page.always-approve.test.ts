@@ -136,4 +136,89 @@ describe("ApprovalsPage always approve", () => {
       cleanupTestRoot({ container, root });
     }
   });
+
+  it("shows always approve for execution-engine policy approvals", async () => {
+    const approval = {
+      approval_id: "55555555-5555-4555-8555-555555555555",
+      approval_key: "approval:2",
+      kind: "policy",
+      status: "pending",
+      prompt: "Policy approval required to continue execution",
+      context: {
+        source: "execution-engine",
+        tool_id: "webfetch",
+        tool_match_target: "https://example.com/data",
+        decision: "require_approval",
+        policy: {
+          policy_snapshot_id: "66666666-6666-4666-8666-666666666666",
+          workspace_id: "22222222-2222-4222-8222-222222222222",
+          suggested_overrides: [
+            {
+              tool_id: "webfetch",
+              pattern: "https://example.com/data",
+              workspace_id: "22222222-2222-4222-8222-222222222222",
+            },
+          ],
+        },
+      },
+      scope: {
+        key: "agent:default:main",
+        lane: "heartbeat",
+        run_id: "77777777-7777-4777-8777-777777777777",
+        step_id: "88888888-8888-4888-8888-888888888888",
+      },
+      created_at: "2026-03-10T18:25:06.000Z",
+      expires_at: null,
+      resolution: null,
+    } as const;
+    const resolve = vi.fn(async () => ({
+      approval: { ...approval, status: "approved" },
+      createdOverrides: [],
+    }));
+
+    const { store: approvalsBaseStore } = createStore({
+      byId: { [approval.approval_id]: approval },
+      pendingIds: [approval.approval_id],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+    const approvalsStore = {
+      ...approvalsBaseStore,
+      resolve,
+    };
+
+    const { store: pairingStore } = createStore({
+      byId: {},
+      pendingIds: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+    const { store: runsStore } = createStore({
+      runsById: {},
+      stepsById: {},
+      attemptsById: {},
+      stepIdsByRunId: {},
+      attemptIdsByStepId: {},
+    });
+
+    const core = {
+      approvalsStore,
+      pairingStore,
+      runsStore,
+    } as unknown as OperatorCore;
+
+    const { container, root } = renderIntoDocument(React.createElement(ApprovalsPage, { core }));
+
+    try {
+      expect(container.textContent).toContain("Policy approval required to continue execution");
+      const alwaysButton = container.querySelector<HTMLButtonElement>(
+        `[data-testid="approval-always-${approval.approval_id}"]`,
+      );
+      expect(alwaysButton).not.toBeNull();
+    } finally {
+      cleanupTestRoot({ container, root });
+    }
+  });
 });
