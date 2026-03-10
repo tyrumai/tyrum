@@ -136,6 +136,10 @@ export function getLabeledSelect(root: ParentNode, labelPrefix: string): HTMLSel
   return expectPresent(findLabeledElement<HTMLSelectElement>(root, "select", labelPrefix));
 }
 
+export function getProviderOption(root: ParentNode, providerKey: string): HTMLButtonElement {
+  return getByTestId<HTMLButtonElement>(root, `providers-provider-option-${providerKey}`);
+}
+
 export function getButton(root: ParentNode, text: string): HTMLButtonElement {
   return expectPresent(
     Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
