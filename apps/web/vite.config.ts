@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, searchForWorkspaceRoot } from "vite";
+import { createTyrumManualChunk } from "../../scripts/vite/manual-chunks.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../..");
@@ -35,5 +36,10 @@ export default defineConfig({
   build: {
     outDir: "../dist",
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: createTyrumManualChunk,
+      },
+    },
   },
 });
