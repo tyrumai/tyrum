@@ -74,7 +74,15 @@ export function DashboardPage({
   // -- Derived: work counts
   let openWorkCount = 0;
   let activeWorkCount = 0;
-  const workStatusCounts = { todo: 0, doing: 0, blocked: 0, done: 0, failed: 0, cancelled: 0 };
+  const workStatusCounts = {
+    backlog: 0,
+    ready: 0,
+    doing: 0,
+    blocked: 0,
+    done: 0,
+    failed: 0,
+    cancelled: 0,
+  };
   for (const item of workboard.items) {
     if (item.status in workStatusCounts) {
       workStatusCounts[item.status as keyof typeof workStatusCounts] += 1;
@@ -86,9 +94,9 @@ export function DashboardPage({
       activeWorkCount += 1;
     }
   }
-  const workTotal = workboard.items.length;
   const workSegments: WorkSegment[] = [
-    { key: "todo", count: workStatusCounts.todo, color: "bg-neutral", label: "Todo" },
+    { key: "backlog", count: workStatusCounts.backlog, color: "bg-neutral", label: "Backlog" },
+    { key: "ready", count: workStatusCounts.ready, color: "bg-neutral", label: "Ready" },
     { key: "doing", count: workStatusCounts.doing, color: "bg-primary", label: "Doing" },
     { key: "blocked", count: workStatusCounts.blocked, color: "bg-warning", label: "Blocked" },
     { key: "done", count: workStatusCounts.done, color: "bg-success", label: "Done" },
@@ -100,6 +108,7 @@ export function DashboardPage({
       label: "Cancelled",
     },
   ];
+  const workTotal = workSegments.reduce((sum, s) => sum + s.count, 0);
 
   const activeRunsCount = getActiveExecutionRunsCountFromQueueDepth(status.status?.queue_depth);
   const connectionDisplay = getConnectionDisplay(connection.status);

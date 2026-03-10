@@ -229,4 +229,108 @@ describe("DashboardPage", () => {
 
     cleanupTestRoot({ container, root });
   });
+
+  it("renders work distribution, token usage, and activity feed with data", () => {
+    const { store: workboardStore } = createStore({
+      items: [
+        { work_item_id: "wi-1", status: "doing", title: "A", kind: "task", priority: 1 },
+        { work_item_id: "wi-2", status: "done", title: "B", kind: "task", priority: 2 },
+        { work_item_id: "wi-3", status: "backlog", title: "C", kind: "task", priority: 3 },
+      ] as unknown[],
+      supported: true,
+      tasksByWorkItemId: {},
+      loading: false,
+      error: null,
+      lastSyncedAt: "2026-03-08T00:00:00.000Z",
+    });
+
+    const { store: statusStore } = createStore({
+      status: { version: "1.0.0", db_kind: "sqlite", sandbox: false },
+      usage: {
+        local: {
+          totals: {
+            total_tokens: 50000,
+            input_tokens: 30000,
+            output_tokens: 20000,
+            usd_micros: 420000,
+          },
+          attempts: { total_with_cost: 10 },
+        },
+      },
+      presenceByInstanceId: {},
+      loading: { status: false, usage: false, presence: false },
+      error: { status: null, usage: null, presence: null },
+      lastSyncedAt: "2026-03-08T00:00:00.000Z",
+    });
+
+    const activityState: ActivityState = {
+      agentsById: {},
+      agentIds: [],
+      workstreamIds: ["ws-1"],
+      workstreamsById: {
+        "ws-1": {
+          id: "ws-1",
+          key: "agent:scout:main",
+          lane: "main",
+          agentId: "scout",
+          persona: { name: "Scout" },
+          latestRunId: null,
+          runStatus: null,
+          queuedRunCount: 0,
+          lease: { held: false },
+          attentionLevel: "none",
+          attentionScore: 0,
+          currentRoom: { kind: "idle" },
+          bubbleText: null,
+          recentEvents: [
+            {
+              id: "ev-1",
+              type: "run.updated",
+              occurredAt: "2026-03-08T00:00:00.000Z",
+              summary: "Run completed",
+            },
+          ],
+        } as unknown as ActivityState["workstreamsById"][string],
+      },
+      selectedAgentId: null,
+      selectedWorkstreamId: null,
+    };
+    const { store: activityStoreBase } = createStore<ActivityState>(activityState);
+    const activityStore = {
+      ...activityStoreBase,
+      clearSelection: vi.fn(),
+      selectWorkstream: vi.fn(),
+    };
+
+    const { core } = createMockCore({
+      workboardStore: {
+        ...workboardStore,
+        refreshList: async () => {},
+        resetSupportProbe: () => {},
+        upsertWorkItem: () => {},
+      },
+      statusStore,
+      activityStore,
+    });
+
+    const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
+
+    // Work distribution bar rendered with segments
+    expect(container.textContent).toContain("Work Distribution");
+    expect(container.textContent).toContain("Doing (1)");
+    expect(container.textContent).toContain("Done (1)");
+    expect(container.textContent).toContain("Backlog (1)");
+
+    // Token usage bar rendered
+    expect(container.textContent).toContain("50,000");
+    expect(container.textContent).toContain("Input: 30,000");
+    expect(container.textContent).toContain("Output: 20,000");
+    expect(container.textContent).toContain("$0.42");
+
+    // Activity feed rendered
+    expect(container.textContent).toContain("Scout");
+    expect(container.textContent).toContain("Run completed");
+
+    cleanupTestRoot({ container, root });
+  });
 });
