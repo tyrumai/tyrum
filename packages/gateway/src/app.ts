@@ -15,6 +15,7 @@ import type { PluginRegistry } from "./modules/plugins/registry.js";
 import type { PluginCatalogProvider } from "./modules/plugins/catalog-provider.js";
 import { createAuthMiddleware } from "./modules/auth/middleware.js";
 import type { ConnectionManager } from "./ws/connection-manager.js";
+import type { ProtocolDeps } from "./ws/protocol.js";
 import type { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
 import type { OutboxDal } from "./modules/backplane/outbox-dal.js";
 import { createHttpScopeAuthorizationMiddleware } from "./modules/authz/http-scope-middleware.js";
@@ -50,6 +51,7 @@ export interface AppOptions {
   playbooks?: Playbook[];
   isLocalOnly?: boolean;
   connectionManager?: ConnectionManager;
+  protocolDeps?: ProtocolDeps;
   connectionDirectory?: ConnectionDirectoryDal;
   engine?: ExecutionEngine;
   wsCluster?: {

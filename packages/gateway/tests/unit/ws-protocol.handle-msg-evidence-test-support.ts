@@ -81,6 +81,7 @@ function registerCapabilityReadyTests(): void {
     const setReadyCapabilities = vi.fn(async () => {
       throw new Error("persist failed");
     });
+    const setCapabilityStates = vi.fn(async () => undefined);
     const enqueue = vi.fn(async () => undefined as never);
 
     const deps = makeDeps(cm, {
@@ -88,7 +89,7 @@ function registerCapabilityReadyTests(): void {
       cluster: {
         edgeId: "edge-1",
         outboxDal: { enqueue } as never,
-        connectionDirectory: { setReadyCapabilities } as never,
+        connectionDirectory: { setReadyCapabilities, setCapabilityStates } as never,
       },
     });
 

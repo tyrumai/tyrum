@@ -250,8 +250,32 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     },
   },
   {
+    id: "tool.node.inspect",
+    description: "Inspect the enabled actions for a specific connected node capability.",
+    risk: "low",
+    requires_confirmation: false,
+    keywords: ["node", "device", "inspect", "capability", "actions"],
+    source: "builtin",
+    family: "node",
+    inputSchema: {
+      type: "object",
+      properties: {
+        node_id: {
+          type: "string",
+          description: "Target node id returned by tool.node.list.",
+        },
+        capability: {
+          type: "string",
+          description: "Capability descriptor id (example: tyrum.browser).",
+        },
+      },
+      required: ["node_id", "capability"],
+      additionalProperties: false,
+    },
+  },
+  {
     id: "tool.node.dispatch",
-    description: "Dispatch tasks to connected node capabilities.",
+    description: "Dispatch a specific capability action to a connected node.",
     risk: "high",
     requires_confirmation: true,
     keywords: ["node", "device", "screen", "automation", "dispatch"],
@@ -268,18 +292,21 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
           type: "string",
           description: "Capability descriptor id (example: tyrum.desktop).",
         },
-        action: { type: "string", description: "ActionPrimitiveKind (example: Desktop)." },
-        args: {
+        action_name: {
+          type: "string",
+          description: "Capability action name discovered via tool.node.inspect.",
+        },
+        input: {
           type: "object",
           additionalProperties: {},
-          description: "Optional action arguments.",
+          description: "Action input object excluding the transport op field.",
         },
         timeout_ms: {
           type: "number",
           description: "Optional timeout in milliseconds (default: 30000).",
         },
       },
-      required: ["node_id", "capability", "action"],
+      required: ["node_id", "capability", "action_name"],
       additionalProperties: false,
     },
   },

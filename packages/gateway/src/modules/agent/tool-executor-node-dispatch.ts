@@ -1,45 +1,38 @@
 import {
-  ActionPrimitiveKind,
-  CapabilityDescriptor,
-  descriptorIdForClientCapability,
+  NodeActionDispatchRequest,
+  NodeActionDispatchResponse,
+  NodeCapabilityInspectionResponse,
   NodeInventoryResponse,
-  requiredCapability,
   type ActionPrimitive,
+  type NodeActionDispatchRequest as NodeActionDispatchRequestT,
+  type NodeActionDispatchResponse as NodeActionDispatchResponseT,
+  type NodeCapabilityInspectionResponse as NodeCapabilityInspectionResponseT,
 } from "@tyrum/schemas";
-import {
-  NoCapableNodeError,
-  NodeDispatchDeniedError,
-  NodeNotCapableError,
-  NodeNotConnectedError,
-  NodeNotPairedError,
-  NodeNotReadyError,
-  UnknownNodeError,
-} from "../../ws/protocol/errors.js";
 import type { ArtifactStore } from "../artifact/store.js";
-import {
-  resolveBrowserEvidenceSensitivity,
-  shapeBrowserEvidenceForArtifacts,
-} from "../browser/shape-browser-evidence.js";
-import {
-  resolveDesktopEvidenceSensitivity,
-  shapeDesktopEvidenceForArtifacts,
-} from "../desktop/shape-desktop-evidence.js";
+import type { NodeCapabilityInspectionService } from "../node/capability-inspection-service.js";
+import { getCapabilityCatalogAction } from "../node/capability-catalog.js";
 import type { NodeInventoryService } from "../node/inventory-service.js";
 import type { NodeDispatchService } from "./node-dispatch-service.js";
 import { tagContent } from "./provenance.js";
 import { sanitizeForModel } from "./sanitizer.js";
-import {
-  DEFAULT_NODE_DISPATCH_TIMEOUT_MS,
-  MAX_NODE_DISPATCH_TIMEOUT_MS,
-  MAX_RESPONSE_BYTES,
-  TRUNCATION_MARKER,
-} from "./tool-executor-shared.js";
 import type { ToolResult, WorkspaceLeaseConfig } from "./tool-executor-shared.js";
+import {
+  dispatchError,
+  normalizeExecutionFailure,
+  normalizeJsonObject,
+  normalizeProviderError,
+  preflightFailure,
+  resolveTimeout,
+  selectPayload,
+  serializeToolDispatchResponse,
+  shapeNodeDispatchEvidence,
+} from "./tool-executor-node-dispatch-helpers.js";
 
-type NodeDispatchExecutorContext = {
+type NodeToolContext = {
   workspaceLease?: WorkspaceLeaseConfig;
   nodeDispatchService?: NodeDispatchService;
   nodeInventoryService?: NodeInventoryService;
+  inspectionService?: NodeCapabilityInspectionService;
   artifactStore?: ArtifactStore;
 };
 
@@ -51,67 +44,226 @@ type NodeDispatchAudit = {
   policy_snapshot_id?: string;
 };
 
-function normalizeJsonObject(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  return value as Record<string, unknown>;
-}
+type DispatchExecutionContext = {
+  tenantId: string;
+  nodeDispatchService: NodeDispatchService;
+  inspectionService: NodeCapabilityInspectionService;
+  artifactStore?: ArtifactStore;
+  workspaceLease?: WorkspaceLeaseConfig;
+};
 
-async function shapeNodeDispatchEvidence(
-  context: NodeDispatchExecutorContext,
-  actionKind: ActionPrimitive["type"],
-  evidence: unknown,
-  result: unknown,
-  scope: { runId: string; stepId: string },
-  policySnapshotId?: string,
-): Promise<unknown> {
-  if (actionKind !== "Desktop" && actionKind !== "Browser") return evidence;
-  if (!context.artifactStore) return evidence;
-  const lease = context.workspaceLease;
-  const db = lease?.db;
-  if (!db) return evidence;
-
-  const fallbackScope = lease
-    ? {
-        tenantId: lease.tenantId,
-        workspaceId: lease.workspaceId,
-        agentId: lease.agentId,
-        policySnapshotId: policySnapshotId?.trim() || null,
-      }
-    : undefined;
-
-  if (actionKind === "Desktop") {
-    const sensitivity = await resolveDesktopEvidenceSensitivity(db, scope);
-    const shaped = await shapeDesktopEvidenceForArtifacts({
-      db,
-      artifactStore: context.artifactStore,
-      runId: scope.runId,
-      stepId: scope.stepId,
-      workspaceId: lease?.workspaceId,
-      fallbackScope,
-      evidence,
-      result,
-      sensitivity,
+async function performNodeDispatch(
+  context: DispatchExecutionContext,
+  request: NodeActionDispatchRequestT,
+  audit?: NodeDispatchAudit,
+): Promise<NodeActionDispatchResponseT> {
+  let normalizedInspection: NodeCapabilityInspectionResponseT;
+  try {
+    const inspection = await context.inspectionService.inspect({
+      tenantId: context.tenantId,
+      nodeId: request.node_id,
+      capabilityId: request.capability,
+      includeDisabled: true,
     });
-    return shaped.evidence;
+    normalizedInspection = NodeCapabilityInspectionResponse.parse(inspection);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith("action_not_supported:")) {
+      return preflightFailure(
+        request,
+        dispatchError("action_not_supported", message.slice("action_not_supported:".length).trim()),
+      );
+    }
+    if (message.startsWith("unknown_node:")) {
+      return preflightFailure(
+        request,
+        dispatchError("runtime_unavailable", message.slice("unknown_node:".length).trim()),
+      );
+    }
+    return preflightFailure(request, dispatchError("execution_failed", message));
   }
 
-  const sensitivity = resolveBrowserEvidenceSensitivity();
-  const shaped = await shapeBrowserEvidenceForArtifacts({
-    db,
-    artifactStore: context.artifactStore,
-    runId: scope.runId,
-    stepId: scope.stepId,
-    workspaceId: lease?.workspaceId,
-    fallbackScope,
-    evidence,
-    result,
-    sensitivity,
-  });
-  return shaped.evidence;
+  if (!normalizedInspection.paired) {
+    return preflightFailure(
+      request,
+      dispatchError(
+        "capability_not_paired",
+        `capability '${request.capability}' is not paired for node '${request.node_id}'`,
+      ),
+    );
+  }
+
+  const actionDefinition = normalizedInspection.actions.find(
+    (action) => action.name === request.action_name,
+  );
+  if (!actionDefinition) {
+    return preflightFailure(
+      request,
+      dispatchError(
+        "action_not_supported",
+        `action '${request.action_name}' is not supported for capability '${request.capability}'`,
+      ),
+    );
+  }
+  if (!actionDefinition.enabled) {
+    return preflightFailure(
+      request,
+      dispatchError(
+        "disabled_by_operator",
+        `action '${request.action_name}' is disabled by the operator for node '${request.node_id}'`,
+      ),
+    );
+  }
+  if (actionDefinition.availability_status === "unavailable") {
+    return preflightFailure(
+      request,
+      dispatchError(
+        "runtime_unavailable",
+        actionDefinition.unavailable_reason ??
+          `action '${request.action_name}' is unavailable at runtime`,
+      ),
+    );
+  }
+
+  const catalogAction = getCapabilityCatalogAction(request.capability, request.action_name);
+  if (!catalogAction) {
+    return preflightFailure(
+      request,
+      dispatchError(
+        "action_not_supported",
+        `action '${request.action_name}' is not defined in the gateway catalog`,
+      ),
+    );
+  }
+
+  let actionArgs: Record<string, unknown>;
+  try {
+    actionArgs = catalogAction.inputParser.parse({
+      ...request.input,
+      [catalogAction.transport.op_field]: catalogAction.transport.op_value,
+    }) as Record<string, unknown>;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return preflightFailure(request, dispatchError("invalid_input", message));
+  }
+
+  const timeoutMs = resolveTimeout(request.timeout_ms);
+  const runId = audit?.execution_run_id?.trim() || crypto.randomUUID();
+  const stepId = audit?.execution_step_id?.trim() || crypto.randomUUID();
+  const attemptId = crypto.randomUUID();
+  const primitive: ActionPrimitive = {
+    type: catalogAction.transport.primitive_kind,
+    args: actionArgs,
+  };
+
+  try {
+    const { taskId, result } = await context.nodeDispatchService.dispatchAndWait(
+      primitive,
+      { tenantId: context.tenantId, runId, stepId, attemptId },
+      { timeoutMs, nodeId: request.node_id },
+    );
+
+    const evidence = await shapeNodeDispatchEvidence(
+      context,
+      primitive.type,
+      result.evidence,
+      result.result,
+      { runId, stepId },
+      audit?.policy_snapshot_id,
+    );
+
+    const selected = selectPayload(catalogAction.transport.result_channel, result.result, evidence);
+    const normalizedError = result.ok ? null : normalizeProviderError(result.error);
+
+    return NodeActionDispatchResponse.parse({
+      status: "ok",
+      task_id: taskId,
+      node_id: request.node_id,
+      capability: request.capability,
+      action_name: request.action_name,
+      ok: result.ok,
+      payload_source: selected.payload_source,
+      payload: selected.payload,
+      error: normalizedError,
+    });
+  } catch (error) {
+    return NodeActionDispatchResponse.parse({
+      status: "ok",
+      task_id: "not-dispatched",
+      node_id: request.node_id,
+      capability: request.capability,
+      action_name: request.action_name,
+      ok: false,
+      payload_source: "none",
+      payload: null,
+      error: normalizeExecutionFailure(error),
+    });
+  }
+}
+
+export async function executeHttpNodeDispatch(
+  context: DispatchExecutionContext,
+  request: NodeActionDispatchRequestT,
+): Promise<NodeActionDispatchResponseT> {
+  return await performNodeDispatch(context, request);
+}
+
+export async function executeNodeInspectTool(
+  context: NodeToolContext,
+  toolCallId: string,
+  args: unknown,
+): Promise<ToolResult> {
+  const tenantId = context.workspaceLease?.tenantId;
+  if (!tenantId || !context.inspectionService) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: "node capability inspection is not configured",
+    };
+  }
+
+  const parsed = normalizeJsonObject(args);
+  const nodeId = typeof parsed?.["node_id"] === "string" ? parsed["node_id"].trim() : "";
+  const capability = typeof parsed?.["capability"] === "string" ? parsed["capability"].trim() : "";
+  if (!nodeId) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: "missing required argument: node_id",
+    };
+  }
+  if (!capability) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: "missing required argument: capability",
+    };
+  }
+
+  try {
+    const payload = await context.inspectionService.inspect({
+      tenantId,
+      nodeId,
+      capabilityId: capability,
+      includeDisabled: false,
+    });
+    const tagged = tagContent(JSON.stringify(payload), "tool");
+    return {
+      tool_call_id: toolCallId,
+      output: sanitizeForModel(tagged),
+      provenance: tagged,
+    };
+  } catch (error) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export async function executeNodeListTool(
-  context: NodeDispatchExecutorContext,
+  context: NodeToolContext,
   toolCallId: string,
   args: unknown,
   audit?: NodeDispatchAudit,
@@ -160,170 +312,51 @@ export async function executeNodeListTool(
 }
 
 export async function executeNodeDispatchTool(
-  context: NodeDispatchExecutorContext,
+  context: NodeToolContext,
   toolCallId: string,
   args: unknown,
   audit?: NodeDispatchAudit,
 ): Promise<ToolResult> {
-  const parsed = normalizeJsonObject(args);
-  const nodeId = typeof parsed?.["node_id"] === "string" ? parsed["node_id"].trim() : "";
-  const capability = typeof parsed?.["capability"] === "string" ? parsed["capability"].trim() : "";
-  const actionToken = typeof parsed?.["action"] === "string" ? parsed["action"].trim() : "";
-
-  if (!nodeId) {
+  const tenantId = context.workspaceLease?.tenantId;
+  if (!tenantId || !context.nodeDispatchService) {
     return {
       tool_call_id: toolCallId,
       output: "",
-      error: "missing required argument: node_id",
+      error: "node dispatch is not configured",
     };
   }
-  if (!capability) {
+  if (!context.inspectionService) {
     return {
       tool_call_id: toolCallId,
       output: "",
-      error: "missing required argument: capability",
-    };
-  }
-  if (!actionToken) {
-    return {
-      tool_call_id: toolCallId,
-      output: "",
-      error: "missing required argument: action",
+      error: "node capability inspection is not configured",
     };
   }
 
-  const parsedAction = ActionPrimitiveKind.safeParse(actionToken);
-  if (!parsedAction.success) {
-    return {
-      tool_call_id: toolCallId,
-      output: "",
-      error: `invalid action: expected ActionPrimitiveKind (got '${actionToken}')`,
-    };
-  }
-
-  const required = requiredCapability(parsedAction.data);
-  if (!required) {
-    return {
-      tool_call_id: toolCallId,
-      output: "",
-      error: `unsupported action for node dispatch: '${parsedAction.data}'`,
-    };
-  }
-
-  const capabilityId = CapabilityDescriptor.safeParse({ id: capability });
-  if (!capabilityId.success) {
-    return {
-      tool_call_id: toolCallId,
-      output: "",
-      error: `invalid capability: ${capabilityId.error.message}`,
-    };
-  }
-
-  const expectedCapability = descriptorIdForClientCapability(required);
-  if (capabilityId.data.id !== expectedCapability) {
-    return {
-      tool_call_id: toolCallId,
-      output: "",
-      error: `capability '${capabilityId.data.id}' does not match action '${parsedAction.data}' (expected '${expectedCapability}')`,
-    };
-  }
-
-  const argsRaw = parsed?.["args"];
-  const actionArgs = argsRaw === undefined ? {} : normalizeJsonObject(argsRaw);
-  if (!actionArgs) {
-    return {
-      tool_call_id: toolCallId,
-      output: "",
-      error: "invalid args: expected an object",
-    };
-  }
-
-  const timeoutMsRaw = parsed?.["timeout_ms"];
-  const timeoutMs =
-    typeof timeoutMsRaw === "number"
-      ? Math.max(1, Math.min(MAX_NODE_DISPATCH_TIMEOUT_MS, Math.floor(timeoutMsRaw)))
-      : DEFAULT_NODE_DISPATCH_TIMEOUT_MS;
-
-  const runId = audit?.execution_run_id?.trim() || crypto.randomUUID();
-  const stepId = audit?.execution_step_id?.trim() || crypto.randomUUID();
-  const attemptId = crypto.randomUUID();
-  const action: ActionPrimitive = { type: parsedAction.data, args: actionArgs };
-
-  let serializedPayload: string;
+  let request: NodeActionDispatchRequestT;
   try {
-    const tenantId = context.workspaceLease?.tenantId;
-    if (!tenantId || !context.nodeDispatchService) {
-      throw new Error("tenantId is required for node dispatch");
-    }
-
-    const { taskId, result } = await context.nodeDispatchService.dispatchAndWait(
-      action,
-      { tenantId, runId, stepId, attemptId },
-      { timeoutMs, nodeId },
-    );
-
-    const evidence = await shapeNodeDispatchEvidence(
-      context,
-      parsedAction.data,
-      result.evidence,
-      result.result,
-      { runId, stepId },
-      audit?.policy_snapshot_id,
-    );
-
-    serializedPayload = JSON.stringify({
-      ok: result.ok,
-      task_id: taskId,
-      node_id: nodeId,
-      evidence,
-      error: result.error,
-    });
-    if (serializedPayload.length > MAX_RESPONSE_BYTES) {
-      serializedPayload = JSON.stringify({
-        ok: result.ok,
-        task_id: taskId,
-        node_id: nodeId,
-        error:
-          typeof result.error === "string" && result.error.length > 4_096
-            ? `${result.error.slice(0, 4_096)}${TRUNCATION_MARKER}`
-            : result.error,
-        evidence: "[omitted: evidence too large]",
-        truncated: true,
-      });
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    let code = "dispatch_failed";
-    let retryable = false;
-
-    if (message.toLowerCase().includes("timeout")) {
-      code = "timeout";
-      retryable = true;
-    } else if (err instanceof NoCapableNodeError) {
-      code = "no_capable_node";
-    } else if (err instanceof UnknownNodeError) {
-      code = "unknown_node";
-    } else if (err instanceof NodeNotConnectedError) {
-      code = "node_not_connected";
-      retryable = true;
-    } else if (err instanceof NodeNotCapableError) {
-      code = "node_not_capable";
-    } else if (err instanceof NodeNotReadyError) {
-      code = "node_not_ready";
-      retryable = true;
-    } else if (err instanceof NodeDispatchDeniedError) {
-      code = "policy_denied";
-    } else if (err instanceof NodeNotPairedError) {
-      code = "not_paired";
-    }
-
-    serializedPayload = JSON.stringify({
-      ok: false,
-      error: { code, message, retryable },
-    });
+    request = NodeActionDispatchRequest.parse(args);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: `invalid node dispatch request: ${message}`,
+    };
   }
 
-  const tagged = tagContent(serializedPayload, "tool");
+  const response = await performNodeDispatch(
+    {
+      tenantId,
+      nodeDispatchService: context.nodeDispatchService,
+      inspectionService: context.inspectionService,
+      artifactStore: context.artifactStore,
+      workspaceLease: context.workspaceLease,
+    },
+    request,
+    audit,
+  );
+  const tagged = tagContent(serializeToolDispatchResponse(response), "tool");
   return {
     tool_call_id: toolCallId,
     output: sanitizeForModel(tagged),

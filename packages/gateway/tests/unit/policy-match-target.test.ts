@@ -128,9 +128,9 @@ describe("canonicalizeToolMatchTarget", () => {
 
   it("canonicalizes desktop node dispatch by capability + action + desktop op", () => {
     const target = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: " screen ",
-      action: " Desktop ",
-      args: { op: "snapshot", secret: "should-not-appear" },
+      capability: "tyrum.desktop",
+      action_name: "snapshot",
+      input: { secret: "should-not-appear" },
     });
 
     expect(target).toBe("capability:tyrum.desktop;action:Desktop;op:snapshot");
@@ -139,11 +139,8 @@ describe("canonicalizeToolMatchTarget", () => {
   it("canonicalizes nested desktop args wrappers for node dispatch without leaking values", () => {
     const target = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.desktop",
-      action: "Desktop",
-      args: {
-        args: { op: "snapshot", secret: "should-not-appear" },
-        other: "ignored",
-      },
+      action_name: "snapshot",
+      input: { secret: "should-not-appear" },
     });
 
     expect(target).toBe("capability:tyrum.desktop;action:Desktop;op:snapshot");
@@ -153,17 +150,16 @@ describe("canonicalizeToolMatchTarget", () => {
   it("canonicalizes other desktop ops without leaking high-entropy values", () => {
     const queryTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.desktop",
-      action: "Desktop",
-      args: { op: "query", selector: { kind: "a11y", role: "button", name: "Save" } },
+      action_name: "query",
+      input: { selector: { kind: "a11y", role: "button", name: "Save" } },
     });
     expect(queryTarget).toBe("capability:tyrum.desktop;action:Desktop;op:query");
     expect(queryTarget).not.toContain("Save");
 
     const waitForTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.desktop",
-      action: "Desktop",
-      args: {
-        op: "wait_for",
+      action_name: "wait_for",
+      input: {
         selector: { kind: "ocr", text: "2FA code", bounds: { x: 1, y: 2, width: 3, height: 4 } },
       },
     });
@@ -172,15 +168,15 @@ describe("canonicalizeToolMatchTarget", () => {
 
     const screenshotTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.desktop",
-      action: "Desktop",
-      args: { op: "screenshot", display: "primary" },
+      action_name: "screenshot",
+      input: { display: "primary" },
     });
     expect(screenshotTarget).toBe("capability:tyrum.desktop;action:Desktop;op:snapshot");
 
     const unknownTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.desktop",
-      action: "Desktop",
-      args: { op: "not-a-real-op", text: "secret" },
+      action_name: "not-a-real-op",
+      input: { text: "secret" },
     });
     expect(unknownTarget).toBe("capability:tyrum.desktop;action:Desktop;op:unknown");
     expect(unknownTarget).not.toContain("secret");
@@ -189,24 +185,23 @@ describe("canonicalizeToolMatchTarget", () => {
   it("groups legacy desktop mouse/keyboard ops under op:act with a minimal subtype", () => {
     const mouseTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.desktop",
-      action: "Desktop",
-      args: { op: "mouse", action: "click", x: 1, y: 2 },
+      action_name: "mouse",
+      input: { action: "click", x: 1, y: 2 },
     });
     expect(mouseTarget).toBe("capability:tyrum.desktop;action:Desktop;op:act;act:mouse");
 
     const keyboardTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.desktop",
-      action: "Desktop",
-      args: { op: "keyboard", action: "type", text: "secret" },
+      action_name: "keyboard",
+      input: { action: "type", text: "secret" },
     });
     expect(keyboardTarget).toBe("capability:tyrum.desktop;action:Desktop;op:act;act:keyboard");
     expect(keyboardTarget).not.toContain("secret");
 
     const actTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.desktop",
-      action: "Desktop",
-      args: {
-        op: "act",
+      action_name: "act",
+      input: {
         target: { kind: "ref", ref: "pixel:1,2" },
         action: { kind: "click" },
       },
@@ -218,16 +213,16 @@ describe("canonicalizeToolMatchTarget", () => {
   it("canonicalizes browser node dispatch by capability + action + browser op", () => {
     const geoTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.browser",
-      action: "Browser",
-      args: { op: "geolocation.get", enable_high_accuracy: true },
+      action_name: "geolocation.get",
+      input: { enable_high_accuracy: true },
     });
     expect(geoTarget).toBe("capability:tyrum.browser;action:Browser;op:geolocation.get");
     expect(geoTarget).not.toContain("enable_high_accuracy");
 
     const unknownTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.browser",
-      action: "Browser",
-      args: { op: "not-a-real-op", secret: "should-not-appear" },
+      action_name: "not-a-real-op",
+      input: { secret: "should-not-appear" },
     });
     expect(unknownTarget).toBe("capability:tyrum.browser;action:Browser;op:unknown");
     expect(unknownTarget).not.toContain("secret");

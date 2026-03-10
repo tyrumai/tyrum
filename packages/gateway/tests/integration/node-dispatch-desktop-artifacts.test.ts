@@ -3,7 +3,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createApp } from "../../src/app.js";
-import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
 import {
   DEFAULT_AGENT_ID,
@@ -12,88 +11,22 @@ import {
 } from "../../src/modules/identity/scope.js";
 import { createTestContainer, decorateAppWithDefaultAuth } from "./helpers.js";
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
-
-type SqlRunner = {
-  run(sql: string, params?: unknown[]): Promise<unknown>;
-};
-
-type ExecutionScopeIds = {
-  jobId: string;
-  runId: string;
-  stepId: string;
-  attemptId: string;
-};
+import {
+  createDesktopInspectionService,
+  extractPayloadArtifactId,
+  seedExecutionScope,
+  stubMcpManager,
+  type ExecutionScopeIds,
+} from "./node-dispatch-desktop-artifacts-test-support.js";
 
 const NODE_ID = "node-1";
-
-async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds): Promise<void> {
-  await db.run(
-    `INSERT INTO execution_jobs (
-       tenant_id,
-       job_id,
-       agent_id,
-       workspace_id,
-       key,
-       lane,
-       status,
-       trigger_json,
-       input_json,
-       latest_run_id
-     )
-     VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
-    [
-      DEFAULT_TENANT_ID,
-      ids.jobId,
-      DEFAULT_AGENT_ID,
-      DEFAULT_WORKSPACE_ID,
-      "agent:agent-1:thread:thread-1",
-      "main",
-      "{}",
-      "{}",
-      ids.runId,
-    ],
-  );
-
-  await db.run(
-    `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt)
-     VALUES (?, ?, ?, ?, ?, 'running', 1)`,
-    [DEFAULT_TENANT_ID, ids.runId, ids.jobId, "agent:agent-1:thread:thread-1", "main"],
-  );
-
-  await db.run(
-    `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
-     VALUES (?, ?, ?, 0, 'running', ?)`,
-    [DEFAULT_TENANT_ID, ids.stepId, ids.runId, "{}"],
-  );
-
-  await db.run(
-    `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, artifacts_json)
-     VALUES (?, ?, ?, 1, 'running', '[]')`,
-    [DEFAULT_TENANT_ID, ids.attemptId, ids.stepId],
-  );
-}
-
-function stubMcpManager(): McpManager {
-  return {
-    listTools: async () => ({ tools: [] }),
-    callTool: async () => ({ content: [] }),
-  } as unknown as McpManager;
-}
-
-function unwrapToolOutput(output: string): string {
-  const trimmed = output.trim();
-  const match = trimmed.match(/^<data source="tool">\s*([\s\S]*)\s*<\/data>$/);
-  return (match?.[1] ?? trimmed).trim();
-}
-
-function extractEvidenceArtifactId(output: string, key: "artifact" | "tree_artifact"): string {
-  const parsed = JSON.parse(unwrapToolOutput(output)) as { evidence?: unknown } | undefined;
-  const evidence = parsed?.evidence as Record<string, unknown> | undefined;
-  const artifact = evidence?.[key] as { artifact_id?: unknown } | undefined;
-  const artifactId = artifact?.artifact_id;
-  expect(typeof artifactId).toBe("string");
-  return artifactId as string;
-}
+const EXECUTION_SCOPE = {
+  tenantId: DEFAULT_TENANT_ID,
+  agentId: DEFAULT_AGENT_ID,
+  workspaceId: DEFAULT_WORKSPACE_ID,
+  key: "agent:agent-1:thread:thread-1",
+  lane: "main",
+} as const;
 
 describe("tool.node.dispatch desktop evidence artifacts", () => {
   let originalTyrumHome: string | undefined;
@@ -121,6 +54,9 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       },
       service,
       container.artifactStore as any,
+      undefined,
+      undefined,
+      createDesktopInspectionService(NODE_ID) as any,
     );
   }
 
@@ -160,7 +96,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       stepId: "step-node-dispatch-1",
       attemptId: "attempt-node-dispatch-1",
     };
-    await seedExecutionScope(container.db, scope);
+    await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
 
     const pngBytes = Buffer.from("fake-png-bytes", "utf8");
     const bytesBase64 = pngBytes.toString("base64");
@@ -192,8 +128,8 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       {
         node_id: NODE_ID,
         capability: "tyrum.desktop",
-        action: "Desktop",
-        args: { op: "screenshot", display: "primary" },
+        action_name: "screenshot",
+        input: { display: "primary" },
       },
       {
         execution_run_id: scope.runId,
@@ -206,7 +142,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     expect(result.output).not.toContain("bytesBase64");
     expect(result.output).not.toContain(bytesBase64);
 
-    const artifactId = extractEvidenceArtifactId(result.output, "artifact");
+    const artifactId = extractPayloadArtifactId(result.output, "artifact");
 
     const row = await container.db.get<{
       artifact_id: string;
@@ -251,7 +187,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       stepId: "step-node-dispatch-3",
       attemptId: "attempt-node-dispatch-3",
     };
-    await seedExecutionScope(container.db, scope);
+    await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
 
     const tree = {
       root: {
@@ -299,8 +235,8 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       {
         node_id: NODE_ID,
         capability: "tyrum.desktop",
-        action: "Desktop",
-        args: { op: "snapshot", include_tree: true },
+        action_name: "snapshot",
+        input: { include_tree: true },
       },
       {
         execution_run_id: scope.runId,
@@ -314,7 +250,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     expect(result.output).not.toContain("bytesBase64");
     expect(result.output).not.toContain(bytesBase64);
 
-    const artifactId = extractEvidenceArtifactId(result.output, "tree_artifact");
+    const artifactId = extractPayloadArtifactId(result.output, "tree_artifact");
 
     const row = await container.db.get<{
       artifact_id: string;
@@ -359,7 +295,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       stepId: "step-node-dispatch-2",
       attemptId: "attempt-node-dispatch-2",
     };
-    await seedExecutionScope(container.db, scope);
+    await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
 
     const tree = {
       root: {
@@ -397,8 +333,8 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       {
         node_id: NODE_ID,
         capability: "tyrum.desktop",
-        action: "Desktop",
-        args: { op: "snapshot", include_tree: true },
+        action_name: "snapshot",
+        input: { include_tree: true },
       },
       {
         execution_run_id: scope.runId,
@@ -411,7 +347,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     expect(result.output).toContain("tree_artifact");
     expect(result.output).not.toContain('"tree":{');
 
-    const artifactId = extractEvidenceArtifactId(result.output, "tree_artifact");
+    const artifactId = extractPayloadArtifactId(result.output, "tree_artifact");
 
     const row = await container.db.get<{
       artifact_id: string;
@@ -456,7 +392,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       stepId: "step-node-dispatch-4",
       attemptId: "attempt-node-dispatch-4",
     };
-    await seedExecutionScope(container.db, scope);
+    await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
 
     const nodeId = "node-sandbox-1";
     await container.db.run(
@@ -508,8 +444,8 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       {
         node_id: nodeId,
         capability: "tyrum.desktop",
-        action: "Desktop",
-        args: { op: "screenshot", display: "primary" },
+        action_name: "screenshot",
+        input: { display: "primary" },
       },
       {
         execution_run_id: scope.runId,
@@ -521,7 +457,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     expect(result.output).toContain("artifact://");
     expect(result.output).not.toContain(bytesBase64);
 
-    const artifactId = extractEvidenceArtifactId(result.output, "artifact");
+    const artifactId = extractPayloadArtifactId(result.output, "artifact");
 
     const row = await container.db.get<{ sensitivity: string }>(
       `SELECT sensitivity

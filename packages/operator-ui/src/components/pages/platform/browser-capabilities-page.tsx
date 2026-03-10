@@ -106,6 +106,59 @@ export function BrowserCapabilitiesPage() {
           {browserNode.error ? (
             <Alert variant="error" title="Browser node error" description={browserNode.error} />
           ) : null}
+
+          <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-4">
+            <div className="text-sm font-semibold text-fg">Action controls</div>
+            {[
+              {
+                name: "geolocation.get" as const,
+                label: "Location",
+                description: "Expose browser geolocation requests to the agent.",
+              },
+              {
+                name: "camera.capture_photo" as const,
+                label: "Camera",
+                description: "Expose still-photo capture from the browser camera.",
+              },
+              {
+                name: "microphone.record" as const,
+                label: "Microphone",
+                description: "Expose browser microphone recording.",
+              },
+            ].map((entry) => {
+              const state = browserNode.capabilityStates[entry.name];
+              return (
+                <div
+                  key={entry.name}
+                  className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border/60 bg-panel px-3 py-3"
+                >
+                  <div className="min-w-0 grid gap-1">
+                    <div className="text-sm font-medium text-fg">{entry.label}</div>
+                    <div className="text-sm text-fg-muted">{entry.description}</div>
+                    <div className="text-xs text-fg-muted">
+                      Status{" "}
+                      <span className="font-medium text-fg">
+                        {state.enabled ? "enabled" : "disabled"}
+                      </span>
+                      {" · "}
+                      <span className="font-medium text-fg">{state.availability_status}</span>
+                    </div>
+                    {state.unavailable_reason ? (
+                      <div className="text-xs text-danger">{state.unavailable_reason}</div>
+                    ) : null}
+                  </div>
+                  <Switch
+                    aria-label={`Enable ${entry.label.toLowerCase()} capability`}
+                    checked={state.enabled}
+                    disabled={!browserNode.enabled}
+                    onCheckedChange={(checked) => {
+                      browserNode.setCapabilityEnabled(entry.name, checked);
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
 
@@ -116,7 +169,13 @@ export function BrowserCapabilitiesPage() {
             <Button
               variant="outline"
               isLoading={testBusy}
-              disabled={!browserNode.enabled || testBusy}
+              disabled={
+                !browserNode.enabled ||
+                !browserNode.capabilityStates["geolocation.get"].enabled ||
+                browserNode.capabilityStates["geolocation.get"].availability_status ===
+                  "unavailable" ||
+                testBusy
+              }
               onClick={() => {
                 void runTest(() =>
                   browserNode.executeLocal({
@@ -133,7 +192,13 @@ export function BrowserCapabilitiesPage() {
             <Button
               variant="outline"
               isLoading={testBusy}
-              disabled={!browserNode.enabled || testBusy}
+              disabled={
+                !browserNode.enabled ||
+                !browserNode.capabilityStates["camera.capture_photo"].enabled ||
+                browserNode.capabilityStates["camera.capture_photo"].availability_status ===
+                  "unavailable" ||
+                testBusy
+              }
               onClick={() => {
                 void runTest(() =>
                   browserNode.executeLocal({
@@ -149,7 +214,13 @@ export function BrowserCapabilitiesPage() {
             <Button
               variant="outline"
               isLoading={testBusy}
-              disabled={!browserNode.enabled || testBusy}
+              disabled={
+                !browserNode.enabled ||
+                !browserNode.capabilityStates["microphone.record"].enabled ||
+                browserNode.capabilityStates["microphone.record"].availability_status ===
+                  "unavailable" ||
+                testBusy
+              }
               onClick={() => {
                 void runTest(() =>
                   browserNode.executeLocal({ op: "microphone.record", duration_ms: 3_000 }),

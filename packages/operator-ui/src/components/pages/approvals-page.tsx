@@ -39,17 +39,13 @@ function describeDesktopApprovalContext(context: unknown): DesktopApprovalSummar
   const args = isRecord(ctx["args"]) ? (ctx["args"] as Record<string, unknown>) : null;
   if (!args) return null;
   if (args["capability"] !== "tyrum.desktop") return null;
-  if (args["action"] !== "Desktop") return null;
-
-  const actionArgs = isRecord(args["args"]) ? (args["args"] as Record<string, unknown>) : null;
-  if (!actionArgs) return null;
-
-  const op = typeof actionArgs["op"] === "string" ? actionArgs["op"].trim() : "";
+  const op = typeof args["action_name"] === "string" ? args["action_name"].trim() : "";
   if (!op) return null;
 
   const summary: DesktopApprovalSummary = { op };
+  const actionArgs = isRecord(args["input"]) ? (args["input"] as Record<string, unknown>) : null;
 
-  if (op === "act") {
+  if (op === "act" && actionArgs) {
     const action = isRecord(actionArgs["action"])
       ? (actionArgs["action"] as Record<string, unknown>)
       : null;

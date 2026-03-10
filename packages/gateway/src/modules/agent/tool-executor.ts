@@ -10,10 +10,15 @@ import type { SecretResolutionAuditDal } from "../secret/resolution-audit-dal.js
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
 import type { AgentMemoryToolRuntime } from "../memory/agent-tool-runtime.js";
 import { executeCoreTool, executeMcpTool } from "./tool-executor-core-tools.js";
-import { executeNodeDispatchTool, executeNodeListTool } from "./tool-executor-node-dispatch.js";
+import {
+  executeNodeDispatchTool,
+  executeNodeInspectTool,
+  executeNodeListTool,
+} from "./tool-executor-node-dispatch.js";
 import { executeAutomationScheduleTool } from "./tool-executor-schedule-tools.js";
 import type { McpManager } from "./mcp-manager.js";
 import type { NodeDispatchService } from "./node-dispatch-service.js";
+import type { NodeCapabilityInspectionService } from "../node/capability-inspection-service.js";
 import {
   DEFAULT_DNS_LOOKUP,
   type DnsLookupFn,
@@ -47,6 +52,7 @@ export class ToolExecutor {
     private readonly artifactStore?: ArtifactStore,
     private readonly identityScopeDal?: IdentityScopeDal,
     private readonly nodeInventoryService?: NodeInventoryService,
+    private readonly nodeCapabilityInspectionService?: NodeCapabilityInspectionService,
     private readonly memoryToolRuntime?: AgentMemoryToolRuntime,
   ) {}
 
@@ -152,22 +158,31 @@ export class ToolExecutor {
       return await executeMcpTool(coreContext, toolId, toolCallId, args);
     }
     if (toolId === "tool.node.dispatch") {
-      return this.nodeDispatchService
-        ? await executeNodeDispatchTool(
-            {
-              workspaceLease: this.workspaceLease,
-              nodeDispatchService: this.nodeDispatchService,
-              artifactStore: this.artifactStore,
-            },
-            toolCallId,
-            args,
-            audit,
-          )
-        : {
-            tool_call_id: toolCallId,
-            output: "",
-            error: "node dispatch is not configured",
-          };
+      if (!this.nodeDispatchService) {
+        return {
+          tool_call_id: toolCallId,
+          output: "",
+          error: "node dispatch is not configured",
+        };
+      }
+      if (!this.nodeCapabilityInspectionService) {
+        return {
+          tool_call_id: toolCallId,
+          output: "",
+          error: "node capability inspection is not configured",
+        };
+      }
+      return await executeNodeDispatchTool(
+        {
+          workspaceLease: this.workspaceLease,
+          nodeDispatchService: this.nodeDispatchService,
+          inspectionService: this.nodeCapabilityInspectionService,
+          artifactStore: this.artifactStore,
+        },
+        toolCallId,
+        args,
+        audit,
+      );
     }
     if (toolId === "tool.node.list") {
       return this.nodeInventoryService
@@ -184,6 +199,22 @@ export class ToolExecutor {
             tool_call_id: toolCallId,
             output: "",
             error: "node inventory is not configured",
+          };
+    }
+    if (toolId === "tool.node.inspect") {
+      return this.nodeCapabilityInspectionService
+        ? await executeNodeInspectTool(
+            {
+              workspaceLease: this.workspaceLease,
+              inspectionService: this.nodeCapabilityInspectionService,
+            },
+            toolCallId,
+            args,
+          )
+        : {
+            tool_call_id: toolCallId,
+            output: "",
+            error: "node capability inspection is not configured",
           };
     }
 

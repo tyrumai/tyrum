@@ -17,7 +17,7 @@ import {
 const nodeDispatchArgs = {
   node_id: "node-1",
   capability: "tyrum.desktop",
-  action: "Desktop",
+  action_name: "snapshot",
 };
 
 function createWorkspaceLease(db: ReturnType<typeof openTestSqliteDb>) {
@@ -68,6 +68,47 @@ async function executeNodeDispatch(
       homeDir: requireHomeDir(home),
       workspaceLease: createWorkspaceLease(db),
       nodeDispatchService: nodeDispatchService as never,
+      nodeCapabilityInspectionService: {
+        inspect: vi.fn(async () => ({
+          status: "ok",
+          generated_at: new Date().toISOString(),
+          node_id: "node-1",
+          capability: "tyrum.desktop",
+          capability_version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+          connected: true,
+          paired: true,
+          dispatchable: true,
+          source_of_truth: {
+            schema: "gateway_catalog",
+            state: "node_capability_state",
+          },
+          actions: [
+            {
+              name: "snapshot",
+              description: "Collect a desktop accessibility snapshot.",
+              supported: true,
+              enabled: true,
+              availability_status: "unknown",
+              input_schema: {},
+              output_schema: {},
+              consent: {
+                requires_operator_enable: false,
+                requires_runtime_consent: false,
+                may_prompt_user: false,
+                sensitive_data_category: "screen",
+              },
+              permissions: { browser_apis: [] },
+              transport: {
+                primitive_kind: "Desktop",
+                op_field: "op",
+                op_value: "snapshot",
+                result_channel: "result_or_evidence",
+                artifactize_binary_fields: [],
+              },
+            },
+          ],
+        })),
+      } as never,
     }).execute("tool.node.dispatch", "call-7", args);
   } finally {
     await db.close();
@@ -79,10 +120,32 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
     const result = await createToolExecutor({ homeDir: requireHomeDir(home) }).execute(
       "tool.node.dispatch",
       "call-7",
-      { node_id: "node-1", capability: "screen", action: "capture" },
+      { node_id: "node-1", capability: "screen", action_name: "capture" },
     );
 
     expect(result.error).toBe("node dispatch is not configured");
+  });
+
+  it("tool.node.dispatch returns inspection configuration error when capability inspection is unavailable", async () => {
+    const db = openTestSqliteDb();
+
+    try {
+      const result = await createToolExecutor({
+        homeDir: requireHomeDir(home),
+        workspaceLease: createWorkspaceLease(db),
+        nodeDispatchService: {
+          dispatchAndWait: vi.fn(async () => ({
+            taskId: "task-123",
+            result: { ok: true, evidence: { foo: "bar" } },
+          })),
+        } as never,
+      }).execute("tool.node.dispatch", "call-7", nodeDispatchArgs);
+
+      expect(result.output).toBe("");
+      expect(result.error).toBe("node capability inspection is not configured");
+    } finally {
+      await db.close();
+    }
   });
 
   it("tool.node.dispatch delegates to node dispatch service and returns structured output", async () => {
@@ -95,13 +158,21 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
 
     const result = await executeNodeDispatch(home, nodeDispatchService, {
       ...nodeDispatchArgs,
-      args: { x: 1 },
+      input: { include_tree: false },
     });
 
     expect(result.error).toBeUndefined();
     expect(nodeDispatchService.dispatchAndWait).toHaveBeenCalledOnce();
     expect(nodeDispatchService.dispatchAndWait).toHaveBeenCalledWith(
-      { type: "Desktop", args: { x: 1 } },
+      {
+        type: "Desktop",
+        args: {
+          op: "snapshot",
+          include_tree: false,
+          max_nodes: 2048,
+          max_text_chars: 32768,
+        },
+      },
       expect.any(Object),
       { timeoutMs: 30_000, nodeId: "node-1" },
     );
@@ -110,6 +181,34 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
     expect(result.output).toContain('"task_id":"task-123"');
     expect(result.output).toContain('"node_id":"node-1"');
     expect(result.output).toContain('"foo":"bar"');
+  });
+
+  it("tool.node.dispatch does not allow input.op to override the catalog action", async () => {
+    const nodeDispatchService = {
+      dispatchAndWait: vi.fn(async () => ({
+        taskId: "task-123",
+        result: { ok: true, evidence: { foo: "bar" } },
+      })),
+    };
+
+    const result = await executeNodeDispatch(home, nodeDispatchService, {
+      ...nodeDispatchArgs,
+      input: { op: "act", include_tree: false },
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(nodeDispatchService.dispatchAndWait).toHaveBeenCalledOnce();
+    expect(nodeDispatchService.dispatchAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "Desktop",
+        args: expect.objectContaining({
+          op: "snapshot",
+          include_tree: false,
+        }),
+      }),
+      expect.any(Object),
+      { timeoutMs: 30_000, nodeId: "node-1" },
+    );
   });
 
   it("tool.node.dispatch returns a structured, retryable timeout error", async () => {
@@ -121,12 +220,12 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
 
     const result = await executeNodeDispatch(home, nodeDispatchService, {
       ...nodeDispatchArgs,
-      args: { x: 1 },
+      input: { include_tree: false },
     });
 
     expect(result.error).toBeUndefined();
     expect(result.output).toContain('"ok":false');
-    expect(result.output).toContain('"code":"timeout"');
+    expect(result.output).toContain('"code":"dispatch_timeout"');
     expect(result.output).toContain('"retryable":true');
   });
 
@@ -138,7 +237,7 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
           connectionManager: new ConnectionManager(),
           taskResults: new TaskResultRegistry(),
         } as never),
-      expectedCode: "unknown_node",
+      expectedCode: "runtime_unavailable",
     },
     {
       name: "tool.node.dispatch returns a structured not_paired error when a desktop node is connected but not paired",
@@ -153,7 +252,7 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
             },
           }) as never,
         ),
-      expectedCode: "not_paired",
+      expectedCode: "capability_not_paired",
     },
     {
       name: "tool.node.dispatch returns a structured policy_denied error when policy denies node dispatch",
@@ -181,7 +280,7 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
             },
           }) as never,
         ),
-      expectedCode: "policy_denied",
+      expectedCode: "execution_failed",
     },
   ] as const;
 
@@ -208,7 +307,7 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
 
     expect(result.error).toBeUndefined();
     expect(result.output).toContain('"truncated":true');
-    expect(result.output).toContain("evidence too large");
+    expect(result.output).toContain("payload too large");
     expect(result.output).not.toContain(huge.slice(0, 200));
   });
 
@@ -226,13 +325,17 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
               connected: true,
               paired_status: "approved",
               attached_to_requested_lane: true,
-              dispatches: [
+              capabilities: [
                 {
                   capability: "tyrum.desktop",
-                  action: "Desktop",
-                  ready: true,
-                  allowed: true,
                   dispatchable: true,
+                  capability_version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                  connected: true,
+                  paired: true,
+                  supported_action_count: 7,
+                  enabled_action_count: 1,
+                  available_action_count: 0,
+                  unknown_action_count: 1,
                 },
               ],
             },
@@ -264,6 +367,30 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
       expect(result.error).toBeUndefined();
       expect(result.output).toContain('"status":"ok"');
       expect(result.output).toContain('"attached_to_requested_lane":true');
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("tool.node.inspect returns a tool error when inspection fails", async () => {
+    const db = openTestSqliteDb();
+
+    try {
+      const result = await createToolExecutor({
+        homeDir: requireHomeDir(home),
+        workspaceLease: createWorkspaceLease(db),
+        nodeCapabilityInspectionService: {
+          inspect: vi.fn(async () => {
+            throw new Error("unknown_node: node-404");
+          }),
+        } as never,
+      }).execute("tool.node.inspect", "call-9", {
+        node_id: "node-404",
+        capability: "tyrum.browser",
+      });
+
+      expect(result.output).toBe("");
+      expect(result.error).toBe("unknown_node: node-404");
     } finally {
       await db.close();
     }

@@ -216,8 +216,13 @@ function handleCapabilityReadyMessage(
     .map((capability) => clientCapabilityFromDescriptorId(capability.id))
     .filter((capability): capability is ClientCapability => capability !== undefined)
     .filter((capability) => client.capabilities.includes(capability));
+  const capabilityStates = parsedReq.data.payload.capability_states.filter((state) => {
+    const capability = clientCapabilityFromDescriptorId(state.capability.id);
+    return capability !== undefined && client.capabilities.includes(capability);
+  });
 
   deps.connectionManager.setReadyCapabilities(client.id, readyLegacyCaps);
+  deps.connectionManager.setCapabilityStates(client.id, capabilityStates);
 
   if (deps.cluster) {
     void deps.cluster.connectionDirectory
@@ -229,6 +234,21 @@ function handleCapabilityReadyMessage(
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
         deps.logger?.warn("ws.capability_ready.persistence_failed", {
+          request_id: msg.request_id,
+          client_id: client.id,
+          request_type: msg.type,
+          error: message,
+        });
+      });
+    void deps.cluster.connectionDirectory
+      .setCapabilityStates({
+        tenantId,
+        connectionId: client.id,
+        capabilityStates,
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        deps.logger?.warn("ws.capability_state.persistence_failed", {
           request_id: msg.request_id,
           client_id: client.id,
           request_type: msg.type,
@@ -248,6 +268,7 @@ function handleCapabilityReadyMessage(
       payload: {
         node_id: nodeId,
         capabilities: parsedReq.data.payload.capabilities,
+        capability_states: capabilityStates,
       },
     },
     deps,

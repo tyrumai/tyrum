@@ -73,7 +73,6 @@ export { WsRunListResponseOkEnvelope, WsRunListResponseErrEnvelope, WsRunListRes
 // prettier-ignore
 export {
   NodeIdentity,
-  NodeInventoryDispatch,
   NodeInventoryEntry,
   NodeInventoryResponse,
   NodePairingStatus,
@@ -86,6 +85,8 @@ export {
 export { PlaybookOutputKind, PlaybookOutputSpec, PlaybookStep, PlaybookManifest, Playbook } from "./playbook.js";
 // prettier-ignore
 export { PlaybookRuntimeRunRequest, PlaybookRuntimeResumeRequest, PlaybookRuntimeRequest, PlaybookRuntimeRequiresApproval, PlaybookRuntimeError, PlaybookRuntimeEnvelope } from "./playbook-runtime.js";
+// prettier-ignore
+export { CapabilityAvailabilityStatus, SensitiveDataCategory, NodeActionConsentMetadata, NodeActionPermissionMetadata, NodeActionTransportMetadata, NodeCapabilityActionDefinition, NodeCapabilitySourceOfTruth, NodeCapabilityInspectionResponse, NodeCapabilitySummary, DispatchErrorCode, NodeActionDispatchRequest, NodeActionDispatchError, NodeActionDispatchResponse, NodeCapabilityActionState, NodeCapabilityState } from "./node-capability.js";
 // prettier-ignore
 export { TenantKey, AgentKey, TenantId, AgentId, ChannelKey, AccountId, PeerId, ThreadId, CronJobId, NodeId, WorkspaceKey, WorkspaceId, DEFAULT_WORKSPACE_KEY, DmScope, resolveDmScope, buildAgentSessionKey, AgentMainKey, AgentDmPerPeerKey, AgentDmPerChannelPeerKey, AgentDmPerAccountChannelPeerKey, AgentGroupKey, AgentChannelKey, AgentSessionKey, CronKey, HookKey, NodeKey, TyrumKey, Lane, QueueMode, parseTyrumKey } from "./keys.js";
 // prettier-ignore

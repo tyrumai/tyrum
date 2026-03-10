@@ -60,6 +60,8 @@ import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js
 import { gatewayMetrics } from "./modules/observability/metrics.js";
 import { PolicyBundleConfigDal } from "./modules/policy/config-dal.js";
 import { NodeInventoryService } from "./modules/node/inventory-service.js";
+import { NodeCapabilityInspectionService } from "./modules/node/capability-inspection-service.js";
+import { NodeDispatchService } from "./modules/agent/node-dispatch-service.js";
 import { isSharedStateMode, resolveGatewayStateMode } from "./modules/runtime-state/mode.js";
 
 export interface AppRouteDependencies {
@@ -163,17 +165,30 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
     }),
   );
   if (context.opts.connectionManager) {
-    context.app.route(
-      "/",
-      createNodesRoute(
-        new NodeInventoryService({
+    const inventoryService = new NodeInventoryService({
+      connectionManager: context.opts.connectionManager,
+      connectionDirectory: context.opts.connectionDirectory,
+      nodePairingDal: context.container.nodePairingDal,
+      presenceDal: context.container.presenceDal,
+      attachmentDal: context.container.sessionLaneNodeAttachmentDal,
+    });
+    const inspectionService = context.opts.protocolDeps
+      ? new NodeCapabilityInspectionService({
           connectionManager: context.opts.connectionManager,
           connectionDirectory: context.opts.connectionDirectory,
-          nodePairingDal: context.container.nodePairingDal,
-          presenceDal: context.container.presenceDal,
-          attachmentDal: context.container.sessionLaneNodeAttachmentDal,
-        }),
-      ),
+          nodeInventoryService: inventoryService,
+        })
+      : undefined;
+    context.app.route(
+      "/",
+      createNodesRoute({
+        inventoryService,
+        inspectionService,
+        nodeDispatchService: context.opts.protocolDeps
+          ? new NodeDispatchService(context.opts.protocolDeps)
+          : undefined,
+        artifactStore: context.container.artifactStore,
+      }),
     );
   }
   context.app.route(

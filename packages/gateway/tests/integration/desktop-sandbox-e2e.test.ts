@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getRequestListener } from "@hono/node-server";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
@@ -192,6 +192,72 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             },
             nodeDispatchService,
             container.artifactStore as any,
+            undefined,
+            undefined,
+            {
+              inspect: vi.fn(async () => ({
+                status: "ok",
+                generated_at: new Date().toISOString(),
+                node_id: pairing.node.node_id,
+                capability: "tyrum.desktop",
+                capability_version: "1.0.0",
+                connected: true,
+                paired: true,
+                dispatchable: true,
+                source_of_truth: {
+                  schema: "gateway_catalog",
+                  state: "node_capability_state",
+                },
+                actions: [
+                  {
+                    name: "snapshot",
+                    description: "Collect a desktop accessibility snapshot.",
+                    supported: true,
+                    enabled: true,
+                    availability_status: "unknown",
+                    input_schema: {},
+                    output_schema: {},
+                    consent: {
+                      requires_operator_enable: false,
+                      requires_runtime_consent: false,
+                      may_prompt_user: false,
+                      sensitive_data_category: "screen",
+                    },
+                    permissions: { browser_apis: [] },
+                    transport: {
+                      primitive_kind: "Desktop",
+                      op_field: "op",
+                      op_value: "snapshot",
+                      result_channel: "result_or_evidence",
+                      artifactize_binary_fields: [],
+                    },
+                  },
+                  {
+                    name: "mouse",
+                    description: "Perform a desktop mouse action.",
+                    supported: true,
+                    enabled: true,
+                    availability_status: "unknown",
+                    input_schema: {},
+                    output_schema: {},
+                    consent: {
+                      requires_operator_enable: false,
+                      requires_runtime_consent: false,
+                      may_prompt_user: false,
+                      sensitive_data_category: "ui",
+                    },
+                    permissions: { browser_apis: [] },
+                    transport: {
+                      primitive_kind: "Desktop",
+                      op_field: "op",
+                      op_value: "mouse",
+                      result_channel: "result_or_evidence",
+                      artifactize_binary_fields: [],
+                    },
+                  },
+                ],
+              })),
+            } as any,
           );
 
           const snapshotResult = await executor.execute(
@@ -200,8 +266,8 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             {
               node_id: pairing.node.node_id,
               capability: "tyrum.desktop",
-              action: "Desktop",
-              args: { op: "snapshot", include_tree: true, max_nodes: 512, max_text_chars: 8192 },
+              action_name: "snapshot",
+              input: { include_tree: true, max_nodes: 512, max_text_chars: 8192 },
               timeout_ms: 120_000,
             },
             {
@@ -267,8 +333,8 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             {
               node_id: pairing.node.node_id,
               capability: "tyrum.desktop",
-              action: "Desktop",
-              args: { op: "mouse", action: "move", x: 5, y: 5 },
+              action_name: "mouse",
+              input: { action: "move", x: 5, y: 5 },
               timeout_ms: 60_000,
             },
             {

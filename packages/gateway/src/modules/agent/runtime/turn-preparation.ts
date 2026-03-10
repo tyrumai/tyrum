@@ -30,6 +30,7 @@ import { SessionDal } from "../session-dal.js";
 import { McpManager } from "../mcp-manager.js";
 import { NodeDispatchService } from "../node-dispatch-service.js";
 import { ToolExecutor } from "../tool-executor.js";
+import { NodeCapabilityInspectionService } from "../../node/capability-inspection-service.js";
 import { NodeInventoryService } from "../../node/inventory-service.js";
 import { resolveSandboxHardeningProfile } from "../../sandbox/hardening.js";
 import { LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
@@ -243,6 +244,14 @@ export async function prepareTurn(
         attachmentDal: deps.opts.container.sessionLaneNodeAttachmentDal,
       })
     : undefined;
+  const nodeCapabilityInspectionService =
+    deps.opts.protocolDeps && nodeInventoryService
+      ? new NodeCapabilityInspectionService({
+          connectionManager: deps.opts.protocolDeps.connectionManager,
+          connectionDirectory: deps.opts.protocolDeps.cluster?.connectionDirectory,
+          nodeInventoryService,
+        })
+      : undefined;
   const modelResolution = await resolveSessionModelImpl(
     {
       container: deps.opts.container,
@@ -309,6 +318,7 @@ export async function prepareTurn(
     deps.opts.container.artifactStore,
     deps.opts.container.identityScopeDal,
     nodeInventoryService,
+    nodeCapabilityInspectionService,
     memoryToolRuntime,
   );
 

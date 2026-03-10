@@ -23,7 +23,8 @@ type ToolExecutorFactoryOptions = {
   nodeDispatchService?: ToolExecutorCtor[9];
   identityScopeDal?: ToolExecutorCtor[11];
   nodeInventoryService?: ToolExecutorCtor[12];
-  memoryToolRuntime?: ToolExecutorCtor[13];
+  nodeCapabilityInspectionService?: ToolExecutorCtor[13];
+  memoryToolRuntime?: ToolExecutorCtor[14];
 };
 
 export function registerTempHomeLifecycle(prefix = "tool-executor-"): HomeDirState {
@@ -76,6 +77,7 @@ export function createToolExecutor({
   nodeDispatchService,
   identityScopeDal,
   nodeInventoryService,
+  nodeCapabilityInspectionService,
   memoryToolRuntime,
 }: ToolExecutorFactoryOptions): ToolExecutor {
   return new ToolExecutor(
@@ -92,6 +94,7 @@ export function createToolExecutor({
     undefined,
     identityScopeDal,
     nodeInventoryService,
+    nodeCapabilityInspectionService,
     memoryToolRuntime,
   );
 }

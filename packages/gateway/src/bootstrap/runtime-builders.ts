@@ -321,6 +321,7 @@ export async function startEdgeRuntime(
     secretProviderForTenant: context.secretProviderForTenant,
     isLocalOnly: context.isLocalOnly,
     connectionManager: protocol.connectionManager,
+    protocolDeps: protocol.protocolDeps,
     connectionDirectory: protocol.connectionDirectory,
     authRateLimiter,
     engine: protocol.edgeEngine,

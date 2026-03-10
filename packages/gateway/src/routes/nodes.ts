@@ -1,10 +1,25 @@
 import { Hono } from "hono";
-import { NodeInventoryResponse } from "@tyrum/schemas";
+import {
+  NodeActionDispatchRequest,
+  NodeActionDispatchResponse,
+  NodeCapabilityInspectionResponse,
+  NodeInventoryResponse,
+} from "@tyrum/schemas";
 import { requireTenantId } from "../modules/auth/claims.js";
 import { NodeInventoryService } from "../modules/node/inventory-service.js";
+import { NodeCapabilityInspectionService } from "../modules/node/capability-inspection-service.js";
+import { executeHttpNodeDispatch } from "../modules/agent/tool-executor-node-dispatch.js";
+import type { NodeDispatchService } from "../modules/agent/node-dispatch-service.js";
+import type { ArtifactStore } from "../modules/artifact/store.js";
 
-export function createNodesRoute(service: NodeInventoryService): Hono {
+export function createNodesRoute(deps: {
+  inventoryService: NodeInventoryService;
+  inspectionService?: NodeCapabilityInspectionService;
+  nodeDispatchService?: NodeDispatchService;
+  artifactStore?: ArtifactStore;
+}): Hono {
   const app = new Hono();
+  const { artifactStore, inspectionService, inventoryService, nodeDispatchService } = deps;
 
   app.get("/nodes", async (c) => {
     const tenantId = requireTenantId(c);
@@ -17,7 +32,7 @@ export function createNodesRoute(service: NodeInventoryService): Hono {
     const key = c.req.query("key")?.trim() || undefined;
     const lane = c.req.query("lane")?.trim() || undefined;
 
-    const result = await service.list({
+    const result = await inventoryService.list({
       tenantId,
       capability,
       dispatchableOnly,
@@ -33,6 +48,54 @@ export function createNodesRoute(service: NodeInventoryService): Hono {
       }),
     );
   });
+
+  if (inspectionService) {
+    app.get("/nodes/:nodeId/capabilities/:capabilityId", async (c) => {
+      const tenantId = requireTenantId(c);
+      const includeDisabledRaw = c.req.query("include_disabled")?.trim().toLowerCase();
+      const includeDisabled =
+        includeDisabledRaw === undefined
+          ? false
+          : ["1", "true", "yes"].includes(includeDisabledRaw);
+
+      const result = await inspectionService.inspect({
+        tenantId,
+        nodeId: c.req.param("nodeId"),
+        capabilityId: c.req.param("capabilityId"),
+        includeDisabled,
+      });
+
+      return c.json(NodeCapabilityInspectionResponse.parse(result));
+    });
+  }
+
+  if (inspectionService && nodeDispatchService) {
+    app.post(
+      "/nodes/:nodeId/capabilities/:capabilityId/actions/:actionName/dispatch",
+      async (c) => {
+        const tenantId = requireTenantId(c);
+        const body = await c.req.json();
+        const parsed = NodeActionDispatchRequest.parse({
+          ...(body && typeof body === "object" ? body : {}),
+          node_id: c.req.param("nodeId"),
+          capability: c.req.param("capabilityId"),
+          action_name: c.req.param("actionName"),
+        });
+
+        const result = await executeHttpNodeDispatch(
+          {
+            tenantId,
+            nodeDispatchService,
+            inspectionService,
+            artifactStore,
+          },
+          parsed,
+        );
+
+        return c.json(NodeActionDispatchResponse.parse(result));
+      },
+    );
+  }
 
   return app;
 }

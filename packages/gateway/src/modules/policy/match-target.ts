@@ -1,10 +1,5 @@
 import { posix as pathPosix, win32 as pathWin32 } from "node:path";
-import {
-  ActionPrimitiveKind,
-  canonicalizeToolId,
-  descriptorIdForClientCapability,
-  requiredCapability,
-} from "@tyrum/schemas";
+import { ActionPrimitiveKind, canonicalizeToolId } from "@tyrum/schemas";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -270,12 +265,9 @@ export function canonicalizeNodeDispatchMatchTarget(
   actionKind: ActionPrimitiveKind,
   actionArgs: unknown,
 ): string {
-  const required = requiredCapability(actionKind);
-  const descriptorId = required ? descriptorIdForClientCapability(required) : "";
+  let target = `action:${actionKind}`;
 
-  let target = `capability:${descriptorId};action:${actionKind}`;
-
-  if (required === "desktop") {
+  if (actionKind === "Desktop") {
     const parsed = asRecord(actionArgs);
     const { op, actSubtype } = canonicalizeDesktopDispatchOp(parsed);
     target += `;op:${op}`;
@@ -284,7 +276,7 @@ export function canonicalizeNodeDispatchMatchTarget(
     }
   }
 
-  if (required === "browser") {
+  if (actionKind === "Browser") {
     const parsed = asRecord(actionArgs);
     const op = canonicalizeBrowserDispatchOp(parsed);
     target += `;op:${op}`;
@@ -347,13 +339,30 @@ export function canonicalizeToolMatchTarget(
   }
 
   if (normalizedToolId === "tool.node.dispatch") {
-    const actionToken = normalizeToken(parsed?.["action"]);
-    if (!actionToken) return "capability:;action:";
+    const capability = normalizeToken(parsed?.["capability"]) ?? "";
+    const actionName = normalizeToken(parsed?.["action_name"]);
+    if (!actionName) return `capability:${capability};action:`;
 
-    const parsedAction = ActionPrimitiveKind.safeParse(actionToken);
-    if (!parsedAction.success) return "capability:;action:";
+    const inferredPrimitive =
+      capability === "tyrum.browser"
+        ? "Browser"
+        : capability === "tyrum.desktop"
+          ? "Desktop"
+          : actionName.startsWith("camera.") ||
+              actionName.startsWith("microphone.") ||
+              actionName.startsWith("geolocation.")
+            ? "Browser"
+            : "Desktop";
+    const parsedAction = ActionPrimitiveKind.safeParse(inferredPrimitive);
 
-    return canonicalizeNodeDispatchMatchTarget(parsedAction.data, parsed?.["args"]);
+    if (!parsedAction.success) return `capability:${capability};action:${actionName}`;
+
+    const input = asRecord(parsed?.["input"]);
+    const actionArgs = input ? { ...input, op: actionName } : { op: actionName };
+    return `capability:${capability};${canonicalizeNodeDispatchMatchTarget(
+      parsedAction.data,
+      actionArgs,
+    )}`;
   }
 
   if (normalizedToolId === "tool.automation.schedule.create") {
