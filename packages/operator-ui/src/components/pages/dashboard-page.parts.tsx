@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Skeleton } from "../ui/skeleton.js";
 import { StatusDot } from "../ui/status-dot.js";
 import { cn } from "../../lib/cn.js";
+import { formatRelativeTime } from "../../utils/format-relative-time.js";
 
 // ---------------------------------------------------------------------------
 // KPI Card
@@ -226,19 +227,6 @@ const EVENT_DOT_VARIANT: Record<ActivityEvent["type"], StatusDotVariant> = {
   "message.final": "success",
   "delivery.receipt": "neutral",
 };
-
-export function formatRelativeTime(isoDate: string): string {
-  const diffMs = Date.now() - new Date(isoDate).getTime();
-  if (diffMs < 0) return "just now";
-  const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
 
 export function ActivityFeedItem({
   agentName,

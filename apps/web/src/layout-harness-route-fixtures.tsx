@@ -4,6 +4,7 @@ import {
 } from "../../../packages/operator-core/src/index.js";
 import type { DesktopApi } from "../../../packages/operator-ui/src/desktop-api.js";
 import {
+  createActivityStore,
   createAgentStatusStore,
   createApprovalsStore,
   createChatStore,
@@ -78,6 +79,7 @@ export function createDashboardCore(): OperatorCore {
     pairingStore: createPairingStore(),
     runsStore: createRunsStore(),
     workboardStore: createWorkboardStore(),
+    activityStore: createActivityStore(),
   } as unknown as OperatorCore;
 }
 

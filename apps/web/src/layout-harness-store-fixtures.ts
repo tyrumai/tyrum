@@ -306,6 +306,21 @@ export function createPairingStore() {
   };
 }
 
+export function createActivityStore() {
+  return {
+    ...createStore({
+      agentsById: {},
+      agentIds: [],
+      workstreamsById: {},
+      workstreamIds: [],
+      selectedAgentId: null,
+      selectedWorkstreamId: null,
+    }).store,
+    clearSelection: () => {},
+    selectWorkstream: () => {},
+  };
+}
+
 export function createAgentStatusStore() {
   const { store, setState } = createStore({
     agentKey: "default",

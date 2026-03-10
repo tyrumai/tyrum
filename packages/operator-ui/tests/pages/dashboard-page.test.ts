@@ -165,10 +165,10 @@ describe("DashboardPage", () => {
   });
 
   it("navigates to the configured connection route from the connection row", () => {
-    const { core } = createMockCore();
+    const { core, setConnectionState } = createMockCore();
     // Set connected so the banner doesn't show (we test the system status row)
     act(() => {
-      (core.connectionStore as ReturnType<typeof createStore>["store"]).getSnapshot();
+      setConnectionState((prev) => ({ ...prev, status: "connected" }));
     });
 
     const onNavigate = vi.fn();
