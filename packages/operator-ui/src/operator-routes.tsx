@@ -56,7 +56,6 @@ const ExtensionsPage = lazyNamed<{ core: OperatorCore }>(
 );
 const RunsPage = lazyNamed<{
   core: OperatorCore;
-  title?: string;
   statuses?: ExecutionRun["status"][];
 }>(() => import("./components/pages/runs-page.js"), "RunsPage");
 const PairingPage = lazyNamed<{ core: OperatorCore }>(
