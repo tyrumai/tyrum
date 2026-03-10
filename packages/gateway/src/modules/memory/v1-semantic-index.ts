@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { MemoryItemKind, MemorySensitivity } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { VectorDal, cosineSimilarity } from "./vector-dal.js";
@@ -31,6 +32,15 @@ type MemoryEmbeddingJoinedRow = {
   body_md: string | null;
   summary_md: string | null;
   vector_data: string | null;
+};
+
+type MemoryEmbeddingFreshnessCandidateRow = {
+  memory_item_id: string;
+  kind: MemoryItemKind;
+  sensitivity: MemorySensitivity;
+  title: string | null;
+  body_md: string | null;
+  summary_md: string | null;
 };
 
 function assertFiniteVector(value: unknown): asserts value is number[] {
@@ -71,6 +81,22 @@ function buildSnippetFromText(text: string): string | undefined {
   const normalized = normalizeSnippet(text);
   if (normalized.length === 0) return undefined;
   return normalized.length <= 200 ? normalized : `${normalized.slice(0, 197)}...`;
+}
+
+function hashEmbeddingText(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+function readSourceHash(value: string | null): string | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const sourceHash = (parsed as Record<string, unknown>).source_hash;
+    return typeof sourceHash === "string" && sourceHash.length > 0 ? sourceHash : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function embeddingTextForRow(
@@ -177,9 +203,15 @@ export class MemoryV1SemanticIndex {
         eligible.label,
         vector,
         this.embedder.modelId,
-        { memory_item_id: row.memory_item_id, kind: row.kind, snippet: eligible.snippet },
+        {
+          memory_item_id: row.memory_item_id,
+          kind: row.kind,
+          snippet: eligible.snippet,
+          source_hash: hashEmbeddingText(eligible.text),
+        },
         { tenantId: this.tenantId, agentId: this.agentId },
       );
+      const linkedAt = new Date().toISOString();
 
       await this.db.run(
         `INSERT INTO memory_item_embeddings (
@@ -188,8 +220,9 @@ export class MemoryV1SemanticIndex {
            memory_item_id,
            embedding_id,
            embedding_model,
-           vector_data
-         ) VALUES (?, ?, ?, ?, ?, ?)
+           vector_data,
+           created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(tenant_id, agent_id, memory_item_id, embedding_id) DO NOTHING`,
         [
           this.tenantId,
@@ -198,6 +231,7 @@ export class MemoryV1SemanticIndex {
           embeddingId,
           this.embedder.modelId,
           JSON.stringify(vector),
+          linkedAt,
         ],
       );
 
@@ -205,6 +239,67 @@ export class MemoryV1SemanticIndex {
     }
 
     return { indexed, skipped };
+  }
+
+  async hasStaleItems(): Promise<boolean> {
+    const items = await this.db.all<MemoryEmbeddingFreshnessCandidateRow>(
+      `SELECT memory_item_id, kind, sensitivity, title, body_md, summary_md
+       FROM memory_items
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND kind IN ('note', 'procedure', 'episode')
+         AND sensitivity <> 'sensitive'`,
+      [this.tenantId, this.agentId],
+    );
+
+    const embeddingRows = await this.db.all<{
+      memory_item_id: string;
+      metadata_json: string | null;
+    }>(
+      `SELECT e.memory_item_id, v.metadata_json
+       FROM memory_item_embeddings e
+       LEFT JOIN vector_metadata v
+         ON v.tenant_id = e.tenant_id
+        AND v.agent_id = e.agent_id
+        AND v.embedding_id = e.embedding_id
+       WHERE e.tenant_id = ?
+         AND e.agent_id = ?
+       ORDER BY e.created_at DESC, e.embedding_id DESC`,
+      [this.tenantId, this.agentId],
+    );
+
+    const latestHashByItem = new Map<string, string | undefined>();
+    for (const row of embeddingRows) {
+      if (latestHashByItem.has(row.memory_item_id)) continue;
+      latestHashByItem.set(row.memory_item_id, readSourceHash(row.metadata_json));
+    }
+
+    for (const row of items) {
+      const eligible = embeddingTextForRow(row, this.maxEmbedChars);
+      if (!eligible) {
+        continue;
+      }
+
+      const latestHash = latestHashByItem.get(row.memory_item_id);
+      if (!latestHash) {
+        return true;
+      }
+
+      if (latestHash !== hashEmbeddingText(eligible.text)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  async ensureFresh(): Promise<{ rebuilt: boolean; indexed: number; skipped: number }> {
+    if (!(await this.hasStaleItems())) {
+      return { rebuilt: false, indexed: 0, skipped: 0 };
+    }
+
+    const rebuilt = await this.rebuild();
+    return { rebuilt: true, indexed: rebuilt.indexed, skipped: rebuilt.skipped };
   }
 
   async search(query: string, limit: number): Promise<MemoryV1SemanticSearchHit[]> {

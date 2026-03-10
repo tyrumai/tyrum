@@ -40,6 +40,9 @@ import type { PolicyService } from "../../policy/service.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import { buildContextReport } from "./turn-context-report.js";
+import { AgentMemoryToolRuntime } from "../../memory/agent-tool-runtime.js";
+import { createMemoryV1BudgetsProvider } from "../../memory/v1-budgets-provider.js";
+import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 export type TurnExecutionContext = {
   planId: string;
   runId: string;
@@ -258,6 +261,34 @@ export async function prepareTurn(
     },
   );
   const model = modelResolution.model;
+  const memoryToolRuntime = ctx.config.memory.v1.enabled
+    ? new AgentMemoryToolRuntime({
+        db: deps.opts.container.db,
+        dal: deps.opts.container.memoryV1Dal,
+        tenantId: session.tenant_id,
+        agentId: session.agent_id,
+        sessionId: session.session_id,
+        channel: resolved.channel,
+        threadId: resolved.thread_id,
+        config: ctx.config.memory.v1,
+        budgetsProvider: async () =>
+          await createMemoryV1BudgetsProvider(deps.opts.container.db)(
+            session.tenant_id,
+            session.agent_id,
+          ),
+        resolveEmbeddingPipeline: async () =>
+          await resolveEmbeddingPipeline({
+            container: deps.opts.container,
+            secretProvider: deps.secretProvider,
+            instanceOwner: deps.instanceOwner,
+            fetchImpl: deps.fetchImpl,
+            primaryModelId: executionProfile.profile.model_id ?? ctx.config.model.model,
+            sessionId: session.session_id,
+            tenantId: session.tenant_id,
+            agentId: session.agent_id,
+          }),
+      })
+    : undefined;
   const toolExecutor = new ToolExecutor(
     deps.home,
     deps.mcpManager,
@@ -278,6 +309,7 @@ export async function prepareTurn(
     deps.opts.container.artifactStore,
     deps.opts.container.identityScopeDal,
     nodeInventoryService,
+    memoryToolRuntime,
   );
 
   const usedTools = new Set<string>();

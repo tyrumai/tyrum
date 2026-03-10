@@ -320,6 +320,7 @@ export async function resolveToolsAndMemory(
   );
   const filteredTools = toolCandidates
     .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
+    .filter((tool) => ctx.config.memory.v1.enabled || !tool.id.startsWith("memory."))
     .slice(0, 8);
 
   return { memoryDigestResult, toolSetBuilder, filteredTools };

@@ -74,6 +74,22 @@ describe("canonicalizeToolMatchTarget", () => {
     ).toBe("https://example.com/a");
   });
 
+  it("canonicalizes memory tool targets without leaking memory content", () => {
+    expect(
+      canonicalizeToolMatchTarget("memory.search", {
+        query: "remember my pizza order",
+      }),
+    ).toBe("memory.search");
+
+    expect(
+      canonicalizeToolMatchTarget("memory.add", {
+        kind: "note",
+        body_md: "super secret content",
+        sensitivity: "private",
+      }),
+    ).toBe("memory.add:kind=note:sensitivity=private");
+  });
+
   it("canonicalizes messaging destinations without matching on message body", () => {
     const target = canonicalizeToolMatchTarget("tool.messaging.send", {
       connector: " slack ",
