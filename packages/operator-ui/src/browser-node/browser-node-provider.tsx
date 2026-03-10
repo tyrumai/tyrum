@@ -317,16 +317,6 @@ export function BrowserNodeProvider({
     if (!provider) {
       return { success: false, error: "browser node is not enabled" };
     }
-    const actionState = capabilityStatesRef.current[args.op];
-    if (!actionState.enabled) {
-      return { success: false, error: `action '${args.op}' is disabled by the operator` };
-    }
-    if (actionState.availability_status === "unavailable") {
-      return {
-        success: false,
-        error: actionState.unavailable_reason ?? `action '${args.op}' is unavailable`,
-      };
-    }
 
     return await provider.execute(
       { type: "Browser", args },

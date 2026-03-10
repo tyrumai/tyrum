@@ -62,6 +62,7 @@ function parseCapabilityStates(raw: string | null): NodeCapabilityState[] {
       .filter((value) => value.success)
       .map((value) => value.data);
   } catch {
+    // Intentional: treat malformed capability state payloads as absent during rolling upgrades.
     return [];
   }
 }

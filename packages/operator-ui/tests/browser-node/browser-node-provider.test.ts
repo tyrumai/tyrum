@@ -108,6 +108,59 @@ afterEach(() => {
 });
 
 describe("BrowserNodeProvider", () => {
+  it("routes local execution through the provider capability guard", async () => {
+    const { BrowserNodeProvider, useBrowserNode } =
+      await import("../../src/browser-node/browser-node-provider.js");
+
+    stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
+    stubBrowserApis();
+
+    let capturedApi: any = null;
+
+    function ApiCapture({ onChange }: { onChange: (api: unknown) => void }) {
+      const api = useBrowserNode();
+      useEffect(() => {
+        onChange(api);
+      }, [api, onChange]);
+      return null;
+    }
+
+    const testRoot = createTestRoot();
+    act(() => {
+      testRoot.root.render(
+        React.createElement(
+          BrowserNodeProvider,
+          { wsUrl: "ws://example.test/ws-1" },
+          React.createElement(ApiCapture, { onChange: (api) => (capturedApi = api) }),
+        ),
+      );
+    });
+
+    try {
+      await flushEffects();
+      await flushEffects();
+
+      await act(async () => {
+        capturedApi.setCapabilityEnabled("geolocation.get", false);
+        await Promise.resolve();
+      });
+
+      const result = await capturedApi.executeLocal({
+        op: "geolocation.get",
+        enable_high_accuracy: false,
+        timeout_ms: 30_000,
+        maximum_age_ms: 0,
+      });
+
+      expect(result).toEqual({
+        success: false,
+        error: "action 'geolocation.get' is disabled by the operator",
+      });
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
   it("cancels pending consent and persists disabled state", async () => {
     const { BrowserNodeProvider, useBrowserNode } =
       await import("../../src/browser-node/browser-node-provider.js");
