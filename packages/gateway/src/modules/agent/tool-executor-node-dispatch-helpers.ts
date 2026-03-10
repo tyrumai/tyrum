@@ -77,12 +77,10 @@ export function normalizeExecutionFailure(error: unknown): NodeActionDispatchErr
   if (error instanceof NodeNotPairedError) {
     return dispatchError("capability_not_paired", message, false);
   }
-  if (
-    error instanceof UnknownNodeError ||
-    error instanceof NodeNotConnectedError ||
-    error instanceof NodeNotReadyError ||
-    error instanceof NoCapableNodeError
-  ) {
+  if (error instanceof NodeNotConnectedError || error instanceof NodeNotReadyError) {
+    return dispatchError("runtime_unavailable", message, true);
+  }
+  if (error instanceof UnknownNodeError || error instanceof NoCapableNodeError) {
     return dispatchError("runtime_unavailable", message, false);
   }
   if (error instanceof NodeNotCapableError) {
@@ -92,7 +90,7 @@ export function normalizeExecutionFailure(error: unknown): NodeActionDispatchErr
     return dispatchError("execution_failed", message, false);
   }
   if (normalized.includes("task connection disconnected")) {
-    return dispatchError("runtime_unavailable", message, false);
+    return dispatchError("runtime_unavailable", message, true);
   }
 
   return dispatchError("execution_failed", message, false);
