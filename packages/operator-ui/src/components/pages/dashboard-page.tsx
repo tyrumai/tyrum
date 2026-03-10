@@ -139,15 +139,32 @@ export function DashboardPage({
       </LiveRegion>
 
       {/* Connection Banner */}
-      {connection.status !== "connected" && (
-        <button
-          type="button"
-          className={cn(
-            "w-full cursor-pointer text-left",
-            "rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-          )}
-          onClick={onNavigate ? () => onNavigate(connectionRouteId) : undefined}
-        >
+      {connection.status !== "connected" &&
+        (onNavigate ? (
+          <button
+            type="button"
+            className={cn(
+              "w-full cursor-pointer text-left",
+              "rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+            )}
+            onClick={() => onNavigate(connectionRouteId)}
+          >
+            <Alert
+              variant={connection.status === "connecting" ? "warning" : "error"}
+              title={
+                <span className="inline-flex items-center gap-2">
+                  <StatusDot
+                    variant={connectionDisplay.variant}
+                    pulse={connectionDisplay.pulse}
+                    aria-hidden="true"
+                  />
+                  {connectionDisplay.label}
+                </span>
+              }
+              description={connection.transportError ?? undefined}
+            />
+          </button>
+        ) : (
           <Alert
             variant={connection.status === "connecting" ? "warning" : "error"}
             title={
@@ -162,8 +179,7 @@ export function DashboardPage({
             }
             description={connection.transportError ?? undefined}
           />
-        </button>
-      )}
+        ))}
 
       {/* KPI Grid */}
       <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4">
