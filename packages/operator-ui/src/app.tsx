@@ -109,7 +109,7 @@ function OperatorUiAppRoot({
             collapsible
             connectionStatus={viewModel.connection.status}
             onConnectionClick={() => {
-              viewModel.navigate(hostKind === "desktop" ? "node-configure" : "configure");
+              viewModel.navigate(hostKind === "desktop" ? "desktop" : "configure");
             }}
             onSyncNow={() => {
               void core.syncAllNow();

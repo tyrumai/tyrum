@@ -1,33 +1,48 @@
 import { vi } from "vitest";
-import type { OperatorWsClient, OperatorHttpClient } from "../../operator-core/src/deps.js";
-import {
-  type Handler,
-  type SampleExecutionStepStatus,
-  type SampleExecutionAttemptStatus,
-  EXECUTION_PROFILE_IDS,
-} from "./operator-ui.test-support.js";
+import type { OperatorHttpClient, OperatorWsClient } from "../../operator-core/src/deps.js";
+import type { Handler } from "./operator-ui.test-support.js";
 import {
   createAuthTokenHttpFixtures,
   createDeviceTokenHttpFixtures,
 } from "./operator-ui.token-http-fixtures.js";
 import {
   sampleAgentStatusResponse,
-  sampleNodeInventoryResponse,
+  sampleApprovalApproved,
+  sampleApprovalPending,
+  sampleExecutionAttempt,
+  sampleExecutionRun,
+  sampleExecutionStep,
+  samplePairingRequestApproved,
+  samplePairingRequestPending,
+  samplePairingRequestPendingWithNodeCapabilities,
   samplePresenceResponse,
-} from "./operator-ui.http-fixture-data.js";
+  sampleStatusResponse,
+  sampleUsageResponse,
+} from "./operator-ui.data-fixtures.js";
+import {
+  createModelConfigHttpFixtures,
+  createProviderConfigHttpFixtures,
+} from "./operator-ui.admin-http-fixtures.js";
+import { sampleNodeInventoryResponse } from "./operator-ui.http-fixture-data.js";
+import { createExtensionsHttpFixtures } from "./operator-ui.extensions-http-fixtures.js";
+
 export class FakeWsClient implements OperatorWsClient {
   connected: boolean;
+
   constructor(initiallyConnected = true) {
     this.connected = initiallyConnected;
   }
+
   connect = vi.fn(() => {
     if (this.connected) {
       this.emit("connected", { clientId: null });
     }
   });
+
   disconnect = vi.fn(() => {
     this.emit("disconnected", { code: 1000, reason: "client disconnect" });
   });
+
   approvalList = vi.fn(async () => ({ approvals: [], next_cursor: undefined }));
   runList = vi.fn(async () => ({ runs: [], steps: [], attempts: [] }));
   approvalResolve = vi.fn(async () => {
@@ -49,7 +64,7 @@ export class FakeWsClient implements OperatorWsClient {
       thread_id: "ui-session-1",
       title: "",
       summary: "",
-      turns: [],
+      transcript: [],
       updated_at: "2026-01-01T00:00:00.000Z",
       created_at: "2026-01-01T00:00:00.000Z",
     },
@@ -69,7 +84,9 @@ export class FakeWsClient implements OperatorWsClient {
   sessionDelete = vi.fn(async () => ({ session_id: "session-1" }));
   sessionSend = vi.fn(async () => ({ session_id: "session-1", assistant_message: "" }));
   commandExecute = vi.fn(async () => ({}));
+
   private readonly handlers = new Map<string, Set<Handler>>();
+
   on(event: string, handler: Handler): void {
     const existing = this.handlers.get(event);
     if (existing) {
@@ -101,174 +118,25 @@ export class FakeWsClient implements OperatorWsClient {
   }
 }
 
-export function sampleStatusResponse() {
-  return {
-    status: "ok",
-    version: "0.1.0",
-    instance_id: "gateway-1",
-    role: "gateway",
-    db_kind: "sqlite",
-    is_exposed: false,
-    otel_enabled: false,
-    ws: null,
-    policy: null,
-    model_auth: null,
-    catalog_freshness: null,
-    session_lanes: null,
-    queue_depth: null,
-    sandbox: null,
-  } as const;
-}
-
-export function sampleUsageResponse() {
-  return {
-    status: "ok",
-    generated_at: "2026-01-01T00:00:00.000Z",
-    scope: { kind: "deployment", run_id: null, key: null, agent_id: null },
-    local: {
-      attempts: { total_with_cost: 0, parsed: 0, invalid: 0 },
-      totals: { duration_ms: 0, input_tokens: 0, output_tokens: 0, total_tokens: 0, usd_micros: 0 },
-    },
-    provider: null,
-  } as const;
-}
-
-export function samplePairingRequestPending() {
-  return {
-    pairing_id: 1,
-    status: "pending",
-    requested_at: "2026-01-01T00:00:00.000Z",
-    node: {
-      node_id: "node-1",
-      label: "my takeover: label (takeover: http://localhost:6080/vnc.html?autoconnect=true)",
-      last_seen_at: "2026-01-01T00:00:00.000Z",
-      capabilities: [],
-    },
-    capability_allowlist: [
-      { id: "tyrum.cli", version: "1.0.0" },
-      { id: "tyrum.http", version: "1.0.0" },
-    ],
-    resolution: null,
-    resolved_at: null,
-  } as const;
-}
-
-export function samplePairingRequestPendingWithNodeCapabilities() {
-  return {
-    ...samplePairingRequestPending(),
-    node: {
-      ...samplePairingRequestPending().node,
-      capabilities: ["cli", "http"],
-    },
-    capability_allowlist: [],
-  } as const;
-}
-
-export function samplePairingRequestApproved() {
-  return {
-    ...samplePairingRequestPending(),
-    status: "approved",
-    trust_level: "local",
-    resolution: {
-      decision: "approved",
-      resolved_at: "2026-01-01T00:00:01.000Z",
-      reason: "ok",
-    },
-    resolved_at: "2026-01-01T00:00:01.000Z",
-  } as const;
-}
-
-export function sampleApprovalPending() {
-  return {
-    approval_id: 1,
-    approval_key: "approval:1",
-    kind: "other",
-    status: "pending",
-    prompt: "Allow the tool call?",
-    created_at: "2026-01-01T00:00:00.000Z",
-    expires_at: null,
-    resolution: null,
-  } as const;
-}
-
-export function sampleApprovalApproved() {
-  return {
-    ...sampleApprovalPending(),
-    status: "approved",
-    resolution: {
-      decision: "approved",
-      resolved_at: "2026-01-01T00:00:01.000Z",
-      reason: "ok",
-    },
-  } as const;
-}
-
-export function sampleExecutionRun() {
-  return {
-    run_id: "11111111-1111-1111-1111-deadbeefcafe",
-    job_id: "22222222-2222-2222-2222-222222222222",
-    key: "agent:default:main",
-    lane: "main",
-    status: "running",
-    attempt: 1,
-    created_at: "2026-01-01T00:00:00.000Z",
-    started_at: "2026-01-01T00:00:00.000Z",
-    finished_at: null,
-  } as const;
-}
-
 export type {
-  SampleExecutionStepStatus,
   SampleExecutionAttemptStatus,
+  SampleExecutionStepStatus,
 } from "./operator-ui.test-support.js";
 
-export function sampleExecutionStep({
-  stepId,
-  stepIndex,
-  status,
-  actionType,
-}: {
-  stepId: string;
-  stepIndex: number;
-  status: SampleExecutionStepStatus;
-  actionType: "Decide" | "Research";
-}) {
-  return {
-    step_id: stepId,
-    run_id: sampleExecutionRun().run_id,
-    step_index: stepIndex,
-    status,
-    action: { type: actionType, args: {} },
-    created_at: "2026-01-01T00:00:00.000Z",
-  } as const;
-}
-
-export function sampleExecutionAttempt({
-  attemptId,
-  attempt,
-  status,
-  stepId,
-  startedAt = "2026-01-01T00:00:00.000Z",
-  finishedAt = null,
-}: {
-  attemptId: string;
-  attempt: number;
-  status: SampleExecutionAttemptStatus;
-  stepId: string;
-  startedAt?: string;
-  finishedAt?: string | null;
-}) {
-  return {
-    attempt_id: attemptId,
-    step_id: stepId,
-    attempt,
-    status,
-    started_at: startedAt,
-    finished_at: finishedAt,
-    error: null,
-    artifacts: [],
-  } as const;
-}
+export {
+  sampleStatusResponse,
+  sampleUsageResponse,
+  sampleAgentStatusResponse,
+  samplePresenceResponse,
+  samplePairingRequestPending,
+  samplePairingRequestPendingWithNodeCapabilities,
+  samplePairingRequestApproved,
+  sampleApprovalPending,
+  sampleApprovalApproved,
+  sampleExecutionRun,
+  sampleExecutionStep,
+  sampleExecutionAttempt,
+};
 
 export function createFakeHttpClient(): {
   http: OperatorHttpClient;
@@ -291,6 +159,9 @@ export function createFakeHttpClient(): {
 } {
   const { authTokensList, authTokensIssue, authTokensRevoke } = createAuthTokenHttpFixtures();
   const { deviceTokensIssue, deviceTokensRevoke } = createDeviceTokenHttpFixtures();
+  const providerConfig = createProviderConfigHttpFixtures();
+  const { modelConfig, modelAssignmentsUpdate } = createModelConfigHttpFixtures();
+  const extensions = createExtensionsHttpFixtures();
   const statusGet = vi.fn(async () => sampleStatusResponse());
   const usageGet = vi.fn(async () => sampleUsageResponse());
   const presenceList = vi.fn(async () => samplePresenceResponse());
@@ -309,16 +180,7 @@ export function createFakeHttpClient(): {
   );
   const agentListGet = vi.fn(async () => ({ agents: [{ agent_key: "default" }] }) as const);
   const agentStatusGet = vi.fn(async () => sampleAgentStatusResponse());
-  const modelAssignmentsUpdate = vi.fn(async () => ({
-    status: "ok",
-    assignments: EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
-      execution_profile_id,
-      preset_key: "preset-default",
-      preset_display_name: "Default",
-      provider_key: "openai",
-      model_id: "gpt-4.1",
-    })),
-  }));
+
   const http: OperatorHttpClient = {
     authTokens: {
       list: authTokensList,
@@ -341,111 +203,11 @@ export function createFakeHttpClient(): {
       deny: pairingsDeny,
       revoke: pairingsRevoke,
     },
-    providerConfig: {
-      listRegistry: vi.fn(async () => ({
-        status: "ok",
-        providers: [
-          {
-            provider_key: "openai",
-            name: "OpenAI",
-            doc: null,
-            supported: true,
-            methods: [
-              {
-                method_key: "api_key",
-                label: "API key",
-                type: "api_key",
-                fields: [
-                  {
-                    key: "api_key",
-                    label: "API key",
-                    description: null,
-                    kind: "secret",
-                    input: "password",
-                    required: true,
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      })),
-      listProviders: vi.fn(async () => ({
-        status: "ok",
-        providers: [],
-      })),
-      createAccount: vi.fn(async () => ({ status: "ok" })),
-      updateAccount: vi.fn(async () => ({ status: "ok" })),
-      deleteAccount: vi.fn(async () => ({ status: "ok" })),
-      deleteProvider: vi.fn(async () => ({ status: "ok" })),
-    },
-    modelConfig: {
-      listPresets: vi.fn(async () => ({
-        status: "ok",
-        presets: [
-          {
-            preset_id: "c2d1f6c6-f541-46a8-9f47-8a2d0ff3c9e5",
-            preset_key: "preset-default",
-            display_name: "Default",
-            provider_key: "openai",
-            model_id: "gpt-4.1",
-            options: {},
-            created_at: "2026-03-01T00:00:00.000Z",
-            updated_at: "2026-03-01T00:00:00.000Z",
-          },
-          {
-            preset_id: "d5c709e9-4585-426e-81ed-7904f7fbbe1b",
-            preset_key: "preset-review",
-            display_name: "Review",
-            provider_key: "openai",
-            model_id: "gpt-4.1-mini",
-            options: { reasoning_effort: "medium" },
-            created_at: "2026-03-01T00:00:00.000Z",
-            updated_at: "2026-03-01T00:00:00.000Z",
-          },
-        ],
-      })),
-      listAvailable: vi.fn(async () => ({
-        status: "ok",
-        models: [
-          {
-            provider_key: "openai",
-            provider_name: "OpenAI",
-            model_id: "gpt-4.1",
-            model_name: "GPT-4.1",
-            family: null,
-            reasoning: true,
-            tool_call: true,
-            modalities: { output: ["text"] },
-          },
-          {
-            provider_key: "openai",
-            provider_name: "OpenAI",
-            model_id: "gpt-4.1-mini",
-            model_name: "GPT-4.1 Mini",
-            family: null,
-            reasoning: true,
-            tool_call: true,
-            modalities: { output: ["text"] },
-          },
-        ],
-      })),
-      createPreset: vi.fn(async () => ({ status: "ok" })),
-      updatePreset: vi.fn(async () => ({ status: "ok" })),
-      deletePreset: vi.fn(async () => ({ status: "ok" })),
-      listAssignments: vi.fn(async () => ({
-        status: "ok",
-        assignments: EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
-          execution_profile_id,
-          preset_key: "preset-default",
-          preset_display_name: "Default",
-          provider_key: "openai",
-          model_id: "gpt-4.1",
-        })),
-      })),
-      updateAssignments: modelAssignmentsUpdate,
-    },
+    providerConfig,
+    modelConfig,
+    extensions,
   };
+
   return {
     http,
     authTokensList,

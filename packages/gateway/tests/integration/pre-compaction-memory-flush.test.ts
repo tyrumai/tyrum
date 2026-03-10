@@ -368,7 +368,7 @@ describe("Pre-compaction memory flush", () => {
       ctx: typeof prepared.ctx;
       session: typeof prepared.session;
       model: typeof prepared.model;
-      droppedTurns: typeof prepared.session.turns;
+      droppedTurns: typeof prepared.session.transcript;
     }) =>
       maybeRunPreCompactionMemoryFlush(
         { db: container.db, logger: container.logger, agentId },
@@ -379,7 +379,7 @@ describe("Pre-compaction memory flush", () => {
       ctx: prepared.ctx,
       session: prepared.session,
       model: prepared.model,
-      droppedTurns: prepared.session.turns,
+      droppedTurns: prepared.session.transcript,
     });
     expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(1);
 
@@ -391,7 +391,7 @@ describe("Pre-compaction memory flush", () => {
       ctx: prepared.ctx,
       session: prepared.session,
       model: prepared.model,
-      droppedTurns: prepared.session.turns,
+      droppedTurns: prepared.session.transcript,
     });
     expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(1);
 

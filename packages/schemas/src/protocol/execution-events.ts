@@ -6,6 +6,7 @@ import { ExecutionRunId } from "../execution.js";
 import { AgentId, ChannelKey, Lane, ThreadId, TyrumKey, WorkspaceId } from "../keys.js";
 import { PolicyOverride, PolicySnapshotId } from "../policy-bundle.js";
 import { PluginId } from "../plugin.js";
+import { SessionTranscriptToolStatus } from "../session-transcript.js";
 import { WsEventEnvelope } from "./envelopes.js";
 
 const wsEvent = <T extends string, P extends z.ZodTypeAny>(type: T, payload: P) =>
@@ -181,6 +182,27 @@ export const WsPluginToolInvokedEvent = wsEvent(
   WsPluginToolInvokedEventPayload,
 );
 export type WsPluginToolInvokedEvent = z.infer<typeof WsPluginToolInvokedEvent>;
+
+export const WsToolLifecycleEventPayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    thread_id: ThreadId,
+    tool_call_id: z.string().trim().min(1),
+    tool_id: z.string().trim().min(1),
+    status: SessionTranscriptToolStatus,
+    summary: z.string(),
+    duration_ms: z.number().int().nonnegative().optional(),
+    error: z.string().trim().min(1).optional(),
+    run_id: ExecutionRunId.optional(),
+    agent_id: AgentId.optional(),
+    workspace_id: WorkspaceId.optional(),
+    channel: ChannelKey.optional(),
+  })
+  .strict();
+export type WsToolLifecycleEventPayload = z.infer<typeof WsToolLifecycleEventPayload>;
+
+export const WsToolLifecycleEvent = wsEvent("tool.lifecycle", WsToolLifecycleEventPayload);
+export type WsToolLifecycleEvent = z.infer<typeof WsToolLifecycleEvent>;
 
 // ---------------------------------------------------------------------------
 // Events (typed) — usage, context, routing, channel, error

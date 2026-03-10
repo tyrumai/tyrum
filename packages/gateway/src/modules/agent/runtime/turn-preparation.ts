@@ -3,7 +3,6 @@ import type { LanguageModel, ToolSet } from "ai";
 import type { AgentTurnRequest as AgentTurnRequestT } from "@tyrum/schemas";
 import type { LaneQueueState } from "./turn-engine-bridge.js";
 import type { ToolCallPolicyState } from "./tool-set-builder.js";
-import { ToolSetBuilder } from "./tool-set-builder.js";
 import {
   buildSandboxPrompt,
   isStatusQuery,
@@ -13,19 +12,14 @@ import {
   resolveMainLaneSessionKey,
   type ResolvedAgentTurnInput,
 } from "./turn-helpers.js";
+import { resolveSessionModelDetailed as resolveSessionModelImpl } from "./session-model-resolution.js";
+import type { ResolvedSessionModel } from "./session-model-resolution.js";
 import {
-  DATA_TAG_SAFETY_PROMPT,
-  formatIdentityPrompt,
-  formatSessionContext,
-  formatSkillsPrompt,
-  formatToolPrompt,
-} from "./prompts.js";
-import {
-  resolveSessionModelDetailed as resolveSessionModelImpl,
-  type ResolvedSessionModel,
-} from "./session-model-resolution.js";
-import { semanticSearch } from "./turn-preparation-helpers.js";
-import { resolveIdentityAndContext } from "./turn-preparation-identity.js";
+  assemblePrompts,
+  buildRuntimePrompt,
+  resolveIdentityAndContext,
+  resolveToolsAndMemory,
+} from "./turn-preparation-runtime.js";
 import { buildWorkFocusDigest } from "./work-focus-digest.js";
 import type { AgentContextReport, AgentLoadedContext, AgentRuntimeOptions } from "./types.js";
 import { resolveAutomationMetadata, buildAutomationDigest } from "./automation-delivery.js";
@@ -33,11 +27,6 @@ import { resolveExecutionProfile, type ResolvedExecutionProfile } from "./intake
 import type { AgentContextStore } from "../context-store.js";
 import type { SessionRow } from "../session-dal.js";
 import { SessionDal } from "../session-dal.js";
-import { isToolAllowed, selectToolDirectory } from "../tools.js";
-import { tagContent } from "../provenance.js";
-import { sanitizeForModel } from "../sanitizer.js";
-import { MemoryV1Dal } from "../../memory/v1-dal.js";
-import { buildMemoryV1Digest } from "../../memory/v1-digest.js";
 import { McpManager } from "../mcp-manager.js";
 import { NodeDispatchService } from "../node-dispatch-service.js";
 import { ToolExecutor } from "../tool-executor.js";
@@ -51,7 +40,6 @@ import type { PolicyService } from "../../policy/service.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import { buildContextReport } from "./turn-context-report.js";
-
 export type TurnExecutionContext = {
   planId: string;
   runId: string;
@@ -59,7 +47,6 @@ export type TurnExecutionContext = {
   stepId: string;
   stepApprovalId?: string;
 };
-
 export type PreparedTurn = {
   ctx: AgentLoadedContext;
   executionProfile: ResolvedExecutionProfile;
@@ -76,7 +63,6 @@ export type PreparedTurn = {
   systemPrompt: string;
   resolved: ResolvedAgentTurnInput;
 };
-
 export type PrepareTurnDeps = {
   opts: AgentRuntimeOptions;
   home: string;
@@ -100,145 +86,6 @@ export type PrepareTurnDeps = {
   cleanupAtMs: number;
   setCleanupAtMs: (ms: number) => void;
 };
-
-async function resolveToolsAndMemory(
-  deps: PrepareTurnDeps,
-  ctx: AgentLoadedContext,
-  session: SessionRow,
-  resolved: ResolvedAgentTurnInput,
-  executionProfile: ResolvedExecutionProfile,
-) {
-  const wantsMcpTools = ctx.config.tools.allow.some(
-    (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
-  );
-
-  const memoryDigestPromise =
-    isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
-      ? Promise.resolve({
-          digest: "Skipped for command turns.",
-          included_item_ids: [],
-          keyword_hit_count: 0,
-          semantic_hit_count: 0,
-          structured_item_count: 0,
-        })
-      : (async () => {
-          try {
-            return await buildMemoryV1Digest({
-              dal: new MemoryV1Dal(deps.opts.container.db),
-              tenantId: session.tenant_id,
-              agentId: session.agent_id,
-              query: resolved.message,
-              config: ctx.config.memory.v1,
-              semanticSearch: ctx.config.memory.v1.semantic.enabled
-                ? (query, limit) =>
-                    semanticSearch(
-                      deps,
-                      query,
-                      limit,
-                      ctx.config.model.model,
-                      session.session_id,
-                      session.tenant_id,
-                      session.agent_id,
-                    )
-                : undefined,
-            });
-          } catch (error) {
-            deps.opts.container.logger.warn("memory.v1.digest_failed", {
-              session_id: session.session_id,
-              agent_id: session.agent_id,
-              error: error instanceof Error ? error.message : String(error),
-            });
-            return {
-              digest: "Memory digest unavailable.",
-              included_item_ids: [],
-              keyword_hit_count: 0,
-              semantic_hit_count: 0,
-              structured_item_count: 0,
-            };
-          }
-        })();
-
-  const [memoryDigestResult, mcpTools] = await Promise.all([
-    memoryDigestPromise,
-    wantsMcpTools
-      ? deps.mcpManager.listToolDescriptors(ctx.mcpServers)
-      : deps.mcpManager.listToolDescriptors([]),
-  ]);
-  const pluginToolsRaw = deps.plugins?.getToolDescriptors() ?? [];
-  const toolSetBuilder = new ToolSetBuilder({
-    home: deps.home,
-    stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
-    tenantId: session.tenant_id,
-    agentId: session.agent_id,
-    workspaceId: session.workspace_id,
-    policyService: deps.policyService,
-    approvalDal: deps.opts.container.approvalDal,
-    approvalNotifier: deps.approvalNotifier as { notify: (approval: unknown) => void },
-    approvalWaitMs: deps.approvalWaitMs,
-    approvalPollMs: deps.approvalPollMs,
-    logger: deps.opts.container.logger,
-    secretProvider: deps.secretProvider,
-    plugins: deps.plugins,
-    redactionEngine: deps.opts.container.redactionEngine,
-  });
-  const { allowlist: toolAllowlist, pluginTools } =
-    await toolSetBuilder.resolvePolicyGatedPluginToolExposure({
-      allowlist: ctx.config.tools.allow,
-      pluginTools: pluginToolsRaw,
-    });
-  const toolCandidates = selectToolDirectory(
-    resolved.message,
-    toolAllowlist,
-    [...mcpTools, ...pluginTools],
-    Number.POSITIVE_INFINITY,
-    true,
-    resolveGatewayStateMode(deps.opts.container.deploymentConfig),
-  );
-  const filteredTools = toolCandidates
-    .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
-    .slice(0, 8);
-
-  return { memoryDigestResult, toolSetBuilder, filteredTools };
-}
-
-function assemblePrompts(
-  ctx: AgentLoadedContext,
-  session: SessionRow,
-  memoryDigestResult: { digest: string },
-  filteredTools: ReturnType<typeof selectToolDirectory>,
-  automation: ReturnType<typeof resolveAutomationMetadata>,
-) {
-  const sessionCtx = formatSessionContext(session.summary, session.turns);
-  const identityPrompt = formatIdentityPrompt(ctx.identity);
-  const safetyPrompt = DATA_TAG_SAFETY_PROMPT;
-  const skillsText = `Enabled skills:\n${formatSkillsPrompt(ctx.skills)}`;
-  const toolsText = `Available tools:\n${formatToolPrompt(filteredTools)}`;
-  const sessionText = `Session context:\n${sessionCtx}`;
-  const memoryTagged = tagContent(memoryDigestResult.digest, "memory", false);
-  const memoryText = `Memory digest:\n${sanitizeForModel(memoryTagged)}`;
-  const automationTriggerText = automation
-    ? `Automation trigger:\n${[
-        `Schedule kind: ${automation.schedule_kind ?? "unknown"}`,
-        `Schedule id: ${automation.schedule_id ?? "unknown"}`,
-        `Fired at: ${automation.fired_at ?? "unknown"}`,
-        `Previous fired at: ${automation.previous_fired_at ?? "never"}`,
-        `Delivery mode: ${automation.delivery_mode ?? "notify"}`,
-        automation.instruction ? `Instruction: ${automation.instruction}` : undefined,
-      ]
-        .filter((line): line is string => Boolean(line))
-        .join("\n")}`
-    : undefined;
-
-  return {
-    identityPrompt,
-    safetyPrompt,
-    skillsText,
-    toolsText,
-    sessionText,
-    memoryText,
-    automationTriggerText,
-  };
-}
 
 export async function prepareTurn(
   deps: PrepareTurnDeps,
@@ -309,27 +156,40 @@ export async function prepareTurn(
           },
         });
   const workFocusText = `Work focus digest:\n${workFocusDigest}`;
+  const hardeningProfile = resolveSandboxHardeningProfile(
+    deps.opts.container.deploymentConfig.toolrunner.hardeningProfile,
+  );
+  const runtimePrompt = await buildRuntimePrompt({
+    nowIso: new Date().toISOString(),
+    agentId: session.agent_id,
+    workspaceId: session.workspace_id,
+    sessionId: session.session_id,
+    channel: resolved.channel,
+    threadId: resolved.thread_id,
+    home: deps.home,
+    stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
+    model: executionProfile.profile.model_id ?? executionProfile.id,
+    approvalWorkflowAvailable: true,
+  });
 
   const {
     identityPrompt,
+    runtimePrompt: runtimePromptText,
     safetyPrompt,
     skillsText,
     toolsText,
     sessionText,
     memoryText,
     automationTriggerText,
-  } = assemblePrompts(ctx, session, memoryDigestResult, filteredTools, automation);
+  } = assemblePrompts(ctx, session, memoryDigestResult, filteredTools, automation, runtimePrompt);
 
-  const hardeningProfile = resolveSandboxHardeningProfile(
-    deps.opts.container.deploymentConfig.toolrunner.hardeningProfile,
-  );
   const sandboxPrompt = await buildSandboxPrompt({
     policyService: deps.policyService,
     hardeningProfile,
     tenantId: deps.tenantId,
     agentId: session.agent_id,
   });
-  const systemPrompt = `${identityPrompt}\n\n${safetyPrompt}\n\n${sandboxPrompt}`;
+  const systemPrompt = `${identityPrompt}\n\n${runtimePromptText}\n\n${safetyPrompt}\n\n${sandboxPrompt}`;
 
   const automationDigestText = automation
     ? await buildAutomationDigest({
@@ -365,7 +225,9 @@ export async function prepareTurn(
     logger: deps.opts.container.logger,
   });
 
-  const mcpSpecMap = new Map(ctx.mcpServers.map((server) => [server.id, server]));
+  const mcpSpecMap = new Map<string, (typeof ctx.mcpServers)[number]>(
+    ctx.mcpServers.map((server: (typeof ctx.mcpServers)[number]) => [server.id, server]),
+  );
   const nodeDispatchService = deps.opts.protocolDeps
     ? new NodeDispatchService(deps.opts.protocolDeps)
     : undefined;

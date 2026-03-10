@@ -39,6 +39,7 @@ describe("Operator UI app/page component structure", () => {
       "approvals",
       "workboard",
       "agents",
+      "extensions",
       "pairing",
       "configure",
     ]);

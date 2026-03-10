@@ -68,7 +68,7 @@ async function insertSession(db: SqlDb, seed: SessionSeed): Promise<void> {
        workspace_id,
        channel_thread_id,
        summary,
-       turns_json,
+       transcript_json,
        created_at,
        updated_at
      )

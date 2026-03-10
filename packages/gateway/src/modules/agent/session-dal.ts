@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { NormalizedThreadMessage as NormalizedThreadMessageSchema } from "@tyrum/schemas";
-import type { NormalizedContainerKind } from "@tyrum/schemas";
+import {
+  NormalizedThreadMessage as NormalizedThreadMessageSchema,
+  SessionTranscriptTextItem,
+} from "@tyrum/schemas";
+import type { NormalizedContainerKind, SessionTranscriptItem } from "@tyrum/schemas";
 import { safeJsonParse } from "../../utils/json.js";
 import type { SqlDb } from "../../statestore/types.js";
 import {
@@ -13,10 +16,7 @@ import type { IdentityScopeDal, ScopeKeys } from "../identity/scope.js";
 import { DEFAULT_TENANT_KEY, normalizeScopeKeys } from "../identity/scope.js";
 import { Logger } from "../observability/logger.js";
 import { gatewayMetrics } from "../observability/metrics.js";
-import {
-  stringifyPersistedJson,
-  type PersistedJsonObserver,
-} from "../observability/persisted-json.js";
+import { type PersistedJsonObserver } from "../observability/persisted-json.js";
 import { renderNormalizedThreadMessageText } from "./session-message-text.js";
 import { buildAgentTurnKey } from "./turn-key.js";
 import type {
@@ -27,7 +27,6 @@ import type {
   SessionDalOptions,
   SessionIdentity,
   SessionListRow,
-  SessionMessage,
   SessionRepairResult,
   SessionRow,
   SessionWithDelivery,
@@ -35,20 +34,27 @@ import type {
 } from "./session-dal-helpers.js";
 import {
   buildStoredTranscript,
-  isSessionMessageArray,
+  countTextTranscriptItems,
   normalizeSessionTitle,
   normalizeContainerKind,
   normalizeRepairTimestamp,
   normalizeTime,
   REPAIR_SESSION_SQL,
-  SESSION_TURNS_JSON_META,
   toSessionListRow,
   toSessionRow,
   UPDATE_SESSION_SQL,
   WITH_DELIVERY_SQL,
 } from "./session-dal-helpers.js";
+import {
+  buildSessionListWhereClause,
+  decodeSessionCursor,
+  encodeSessionCursor,
+  latestTranscriptTimestamp,
+  loadOutboxReplyText,
+  stringifySessionTranscript,
+  sortSessionTranscript,
+} from "./session-dal-runtime.js";
 export type {
-  SessionMessage,
   SessionRow,
   SessionListRow,
   SessionWithDelivery,
@@ -57,6 +63,16 @@ export type {
 } from "./session-dal-helpers.js";
 
 const logger = new Logger({ base: { module: "agent.session_dal" } });
+
+function preserveNonTextCreatedAt(
+  existing: SessionTranscriptItem | undefined,
+  next: SessionTranscriptItem,
+): SessionTranscriptItem {
+  if (!existing || existing.kind !== next.kind || next.kind === "text") {
+    return next;
+  }
+  return { ...next, created_at: existing.created_at };
+}
 
 export class SessionDal {
   private readonly jsonObserver: PersistedJsonObserver;
@@ -71,34 +87,6 @@ export class SessionDal {
       logger: opts?.logger ?? logger,
       metrics: opts?.metrics ?? gatewayMetrics,
     };
-  }
-
-  private static encodeCursor(input: { updated_at: string; session_id: string }): string {
-    return Buffer.from(
-      JSON.stringify({ updated_at: input.updated_at, session_id: input.session_id }),
-      "utf-8",
-    ).toString("base64url");
-  }
-
-  private static decodeCursor(
-    cursor: string,
-  ): { updated_at: string; session_id: string } | undefined {
-    const trimmed = cursor.trim();
-    if (!trimmed) return undefined;
-    try {
-      const parsed = JSON.parse(Buffer.from(trimmed, "base64url").toString("utf-8")) as unknown;
-      if (!parsed || typeof parsed !== "object") return undefined;
-      const { updated_at: updatedAt, session_id: sessionId } = parsed as Record<string, unknown>;
-      return typeof updatedAt === "string" &&
-        updatedAt.trim().length > 0 &&
-        typeof sessionId === "string" &&
-        sessionId.trim().length > 0
-        ? { updated_at: updatedAt, session_id: sessionId }
-        : undefined;
-    } catch {
-      // Intentional: invalid cursors are treated as absent.
-      return undefined;
-    }
   }
 
   private async getRawSession(
@@ -118,19 +106,11 @@ export class SessionDal {
     return session;
   }
 
-  private stringifyTurns(turns: SessionMessage[]): string {
-    return stringifyPersistedJson({
-      value: turns,
-      ...SESSION_TURNS_JSON_META,
-      validate: isSessionMessageArray,
-    });
-  }
-
   private async writeSession(
     input: SessionIdentity & { stored: StoredTranscript; updatedAt?: string },
   ): Promise<void> {
     await this.db.run(UPDATE_SESSION_SQL, [
-      this.stringifyTurns(input.stored.turns),
+      stringifySessionTranscript(input.stored.transcript),
       input.stored.title,
       input.stored.summary,
       input.updatedAt ?? new Date().toISOString(),
@@ -141,7 +121,7 @@ export class SessionDal {
 
   async replaceTranscript(
     input: SessionIdentity & {
-      turns: SessionMessage[];
+      transcript: SessionTranscriptItem[];
       summary: string;
       title?: string;
       updatedAt?: string;
@@ -152,7 +132,7 @@ export class SessionDal {
       sessionId: input.sessionId,
       updatedAt: input.updatedAt,
       stored: {
-        turns: input.turns,
+        transcript: input.transcript,
         title: normalizeSessionTitle(input.title ?? ""),
         summary: input.summary,
         droppedMessages: 0,
@@ -235,7 +215,7 @@ export class SessionDal {
 
     const nowIso = new Date().toISOString();
     const inserted = await this.db.get<RawSessionRow>(
-      "INSERT INTO sessions (tenant_id, session_id, session_key, agent_id, workspace_id, channel_thread_id, title, summary, turns_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, '', '', '[]', ?, ?) ON CONFLICT (tenant_id, session_key) DO NOTHING RETURNING *",
+      "INSERT INTO sessions (tenant_id, session_id, session_key, agent_id, workspace_id, channel_thread_id, title, summary, transcript_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, '', '', '[]', ?, ?) ON CONFLICT (tenant_id, session_key) DO NOTHING RETURNING *",
       [tenantId, randomUUID(), sessionKey, agentId, workspaceId, channelThreadId, nowIso, nowIso],
     );
     if (inserted) return toSessionRow(inserted, this.jsonObserver);
@@ -256,22 +236,18 @@ export class SessionDal {
     const connectorKeyRaw = input.connectorKey?.trim();
     const connectorKey = connectorKeyRaw ? normalizeConnectorId(connectorKeyRaw) : undefined;
     const limit = Math.min(200, Math.max(1, Math.floor(input.limit ?? 50)));
-    const cursor = input.cursor ? SessionDal.decodeCursor(input.cursor) : undefined;
+    const cursor = input.cursor ? decodeSessionCursor(input.cursor) : undefined;
     if (input.cursor && !cursor) throw new Error("invalid cursor");
-
-    const where = ["s.tenant_id = ?", "s.agent_id = ?", "s.workspace_id = ?"];
-    const params: unknown[] = [scopeIds.tenantId, scopeIds.agentId, scopeIds.workspaceId];
-    if (connectorKey) {
-      where.push("ca.connector_key = ?");
-      params.push(connectorKey);
-    }
-    if (cursor) {
-      where.push("(s.updated_at < ? OR (s.updated_at = ? AND s.session_id < ?))");
-      params.push(cursor.updated_at, cursor.updated_at, cursor.session_id);
-    }
+    const { where, params } = buildSessionListWhereClause({
+      tenantId: scopeIds.tenantId,
+      agentId: scopeIds.agentId,
+      workspaceId: scopeIds.workspaceId,
+      connectorKey,
+      cursor,
+    });
 
     const rows = await this.db.all<RawSessionListRow>(
-      `SELECT s.session_id, s.session_key, ag.agent_key, ca.connector_key, ct.provider_thread_id, s.title, s.summary, s.turns_json, s.created_at, s.updated_at FROM sessions s JOIN agents ag ON ag.tenant_id = s.tenant_id AND ag.agent_id = s.agent_id JOIN channel_threads ct ON ct.tenant_id = s.tenant_id AND ct.workspace_id = s.workspace_id AND ct.channel_thread_id = s.channel_thread_id JOIN channel_accounts ca ON ca.tenant_id = ct.tenant_id AND ca.workspace_id = ct.workspace_id AND ca.channel_account_id = ct.channel_account_id WHERE ${where.join(" AND ")} ORDER BY s.updated_at DESC, s.session_id DESC LIMIT ?`,
+      `SELECT s.session_id, s.session_key, ag.agent_key, ca.connector_key, ct.provider_thread_id, s.title, s.summary, s.transcript_json, s.created_at, s.updated_at FROM sessions s JOIN agents ag ON ag.tenant_id = s.tenant_id AND ag.agent_id = s.agent_id JOIN channel_threads ct ON ct.tenant_id = s.tenant_id AND ct.workspace_id = s.workspace_id AND ct.channel_thread_id = s.channel_thread_id JOIN channel_accounts ca ON ca.tenant_id = ct.tenant_id AND ca.workspace_id = ct.workspace_id AND ca.channel_account_id = ct.channel_account_id WHERE ${where.join(" AND ")} ORDER BY s.updated_at DESC, s.session_id DESC LIMIT ?`,
       [...params, limit + 1],
     );
     const selectedRows = rows.slice(0, limit);
@@ -280,7 +256,7 @@ export class SessionDal {
       sessions: selectedRows.map((row) => toSessionListRow(row, this.jsonObserver)),
       nextCursor:
         rows.length > limit && last
-          ? SessionDal.encodeCursor({
+          ? encodeSessionCursor({
               updated_at: normalizeTime(last.updated_at),
               session_id: last.session_id,
             })
@@ -290,7 +266,7 @@ export class SessionDal {
 
   async reset(input: SessionIdentity): Promise<boolean> {
     const res = await this.db.run(
-      "UPDATE sessions SET turns_json = '[]', title = '', summary = '', updated_at = ? WHERE tenant_id = ? AND session_id = ?",
+      "UPDATE sessions SET transcript_json = '[]', title = '', summary = '', updated_at = ? WHERE tenant_id = ? AND session_id = ?",
       [new Date().toISOString(), input.tenantId, input.sessionId],
     );
     return res.changes === 1;
@@ -308,15 +284,27 @@ export class SessionDal {
       tenantId: input.tenantId,
       sessionId: input.sessionId,
     });
-    const turns: SessionMessage[] = [
-      ...session.turns,
-      { role: "user", content: input.userMessage, timestamp: input.timestamp },
-      { role: "assistant", content: input.assistantMessage, timestamp: input.timestamp },
+    const transcript: SessionTranscriptItem[] = [
+      ...session.transcript,
+      SessionTranscriptTextItem.parse({
+        kind: "text",
+        id: randomUUID(),
+        role: "user",
+        content: input.userMessage,
+        created_at: input.timestamp,
+      }),
+      SessionTranscriptTextItem.parse({
+        kind: "text",
+        id: randomUUID(),
+        role: "assistant",
+        content: input.assistantMessage,
+        created_at: input.timestamp,
+      }),
     ];
     const maxTurns = input.maxTurns ?? 0;
     if (maxTurns > 0) {
       const stored = buildStoredTranscript({
-        turns,
+        transcript,
         keepLastMessages: maxTurns * 2,
         previousTitle: session.title,
         previousSummary: session.summary,
@@ -331,7 +319,7 @@ export class SessionDal {
       await this.replaceTranscript({
         tenantId: input.tenantId,
         sessionId: input.sessionId,
-        turns,
+        transcript,
         title: session.title,
         summary: session.summary,
         updatedAt: input.timestamp,
@@ -343,6 +331,42 @@ export class SessionDal {
     return updated;
   }
 
+  async upsertTranscriptItem(
+    input: SessionIdentity & {
+      item: SessionTranscriptItem;
+      summary?: string;
+      title?: string;
+      updatedAt?: string;
+    },
+  ): Promise<SessionRow> {
+    const session = await this.requireSession({
+      tenantId: input.tenantId,
+      sessionId: input.sessionId,
+    });
+    const existingItem = session.transcript.find((item) => item.id === input.item.id);
+    const nextItem = preserveNonTextCreatedAt(existingItem, input.item);
+    const nextTranscript = sortSessionTranscript(
+      existingItem
+        ? session.transcript.map((item) => (item.id === nextItem.id ? nextItem : item))
+        : [...session.transcript, nextItem],
+    );
+
+    await this.replaceTranscript({
+      tenantId: input.tenantId,
+      sessionId: input.sessionId,
+      transcript: nextTranscript,
+      title: input.title ?? session.title,
+      summary: input.summary ?? session.summary,
+      updatedAt:
+        input.updatedAt ??
+        (input.item.kind === "text" ? input.item.created_at : input.item.updated_at),
+    });
+
+    const updated = await this.getById({ tenantId: input.tenantId, sessionId: input.sessionId });
+    if (!updated) throw new Error(`session '${input.sessionId}' missing after transcript upsert`);
+    return updated;
+  }
+
   async compact(
     input: SessionIdentity & { keepLastMessages: number },
   ): Promise<{ droppedMessages: number; keptMessages: number }> {
@@ -351,13 +375,16 @@ export class SessionDal {
       sessionId: input.sessionId,
     });
     const stored = buildStoredTranscript({
-      turns: session.turns,
+      transcript: session.transcript,
       keepLastMessages: Math.max(0, input.keepLastMessages),
       previousTitle: session.title,
       previousSummary: session.summary,
     });
     await this.writeSession({ tenantId: input.tenantId, sessionId: input.sessionId, stored });
-    return { droppedMessages: stored.droppedMessages, keptMessages: stored.turns.length };
+    return {
+      droppedMessages: stored.droppedMessages,
+      keptMessages: countTextTranscriptItems(stored.transcript),
+    };
   }
 
   async setTitleIfBlank(input: SessionIdentity & { title: string }): Promise<boolean> {
@@ -383,7 +410,7 @@ export class SessionDal {
       input.tenantId,
       input.sessionId,
     ]);
-    const rebuiltTurns: SessionMessage[] = [];
+    const rebuiltTranscript: SessionTranscriptItem[] = [];
     let sourceRows = 0;
 
     for (const row of rows) {
@@ -396,16 +423,31 @@ export class SessionDal {
       const assistantMessage =
         row.reply_text !== null
           ? row.reply_text
-          : await this.loadOutboxReplyText({ tenantId: input.tenantId, inboxId: row.inbox_id });
+          : await loadOutboxReplyText(this.db, {
+              tenantId: input.tenantId,
+              inboxId: row.inbox_id,
+            });
       if (assistantMessage === undefined) continue;
 
       const timestamp = normalizeRepairTimestamp(
         row.processed_at,
         parsed.data.message.envelope?.received_at ?? parsed.data.message.timestamp,
       );
-      rebuiltTurns.push(
-        { role: "user", content: userMessage, timestamp },
-        { role: "assistant", content: assistantMessage, timestamp },
+      rebuiltTranscript.push(
+        SessionTranscriptTextItem.parse({
+          kind: "text",
+          id: randomUUID(),
+          role: "user",
+          content: userMessage,
+          created_at: timestamp,
+        }),
+        SessionTranscriptTextItem.parse({
+          kind: "text",
+          id: randomUUID(),
+          role: "assistant",
+          content: assistantMessage,
+          created_at: timestamp,
+        }),
       );
       sourceRows += 1;
     }
@@ -415,7 +457,7 @@ export class SessionDal {
     const maxTurns = input.maxTurns ?? 0;
     if (maxTurns > 0) {
       const stored = buildStoredTranscript({
-        turns: rebuiltTurns,
+        transcript: rebuiltTranscript,
         keepLastMessages: maxTurns * 2,
         previousTitle: session.title,
         previousSummary: session.summary,
@@ -424,12 +466,12 @@ export class SessionDal {
         tenantId: input.tenantId,
         sessionId: input.sessionId,
         stored,
-        updatedAt: stored.turns.at(-1)?.timestamp ?? session.updated_at,
+        updatedAt: latestTranscriptTimestamp(stored.transcript) ?? session.updated_at,
       });
       return {
         source_rows: sourceRows,
-        rebuilt_messages: rebuiltTurns.length,
-        kept_messages: stored.turns.length,
+        rebuilt_messages: rebuiltTranscript.length,
+        kept_messages: stored.transcript.length,
         dropped_messages: stored.droppedMessages,
       };
     }
@@ -437,15 +479,15 @@ export class SessionDal {
     await this.replaceTranscript({
       tenantId: input.tenantId,
       sessionId: input.sessionId,
-      turns: rebuiltTurns,
+      transcript: rebuiltTranscript,
       title: session.title,
       summary: session.summary,
-      updatedAt: rebuiltTurns.at(-1)?.timestamp ?? session.updated_at,
+      updatedAt: latestTranscriptTimestamp(rebuiltTranscript) ?? session.updated_at,
     });
     return {
       source_rows: sourceRows,
-      rebuilt_messages: rebuiltTurns.length,
-      kept_messages: rebuiltTurns.length,
+      rebuilt_messages: rebuiltTranscript.length,
+      kept_messages: rebuiltTranscript.length,
       dropped_messages: 0,
     };
   }
@@ -467,16 +509,5 @@ export class SessionDal {
         ? `DELETE FROM sessions WHERE tenant_id = ? ${agentClause} AND datetime(replace(replace(updated_at, 'T', ' '), 'Z', '')) < datetime(replace(replace(?, 'T', ' '), 'Z', ''))`
         : `DELETE FROM sessions WHERE tenant_id = ? ${agentClause} AND updated_at < ?`;
     return (await this.db.run(sql, params)).changes;
-  }
-
-  private async loadOutboxReplyText(input: {
-    tenantId: string;
-    inboxId: number;
-  }): Promise<string | undefined> {
-    const rows = await this.db.all<{ text: string }>(
-      "SELECT text FROM channel_outbox WHERE tenant_id = ? AND inbox_id = ? ORDER BY chunk_index ASC, outbox_id ASC",
-      [input.tenantId, input.inboxId],
-    );
-    return rows.length > 0 ? rows.map((row) => row.text).join("") : undefined;
   }
 }

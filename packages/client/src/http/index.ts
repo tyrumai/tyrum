@@ -86,3 +86,10 @@ export type { ContextGetResponse, ContextListResponse, ContextDetailResponse } f
 export type { ArtifactMetadataResponse, ArtifactBytesResult } from "./artifacts.js";
 export type { HealthResponse } from "./health.js";
 export type { ToolRegistryListResult } from "./tool-registry.js";
+export type {
+  SkillImportInput,
+  UploadInput,
+  McpImportInput,
+  ExtensionsToggleInput,
+  ExtensionsRevertInput,
+} from "./extensions.js";

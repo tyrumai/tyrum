@@ -17,6 +17,7 @@ import { createConnectionsRoute } from "./routes/connections.js";
 import { createContextRoutes } from "./routes/context.js";
 import { createContractRoutes } from "./routes/contracts.js";
 import { createDeviceTokenRoutes } from "./routes/device-token.js";
+import { createExtensionsRoutes } from "./routes/extensions.js";
 import { createHealthRoute } from "./routes/health.js";
 import { createIngressRoutes } from "./routes/ingress.js";
 import { createMemoryExportRoutes } from "./routes/memory-export.js";
@@ -458,6 +459,13 @@ export function registerArtifactsAuditAndUiRoutes(context: AppRouteContext): voi
   context.app.route(
     "/",
     createMemoryExportRoutes({ artifactStore: context.container.artifactStore }),
+  );
+  context.app.route(
+    "/",
+    createExtensionsRoutes({
+      db: context.container.db,
+      container: context.container,
+    }),
   );
 
   context.app.route(

@@ -1,7 +1,7 @@
 import type { MenuItemConstructorOptions } from "electron";
 
 export interface NavigationRequest {
-  pageId: "node-configure";
+  pageId: "desktop";
 }
 
 export interface BuildApplicationMenuTemplateOptions {
@@ -123,7 +123,7 @@ export function buildApplicationMenuTemplate(
   options: BuildApplicationMenuTemplateOptions,
 ): MenuItemConstructorOptions[] {
   const requestOpenSettings = (): void => {
-    options.onRequestNavigate({ pageId: "node-configure" });
+    options.onRequestNavigate({ pageId: "desktop" });
   };
 
   const editMenu = buildEditMenu();

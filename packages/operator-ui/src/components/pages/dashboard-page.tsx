@@ -16,7 +16,7 @@ import { useOperatorStore } from "../../use-operator-store.js";
 export interface DashboardPageProps {
   core: OperatorCore;
   onNavigate?: (id: string) => void;
-  connectionRouteId?: "configure" | "node-configure";
+  connectionRouteId?: "configure" | "desktop";
 }
 
 function SummaryRow({

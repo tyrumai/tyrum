@@ -446,12 +446,11 @@ describe("AgentRuntime - engine timing and concurrency", () => {
         sessionKey: "agent:default:test:default:channel:thread-1",
       });
       expect(session).toBeTruthy();
-      expect(session!.turns.map((t) => `${t.role}:${t.content}`)).toEqual([
-        "user:m1",
-        "assistant:first",
-        "user:m2",
-        "assistant:second",
-      ]);
+      expect(
+        session!.transcript
+          .filter((item) => item.kind === "text")
+          .map((item) => `${item.role}:${item.content}`),
+      ).toEqual(["user:m1", "assistant:first", "user:m2", "assistant:second"]);
     } finally {
       gate.resolve();
       await Promise.allSettled([p1, p2]);

@@ -1,12 +1,13 @@
 import { generateText, stepCountIs } from "ai";
 import type { LanguageModel, ModelMessage } from "ai";
-import type { AgentConfig as AgentConfigT } from "@tyrum/schemas";
+import type { AgentConfig as AgentConfigT, SessionTranscriptTextItem } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../../container.js";
 import { ensureAgentConfigSeeded } from "../default-config.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import type { AgentContextStore } from "../context-store.js";
 import type { SessionDal } from "../session-dal.js";
-import type { SessionMessage, SessionRow } from "../session-dal.js";
+import type { SessionRow } from "../session-dal.js";
+import { countTextTranscriptItems, splitTranscriptForCompaction } from "../session-dal-helpers.js";
 import { maybeRunPreCompactionMemoryFlush } from "./pre-compaction-memory-flush.js";
 import {
   resolveSessionModelDetailed,
@@ -149,7 +150,7 @@ function getReservedInputTokens(config: AgentConfigT): number {
 
 function buildSummaryHistoryMessages(
   previousSummary: string,
-  droppedTurns: readonly SessionMessage[],
+  droppedTurns: readonly SessionTranscriptTextItem[],
 ): ModelMessage[] {
   const messages: ModelMessage[] = [];
   const trimmedSummary = previousSummary.trim();
@@ -160,23 +161,22 @@ function buildSummaryHistoryMessages(
     });
   }
   for (const turn of droppedTurns) {
-    messages.push({
-      role: turn.role,
-      content: [{ type: "text", text: `[${turn.timestamp}] ${turn.content}` }],
-    });
+    const text = `[${turn.created_at}] ${turn.content}`;
+    const content = [{ type: "text" as const, text }];
+    switch (turn.role) {
+      case "assistant":
+        messages.push({ role: "assistant", content });
+        break;
+      case "system":
+        messages.push({ role: "system", content: text });
+        break;
+      case "user":
+      default:
+        messages.push({ role: "user", content });
+        break;
+    }
   }
   return messages;
-}
-
-function getDroppedTurns(session: SessionRow, keepLastMessages: number): SessionMessage[] {
-  const overflow = session.turns.length - keepLastMessages;
-  if (overflow <= 0) return [];
-  return session.turns.slice(0, overflow);
-}
-
-function getKeptTurns(session: SessionRow, keepLastMessages: number): SessionMessage[] {
-  if (keepLastMessages <= 0) return [];
-  return session.turns.slice(-keepLastMessages);
 }
 
 function compactionTimeoutMs(timeoutMs: number | undefined): number | undefined {
@@ -243,7 +243,7 @@ export function shouldCompactSessionForUsage(input: {
   if (!Number.isFinite(maxTurns) || maxTurns <= 0) {
     return false;
   }
-  return input.session.turns.length >= maxTurns * 2;
+  return countTextTranscriptItems(input.session.transcript) >= maxTurns * 2;
 }
 
 export async function compactSessionWithResolvedModel(input: {
@@ -261,12 +261,18 @@ export async function compactSessionWithResolvedModel(input: {
     0,
     input.keepLastMessages ?? getKeepLastMessages(input.ctx.config),
   );
-  const droppedTurns = getDroppedTurns(input.session, keepLastMessages);
+  const { dropped, kept } = splitTranscriptForCompaction({
+    transcript: input.session.transcript,
+    keepLastMessages,
+  });
+  const droppedTurns = dropped.filter(
+    (item): item is SessionTranscriptTextItem => item.kind === "text",
+  );
   if (droppedTurns.length === 0) {
     return {
       compacted: false,
       droppedMessages: 0,
-      keptMessages: input.session.turns.length,
+      keptMessages: countTextTranscriptItems(input.session.transcript),
       summary: input.session.summary,
       reason: "noop",
     };
@@ -284,7 +290,6 @@ export async function compactSessionWithResolvedModel(input: {
     },
   );
 
-  const keptTurns = getKeptTurns(input.session, keepLastMessages);
   const timeout = compactionTimeoutMs(input.timeoutMs);
   if (timeout === 0) {
     return await runDeterministicFallbackCompaction({
@@ -314,14 +319,15 @@ export async function compactSessionWithResolvedModel(input: {
     await input.sessionDal.replaceTranscript({
       tenantId: input.session.tenant_id,
       sessionId: input.session.session_id,
-      turns: keptTurns,
+      transcript: kept.slice(),
+      title: input.session.title,
       summary,
     });
 
     return {
       compacted: true,
       droppedMessages: droppedTurns.length,
-      keptMessages: keptTurns.length,
+      keptMessages: countTextTranscriptItems(kept),
       summary,
       reason: "model",
     };

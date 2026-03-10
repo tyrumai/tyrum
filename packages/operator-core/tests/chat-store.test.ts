@@ -23,10 +23,10 @@ function sampleListItem(sessionId: string, updatedAt = "2026-01-01T00:00:00.000Z
     thread_id: `ui-${sessionId}`,
     title: "",
     summary: "",
-    turns_count: 0,
+    transcript_count: 1,
     updated_at: updatedAt,
     created_at: updatedAt,
-    last_turn: { role: "user", content: "hello" },
+    last_text: { role: "user", content: "hello" },
   } as const;
 }
 
@@ -38,7 +38,15 @@ function sampleGetSession(sessionId: string) {
     thread_id: `ui-${sessionId}`,
     title: "",
     summary: "",
-    turns: [{ role: "user", content: "hello" }],
+    transcript: [
+      {
+        kind: "text",
+        id: `${sessionId}-user-1`,
+        role: "user",
+        content: "hello",
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+    ],
     updated_at: "2026-01-01T00:00:00.000Z",
     created_at: "2026-01-01T00:00:00.000Z",
   } as const;
@@ -62,6 +70,8 @@ function createFakeWs() {
     })),
     sessionDelete: vi.fn(async () => ({ session_id: "session-1" })),
     sessionSend: vi.fn(async () => ({ session_id: "session-1", assistant_message: "" })),
+    on: vi.fn(),
+    off: vi.fn(),
   };
 }
 

@@ -11,11 +11,35 @@ describe("maybeAutoCompactSession", () => {
           session_id: "session-1",
           agent_id: "agent-1",
           summary: "existing summary",
-          turns: [
-            { role: "user", content: "u1", timestamp: "2026-03-08T00:00:00Z" },
-            { role: "assistant", content: "a1", timestamp: "2026-03-08T00:00:00Z" },
-            { role: "user", content: "u2", timestamp: "2026-03-08T00:00:01Z" },
-            { role: "assistant", content: "a2", timestamp: "2026-03-08T00:00:01Z" },
+          transcript: [
+            {
+              kind: "text",
+              id: "turn-1",
+              role: "user",
+              content: "u1",
+              created_at: "2026-03-08T00:00:00Z",
+            },
+            {
+              kind: "text",
+              id: "turn-2",
+              role: "assistant",
+              content: "a1",
+              created_at: "2026-03-08T00:00:00Z",
+            },
+            {
+              kind: "text",
+              id: "turn-3",
+              role: "user",
+              content: "u2",
+              created_at: "2026-03-08T00:00:01Z",
+            },
+            {
+              kind: "text",
+              id: "turn-4",
+              role: "assistant",
+              content: "a2",
+              created_at: "2026-03-08T00:00:01Z",
+            },
           ],
         })
         .mockResolvedValueOnce({

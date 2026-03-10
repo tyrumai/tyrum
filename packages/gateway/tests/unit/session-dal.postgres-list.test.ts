@@ -6,7 +6,7 @@ import { openTestPostgresDb } from "../helpers/postgres-db.js";
 import { MetricsRegistry } from "../../src/modules/observability/metrics.js";
 
 describe("SessionDal.list (postgres)", () => {
-  it("treats malformed turns_json as empty instead of failing the whole query", async () => {
+  it("treats malformed transcript_json as empty instead of failing the whole query", async () => {
     const { db, close } = await openTestPostgresDb();
     try {
       const identityScopeDal = new IdentityScopeDal(db, { cacheTtlMs: 60_000 });
@@ -25,11 +25,10 @@ describe("SessionDal.list (postgres)", () => {
         containerKind: "group",
       });
 
-      await db.run("UPDATE sessions SET turns_json = ? WHERE tenant_id = ? AND session_id = ?", [
-        "{ not: json",
-        s1.tenant_id,
-        s1.session_id,
-      ]);
+      await db.run(
+        "UPDATE sessions SET transcript_json = ? WHERE tenant_id = ? AND session_id = ?",
+        ["{ not: json", s1.tenant_id, s1.session_id],
+      );
 
       const page = await dal.list({ connectorKey: "ui", limit: 10 });
       expect(page.sessions.map((s) => s.session_id).toSorted()).toEqual(
@@ -37,13 +36,13 @@ describe("SessionDal.list (postgres)", () => {
       );
 
       const corrupted = page.sessions.find((s) => s.session_id === s1.session_key);
-      expect(corrupted?.turns_count).toBe(0);
-      expect(corrupted?.last_turn).toBeNull();
+      expect(corrupted?.transcript_count).toBe(0);
+      expect(corrupted?.last_text).toBeNull();
       expect(logger.warn).toHaveBeenCalledWith(
         "persisted_json.read_failed",
         expect.objectContaining({
           table: "sessions",
-          column: "turns_json",
+          column: "transcript_json",
           reason: "invalid_json",
         }),
       );
@@ -51,13 +50,15 @@ describe("SessionDal.list (postgres)", () => {
       const metricsText = await metrics.registry.getSingleMetricAsString(
         "persisted_json_read_failures_total",
       );
-      expect(metricsText).toContain('table="sessions",column="turns_json",reason="invalid_json"');
+      expect(metricsText).toContain(
+        'table="sessions",column="transcript_json",reason="invalid_json"',
+      );
     } finally {
       await close();
     }
   });
 
-  it("treats non-array turns_json as empty instead of failing the whole query", async () => {
+  it("treats non-array transcript_json as empty instead of failing the whole query", async () => {
     const { db, close } = await openTestPostgresDb();
     try {
       const identityScopeDal = new IdentityScopeDal(db, { cacheTtlMs: 60_000 });
@@ -76,11 +77,10 @@ describe("SessionDal.list (postgres)", () => {
         containerKind: "group",
       });
 
-      await db.run("UPDATE sessions SET turns_json = ? WHERE tenant_id = ? AND session_id = ?", [
-        "{}",
-        s1.tenant_id,
-        s1.session_id,
-      ]);
+      await db.run(
+        "UPDATE sessions SET transcript_json = ? WHERE tenant_id = ? AND session_id = ?",
+        ["{}", s1.tenant_id, s1.session_id],
+      );
 
       const page = await dal.list({ connectorKey: "ui", limit: 10 });
       expect(page.sessions.map((s) => s.session_id).toSorted()).toEqual(
@@ -88,13 +88,13 @@ describe("SessionDal.list (postgres)", () => {
       );
 
       const corrupted = page.sessions.find((s) => s.session_id === s1.session_key);
-      expect(corrupted?.turns_count).toBe(0);
-      expect(corrupted?.last_turn).toBeNull();
+      expect(corrupted?.transcript_count).toBe(0);
+      expect(corrupted?.last_text).toBeNull();
       expect(logger.warn).toHaveBeenCalledWith(
         "persisted_json.read_failed",
         expect.objectContaining({
           table: "sessions",
-          column: "turns_json",
+          column: "transcript_json",
           reason: "unexpected_shape",
         }),
       );
@@ -103,7 +103,7 @@ describe("SessionDal.list (postgres)", () => {
         "persisted_json_read_failures_total",
       );
       expect(metricsText).toContain(
-        'table="sessions",column="turns_json",reason="unexpected_shape"',
+        'table="sessions",column="transcript_json",reason="unexpected_shape"',
       );
     } finally {
       await close();
@@ -124,21 +124,20 @@ describe("SessionDal.list (postgres)", () => {
         containerKind: "group",
       });
 
-      await db.run("UPDATE sessions SET turns_json = ? WHERE tenant_id = ? AND session_id = ?", [
-        '[{"role":"user"}]',
-        session.tenant_id,
-        session.session_id,
-      ]);
+      await db.run(
+        "UPDATE sessions SET transcript_json = ? WHERE tenant_id = ? AND session_id = ?",
+        ['[{"role":"user"}]', session.tenant_id, session.session_id],
+      );
 
       const page = await dal.list({ connectorKey: "ui", limit: 10 });
       const corrupted = page.sessions.find((s) => s.session_id === session.session_key);
-      expect(corrupted?.turns_count).toBe(0);
-      expect(corrupted?.last_turn).toBeNull();
+      expect(corrupted?.transcript_count).toBe(0);
+      expect(corrupted?.last_text).toBeNull();
       expect(logger.warn).toHaveBeenCalledWith(
         "persisted_json.read_failed",
         expect.objectContaining({
           table: "sessions",
-          column: "turns_json",
+          column: "transcript_json",
           reason: "invalid_value",
         }),
       );
@@ -146,7 +145,9 @@ describe("SessionDal.list (postgres)", () => {
       const metricsText = await metrics.registry.getSingleMetricAsString(
         "persisted_json_read_failures_total",
       );
-      expect(metricsText).toContain('table="sessions",column="turns_json",reason="invalid_value"');
+      expect(metricsText).toContain(
+        'table="sessions",column="transcript_json",reason="invalid_value"',
+      );
     } finally {
       await close();
     }

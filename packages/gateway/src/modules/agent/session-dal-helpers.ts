@@ -1,19 +1,20 @@
-import type { NormalizedContainerKind } from "@tyrum/schemas";
+import type {
+  NormalizedContainerKind,
+  SessionTranscriptItem,
+  SessionTranscriptTextItem,
+  SessionTranscriptTextPreview,
+} from "@tyrum/schemas";
 import {
   parsePersistedJson,
   reportPersistedJsonReadFailure,
   type PersistedJsonObserver,
 } from "../observability/persisted-json.js";
+import {
+  SessionTranscriptItem as SessionTranscriptItemSchema,
+  SessionTranscriptTextItem as SessionTranscriptTextItemSchema,
+} from "@tyrum/schemas";
 
-type SessionRole = "user" | "assistant";
-type SessionPreview = { role: SessionRole; content: string };
 const SESSION_TITLE_MAX_CHARS = 120;
-
-export interface SessionMessage {
-  role: SessionRole;
-  content: string;
-  timestamp: string;
-}
 export interface SessionRow extends RawSessionTimeFields {
   tenant_id: string;
   session_id: string;
@@ -23,7 +24,7 @@ export interface SessionRow extends RawSessionTimeFields {
   channel_thread_id: string;
   title: string;
   summary: string;
-  turns: SessionMessage[];
+  transcript: SessionTranscriptItem[];
   created_at: string;
   updated_at: string;
 }
@@ -34,8 +35,8 @@ export interface SessionListRow extends RawSessionTimeFields {
   thread_id: string;
   title: string;
   summary: string;
-  turns_count: number;
-  last_turn: SessionPreview | null;
+  transcript_count: number;
+  last_text: SessionTranscriptTextPreview | null;
   created_at: string;
   updated_at: string;
 }
@@ -60,7 +61,7 @@ export interface RawSessionRow extends RawSessionTimeFields {
   channel_thread_id: string;
   title: string;
   summary: string;
-  turns_json: string;
+  transcript_json: string;
 }
 export interface RawSessionListRow extends RawSessionTimeFields {
   session_id: string;
@@ -70,7 +71,7 @@ export interface RawSessionListRow extends RawSessionTimeFields {
   provider_thread_id: string;
   title: string;
   summary: string;
-  turns_json: string;
+  transcript_json: string;
 }
 export interface RawSessionWithDeliveryRow extends RawSessionRow {
   agent_key: string;
@@ -96,7 +97,7 @@ export interface SessionRepairResult {
 }
 
 export type StoredTranscript = {
-  turns: SessionMessage[];
+  transcript: SessionTranscriptItem[];
   title: string;
   summary: string;
   droppedMessages: number;
@@ -105,11 +106,11 @@ export type SessionIdentity = { tenantId: string; sessionId: string };
 
 export const SESSION_TURNS_JSON_META = {
   table: "sessions",
-  column: "turns_json",
+  column: "transcript_json",
   shape: "array",
 } as const;
 export const UPDATE_SESSION_SQL =
-  "UPDATE sessions SET turns_json = ?, title = ?, summary = ?, updated_at = ? WHERE tenant_id = ? AND session_id = ?";
+  "UPDATE sessions SET transcript_json = ?, title = ?, summary = ?, updated_at = ? WHERE tenant_id = ? AND session_id = ?";
 export const REPAIR_SESSION_SQL =
   "SELECT inbox_id, payload_json, reply_text, processed_at FROM channel_inbox WHERE tenant_id = ? AND session_id = ? AND status = 'completed' ORDER BY received_at_ms ASC, inbox_id ASC";
 export const WITH_DELIVERY_SQL = `SELECT s.*, ag.agent_key, ws.workspace_key, ca.connector_key, ca.account_key, ct.provider_thread_id, ct.container_kind FROM sessions s JOIN agents ag ON ag.tenant_id = s.tenant_id AND ag.agent_id = s.agent_id JOIN workspaces ws ON ws.tenant_id = s.tenant_id AND ws.workspace_id = s.workspace_id JOIN channel_threads ct ON ct.tenant_id = s.tenant_id AND ct.workspace_id = s.workspace_id AND ct.channel_thread_id = s.channel_thread_id JOIN channel_accounts ca ON ca.tenant_id = ct.tenant_id AND ca.workspace_id = ct.workspace_id AND ca.channel_account_id = ct.channel_account_id WHERE s.tenant_id = ? AND s.session_key = ? LIMIT 1`;
@@ -122,28 +123,152 @@ export function normalizeTime(value: string | Date): string {
     : value;
 }
 
-function isSessionMessage(value: unknown): value is SessionMessage {
-  if (!value || typeof value !== "object") return false;
-  const record = value as Record<string, unknown>;
+function isSessionTranscriptItem(value: unknown): value is SessionTranscriptItem {
+  return SessionTranscriptItemSchema.safeParse(value).success;
+}
+
+function isSessionTranscriptTextItem(value: unknown): value is SessionTranscriptTextItem {
+  return SessionTranscriptTextItemSchema.safeParse(value).success;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isTranscriptRole(value: unknown): value is SessionTranscriptTextItem["role"] {
+  return value === "assistant" || value === "system" || value === "user";
+}
+
+function isToolStatus(value: unknown): boolean {
   return (
-    (record["role"] === "user" || record["role"] === "assistant") &&
-    typeof record["content"] === "string" &&
-    typeof record["timestamp"] === "string"
+    value === "queued" ||
+    value === "running" ||
+    value === "completed" ||
+    value === "failed" ||
+    value === "awaiting_approval" ||
+    value === "cancelled"
   );
 }
 
-export function isSessionMessageArray(value: unknown): value is SessionMessage[] {
-  return Array.isArray(value) && value.every(isSessionMessage);
+function isApprovalStatus(value: unknown): boolean {
+  return (
+    value === "pending" ||
+    value === "approved" ||
+    value === "denied" ||
+    value === "expired" ||
+    value === "cancelled"
+  );
 }
 
-export function parseTurns(raw: string, observer: PersistedJsonObserver): SessionMessage[] {
+function hasStringField(record: Record<string, unknown>, key: string): boolean {
+  return typeof record[key] === "string";
+}
+
+type SessionTranscriptListPreviewItem =
+  | {
+      kind: "text";
+      role: SessionTranscriptTextItem["role"];
+      content: string;
+    }
+  | { kind: "tool" }
+  | { kind: "approval" };
+
+function isSessionTranscriptItemPreview(value: unknown): value is SessionTranscriptListPreviewItem {
+  if (!isRecord(value) || typeof value["kind"] !== "string") return false;
+
+  if (value["kind"] === "text") {
+    return (
+      hasStringField(value, "id") &&
+      isTranscriptRole(value["role"]) &&
+      hasStringField(value, "content") &&
+      hasStringField(value, "created_at")
+    );
+  }
+
+  if (value["kind"] === "tool") {
+    return (
+      hasStringField(value, "id") &&
+      hasStringField(value, "tool_id") &&
+      hasStringField(value, "tool_call_id") &&
+      isToolStatus(value["status"]) &&
+      hasStringField(value, "summary") &&
+      hasStringField(value, "created_at") &&
+      hasStringField(value, "updated_at")
+    );
+  }
+
+  if (value["kind"] === "approval") {
+    return (
+      hasStringField(value, "id") &&
+      hasStringField(value, "approval_id") &&
+      isApprovalStatus(value["status"]) &&
+      hasStringField(value, "title") &&
+      hasStringField(value, "detail") &&
+      hasStringField(value, "created_at") &&
+      hasStringField(value, "updated_at")
+    );
+  }
+
+  return false;
+}
+
+function extractTranscriptListPreview(
+  raw: string,
+  observer: PersistedJsonObserver,
+): { transcriptCount: number; lastText: SessionTranscriptTextPreview | null } {
   const parsed = parsePersistedJson<unknown[]>({
     raw,
     fallback: [],
     ...SESSION_TURNS_JSON_META,
     observer,
   });
-  const safe = parsed.filter(isSessionMessage);
+
+  let transcriptCount = 0;
+  let invalidItems = 0;
+  let lastText: SessionTranscriptTextPreview | null = null;
+
+  for (const item of parsed) {
+    if (!isSessionTranscriptItemPreview(item)) {
+      invalidItems += 1;
+      continue;
+    }
+
+    transcriptCount += 1;
+    if (item.kind === "text") {
+      lastText = {
+        role: item.role,
+        content: item.content,
+      };
+    }
+  }
+
+  if (invalidItems > 0) {
+    reportPersistedJsonReadFailure({
+      observer,
+      ...SESSION_TURNS_JSON_META,
+      reason: "invalid_value",
+      extra: { invalid_items: invalidItems },
+    });
+  }
+
+  return { transcriptCount, lastText };
+}
+
+export function isSessionTranscriptArray(value: unknown): value is SessionTranscriptItem[] {
+  return Array.isArray(value) && value.every(isSessionTranscriptItem);
+}
+
+export function parseTranscript(
+  raw: string,
+  observer: PersistedJsonObserver,
+): SessionTranscriptItem[] {
+  const parsed = parsePersistedJson<unknown[]>({
+    raw,
+    fallback: [],
+    ...SESSION_TURNS_JSON_META,
+    observer,
+  });
+  const safe = parsed.filter(isSessionTranscriptItem);
   const invalidItems = parsed.length - safe.length;
   if (invalidItems > 0)
     reportPersistedJsonReadFailure({
@@ -165,7 +290,7 @@ export function toSessionRow(raw: RawSessionRow, observer: PersistedJsonObserver
     channel_thread_id: raw.channel_thread_id,
     title: raw.title,
     summary: raw.summary,
-    turns: parseTurns(raw.turns_json, observer),
+    transcript: parseTranscript(raw.transcript_json, observer),
     created_at: normalizeTime(raw.created_at),
     updated_at: normalizeTime(raw.updated_at),
   };
@@ -179,8 +304,7 @@ export function toSessionListRow(
   raw: RawSessionListRow,
   observer: PersistedJsonObserver,
 ): SessionListRow {
-  const turns = parseTurns(raw.turns_json, observer);
-  const lastMessage = turns.at(-1);
+  const { transcriptCount, lastText } = extractTranscriptListPreview(raw.transcript_json, observer);
   return {
     agent_id: raw.agent_key,
     session_id: raw.session_key,
@@ -188,8 +312,8 @@ export function toSessionListRow(
     thread_id: raw.provider_thread_id,
     title: raw.title,
     summary: raw.summary,
-    turns_count: turns.length,
-    last_turn: lastMessage ? { role: lastMessage.role, content: lastMessage.content } : null,
+    transcript_count: transcriptCount,
+    last_text: lastText ? { role: lastText.role, content: lastText.content } : null,
     created_at: normalizeTime(raw.created_at),
     updated_at: normalizeTime(raw.updated_at),
   };
@@ -207,18 +331,19 @@ export function normalizeSessionTitle(value: string): string {
 
 function compactSessionSummary(
   previousSummary: string,
-  droppedTurns: readonly SessionMessage[],
+  droppedItems: readonly SessionTranscriptItem[],
   opts?: { maxLines?: number; maxChars?: number; maxLineChars?: number },
 ): string {
   const maxLines = Math.max(10, opts?.maxLines ?? 200);
   const maxChars = Math.max(200, opts?.maxChars ?? 6000);
   const maxLineChars = Math.max(40, opts?.maxLineChars ?? 240);
   const prevLines = previousSummary.trim().length > 0 ? previousSummary.trim().split("\n") : [];
+  const droppedTurns = droppedItems.filter(isSessionTranscriptTextItem);
   let lines = [
     ...prevLines,
     ...droppedTurns.map(
       (turn) =>
-        `${turn.role === "assistant" ? "A" : "U"} ${turn.timestamp}: ${trimTo(turn.content.trim(), maxLineChars)}`,
+        `${turn.role === "assistant" ? "A" : turn.role === "system" ? "S" : "U"} ${turn.created_at}: ${trimTo(turn.content.trim(), maxLineChars)}`,
     ),
   ];
   if (lines.length > maxLines) lines = lines.slice(lines.length - maxLines);
@@ -226,23 +351,66 @@ function compactSessionSummary(
   return lines.join("\n");
 }
 
+export function countTextTranscriptItems(transcript: readonly SessionTranscriptItem[]): number {
+  let count = 0;
+  for (const item of transcript) {
+    if (item.kind === "text") count += 1;
+  }
+  return count;
+}
+
+export function splitTranscriptForCompaction(input: {
+  transcript: readonly SessionTranscriptItem[];
+  keepLastMessages: number;
+}): {
+  dropped: SessionTranscriptItem[];
+  kept: SessionTranscriptItem[];
+} {
+  const keepLastMessages = Math.max(0, input.keepLastMessages);
+  let splitIndex = input.transcript.length;
+  let remainingTextToKeep = keepLastMessages;
+  let preservingSuffix = true;
+  for (let index = input.transcript.length - 1; index >= 0; index -= 1) {
+    const item = input.transcript[index];
+    if (!item) continue;
+    if (item.kind !== "text") {
+      if (preservingSuffix) {
+        splitIndex = index;
+      }
+      continue;
+    }
+    if (remainingTextToKeep > 0) {
+      splitIndex = index;
+      remainingTextToKeep -= 1;
+      continue;
+    }
+    preservingSuffix = false;
+    break;
+  }
+
+  return {
+    dropped: input.transcript.slice(0, splitIndex),
+    kept: input.transcript.slice(splitIndex),
+  };
+}
+
 export function buildStoredTranscript(input: {
-  turns: readonly SessionMessage[];
+  transcript: readonly SessionTranscriptItem[];
   keepLastMessages: number;
   previousSummary?: string;
   previousTitle?: string;
 }): StoredTranscript {
-  const keepLastMessages = Math.max(0, input.keepLastMessages);
-  const overflow = input.turns.length - keepLastMessages;
-  const dropped = overflow > 0 ? input.turns.slice(0, overflow) : [];
-  const turns = keepLastMessages > 0 ? input.turns.slice(-keepLastMessages) : [];
+  const { dropped, kept: transcript } = splitTranscriptForCompaction({
+    transcript: input.transcript,
+    keepLastMessages: input.keepLastMessages,
+  });
   const previousSummary = input.previousSummary ?? "";
   const previousTitle = normalizeSessionTitle(input.previousTitle ?? "");
   return {
-    turns: turns.slice(),
+    transcript: transcript.slice(),
     title: previousTitle,
     summary: dropped.length > 0 ? compactSessionSummary(previousSummary, dropped) : previousSummary,
-    droppedMessages: dropped.length,
+    droppedMessages: countTextTranscriptItems(dropped),
   };
 }
 

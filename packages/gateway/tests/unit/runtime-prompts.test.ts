@@ -1,0 +1,51 @@
+import { describe, expect, it } from "vitest";
+import { formatSkillsPrompt } from "../../src/modules/agent/runtime/prompts.js";
+
+describe("formatSkillsPrompt", () => {
+  it("includes inline skill instructions with provenance metadata", () => {
+    const prompt = formatSkillsPrompt([
+      {
+        body: "Keep responses terse.",
+        meta: {
+          id: "skill-1",
+          name: "Terse Mode",
+          version: "1.0.0",
+          description: "Respond briefly",
+        },
+        provenance: {
+          source: "workspace",
+          path: "/tmp/skills/terse.md",
+        },
+      },
+    ]);
+
+    expect(prompt).toContain("Use the relevant skill instructions below");
+    expect(prompt).toContain("Terse Mode (skill-1@1.0.0)");
+    expect(prompt).toContain("description=Respond briefly");
+    expect(prompt).toContain("source=workspace");
+    expect(prompt).toContain("file=/tmp/skills/terse.md");
+    expect(prompt).toContain("Keep responses terse.");
+  });
+
+  it("includes database-backed skill bodies even without a readable file path", () => {
+    const prompt = formatSkillsPrompt([
+      {
+        body: "Escalate approval requests before running deploy actions.",
+        meta: {
+          id: "skill-db",
+          name: "DB Skill",
+          version: "2.0.0",
+          description: "Stored in the database",
+        },
+        provenance: {
+          source: "managed-extension",
+          path: "db://runtime-packages/skill/skill-db",
+        },
+      },
+    ]);
+
+    expect(prompt).toContain("DB Skill (skill-db@2.0.0)");
+    expect(prompt).toContain("file=db://runtime-packages/skill/skill-db");
+    expect(prompt).toContain("Escalate approval requests before running deploy actions.");
+  });
+});

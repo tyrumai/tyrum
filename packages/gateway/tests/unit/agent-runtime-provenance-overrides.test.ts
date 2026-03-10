@@ -253,6 +253,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
           },
         ],
       }),
+      expect.any(Function),
     );
     expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
     expect(usedTools.has("read")).toBe(true);
@@ -361,6 +362,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
           },
         ],
       }),
+      expect.any(Function),
     );
     expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
     expect(usedTools.has("tool.node.dispatch")).toBe(true);

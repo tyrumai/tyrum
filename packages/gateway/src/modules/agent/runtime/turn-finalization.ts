@@ -1,5 +1,8 @@
 import { generateText, type LanguageModel } from "ai";
-import type { AgentTurnResponse as AgentTurnResponseT } from "@tyrum/schemas";
+import type {
+  AgentTurnResponse as AgentTurnResponseT,
+  SessionTranscriptTextItem,
+} from "@tyrum/schemas";
 import { AgentTurnResponse } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../../container.js";
 import { decideCrossTurnLoopWarning, LOOP_WARNING_PREFIX } from "../loop-detection.js";
@@ -11,6 +14,12 @@ import { classifyTurnMemory } from "./turn-memory-policy.js";
 import { normalizeSessionTitle } from "../session-dal-helpers.js";
 
 type FinalizeContainer = Pick<GatewayContainer, "contextReportDal" | "logger" | "memoryV1Dal">;
+
+function isAssistantTextTurn(
+  turn: SessionRow["transcript"][number],
+): turn is SessionTranscriptTextItem & { role: "assistant" } {
+  return turn.kind === "text" && turn.role === "assistant";
+}
 
 const CROSS_TURN_LOOP_WARNING_TEXT =
   `${LOOP_WARNING_PREFIX} I may be repeating myself. If this isn't progressing, tell me what to change ` +
@@ -28,8 +37,8 @@ function applyCrossTurnLoopWarning(input: {
     return input.reply;
   }
 
-  const previousAssistantMessages = input.session.turns
-    .filter((turn) => turn.role === "assistant")
+  const previousAssistantMessages = input.session.transcript
+    .filter(isAssistantTextTurn)
     .map((turn) => turn.content);
   const decision = decideCrossTurnLoopWarning({
     previousAssistantMessages,

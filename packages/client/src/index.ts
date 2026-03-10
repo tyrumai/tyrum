@@ -65,6 +65,11 @@ export type {
   ArtifactBytesResult,
   HealthResponse,
   ToolRegistryListResult,
+  SkillImportInput,
+  UploadInput,
+  McpImportInput,
+  ExtensionsToggleInput,
+  ExtensionsRevertInput,
 } from "./http/index.js";
 
 export type {
@@ -73,6 +78,13 @@ export type {
   ExecutionAttempt,
   ExecutionRun,
   ExecutionStep,
+  SessionTranscriptApprovalItem,
+  SessionTranscriptItem,
+  SessionTranscriptTextItem,
+  SessionTranscriptTextPreview,
+  SessionTranscriptTextRole,
+  SessionTranscriptToolItem,
+  SessionTranscriptToolStatus,
   NodePairingRequest,
   PresenceEntry,
   WsError,
@@ -109,7 +121,6 @@ export type {
   WsMemoryItemForgottenEvent,
   WsMemoryItemConsolidatedEvent,
   WsMemoryExportCompletedEvent,
-  WsSessionTurn,
   WsSessionListItem,
   WsSessionListPayload,
   WsSessionListResult,

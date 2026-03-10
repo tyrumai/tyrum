@@ -49,7 +49,7 @@ class FakeWsClient implements OperatorWsClient {
       thread_id: "ui-session-1",
       title: "",
       summary: "",
-      turns: [],
+      transcript: [],
       updated_at: "2026-01-01T00:00:00.000Z",
       created_at: "2026-01-01T00:00:00.000Z",
     },
@@ -214,7 +214,7 @@ type OperatorUiA11yRouteId =
   | "agents"
   | "pairing"
   | "configure"
-  | "node-configure"
+  | "desktop"
   | "browser";
 
 async function expectNoAxeViolationsForRoute({
@@ -298,7 +298,7 @@ describe("operator-ui a11y", () => {
     { mode: "desktop", route: "approvals" },
     { mode: "desktop", route: "agents" },
     { mode: "desktop", route: "pairing" },
-    { mode: "desktop", route: "node-configure" },
+    { mode: "desktop", route: "desktop" },
     { mode: "desktop", route: "configure" },
     { mode: "web", route: "connect" },
     { mode: "web", route: "dashboard" },

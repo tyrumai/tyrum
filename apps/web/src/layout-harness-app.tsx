@@ -6,6 +6,7 @@ import { ApprovalsPage } from "../../../packages/operator-ui/src/components/page
 import { ChatPage } from "../../../packages/operator-ui/src/components/pages/chat-page.js";
 import { ConfigurePage } from "../../../packages/operator-ui/src/components/pages/configure-page.js";
 import { DashboardPage } from "../../../packages/operator-ui/src/components/pages/dashboard-page.js";
+import { ExtensionsPage } from "../../../packages/operator-ui/src/components/pages/extensions-page.js";
 import { NodeConfigurePage } from "../../../packages/operator-ui/src/components/pages/node-configure-page.js";
 import { PairingPage } from "../../../packages/operator-ui/src/components/pages/pairing-page.js";
 import { BrowserCapabilitiesPage } from "../../../packages/operator-ui/src/components/pages/platform/browser-capabilities-page.js";
@@ -31,9 +32,10 @@ type LayoutRoute =
   | "agents"
   | "pairing"
   | "workboard"
+  | "extensions"
   | "configure"
   | "browser"
-  | "node-configure";
+  | "desktop";
 
 function HarnessIcon({ className }: { className?: string }) {
   return (
@@ -62,7 +64,7 @@ function createBrowserRoute(): React.ReactNode {
   );
 }
 
-function createNodeConfigureRoute(): React.ReactNode {
+function createDesktopRoute(): React.ReactNode {
   return (
     <OperatorUiHostProvider value={{ kind: "desktop", api: createDesktopApi() }}>
       <NodeConfigurePage />
@@ -84,6 +86,14 @@ function renderRoute(route: LayoutRoute): React.ReactNode {
       return <PairingPage core={createPairingCore()} />;
     case "workboard":
       return <WorkBoardPage core={createWorkboardCore()} />;
+    case "extensions": {
+      const core = createAgentsCore();
+      return (
+        <ElevatedModeProvider core={core} mode="desktop">
+          <ExtensionsPage core={core} />
+        </ElevatedModeProvider>
+      );
+    }
     case "configure": {
       const core = createConfigureCore();
       return (
@@ -94,8 +104,8 @@ function renderRoute(route: LayoutRoute): React.ReactNode {
     }
     case "browser":
       return createBrowserRoute();
-    case "node-configure":
-      return createNodeConfigureRoute();
+    case "desktop":
+      return createDesktopRoute();
     default:
       return null;
   }
@@ -111,9 +121,10 @@ export function LayoutHarnessApp() {
     { id: "agents", label: "Agents", icon: HarnessIcon },
     { id: "pairing", label: "Nodes", icon: HarnessIcon },
     { id: "workboard", label: "Work", icon: HarnessIcon },
+    { id: "extensions", label: "Extensions", icon: HarnessIcon },
     { id: "configure", label: "Configure", icon: HarnessIcon },
     { id: "browser", label: "Browser", icon: HarnessIcon },
-    { id: "node-configure", label: "Node", icon: HarnessIcon },
+    { id: "desktop", label: "Desktop", icon: HarnessIcon },
   ];
 
   return (

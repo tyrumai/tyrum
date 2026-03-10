@@ -3,11 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
-import {
-  waitForSelector,
-  openConfigureTab,
-  setControlledInputValue,
-} from "./operator-ui.test-support.js";
+import { waitForSelector, openConfigureTab } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
 function registerConfigurePanelsNavTests(): void {
@@ -66,9 +62,6 @@ function registerConfigurePanelsNavTests(): void {
         await waitForSelector(container, "[data-testid='admin-http-tab-secrets']"),
       ).not.toBeNull();
       expect(
-        await waitForSelector(container, "[data-testid='admin-http-tab-plugins']"),
-      ).not.toBeNull();
-      expect(
         await waitForSelector(container, "[data-testid='admin-http-tab-gateway']"),
       ).not.toBeNull();
       expect(
@@ -109,9 +102,6 @@ function registerConfigurePanelsNavTests(): void {
       });
       await openConfigureTab(container, "admin-http-tab-gateway");
       expect(container.querySelector("[data-testid='admin-http-tokens']")).not.toBeNull();
-
-      await openConfigureTab(container, "admin-http-tab-plugins");
-      expect(container.querySelector("[data-testid='admin-http-plugins']")).not.toBeNull();
 
       await openConfigureTab(container, "admin-http-tab-providers");
       expect(container.querySelector("[data-testid='admin-http-providers']")).not.toBeNull();
@@ -265,72 +255,6 @@ function registerConfigurePanelsNavTests(): void {
       container.remove();
     }
   });
-}
-
-function registerConfigurePanelsPluginTests(): void {
-  it("disables Configure Plugins.get until a plugin id is provided", async () => {
-    const ws = new FakeWsClient();
-    const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
-
-    core.elevatedModeStore.enter({
-      elevatedToken: "elevated-test-token",
-      expiresAt: "2099-01-01T00:00:00.000Z",
-    });
-
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
-    try {
-      act(() => {
-        root = createRoot(container);
-        root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
-      });
-      await openConfigureTab(container, "admin-http-tab-plugins");
-      const pluginsCard = container.querySelector<HTMLElement>(
-        '[data-testid="admin-http-plugins"]',
-      );
-      expect(pluginsCard).not.toBeNull();
-
-      const buttons = Array.from(pluginsCard?.querySelectorAll<HTMLButtonElement>("button") ?? []);
-      const listButton = buttons.find((button) => button.textContent?.trim() === "List");
-      expect(listButton).not.toBeUndefined();
-      expect(listButton?.disabled).toBe(false);
-
-      const getButton = buttons.find((button) => button.textContent?.trim() === "Get");
-      expect(getButton).not.toBeUndefined();
-      expect(getButton?.disabled).toBe(true);
-
-      const pluginIdInput = pluginsCard?.querySelector<HTMLInputElement>("input");
-      expect(pluginIdInput).not.toBeNull();
-
-      await act(async () => {
-        setControlledInputValue(pluginIdInput!, "echo");
-        await Promise.resolve();
-      });
-
-      expect(pluginIdInput?.value).toBe("echo");
-
-      const nextButtons = Array.from(
-        pluginsCard?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-      );
-      const nextGetButton = nextButtons.find((button) => button.textContent?.trim() === "Get");
-      expect(nextGetButton).not.toBeUndefined();
-      expect(nextGetButton?.disabled).toBe(false);
-    } finally {
-      act(() => {
-        root?.unmount();
-      });
-      container.remove();
-    }
-  });
-
   it("does not render the deprecated Contracts panel in Configure", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -368,5 +292,4 @@ function registerConfigurePanelsPluginTests(): void {
 
 export function registerConfigurePanelsTests(): void {
   registerConfigurePanelsNavTests();
-  registerConfigurePanelsPluginTests();
 }

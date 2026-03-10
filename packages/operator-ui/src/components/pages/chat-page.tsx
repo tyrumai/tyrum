@@ -1,28 +1,21 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { useBrowserNodeOptional } from "../../browser-node/browser-node-provider.js";
 import { useHostApiOptional } from "../../host/host-api.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { useAppShellMinWidth } from "../layout/app-shell.js";
 import { Alert } from "../ui/alert.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
-import { ChatConversationPanel, ChatThreadsPanel } from "./chat-page.panels.js";
+import {
+  ChatConversationPanel,
+  ChatThreadsPanel,
+  deriveThreadPreview,
+  deriveThreadTitle,
+  type ChatThreadSummary,
+} from "./chat-page-parts.js";
 
 const CHAT_TWO_PANEL_CONTENT_WIDTH_PX = 800;
-
-function firstLine(text: string): string {
-  return text.split(/\r?\n/)[0]?.trim() ?? "";
-}
-
-function deriveThreadTitle(session: { title: string; thread_id: string }): string {
-  const title = firstLine(session.title);
-  if (title) return title;
-  return session.thread_id;
-}
-
-function deriveThreadPreview(session: { summary: string }): string {
-  return firstLine(session.summary);
-}
 
 export function ChatPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);
@@ -35,14 +28,18 @@ export function ChatPage({ core }: { core: OperatorCore }) {
   const [draft, setDraft] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [mobileView, setMobileView] = useState<"threads" | "conversation">("threads");
+  const [renderMode, setRenderMode] = useState<"markdown" | "text">("markdown");
+  const [resolvingApprovalId, setResolvingApprovalId] = useState<string | null>(null);
 
-  const threads = useMemo(() => {
-    return chat.sessions.sessions.map((session) => ({
-      ...session,
-      title: deriveThreadTitle(session),
-      preview: deriveThreadPreview(session),
-    }));
-  }, [chat.sessions.sessions]);
+  const threads = useMemo<ChatThreadSummary[]>(
+    () =>
+      chat.sessions.sessions.map((session) => ({
+        ...session,
+        title: deriveThreadTitle(session),
+        preview: deriveThreadPreview(session),
+      })),
+    [chat.sessions.sessions],
+  );
 
   useEffect(() => {
     if (!isConnected) return;
@@ -55,10 +52,8 @@ export function ChatPage({ core }: { core: OperatorCore }) {
   }, [core.chatStore, isConnected, chat.agentId]);
 
   useEffect(() => {
-    if (lgUp) return;
-    if (!chat.active.sessionId) {
-      setMobileView("threads");
-    }
+    if (lgUp || chat.active.sessionId) return;
+    setMobileView("threads");
   }, [chat.active.sessionId, lgUp]);
 
   const resolveAttachedNodeId = useCallback(async (): Promise<string | null> => {
@@ -81,34 +76,43 @@ export function ChatPage({ core }: { core: OperatorCore }) {
     if (!text) return;
     const attachedNodeId = await resolveAttachedNodeId();
     await core.chatStore.sendMessage(text, { attachedNodeId });
-    if (!core.chatStore.getSnapshot().send.error) {
-      setDraft("");
-    }
+    if (!core.chatStore.getSnapshot().send.error) setDraft("");
   };
 
   const openThread = async (sessionId: string): Promise<void> => {
     await core.chatStore.openSession(sessionId);
-    if (!lgUp) {
-      setMobileView("conversation");
-    }
+    if (!lgUp) setMobileView("conversation");
   };
 
   const startNewChat = async (): Promise<void> => {
     await core.chatStore.newChat();
-    if (!lgUp) {
-      setMobileView("conversation");
+    if (!lgUp) setMobileView("conversation");
+  };
+
+  const resolveApproval = async (
+    approvalId: string,
+    decision: "approved" | "denied",
+  ): Promise<void> => {
+    setResolvingApprovalId(approvalId);
+    try {
+      await core.approvalsStore.resolve(approvalId, decision);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setResolvingApprovalId(null);
     }
   };
 
   const active = chat.active.session;
-  const activeTurns = active?.turns ?? [];
   const showThreads = lgUp || mobileView === "threads";
   const showConversation = lgUp || mobileView === "conversation";
   const canSend = Boolean(active) && !chat.send.sending && draft.trim().length > 0;
+  const working =
+    chat.send.sending || chat.active.typing || chat.active.activeToolCallIds.length > 0;
 
   return (
     <div
-      className="relative flex h-full flex-1 w-full flex-col overflow-hidden bg-bg"
+      className="relative flex h-full w-full flex-1 flex-col overflow-hidden bg-bg"
       data-testid="chat-page"
     >
       {chat.agents.error ? (
@@ -121,7 +125,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
         </div>
       ) : null}
 
-      <div className="flex h-full flex-1 w-full min-h-0" data-testid="chat-panels">
+      <div className="flex h-full w-full min-h-0 flex-1" data-testid="chat-panels">
         {showThreads ? (
           <ChatThreadsPanel
             splitView={lgUp}
@@ -155,7 +159,9 @@ export function ChatPage({ core }: { core: OperatorCore }) {
         {showConversation ? (
           <ChatConversationPanel
             activeThreadId={active?.thread_id ?? null}
-            activeTurns={activeTurns}
+            transcript={active?.transcript ?? []}
+            renderMode={renderMode}
+            onRenderModeChange={setRenderMode}
             loadError={chat.active.error?.message ?? null}
             sendError={chat.send.error?.message ?? null}
             deleteDisabled={!active || chat.active.loading}
@@ -167,6 +173,9 @@ export function ChatPage({ core }: { core: OperatorCore }) {
             send={send}
             sendBusy={chat.send.sending}
             canSend={canSend}
+            working={working}
+            onResolveApproval={resolveApproval}
+            resolvingApprovalId={resolvingApprovalId}
             onBack={
               lgUp
                 ? undefined
@@ -186,9 +195,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
         confirmLabel="Delete"
         onConfirm={async () => {
           await core.chatStore.deleteActive();
-          if (!lgUp) {
-            setMobileView("threads");
-          }
+          if (!lgUp) setMobileView("threads");
         }}
       />
     </div>

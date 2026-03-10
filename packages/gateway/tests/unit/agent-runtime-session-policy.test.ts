@@ -268,6 +268,77 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     expect(usedTools.has("bash")).toBe(true);
   });
 
+  it("passes work session routing fields to tool execution audit context", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const policyService = {
+      isEnabled: () => false,
+      isObserveOnly: () => false,
+      evaluateToolCall: vi.fn(),
+    };
+
+    const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
+
+    const toolDesc = {
+      id: "bash",
+      description: "Execute shell commands on the local machine.",
+      risk: "high" as const,
+      requires_confirmation: false,
+      keywords: [],
+      inputSchema: {
+        type: "object",
+        properties: { command: { type: "string" } },
+        required: ["command"],
+        additionalProperties: false,
+      },
+    };
+
+    const toolExecutor = {
+      execute: vi.fn(async () => ({
+        tool_call_id: "tc-test",
+        output: "ok",
+        error: undefined,
+        provenance: undefined,
+      })),
+    };
+
+    const toolSet = toolSetBuilder.buildToolSet(
+      [toolDesc],
+      toolExecutor,
+      new Set<string>(),
+      {
+        planId: "plan-1",
+        sessionId: "session-1",
+        channel: "test",
+        threadId: "thread-1",
+        workSessionKey: "agent:default:test:default:channel:thread-1",
+        workLane: "main",
+        execution: {
+          runId: "run-1",
+          stepIndex: 0,
+          stepId: "step-1",
+        },
+      },
+      makeContextReport(),
+    );
+
+    await toolSet["bash"]!.execute({ command: "echo hi" });
+
+    expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
+    expect(toolExecutor.execute.mock.calls[0]?.[3]).toEqual(
+      expect.objectContaining({
+        work_session_key: "agent:default:test:default:channel:thread-1",
+        work_lane: "main",
+        execution_run_id: "run-1",
+        execution_step_id: "step-1",
+      }),
+    );
+  });
+
   it("rejects approvals that don't match tool_call_id during execution resume", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({

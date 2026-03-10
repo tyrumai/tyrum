@@ -169,7 +169,7 @@ async function createPinnedProviderUsageApp(input: {
        workspace_id,
        channel_thread_id,
        summary,
-       turns_json
+       transcript_json
      ) VALUES (?, ?, ?, ?, ?, ?, '', '[]')`,
     [
       DEFAULT_TENANT_ID,
