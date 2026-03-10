@@ -203,6 +203,28 @@ describe("tool registry routes", () => {
     expect(body.tools).toContainEqual(
       expect.objectContaining({
         source: "builtin",
+        canonical_id: "memory.search",
+        family: "memory",
+        input_schema: expect.objectContaining({
+          properties: expect.objectContaining({
+            query: expect.any(Object),
+          }),
+        }),
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin",
+        canonical_id: "memory.add",
+        family: "memory",
+        input_schema: expect.objectContaining({
+          oneOf: expect.any(Array),
+        }),
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin",
         canonical_id: "tool.automation.schedule.list",
         family: "automation",
       }),

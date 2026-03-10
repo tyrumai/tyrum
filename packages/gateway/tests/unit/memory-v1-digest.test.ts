@@ -4,6 +4,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { buildMemoryV1Digest } from "../../src/modules/memory/v1-digest.js";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { retrieveMemoryV1 } from "../../src/modules/memory/v1-retrieval.js";
 
 describe("buildMemoryV1Digest", () => {
   afterEach(() => {
@@ -292,6 +293,91 @@ describe("buildMemoryV1Digest", () => {
       });
 
       expect(res.structured_item_count).toBe(1);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("tolerates undefined structured arrays in retrieval input", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const dal = new MemoryV1Dal(db);
+      const res = await retrieveMemoryV1({
+        dal,
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        query: "",
+        allow_sensitivities: ["public", "private"],
+        structured: {
+          fact_keys: undefined,
+          tags: undefined,
+        } as unknown as AgentConfig["memory"]["v1"]["structured"],
+      });
+
+      expect(res.hits).toEqual([]);
+      expect(res.structured_item_count).toBe(0);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("preserves configured fact_keys order for structured hits under tight budgets", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const dal = new MemoryV1Dal(db);
+      const base = AgentConfig.parse({ model: { model: "openai/gpt-4.1" } }).memory.v1;
+      const config = {
+        ...base,
+        structured: {
+          ...base.structured,
+          fact_keys: ["preferred_drink", "favorite_color"],
+        },
+        budgets: {
+          ...base.budgets,
+          max_total_items: 1,
+          per_kind: {
+            ...base.budgets.per_kind,
+            fact: { ...base.budgets.per_kind.fact, max_items: 1 },
+          },
+        },
+      } satisfies typeof base;
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
+      const olderConfiguredFirst = await dal.create({
+        kind: "fact",
+        key: "preferred_drink",
+        value: "coffee",
+        observed_at: "2026-02-27T00:00:00.000Z",
+        confidence: 0.9,
+        tags: [],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      });
+
+      vi.setSystemTime(new Date("2026-02-27T00:10:00.000Z"));
+      const newerConfiguredSecond = await dal.create({
+        kind: "fact",
+        key: "favorite_color",
+        value: "blue",
+        observed_at: "2026-02-27T00:10:00.000Z",
+        confidence: 0.9,
+        tags: [],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      });
+
+      const res = await buildMemoryV1Digest({
+        dal,
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        query: "",
+        config,
+      });
+
+      expect(res.included_item_ids).toEqual([olderConfiguredFirst.memory_item_id]);
+      expect(res.digest).toContain(olderConfiguredFirst.memory_item_id);
+      expect(res.digest).not.toContain(newerConfiguredSecond.memory_item_id);
     } finally {
       await db.close();
     }

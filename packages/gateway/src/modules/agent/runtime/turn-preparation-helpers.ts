@@ -53,6 +53,7 @@ export async function semanticSearch(
         embed: async (text: string) => pipeline.embed(text),
       },
     });
+    await index.ensureFresh();
     return await index.search(query, limit);
   } catch {
     // Intentional: semantic search is best-effort; fall back to no hits on failure.

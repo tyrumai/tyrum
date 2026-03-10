@@ -31,6 +31,8 @@ import {
   executeWebFetchTool,
   executeWebSearchTool,
 } from "./tool-executor-mcp-tools.js";
+import { executeMemoryTool } from "./tool-executor-memory-tools.js";
+import type { AgentMemoryToolRuntime } from "../memory/agent-tool-runtime.js";
 export { executeMcpTool } from "./tool-executor-mcp-tools.js";
 
 type WorkspaceLeaseRunner = <T>(
@@ -46,6 +48,7 @@ type CoreToolContext = {
   mcpManager: McpManager;
   mcpServerSpecs: ReadonlyMap<string, McpServerSpecT>;
   secretProvider?: SecretProvider;
+  memoryToolRuntime?: AgentMemoryToolRuntime;
   assertSandboxed: (filePath: string) => string;
   withWorkspaceLease: WorkspaceLeaseRunner;
 };
@@ -474,6 +477,11 @@ export async function executeCoreTool(
   toolCallId: string,
   args: unknown,
 ): Promise<ToolResult | null> {
+  const memoryResult = await executeMemoryTool(context.memoryToolRuntime, toolId, toolCallId, args);
+  if (memoryResult) {
+    return memoryResult;
+  }
+
   switch (toolId) {
     case "read":
       return await executeFsRead(context, toolCallId, args);

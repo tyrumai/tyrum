@@ -167,5 +167,54 @@ for (const fixture of fixtures) {
         await close();
       }
     });
+
+    it("rebuilds stale embeddings when canonical memory is updated", async () => {
+      const { dal, db, close } = await fixture.open();
+      try {
+        const scope = { tenantId: DEFAULT_TENANT_ID, agentId: DEFAULT_AGENT_ID };
+        const index = new MemoryV1SemanticIndex({
+          db,
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          embedder: {
+            modelId: "test/deterministic-v1",
+            embed: async (text: string) => embedDeterministic(text),
+          },
+        });
+
+        const note = await dal.create(
+          {
+            kind: "note",
+            title: "Food prefs",
+            body_md: "I like pizza.",
+            tags: ["prefs"],
+            sensitivity: "private",
+            provenance: { source_kind: "user", refs: [] },
+          },
+          scope,
+        );
+
+        await index.rebuild();
+        expect(await index.hasStaleItems()).toBe(false);
+
+        await dal.update(
+          note.memory_item_id,
+          {
+            body_md: "I like hiking in the mountains.",
+          },
+          scope,
+        );
+
+        expect(await index.hasStaleItems()).toBe(true);
+        const refreshed = await index.ensureFresh();
+        expect(refreshed.rebuilt).toBe(true);
+
+        const hits = await index.search("mountains", 5);
+        expect(hits[0]?.memory_item_id).toBe(note.memory_item_id);
+        expect(await index.hasStaleItems()).toBe(false);
+      } finally {
+        await close();
+      }
+    });
   });
 }

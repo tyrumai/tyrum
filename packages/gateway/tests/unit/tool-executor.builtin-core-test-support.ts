@@ -13,6 +13,50 @@ import {
 } from "./tool-executor.shared-test-support.js";
 
 export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
+  it("memory.search delegates to the agent memory runtime", async () => {
+    const memoryToolRuntime = {
+      search: vi.fn(async () => ({
+        status: "ok",
+        query: "pizza",
+        hits: [{ memory_item_id: "mem-1", kind: "note", preview: "pizza note" }],
+      })),
+      add: vi.fn(),
+    };
+
+    const result = await createToolExecutor({
+      homeDir: requireHomeDir(home),
+      memoryToolRuntime: memoryToolRuntime as never,
+    }).execute("memory.search", "call-memory-search-1", {
+      query: "pizza",
+      limit: 1,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.output).toContain("pizza note");
+    expect(memoryToolRuntime.search).toHaveBeenCalledWith(
+      expect.objectContaining({ query: "pizza", limit: 1 }),
+    );
+  });
+
+  it("memory.add rejects unsupported writable kinds before runtime execution", async () => {
+    const memoryToolRuntime = {
+      search: vi.fn(),
+      add: vi.fn(),
+    };
+
+    const result = await createToolExecutor({
+      homeDir: requireHomeDir(home),
+      memoryToolRuntime: memoryToolRuntime as never,
+    }).execute("memory.add", "call-memory-add-1", {
+      kind: "episode",
+      summary_md: "episode body",
+    });
+
+    expect(result.output).toBe("");
+    expect(result.error).toContain("Invalid input");
+    expect(memoryToolRuntime.add).not.toHaveBeenCalled();
+  });
+
   it("fs.read returns file content", async () => {
     const homeDir = requireHomeDir(home);
     await writeFile(join(homeDir, "test.txt"), "hello world", "utf-8");

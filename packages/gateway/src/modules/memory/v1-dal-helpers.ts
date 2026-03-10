@@ -55,6 +55,10 @@ export function uniqSortedStrings(values: readonly string[]): string[] {
   return [...new Set(values.map((v) => v.trim()).filter((v) => v.length > 0))].toSorted();
 }
 
+export function normalizeSnippet(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 export function normalizeBudgets(
   budgets: AgentConfig["memory"]["v1"]["budgets"],
 ): MemoryV1BudgetLimits {

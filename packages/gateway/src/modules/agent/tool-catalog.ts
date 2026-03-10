@@ -1,4 +1,5 @@
 import type { ToolDescriptor } from "./tools.js";
+import { MEMORY_TOOL_DESCRIPTORS } from "./tool-catalog-memory-tools.js";
 
 export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
@@ -216,6 +217,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
       additionalProperties: false,
     },
   },
+  ...MEMORY_TOOL_DESCRIPTORS,
   {
     id: "tool.node.list",
     description: "List connected and dispatchable nodes for the current lane or a specified lane.",

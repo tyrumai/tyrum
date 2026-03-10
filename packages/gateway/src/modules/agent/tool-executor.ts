@@ -8,6 +8,7 @@ import type { RedactionEngine } from "../redaction/engine.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { SecretResolutionAuditDal } from "../secret/resolution-audit-dal.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
+import type { AgentMemoryToolRuntime } from "../memory/agent-tool-runtime.js";
 import { executeCoreTool, executeMcpTool } from "./tool-executor-core-tools.js";
 import { executeNodeDispatchTool, executeNodeListTool } from "./tool-executor-node-dispatch.js";
 import { executeAutomationScheduleTool } from "./tool-executor-schedule-tools.js";
@@ -46,6 +47,7 @@ export class ToolExecutor {
     private readonly artifactStore?: ArtifactStore,
     private readonly identityScopeDal?: IdentityScopeDal,
     private readonly nodeInventoryService?: NodeInventoryService,
+    private readonly memoryToolRuntime?: AgentMemoryToolRuntime,
   ) {}
 
   private workspaceLeaseOwner(toolCallId: string): string {
@@ -137,6 +139,7 @@ export class ToolExecutor {
       mcpManager: this.mcpManager,
       mcpServerSpecs: this.mcpServerSpecs,
       secretProvider: this.secretProvider,
+      memoryToolRuntime: this.memoryToolRuntime,
       assertSandboxed: (filePath: string) => this.assertSandboxed(filePath),
       withWorkspaceLease: <T>(
         callId: string,

@@ -1,6 +1,8 @@
-import type { AgentConfig, MemoryItem, MemoryItemKind, MemorySensitivity } from "@tyrum/schemas";
+import type { AgentConfig, MemoryItem, MemoryItemKind } from "@tyrum/schemas";
+import { normalizeSnippet, truncate } from "./v1-dal-helpers.js";
 import type { MemoryV1SemanticSearchHit } from "./v1-semantic-index.js";
 import type { MemoryV1Dal } from "./v1-dal.js";
+import { retrieveMemoryV1 } from "./v1-retrieval.js";
 
 export type MemoryV1DigestResult = {
   digest: string;
@@ -10,29 +12,9 @@ export type MemoryV1DigestResult = {
   structured_item_count: number;
 };
 
-type DigestCandidate = {
-  memory_item_id: string;
-  kind: MemoryItemKind;
-  source: "structured" | "keyword" | "semantic";
-  score: number;
-  item?: MemoryItem;
-};
-
-function normalizeSnippet(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function truncate(value: string, maxChars: number): string {
-  if (maxChars <= 0) return "";
-  if (value.length <= maxChars) return value;
-  if (maxChars <= 3) return value.slice(0, maxChars);
-  return `${value.slice(0, maxChars - 3)}...`;
-}
-
 function estimateTokens(value: string): number {
   const trimmed = value.trim();
   if (trimmed.length === 0) return 0;
-  // Deterministic, provider-agnostic approximation (good enough for budgeting).
   return Math.ceil(trimmed.length / 4);
 }
 
@@ -58,11 +40,10 @@ function formatItemHeader(item: MemoryItem): string {
     try {
       value = JSON.stringify(item.value);
     } catch {
-      // Intentional: fall back to a lossy string representation if value contains cycles/BigInt.
+      // Intentional: fall back to string coercion for non-JSON-serializable fact values.
       value = String(item.value);
     }
-    const valueTrimmed = truncate(value, 240);
-    return `key=${item.key} value=${valueTrimmed} conf=${item.confidence.toFixed(2)}`;
+    return `key=${item.key} value=${truncate(value, 240)} conf=${item.confidence.toFixed(2)}`;
   }
 
   if (item.kind === "note") {
@@ -76,8 +57,7 @@ function formatItemHeader(item: MemoryItem): string {
     return `title=${truncate(title, 120)}${conf}`;
   }
 
-  const occurred = normalizeSnippet(item.occurred_at);
-  return `occurred_at=${occurred}`;
+  return `occurred_at=${normalizeSnippet(item.occurred_at)}`;
 }
 
 function itemSnippet(item: MemoryItem): string | undefined {
@@ -96,109 +76,28 @@ function resolveKindBudget(
   config: AgentConfig["memory"]["v1"]["budgets"]["per_kind"],
   kind: MemoryItemKind,
 ): { max_items: number; max_chars: number; max_tokens?: number } {
-  const b = config[kind];
+  const budget = config[kind];
   return {
-    max_items: Math.max(0, Math.floor(b.max_items)),
-    max_chars: Math.max(0, Math.floor(b.max_chars)),
-    ...(b.max_tokens !== undefined ? { max_tokens: Math.max(0, Math.floor(b.max_tokens)) } : {}),
+    max_items: Math.max(0, Math.floor(budget.max_items)),
+    max_chars: Math.max(0, Math.floor(budget.max_chars)),
+    ...(budget.max_tokens !== undefined
+      ? { max_tokens: Math.max(0, Math.floor(budget.max_tokens)) }
+      : {}),
   };
 }
 
-function sensitivityAllowed(
-  sensitivity: MemorySensitivity,
-  allow: readonly MemorySensitivity[],
-): boolean {
-  return allow.includes(sensitivity);
-}
-
-async function loadStructuredItems(params: {
-  dal: MemoryV1Dal;
-  tenantId: string;
-  agentId: string;
-  allow_sensitivities: readonly MemorySensitivity[];
-  structured: AgentConfig["memory"]["v1"]["structured"];
-  maxItems: number;
-}): Promise<MemoryItem[]> {
-  const factKeys = params.structured.fact_keys ?? [];
-  const tags = params.structured.tags ?? [];
-
-  const out: MemoryItem[] = [];
-
-  if (factKeys.length > 0) {
-    const { items } = await params.dal.list({
-      tenantId: params.tenantId,
-      agentId: params.agentId,
-      limit: Math.max(1, Math.min(200, Math.max(factKeys.length * 3, 20))),
-      filter: {
-        kinds: ["fact"],
-        keys: factKeys,
-        sensitivities: [...params.allow_sensitivities],
-      },
-    });
-
-    const newestByKey = new Map<string, MemoryItem>();
-    for (const item of items) {
-      if (item.kind !== "fact") continue;
-      if (!newestByKey.has(item.key)) {
-        newestByKey.set(item.key, item);
-      }
-    }
-
-    for (const key of factKeys) {
-      const item = newestByKey.get(key);
-      if (item) out.push(item);
-      if (out.length >= params.maxItems) return out;
-    }
-  }
-
-  if (tags.length > 0 && out.length < params.maxItems) {
-    const { items } = await params.dal.list({
-      tenantId: params.tenantId,
-      agentId: params.agentId,
-      limit: Math.max(1, Math.min(200, Math.max(params.maxItems * 2, 20))),
-      filter: {
-        tags,
-        sensitivities: [...params.allow_sensitivities],
-      },
-    });
-
-    const seenIds = new Set(out.map((item) => item.memory_item_id));
-    for (const item of items) {
-      if (seenIds.has(item.memory_item_id)) continue;
-      out.push(item);
-      seenIds.add(item.memory_item_id);
-      if (out.length >= params.maxItems) break;
-    }
-  }
-
-  return out;
-}
-
 function formatDigestLine(item: MemoryItem, maxChars: number): string {
-  const kind = item.kind;
-  const id = item.memory_item_id;
-  const sensitivity = item.sensitivity;
-  const prov = formatProvenance(item);
-  const header = formatItemHeader(item);
-
-  const base = `- [${kind}] ${id} (${sensitivity}) ${header}`;
+  const base = `- [${item.kind}] ${item.memory_item_id} (${item.sensitivity}) ${formatItemHeader(item)}`;
   const snippet = itemSnippet(item);
-  const suffix = ` (${prov})`;
-
+  const suffix = ` (${formatProvenance(item)})`;
   const maxLineChars = Math.max(0, Math.floor(maxChars));
   if (maxLineChars === 0) return "";
 
-  const maxSnippetChars = maxLineChars - (base.length + 3 + suffix.length); // " — "
+  const maxSnippetChars = maxLineChars - (base.length + 3 + suffix.length);
   const safeSnippet =
     snippet && maxSnippetChars > 0 ? truncate(snippet, Math.min(600, maxSnippetChars)) : "";
-
-  const withSnippet =
-    safeSnippet.length > 0 ? `${base} — ${safeSnippet}${suffix}` : `${base}${suffix}`;
-
-  if (withSnippet.length <= maxLineChars) return withSnippet;
-
-  // Final fallback: trim entire line to budget.
-  return truncate(withSnippet, maxLineChars);
+  const line = safeSnippet.length > 0 ? `${base} — ${safeSnippet}${suffix}` : `${base}${suffix}`;
+  return line.length <= maxLineChars ? line : truncate(line, maxLineChars);
 }
 
 export async function buildMemoryV1Digest(params: {
@@ -230,8 +129,8 @@ export async function buildMemoryV1Digest(params: {
       structured_item_count: 0,
     };
   }
-  const budgets = config.budgets;
 
+  const budgets = config.budgets;
   const maxTotalItems = Math.max(0, Math.floor(budgets.max_total_items));
   const maxTotalChars = Math.max(0, Math.floor(budgets.max_total_chars));
   const maxTotalTokens =
@@ -244,12 +143,11 @@ export async function buildMemoryV1Digest(params: {
     maxTotalChars === 0 ||
     (maxTotalTokens !== undefined && maxTotalTokens === 0)
   ) {
-    // NOTE: tokens budget is optional in config schema but we treat explicit 0 as "nothing".
-    const tokensDisabled = maxTotalTokens !== undefined && maxTotalTokens === 0;
     return {
-      digest: tokensDisabled
-        ? "Memory digest skipped (max_total_tokens=0)."
-        : "Memory digest empty.",
+      digest:
+        maxTotalTokens !== undefined && maxTotalTokens === 0
+          ? "Memory digest skipped (max_total_tokens=0)."
+          : "Memory digest empty.",
       included_item_ids: [],
       keyword_hit_count: 0,
       semantic_hit_count: 0,
@@ -257,87 +155,35 @@ export async function buildMemoryV1Digest(params: {
     };
   }
 
-  const structuredItems = await loadStructuredItems({
-    dal: params.dal,
-    tenantId: params.tenantId,
-    agentId: params.agentId,
-    allow_sensitivities: allowSensitivities,
-    structured: config.structured,
-    maxItems: Math.max(1, Math.min(200, maxTotalItems * 2)),
-  });
-
   const query = params.query.trim();
-  const keywordHits = await (async () => {
-    if (!config.keyword.enabled || query.length === 0) {
-      return { v: 1 as const, hits: [], next_cursor: undefined };
-    }
-
+  const retrieval = await (async () => {
     try {
-      return await params.dal.search(
-        {
-          v: 1,
-          query,
-          limit: config.keyword.limit,
-          filter: {
-            sensitivities: [...allowSensitivities],
-          },
-        },
-        { tenantId: params.tenantId, agentId: params.agentId },
-      );
+      return await retrieveMemoryV1({
+        dal: params.dal,
+        tenantId: params.tenantId,
+        agentId: params.agentId,
+        query,
+        allow_sensitivities: allowSensitivities,
+        structured: config.structured,
+        structuredMaxItems: Math.max(1, Math.min(200, maxTotalItems * 2)),
+        keywordLimit: config.keyword.enabled && query.length > 0 ? config.keyword.limit : 0,
+        semanticLimit: config.semantic.enabled && query.length > 0 ? config.semantic.limit : 0,
+        semanticSearch:
+          config.semantic.enabled && params.semanticSearch ? params.semanticSearch : undefined,
+      });
     } catch {
-      // Intentional: keyword search is best-effort; treat failures as no keyword hits.
-      return { v: 1 as const, hits: [], next_cursor: undefined };
+      // Intentional: digest construction is best-effort and should degrade to an empty result.
+      return {
+        hits: [],
+        keyword_hit_count: 0,
+        semantic_hit_count: 0,
+        structured_item_count: 0,
+      };
     }
   })();
 
-  const semanticHits = await (async () => {
-    if (!config.semantic.enabled || !params.semanticSearch || query.length === 0) return [];
-
-    try {
-      return await params.semanticSearch(query, config.semantic.limit);
-    } catch {
-      // Intentional: semantic search is best-effort; treat failures as no semantic hits.
-      return [];
-    }
-  })();
-
-  const candidates: DigestCandidate[] = [];
-
-  for (const item of structuredItems) {
-    candidates.push({
-      memory_item_id: item.memory_item_id,
-      kind: item.kind,
-      source: "structured",
-      score: Number.POSITIVE_INFINITY,
-      item,
-    });
-  }
-
-  for (const hit of keywordHits.hits) {
-    candidates.push({
-      memory_item_id: hit.memory_item_id,
-      kind: hit.kind,
-      source: "keyword",
-      score: hit.score,
-    });
-  }
-
-  const semanticSorted = semanticHits.toSorted((a, b) =>
-    b.score !== a.score ? b.score - a.score : a.memory_item_id.localeCompare(b.memory_item_id),
-  );
-  for (const hit of semanticSorted) {
-    candidates.push({
-      memory_item_id: hit.memory_item_id,
-      kind: hit.kind,
-      source: "semantic",
-      score: hit.score,
-    });
-  }
-
-  const seen = new Set<string>();
   const includedIds: string[] = [];
   const lines: string[] = [];
-
   const usedByKind: Record<MemoryItemKind, { items: number; chars: number; tokens: number }> = {
     fact: { items: 0, chars: 0, tokens: 0 },
     note: { items: 0, chars: 0, tokens: 0 },
@@ -349,32 +195,15 @@ export async function buildMemoryV1Digest(params: {
   let usedTotalChars = 0;
   let usedTotalTokens = 0;
 
-  for (const candidate of candidates) {
+  for (const hit of retrieval.hits) {
     if (usedTotalItems >= maxTotalItems) break;
-    if (seen.has(candidate.memory_item_id)) continue;
 
-    const kindBudget = resolveKindBudget(budgets.per_kind, candidate.kind);
-    const kindUsage = usedByKind[candidate.kind];
-    if (!kindUsage) continue;
-
+    const item = hit.item;
+    const kindBudget = resolveKindBudget(budgets.per_kind, item.kind);
+    const kindUsage = usedByKind[item.kind];
     if (kindUsage.items >= kindBudget.max_items) continue;
     if (kindUsage.chars >= kindBudget.max_chars) continue;
     if (kindBudget.max_tokens !== undefined && kindUsage.tokens >= kindBudget.max_tokens) continue;
-
-    let item = candidate.item;
-    if (!item) {
-      try {
-        item = await params.dal.getById(candidate.memory_item_id, {
-          tenantId: params.tenantId,
-          agentId: params.agentId,
-        });
-      } catch {
-        // Intentional: best-effort candidate hydration; skip items that cannot be loaded.
-        continue;
-      }
-    }
-    if (!item) continue;
-    if (!sensitivityAllowed(item.sensitivity, allowSensitivities)) continue;
 
     const separatorChars = lines.length > 0 ? 1 : 0;
     const remainingTotalChars = maxTotalChars - usedTotalChars - separatorChars;
@@ -385,13 +214,15 @@ export async function buildMemoryV1Digest(params: {
     const line = formatDigestLine(item, remainingChars);
     if (!line) continue;
 
-    const tokens = estimateTokens(line);
-    const wouldExceedTotalTokens =
-      maxTotalTokens !== undefined && usedTotalTokens + tokens > maxTotalTokens;
-    const wouldExceedKindTokens =
-      kindBudget.max_tokens !== undefined && kindUsage.tokens + tokens > kindBudget.max_tokens;
-    if (wouldExceedTotalTokens || wouldExceedKindTokens) {
-      // Retry with a more aggressive char limit to reduce tokens deterministically.
+    let chosenLine = line;
+    let chosenTokens = estimateTokens(line);
+    const exceedsTotalTokens =
+      maxTotalTokens !== undefined && usedTotalTokens + chosenTokens > maxTotalTokens;
+    const exceedsKindTokens =
+      kindBudget.max_tokens !== undefined &&
+      kindUsage.tokens + chosenTokens > kindBudget.max_tokens;
+
+    if (exceedsTotalTokens || exceedsKindTokens) {
       const tightened = formatDigestLine(item, Math.max(1, Math.floor(remainingChars * 0.7)));
       if (!tightened) continue;
       const tightenedTokens = estimateTokens(tightened);
@@ -402,33 +233,25 @@ export async function buildMemoryV1Digest(params: {
       ) {
         continue;
       }
-      lines.push(tightened);
-      kindUsage.chars += separatorChars + tightened.length;
-      kindUsage.tokens += tightenedTokens;
-      kindUsage.items += 1;
-      usedTotalChars += separatorChars + tightened.length;
-      usedTotalTokens += tightenedTokens;
-    } else {
-      lines.push(line);
-      kindUsage.chars += separatorChars + line.length;
-      kindUsage.tokens += tokens;
-      kindUsage.items += 1;
-      usedTotalChars += separatorChars + line.length;
-      usedTotalTokens += tokens;
+      chosenLine = tightened;
+      chosenTokens = tightenedTokens;
     }
 
+    lines.push(chosenLine);
+    kindUsage.chars += separatorChars + chosenLine.length;
+    kindUsage.tokens += chosenTokens;
+    kindUsage.items += 1;
+    usedTotalChars += separatorChars + chosenLine.length;
+    usedTotalTokens += chosenTokens;
     usedTotalItems += 1;
-    seen.add(candidate.memory_item_id);
-    includedIds.push(candidate.memory_item_id);
+    includedIds.push(item.memory_item_id);
   }
 
-  const digest = lines.length > 0 ? lines.join("\n") : "No matching durable memory found.";
-
   return {
-    digest,
+    digest: lines.length > 0 ? lines.join("\n") : "No matching durable memory found.",
     included_item_ids: includedIds,
-    keyword_hit_count: keywordHits.hits.length,
-    semantic_hit_count: semanticHits.length,
-    structured_item_count: structuredItems.length,
+    keyword_hit_count: retrieval.keyword_hit_count,
+    semantic_hit_count: retrieval.semantic_hit_count,
+    structured_item_count: retrieval.structured_item_count,
   };
 }

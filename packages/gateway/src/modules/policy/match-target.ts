@@ -317,6 +317,16 @@ export function canonicalizeToolMatchTarget(
     return url.slice(0, end).trim();
   }
 
+  if (normalizedToolId === "memory.search") {
+    return "memory.search";
+  }
+
+  if (normalizedToolId === "memory.add") {
+    const kind = normalizeToken(parsed?.["kind"]) ?? "";
+    const sensitivity = normalizeToken(parsed?.["sensitivity"]) ?? "private";
+    return `memory.add:kind=${kind}:sensitivity=${sensitivity}`;
+  }
+
   if (["read", "write", "edit", "apply_patch", "glob", "grep"].includes(normalizedToolId)) {
     if (normalizedToolId === "apply_patch") return "apply_patch";
     if (normalizedToolId === "glob") {
