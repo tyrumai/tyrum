@@ -6,7 +6,7 @@ import type { SecretHandle } from "@tyrum/schemas";
 import { ActionPrimitive } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../src/container.js";
 import { createLocalStepExecutor } from "../../src/modules/execution/local-step-executor.js";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 
 describe("LocalStepExecutor policy enforcement", () => {
@@ -71,7 +71,7 @@ describe("LocalStepExecutor policy enforcement", () => {
       agentId: "00000000-0000-4000-8000-000000000002",
       key: "agent:test",
       lane: "main",
-      workspaceId: "default",
+      workspaceId: DEFAULT_WORKSPACE_ID,
       policySnapshotId: "policy-1",
     };
   }
@@ -177,5 +177,46 @@ describe("LocalStepExecutor policy enforcement", () => {
       expect.objectContaining({ secretScopes: ["db:billing"] }),
     );
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("includes suggested overrides in policy approval pauses for tool-matched steps", async () => {
+    const { executor } = await makeMockedPolicyExecutor({
+      secretsDecision: "allow",
+      toolDecision: "require_approval",
+    });
+
+    const result = await executor.execute(
+      ActionPrimitive.parse({
+        type: "Http",
+        args: { url: "https://example.com/data", method: "GET" },
+      }),
+      "plan-policy-approval-context",
+      0,
+      5_000,
+      policyContext(null),
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.pause).toMatchObject({
+      kind: "policy",
+      prompt: "Policy approval required to continue execution",
+      context: {
+        source: "execution-engine",
+        tool_id: "webfetch",
+        tool_match_target: "https://example.com/data",
+        decision: "require_approval",
+        policy: {
+          policy_snapshot_id: "policy-1",
+          workspace_id: DEFAULT_WORKSPACE_ID,
+          suggested_overrides: [
+            {
+              tool_id: "webfetch",
+              pattern: "https://example.com/data",
+              workspace_id: DEFAULT_WORKSPACE_ID,
+            },
+          ],
+        },
+      },
+    });
   });
 });

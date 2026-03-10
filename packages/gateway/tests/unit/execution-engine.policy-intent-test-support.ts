@@ -65,6 +65,27 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     expect(approval?.kind).toBe("policy");
     expect(approval?.resume_token).toBeTruthy();
     const approvalDal = new ApprovalDal(db);
+    const pendingApproval = await approvalDal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval!.approval_id,
+    });
+    expect(pendingApproval?.context).toMatchObject({
+      source: "execution-engine",
+      tool_id: "webfetch",
+      tool_match_target: "https://example.com/",
+      decision: "require_approval",
+      policy: {
+        policy_snapshot_id: snapshot.policy_snapshot_id,
+        workspace_id: DEFAULT_WORKSPACE_ID,
+        suggested_overrides: [
+          {
+            tool_id: "webfetch",
+            pattern: "https://example.com/",
+            workspace_id: DEFAULT_WORKSPACE_ID,
+          },
+        ],
+      },
+    });
     await approvalDal.respond({
       tenantId: DEFAULT_TENANT_ID,
       approvalId: approval!.approval_id,
