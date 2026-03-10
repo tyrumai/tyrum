@@ -144,7 +144,7 @@ function ChatTextItem({
         <Button
           size="sm"
           variant="ghost"
-          className="h-7 w-7 p-0 text-fg-muted opacity-0 hover:text-fg group-hover:opacity-100"
+          className="h-7 w-7 p-0 text-fg-muted opacity-0 transition-opacity hover:text-fg group-hover:opacity-100"
           onClick={() => {
             void copyToClipboard(item.content);
           }}
