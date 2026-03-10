@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildModelToolNameMap,
+  listBuiltinToolDescriptors,
   registerModelTool,
   selectToolDirectory,
   type ToolDescriptor,
@@ -100,6 +101,15 @@ describe("model tool naming", () => {
     expect(toolSet[firstModelToolName ?? ""]).toBe(firstTool);
     expect(toolSet["read"]).toBe(firstTool);
     expect(toolSet["tool_fs_read"]).toBe(secondTool);
+  });
+
+  it("includes distinct inspect and dispatch node tools", () => {
+    const builtinIds = listBuiltinToolDescriptors().map((tool) => tool.id);
+
+    expect(builtinIds).toContain("tool.node.inspect");
+    expect(builtinIds).toContain("tool.node.dispatch");
+    expect(builtinIds.filter((id) => id === "tool.node.dispatch")).toHaveLength(1);
+    expect(builtinIds.filter((id) => id === "tool.node.inspect")).toHaveLength(1);
   });
 
   it("throws when alias registration would overwrite another tool", () => {

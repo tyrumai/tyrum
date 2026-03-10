@@ -250,7 +250,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     },
   },
   {
-    id: "tool.node.dispatch",
+    id: "tool.node.inspect",
     description: "Inspect the enabled actions for a specific connected node capability.",
     risk: "low",
     requires_confirmation: false,
