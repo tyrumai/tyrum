@@ -2,6 +2,7 @@ import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { NodeId } from "./keys.js";
 import { CapabilityDescriptor, CapabilityKind } from "./capability.js";
+import { NodeCapabilitySummary } from "./node-capability.js";
 
 export const NodeIdentity = z
   .object({
@@ -64,17 +65,6 @@ export const NodePairingRequest = z
   });
 export type NodePairingRequest = z.infer<typeof NodePairingRequest>;
 
-export const NodeInventoryDispatch = z
-  .object({
-    capability: CapabilityDescriptor.shape.id,
-    action: z.string().trim().min(1),
-    ready: z.boolean(),
-    allowed: z.boolean(),
-    dispatchable: z.boolean(),
-  })
-  .strict();
-export type NodeInventoryDispatch = z.infer<typeof NodeInventoryDispatch>;
-
 export const NodeInventoryEntry = z
   .object({
     node_id: NodeId,
@@ -86,7 +76,7 @@ export const NodeInventoryEntry = z
     attached_to_requested_lane: z.boolean(),
     source_client_device_id: z.string().trim().min(1).nullable().optional(),
     last_seen_at: DateTimeSchema.optional(),
-    dispatches: z.array(NodeInventoryDispatch),
+    capabilities: z.array(NodeCapabilitySummary),
   })
   .strict();
 export type NodeInventoryEntry = z.infer<typeof NodeInventoryEntry>;

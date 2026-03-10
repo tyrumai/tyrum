@@ -324,10 +324,10 @@ describe("AgentRuntime - provenance and policy overrides", () => {
     ) as unknown as Record<string, { execute: (args: unknown) => Promise<string> }>;
 
     const result = await toolSet["tool.node.dispatch"]!.execute({
+      node_id: "node-1",
       capability: "tyrum.desktop",
-      action: "Desktop",
-      args: {
-        op: "act",
+      action_name: "act",
+      input: {
         target: { kind: "a11y", role: "button", name: "Submit", states: [] },
         action: { kind: "click" },
       },

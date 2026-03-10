@@ -6,11 +6,7 @@ import {
   TyrumClient,
   type TaskResult,
 } from "@tyrum/client/browser";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-  type BrowserActionArgs,
-} from "@tyrum/schemas";
+import { type BrowserActionArgs } from "@tyrum/schemas";
 import {
   createContext,
   useCallback,
@@ -37,6 +33,17 @@ import {
   type BrowserConsentRequest,
   type RequestBrowserConsent,
 } from "./browser-capability-provider.js";
+import {
+  readCapabilitySettingsFromStorage,
+  readEnabledFromStorage,
+  resolveBrowserCapabilityStates,
+  toNodeCapabilityState,
+  writeCapabilitySettingsToStorage,
+  writeEnabledToStorage,
+  type BrowserCapabilityName,
+  type BrowserCapabilitySettings,
+  type BrowserCapabilityState,
+} from "./browser-node-capability-state.js";
 
 type BrowserNodeStatus = "disabled" | "connecting" | "connected" | "disconnected" | "error";
 
@@ -46,45 +53,17 @@ export interface BrowserNodeState {
   deviceId: string | null;
   clientId: string | null;
   error: string | null;
+  capabilityStates: Record<BrowserCapabilityName, BrowserCapabilityState>;
 }
 
 export interface BrowserNodeApi extends BrowserNodeState {
   setEnabled: (enabled: boolean) => void;
+  setCapabilityEnabled: (capability: BrowserCapabilityName, enabled: boolean) => void;
   executeLocal: (args: BrowserActionArgs) => Promise<TaskResult>;
 }
 
 const BrowserNodeContext = createContext<BrowserNodeApi | null>(null);
-
-const ENABLED_STORAGE_KEY = "tyrum.operator-ui.browserNode.enabled";
 const DEVICE_IDENTITY_STORAGE_KEY = "tyrum.operator-ui.browserNode.deviceIdentity";
-
-function readEnabledFromStorage(): boolean {
-  try {
-    const storage = globalThis.localStorage;
-    if (!storage || typeof storage.getItem !== "function") return false;
-    return storage.getItem(ENABLED_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function writeEnabledToStorage(enabled: boolean): void {
-  try {
-    const storage = globalThis.localStorage;
-    if (!storage) return;
-    if (enabled) {
-      if (typeof storage.setItem === "function") {
-        storage.setItem(ENABLED_STORAGE_KEY, "1");
-      }
-      return;
-    }
-    if (typeof storage.removeItem === "function") {
-      storage.removeItem(ENABLED_STORAGE_KEY);
-    }
-  } catch {
-    // ignore
-  }
-}
 
 type ConsentQueueItem = {
   request: BrowserConsentRequest;
@@ -99,6 +78,9 @@ export function BrowserNodeProvider({
   children: ReactNode;
 }): ReactElement {
   const [enabled, setEnabledState] = useState(() => readEnabledFromStorage());
+  const [capabilitySettings, setCapabilitySettings] = useState<BrowserCapabilitySettings>(() =>
+    readCapabilitySettingsFromStorage(),
+  );
   const [status, setStatus] = useState<BrowserNodeStatus>(() =>
     enabled ? "connecting" : "disabled",
   );
@@ -108,6 +90,12 @@ export function BrowserNodeProvider({
 
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
+  const capabilityStates = useMemo(
+    () => resolveBrowserCapabilityStates(capabilitySettings),
+    [capabilitySettings],
+  );
+  const capabilityStatesRef = useRef(capabilityStates);
+  capabilityStatesRef.current = capabilityStates;
 
   const consentQueueRef = useRef<ConsentQueueItem[]>([]);
   const consentResolveRef = useRef<((allowed: boolean) => void) | null>(null);
@@ -164,10 +152,25 @@ export function BrowserNodeProvider({
 
   const clientRef = useRef<TyrumClient | null>(null);
   const providerRef = useRef<ReturnType<typeof createBrowserCapabilityProvider> | null>(null);
+  const publishCapabilityState = useCallback(async (client: TyrumClient) => {
+    const capabilityState = toNodeCapabilityState(capabilityStatesRef.current);
+    await client.capabilityReady({
+      capabilities: [capabilityState.capability],
+      capability_states: [capabilityState],
+    });
+  }, []);
 
   const setEnabled = useCallback((next: boolean) => {
     setEnabledState(next);
     writeEnabledToStorage(next);
+  }, []);
+
+  const setCapabilityEnabled = useCallback((capability: BrowserCapabilityName, next: boolean) => {
+    setCapabilitySettings((current) => {
+      const updated = { ...current, [capability]: next };
+      writeCapabilitySettingsToStorage(updated);
+      return updated;
+    });
   }, []);
 
   useEffect(() => {
@@ -223,7 +226,31 @@ export function BrowserNodeProvider({
 
       clientRef.current = client;
 
-      const provider = createBrowserCapabilityProvider({ requestConsent });
+      const baseProvider = createBrowserCapabilityProvider({ requestConsent });
+      const provider = {
+        ...baseProvider,
+        execute: async (...args: Parameters<typeof baseProvider.execute>) => {
+          const [action, ctx] = args;
+          if (action.type === "Browser") {
+            const browserArgs = action.args as BrowserActionArgs;
+            const actionState = capabilityStatesRef.current[browserArgs.op];
+            if (!actionState.enabled) {
+              return {
+                success: false,
+                error: `action '${browserArgs.op}' is disabled by the operator`,
+              };
+            }
+            if (actionState.availability_status === "unavailable") {
+              return {
+                success: false,
+                error:
+                  actionState.unavailable_reason ?? `action '${browserArgs.op}' is unavailable`,
+              };
+            }
+          }
+          return await baseProvider.execute(action, ctx);
+        },
+      };
       providerRef.current = provider;
       autoExecute(client, [provider]);
 
@@ -235,14 +262,7 @@ export function BrowserNodeProvider({
             : undefined;
         setClientId(typeof cid === "string" ? cid : null);
         setStatus("connected");
-        void client.capabilityReady({
-          capabilities: [
-            {
-              id: descriptorIdForClientCapability("browser"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-            },
-          ],
-        });
+        void publishCapabilityState(client);
       };
 
       const onDisconnected = () => {
@@ -285,12 +305,27 @@ export function BrowserNodeProvider({
       }
       providerRef.current = null;
     };
-  }, [clearConsentQueue, enabled, requestConsent, wsUrl]);
+  }, [clearConsentQueue, enabled, publishCapabilityState, requestConsent, wsUrl]);
+
+  useEffect(() => {
+    if (!enabled || status !== "connected" || !clientRef.current) return;
+    void publishCapabilityState(clientRef.current);
+  }, [capabilityStates, enabled, publishCapabilityState, status]);
 
   const executeLocal = useCallback(async (args: BrowserActionArgs): Promise<TaskResult> => {
     const provider = providerRef.current;
     if (!provider) {
       return { success: false, error: "browser node is not enabled" };
+    }
+    const actionState = capabilityStatesRef.current[args.op];
+    if (!actionState.enabled) {
+      return { success: false, error: `action '${args.op}' is disabled by the operator` };
+    }
+    if (actionState.availability_status === "unavailable") {
+      return {
+        success: false,
+        error: actionState.unavailable_reason ?? `action '${args.op}' is unavailable`,
+      };
     }
 
     return await provider.execute(
@@ -306,10 +341,22 @@ export function BrowserNodeProvider({
       deviceId,
       clientId,
       error,
+      capabilityStates,
       setEnabled,
+      setCapabilityEnabled,
       executeLocal,
     }),
-    [clientId, deviceId, enabled, error, executeLocal, setEnabled, status],
+    [
+      capabilityStates,
+      clientId,
+      deviceId,
+      enabled,
+      error,
+      executeLocal,
+      setCapabilityEnabled,
+      setEnabled,
+      status,
+    ],
   );
 
   return (

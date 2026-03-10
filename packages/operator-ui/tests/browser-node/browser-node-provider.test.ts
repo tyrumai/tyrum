@@ -70,18 +70,36 @@ function stubLocalStorage(initial?: Record<string, string>): void {
   });
 }
 
+function stubBrowserApis(): void {
+  vi.stubGlobal("isSecureContext", true);
+  vi.stubGlobal("navigator", {
+    geolocation: {
+      getCurrentPosition: vi.fn(),
+    },
+    mediaDevices: {
+      getUserMedia: vi.fn(),
+    },
+  });
+  const MediaRecorderStub = Object.assign(function MediaRecorderStub() {}, {
+    isTypeSupported: () => true,
+  });
+  vi.stubGlobal("MediaRecorder", MediaRecorderStub);
+}
+
 async function flushEffects(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
   });
 }
 
-function clickButton(label: string): void {
+async function clickButton(label: string): Promise<void> {
   const button = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((el) =>
     el.textContent?.includes(label),
   );
   expect(button).not.toBeUndefined();
-  button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  await act(async () => {
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
 }
 
 afterEach(() => {
@@ -97,6 +115,7 @@ describe("BrowserNodeProvider", () => {
       await import("../../src/components/pages/platform/browser-capabilities-page.js");
 
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
+    stubBrowserApis();
 
     let capturedApi: any = null;
 
@@ -128,7 +147,7 @@ describe("BrowserNodeProvider", () => {
       await flushEffects();
       await flushEffects();
 
-      clickButton("Get location");
+      await clickButton("Get location");
       await flushEffects();
 
       expect(document.querySelector("[data-testid='browser-node-consent-dialog']")).not.toBeNull();
@@ -151,6 +170,7 @@ describe("BrowserNodeProvider", () => {
       await import("../../src/components/pages/platform/browser-capabilities-page.js");
 
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
+    stubBrowserApis();
 
     const testRoot = createTestRoot();
 
@@ -168,7 +188,7 @@ describe("BrowserNodeProvider", () => {
       await flushEffects();
       await flushEffects();
 
-      clickButton("Get location");
+      await clickButton("Get location");
       await flushEffects();
 
       expect(document.querySelector("[data-testid='browser-node-consent-dialog']")).not.toBeNull();

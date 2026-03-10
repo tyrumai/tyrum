@@ -38,6 +38,8 @@ export type {
   StatusResponse,
   UsageResponse,
   PresenceResponse,
+  NodeCapabilityInspectionResponse,
+  NodeActionDispatchResponse,
   PairingListResponse,
   PairingMutateResponse,
   AuthTokenListEntry,

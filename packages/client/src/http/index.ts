@@ -14,6 +14,8 @@ export type {
   UsageResponse,
   PresenceResponse,
   NodeInventoryResponse,
+  NodeCapabilityInspectionResponse,
+  NodeActionDispatchResponse,
   PairingListResponse,
   PairingMutateResponse,
 } from "./observability.js";

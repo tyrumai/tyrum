@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { CapabilityDescriptor, CapabilityKind } from "../capability.js";
 import { NodeId } from "../keys.js";
+import { NodeCapabilityState } from "../node-capability.js";
 import { ActionPrimitiveKind } from "../planner.js";
 import {
   WsEventEnvelope,
@@ -16,6 +17,7 @@ import {
 export const WsCapabilityReadyPayload = z
   .object({
     capabilities: z.array(CapabilityDescriptor).default([]),
+    capability_states: z.array(NodeCapabilityState).default([]),
   })
   .strict();
 export type WsCapabilityReadyPayload = z.infer<typeof WsCapabilityReadyPayload>;
@@ -58,6 +60,7 @@ export const WsCapabilityReadyEventPayload = z
   .object({
     node_id: NodeId,
     capabilities: z.array(CapabilityDescriptor).default([]),
+    capability_states: z.array(NodeCapabilityState).default([]),
   })
   .strict();
 export type WsCapabilityReadyEventPayload = z.infer<typeof WsCapabilityReadyEventPayload>;

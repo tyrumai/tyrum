@@ -1,7 +1,9 @@
 import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
   type CapabilityKind,
-  type NodeInventoryDispatch,
+  type NodeCapabilityState,
+  type NodeCapabilitySummary,
   type NodeInventoryEntry,
 } from "@tyrum/schemas";
 import type {
@@ -13,15 +15,16 @@ import type { PresenceDal } from "../presence/dal.js";
 import { readRecordString } from "../util/coerce.js";
 import type { ConnectionManager, ConnectedClient } from "../../ws/connection-manager.js";
 import { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
+import { getCapabilityCatalogEntry } from "./capability-catalog.js";
 
 const ACTION_CAPABILITIES = [
-  { action: "Web", capability: "playwright" },
-  { action: "Browser", capability: "browser" },
-  { action: "Android", capability: "android" },
-  { action: "Desktop", capability: "desktop" },
-  { action: "CLI", capability: "cli" },
-  { action: "Http", capability: "http" },
-] as const satisfies ReadonlyArray<{ action: string; capability: CapabilityKind }>;
+  { capability: "playwright" },
+  { capability: "browser" },
+  { capability: "android" },
+  { capability: "desktop" },
+  { capability: "cli" },
+  { capability: "http" },
+] as const satisfies ReadonlyArray<{ capability: CapabilityKind }>;
 
 type InventoryNode = {
   nodeId: string;
@@ -31,6 +34,7 @@ type InventoryNode = {
   connected: boolean;
   capabilities: Set<CapabilityKind>;
   readyCapabilities: Set<CapabilityKind>;
+  capabilityStates: Map<string, NodeCapabilityState>;
   lastSeenAtMs?: number;
 };
 
@@ -44,6 +48,12 @@ type NodeInventoryServiceDeps = {
 
 function capabilitySet(values: readonly CapabilityKind[] | undefined): Set<CapabilityKind> {
   return new Set(values ?? []);
+}
+
+function capabilityStateMap(
+  values: readonly NodeCapabilityState[] | undefined,
+): Map<string, NodeCapabilityState> {
+  return new Map((values ?? []).map((state) => [state.capability.id, state] as const));
 }
 
 function upsertNode(map: Map<string, InventoryNode>, next: InventoryNode): void {
@@ -60,6 +70,9 @@ function upsertNode(map: Map<string, InventoryNode>, next: InventoryNode): void 
   existing.connected ||= next.connected;
   for (const capability of next.capabilities) existing.capabilities.add(capability);
   for (const capability of next.readyCapabilities) existing.readyCapabilities.add(capability);
+  for (const [capabilityId, state] of next.capabilityStates) {
+    existing.capabilityStates.set(capabilityId, state);
+  }
 }
 
 function fromDirectoryRow(row: ConnectionDirectoryRow): InventoryNode | undefined {
@@ -72,6 +85,7 @@ function fromDirectoryRow(row: ConnectionDirectoryRow): InventoryNode | undefine
     connected: true,
     capabilities: capabilitySet(row.capabilities),
     readyCapabilities: capabilitySet(row.ready_capabilities),
+    capabilityStates: capabilityStateMap(row.capability_states),
     lastSeenAtMs: row.last_seen_at_ms,
   };
 }
@@ -83,6 +97,7 @@ function fromConnectedClient(client: ConnectedClient): InventoryNode | undefined
     connected: true,
     capabilities: capabilitySet(client.capabilities),
     readyCapabilities: new Set(client.readyCapabilities),
+    capabilityStates: new Map(client.capabilityStates),
     lastSeenAtMs: client.lastWsPongAt,
   };
 }
@@ -127,6 +142,7 @@ export class NodeInventoryService {
         connected: false,
         capabilities: capabilitySet(pairing.node.capabilities),
         readyCapabilities: new Set(),
+        capabilityStates: new Map(),
         lastSeenAtMs: Number.isFinite(lastSeenAtMs) ? lastSeenAtMs : undefined,
       });
     }
@@ -150,9 +166,9 @@ export class NodeInventoryService {
     for (const [nodeId, node] of nodesById) {
       const pairing = pairings.find((entry) => entry.node.node_id === nodeId);
       const allowlist = pairing?.capability_allowlist ?? [];
-      const dispatches: NodeInventoryDispatch[] = [];
+      const summaries: NodeCapabilitySummary[] = [];
 
-      for (const { action, capability } of ACTION_CAPABILITIES) {
+      for (const { capability } of ACTION_CAPABILITIES) {
         const descriptorId = descriptorIdForClientCapability(capability);
         if (filteredCapability && filteredCapability !== descriptorId) continue;
         if (
@@ -162,19 +178,48 @@ export class NodeInventoryService {
           continue;
         }
 
+        const catalog = getCapabilityCatalogEntry(descriptorId);
+        if (!catalog) continue;
+
         const ready = node.readyCapabilities.has(capability);
-        const allowed =
+        const paired =
           pairing?.status === "approved" && allowlist.some((entry) => entry.id === descriptorId);
-        dispatches.push({
+        const state = node.capabilityStates.get(descriptorId);
+        const actionStates = new Map((state?.actions ?? []).map((action) => [action.name, action]));
+        const supportedActionCount = catalog.actions.length;
+        let enabledActionCount = 0;
+        let availableActionCount = 0;
+        let unknownActionCount = 0;
+
+        for (const action of catalog.actions) {
+          const currentState = actionStates.get(action.name);
+          const enabled = currentState?.enabled ?? true;
+          if (!enabled) continue;
+          enabledActionCount += 1;
+          if ((currentState?.availability_status ?? "unknown") === "available") {
+            availableActionCount += 1;
+          } else if ((currentState?.availability_status ?? "unknown") === "unknown") {
+            unknownActionCount += 1;
+          }
+        }
+
+        summaries.push({
           capability: descriptorId,
-          action,
-          ready,
-          allowed,
-          dispatchable: node.connected && ready && allowed,
+          capability_version:
+            state?.capability.version ??
+            allowlist.find((entry) => entry.id === descriptorId)?.version ??
+            CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+          connected: node.connected,
+          paired,
+          dispatchable: node.connected && ready && paired && enabledActionCount > 0,
+          supported_action_count: supportedActionCount,
+          enabled_action_count: enabledActionCount,
+          available_action_count: availableActionCount,
+          unknown_action_count: unknownActionCount,
         });
       }
 
-      if (dispatchableOnly && !dispatches.some((dispatch) => dispatch.dispatchable)) {
+      if (dispatchableOnly && !summaries.some((summary) => summary.dispatchable)) {
         continue;
       }
 
@@ -190,7 +235,7 @@ export class NodeInventoryService {
           ? { source_client_device_id: attachment.source_client_device_id ?? null }
           : {}),
         ...(node.lastSeenAtMs ? { last_seen_at: new Date(node.lastSeenAtMs).toISOString() } : {}),
-        dispatches,
+        capabilities: summaries,
       });
     }
 

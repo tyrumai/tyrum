@@ -182,8 +182,8 @@ describe("AgentRuntime - desktop dispatch", () => {
                 input: JSON.stringify({
                   node_id: nodeId,
                   capability: "tyrum.desktop",
-                  action: "Desktop",
-                  args: { op: "snapshot", include_tree: false },
+                  action_name: "snapshot",
+                  input: { include_tree: false },
                 }),
               },
             ],

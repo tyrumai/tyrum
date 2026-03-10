@@ -6,7 +6,12 @@
  */
 
 import type { WebSocket } from "ws";
-import type { ClientCapability, WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
+import type {
+  ClientCapability,
+  NodeCapabilityState,
+  WsEventEnvelope,
+  WsRequestEnvelope,
+} from "@tyrum/schemas";
 import type { AuthTokenClaims } from "@tyrum/schemas";
 import { gatewayMetrics, type MetricsRegistry } from "../modules/observability/metrics.js";
 
@@ -23,6 +28,7 @@ export interface ConnectedClient {
   readonly protocol_rev: number;
   readonly capabilities: readonly ClientCapability[];
   readyCapabilities: Set<ClientCapability>;
+  capabilityStates: Map<string, NodeCapabilityState>;
   lastWsPongAt: number;
 }
 
@@ -80,6 +86,7 @@ export class ConnectionManager {
       protocol_rev: opts?.protocolRev ?? 1,
       capabilities,
       readyCapabilities,
+      capabilityStates: new Map(),
       lastWsPongAt: Date.now(),
     };
     ws.on("pong", () => {
@@ -123,6 +130,14 @@ export class ConnectionManager {
     const client = this.clients.get(id);
     if (!client) return;
     client.readyCapabilities = new Set<ClientCapability>(capabilities);
+  }
+
+  setCapabilityStates(id: string, capabilityStates: readonly NodeCapabilityState[]): void {
+    const client = this.clients.get(id);
+    if (!client) return;
+    client.capabilityStates = new Map(
+      capabilityStates.map((state) => [state.capability.id, state] as const),
+    );
   }
 
   /** Remove a client (e.g. on disconnect or eviction). */

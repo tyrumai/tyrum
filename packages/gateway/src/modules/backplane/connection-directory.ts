@@ -1,4 +1,5 @@
-import type { ClientCapability } from "@tyrum/schemas";
+import { NodeCapabilityState as NodeCapabilityStateSchema } from "@tyrum/schemas";
+import type { ClientCapability, NodeCapabilityState } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
@@ -14,6 +15,7 @@ export interface ConnectionDirectoryRow {
   mode: string | null;
   capabilities: ClientCapability[];
   ready_capabilities: ClientCapability[];
+  capability_states: NodeCapabilityState[];
   connected_at_ms: number;
   last_seen_at_ms: number;
   expires_at_ms: number;
@@ -31,6 +33,7 @@ interface RawConnectionDirectoryRow {
   metadata_json: string;
   capabilities_json: string;
   ready_capabilities_json: string | null;
+  capability_states_json: string | null;
   connected_at_ms: number;
   last_seen_at_ms: number;
   expires_at_ms: number;
@@ -46,6 +49,20 @@ function safeParseJsonObject(raw: string): Record<string, unknown> {
   } catch {
     // Intentional: treat malformed JSON as empty metadata for rolling upgrade safety.
     return {};
+  }
+}
+
+function parseCapabilityStates(raw: string | null): NodeCapabilityState[] {
+  if (typeof raw !== "string" || raw.trim().length === 0) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((value) => NodeCapabilityStateSchema.safeParse(value))
+      .filter((value) => value.success)
+      .map((value) => value.data);
+  } catch {
+    return [];
   }
 }
 
@@ -94,6 +111,7 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
     mode,
     capabilities,
     ready_capabilities: readyCapabilities ?? capabilities,
+    capability_states: parseCapabilityStates(raw.capability_states_json),
     connected_at_ms: raw.connected_at_ms,
     last_seen_at_ms: raw.last_seen_at_ms,
     expires_at_ms: raw.expires_at_ms,
@@ -116,6 +134,7 @@ export class ConnectionDirectoryDal {
     mode?: string | null;
     capabilities: readonly ClientCapability[];
     readyCapabilities?: readonly ClientCapability[];
+    capabilityStates?: readonly NodeCapabilityState[];
     nowMs: number;
     ttlMs: number;
   }): Promise<void> {
@@ -178,6 +197,7 @@ export class ConnectionDirectoryDal {
 
     const expiresAtMs = params.nowMs + params.ttlMs;
     const readyCapabilities = params.readyCapabilities ?? params.capabilities ?? [];
+    const capabilityStates = params.capabilityStates ?? [];
     await this.db.run(
       `INSERT INTO connections (
          tenant_id,
@@ -187,16 +207,18 @@ export class ConnectionDirectoryDal {
          protocol_rev,
          capabilities_json,
          ready_capabilities_json,
+         capability_states_json,
          connected_at_ms,
          last_seen_at_ms,
          expires_at_ms
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(tenant_id, connection_id) DO UPDATE SET
          edge_id = excluded.edge_id,
          principal_id = excluded.principal_id,
          protocol_rev = excluded.protocol_rev,
          capabilities_json = excluded.capabilities_json,
          ready_capabilities_json = excluded.ready_capabilities_json,
+         capability_states_json = excluded.capability_states_json,
          last_seen_at_ms = excluded.last_seen_at_ms,
          expires_at_ms = excluded.expires_at_ms`,
       [
@@ -207,6 +229,7 @@ export class ConnectionDirectoryDal {
         params.protocolRev ?? 1,
         JSON.stringify(params.capabilities ?? []),
         JSON.stringify(readyCapabilities),
+        JSON.stringify(capabilityStates),
         params.nowMs,
         params.nowMs,
         expiresAtMs,
@@ -228,6 +251,23 @@ export class ConnectionDirectoryDal {
        SET ready_capabilities_json = ?
        WHERE tenant_id = ? AND connection_id = ?`,
       [JSON.stringify(params.readyCapabilities ?? []), tenantId, params.connectionId],
+    );
+  }
+
+  async setCapabilityStates(params: {
+    tenantId: string;
+    connectionId: string;
+    capabilityStates: readonly NodeCapabilityState[];
+  }): Promise<void> {
+    const tenantId = params.tenantId.trim();
+    if (tenantId.length === 0) {
+      throw new Error("tenantId is required");
+    }
+    await this.db.run(
+      `UPDATE connections
+       SET capability_states_json = ?
+       WHERE tenant_id = ? AND connection_id = ?`,
+      [JSON.stringify(params.capabilityStates ?? []), tenantId, params.connectionId],
     );
   }
 
@@ -283,6 +323,7 @@ export class ConnectionDirectoryDal {
          p.metadata_json,
          c.capabilities_json,
          c.ready_capabilities_json,
+         c.capability_states_json,
          c.connected_at_ms,
          c.last_seen_at_ms,
          c.expires_at_ms

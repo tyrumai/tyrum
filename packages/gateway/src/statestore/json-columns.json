@@ -203,6 +203,13 @@
     "default": null
   },
   {
+    "table": "connections",
+    "column": "capability_states_json",
+    "shape": "array",
+    "nullable": true,
+    "default": null
+  },
+  {
     "table": "configured_model_presets",
     "column": "options_json",
     "shape": "object",

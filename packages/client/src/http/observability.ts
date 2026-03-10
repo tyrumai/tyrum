@@ -1,6 +1,9 @@
 import {
   CapabilityDescriptor,
   DateTimeSchema,
+  NodeActionDispatchRequest as NodeActionDispatchRequestSchema,
+  NodeActionDispatchResponse as NodeActionDispatchResponseSchema,
+  NodeCapabilityInspectionResponse as NodeCapabilityInspectionResponseSchema,
   NodeInventoryResponse as NodeInventoryResponseSchema,
   NodePairingRequest,
   NodePairingStatus,
@@ -138,6 +141,10 @@ export type StatusResponse = z.infer<typeof StatusResponse>;
 export type UsageResponse = z.infer<typeof UsageResponse>;
 export type PresenceResponse = z.infer<typeof PresenceResponse>;
 export type NodeInventoryResponse = z.infer<typeof NodeInventoryResponseSchema>;
+export type NodeCapabilityInspectionResponse = z.infer<
+  typeof NodeCapabilityInspectionResponseSchema
+>;
+export type NodeActionDispatchResponse = z.infer<typeof NodeActionDispatchResponseSchema>;
 export type PairingListResponse = z.infer<typeof PairingListResponse>;
 export type PairingMutateResponse = z.infer<typeof PairingMutateResponse>;
 
@@ -162,11 +169,33 @@ const NodesListQuery = z
   })
   .strict();
 
+const NodesInspectQuery = z
+  .object({
+    include_disabled: z.boolean().optional(),
+  })
+  .strict();
+
 export interface NodesApi {
   list(
     query?: z.input<typeof NodesListQuery>,
     options?: TyrumRequestOptions,
   ): Promise<NodeInventoryResponse>;
+  inspect(
+    nodeId: string,
+    capabilityId: string,
+    query?: z.input<typeof NodesInspectQuery>,
+    options?: TyrumRequestOptions,
+  ): Promise<NodeCapabilityInspectionResponse>;
+  dispatch(
+    nodeId: string,
+    capabilityId: string,
+    actionName: string,
+    input?: Omit<
+      z.input<typeof NodeActionDispatchRequestSchema>,
+      "node_id" | "capability" | "action_name"
+    >,
+    options?: TyrumRequestOptions,
+  ): Promise<NodeActionDispatchResponse>;
 }
 
 export interface PairingsApi {
@@ -241,6 +270,44 @@ export function createNodesApi(transport: HttpTransport): NodesApi {
         path: "/nodes",
         query: parsedQuery,
         response: NodeInventoryResponseSchema,
+        signal: options?.signal,
+      });
+    },
+    async inspect(nodeId, capabilityId, query, options) {
+      const parsedQuery = validateOrThrow(NodesInspectQuery, query ?? {}, "nodes inspect query");
+      return await transport.request({
+        method: "GET",
+        path: `/nodes/${encodeURIComponent(nodeId)}/capabilities/${encodeURIComponent(capabilityId)}`,
+        query: parsedQuery,
+        response: NodeCapabilityInspectionResponseSchema,
+        signal: options?.signal,
+      });
+    },
+    async dispatch(nodeId, capabilityId, actionName, input, options) {
+      const parsedInput = validateOrThrow(
+        NodeActionDispatchRequestSchema,
+        input
+          ? {
+              ...input,
+              node_id: nodeId,
+              capability: capabilityId,
+              action_name: actionName,
+            }
+          : {
+              node_id: nodeId,
+              capability: capabilityId,
+              action_name: actionName,
+            },
+        "nodes dispatch input",
+      );
+      return await transport.request({
+        method: "POST",
+        path: `/nodes/${encodeURIComponent(nodeId)}/capabilities/${encodeURIComponent(capabilityId)}/actions/${encodeURIComponent(actionName)}/dispatch`,
+        body: {
+          input: parsedInput.input,
+          ...(parsedInput.timeout_ms !== undefined ? { timeout_ms: parsedInput.timeout_ms } : {}),
+        },
+        response: NodeActionDispatchResponseSchema,
         signal: options?.signal,
       });
     },

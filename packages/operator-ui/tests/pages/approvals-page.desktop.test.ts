@@ -22,9 +22,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
         tool_match_target: "tool.node.dispatch.desktop.act",
         args: {
           capability: "tyrum.desktop",
-          action: "Desktop",
-          args: {
-            op: "act",
+          action_name: "act",
+          input: {
             target: { kind: "a11y", role: "button", name: "Submit", states: [] },
             action: { kind: "click" },
           },
@@ -126,9 +125,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
         tool_match_target: "tool.node.dispatch.desktop.act",
         args: {
           capability: "tyrum.desktop",
-          action: "Desktop",
-          args: {
-            op: "act",
+          action_name: "act",
+          input: {
             target: { kind: "a11y", role: "button", name: "Submit", states: [] },
             action: { kind: "click" },
           },
@@ -226,9 +224,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
         tool_match_target: "tool.node.dispatch.desktop.act",
         args: {
           capability: "tyrum.desktop",
-          action: "Desktop",
-          args: {
-            op: "act",
+          action_name: "act",
+          input: {
             target: { kind: "a11y", role: "button", name: "Submit", states: [] },
             action: { kind: "click" },
           },
@@ -357,9 +354,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
         tool_match_target: "tool.node.dispatch.desktop.act",
         args: {
           capability: "tyrum.desktop",
-          action: "Desktop",
-          args: {
-            op: "act",
+          action_name: "act",
+          input: {
             target: { kind: "a11y", role: "button", name: "Submit", states: [] },
             action: { kind: "click" },
           },

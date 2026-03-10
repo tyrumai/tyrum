@@ -62,7 +62,7 @@ export function sampleNodeInventoryResponse() {
         connected: false,
         paired_status: "approved",
         attached_to_requested_lane: false,
-        dispatches: [],
+        capabilities: [],
       },
     ],
   } as const;
