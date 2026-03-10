@@ -13,6 +13,7 @@ import {
 } from "../ui/dialog.js";
 import { Label } from "../ui/label.js";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
+import { isRecord } from "../../utils/is-record.js";
 
 type SuggestedOverride = {
   tool_id: string;
@@ -25,10 +26,6 @@ type SuggestedOverrideOption = SuggestedOverride & {
   title: string;
   description: string;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 function extractSuggestedOverrides(approval: Approval | null | undefined): SuggestedOverride[] {
   const context = isRecord(approval?.context) ? approval.context : null;
@@ -119,7 +116,7 @@ function describeSuggestedOverride(input: SuggestedOverride): {
   };
 }
 
-export function listApprovalSuggestedOverrideOptions(
+function listApprovalSuggestedOverrideOptions(
   approval: Approval | null | undefined,
 ): SuggestedOverrideOption[] {
   return extractSuggestedOverrides(approval).map((override) => {
