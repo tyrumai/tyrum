@@ -1,3 +1,4 @@
+import { descriptorIdForClientCapability } from "@tyrum/schemas";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { NodeInventoryService } from "../../src/modules/node/inventory-service.js";
@@ -96,6 +97,47 @@ describe("NodeInventoryService", () => {
         node_id: "node-offline-1",
         connected: false,
         last_seen_at: lastSeenAt,
+      }),
+    ]);
+  });
+
+  it("preserves connected non-catalog capabilities in node summaries", async () => {
+    const connectionManager = new ConnectionManager();
+    connectionManager.addClient({ on: vi.fn(), send: vi.fn(), readyState: 1 } as never, ["cli"], {
+      id: "conn-cli-1",
+      role: "node",
+      deviceId: "node-cli-1",
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-cli-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        device_id: "node-cli-1",
+        role: "node",
+        scopes: [],
+      },
+      protocolRev: 2,
+    });
+
+    const service = new NodeInventoryService({ connectionManager });
+    const result = await service.list({
+      tenantId: DEFAULT_TENANT_ID,
+      dispatchableOnly: false,
+    });
+
+    expect(result.nodes).toEqual([
+      expect.objectContaining({
+        node_id: "node-cli-1",
+        connected: true,
+        capabilities: [
+          expect.objectContaining({
+            capability: descriptorIdForClientCapability("cli"),
+            dispatchable: false,
+            supported_action_count: 0,
+            enabled_action_count: 0,
+            available_action_count: 0,
+            unknown_action_count: 0,
+          }),
+        ],
       }),
     ]);
   });

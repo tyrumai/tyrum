@@ -274,7 +274,10 @@ export function dispatchTask(
   }
 
   const descriptorId = descriptorIdForClientCapability(capability);
-  const toolMatchTarget = canonicalizeNodeDispatchMatchTarget(action.type, action.args);
+  const toolMatchTarget = `capability:${descriptorId};${canonicalizeNodeDispatchMatchTarget(
+    action.type,
+    action.args,
+  )}`;
   const policyEnabled = deps.policyService?.isEnabled() ?? false;
   const policyEvalPromise = policyEnabled
     ? deps.policyService!.evaluateToolCall({

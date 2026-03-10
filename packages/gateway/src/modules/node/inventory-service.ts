@@ -179,27 +179,31 @@ export class NodeInventoryService {
         }
 
         const catalog = getCapabilityCatalogEntry(descriptorId);
-        if (!catalog) continue;
-
+        const state = node.capabilityStates.get(descriptorId);
         const ready = node.readyCapabilities.has(capability);
         const paired =
           pairing?.status === "approved" && allowlist.some((entry) => entry.id === descriptorId);
-        const state = node.capabilityStates.get(descriptorId);
-        const actionStates = new Map((state?.actions ?? []).map((action) => [action.name, action]));
-        const supportedActionCount = catalog.actions.length;
+        let supportedActionCount = 0;
         let enabledActionCount = 0;
         let availableActionCount = 0;
         let unknownActionCount = 0;
 
-        for (const action of catalog.actions) {
-          const currentState = actionStates.get(action.name);
-          const enabled = currentState?.enabled ?? true;
-          if (!enabled) continue;
-          enabledActionCount += 1;
-          if ((currentState?.availability_status ?? "unknown") === "available") {
-            availableActionCount += 1;
-          } else if ((currentState?.availability_status ?? "unknown") === "unknown") {
-            unknownActionCount += 1;
+        if (catalog) {
+          const actionStates = new Map(
+            (state?.actions ?? []).map((action) => [action.name, action] as const),
+          );
+          supportedActionCount = catalog.actions.length;
+
+          for (const action of catalog.actions) {
+            const currentState = actionStates.get(action.name);
+            const enabled = currentState?.enabled ?? true;
+            if (!enabled) continue;
+            enabledActionCount += 1;
+            if ((currentState?.availability_status ?? "unknown") === "available") {
+              availableActionCount += 1;
+            } else if ((currentState?.availability_status ?? "unknown") === "unknown") {
+              unknownActionCount += 1;
+            }
           }
         }
 
@@ -211,7 +215,9 @@ export class NodeInventoryService {
             CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
           connected: node.connected,
           paired,
-          dispatchable: node.connected && ready && paired && enabledActionCount > 0,
+          dispatchable: catalog
+            ? node.connected && ready && paired && enabledActionCount > 0
+            : false,
           supported_action_count: supportedActionCount,
           enabled_action_count: enabledActionCount,
           available_action_count: availableActionCount,

@@ -164,7 +164,7 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
       presenceDal: context.container.presenceDal,
     }),
   );
-  if (context.opts.connectionManager && context.opts.protocolDeps) {
+  if (context.opts.connectionManager) {
     const inventoryService = new NodeInventoryService({
       connectionManager: context.opts.connectionManager,
       connectionDirectory: context.opts.connectionDirectory,
@@ -172,17 +172,21 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
       presenceDal: context.container.presenceDal,
       attachmentDal: context.container.sessionLaneNodeAttachmentDal,
     });
-    const inspectionService = new NodeCapabilityInspectionService({
-      connectionManager: context.opts.connectionManager,
-      connectionDirectory: context.opts.connectionDirectory,
-      nodeInventoryService: inventoryService,
-    });
+    const inspectionService = context.opts.protocolDeps
+      ? new NodeCapabilityInspectionService({
+          connectionManager: context.opts.connectionManager,
+          connectionDirectory: context.opts.connectionDirectory,
+          nodeInventoryService: inventoryService,
+        })
+      : undefined;
     context.app.route(
       "/",
       createNodesRoute({
         inventoryService,
         inspectionService,
-        nodeDispatchService: new NodeDispatchService(context.opts.protocolDeps),
+        nodeDispatchService: context.opts.protocolDeps
+          ? new NodeDispatchService(context.opts.protocolDeps)
+          : undefined,
         artifactStore: context.container.artifactStore,
       }),
     );
